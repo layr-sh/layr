@@ -1,0 +1,92 @@
+# Layr Runtime Data & Embedded PostgreSQL
+.layr/
+.layr/data/
+.layr/bin/
+*.sock
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.staging
+.env.production
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# Go (Binaries, Build Outputs & Caches)
+/layr
+bin/
+dist/
+build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts and coverage
+*.test
+*.out
+coverage/
+coverage.txt
+coverage.out
+profile.out
+trace.out
+.nyc_output/
+htmlcov/
+.coverage
+*.lcov
+
+# Go workspace / cache
+.gocache/
+
+# Node / Console Frontend (Nuxt, Vue, Vite)
+node_modules/
+.npm
+.nuxt/
+.output/
+.nitro/
+.vite/
+.cache/
+
+# Package manager logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE, Editors & Tooling
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains / GoLand
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Temporary / Scratch files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*~

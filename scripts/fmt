@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
+CHECK_ONLY=false
+PASSTHROUGH_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      echo "Usage: $(basename "$0") [options] [files...]"
+      echo ""
+      echo "Formats Go source files using golangci-lint fmt."
+      echo ""
+      echo "Options:"
+      echo "  --check       Check formatting without modifying files (exits non-zero if diff found)"
+      echo "  -d, --diff    Display diffs instead of rewriting files"
+      echo "  -h, --help    Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  ./scripts/fmt              # Reformat all Go source files in the repository"
+      echo "  ./scripts/fmt --check      # Verify formatting without modifying files"
+      echo "  ./scripts/fmt --diff       # Show formatting diffs without applying"
+      echo "  ./scripts/fmt core/        # Format files in specific directory"
+      exit 0
+      ;;
+    --check)
+      CHECK_ONLY=true
+      shift
+      ;;
+    -d|--diff)
+      PASSTHROUGH_ARGS+=("--diff")
+      shift
+      ;;
+    *)
+      PASSTHROUGH_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+  echo "error: golangci-lint is not installed or not in PATH." >&2
+  exit 1
+fi
+
+FMT_CMD=(golangci-lint fmt)
+if [ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]; then
+  FMT_CMD+=("${PASSTHROUGH_ARGS[@]}")
+fi
+
+if [ "${CHECK_ONLY}" = true ]; then
+  CHECK_CMD=(golangci-lint fmt -d)
+  if [ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]; then
+    CHECK_CMD+=("${PASSTHROUGH_ARGS[@]}")
+  fi
+  DIFF_OUTPUT=$("${CHECK_CMD[@]}" 2>/dev/null || true)
+  if [ -n "${DIFF_OUTPUT}" ]; then
+    echo "error: unformatted Go files detected:" >&2
+    "${CHECK_CMD[@]}" || true
+    echo "" >&2
+    echo "Run './scripts/fmt' to reformat files." >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+"${FMT_CMD[@]}"
