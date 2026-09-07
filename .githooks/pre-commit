@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "${REPO_ROOT}"
+
+# Collect staged Go files
+STAGED_GO_FILES=()
+STAGED_TEST_FILES=()
+
+while IFS= read -r file; do
+  [ -z "$file" ] && continue
+  STAGED_GO_FILES+=("$file")
+  if [[ "$file" =~ _test\.go$ ]]; then
+    STAGED_TEST_FILES+=("$file")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+# If no Go files are staged, allow commit immediately
+if [ ${#STAGED_GO_FILES[@]} -eq 0 ]; then
+  exit 0
+fi
+
+# 1. Format check
+if [ -x "${REPO_ROOT}/scripts/fmt" ]; then
+  if ! "${REPO_ROOT}/scripts/fmt" --check; then
+    exit 1
+  fi
+fi
+
+# 2. Test naming conventions check (Test<Subject><Scenario><Tier>)
+if [ ${#STAGED_TEST_FILES[@]} -gt 0 ]; then
+  if [ -x "${REPO_ROOT}/scripts/check-test-names" ]; then
+    if ! "${REPO_ROOT}/scripts/check-test-names" -q "${STAGED_TEST_FILES[@]}"; then
+      exit 1
+    fi
+  fi
+fi
+
+# 3. Lint check
+if [ -x "${REPO_ROOT}/scripts/lint" ]; then
+  if ! "${REPO_ROOT}/scripts/lint" -q; then
+    exit 1
+  fi
+fi
+
+exit 0

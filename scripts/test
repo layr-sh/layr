@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CACHE_DIR="${REPO_ROOT}/.cache/coverage"
+mkdir -p "${CACHE_DIR}"
+
+COVERAGE_FILE="${CACHE_DIR}/coverage.out"
+HTML_REPORT="${CACHE_DIR}/coverage.html"
+
+SHOW_HTML=false
+VERBOSE=false
+ENFORCE_COVERAGE=auto
+TEST_FILTER=""
+TARGET_PACKAGES=()
+PASSTHROUGH_ARGS=()
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      echo "Usage: $(basename "$0") [options] [packages...] [test-name]"
+      echo ""
+      echo "Runs Go tests with atomic statement coverage."
+      echo "Enforces 100.0% coverage when running the full test suite."
+      echo ""
+      echo "Filtering tests:"
+      echo "  -run <pattern>      Run only tests matching <pattern> (standard go test flag)"
+      echo "  -run=<pattern>      Run only tests matching <pattern>"
+      echo "  <test-name>         Direct test name pattern (e.g. TestCoreConfigDefaultsUnit, Defaults)"
+      echo ""
+      echo "Options:"
+      echo "  -v, --verbose           Run tests with verbose output (go test -v)"
+      echo "  --html                  Generate HTML coverage report in .cache/coverage/coverage.html"
+      echo "  --enforce-coverage      Force 100% coverage check even when filtering by test name"
+      echo "  --no-enforce-coverage   Skip 100% coverage check"
+      echo "  -h, --help              Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  ./scripts/test                             # Full suite (100% coverage enforced)"
+      echo "  ./scripts/test -run Defaults               # Filter by test pattern"
+      echo "  ./scripts/test TestCoreConfigDefaultsUnit  # Filter by test name shorthand"
+      echo "  ./scripts/test ./core -run Defaults        # Filter specific package and test"
+      echo "  ./scripts/test -v                          # Run all tests verbosely"
+      echo "  ./scripts/test --html                      # Generate visual HTML report"
+      exit 0
+      ;;
+    -v|--verbose)
+      VERBOSE=true
+      shift
+      ;;
+    --html)
+      SHOW_HTML=true
+      shift
+      ;;
+    --enforce-coverage)
+      ENFORCE_COVERAGE=true
+      shift
+      ;;
+    --no-enforce-coverage)
+      ENFORCE_COVERAGE=false
+      shift
+      ;;
+    -run|--run)
+      if [ $# -ge 2 ]; then
+        TEST_FILTER="$2"
+        PASSTHROUGH_ARGS+=("-run" "$2")
+        shift 2
+      else
+        PASSTHROUGH_ARGS+=("-run")
+        shift
+      fi
+      ;;
+    -run=*|--run=*)
+      TEST_FILTER="${1#*=}"
+      PASSTHROUGH_ARGS+=("-run=${TEST_FILTER}")
+      shift
+      ;;
+    -tags|-timeout|-count)
+      if [ $# -ge 2 ]; then
+        PASSTHROUGH_ARGS+=("$1" "$2")
+        shift 2
+      else
+        PASSTHROUGH_ARGS+=("$1")
+        shift
+      fi
+      ;;
+    -*)
+      PASSTHROUGH_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      # Determine if positional argument is a package or test name
+      if [ -d "$1" ] || [[ "$1" == *"..."* ]] || [[ "$1" == layr.sh/* ]]; then
+        TARGET_PACKAGES+=("$1")
+      elif [[ "$1" =~ ^\^?Test ]] || [ -z "${TEST_FILTER}" ]; then
+        # Positional test name pattern (e.g. TestCoreConfigDefaultsUnit or Defaults)
+        TEST_FILTER="$1"
+        PASSTHROUGH_ARGS+=("-run" "$1")
+      else
+        TARGET_PACKAGES+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+
+# If a test filter is specified and enforcement is 'auto', skip failing on <100% coverage
+if [ "${ENFORCE_COVERAGE}" = "auto" ]; then
+  if [ -n "${TEST_FILTER}" ]; then
+    ENFORCE_COVERAGE=false
+  else
+    ENFORCE_COVERAGE=true
+  fi
+fi
+
+# If no specific package is passed, discover all application packages (excluding scripts)
+if [ ${#TARGET_PACKAGES[@]} -eq 0 ]; then
+  while IFS= read -r pkg; do
+    [ -z "$pkg" ] && continue
+    if [[ "$pkg" != *"scripts"* ]]; then
+      TARGET_PACKAGES+=("$pkg")
+    fi
+  done < <(go list ./... 2>/dev/null || true)
+fi
+
+if [ ${#TARGET_PACKAGES[@]} -eq 0 ]; then
+  echo "error: no testable Go packages found." >&2
+  exit 1
+fi
+
+# Build test command
+CMD=(go test -count=1 -covermode=atomic "-coverprofile=${COVERAGE_FILE}")
+if [ "${VERBOSE}" = true ]; then
+  CMD+=("-v")
+fi
+if [ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]; then
+  CMD+=("${PASSTHROUGH_ARGS[@]}")
+fi
+CMD+=("${TARGET_PACKAGES[@]}")
+
+# Execute tests
+"${CMD[@]}"
+
+if [ ! -f "${COVERAGE_FILE}" ] || [ ! -s "${COVERAGE_FILE}" ]; then
+  echo "error: coverage file was not generated or is empty." >&2
+  exit 1
+fi
+
+# Generate function breakdown
+COVERAGE_SUMMARY=$(go tool cover -func="${COVERAGE_FILE}")
+
+# Extract total coverage percentage
+TOTAL_LINE=$(echo "${COVERAGE_SUMMARY}" | grep '^total:' || true)
+if [ -z "${TOTAL_LINE}" ]; then
+  echo "error: could not parse total coverage from output." >&2
+  exit 1
+fi
+
+TOTAL_PERCENT=$(echo "${TOTAL_LINE}" | awk '{print $NF}')
+NUMERIC_PERCENT=$(echo "${TOTAL_PERCENT}" | tr -d '%')
+
+# Generate HTML report if requested
+if [ "${SHOW_HTML}" = true ]; then
+  go tool cover -html="${COVERAGE_FILE}" -o "${HTML_REPORT}"
+  echo "html coverage report: ${HTML_REPORT}"
+fi
+
+# Check for any uncovered statement blocks in coverage.out (execution count == 0)
+UNCOVERED_BLOCKS=$(awk '$NF == 0 {print $1}' "${COVERAGE_FILE}" || true)
+
+# Check for functions below 100.0%
+UNCOVERED_FUNCS=$(echo "${COVERAGE_SUMMARY}" | grep -v '^total:' | awk '$NF != "100.0%" {print "  " $1 " " $2 " (" $NF ")"}' || true)
+
+# Enforce 100.0% if requested
+if [ "${ENFORCE_COVERAGE}" = true ]; then
+  if [ "${NUMERIC_PERCENT}" != "100.0" ] || [ -n "${UNCOVERED_BLOCKS}" ]; then
+    echo "" >&2
+    echo "error: coverage check failed: ${TOTAL_PERCENT} (100.0% required)" >&2
+    echo "" >&2
+    
+    if [ -n "${UNCOVERED_FUNCS}" ]; then
+      echo "functions below 100.0%:" >&2
+      echo "${UNCOVERED_FUNCS}" >&2
+      echo "" >&2
+    fi
+
+    if [ -n "${UNCOVERED_BLOCKS}" ]; then
+      echo "uncovered code locations:" >&2
+      while IFS= read -r block; do
+        [ -z "$block" ] && continue
+        echo "  ${block}" >&2
+      done <<< "${UNCOVERED_BLOCKS}"
+      echo "" >&2
+    fi
+
+    # Generate HTML report to assist debugging
+    go tool cover -html="${COVERAGE_FILE}" -o "${HTML_REPORT}"
+    echo "detailed report: ${HTML_REPORT}" >&2
+    exit 1
+  fi
+
+  # Print full function summary
+  echo ""
+  echo "${COVERAGE_SUMMARY}"
+  echo ""
+  echo "100.0% test coverage requirement satisfied."
+else
+  # Filtered run: report coverage without failing
+  echo ""
+  echo "${COVERAGE_SUMMARY}"
+  echo ""
+  echo "filtered run (-run '${TEST_FILTER}'): statement coverage ${TOTAL_PERCENT} (100% threshold skipped)."
+fi
+
+exit 0

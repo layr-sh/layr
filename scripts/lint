@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
+QUIET=false
+PASSTHROUGH_ARGS=()
+PACKAGES=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      echo "Usage: $(basename "$0") [options] [packages...]"
+      echo ""
+      echo "Runs golangci-lint across repository packages."
+      echo ""
+      echo "Options:"
+      echo "  --fix         Automatically fix supported linter issues"
+      echo "  -v, --verbose Enable verbose linter output"
+      echo "  -q, --quiet   Suppress output on success (only print issues)"
+      echo "  -h, --help    Show this help message"
+      echo ""
+      echo "Examples:"
+      echo "  ./scripts/lint             # Lint all packages in the repository"
+      echo "  ./scripts/lint --fix       # Automatically fix autofixable issues"
+      echo "  ./scripts/lint ./core/...  # Lint specific package subtree"
+      exit 0
+      ;;
+    --fix)
+      PASSTHROUGH_ARGS+=("--fix")
+      shift
+      ;;
+    -v|--verbose)
+      PASSTHROUGH_ARGS+=("-v")
+      shift
+      ;;
+    -q|--quiet)
+      QUIET=true
+      shift
+      ;;
+    -*)
+      PASSTHROUGH_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      PACKAGES+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+  echo "error: golangci-lint is not installed or not in PATH." >&2
+  exit 1
+fi
+
+if [ ${#PACKAGES[@]} -eq 0 ]; then
+  PACKAGES=("./...")
+fi
+
+CMD=(golangci-lint run)
+if [ ${#PASSTHROUGH_ARGS[@]} -gt 0 ]; then
+  CMD+=("${PASSTHROUGH_ARGS[@]}")
+fi
+CMD+=("${PACKAGES[@]}")
+
+if [ "${QUIET}" = true ]; then
+  if ! "${CMD[@]}" >/dev/null 2>&1; then
+    "${CMD[@]}"
+    exit 1
+  fi
+  exit 0
+fi
+
+"${CMD[@]}"

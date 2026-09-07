@@ -1,0 +1,160 @@
+version: "2"
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  modules-download-mode: readonly
+
+output:
+  formats:
+    text:
+      path: stdout
+      colors: true
+      print-issued-lines: false
+      print-linter-name: false
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - bodyclose
+    - noctx
+    - contextcheck
+    - revive
+    - misspell
+    - unconvert
+    - unparam
+    - whitespace
+    - predeclared
+    - varnamelen
+    - forbidigo
+    - nonamedreturns
+    - wrapcheck
+    - mnd
+    - nilnil
+    - nilnesserr
+    - usestdlibvars
+  
+  exclusions:
+    paths:
+      - sdks/go/generated
+    rules:
+      - linters:
+          - forbidigo
+        text: 'use of `.*(WriteString|DecodeString|EncodeToString|NewInt|ConnectionString|connectionString)` forbidden'
+
+  settings:
+    govet:
+      enable-all: false
+      enable:
+        - shadow
+        - nilness
+        - loopclosure
+
+    varnamelen:
+      min-name-length: 3
+      ignore-names:
+        - ctx
+        - db
+        - sub
+        - err
+        - ok
+        - mux
+        - tx
+        - sql
+        - mac
+        - gcm
+        - ID
+        - URL
+        - TTL
+        - JWT
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+
+    revive:
+      severity: error
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: receiver-naming
+          disabled: true
+        - name: var-naming
+          arguments:
+            - ["ID", "URL", "TTL", "JWT", "HTTP", "JSON", "OIDC", "API", "IP", "UUID"]
+            - ["cfg", "dbPool", "databasePool", "poolDB", "pool", "km", "mgr", "keyMgr", "sa", "saID", "saKey", "saManager", "wh", "whServer", "whID", "ch", "chan", "eventsCh", "eventsChan", "failCh", "failChan", "mu", "col", "cols", "colQuoted", "badCol", "val", "vals", "valRows", "badVal", "obj", "firstObj", "setObj", "mut", "badMut", "mutOp", "mutRes", "req", "reqMatch", "userReq", "res", "resp", "userResp", "noContentResp", "tz", "tzMap", "tzEntries", "accountId", "endpointUrl", "requestTtl", "accountSid", "sessionJwt", "admin", "administrator", "operator", "consoleUsr", "cpUser"]
+
+    forbidigo:
+      forbid:
+        - pattern: '(?i)\b(admin|administrator|operator)\b'
+          msg: "Term prohibited: use 'console user' or 'control plane'"
+        - pattern: '\b(canceledCtx|authCtx|timeoutCtx)\b'
+          msg: "Alternative context identifier prohibited: use 'ctx' with lexical scoping"
+        - pattern: '\b[a-zA-Z0-9]+(Str|Int|String|Bool)\b'
+          msg: "Meaningless representation suffix prohibited"
+      analyze-types: true
+
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - return
+      ignored-numbers:
+        - "0"
+        - "1"
+        - "2"
+        - "10"
+        - "100"
+
+    wrapcheck:
+      ignore-package-globs:
+        - encoding/*
+        - github.com/jackc/pgx/*
+        - github.com/fergusstrange/embedded-postgres*
+
+    nilnil:
+      detect-opposite: true
+      checked-types:
+        - chan
+        - func
+        - iface
+        - map
+        - ptr
+        - uintptr
+        - unsafeptr
+
+    usestdlibvars:
+      http-method: true
+      http-status-code: true
+      time-weekday: true
+      time-month: true
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      tls-signature-scheme: true
+      constant-kind: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false

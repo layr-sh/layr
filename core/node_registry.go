@@ -1,0 +1,90 @@
+package core
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+	"uuid"
+)
+
+// NodeRegistry handles cluster heartbeats and active nodes.
+type NodeRegistry struct {
+	db                *DatabasePool
+	nodeID            uuid.UUID
+	nodeName          string
+	services          []string
+	stopChannel       chan struct{}
+	closeOnce         sync.Once
+	waitGroup         sync.WaitGroup
+	heartbeatInterval time.Duration // configurable for testing; default 10s
+}
+
+// NewNodeRegistry initializes node in core.nodes.
+func NewNodeRegistry(db *DatabasePool, nodeName string, services []string) *NodeRegistry {
+	return &NodeRegistry{
+		db:                db,
+		nodeName:          nodeName,
+		services:          services,
+		stopChannel:       make(chan struct{}),
+		heartbeatInterval: 10 * time.Second,
+	}
+}
+
+const (
+	heartbeatTimeoutDuration  = 5 * time.Second
+	unregisterTimeoutDuration = 3 * time.Second
+)
+
+// Register registers this node and starts background heartbeat.
+func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
+	var nodeID uuid.UUID
+	err := nodeRegistry.db.QueryRow(ctx, `
+		INSERT INTO core.nodes (node_name, enabled_services, last_heartbeat_at)
+		VALUES ($1, $2, clock_timestamp())
+		RETURNING id
+	`, nodeRegistry.nodeName, nodeRegistry.services).Scan(&nodeID)
+	if err != nil {
+		return fmt.Errorf("failed to register node in core.nodes: %w", err)
+	}
+	nodeRegistry.nodeID = nodeID
+
+	nodeRegistry.waitGroup.Add(1)
+	go nodeRegistry.startHeartbeatLoop(ctx)
+	return nil
+}
+
+func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
+	defer nodeRegistry.waitGroup.Done()
+	ticker := time.NewTicker(nodeRegistry.heartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Heartbeats must outlive transient request cancellation; detach but keep values.
+			{
+				heartbeatContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), heartbeatTimeoutDuration)
+				_, _ = nodeRegistry.db.Exec(heartbeatContext, "UPDATE core.nodes SET last_heartbeat_at = clock_timestamp() WHERE id = $1", nodeRegistry.nodeID)
+				_, _ = nodeRegistry.db.Exec(heartbeatContext, "DELETE FROM core.nodes WHERE last_heartbeat_at < clock_timestamp() - INTERVAL '60 seconds'")
+				cancel()
+			}
+		case <-nodeRegistry.stopChannel:
+			// Unregister must run even though stopChannel closed; detach from ctx.
+			{
+				unregisterContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), unregisterTimeoutDuration)
+				_, _ = nodeRegistry.db.Exec(unregisterContext, "DELETE FROM core.nodes WHERE id = $1", nodeRegistry.nodeID)
+				cancel()
+			}
+			return
+		}
+	}
+}
+
+// Close stops heartbeat and unregisters the node.
+func (nodeRegistry *NodeRegistry) Close() {
+	nodeRegistry.closeOnce.Do(func() {
+		close(nodeRegistry.stopChannel)
+		nodeRegistry.waitGroup.Wait()
+	})
+}
