@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,7 +14,10 @@ import (
 	"uuid"
 
 	"layr.sh/auth/password"
+	"layr.sh/logger"
 )
+
+var log = logger.New()
 
 const (
 	defaultDatabaseConnectionTimeout = 30 * time.Second
@@ -82,12 +84,12 @@ func NewKernel() (*Kernel, error) {
 	return kernel, nil
 }
 
-// ClientPublishableKey returns the deterministic client publishable key derived from the master encryption key.
-func (kernel *Kernel) ClientPublishableKey() string {
+// PublishableKey returns the deterministic publishable key derived from the master encryption key.
+func (kernel *Kernel) PublishableKey() string {
 	if kernel.cryptoKeyManager == nil {
 		return ""
 	}
-	return kernel.cryptoKeyManager.DeriveClientPublishableKey()
+	return kernel.cryptoKeyManager.DerivePublishableKey()
 }
 
 // Start boots the database, applies migrations, launches heartbeats, and starts the HTTP gateway.
@@ -132,7 +134,7 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	kernel.db = db
 
 	// Run Core Migrations
-	log.Printf("[Kernel] Executing foundational migrations...")
+	log.Infof("Executing foundational migrations...")
 	allMigrations := GetRegisteredDatabaseMigrations()
 
 	if migrationErr := kernel.db.RunMigrations(ctx, allMigrations); migrationErr != nil {
@@ -188,7 +190,7 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 		service.RegisterRoutes(kernel.server.Router(), kernel.server.ControlPlaneRouter())
 	}
 
-	log.Printf("[Kernel] Layr Gateway listening on %s (Services: %v)", config.Server.ListenAddr, config.GetEnabledServices())
+	log.Infof("Layr Gateway listening on %s (Services: %v)", config.Server.ListenAddr, config.GetEnabledServices())
 
 	errChannel := make(chan error, 1)
 	go func() {
@@ -205,10 +207,10 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	case err := <-errChannel:
 		return err
 	case receivedSignal := <-signalChannel:
-		log.Printf("[Kernel] Received signal %s, initiating graceful shutdown...", receivedSignal)
+		log.Infof("Received signal %s, initiating graceful shutdown...", receivedSignal)
 		return kernel.Stop(ctx)
 	case <-ctx.Done():
-		log.Printf("[Kernel] Context cancelled, initiating graceful shutdown...")
+		log.Infof("Context cancelled, initiating graceful shutdown...")
 		return kernel.Stop(ctx)
 	}
 }
@@ -322,7 +324,7 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 			_ = kernel.embeddedDB.Stop()
 		}
 
-		log.Printf("[Kernel] Layr process stopped cleanly.")
+		log.Infof("Layr process stopped cleanly.")
 	})
 	return nil
 }
@@ -685,10 +687,10 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 		return fmt.Errorf("failed to create linked root service account: %w", err)
 	}
 
-	log.Printf("[Kernel] Initial console root account created:")
-	log.Printf("[Kernel]   Email:               %s", email)
-	log.Printf("[Kernel]   Password:            %s", plainPassword)
-	log.Printf("[Kernel]   Service Account Key: %s", serviceAccountResult.SecretKey)
+	log.Infof("Initial console root account created:")
+	log.Infof("  Email:               %s", email)
+	log.Infof("  Password:            %s", plainPassword)
+	log.Infof("  Service Account Key: %s", serviceAccountResult.SecretKey)
 
 	return nil
 }

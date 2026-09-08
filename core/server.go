@@ -44,10 +44,10 @@ type TopologyServerInfo struct {
 
 // TopologyResponse represents the dynamic topology discovery model.
 type TopologyResponse struct {
-	Project              TopologyProjectInfo `json:"project"`
-	EnabledServices      []string            `json:"enabled_services"`
-	Server               TopologyServerInfo  `json:"server"`
-	ClientPublishableKey string              `json:"client_publishable_key,omitempty"`
+	Project         TopologyProjectInfo `json:"project"`
+	EnabledServices []string            `json:"enabled_services"`
+	Server          TopologyServerInfo  `json:"server"`
+	PublishableKey  string              `json:"publishable_key,omitempty"`
 }
 
 // HTTPServer coordinates the Layr HTTP gateway, probes, and API dispatch.
@@ -134,13 +134,13 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 	GetRoute[TopologyResponse](router, "/api/v1/topology", server.handleTopologyRequest,
 		RouteTag("Discovery"),
 		RouteSummary("Get dynamic cluster topology and enabled services"),
-		RouteDescription("Returns dynamic cluster topology, enabled service flags, project metadata, and client publishable key for SDK initialization."),
+		RouteDescription("Returns dynamic cluster topology, enabled service flags, project metadata, and publishable key for SDK initialization."),
 		RouteOperationID("core__topology"),
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("topology"),
 	)
 
-	// Mount Public Probe Routes directly on root mux (No client publishable key required)
+	// Mount Public Probe Routes directly on root mux (No publishable key required)
 	mux.Handle("/healthz", router.Mux())
 	mux.Handle("/readyz", router.Mux())
 	mux.Handle("/metrics", router.Mux())
@@ -167,7 +167,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 	mux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
 
 	// Mount Public API Router with Publishable Key Gate
-	mux.Handle("/api/v1/", server.ClientPublishableKeyMiddleware(router.Mux()))
+	mux.Handle("/api/v1/", server.PublishableKeyMiddleware(router.Mux()))
 
 	server.server = &http.Server{
 		Addr:              config.Server.ListenAddr,
@@ -272,8 +272,8 @@ func (server *HTTPServer) handleMetricsRequest(responseWriter http.ResponseWrite
 	_, _ = responseWriter.Write([]byte(output))
 }
 
-// ClientPublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /api/v1/* routes.
-func (server *HTTPServer) ClientPublishableKeyMiddleware(next http.Handler) http.Handler {
+// PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /api/v1/* routes.
+func (server *HTTPServer) PublishableKeyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
 		if path == "/api/v1/topology" ||
@@ -287,17 +287,17 @@ func (server *HTTPServer) ClientPublishableKeyMiddleware(next http.Handler) http
 		}
 
 		if server.cryptoKeyManager != nil {
-			clientPublishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
+			publishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
 			serviceAccountKey := request.Header.Get("X-Layr-Service-Account-Key")
 			authHeader := request.Header.Get("Authorization")
 
-			isValid := server.cryptoKeyManager.VerifyClientPublishableKey(clientPublishableKey)
+			isValid := server.cryptoKeyManager.VerifyPublishableKey(publishableKey)
 			if !isValid && (serviceAccountKey != "" || authHeader != "") {
 				isValid = true
 			}
 
 			if !isValid {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing client publishable key", "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing publishable key", "LAYR_CORE_006")
 				return
 			}
 		}
@@ -308,9 +308,9 @@ func (server *HTTPServer) ClientPublishableKeyMiddleware(next http.Handler) http
 
 // /api/v1/topology - Dynamic cluster & topology discovery
 func (server *HTTPServer) handleTopologyRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	clientPublishableKey := ""
+	publishableKey := ""
 	if server.cryptoKeyManager != nil {
-		clientPublishableKey = server.cryptoKeyManager.DeriveClientPublishableKey()
+		publishableKey = server.cryptoKeyManager.DerivePublishableKey()
 	}
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -325,7 +325,7 @@ func (server *HTTPServer) handleTopologyRequest(responseWriter http.ResponseWrit
 			ListenAddr: config.Server.ListenAddr,
 			BaseURL:    config.Server.BaseURL,
 		},
-		ClientPublishableKey: clientPublishableKey,
+		PublishableKey: publishableKey,
 	})
 }
 

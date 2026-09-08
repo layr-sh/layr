@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"os"
@@ -91,13 +90,13 @@ func (embeddedDatabase *EmbeddedDatabase) Start(ctx context.Context) (string, er
 
 	embeddedDatabase.postgres = embeddedpostgres.NewDatabase(embeddedDatabaseConfig)
 
-	log.Printf("[EmbeddedDatabase] Starting EmbeddedDatabase PostgreSQL %s on port %d (dataDir: %s)...", EmbeddedDatabasePostgresVersion, embeddedDatabase.port, absDataDir)
+	log.Infof("Starting Embedded PostgreSQL %s on port %d (dataDir: %s)...", EmbeddedDatabasePostgresVersion, embeddedDatabase.port, absDataDir)
 	if err := embeddedDatabase.postgres.Start(); err != nil {
 		return "", fmt.Errorf("failed to start embedded postgres: %w", err)
 	}
 
 	databaseURL := fmt.Sprintf("postgres://%s:%s@127.0.0.1:%d/%s?sslmode=disable", EmbeddedDatabaseUsername, EmbeddedDatabasePassword, embeddedDatabase.port, EmbeddedDatabaseName)
-	log.Printf("[EmbeddedDatabase] PostgreSQL ready at %s", databaseURL)
+	log.Infof("PostgreSQL ready at %s", databaseURL)
 
 	return databaseURL, nil
 }
@@ -107,7 +106,7 @@ func (embeddedDatabase *EmbeddedDatabase) Stop() error {
 	if embeddedDatabase.postgres == nil {
 		return nil
 	}
-	log.Printf("[EmbeddedDatabase] Shutting down embedded PostgreSQL...")
+	log.Infof("Shutting down embedded PostgreSQL...")
 	err := embeddedDatabase.postgres.Stop()
 	embeddedDatabase.postgres = nil
 	return err

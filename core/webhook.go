@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -181,7 +180,7 @@ func (webhookEventBus *WebhookEventBus) Publish(ctx context.Context, event Webho
 	select {
 	case webhookEventBus.dispatchChannel <- event:
 	default:
-		log.Printf("[WebhookEventBus] dispatch buffer full, dropping event %s (%s)", event.ID, event.Event)
+		log.Warnf("dispatch buffer full, dropping event %s (%s)", event.ID, event.Event)
 	}
 }
 

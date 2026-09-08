@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,39 +24,7 @@ const (
 
 var (
 	yamlMarshal = yaml.Marshal
-
-	verboseLogging bool
-	verboseMutex   sync.RWMutex
 )
-
-// SetVerboseLogging enables or disables verbose configuration override logging.
-func SetVerboseLogging(enabled bool) {
-	verboseMutex.Lock()
-	defer verboseMutex.Unlock()
-	verboseLogging = enabled
-}
-
-func isVerboseLoggingEnabled() bool {
-	verboseMutex.RLock()
-	isExplicit := verboseLogging
-	verboseMutex.RUnlock()
-	if isExplicit {
-		return true
-	}
-
-	for _, envKey := range []string{"LAYR_DEBUG", "DEBUG", "LAYR_VERBOSE", "VERBOSE"} {
-		if parseFlag(os.Getenv(envKey)) {
-			return true
-		}
-	}
-	return false
-}
-
-func logEnvOverride(target string) {
-	if isVerboseLoggingEnabled() {
-		log.Printf("Overriding %s from ENV", target)
-	}
-}
 
 // Config represents the Tier 1 configuration (layr.yaml + LAYR__ env vars).
 type Config struct {
@@ -289,13 +256,13 @@ func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 	if value := os.Getenv("DATABASE_URL"); value != "" {
 		config.Database.URL = value
 		if shouldLog {
-			logEnvOverride("database.url")
+			log.Debugf("Overriding %s from ENV", "database.url")
 		}
 	}
 	if value := os.Getenv("MASTER_ENCRYPTION_KEY"); value != "" {
 		config.Security.MasterEncryptionKey = value
 		if shouldLog {
-			logEnvOverride("security.master_encryption_key")
+			log.Debugf("Overriding %s from ENV", "security.master_encryption_key")
 		}
 	}
 	if value := os.Getenv("PORT"); value != "" {
@@ -307,14 +274,14 @@ func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 				config.Server.ListenAddr = ":" + value
 			}
 			if shouldLog {
-				logEnvOverride("server.port")
+				log.Debugf("Overriding %s from ENV", "server.port")
 			}
 		}
 	}
 	if value := os.Getenv("BASE_URL"); value != "" {
 		config.Server.BaseURL = value
 		if shouldLog {
-			logEnvOverride("server.base_url")
+			log.Debugf("Overriding %s from ENV", "server.base_url")
 		}
 	}
 
@@ -331,7 +298,7 @@ func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 			}
 			if canonicalTarget, ok := applyEnvConfigField(config, section, field, parts[1]); ok {
 				if shouldLog {
-					logEnvOverride(canonicalTarget)
+					log.Debugf("Overriding %s from ENV", canonicalTarget)
 				}
 			}
 		}
