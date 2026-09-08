@@ -19,20 +19,20 @@ func TestCoreCryptoZeroDecryptionLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
-	if !cryptoKeyManager.VerifyPublishableKey(publishableKey) {
-		t.Fatal("publishable key verification failed")
+	clientPublishableKey := cryptoKeyManager.DeriveClientPublishableKey()
+	if !cryptoKeyManager.VerifyClientPublishableKey(clientPublishableKey) {
+		t.Fatal("client publishable key verification failed")
 	}
 
 	// Publishable key edge cases
-	if !cryptoKeyManager.VerifyPublishableKey("  " + publishableKey + "\n") {
-		t.Fatal("publishable key verification with whitespace failed")
+	if !cryptoKeyManager.VerifyClientPublishableKey("  " + clientPublishableKey + "\n") {
+		t.Fatal("client publishable key verification with whitespace failed")
 	}
-	if cryptoKeyManager.VerifyPublishableKey("invalid-key-attempt-000000000000000000000000000000000000000000000000") {
-		t.Fatal("expected failure on invalid publishable key")
+	if cryptoKeyManager.VerifyClientPublishableKey("invalid-key-attempt-000000000000000000000000000000000000000000000000") {
+		t.Fatal("expected failure on invalid client publishable key")
 	}
-	if cryptoKeyManager.VerifyPublishableKey("") {
-		t.Fatal("expected failure on empty publishable key")
+	if cryptoKeyManager.VerifyClientPublishableKey("") {
+		t.Fatal("expected failure on empty client publishable key")
 	}
 
 	// Scenario 2: Secret Input Envelope Encryption & Zero-Decryption UI Projection

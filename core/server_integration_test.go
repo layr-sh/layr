@@ -133,7 +133,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		_, _ = responseWriter.Write([]byte(postgresVersion))
 	})
 
-	// 1. Without publishable key -> 401 Unauthorized
+	// 1. Without client publishable key -> 401 Unauthorized
 	unauthorizedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
 	unauthorizedRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(unauthorizedRecorder, unauthorizedRequest)
@@ -142,25 +142,25 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		t.Fatalf("expected 401 for unauthenticated db-check, got %d", unauthorizedRecorder.Code)
 	}
 
-	// 2. With invalid publishable key -> 401 Unauthorized
+	// 2. With invalid client publishable key -> 401 Unauthorized
 	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
-	invalidKeyRequest.Header.Set("X-Layr-Publishable-Key", "invalid_publishable_key_123456789")
+	invalidKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", "invalid_client_publishable_key_123456789")
 	invalidKeyRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(invalidKeyRecorder, invalidKeyRequest)
 
 	if invalidKeyRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for invalid publishable key, got %d", invalidKeyRecorder.Code)
+		t.Fatalf("expected 401 for invalid client publishable key, got %d", invalidKeyRecorder.Code)
 	}
 
-	// 3. With valid derived publishable key -> 200 OK and live DB query result
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
+	// 3. With valid derived client publishable key -> 200 OK and live DB query result
+	clientPublishableKey := cryptoKeyManager.DeriveClientPublishableKey()
 	validKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
-	validKeyRequest.Header.Set("X-Layr-Publishable-Key", publishableKey)
+	validKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", clientPublishableKey)
 	validKeyRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(validKeyRecorder, validKeyRequest)
 
 	if validKeyRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 for valid publishable key, got %d", validKeyRecorder.Code)
+		t.Fatalf("expected 200 for valid client publishable key, got %d", validKeyRecorder.Code)
 	}
 	if !strings.Contains(validKeyRecorder.Body.String(), "PostgreSQL") {
 		t.Fatalf("expected PostgreSQL version string in body, got: %s", validKeyRecorder.Body.String())

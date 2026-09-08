@@ -76,6 +76,16 @@ func toPascalCase(input string) string {
 	return builder.String()
 }
 
+func allowedPrefixesForFolder(folderName string) []string {
+	folderPascal := toPascalCase(folderName)
+	standardPrefix := "Test" + folderPascal
+	uppercasePrefix := "Test" + strings.ToUpper(folderPascal)
+	if standardPrefix == uppercasePrefix {
+		return []string{standardPrefix}
+	}
+	return []string{uppercasePrefix, standardPrefix}
+}
+
 func inspectTestFile(fileSet *token.FileSet, filePath, repositoryRoot string) ([]Violation, int, error) {
 	parsedFile, parseErr := parser.ParseFile(fileSet, filePath, nil, parser.ParseComments)
 	if parseErr != nil {
@@ -88,8 +98,7 @@ func inspectTestFile(fileSet *token.FileSet, filePath, repositoryRoot string) ([
 	}
 
 	folderName := filepath.Base(filepath.Dir(filePath))
-	folderPascal := toPascalCase(folderName)
-	expectedPrefix := "Test" + folderPascal
+	expectedPrefixes := allowedPrefixesForFolder(folderName)
 
 	var violations []Violation
 	testCount := 0
@@ -114,12 +123,24 @@ func inspectTestFile(fileSet *token.FileSet, filePath, repositoryRoot string) ([
 			continue
 		}
 
-		if !strings.HasPrefix(functionName, expectedPrefix) {
+		hasValidPrefix := false
+		for _, expectedPrefix := range expectedPrefixes {
+			if strings.HasPrefix(functionName, expectedPrefix) {
+				hasValidPrefix = true
+				break
+			}
+		}
+
+		if !hasValidPrefix {
+			prefixLabel := expectedPrefixes[0]
+			if len(expectedPrefixes) > 1 {
+				prefixLabel = strings.Join(expectedPrefixes, "' or '")
+			}
 			violations = append(violations, Violation{
 				Position:     sourcePosition,
 				FunctionName: functionName,
 				FilePath:     relativeFilePath,
-				Message:      fmt.Sprintf("test function name in folder '%s' must start with '%s'", folderName, expectedPrefix),
+				Message:      fmt.Sprintf("test function name in folder '%s' must start with '%s'", folderName, prefixLabel),
 			})
 			continue
 		}

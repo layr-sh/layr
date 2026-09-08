@@ -162,8 +162,8 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Check PublishableKey
-	if publishableKey := kernel.PublishableKey(); len(publishableKey) != 64 {
-		t.Fatalf("expected 64-char hex publishable key from kernel, got: %s", publishableKey)
+	if clientPublishableKey := kernel.ClientPublishableKey(); len(clientPublishableKey) != 64 {
+		t.Fatalf("expected 64-char hex client publishable key from kernel, got: %s", clientPublishableKey)
 	}
 
 	// Cancel context to test graceful shutdown via ctx.Done()

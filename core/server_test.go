@@ -72,7 +72,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("metrics body missing expected prometheus metrics: %s", metricsBody)
 	}
 
-	// Test /api/v1/topology without publishable key -> 200 (System Discovery is public & unauthenticated)
+	// Test /api/v1/topology without client publishable key -> 200 (System Discovery is public & unauthenticated)
 	topologyRequestNoKey := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
 	topologyRecorderNoKey := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(topologyRecorderNoKey, topologyRequestNoKey)
@@ -86,7 +86,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		_, _ = responseWriter.Write([]byte("ok-client"))
 	})
 
-	// Test public client endpoint without publishable key -> 401
+	// Test public client endpoint without client publishable key -> 401
 	clientRequestNoKey := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientRecorderNoKey := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientRecorderNoKey, clientRequestNoKey)
@@ -94,10 +94,10 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 401 without key, got %d", clientRecorderNoKey.Code)
 	}
 
-	// Test public client endpoint with valid publishable key -> 200
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
+	// Test public client endpoint with valid client publishable key -> 200
+	clientPublishableKey := cryptoKeyManager.DeriveClientPublishableKey()
 	clientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientRequest.Header.Set("X-Layr-Publishable-Key", publishableKey)
+	clientRequest.Header.Set("X-Layr-Client-Publishable-Key", clientPublishableKey)
 	clientRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientRecorder, clientRequest)
 	if clientRecorder.Code != http.StatusOK {

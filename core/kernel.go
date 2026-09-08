@@ -82,12 +82,12 @@ func NewKernel() (*Kernel, error) {
 	return kernel, nil
 }
 
-// PublishableKey returns the deterministic client publishable key derived from the master encryption key.
-func (kernel *Kernel) PublishableKey() string {
+// ClientPublishableKey returns the deterministic client publishable key derived from the master encryption key.
+func (kernel *Kernel) ClientPublishableKey() string {
 	if kernel.cryptoKeyManager == nil {
 		return ""
 	}
-	return kernel.cryptoKeyManager.DerivePublishableKey()
+	return kernel.cryptoKeyManager.DeriveClientPublishableKey()
 }
 
 // Start boots the database, applies migrations, launches heartbeats, and starts the HTTP gateway.

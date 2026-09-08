@@ -19,12 +19,12 @@ import (
 
 // Standard HKDF Subkey Contexts
 const (
-	ContextDBSecrets      = "layr:db:envelope:aes256gcm:v1"
-	ContextJWTSigning     = "layr:auth:jwt:ed25519:v1"
-	ContextConsoleSalt    = "layr:console:user:salt:v1"
-	ContextIPCHMAC        = "layr:core:ipc:hmacsha256:v1"
-	ContextStorageEnc     = "layr:storage:chunk:aes256gcm:v1"
-	ContextPublishableKey = "layr:client:publishable:v1"
+	CryptoContextDBEnvelopeAES256GCM       = "db:envelope:aes256gcm:v1"
+	CryptoContextAuthJWTSigning            = "auth:jwt:ed25519:v1"
+	CryptoContextConsoleUserSalt           = "console:user:salt:v1"
+	CryptoContextCoreIPCHMAC               = "core:ipc:hmacsha256:v1"
+	CryptoContextFileStorageChunkAES256GCM = "file_storage:chunk:aes256gcm:v1"
+	CryptoContextClientPublishableKey      = "client:publishable:v1"
 )
 
 const (
@@ -79,7 +79,7 @@ func (cryptoKeyManager *CryptoKeyManager) DeriveSubkey(derivationContext string)
 // EncryptField encrypts plaintext using the DB secrets subkey in AES-256-GCM.
 // Output format: enc:v1:aes256gcm:<base64-iv>:<base64-ciphertext>:<base64-tag>
 func (cryptoKeyManager *CryptoKeyManager) EncryptField(plaintext []byte) (string, error) {
-	subkey := cryptoKeyManager.deriveSubkey(ContextDBSecrets)
+	subkey := cryptoKeyManager.deriveSubkey(CryptoContextDBEnvelopeAES256GCM)
 
 	// AES-256 with exactly 32-byte key and GCM with valid AES block cannot fail
 	block, _ := aes.NewCipher(subkey)
@@ -129,7 +129,7 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 		return nil, fmt.Errorf("invalid tag base64: %w", err)
 	}
 
-	subkey := cryptoKeyManager.deriveSubkey(ContextDBSecrets)
+	subkey := cryptoKeyManager.deriveSubkey(CryptoContextDBEnvelopeAES256GCM)
 	block, _ := aes.NewCipher(subkey)
 	gcm, _ := cipher.NewGCM(block)
 
@@ -146,19 +146,19 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 	return plaintext, nil
 }
 
-// DerivePublishableKey returns the deterministic client publishable key.
-func (cryptoKeyManager *CryptoKeyManager) DerivePublishableKey() string {
-	subkey := cryptoKeyManager.deriveSubkey(ContextPublishableKey)
+// DeriveClientPublishableKey returns the deterministic client publishable key.
+func (cryptoKeyManager *CryptoKeyManager) DeriveClientPublishableKey() string {
+	subkey := cryptoKeyManager.deriveSubkey(CryptoContextClientPublishableKey)
 	return hex.EncodeToString(subkey)
 }
 
-// VerifyPublishableKey checks if the presented key matches the derived publishable key.
-func (cryptoKeyManager *CryptoKeyManager) VerifyPublishableKey(presentedKey string) bool {
+// VerifyClientPublishableKey checks if the presented key matches the derived client publishable key.
+func (cryptoKeyManager *CryptoKeyManager) VerifyClientPublishableKey(presentedKey string) bool {
 	presentedKey = strings.TrimSpace(presentedKey)
 	if presentedKey == "" {
 		return false
 	}
-	expected := cryptoKeyManager.DerivePublishableKey()
+	expected := cryptoKeyManager.DeriveClientPublishableKey()
 	return subtle.ConstantTimeCompare([]byte(presentedKey), []byte(expected)) == 1
 }
 

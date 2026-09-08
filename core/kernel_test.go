@@ -68,13 +68,13 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 		t.Fatal("expected non-nil Kernel instance")
 	}
 
-	if publishableKey := kernel.PublishableKey(); len(publishableKey) != 64 {
-		t.Fatalf("expected 64-char hex publishable key, got %s", publishableKey)
+	if clientPublishableKey := kernel.ClientPublishableKey(); len(clientPublishableKey) != 64 {
+		t.Fatalf("expected 64-char hex client publishable key, got %s", clientPublishableKey)
 	}
 
 	nilKeyKernel := &Kernel{}
-	if publishableKey := nilKeyKernel.PublishableKey(); publishableKey != "" {
-		t.Fatalf("expected empty key for nil cryptoCryptoKeyManager, got %s", publishableKey)
+	if clientPublishableKey := nilKeyKernel.ClientPublishableKey(); clientPublishableKey != "" {
+		t.Fatalf("expected empty key for nil cryptoCryptoKeyManager, got %s", clientPublishableKey)
 	}
 
 	// Clean stop on unstarted kernel (all nil subsystems)
