@@ -38,11 +38,13 @@ func NewRedisKVStore(ctx context.Context) (*RedisKVStore, error) {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
+	log.Debugf("initialized RedisKVStore")
 	return &RedisKVStore{client: client}, nil
 }
 
 // Get retrieves a string value by key. Returns ErrKVStoreKeyNotFound if missing.
 func (redisKVStore *RedisKVStore) Get(ctx context.Context, key string) (string, error) {
+	log.Tracef("RedisKVStore.Get key %s", key)
 	value, err := redisKVStore.client.Get(ctx, key).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
@@ -76,6 +78,7 @@ func (redisKVStore *RedisKVStore) MGet(ctx context.Context, keys []string) (map[
 
 // Set stores a string value with expiry.
 func (redisKVStore *RedisKVStore) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+	log.Tracef("RedisKVStore.Set key %s (expiry: %v)", key, expiry)
 	err := redisKVStore.client.Set(ctx, key, value, expiry).Err()
 	if err != nil {
 		return fmt.Errorf("failed to set redis key '%s': %w", key, err)
@@ -102,6 +105,7 @@ func (redisKVStore *RedisKVStore) MSet(ctx context.Context, entries map[string]s
 
 // SetNX stores a value only if the key does not already exist in Redis.
 func (redisKVStore *RedisKVStore) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
+	log.Tracef("RedisKVStore.SetNX key %s (expiry: %v)", key, expiry)
 	ok, err := redisKVStore.client.SetNX(ctx, key, value, expiry).Result()
 	if err != nil {
 		return false, fmt.Errorf("failed to setnx redis key '%s': %w", key, err)
@@ -111,6 +115,7 @@ func (redisKVStore *RedisKVStore) SetNX(ctx context.Context, key string, value s
 
 // Delete removes a key from Redis.
 func (redisKVStore *RedisKVStore) Delete(ctx context.Context, key string) error {
+	log.Tracef("RedisKVStore.Delete key %s", key)
 	err := redisKVStore.client.Del(ctx, key).Err()
 	if err != nil {
 		return fmt.Errorf("failed to delete redis key '%s': %w", key, err)
@@ -120,6 +125,7 @@ func (redisKVStore *RedisKVStore) Delete(ctx context.Context, key string) error 
 
 // Increment atomically increments an integer counter with the specified expiry.
 func (redisKVStore *RedisKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+	log.Tracef("RedisKVStore.Increment key %s (expiry: %v)", key, expiry)
 	pipe := redisKVStore.client.Pipeline()
 	incrCmd := pipe.Incr(ctx, key)
 	if expiry > 0 {
@@ -135,6 +141,7 @@ func (redisKVStore *RedisKVStore) Increment(ctx context.Context, key string, exp
 
 // Expire updates the expiry on an existing Redis key.
 func (redisKVStore *RedisKVStore) Expire(ctx context.Context, key string, expiry time.Duration) error {
+	log.Tracef("RedisKVStore.Expire key %s (expiry: %v)", key, expiry)
 	ok, err := redisKVStore.client.Expire(ctx, key, expiry).Result()
 	if err != nil {
 		return fmt.Errorf("failed to expire redis key '%s': %w", key, err)
@@ -147,6 +154,7 @@ func (redisKVStore *RedisKVStore) Expire(ctx context.Context, key string, expiry
 
 // Ping checks Redis connectivity.
 func (redisKVStore *RedisKVStore) Ping(ctx context.Context) error {
+	log.Trace("RedisKVStore.Ping")
 	if err := redisKVStore.client.Ping(ctx).Err(); err != nil {
 		return fmt.Errorf("redis ping failed: %w", err)
 	}
@@ -155,6 +163,7 @@ func (redisKVStore *RedisKVStore) Ping(ctx context.Context) error {
 
 // Close terminates Redis connections.
 func (redisKVStore *RedisKVStore) Close() error {
+	log.Debug("RedisKVStore.Close")
 	if err := redisKVStore.client.Close(); err != nil {
 		return fmt.Errorf("failed to close redis client: %w", err)
 	}

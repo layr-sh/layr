@@ -70,6 +70,9 @@ func (embeddedDatabase *EmbeddedDatabase) Start(ctx context.Context) (string, er
 	dataPath := filepath.Join(absDataDir, "pgdata")
 	binariesPath := filepath.Join(absDataDir, "binaries")
 
+	log.Debugf("configuring embedded PostgreSQL on port %d", embeddedDatabase.port)
+	log.Tracef("embedded PostgreSQL paths: data=%s, runtime=%s", dataPath, runtimePath)
+
 	embeddedDatabaseConfig := embeddedpostgres.DefaultConfig().
 		Username(EmbeddedDatabaseUsername).
 		Password(EmbeddedDatabasePassword).
@@ -106,9 +109,11 @@ func (embeddedDatabase *EmbeddedDatabase) Stop() error {
 	if embeddedDatabase.postgres == nil {
 		return nil
 	}
+	log.Debugf("shutting down embedded PostgreSQL")
 	log.Infof("Shutting down embedded PostgreSQL...")
 	err := embeddedDatabase.postgres.Stop()
 	embeddedDatabase.postgres = nil
+	log.Tracef("embedded PostgreSQL shutdown complete")
 	return err
 }
 

@@ -57,6 +57,7 @@ func SetSessionCookie(responseWriter http.ResponseWriter, secureName, plainName,
 	if isSecure {
 		cookieName = secureName
 	}
+	log.Tracef("setting session cookie %s (secure: %t)", cookieName, isSecure)
 	cookie := &http.Cookie{
 		Name:     cookieName,
 		Value:    token,
@@ -71,6 +72,7 @@ func SetSessionCookie(responseWriter http.ResponseWriter, secureName, plainName,
 
 // ClearSessionCookie clears both secure and insecure session cookies.
 func ClearSessionCookie(responseWriter http.ResponseWriter, secureName, plainName string, isSecure bool) {
+	log.Tracef("clearing session cookies (secure: %t)", isSecure)
 	cookieNames := []string{plainName}
 	if isSecure {
 		cookieNames = append(cookieNames, secureName)

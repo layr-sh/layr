@@ -121,6 +121,7 @@ func HashSecretKey(secretKey string) string {
 
 // Create creates a new Service Account and returns the plaintext key once.
 func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, input CreateServiceAccountInput) (*CreateServiceAccountResult, error) {
+	log.Debugf("creating service account %q", input.Name)
 	if serviceAccountManager.db == nil {
 		return nil, fmt.Errorf("db connection pool not available")
 	}
@@ -165,6 +166,7 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 
 	_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 
+	log.Tracef("created service account %s with prefix %s", serviceAccountID, prefix)
 	return &CreateServiceAccountResult{
 		ServiceAccount: serviceAccount,
 		SecretKey:      secretKey,
@@ -178,11 +180,13 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 	}
 	secretKey = strings.TrimSpace(secretKey)
 	if len(secretKey) < minimumSecretKeyLength {
+		log.Tracef("service account key length %d is below minimum %d", len(secretKey), minimumSecretKeyLength)
 		return nil, ErrServiceAccountNotFound
 	}
 
 	prefix := secretKey[:secretKeyPrefixLength]
 	hash := HashSecretKey(secretKey)
+	log.Tracef("authenticating service account key (prefix: %s, clientIP: %s)", prefix, clientIP)
 
 	query := `
 		SELECT id, name, description, key_prefix, key_hash, scopes, is_enabled, allowed_ips, expires_at, console_user_id, last_used_at, created_at, last_updated_at
@@ -214,23 +218,28 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 	}
 
 	if matched == nil {
+		log.Debugf("service account authentication failed: no matching active key for prefix %s", prefix)
 		return nil, ErrServiceAccountNotFound
 	}
 
 	if !matched.IsEnabled {
+		log.Warnf("service account authentication rejected: account %s (%q) is disabled", matched.ID, matched.Name)
 		return nil, ErrServiceAccountDisabled
 	}
 
 	if matched.ExpiresAt != nil && time.Now().UTC().After(*matched.ExpiresAt) {
+		log.Warnf("service account authentication rejected: account %s (%q) expired at %s", matched.ID, matched.Name, matched.ExpiresAt.Format(time.RFC3339))
 		return nil, ErrServiceAccountExpired
 	}
 
 	if len(matched.AllowedIPs) > 0 && clientIP != "" {
 		if !isIPAllowed(clientIP, matched.AllowedIPs) {
+			log.Warnf("service account authentication rejected: client IP %s not in allowed list %v for account %s", clientIP, matched.AllowedIPs, matched.ID)
 			return nil, ErrServiceAccountIPBlocked
 		}
 	}
 
+	log.Debugf("authenticated service account %s (%q)", matched.ID, matched.Name)
 	// Update last_used_at asynchronously (detached from request cancellation)
 	go func(serviceAccountID string) {
 		now := time.Now().UTC()
@@ -244,6 +253,7 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 
 // List returns all service accounts.
 func (serviceAccountManager *ServiceAccountManager) List(ctx context.Context) ([]ServiceAccount, error) {
+	log.Trace("listing service accounts from database")
 	if serviceAccountManager.db == nil {
 		return nil, fmt.Errorf("db connection pool not available")
 	}
@@ -268,11 +278,13 @@ func (serviceAccountManager *ServiceAccountManager) List(ctx context.Context) ([
 		_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 		results = append(results, serviceAccount)
 	}
+	log.Tracef("listed %d service accounts", len(results))
 	return results, nil
 }
 
 // Get returns a service account by UUID.
 func (serviceAccountManager *ServiceAccountManager) Get(ctx context.Context, serviceAccountID string) (*ServiceAccount, error) {
+	log.Tracef("retrieving service account %s", serviceAccountID)
 	if serviceAccountManager.db == nil {
 		return nil, fmt.Errorf("db connection pool not available")
 	}
@@ -296,6 +308,7 @@ func (serviceAccountManager *ServiceAccountManager) Get(ctx context.Context, ser
 
 // Update updates service account metadata, scopes, or state.
 func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, serviceAccountID string, input UpdateServiceAccountInput) (*ServiceAccount, error) {
+	log.Debugf("updating service account %s", serviceAccountID)
 	current, err := serviceAccountManager.Get(ctx, serviceAccountID)
 	if err != nil {
 		return nil, err
@@ -355,11 +368,13 @@ func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, 
 	)
 
 	_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
+	log.Tracef("updated service account %s successfully", serviceAccountID)
 	return &serviceAccount, nil
 }
 
 // Delete removes a service account with console ownership and root protection assertion.
 func (serviceAccountManager *ServiceAccountManager) Delete(ctx context.Context, serviceAccountID string) error {
+	log.Debugf("deleting service account %s", serviceAccountID)
 	current, err := serviceAccountManager.Get(ctx, serviceAccountID)
 	if err != nil {
 		return err
@@ -376,10 +391,14 @@ func (serviceAccountManager *ServiceAccountManager) Delete(ctx context.Context, 
 	}
 
 	_, err = serviceAccountManager.db.Exec(ctx, "DELETE FROM core.service_accounts WHERE id = $1", serviceAccountID)
+	if err == nil {
+		log.Tracef("deleted service account %s successfully", serviceAccountID)
+	}
 	return err
 }
 
 func (serviceAccountManager *ServiceAccountManager) assertOtherRootExists(ctx context.Context, excludeID string) error {
+	log.Tracef("asserting existence of another active root service account (excluding %s)", excludeID)
 	query := `
 		SELECT COUNT(*) FROM core.service_accounts
 		WHERE id != $1 AND is_enabled = true AND scopes @> '["*"]'::jsonb
@@ -440,6 +459,7 @@ func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) 
 				next.ServeHTTP(writer, request)
 				return
 			}
+			log.Tracef("evaluating service account authentication for request %s", request.URL.Path)
 			clientIP := ExtractRequestClientIP(request)
 			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
 			if err != nil {

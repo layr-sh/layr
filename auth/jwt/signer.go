@@ -82,6 +82,7 @@ func (claims *Claims) Assert(key string, expected any) error {
 		actual = val
 	}
 
+	log.Tracef("asserting claim key %q (expected %v)", key, expected)
 	if !assertValueEqual(actual, expected) {
 		return fmt.Errorf("jwt claim %q mismatch: expected %v, got %v", key, expected, actual)
 	}
@@ -143,6 +144,7 @@ func NewSigner(keyManager *core.CryptoKeyManager, customKeyID ...string) (*Signe
 		resolvedKeyID = customKeyID[0]
 	}
 
+	log.Debugf("derived Ed25519 signer keypair with keyID %s", resolvedKeyID)
 	return &Signer{
 		privateKey: privateKey,
 		publicKey:  publicKey,
@@ -212,6 +214,7 @@ func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
 	signingInput := headerBase64 + "." + claimsBase64
+	log.Tracef("signing access token for subject %s with keyID %s", claims.Subject, signer.keyID)
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
@@ -221,8 +224,10 @@ func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (
 
 // VerifyAccessToken validates an Ed25519 JWT, asserting signature and expiration/nbf timestamps.
 func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
+	log.Tracef("verifying access token with keyID %s", signer.keyID)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != expectedTokenSegmentCount {
+		log.Debugf("jwt verification failed: invalid segment count %d", len(tokenSegments))
 		return nil, errors.New("invalid token format: must contain 3 segments")
 	}
 
@@ -230,29 +235,35 @@ func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
 	signingInput := tokenSegments[0] + "." + tokenSegments[1]
 	signature, err := base64.RawURLEncoding.DecodeString(tokenSegments[2])
 	if err != nil {
+		log.Debugf("jwt verification failed: invalid signature encoding: %v", err)
 		return nil, errors.New("invalid signature encoding")
 	}
 
 	if !ed25519.Verify(signer.publicKey, []byte(signingInput), signature) {
+		log.Debugf("jwt verification failed: Ed25519 signature mismatch for keyID %s", signer.keyID)
 		return nil, errors.New("jwt signature verification failed")
 	}
 
 	// 2. Decode claims
 	claimsJSON, err := base64.RawURLEncoding.DecodeString(tokenSegments[1])
 	if err != nil {
+		log.Debugf("jwt verification failed: invalid claims base64: %v", err)
 		return nil, fmt.Errorf("invalid claims base64: %w", err)
 	}
 
 	var claims Claims
 	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+		log.Debugf("jwt verification failed: invalid claims json: %v", err)
 		return nil, fmt.Errorf("invalid claims json: %w", err)
 	}
 
 	now := time.Now().UTC().Unix()
 	if claims.ExpiresAt < now {
+		log.Debugf("jwt verification failed: token expired at %d (current: %d)", claims.ExpiresAt, now)
 		return nil, errors.New("jwt token expired")
 	}
 	if claims.NotBefore > now {
+		log.Debugf("jwt verification failed: token not valid until %d (current: %d)", claims.NotBefore, now)
 		return nil, errors.New("jwt token not valid yet")
 	}
 
@@ -274,6 +285,7 @@ func HashRefreshToken(token string) string {
 
 // SignHMAC signs input string with seed using HMAC-SHA256 for one-time verification tokens.
 func (signer *Signer) SignHMAC(message string) string {
+	log.Tracef("signing message with HMAC-SHA256")
 	mac := hmac.New(sha256.New, signer.seed)
 	mac.Write([]byte(message))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -281,6 +293,7 @@ func (signer *Signer) SignHMAC(message string) string {
 
 // VerifyHMAC verifies HMAC-SHA256 signature in constant time.
 func (signer *Signer) VerifyHMAC(message, expectedSignature string) bool {
+	log.Tracef("verifying HMAC-SHA256 signature")
 	actualSignature := signer.SignHMAC(message)
 	return hmac.Equal([]byte(actualSignature), []byte(expectedSignature))
 }
@@ -344,6 +357,7 @@ func (signer *Signer) GenerateIDToken(claims OIDCIDTokenClaims, expirySeconds ..
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
 	signingInput := headerBase64 + "." + claimsBase64
+	log.Tracef("signing ID token for subject %s with keyID %s", claims.Subject, signer.keyID)
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 

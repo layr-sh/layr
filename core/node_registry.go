@@ -38,6 +38,7 @@ const (
 
 // Register registers this node and starts background heartbeat.
 func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
+	log.Debugf("registering node %s in cluster", nodeRegistry.nodeName)
 	var nodeID uuid.UUID
 	err := nodeRegistry.db.QueryRow(ctx, `
 		INSERT INTO core.nodes (node_name, enabled_services, last_heartbeat_at)
@@ -49,6 +50,7 @@ func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
 	}
 	nodeRegistry.nodeID = nodeID
 
+	log.Tracef("node %s registered with id %s", nodeRegistry.nodeName, nodeID)
 	nodeRegistry.waitGroup.Add(1)
 	go nodeRegistry.startHeartbeatLoop(ctx)
 	return nil
@@ -84,7 +86,9 @@ func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
 // Close stops heartbeat and unregisters the node.
 func (nodeRegistry *NodeRegistry) Close() {
 	nodeRegistry.closeOnce.Do(func() {
+		log.Debugf("closing node registry for node %s", nodeRegistry.nodeName)
 		close(nodeRegistry.stopChannel)
 		nodeRegistry.waitGroup.Wait()
+		log.Tracef("node registry closed for node %s", nodeRegistry.nodeName)
 	})
 }

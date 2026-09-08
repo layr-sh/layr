@@ -71,6 +71,7 @@ type Kernel struct {
 
 // NewKernel initializes the Layr Kernel.
 func NewKernel() (*Kernel, error) {
+	log.Debugf("initializing Kernel instance")
 	config := GetConfig()
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("configuration invariant violation: %w", err)
@@ -94,6 +95,7 @@ func (kernel *Kernel) PublishableKey() string {
 
 // Start boots the database, applies migrations, launches heartbeats, and starts the HTTP gateway.
 func (kernel *Kernel) Start(ctx context.Context) (err error) {
+	log.Debugf("starting Kernel subsystem initialization")
 	defer func() {
 		if err != nil {
 			_ = kernel.Stop(ctx)
@@ -299,6 +301,7 @@ func (kernel *Kernel) RegisterService(service ServiceRunner) {
 // Stop gracefully terminates all subsystems.
 func (kernel *Kernel) Stop(ctx context.Context) error {
 	kernel.stopOnce.Do(func() {
+		log.Debugf("stopping Kernel services...")
 		shutdownContext, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultKernelShutdownTimeout)
 		defer shutdownCancel()
 
@@ -324,6 +327,7 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 			_ = kernel.embeddedDB.Stop()
 		}
 
+		log.Tracef("all Kernel subsystems stopped")
 		log.Infof("Layr process stopped cleanly.")
 	})
 	return nil
@@ -646,6 +650,7 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 		return fmt.Errorf("failed to count console users: %w", err)
 	}
 
+	log.Debugf("checking console root account status")
 	if count > 0 {
 		return nil
 	}
@@ -687,6 +692,7 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 		return fmt.Errorf("failed to create linked root service account: %w", err)
 	}
 
+	log.Tracef("created linked root service account (id: %s)", serviceAccountResult.ID)
 	log.Infof("Initial console root account created:")
 	log.Infof("  Email:               %s", email)
 	log.Infof("  Password:            %s", plainPassword)

@@ -12,7 +12,10 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/argon2"
+	"layr.sh/logger"
 )
+
+var log = logger.New("auth")
 
 const (
 	expectedHashSegmentCount = 6
@@ -40,6 +43,7 @@ type Hasher struct {
 
 // NewHasher initializes an Argon2id hasher with canonical parameters.
 func NewHasher() *Hasher {
+	log.Debugf("initializing Argon2id hasher")
 	return &Hasher{
 		memory:       DefaultMemory,
 		iterations:   DefaultIterations,
@@ -62,6 +66,7 @@ func (hasher *Hasher) SetRandomReader(reader io.Reader) {
 // Hash generates an Argon2id PHC-formatted password hash.
 // Output: $argon2id$v=19$m=65536,t=3,p=4$<b64salt>$<b64hash>
 func (hasher *Hasher) Hash(plainPassword string) (string, error) {
+	log.Debugf("hashing password with Argon2id")
 	salt := make([]byte, hasher.saltLength)
 	if _, err := io.ReadFull(hasher.randomReader, salt); err != nil {
 		return "", fmt.Errorf("failed to generate random salt: %w", err)
@@ -72,28 +77,34 @@ func (hasher *Hasher) Hash(plainPassword string) (string, error) {
 	saltBase64 := base64.RawStdEncoding.EncodeToString(salt)
 	hashBase64 := base64.RawStdEncoding.EncodeToString(hash)
 
+	log.Tracef("generated Argon2id password hash (memory=%d, iterations=%d, parallelism=%d)", hasher.memory, hasher.iterations, hasher.parallelism)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, hasher.memory, hasher.iterations, hasher.parallelism, saltBase64, hashBase64), nil
 }
 
 // Verify checks password against an Argon2id PHC-formatted hash string in constant time.
 func (hasher *Hasher) Verify(plainPassword, encodedHash string) (bool, error) {
+	log.Tracef("verifying password with Argon2id")
 	hashSegments := strings.Split(encodedHash, "$")
 	if len(hashSegments) != expectedHashSegmentCount {
+		log.Debugf("password verification failed: invalid argon2id hash segment count (%d)", len(hashSegments))
 		return false, errors.New("invalid argon2id hash format")
 	}
 
 	if hashSegments[1] != "argon2id" {
+		log.Debugf("password verification failed: incompatible hash type %q", hashSegments[1])
 		return false, fmt.Errorf("incompatible hash type: %s", hashSegments[1])
 	}
 
 	var version int
 	if _, err := fmt.Sscanf(hashSegments[2], "v=%d", &version); err != nil || version != argon2.Version {
+		log.Debugf("password verification failed: unsupported argon2 version")
 		return false, errors.New("unsupported argon2 version")
 	}
 
 	parameterSegments := strings.Split(hashSegments[3], ",")
 	if len(parameterSegments) != expectedParameterCount {
+		log.Debugf("password verification failed: invalid argon2 parameters")
 		return false, errors.New("invalid argon2 parameters")
 	}
 
@@ -139,7 +150,9 @@ func (hasher *Hasher) Verify(plainPassword, encodedHash string) (bool, error) {
 
 	computedHash := argon2.IDKey([]byte(plainPassword), salt, iterations, memory, uint8(parallelism), uint32(len(expectedHash)))
 
-	if subtle.ConstantTimeCompare(computedHash, expectedHash) == 1 {
+	matched := subtle.ConstantTimeCompare(computedHash, expectedHash) == 1
+	log.Tracef("Argon2id password verification completed (match=%t)", matched)
+	if matched {
 		return true, nil
 	}
 
