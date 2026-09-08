@@ -14,7 +14,10 @@ import (
 	"uuid"
 
 	"layr.sh/core"
+	"layr.sh/logger"
 )
+
+var log = logger.New("auth")
 
 const (
 	expectedTokenSegmentCount       = 3
@@ -212,6 +215,7 @@ func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
+	log.Debugf("issued access token for subject %s (kid: %s)", claims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
 }
 
@@ -252,6 +256,7 @@ func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
 		return nil, errors.New("jwt token not valid yet")
 	}
 
+	log.Debugf("verified access token for subject %s (kid: %s)", claims.Subject, signer.keyID)
 	return &claims, nil
 }
 
@@ -342,5 +347,6 @@ func (signer *Signer) GenerateIDToken(claims OIDCIDTokenClaims, expirySeconds ..
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
+	log.Debugf("issued ID token for subject %s (kid: %s)", claims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
 }

@@ -3,7 +3,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"sync"
 )
@@ -229,7 +228,7 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 			break
 		}
 
-		log.Printf("[DB] Applying Up migration %d: %s", migration.Version, migration.Description)
+		log.Infof("Applying Up migration %d: %s", migration.Version, migration.Description)
 		if _, execErr := tx.Exec(ctx, migration.UpSQL); execErr != nil {
 			return fmt.Errorf("failed Up migration %d (%s): %w", migration.Version, migration.Description, execErr)
 		}
@@ -301,7 +300,7 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 			}
 		}
 
-		log.Printf("[DB] Rolling back Down migration %d: %s", migration.Version, migration.Description)
+		log.Infof("Rolling back Down migration %d: %s", migration.Version, migration.Description)
 		if _, err := tx.Exec(ctx, migration.DownSQL); err != nil {
 			return fmt.Errorf("failed Down migration %d (%s): %w", migration.Version, migration.Description, err)
 		}

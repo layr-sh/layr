@@ -24,7 +24,7 @@ const (
 	CryptoContextConsoleUserSalt           = "console:user:salt:v1"
 	CryptoContextCoreIPCHMAC               = "core:ipc:hmacsha256:v1"
 	CryptoContextFileStorageChunkAES256GCM = "file_storage:chunk:aes256gcm:v1"
-	CryptoContextClientPublishableKey      = "client:publishable:v1"
+	CryptoContextPublishableKey            = "client:publishable:v1"
 )
 
 const (
@@ -146,19 +146,19 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 	return plaintext, nil
 }
 
-// DeriveClientPublishableKey returns the deterministic client publishable key.
-func (cryptoKeyManager *CryptoKeyManager) DeriveClientPublishableKey() string {
-	subkey := cryptoKeyManager.deriveSubkey(CryptoContextClientPublishableKey)
+// DerivePublishableKey returns the deterministic publishable key.
+func (cryptoKeyManager *CryptoKeyManager) DerivePublishableKey() string {
+	subkey := cryptoKeyManager.deriveSubkey(CryptoContextPublishableKey)
 	return hex.EncodeToString(subkey)
 }
 
-// VerifyClientPublishableKey checks if the presented key matches the derived client publishable key.
-func (cryptoKeyManager *CryptoKeyManager) VerifyClientPublishableKey(presentedKey string) bool {
+// VerifyPublishableKey checks if the presented key matches the derived publishable key.
+func (cryptoKeyManager *CryptoKeyManager) VerifyPublishableKey(presentedKey string) bool {
 	presentedKey = strings.TrimSpace(presentedKey)
 	if presentedKey == "" {
 		return false
 	}
-	expected := cryptoKeyManager.DeriveClientPublishableKey()
+	expected := cryptoKeyManager.DerivePublishableKey()
 	return subtle.ConstantTimeCompare([]byte(presentedKey), []byte(expected)) == 1
 }
 

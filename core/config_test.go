@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"errors"
-	"log"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -974,16 +973,15 @@ func TestCoreConfigWriteConfigFileErrorsUnit(t *testing.T) {
 
 func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 	var buffer bytes.Buffer
-	originalOutput := log.Writer()
-	defer log.SetOutput(originalOutput)
 	log.SetOutput(&buffer)
+	defer log.SetOutput(nil)
 
 	tempDir := t.TempDir()
 	targetConfigFile := filepath.Join(tempDir, "verbose_test.yaml")
 
 	// Test programmatic SetVerboseLogging
-	SetVerboseLogging(true)
-	defer SetVerboseLogging(false)
+	log.SetVerboseLogging(true)
+	defer log.SetVerboseLogging(false)
 
 	t.Setenv("PORT", "8888")
 	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
@@ -1022,12 +1020,10 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 	}
 
 	// 3. Test disabled logging: LoadConfig must not log
-	SetVerboseLogging(false)
+	log.SetVerboseLogging(false)
 	buffer.Reset()
-	t.Setenv("VERBOSE", "")
-	t.Setenv("DEBUG", "")
-	t.Setenv("LAYR_VERBOSE", "")
-	t.Setenv("LAYR_DEBUG", "")
+	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("LAYR_LOG_LEVEL", "")
 	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
@@ -1035,13 +1031,13 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 		t.Errorf("expected no logs when verbose logging is disabled, got %q", buffer.String())
 	}
 
-	// 4. Test enabled via DEBUG=true environment variable: LoadConfig must log
-	t.Setenv("DEBUG", "true")
+	// 4. Test enabled via LOG_LEVEL=debug environment variable: LoadConfig must log
+	t.Setenv("LOG_LEVEL", "debug")
 	buffer.Reset()
 	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 	if !strings.Contains(buffer.String(), "Overriding server.port from ENV") {
-		t.Errorf("expected log output when DEBUG=true, got %q", buffer.String())
+		t.Errorf("expected log output when LOG_LEVEL=debug, got %q", buffer.String())
 	}
 }

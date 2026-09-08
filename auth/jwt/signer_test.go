@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"uuid"
 
 	"layr.sh/core"
+	"layr.sh/logger"
 )
 
 func TestJWTSignerAndVerifierUnit(t *testing.T) {
@@ -476,5 +478,47 @@ func TestJWTProjectSlugConfigurationUnit(t *testing.T) {
 	}
 	if assertErr := dynamicClaims.Assert("aud", expectedConfiguredIssuer+":user"); assertErr != nil {
 		t.Fatalf("failed dynamic claims aud assert: %v", assertErr)
+	}
+}
+
+func TestJWTSignerAutomaticLoggingScopeUnit(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(nil)
+
+	log.SetLevel(logger.LevelDebug)
+	defer log.ResetLevel()
+
+	keyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create key manager: %v", err)
+	}
+
+	signer, err := NewSigner(keyManager)
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	token, err := signer.GenerateAccessToken(Claims{Subject: "user-123"}, 300)
+	if err != nil {
+		t.Fatalf("failed to generate access token: %v", err)
+	}
+
+	output := buf.String()
+	expectedLog := "[DEBUG] [auth] issued access token for subject user-123"
+	if !strings.Contains(output, expectedLog) {
+		t.Errorf("expected log output to contain %q, but got:\n%s", expectedLog, output)
+	}
+
+	buf.Reset()
+	_, err = signer.VerifyAccessToken(token)
+	if err != nil {
+		t.Fatalf("failed to verify access token: %v", err)
+	}
+
+	verifyOutput := buf.String()
+	expectedVerifyLog := "[DEBUG] [auth] verified access token for subject user-123"
+	if !strings.Contains(verifyOutput, expectedVerifyLog) {
+		t.Errorf("expected log output to contain %q, but got:\n%s", expectedVerifyLog, verifyOutput)
 	}
 }
