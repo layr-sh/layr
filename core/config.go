@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,8 +15,49 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ConfigFailureExitCode is the exit code for configuration failures according to sysexits.h
-const ConfigFailureExitCode = 78
+const (
+	// ConfigFailureExitCode is the exit code for configuration failures according to sysexits.h
+	ConfigFailureExitCode = 78
+
+	defaultConfigFileDirectoryPermission = 0o755
+	defaultConfigFilePermission          = 0o644
+)
+
+var (
+	yamlMarshal = yaml.Marshal
+
+	verboseLogging bool
+	verboseMutex   sync.RWMutex
+)
+
+// SetVerboseLogging enables or disables verbose configuration override logging.
+func SetVerboseLogging(enabled bool) {
+	verboseMutex.Lock()
+	defer verboseMutex.Unlock()
+	verboseLogging = enabled
+}
+
+func isVerboseLoggingEnabled() bool {
+	verboseMutex.RLock()
+	isExplicit := verboseLogging
+	verboseMutex.RUnlock()
+	if isExplicit {
+		return true
+	}
+
+	for _, envKey := range []string{"LAYR_DEBUG", "DEBUG", "LAYR_VERBOSE", "VERBOSE"} {
+		if parseFlag(os.Getenv(envKey)) {
+			return true
+		}
+	}
+	return false
+}
+
+func logEnvOverride(target string) {
+	if isVerboseLoggingEnabled() {
+		log.Printf("Overriding %s from ENV", target)
+	}
+}
 
 // Config represents the Tier 1 configuration (layr.yaml + LAYR__ env vars).
 type Config struct {
@@ -122,10 +165,10 @@ func DefaultConfig() *Config {
 		KVStore: KVStoreConfig{
 			Backend: "database",
 		},
-		Data:         ServiceConfig{Enabled: false},
-		Auth:         ServiceConfig{Enabled: false},
+		Data:         ServiceConfig{Enabled: true},
+		Auth:         ServiceConfig{Enabled: true},
+		FileStorage:  ServiceConfig{Enabled: true},
 		Tasks:        ServiceConfig{Enabled: false},
-		FileStorage:  ServiceConfig{Enabled: false},
 		Notification: ServiceConfig{Enabled: false},
 		Analytics:    ServiceConfig{Enabled: false},
 		Image:        ServiceConfig{Enabled: false},
@@ -158,13 +201,58 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	ApplyEnvConfigOverrides(config)
+	applyEnvConfigOverrides(config, true)
 
 	rwMutex.Lock()
 	loadedConfig = config
 	rwMutex.Unlock()
 
 	return config, nil
+}
+
+// WriteConfigFile writes the configuration to a file in YAML format.
+// If optionalConfig is omitted, DefaultConfig() is used with environment variable overrides applied.
+func WriteConfigFile(path string, optionalConfig ...Config) error {
+	if path == "" {
+		return errors.New("config file path cannot be empty")
+	}
+
+	var targetConfig *Config
+	if len(optionalConfig) > 0 {
+		targetConfig = &optionalConfig[0]
+	} else {
+		targetConfig = DefaultConfig()
+		applyEnvConfigOverrides(targetConfig, false)
+	}
+
+	if targetConfig.Security.MasterEncryptionKey == "" {
+		masterEncryptionKey, _ := GenerateRandomCryptoEncryptionKeyHex()
+		targetConfig.Security.MasterEncryptionKey = masterEncryptionKey
+	}
+
+	directory := filepath.Dir(path)
+	if directory != "" && directory != "." {
+		if err := os.MkdirAll(directory, defaultConfigFileDirectoryPermission); err != nil {
+			return fmt.Errorf("failed to create directory for config file %s: %w", path, err)
+		}
+	}
+
+	data, err := yamlMarshal(targetConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to yaml: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, defaultConfigFilePermission); err != nil {
+		return fmt.Errorf("failed to write config file %s: %w", path, err)
+	}
+
+	return nil
+}
+
+// CreateConfigFile creates a configuration file in YAML format.
+// It is an alias for WriteConfigFile.
+func CreateConfigFile(path string, optionalConfig ...Config) error {
+	return WriteConfigFile(path, optionalConfig...)
 }
 
 // GetConfig returns the loaded configuration from lifetime memory, or DefaultConfig() if not yet loaded.
@@ -191,14 +279,24 @@ func UnloadConfig() {
 	loadedConfig = nil
 }
 
-// ApplyEnvConfigOverrides applies LAYR__* and top-level alias environment variables.
+// ApplyEnvConfigOverrides applies LAYR__* and top-level alias environment variables without logging.
 func ApplyEnvConfigOverrides(config *Config) {
+	applyEnvConfigOverrides(config, false)
+}
+
+func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 	// Aliases
 	if value := os.Getenv("DATABASE_URL"); value != "" {
 		config.Database.URL = value
+		if shouldLog {
+			logEnvOverride("database.url")
+		}
 	}
 	if value := os.Getenv("MASTER_ENCRYPTION_KEY"); value != "" {
 		config.Security.MasterEncryptionKey = value
+		if shouldLog {
+			logEnvOverride("security.master_encryption_key")
+		}
 	}
 	if value := os.Getenv("PORT"); value != "" {
 		if _, err := strconv.Atoi(value); err == nil {
@@ -208,10 +306,16 @@ func ApplyEnvConfigOverrides(config *Config) {
 			} else {
 				config.Server.ListenAddr = ":" + value
 			}
+			if shouldLog {
+				logEnvOverride("server.port")
+			}
 		}
 	}
 	if value := os.Getenv("BASE_URL"); value != "" {
 		config.Server.BaseURL = value
+		if shouldLog {
+			logEnvOverride("server.base_url")
+		}
 	}
 
 	// Dynamic LAYR__<SECTION>__<FIELD> overrides
@@ -225,74 +329,96 @@ func ApplyEnvConfigOverrides(config *Config) {
 			if len(keyParts) >= expectedKeyPartsLen {
 				field = strings.ToLower(keyParts[2])
 			}
-			applyEnvConfigField(config, section, field, parts[1])
+			if canonicalTarget, ok := applyEnvConfigField(config, section, field, parts[1]); ok {
+				if shouldLog {
+					logEnvOverride(canonicalTarget)
+				}
+			}
 		}
 	}
 }
 
-func applyEnvConfigField(config *Config, section, field, value string) {
+func applyEnvConfigField(config *Config, section, field, value string) (string, bool) {
 	switch section {
 	case "project":
 		switch field {
 		case "name":
 			config.Project.Name = value
+			return "project.name", true
 		case "description":
 			config.Project.Description = value
+			return "project.description", true
 		}
 	case "server":
 		switch field {
 		case "listen_addr", "listenaddr":
 			config.Server.ListenAddr = value
+			return "server.listen_addr", true
 		case "base_url", "baseurl":
 			config.Server.BaseURL = value
+			return "server.base_url", true
 		}
 	case "database":
 		switch field {
 		case "url":
 			config.Database.URL = value
+			return "database.url", true
 		case "max_connections":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.MaxConnections = number
+				return "database.max_connections", true
 			}
 		case "min_connections":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.MinConnections = number
+				return "database.min_connections", true
 			}
 		case "connection_timeout_ms":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.ConnectionTimeoutMs = number
+				return "database.connection_timeout_ms", true
 			}
 		case "idle_timeout_ms":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.IdleTimeoutMs = number
+				return "database.idle_timeout_ms", true
 			}
 		case "max_lifetime_ms":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.MaxLifetimeMs = number
+				return "database.max_lifetime_ms", true
 			}
 		case "health_check_period_ms":
 			if number, err := strconv.Atoi(value); err == nil {
 				config.Database.HealthCheckPeriodMs = number
+				return "database.health_check_period_ms", true
 			}
 		case "ssl_mode":
 			config.Database.SSLMode = strings.ToLower(value)
+			return "database.ssl_mode", true
 		case "ssl_root_cert":
 			config.Database.SSLRootCert = value
+			return "database.ssl_root_cert", true
 		case "ssl_cert":
 			config.Database.SSLCert = value
+			return "database.ssl_cert", true
 		case "ssl_key":
 			config.Database.SSLKey = value
+			return "database.ssl_key", true
 		}
 	case "security":
 		if field == "master_encryption_key" {
 			config.Security.MasterEncryptionKey = value
+			return "security.master_encryption_key", true
 		}
 	case "kv_store", "kvstore", "kv":
 		switch field {
 		case "backend":
 			config.KVStore.Backend = strings.ToLower(value)
+			return "kv_store.backend", true
 		case "url":
 			config.KVStore.URL = value
+			return "kv_store.url", true
 		case "cluster_urls":
 			if value != "" {
 				rawSegments := strings.Split(value, ",")
@@ -303,46 +429,58 @@ func applyEnvConfigField(config *Config, section, field, value string) {
 					}
 				}
 				config.KVStore.ClusterURLs = cleaned
+				return "kv_store.cluster_urls", true
 			}
 		}
 	case "data":
 		if field == "enabled" {
 			config.Data.Enabled = parseFlag(value)
+			return "data.enabled", true
 		}
 	case "auth":
 		if field == "enabled" {
 			config.Auth.Enabled = parseFlag(value)
+			return "auth.enabled", true
 		}
 	case "tasks":
 		if field == "enabled" {
 			config.Tasks.Enabled = parseFlag(value)
+			return "tasks.enabled", true
 		}
 	case "file_storage", "filestorage":
 		if field == "enabled" {
 			config.FileStorage.Enabled = parseFlag(value)
+			return "file_storage.enabled", true
 		}
 	case "notification":
 		if field == "enabled" {
 			config.Notification.Enabled = parseFlag(value)
+			return "notification.enabled", true
 		}
 	case "analytics":
 		if field == "enabled" {
 			config.Analytics.Enabled = parseFlag(value)
+			return "analytics.enabled", true
 		}
 	case "image":
 		if field == "enabled" {
 			config.Image.Enabled = parseFlag(value)
+			return "image.enabled", true
 		}
 	case "console":
 		switch field {
 		case "enabled":
 			config.Console.Enabled = parseFlag(value)
+			return "console.enabled", true
 		case "initial_user_email":
 			config.Console.InitialUserEmail = value
+			return "console.initial_user_email", true
 		case "initial_user_password":
 			config.Console.InitialUserPassword = value
+			return "console.initial_user_password", true
 		}
 	}
+	return "", false
 }
 
 func parseFlag(value string) bool {

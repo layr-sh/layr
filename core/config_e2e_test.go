@@ -67,6 +67,8 @@ func TestCoreConfigMicroservicePodProfilesE2E(t *testing.T) {
 
 	// Scenario 2: Dedicated Auth Microservice Pod (`layr start auth`)
 	authPodConfig := DefaultConfig()
+	authPodConfig.Data.Enabled = false
+	authPodConfig.FileStorage.Enabled = false
 	authPodConfig.Security.MasterEncryptionKey = validHexKey
 	authPodConfig.Console.Enabled = false
 	if err := authPodConfig.EnableService("auth"); err != nil {
@@ -81,6 +83,8 @@ func TestCoreConfigMicroservicePodProfilesE2E(t *testing.T) {
 
 	// Scenario 3: Dedicated FileStorage + Image Pod (`layr start file_storage image`)
 	mediaPodConfig := DefaultConfig()
+	mediaPodConfig.Data.Enabled = false
+	mediaPodConfig.Auth.Enabled = false
 	mediaPodConfig.Security.MasterEncryptionKey = validHexKey
 	mediaPodConfig.Console.Enabled = false
 	_ = mediaPodConfig.EnableService("file_storage")
@@ -116,6 +120,9 @@ func TestCoreConfigProcessStartupRejectionE2E(t *testing.T) {
 	}
 
 	zeroServiceConfig := DefaultConfig()
+	zeroServiceConfig.Data.Enabled = false
+	zeroServiceConfig.Auth.Enabled = false
+	zeroServiceConfig.FileStorage.Enabled = false
 	zeroServiceConfig.Security.MasterEncryptionKey = validHexKey
 	zeroServiceConfig.Console.Enabled = true
 
