@@ -132,6 +132,7 @@ func (registerer netHTTPRouteRegisterer[T, B, P]) Register() fuego.Route[T, B, P
 		fullPath = route.Method + " " + fullPath
 	}
 
+	log.Tracef("registering HTTP route: %s", fullPath)
 	registerer.server.Mux.Handle(fullPath, registerer.controller)
 	return route
 }

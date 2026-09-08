@@ -59,12 +59,14 @@ func NewCryptoKeyManager(encryptionKeyHex string) (*CryptoKeyManager, error) {
 		return nil, fmt.Errorf("master_encryption_key must be a valid 32-byte hex or base64 encoded string: %w", err)
 	}
 
+	log.Debugf("initialized CryptoKeyManager")
 	return &CryptoKeyManager{encryptionKey: decodedKey, randomReader: rand.Reader}, nil
 }
 
 // deriveSubkey derives a deterministic 32-byte subkey using HKDF-SHA256.
 // HKDF-SHA256 with a valid 32-byte key cannot fail, so this is infallible.
 func (cryptoKeyManager *CryptoKeyManager) deriveSubkey(derivationContext string) []byte {
+	log.Tracef("deriving crypto subkey for context %s", derivationContext)
 	hkdfReader := hkdf.New(sha256.New, cryptoKeyManager.encryptionKey, nil, []byte(derivationContext))
 	subkey := make([]byte, subkeyByteLength)
 	_, _ = io.ReadFull(hkdfReader, subkey) // HKDF with valid key always succeeds
@@ -79,6 +81,7 @@ func (cryptoKeyManager *CryptoKeyManager) DeriveSubkey(derivationContext string)
 // EncryptField encrypts plaintext using the DB secrets subkey in AES-256-GCM.
 // Output format: enc:v1:aes256gcm:<base64-iv>:<base64-ciphertext>:<base64-tag>
 func (cryptoKeyManager *CryptoKeyManager) EncryptField(plaintext []byte) (string, error) {
+	log.Debugf("encrypting field with AES-256-GCM")
 	subkey := cryptoKeyManager.deriveSubkey(CryptoContextDBEnvelopeAES256GCM)
 
 	// AES-256 with exactly 32-byte key and GCM with valid AES block cannot fail
@@ -100,11 +103,13 @@ func (cryptoKeyManager *CryptoKeyManager) EncryptField(plaintext []byte) (string
 	ciphertextBase64 := base64.RawURLEncoding.EncodeToString(ciphertext)
 	tagBase64 := base64.RawURLEncoding.EncodeToString(authTag)
 
+	log.Tracef("field encrypted successfully (ciphertext bytes: %d)", len(ciphertext))
 	return fmt.Sprintf("enc:v1:aes256gcm:%s:%s:%s", nonceBase64, ciphertextBase64, tagBase64), nil
 }
 
 // DecryptField decrypts an envelope ciphertext.
 func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte, error) {
+	log.Debugf("decrypting envelope field")
 	if !strings.HasPrefix(encrypted, "enc:v1:aes256gcm:") {
 		return nil, errors.New("invalid envelope encryption prefix")
 	}
@@ -143,17 +148,20 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 		return nil, fmt.Errorf("failed to authenticate and decrypt ciphertext: %w", err)
 	}
 
+	log.Tracef("field decrypted successfully (plaintext bytes: %d)", len(plaintext))
 	return plaintext, nil
 }
 
 // DerivePublishableKey returns the deterministic publishable key.
 func (cryptoKeyManager *CryptoKeyManager) DerivePublishableKey() string {
+	log.Debugf("deriving publishable key")
 	subkey := cryptoKeyManager.deriveSubkey(CryptoContextPublishableKey)
 	return hex.EncodeToString(subkey)
 }
 
 // VerifyPublishableKey checks if the presented key matches the derived publishable key.
 func (cryptoKeyManager *CryptoKeyManager) VerifyPublishableKey(presentedKey string) bool {
+	log.Tracef("verifying publishable key presentation")
 	presentedKey = strings.TrimSpace(presentedKey)
 	if presentedKey == "" {
 		return false

@@ -177,6 +177,7 @@ DROP SCHEMA IF EXISTS core CASCADE;
 
 // RunMigrations applies system and modular migrations upward with advisory locking.
 func (db *DatabasePool) RunMigrations(ctx context.Context, migrations []DatabaseMigration) error {
+	log.Debugf("initiating RunMigrations with %d migration definitions", len(migrations))
 	return db.MigrateUp(ctx, migrations, 0)
 }
 
@@ -191,7 +192,9 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 	}()
 
 	// Acquire cluster-wide migration advisory lock and bootstrap schema
+	log.Trace("acquiring cluster-wide migration advisory lock (1279342930)")
 	_, _ = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(1279342930);")
+	log.Trace("ensuring core schema and core.migrations table")
 	_, _ = tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS core;")
 	_, _ = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS core.migrations (
@@ -212,6 +215,7 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 		_ = rows.Scan(&appliedVersion)
 		applied[appliedVersion] = true
 	}
+	log.Tracef("retrieved %d applied migration versions from core.migrations", len(applied))
 
 	// Sort migrations in ascending order
 	sortedMigrations := make([]DatabaseMigration, len(migrations))
@@ -220,15 +224,19 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 		return sortedMigrations[i].Version < sortedMigrations[j].Version
 	})
 
+	log.Debugf("starting MigrateUp (available migrations: %d, target: %d)", len(migrations), targetVersion)
 	for _, migration := range sortedMigrations {
 		if applied[migration.Version] {
+			log.Tracef("migration %d (%s) already applied, skipping", migration.Version, migration.Description)
 			continue
 		}
 		if targetVersion > 0 && migration.Version > targetVersion {
+			log.Tracef("migration %d exceeds target version %d, stopping MigrateUp", migration.Version, targetVersion)
 			break
 		}
 
 		log.Infof("Applying Up migration %d: %s", migration.Version, migration.Description)
+		log.Tracef("executing Up migration SQL for version %d", migration.Version)
 		if _, execErr := tx.Exec(ctx, migration.UpSQL); execErr != nil {
 			return fmt.Errorf("failed Up migration %d (%s): %w", migration.Version, migration.Description, execErr)
 		}
@@ -237,8 +245,10 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 			return fmt.Errorf("failed to record migration %d: %w", migration.Version, insertErr)
 		}
 		applied[migration.Version] = true
+		log.Tracef("recorded migration %d in core.migrations", migration.Version)
 	}
 
+	log.Debug("MigrateUp completed successfully, committing transaction")
 	return tx.Commit(ctx)
 }
 
@@ -253,6 +263,7 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 	}()
 
 	// Acquire advisory lock and verify migrations table existence
+	log.Trace("acquiring rollback advisory lock and checking core.migrations existence")
 	var tableExists bool
 	_ = tx.QueryRow(ctx, `
 		SELECT EXISTS (
@@ -261,6 +272,7 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 		)
 	`).Scan(&tableExists)
 	if !tableExists {
+		log.Debug("core.migrations table does not exist, skipping MigrateDown")
 		return nil // Nothing to rollback
 	}
 
@@ -279,8 +291,10 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 		migrationMap[migration.Version] = migration
 	}
 
+	log.Debugf("starting MigrateDown (applied versions count: %d, target: %d)", len(appliedVersions), targetVersion)
 	for _, version := range appliedVersions {
 		if version <= targetVersion {
+			log.Tracef("version %d is at or below target %d, stopping MigrateDown", version, targetVersion)
 			break
 		}
 
@@ -301,10 +315,12 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 		}
 
 		log.Infof("Rolling back Down migration %d: %s", migration.Version, migration.Description)
+		log.Tracef("executing Down rollback SQL for version %d", migration.Version)
 		if _, err := tx.Exec(ctx, migration.DownSQL); err != nil {
 			return fmt.Errorf("failed Down migration %d (%s): %w", migration.Version, migration.Description, err)
 		}
 	}
 
+	log.Debug("MigrateDown completed successfully, committing transaction")
 	return tx.Commit(ctx)
 }

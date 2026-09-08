@@ -51,6 +51,7 @@ func (totpManager *TOTPManager) SetRandomReader(reader io.Reader) {
 
 // GenerateSecret creates a 20-byte random base32 encoded TOTP secret without padding.
 func (totpManager *TOTPManager) GenerateSecret() (string, error) {
+	log.Debugf("generating random TOTP secret")
 	secretBytes := make([]byte, totpSecretByteLength)
 	if _, err := io.ReadFull(totpManager.randomReader, secretBytes); err != nil {
 		return "", fmt.Errorf("failed to generate random TOTP secret: %w", err)
@@ -60,6 +61,7 @@ func (totpManager *TOTPManager) GenerateSecret() (string, error) {
 
 // GenerateCode calculates the 6-digit TOTP code for a secret at a specific time.
 func (totpManager *TOTPManager) GenerateCode(secretBase32 string, atTime time.Time) (string, error) {
+	log.Tracef("generating TOTP code at %s", atTime.Format(time.RFC3339))
 	secretKey, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secretBase32)))
 	if err != nil {
 		return "", fmt.Errorf("invalid base32 secret: %w", err)
@@ -81,6 +83,7 @@ func (totpManager *TOTPManager) GenerateCode(secretBase32 string, atTime time.Ti
 
 // ValidateCode verifies a TOTP code within a window of [-skew, +skew] intervals.
 func (totpManager *TOTPManager) ValidateCode(secretBase32 string, code string, atTime time.Time, skewSteps int) bool {
+	log.Tracef("validating TOTP code at %s with skew %d", atTime.Format(time.RFC3339), skewSteps)
 	code = strings.TrimSpace(code)
 	if len(code) != totpManager.digits {
 		return false

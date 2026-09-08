@@ -106,6 +106,7 @@ func (slugifier *Slugifier) InvalidCharacter(invalidCharacterReplacement string)
 // Slugify implements making a pretty slug from the given text.
 // e.g. Slugify("kožušček hello world") => "kozuscek-hello-world"
 func (slugifier *Slugifier) Slugify(text string) string {
+	log.Tracef("slugifying text %q", text)
 	if !slugifier.initialized {
 		slugifier.initialize()
 	}

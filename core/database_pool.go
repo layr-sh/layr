@@ -85,6 +85,8 @@ func NewDatabasePool(ctx context.Context, databaseURL string, databasePoolOption
 		}
 	}
 
+	log.Debugf("initializing database connection pool")
+	log.Tracef("database pool configured (maxConns: %d, minConns: %d)", databaseConfig.MaxConns, databaseConfig.MinConns)
 	databaseConfig.MaxConns = options.MaxConns
 	databaseConfig.MinConns = options.MinConns
 	databaseConfig.MaxConnLifetime = options.MaxConnLifetime
@@ -105,6 +107,7 @@ func NewDatabasePool(ctx context.Context, databaseURL string, databasePoolOption
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	log.Tracef("database ping succeeded, pool ready")
 	return &DatabasePool{
 		Pool: pool,
 		url:  databaseURL,

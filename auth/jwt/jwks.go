@@ -43,7 +43,9 @@ type OIDCConfiguration struct {
 
 // BuildJWKS constructs the JWKS payload containing the public key.
 func (signer *Signer) BuildJWKS() JWKSResponse {
+	log.Debugf("building JWKS payload with keyID %s", signer.keyID)
 	publicKeyBase64 := base64.RawURLEncoding.EncodeToString(signer.publicKey)
+	log.Tracef("encoded public key for JWKS keyID %s", signer.keyID)
 	return JWKSResponse{
 		Keys: []JWK{
 			{
@@ -63,6 +65,7 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
 	}
+	log.Debugf("building OIDC discovery configuration for issuer %s", baseURL)
 	return OIDCConfiguration{
 		Issuer:                            baseURL,
 		AuthorizationEndpoint:             baseURL + "/api/v1/auth/oauth/authorize",
@@ -83,6 +86,7 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 
 // HandleJWKS serves the GET /.well-known/jwks.json endpoint.
 func (signer *Signer) HandleJWKS(writer http.ResponseWriter, request *http.Request) {
+	log.Tracef("handling JWKS HTTP request from %s", request.RemoteAddr)
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	_ = writeJSON(writer, signer.BuildJWKS())

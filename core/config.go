@@ -153,6 +153,7 @@ var (
 // LoadConfig loads config from a file path, applies environment variable overlays,
 // and caches the loaded configuration in lifetime memory.
 func LoadConfig(path string) (*Config, error) {
+	log.Debugf("loading configuration from %q", path)
 	config := DefaultConfig()
 
 	if path != "" {
@@ -174,6 +175,7 @@ func LoadConfig(path string) (*Config, error) {
 	loadedConfig = config
 	rwMutex.Unlock()
 
+	log.Tracef("configuration loaded successfully for project %s", config.Project.Name)
 	return config, nil
 }
 

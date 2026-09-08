@@ -8,6 +8,7 @@ import (
 
 // ExportOpenAPISpecs builds and returns the Public, Control Plane, and Unified OpenAPI 3.1 specifications.
 func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
+	log.Debug("exporting OpenAPI 3.1 specifications")
 	config := DefaultConfig()
 	config.Data.Enabled = true
 	config.Auth.Enabled = true
@@ -38,6 +39,7 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 	}
 	serviceFactoriesMutex.RUnlock()
 	sort.Strings(serviceNames)
+	log.Tracef("registering service routes for OpenAPI export: %v", serviceNames)
 
 	for _, serviceName := range serviceNames {
 		factory, ok := GetServiceFactory(serviceName)
@@ -52,6 +54,7 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 	publicSpec := server.Router().OutputOpenAPISpec()
 	controlSpec := server.ControlPlaneRouter().OutputOpenAPISpec()
 	unifiedSpec := MergeOpenAPISpecs(publicSpec, controlSpec)
+	log.Trace("synthesized public, control plane, and unified OpenAPI specifications")
 
 	return publicSpec, controlSpec, unifiedSpec, nil
 }

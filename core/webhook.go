@@ -119,6 +119,7 @@ type WebhookEventBus struct {
 
 // NewWebhookEventBus initializes the WebhookEventBus and starts background worker goroutines.
 func NewWebhookEventBus(pool *DatabasePool, cryptoKeyManager *CryptoKeyManager) *WebhookEventBus {
+	log.Debugf("initializing WebhookEventBus")
 	ctx, cancel := context.WithCancel(context.Background())
 	webhookEventBus := &WebhookEventBus{
 		subscribers:      make(map[string][]WebhookEventHandler),
@@ -157,6 +158,7 @@ func (webhookEventBus *WebhookEventBus) Publish(ctx context.Context, event Webho
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now().UTC()
 	}
+	log.Tracef("publishing webhook event %s (%s)", event.ID, event.Event)
 
 	// Dispatch to in-memory subscribers synchronously or concurrently
 	webhookEventBus.rwMutex.RLock()
@@ -186,9 +188,11 @@ func (webhookEventBus *WebhookEventBus) Publish(ctx context.Context, event Webho
 
 // Close stops all background dispatch workers cleanly.
 func (webhookEventBus *WebhookEventBus) Close() {
+	log.Debugf("closing WebhookEventBus")
 	close(webhookEventBus.stopChannel)
 	webhookEventBus.contextCancel()
 	webhookEventBus.waitGroup.Wait()
+	log.Tracef("WebhookEventBus closed cleanly")
 }
 
 func (webhookEventBus *WebhookEventBus) worker() {
@@ -204,6 +208,7 @@ func (webhookEventBus *WebhookEventBus) worker() {
 }
 
 func (webhookEventBus *WebhookEventBus) dispatch(ctx context.Context, event WebhookEventEnvelope) {
+	log.Tracef("dispatching webhook event %s (%s)", event.ID, event.Event)
 	if webhookEventBus.pool == nil {
 		return
 	}
@@ -267,6 +272,7 @@ func (webhookEventBus *WebhookEventBus) deliverWebhook(ctx context.Context, webh
 	signature := ComputeWebhookSignature(secret, timestamp, bodyBytes)
 
 	deliveryID := uuid.NewV7().String()
+	log.Debugf("dispatching webhook delivery %s for webhook %s (event: %s) to %s", deliveryID, webhookID, event.Event, targetURL)
 	attempt := 0
 	var lastStatus *int
 	var lastBody *string
@@ -278,10 +284,12 @@ func (webhookEventBus *WebhookEventBus) deliverWebhook(ctx context.Context, webh
 
 	for attempt < maxRetries {
 		attempt++
+		log.Tracef("webhook %s delivery attempt %d/%d to %s", webhookID, attempt, maxRetries, targetURL)
 		attemptContext, attemptCancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 		request, err := http.NewRequestWithContext(attemptContext, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
 		if err != nil {
 			attemptCancel()
+			log.Debugf("failed to create webhook HTTP request: %v", err)
 			errMsg := err.Error()
 			lastErr = &errMsg
 			break
@@ -298,6 +306,7 @@ func (webhookEventBus *WebhookEventBus) deliverWebhook(ctx context.Context, webh
 		attemptCancel()
 
 		if err != nil {
+			log.Tracef("webhook %s delivery attempt %d network error: %v", webhookID, attempt, err)
 			errMsg := err.Error()
 			lastErr = &errMsg
 			time.Sleep(CalculateWebhookBackoff(attempt))
@@ -320,9 +329,11 @@ func (webhookEventBus *WebhookEventBus) deliverWebhook(ctx context.Context, webh
 			now := time.Now().UTC()
 			deliveredAt = &now
 			lastErr = nil
+			log.Debugf("webhook %s delivery %s succeeded with status %d in %dms (%d attempts)", webhookID, deliveryID, status, time.Since(start).Milliseconds(), attempt)
 			break
 		}
 
+		log.Tracef("webhook %s delivery attempt %d returned HTTP status %d", webhookID, attempt, status)
 		errMsg := fmt.Sprintf("HTTP error status %d", status)
 		lastErr = &errMsg
 		time.Sleep(CalculateWebhookBackoff(attempt))
@@ -341,6 +352,7 @@ func (webhookEventBus *WebhookEventBus) deliverWebhook(ctx context.Context, webh
 	}
 
 	if !isDelivered {
+		log.Warnf("webhook %s delivery %s failed after %d attempts", webhookID, deliveryID, attempt)
 		// Broadcast delivery failure to internal bus listeners
 		webhookEventBus.rwMutex.RLock()
 		for pattern, handlers := range webhookEventBus.subscribers {
@@ -416,6 +428,7 @@ func NewWebhookManager(pool *DatabasePool, cryptoKeyManager *CryptoKeyManager, w
 
 // Create registers a new webhook subscription.
 func (webhookManager *WebhookManager) Create(ctx context.Context, input CreateWebhookInput) (*WebhookSubscription, error) {
+	log.Debugf("creating webhook subscription %q for %s", input.Name, input.TargetURL)
 	if webhookManager.pool == nil {
 		return nil, fmt.Errorf("database pool is not available")
 	}
@@ -471,11 +484,13 @@ func (webhookManager *WebhookManager) Create(ctx context.Context, input CreateWe
 	webhook.SigningSecretConfigured = (secretEncrypted != "")
 	webhook.SigningSecretMasked = webhook.SigningSecretConfigured
 
+	log.Tracef("created webhook %s successfully", webhookID)
 	return &webhook, nil
 }
 
 // List returns all webhook subscriptions.
 func (webhookManager *WebhookManager) List(ctx context.Context) ([]WebhookSubscription, error) {
+	log.Trace("listing webhooks from database")
 	if webhookManager.pool == nil {
 		return nil, fmt.Errorf("database pool is not available")
 	}
@@ -503,11 +518,13 @@ func (webhookManager *WebhookManager) List(ctx context.Context) ([]WebhookSubscr
 		webhook.SigningSecretMasked = webhook.SigningSecretConfigured
 		results = append(results, webhook)
 	}
+	log.Tracef("listed %d webhooks", len(results))
 	return results, nil
 }
 
 // Get returns a webhook by ID.
 func (webhookManager *WebhookManager) Get(ctx context.Context, webhookID string) (*WebhookSubscription, error) {
+	log.Tracef("retrieving webhook %s", webhookID)
 	if webhookManager.pool == nil {
 		return nil, fmt.Errorf("database pool is not available")
 	}
@@ -535,6 +552,7 @@ func (webhookManager *WebhookManager) Get(ctx context.Context, webhookID string)
 
 // Update modifies an existing webhook.
 func (webhookManager *WebhookManager) Update(ctx context.Context, webhookID string, input UpdateWebhookInput) (*WebhookSubscription, error) {
+	log.Debugf("updating webhook %s", webhookID)
 	current, err := webhookManager.Get(ctx, webhookID)
 	if err != nil {
 		return nil, err
@@ -593,11 +611,13 @@ func (webhookManager *WebhookManager) Update(ctx context.Context, webhookID stri
 	_ = json.Unmarshal(eventsRaw, &webhook.Events)
 	webhook.SigningSecretConfigured = (secretEncrypted != "")
 	webhook.SigningSecretMasked = webhook.SigningSecretConfigured
+	log.Tracef("updated webhook %s successfully", webhookID)
 	return &webhook, nil
 }
 
 // Delete removes a webhook subscription.
 func (webhookManager *WebhookManager) Delete(ctx context.Context, webhookID string) error {
+	log.Debugf("deleting webhook %s", webhookID)
 	if webhookManager.pool == nil {
 		return fmt.Errorf("database pool is not available")
 	}
@@ -605,11 +625,13 @@ func (webhookManager *WebhookManager) Delete(ctx context.Context, webhookID stri
 	if err != nil || result.RowsAffected() == 0 {
 		return ErrWebhookNotFound
 	}
+	log.Tracef("deleted webhook %s successfully", webhookID)
 	return nil
 }
 
 // ListDeliveries returns delivery history for a webhook.
 func (webhookManager *WebhookManager) ListDeliveries(ctx context.Context, webhookID string) ([]WebhookDelivery, error) {
+	log.Tracef("listing deliveries for webhook %s", webhookID)
 	if webhookManager.pool == nil {
 		return nil, fmt.Errorf("database pool is not available")
 	}
@@ -636,5 +658,6 @@ func (webhookManager *WebhookManager) ListDeliveries(ctx context.Context, webhoo
 		_ = json.Unmarshal(payloadRaw, &delivery.Payload)
 		results = append(results, delivery)
 	}
+	log.Tracef("listed %d webhook deliveries for %s", len(results), webhookID)
 	return results, nil
 }

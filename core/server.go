@@ -97,6 +97,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 		),
 	))
 
+	log.Debugf("initializing HTTPServer gateway")
 	server := &HTTPServer{
 		db:                 db,
 		cryptoKeyManager:   cryptoKeyManager,
@@ -196,6 +197,7 @@ func (server *HTTPServer) ControlPlaneRouter() *Router {
 
 // Start boots the HTTP server in background.
 func (server *HTTPServer) Start() error {
+	log.Debugf("starting HTTP server on %s", server.server.Addr)
 	if err := server.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http server failed to listen and serve: %w", err)
 	}
@@ -204,14 +206,17 @@ func (server *HTTPServer) Start() error {
 
 // Shutdown initiates a graceful drain.
 func (server *HTTPServer) Shutdown(ctx context.Context) error {
+	log.Debugf("shutting down HTTP server")
 	if err := server.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("http server failed to shut down cleanly: %w", err)
 	}
+	log.Tracef("HTTP server shutdown complete")
 	return nil
 }
 
 func (server *HTTPServer) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		log.Tracef("incoming HTTP request %s %s", request.Method, request.URL.Path)
 		server.requestCount.Add(1)
 		// responseWriter.Header().Set("Layr-Version", "TODO")
 		next.ServeHTTP(responseWriter, request)
@@ -276,6 +281,7 @@ func (server *HTTPServer) handleMetricsRequest(responseWriter http.ResponseWrite
 func (server *HTTPServer) PublishableKeyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
+		log.Tracef("evaluating publishable key middleware for path %s", path)
 		if path == "/api/v1/topology" ||
 			strings.HasPrefix(path, "/api/v1/_/") ||
 			path == "/api/v1/_" ||

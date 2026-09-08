@@ -38,6 +38,7 @@ func NewDatabaseKVStore(ctx context.Context, db *DatabasePool, sweepInterval tim
 		stopChannel:   make(chan struct{}),
 	}
 
+	log.Debugf("initializing DatabaseKVStore")
 	databaseKVStore.waitGroup.Add(1)
 	go databaseKVStore.sweepLoop(ctx)
 
@@ -64,6 +65,7 @@ func (databaseKVStore *DatabaseKVStore) sweepLoop(ctx context.Context) {
 
 // Sweep prunes all expired cache records from PostgreSQL.
 func (databaseKVStore *DatabaseKVStore) Sweep(ctx context.Context) (int64, error) {
+	log.Tracef("DatabaseKVStore.Sweep executing")
 	commandTag, err := databaseKVStore.db.Exec(ctx, "DELETE FROM core.kv_store WHERE expires_at <= clock_timestamp()")
 	if err != nil {
 		return 0, fmt.Errorf("failed to sweep expired kv records: %w", err)
@@ -73,6 +75,7 @@ func (databaseKVStore *DatabaseKVStore) Sweep(ctx context.Context) (int64, error
 
 // Get retrieves a value by key. Returns ErrKVStoreKeyNotFound if missing or expired.
 func (databaseKVStore *DatabaseKVStore) Get(ctx context.Context, key string) (string, error) {
+	log.Tracef("DatabaseKVStore.Get key %s", key)
 	var value []byte
 	err := databaseKVStore.db.QueryRow(ctx, `
 		SELECT value FROM core.kv_store
@@ -117,6 +120,7 @@ func (databaseKVStore *DatabaseKVStore) MGet(ctx context.Context, keys []string)
 // Set unconditionally stores or updates a value with the specified expiry (matching Redis SET key value EX ttl upsert semantics).
 // For conditional insertion only when key is absent/expired, use SetNX.
 func (databaseKVStore *DatabaseKVStore) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+	log.Tracef("DatabaseKVStore.Set key %s (expiry: %v)", key, expiry)
 	if expiry <= 0 {
 		expiry = defaultKeyExpiry
 	}
@@ -172,6 +176,7 @@ func (databaseKVStore *DatabaseKVStore) MSet(ctx context.Context, entries map[st
 
 // SetNX stores a value only if the key does not exist or has expired.
 func (databaseKVStore *DatabaseKVStore) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
+	log.Tracef("DatabaseKVStore.SetNX key %s (expiry: %v)", key, expiry)
 	if expiry <= 0 {
 		expiry = defaultKeyExpiry
 	}
@@ -195,6 +200,7 @@ func (databaseKVStore *DatabaseKVStore) SetNX(ctx context.Context, key string, v
 
 // Delete removes a key from cache.
 func (databaseKVStore *DatabaseKVStore) Delete(ctx context.Context, key string) error {
+	log.Tracef("DatabaseKVStore.Delete key %s", key)
 	_, err := databaseKVStore.db.Exec(ctx, "DELETE FROM core.kv_store WHERE key = $1", key)
 	if err != nil {
 		return fmt.Errorf("failed to delete kv key '%s': %w", key, err)
@@ -204,6 +210,7 @@ func (databaseKVStore *DatabaseKVStore) Delete(ctx context.Context, key string) 
 
 // Increment atomically increments an integer counter with the specified expiry.
 func (databaseKVStore *DatabaseKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+	log.Tracef("DatabaseKVStore.Increment key %s (expiry: %v)", key, expiry)
 	if expiry <= 0 {
 		expiry = defaultKeyExpiry
 	}
@@ -232,6 +239,7 @@ func (databaseKVStore *DatabaseKVStore) Increment(ctx context.Context, key strin
 
 // Expire updates the expiry on an existing key.
 func (databaseKVStore *DatabaseKVStore) Expire(ctx context.Context, key string, expiry time.Duration) error {
+	log.Tracef("DatabaseKVStore.Expire key %s (expiry: %v)", key, expiry)
 	if expiry <= 0 {
 		expiry = defaultKeyExpiry
 	}
@@ -255,11 +263,13 @@ func (databaseKVStore *DatabaseKVStore) Expire(ctx context.Context, key string, 
 
 // Ping verifies database health.
 func (databaseKVStore *DatabaseKVStore) Ping(ctx context.Context) error {
+	log.Trace("DatabaseKVStore.Ping")
 	return databaseKVStore.db.Ping(ctx)
 }
 
 // Close stops the background expiration sweeper.
 func (databaseKVStore *DatabaseKVStore) Close() error {
+	log.Debug("DatabaseKVStore.Close")
 	databaseKVStore.mutex.Lock()
 	if databaseKVStore.closed {
 		databaseKVStore.mutex.Unlock()
