@@ -75,12 +75,12 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 	cryptoKeyManager, _ := NewCryptoKeyManager(validEncryptionKeyHex)
 
 	allContexts := []string{
-		ContextDBSecrets,
-		ContextJWTSigning,
-		ContextConsoleSalt,
-		ContextIPCHMAC,
-		ContextStorageEnc,
-		ContextPublishableKey,
+		CryptoContextDBEnvelopeAES256GCM,
+		CryptoContextAuthJWTSigning,
+		CryptoContextConsoleUserSalt,
+		CryptoContextCoreIPCHMAC,
+		CryptoContextFileStorageChunkAES256GCM,
+		CryptoContextClientPublishableKey,
 		"custom:arbitrary:context:v1",
 	}
 
@@ -265,40 +265,40 @@ func TestCoreCryptoGenerateRandomEncryptionKeyHexFailureUnit(t *testing.T) {
 	}
 }
 
-func TestCoreCryptoKeyManagerPublishableKeyDerivationAndVerificationUnit(t *testing.T) {
+func TestCoreCryptoKeyManagerClientPublishableKeyDerivationAndVerificationUnit(t *testing.T) {
 	validEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	cryptoKeyManager, _ := NewCryptoKeyManager(validEncryptionKeyHex)
 
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
-	if len(publishableKey) != 64 {
-		t.Fatalf("expected 64-char hex publishable key, got %d chars", len(publishableKey))
+	clientPublishableKey := cryptoKeyManager.DeriveClientPublishableKey()
+	if len(clientPublishableKey) != 64 {
+		t.Fatalf("expected 64-char hex client publishable key, got %d chars", len(clientPublishableKey))
 	}
 
 	// Infallible & deterministic check
-	if cryptoKeyManager.DerivePublishableKey() != publishableKey {
-		t.Fatal("expected deterministic publishable key derivation")
+	if cryptoKeyManager.DeriveClientPublishableKey() != clientPublishableKey {
+		t.Fatal("expected deterministic client publishable key derivation")
 	}
 
 	// Verify valid key
-	if !cryptoKeyManager.VerifyPublishableKey(publishableKey) {
-		t.Fatal("expected VerifyPublishableKey to succeed for valid key")
+	if !cryptoKeyManager.VerifyClientPublishableKey(clientPublishableKey) {
+		t.Fatal("expected VerifyClientPublishableKey to succeed for valid key")
 	}
 
 	// Verify valid key with leading/trailing whitespace
-	if !cryptoKeyManager.VerifyPublishableKey("  \t" + publishableKey + " \n") {
-		t.Fatal("expected VerifyPublishableKey to succeed with whitespace")
+	if !cryptoKeyManager.VerifyClientPublishableKey("  \t" + clientPublishableKey + " \n") {
+		t.Fatal("expected VerifyClientPublishableKey to succeed with whitespace")
 	}
 
 	// Verify invalid key
-	if cryptoKeyManager.VerifyPublishableKey("0000000000000000000000000000000000000000000000000000000000000000") {
-		t.Fatal("expected VerifyPublishableKey to fail for wrong key")
+	if cryptoKeyManager.VerifyClientPublishableKey("0000000000000000000000000000000000000000000000000000000000000000") {
+		t.Fatal("expected VerifyClientPublishableKey to fail for wrong key")
 	}
 
 	// Verify empty key and whitespace
-	if cryptoKeyManager.VerifyPublishableKey("") {
-		t.Fatal("expected VerifyPublishableKey to fail for empty string")
+	if cryptoKeyManager.VerifyClientPublishableKey("") {
+		t.Fatal("expected VerifyClientPublishableKey to fail for empty string")
 	}
-	if cryptoKeyManager.VerifyPublishableKey("   \t\n  ") {
-		t.Fatal("expected VerifyPublishableKey to fail for whitespace string")
+	if cryptoKeyManager.VerifyClientPublishableKey("   \t\n  ") {
+		t.Fatal("expected VerifyClientPublishableKey to fail for whitespace string")
 	}
 }
