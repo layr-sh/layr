@@ -1,6 +1,10 @@
 package core
 
 import (
+	"bytes"
+	"errors"
+	"log"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -58,13 +62,21 @@ func TestCoreConfigDefaultsUnit(t *testing.T) {
 		t.Fatalf("expected kv_store backend 'database', got '%s'", config.KVStore.Backend)
 	}
 
-	// Verify Console default is true, functional services default is false
+	// Verify Console, Data, Auth, and FileStorage default to true, other functional services default to false
 	if !config.Console.Enabled {
 		t.Fatal("expected console.enabled to default to true")
 	}
-	if config.Data.Enabled || config.Auth.Enabled || config.Tasks.Enabled ||
-		config.FileStorage.Enabled || config.Notification.Enabled || config.Analytics.Enabled || config.Image.Enabled {
-		t.Fatal("expected all functional services to default to false")
+	if !config.Data.Enabled {
+		t.Fatal("expected data.enabled to default to true")
+	}
+	if !config.Auth.Enabled {
+		t.Fatal("expected auth.enabled to default to true")
+	}
+	if !config.FileStorage.Enabled {
+		t.Fatal("expected file_storage.enabled to default to true")
+	}
+	if config.Tasks.Enabled || config.Notification.Enabled || config.Analytics.Enabled || config.Image.Enabled {
+		t.Fatal("expected tasks, notification, analytics, and image to default to false")
 	}
 }
 
@@ -124,6 +136,9 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	// 1. Zero functional services enabled
 	config := DefaultConfig()
+	config.Data.Enabled = false
+	config.Auth.Enabled = false
+	config.FileStorage.Enabled = false
 	if config.HasAnyFunctionalServiceEnabled() {
 		t.Fatal("expected HasAnyFunctionalServiceEnabled to be false on fresh default config")
 	}
@@ -139,6 +154,9 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	allFunctionalServices := []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image"}
 	for _, serviceName := range allFunctionalServices {
 		singleServiceConfig := DefaultConfig()
+		singleServiceConfig.Data.Enabled = false
+		singleServiceConfig.Auth.Enabled = false
+		singleServiceConfig.FileStorage.Enabled = false
 		singleServiceConfig.Console.Enabled = false
 		if err := singleServiceConfig.EnableService(serviceName); err != nil {
 			t.Fatalf("failed to enable service '%s': %v", serviceName, err)
@@ -513,6 +531,9 @@ func TestCoreConfigValidationMinimumFunctionalServiceInvariantUnit(t *testing.T)
 
 	// Zero functional services enabled (even if Console is enabled)
 	zeroServiceConfig := DefaultConfig()
+	zeroServiceConfig.Data.Enabled = false
+	zeroServiceConfig.Auth.Enabled = false
+	zeroServiceConfig.FileStorage.Enabled = false
 	zeroServiceConfig.Security.MasterEncryptionKey = validHexKey
 	zeroServiceConfig.Console.Enabled = true
 	if err := zeroServiceConfig.Validate(); err == nil {
@@ -807,5 +828,220 @@ func TestCoreConfigProjectSlugUnit(t *testing.T) {
 	project := ProjectConfig{Name: "Custom Service Platform"}
 	if project.Slug() != "custom-service-platform" {
 		t.Errorf("expected project slug 'custom-service-platform', got: %s", project.Slug())
+	}
+}
+
+func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "sub", "config.yaml")
+
+	t.Setenv("PORT", "9123")
+	t.Setenv("LAYR__PROJECT__NAME", "Env Written App")
+
+	if writeErr := WriteConfigFile(targetPath); writeErr != nil {
+		t.Fatalf("unexpected write config file error: %v", writeErr)
+	}
+
+	loaded, loadErr := LoadConfig(targetPath)
+	if loadErr != nil {
+		t.Fatalf("unexpected load config file error: %v", loadErr)
+	}
+
+	if loaded.Server.ListenAddr != ":9123" {
+		t.Errorf("expected server listen addr ':9123', got %q", loaded.Server.ListenAddr)
+	}
+	if loaded.Project.Name != "Env Written App" {
+		t.Errorf("expected project name 'Env Written App', got %q", loaded.Project.Name)
+	}
+	const expectedKeyLength = 64
+	if len(loaded.Security.MasterEncryptionKey) != expectedKeyLength {
+		t.Errorf("expected 64-char hex master encryption key, got %q", loaded.Security.MasterEncryptionKey)
+	}
+}
+
+func TestCoreConfigWriteConfigFileCustomUnit(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "custom.yaml")
+
+	customConfig := *DefaultConfig()
+	customConfig.Project.Name = "Explicit Custom App"
+	customConfig.Server.ListenAddr = ":443"
+	customConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+	if writeErr := WriteConfigFile(targetPath, customConfig); writeErr != nil {
+		t.Fatalf("unexpected write error: %v", writeErr)
+	}
+
+	loaded, loadErr := LoadConfig(targetPath)
+	if loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+
+	if loaded.Project.Name != "Explicit Custom App" {
+		t.Errorf("expected 'Explicit Custom App', got %q", loaded.Project.Name)
+	}
+	if loaded.Server.ListenAddr != ":443" {
+		t.Errorf("expected ':443', got %q", loaded.Server.ListenAddr)
+	}
+	if loaded.Security.MasterEncryptionKey != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Errorf("expected preserved master encryption key, got %q", loaded.Security.MasterEncryptionKey)
+	}
+
+	emptyKeyPath := filepath.Join(tempDir, "custom_empty_key.yaml")
+	customConfigEmptyKey := *DefaultConfig()
+	customConfigEmptyKey.Security.MasterEncryptionKey = ""
+	if writeEmptyErr := WriteConfigFile(emptyKeyPath, customConfigEmptyKey); writeEmptyErr != nil {
+		t.Fatalf("unexpected write error: %v", writeEmptyErr)
+	}
+	loadedEmptyKey, loadEmptyErr := LoadConfig(emptyKeyPath)
+	if loadEmptyErr != nil {
+		t.Fatalf("unexpected load error: %v", loadEmptyErr)
+	}
+	const expectedKeyLength = 64
+	if len(loadedEmptyKey.Security.MasterEncryptionKey) != expectedKeyLength {
+		t.Errorf("expected generated 64-char hex key, got %q", loadedEmptyKey.Security.MasterEncryptionKey)
+	}
+}
+
+func TestCoreConfigWriteConfigFileEnvSecurityKeyUnit(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "env_security.yaml")
+
+	expectedKey := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", expectedKey)
+
+	if writeErr := WriteConfigFile(targetPath); writeErr != nil {
+		t.Fatalf("unexpected write error: %v", writeErr)
+	}
+
+	loaded, loadErr := LoadConfig(targetPath)
+	if loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+
+	if loaded.Security.MasterEncryptionKey != expectedKey {
+		t.Errorf("expected master encryption key from env %q, got %q", expectedKey, loaded.Security.MasterEncryptionKey)
+	}
+}
+
+func TestCoreConfigCreateConfigFileAliasUnit(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "alias.yaml")
+
+	if createErr := CreateConfigFile(targetPath); createErr != nil {
+		t.Fatalf("unexpected create error: %v", createErr)
+	}
+
+	loaded, loadErr := LoadConfig(targetPath)
+	if loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+
+	if loaded.Project.Name != "layr-app" {
+		t.Errorf("expected 'layr-app', got %q", loaded.Project.Name)
+	}
+}
+
+func TestCoreConfigWriteConfigFileErrorsUnit(t *testing.T) {
+	// Empty path error
+	if emptyPathErr := WriteConfigFile(""); emptyPathErr == nil {
+		t.Fatal("expected error for empty path, got nil")
+	}
+
+	// Directory creation error
+	invalidDirPath := filepath.Join("/dev/null", "cannot_mkdir", "config.yaml")
+	if dirCreationErr := WriteConfigFile(invalidDirPath); dirCreationErr == nil {
+		t.Fatal("expected error creating directory under /dev/null, got nil")
+	}
+
+	// Write file error (target path is an existing directory)
+	tempDir := t.TempDir()
+	if writeDirErr := WriteConfigFile(tempDir); writeDirErr == nil {
+		t.Fatal("expected error writing to directory path, got nil")
+	}
+
+	// YAML marshal error
+	originalMarshal := yamlMarshal
+	defer func() { yamlMarshal = originalMarshal }()
+	yamlMarshal = func(_ any) ([]byte, error) {
+		return nil, errors.New("simulated marshal error")
+	}
+	marshalErrorPath := filepath.Join(tempDir, "marshal_fail.yaml")
+	if marshalErr := WriteConfigFile(marshalErrorPath); marshalErr == nil {
+		t.Fatal("expected marshal error, got nil")
+	}
+}
+
+func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
+	var buffer bytes.Buffer
+	originalOutput := log.Writer()
+	defer log.SetOutput(originalOutput)
+	log.SetOutput(&buffer)
+
+	tempDir := t.TempDir()
+	targetConfigFile := filepath.Join(tempDir, "verbose_test.yaml")
+
+	// Test programmatic SetVerboseLogging
+	SetVerboseLogging(true)
+	defer SetVerboseLogging(false)
+
+	t.Setenv("PORT", "8888")
+	t.Setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/db")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("BASE_URL", "https://api.example.com")
+	t.Setenv("LAYR__PROJECT__NAME", "Verbose App")
+	t.Setenv("LAYR__SERVER__LISTEN_ADDR", ":8888")
+
+	// 1. WriteConfigFile must NEVER print "Overriding %s from ENV" messages
+	if writeErr := WriteConfigFile(targetConfigFile); writeErr != nil {
+		t.Fatalf("unexpected write error: %v", writeErr)
+	}
+	if buffer.Len() != 0 {
+		t.Errorf("expected WriteConfigFile NOT to log any override messages, but got:\n%s", buffer.String())
+	}
+	buffer.Reset()
+
+	// 2. LoadConfig MUST print "Overriding %s from ENV" messages when verbose logging is enabled
+	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+
+	loggedContent := buffer.String()
+	expectedSubstrings := []string{
+		"Overriding server.port from ENV",
+		"Overriding database.url from ENV",
+		"Overriding security.master_encryption_key from ENV",
+		"Overriding server.base_url from ENV",
+		"Overriding project.name from ENV",
+		"Overriding server.listen_addr from ENV",
+	}
+	for _, expectedSubstring := range expectedSubstrings {
+		if !strings.Contains(loggedContent, expectedSubstring) {
+			t.Errorf("expected log to contain %q, got output:\n%s", expectedSubstring, loggedContent)
+		}
+	}
+
+	// 3. Test disabled logging: LoadConfig must not log
+	SetVerboseLogging(false)
+	buffer.Reset()
+	t.Setenv("VERBOSE", "")
+	t.Setenv("DEBUG", "")
+	t.Setenv("LAYR_VERBOSE", "")
+	t.Setenv("LAYR_DEBUG", "")
+	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+	if buffer.Len() != 0 {
+		t.Errorf("expected no logs when verbose logging is disabled, got %q", buffer.String())
+	}
+
+	// 4. Test enabled via DEBUG=true environment variable: LoadConfig must log
+	t.Setenv("DEBUG", "true")
+	buffer.Reset()
+	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+		t.Fatalf("unexpected load error: %v", loadErr)
+	}
+	if !strings.Contains(buffer.String(), "Overriding server.port from ENV") {
+		t.Errorf("expected log output when DEBUG=true, got %q", buffer.String())
 	}
 }

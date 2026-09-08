@@ -34,6 +34,9 @@ func (mock *mockServiceRunner) Stop() error {
 func TestCoreKernelValidationUnit(t *testing.T) {
 	// 1. Invalid config with zero functional services -> must fail
 	invalidConfig := DefaultConfig()
+	invalidConfig.Data.Enabled = false
+	invalidConfig.Auth.Enabled = false
+	invalidConfig.FileStorage.Enabled = false
 	invalidConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(invalidConfig)
 	defer UnloadConfig()
