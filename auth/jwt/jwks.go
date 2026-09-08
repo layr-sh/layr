@@ -49,7 +49,7 @@ func (signer *Signer) BuildJWKS() JWKSResponse {
 			{
 				KeyType:   "OKP",
 				Curve:     tls.Ed25519.String(),
-				KeyID:     KeyIDEd25519,
+				KeyID:     signer.keyID,
 				Use:       "sig",
 				Algorithm: "EdDSA",
 				X:         publicKeyBase64,

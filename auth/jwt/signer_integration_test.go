@@ -41,7 +41,12 @@ func TestJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 		"tier":        "enterprise",
 		"permissions": []any{"read:documents", "write:documents"},
 	}
-	signedToken, generateErr := primarySigner.GenerateAccessToken(applicationUserID, "alice@example.com", "+10000000000", "authenticated", false, userClaims, 600)
+	signedToken, generateErr := primarySigner.GenerateAccessToken(Claims{
+		Subject: applicationUserID,
+		Email:   "alice@example.com",
+		Phone:   "+10000000000",
+		Claims:  userClaims,
+	}, 600)
 	if generateErr != nil {
 		t.Fatalf("failed to generate access token: %v", generateErr)
 	}
@@ -90,7 +95,10 @@ func TestJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
 
 	// 2. Token signed by tenant 1 must fail verification on tenant 2
 	applicationUserID := uuid.NewV7().String()
-	tokenTenantOne, generateErr := tenantOneSigner.GenerateAccessToken(applicationUserID, "bob@example.com", "", "authenticated", false, nil, 600)
+	tokenTenantOne, generateErr := tenantOneSigner.GenerateAccessToken(Claims{
+		Subject: applicationUserID,
+		Email:   "bob@example.com",
+	}, 600)
 	if generateErr != nil {
 		t.Fatalf("failed to generate token: %v", generateErr)
 	}
@@ -125,7 +133,13 @@ func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 		},
 	}
 
-	token, generateErr := signer.GenerateAccessToken(applicationUserID, "charlie@example.com", "+19876543210", "developer", false, userClaims, 1200)
+	token, generateErr := signer.GenerateAccessToken(Claims{
+		Subject: applicationUserID,
+		Email:   "charlie@example.com",
+		Phone:   "+19876543210",
+		Role:    "developer",
+		Claims:  userClaims,
+	}, 1200)
 	if generateErr != nil {
 		t.Fatalf("failed to generate token: %v", generateErr)
 	}
@@ -166,5 +180,59 @@ func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 			t.Fatalf("duplicate refresh token hash produced: %s", tokenHash)
 		}
 		seenHashes[tokenHash] = true
+	}
+}
+
+func TestJWTProjectIsolationIntegration(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create CryptoKeyManager: %v", err)
+	}
+
+	appSigner, appSignerErr := NewSigner(cryptoKeyManager, "portal-key-v1")
+	if appSignerErr != nil {
+		t.Fatalf("failed to create app signer: %v", appSignerErr)
+	}
+	adminSigner, adminSignerErr := NewSigner(cryptoKeyManager, "admin-key-v1")
+	if adminSignerErr != nil {
+		t.Fatalf("failed to create admin signer: %v", adminSignerErr)
+	}
+
+	// 1. Both share the same underlying key derivation
+	if !bytes.Equal(appSigner.PublicKey(), adminSigner.PublicKey()) {
+		t.Fatal("expected identical public keys for identical crypto key managers")
+	}
+
+	// 2. Generate token with appSigner for Customer Portal audience and issuer
+	userID := uuid.NewV7().String()
+	appToken, portalTokenErr := appSigner.GenerateAccessToken(Claims{
+		Subject:  userID,
+		Email:    "user@portal.com",
+		Audience: "customer-portal:user",
+		Issuer:   "customer-portal",
+	}, 600)
+	if portalTokenErr != nil {
+		t.Fatalf("failed to generate portal token: %v", portalTokenErr)
+	}
+
+	// 3. appSigner successfully verifies token with matching audience and issuer
+	verifiedClaims, verifyPortalTokenErr := appSigner.VerifyAccessToken(appToken)
+	if verifyPortalTokenErr != nil {
+		t.Fatalf("appSigner failed to verify own token: %v", verifyPortalTokenErr)
+	}
+	if assertErr := verifiedClaims.Assert("aud", "customer-portal:user"); assertErr != nil {
+		t.Fatalf("failed to assert portal aud: %v", assertErr)
+	}
+	if assertErr := verifiedClaims.Assert("iss", "customer-portal"); assertErr != nil {
+		t.Fatalf("failed to assert portal iss: %v", assertErr)
+	}
+
+	// 4. Verifier expecting Admin Console audience fails assertion
+	adminClaims, crossVerifyErr := adminSigner.VerifyAccessToken(appToken)
+	if crossVerifyErr != nil {
+		t.Fatalf("unexpected signature verification failure: %v", crossVerifyErr)
+	}
+	if assertErr := adminClaims.Assert("aud", "admin-console:user"); assertErr == nil {
+		t.Fatal("expected audience assertion failure when verifying with different audience")
 	}
 }

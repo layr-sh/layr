@@ -28,7 +28,7 @@ func TestJWTJWKSAndOIDCDiscoveryUnit(t *testing.T) {
 		t.Fatalf("expected 1 key in JWKS, got: %d", len(jwks.Keys))
 	}
 	key := jwks.Keys[0]
-	if key.KeyType != "OKP" || key.Curve != tls.Ed25519.String() || key.KeyID != KeyIDEd25519 || key.Use != "sig" || key.Algorithm != "EdDSA" || key.X == "" {
+	if key.KeyType != "OKP" || key.Curve != tls.Ed25519.String() || key.KeyID != signer.KeyID() || key.Use != "sig" || key.Algorithm != "EdDSA" || key.X == "" {
 		t.Fatalf("unexpected JWK fields: %+v", key)
 	}
 
@@ -47,7 +47,7 @@ func TestJWTJWKSAndOIDCDiscoveryUnit(t *testing.T) {
 	if err := json.NewDecoder(discoveryRecorder.Body).Decode(&decodedJWKS); err != nil {
 		t.Fatalf("failed to decode JWKS response body: %v", err)
 	}
-	if len(decodedJWKS.Keys) != 1 || decodedJWKS.Keys[0].KeyID != KeyIDEd25519 {
+	if len(decodedJWKS.Keys) != 1 || decodedJWKS.Keys[0].KeyID != signer.KeyID() {
 		t.Fatalf("mismatched decoded JWKS keys: %+v", decodedJWKS)
 	}
 

@@ -28,7 +28,12 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	}
 
 	userID := uuid.NewV7().String()
-	token, err := signer.GenerateAccessToken(userID, "user@example.com", "+123456789", "authenticated", false, map[string]any{"plan": "pro"}, 900)
+	token, err := signer.GenerateAccessToken(Claims{
+		Subject: userID,
+		Email:   "user@example.com",
+		Phone:   "+123456789",
+		Claims:  map[string]any{"plan": "pro", "level": 3, "active": true},
+	}, 900)
 	if err != nil {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
@@ -45,8 +50,72 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 		t.Fatalf("expected claims.Claims['plan'] == 'pro', got: %v", claims.Claims["plan"])
 	}
 
+	// Test single Assert with standard aliases and custom claims
+	if assertErr := claims.Assert("sub", userID); assertErr != nil {
+		t.Fatalf("assert sub failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("subject", userID); assertErr != nil {
+		t.Fatalf("assert subject alias failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("aud", core.GetConfig().Project.Slug()+":user"); assertErr != nil {
+		t.Fatalf("assert aud failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("audience", core.GetConfig().Project.Slug()+":user"); assertErr != nil {
+		t.Fatalf("assert audience alias failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("iss", core.GetConfig().Project.Slug()); assertErr != nil {
+		t.Fatalf("assert iss failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("issuer", core.GetConfig().Project.Slug()); assertErr != nil {
+		t.Fatalf("assert issuer alias failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("role", "authenticated"); assertErr != nil {
+		t.Fatalf("assert role failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("email", "user@example.com"); assertErr != nil {
+		t.Fatalf("assert email failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("phone", "+123456789"); assertErr != nil {
+		t.Fatalf("assert phone failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("is_anonymous", false); assertErr != nil {
+		t.Fatalf("assert is_anonymous failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("jti", claims.JWTID); assertErr != nil {
+		t.Fatalf("assert jti failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("plan", "pro"); assertErr != nil {
+		t.Fatalf("assert plan failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("level", 3); assertErr != nil {
+		t.Fatalf("assert numeric level failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("level", int64(3)); assertErr != nil {
+		t.Fatalf("assert int64 level failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("level", float64(3)); assertErr != nil {
+		t.Fatalf("assert float64 level failed: %v", assertErr)
+	}
+	if assertErr := claims.Assert("active", true); assertErr != nil {
+		t.Fatalf("assert bool active failed: %v", assertErr)
+	}
+
+	// Test Assert failure on mismatch and missing claim
+	if assertErr := claims.Assert("role", "admin"); assertErr == nil {
+		t.Fatal("expected assertion error on role mismatch")
+	}
+	if assertErr := claims.Assert("non_existent_key", "value"); assertErr == nil {
+		t.Fatal("expected assertion error on missing custom claim")
+	}
+	if assertErr := claims.Assert("active", 123); assertErr == nil {
+		t.Fatal("expected assertion error when comparing bool with number")
+	}
+
 	// Anonymous token verification
-	anonymousToken, err := signer.GenerateAccessToken(userID, "", "", "authenticated", true, nil, 900)
+	anonymousToken, err := signer.GenerateAccessToken(Claims{
+		Subject:     userID,
+		IsAnonymous: true,
+	}, 900)
 	if err != nil {
 		t.Fatalf("failed to generate anonymous token: %v", err)
 	}
@@ -54,9 +123,18 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	if err != nil || !anonymousClaims.IsAnonymous {
 		t.Fatalf("expected anonymous claims with IsAnonymous=true, got: %+v", anonymousClaims)
 	}
+	if assertErr := anonymousClaims.Assert("is_anonymous", true); assertErr != nil {
+		t.Fatalf("assert is_anonymous failed: %v", assertErr)
+	}
+	// Test Assert on nil Claims map
+	if assertErr := anonymousClaims.Assert("any_custom_key", "val"); assertErr == nil {
+		t.Fatal("expected error on nil claims map")
+	}
 
 	// Fallback role and expiry
-	fallbackToken, err := signer.GenerateAccessToken(userID, "", "", "", false, nil, 0)
+	fallbackToken, err := signer.GenerateAccessToken(Claims{
+		Subject: userID,
+	})
 	if err != nil {
 		t.Fatalf("failed to generate fallback token: %v", err)
 	}
@@ -66,13 +144,13 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	}
 
 	// Malformed tokens
-	if _, err := signer.VerifyAccessToken("not.three.segments.extra"); err == nil {
+	if _, verifySegmentErr := signer.VerifyAccessToken("not.three.segments.extra"); verifySegmentErr == nil {
 		t.Fatalf("expected error on 4-part token")
 	}
-	if _, err := signer.VerifyAccessToken("eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiIxIn0.!!invalid-signature-base64!!"); err == nil {
+	if _, verifyBase64Err := signer.VerifyAccessToken("eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiIxIn0.!!invalid-signature-base64!!"); verifyBase64Err == nil {
 		t.Fatalf("expected error on bad signature base64")
 	}
-	if _, err := signer.VerifyAccessToken("eyJhbGciOiJFZERTQSJ9.e30.c2ln"); err == nil {
+	if _, verifySigErr := signer.VerifyAccessToken("eyJhbGciOiJFZERTQSJ9.e30.c2ln"); verifySigErr == nil {
 		t.Fatalf("expected signature verification failure")
 	}
 
@@ -80,7 +158,7 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badClaimsPayload := "eyJhbGciOiJFZERTQSJ9.!bad-b64!"
 	badSignature := ed25519.Sign(signer.privateKey, []byte(badClaimsPayload))
 	badClaimsToken := badClaimsPayload + "." + base64.RawURLEncoding.EncodeToString(badSignature)
-	if _, err := signer.VerifyAccessToken(badClaimsToken); err == nil {
+	if _, verifyClaimsB64Err := signer.VerifyAccessToken(badClaimsToken); verifyClaimsB64Err == nil {
 		t.Fatalf("expected error on bad claims base64")
 	}
 
@@ -88,21 +166,24 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	nonJSONClaimsPayload := "eyJhbGciOiJFZERTQSJ9.bm90LWpzb24"
 	nonJSONSignature := ed25519.Sign(signer.privateKey, []byte(nonJSONClaimsPayload))
 	nonJSONToken := nonJSONClaimsPayload + "." + base64.RawURLEncoding.EncodeToString(nonJSONSignature)
-	if _, err := signer.VerifyAccessToken(nonJSONToken); err == nil {
+	if _, verifyJSONErr := signer.VerifyAccessToken(nonJSONToken); verifyJSONErr == nil {
 		t.Fatalf("expected error on non-json claims")
 	}
 
 	// Expired token test
-	expiredToken, _ := signer.GenerateAccessToken(userID, "exp@example.com", "", "authenticated", false, nil, -10)
-	if _, err := signer.VerifyAccessToken(expiredToken); err == nil || !strings.Contains(err.Error(), "expired") {
-		t.Fatalf("expected expired error, got: %v", err)
+	expiredToken, _ := signer.GenerateAccessToken(Claims{
+		Subject: userID,
+		Email:   "exp@example.com",
+	}, -10)
+	if _, verifyExpiredErr := signer.VerifyAccessToken(expiredToken); verifyExpiredErr == nil || !strings.Contains(verifyExpiredErr.Error(), "expired") {
+		t.Fatalf("expected expired error, got: %v", verifyExpiredErr)
 	}
 
 	// Future NotBefore token
-	futureClaims := AppUserClaims{
+	futureClaims := Claims{
 		Subject:   userID,
-		Issuer:    IssuerAppUser,
-		Audience:  AudienceAppUser,
+		Issuer:    core.GetConfig().Project.Slug(),
+		Audience:  core.GetConfig().Project.Slug() + ":user",
 		IssuedAt:  time.Now().Unix() + 100,
 		NotBefore: time.Now().Unix() + 100,
 		ExpiresAt: time.Now().Unix() + 1000,
@@ -112,8 +193,8 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	futureClaimsBase64 := base64.RawURLEncoding.EncodeToString(futureJSON)
 	futureSignature := ed25519.Sign(signer.privateKey, []byte(headerBase64+"."+futureClaimsBase64))
 	futureToken := headerBase64 + "." + futureClaimsBase64 + "." + base64.RawURLEncoding.EncodeToString(futureSignature)
-	if _, err := signer.VerifyAccessToken(futureToken); err == nil || !strings.Contains(err.Error(), "not valid yet") {
-		t.Fatalf("expected not valid yet error, got: %v", err)
+	if _, verifyFutureErr := signer.VerifyAccessToken(futureToken); verifyFutureErr == nil || !strings.Contains(verifyFutureErr.Error(), "not valid yet") {
+		t.Fatalf("expected not valid yet error, got: %v", verifyFutureErr)
 	}
 
 	// Audience mismatch
@@ -124,8 +205,12 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badAudienceClaimsBase64 := base64.RawURLEncoding.EncodeToString(badAudienceJSON)
 	badAudienceSignature := ed25519.Sign(signer.privateKey, []byte(headerBase64+"."+badAudienceClaimsBase64))
 	badAudienceToken := headerBase64 + "." + badAudienceClaimsBase64 + "." + base64.RawURLEncoding.EncodeToString(badAudienceSignature)
-	if _, err := signer.VerifyAccessToken(badAudienceToken); err == nil || !strings.Contains(err.Error(), "invalid jwt audience") {
-		t.Fatalf("expected invalid audience error, got: %v", err)
+	verifiedBadAudience, verifyAudienceErr := signer.VerifyAccessToken(badAudienceToken)
+	if verifyAudienceErr != nil {
+		t.Fatalf("expected signature verification to pass, got: %v", verifyAudienceErr)
+	}
+	if assertErr := verifiedBadAudience.Assert("aud", core.GetConfig().Project.Slug()+":user"); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
+		t.Fatalf("expected audience mismatch error, got: %v", assertErr)
 	}
 
 	// Issuer mismatch
@@ -136,8 +221,12 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badIssuerClaimsBase64 := base64.RawURLEncoding.EncodeToString(badIssuerJSON)
 	badIssuerSignature := ed25519.Sign(signer.privateKey, []byte(headerBase64+"."+badIssuerClaimsBase64))
 	badIssuerToken := headerBase64 + "." + badIssuerClaimsBase64 + "." + base64.RawURLEncoding.EncodeToString(badIssuerSignature)
-	if _, err := signer.VerifyAccessToken(badIssuerToken); err == nil || !strings.Contains(err.Error(), "invalid jwt issuer") {
-		t.Fatalf("expected invalid issuer error, got: %v", err)
+	verifiedBadIssuer, verifyIssuerErr := signer.VerifyAccessToken(badIssuerToken)
+	if verifyIssuerErr != nil {
+		t.Fatalf("expected signature verification to pass, got: %v", verifyIssuerErr)
+	}
+	if assertErr := verifiedBadIssuer.Assert("iss", core.GetConfig().Project.Slug()); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
+		t.Fatalf("expected issuer mismatch error, got: %v", assertErr)
 	}
 }
 
@@ -181,7 +270,16 @@ func TestJWTGenerateIDTokenAndOIDCDiscoveryUnit(t *testing.T) {
 	}
 
 	userID := uuid.NewV7().String()
-	idToken, tokenGenerateErr := signer.GenerateIDToken("https://auth.example.com", "client-123", userID, "test@example.com", "+1234567890", "user", "nonce-xyz", true, false, false, 3600)
+	idToken, tokenGenerateErr := signer.GenerateIDToken(OIDCIDTokenClaims{
+		Issuer:        "https://auth.example.com",
+		Audience:      "client-123",
+		Subject:       userID,
+		Email:         "test@example.com",
+		EmailVerified: true,
+		PhoneNumber:   "+1234567890",
+		Role:          "user",
+		Nonce:         "nonce-xyz",
+	}, 3600)
 	if tokenGenerateErr != nil {
 		t.Fatalf("failed to generate ID token: %v", tokenGenerateErr)
 	}
@@ -217,13 +315,29 @@ func TestJWTGenerateIDTokenAndOIDCDiscoveryUnit(t *testing.T) {
 		t.Errorf("expected nonce nonce-xyz, got %s", claims.Nonce)
 	}
 
-	// Test GenerateIDToken with empty role and expiry 0
-	defaultIDToken, defaultTokenGenerateErr := signer.GenerateIDToken("https://auth.example.com", "client-default", userID, "", "", "", "", false, false, false, 0)
+	// Test GenerateIDToken with empty role, empty issuer (fallback to core.GetConfig().Project.Slug()), and expiry 0
+	defaultIDToken, defaultTokenGenerateErr := signer.GenerateIDToken(OIDCIDTokenClaims{
+		Audience: "client-default",
+		Subject:  userID,
+	})
 	if defaultTokenGenerateErr != nil {
 		t.Fatalf("failed to generate default id token: %v", defaultTokenGenerateErr)
 	}
 	if defaultIDToken == "" {
 		t.Fatal("expected non-empty default id token")
+	}
+
+	defaultSegments := strings.Split(defaultIDToken, ".")
+	defaultClaimsBytes, defaultClaimsDecodeErr := base64.RawURLEncoding.DecodeString(defaultSegments[1])
+	if defaultClaimsDecodeErr != nil {
+		t.Fatalf("failed to decode default claims: %v", defaultClaimsDecodeErr)
+	}
+	var defaultClaims OIDCIDTokenClaims
+	if defaultUnmarshalErr := json.Unmarshal(defaultClaimsBytes, &defaultClaims); defaultUnmarshalErr != nil {
+		t.Fatalf("failed to unmarshal default claims: %v", defaultUnmarshalErr)
+	}
+	if defaultClaims.Issuer != core.GetConfig().Project.Slug() {
+		t.Fatalf("expected fallback issuer %s, got: %s", core.GetConfig().Project.Slug(), defaultClaims.Issuer)
 	}
 
 	// Verify discovery
@@ -236,5 +350,131 @@ func TestJWTGenerateIDTokenAndOIDCDiscoveryUnit(t *testing.T) {
 	}
 	if len(discovery.GrantTypesSupported) == 0 || discovery.GrantTypesSupported[0] != "authorization_code" {
 		t.Errorf("unexpected grant types: %v", discovery.GrantTypesSupported)
+	}
+}
+
+func TestJWTProjectSlugConfigurationUnit(t *testing.T) {
+	cryptoKeyManager, managerErr := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if managerErr != nil {
+		t.Fatalf("failed to create KeyManager: %v", managerErr)
+	}
+
+	// 1. Verify default values derived from core default config ("layr-app")
+	expectedDefaultIssuer := "layr-app"
+	expectedDefaultAudience := "layr-app:user"
+	expectedDefaultKeyID := "layr-app-ed25519-v1"
+
+	defaultSigner, defaultSignerErr := NewSigner(cryptoKeyManager)
+	if defaultSignerErr != nil {
+		t.Fatalf("failed to create default Signer: %v", defaultSignerErr)
+	}
+	if defaultSigner.KeyID() != expectedDefaultKeyID {
+		t.Fatalf("expected default key ID %s, got: %s", expectedDefaultKeyID, defaultSigner.KeyID())
+	}
+
+	// 2. Verify custom key ID and fallback when empty string passed
+	customKeySigner, customKeySignerErr := NewSigner(cryptoKeyManager, "custom-key-v2")
+	if customKeySignerErr != nil {
+		t.Fatalf("failed to create Signer with custom key ID: %v", customKeySignerErr)
+	}
+	if customKeySigner.KeyID() != "custom-key-v2" {
+		t.Fatalf("expected custom key ID custom-key-v2, got: %s", customKeySigner.KeyID())
+	}
+
+	fallbackKeySigner, fallbackKeySignerErr := NewSigner(cryptoKeyManager, "")
+	if fallbackKeySignerErr != nil {
+		t.Fatalf("failed to create Signer with empty key ID: %v", fallbackKeySignerErr)
+	}
+	if fallbackKeySigner.KeyID() != expectedDefaultKeyID {
+		t.Fatalf("expected fallback key ID %s, got: %s", expectedDefaultKeyID, fallbackKeySigner.KeyID())
+	}
+
+	// 3. Verify token issuance and verification with default audience/issuer
+	testUserID := uuid.NewV7().String()
+	defaultToken, defaultTokenErr := defaultSigner.GenerateAccessToken(Claims{
+		Subject: testUserID,
+		Email:   "user@example.com",
+	}, 600)
+	if defaultTokenErr != nil {
+		t.Fatalf("failed to generate default token: %v", defaultTokenErr)
+	}
+	defaultVerifiedClaims, verifyDefaultErr := defaultSigner.VerifyAccessToken(defaultToken)
+	if verifyDefaultErr != nil {
+		t.Fatalf("failed to verify default token: %v", verifyDefaultErr)
+	}
+	if assertErr := defaultVerifiedClaims.Assert("iss", expectedDefaultIssuer); assertErr != nil {
+		t.Fatalf("failed default claims iss assert: %v", assertErr)
+	}
+	if assertErr := defaultVerifiedClaims.Assert("aud", expectedDefaultAudience); assertErr != nil {
+		t.Fatalf("failed default claims aud assert: %v", assertErr)
+	}
+
+	// 4. Verify token issuance and verification with custom audience and issuer parameters
+	customAudience := "custom-audience:admin"
+	customIssuer := "custom-auth-service"
+	customToken, customTokenErr := defaultSigner.GenerateAccessToken(Claims{
+		Subject:  testUserID,
+		Email:    "admin@example.com",
+		Role:     "admin",
+		Audience: customAudience,
+		Issuer:   customIssuer,
+	}, 600)
+	if customTokenErr != nil {
+		t.Fatalf("failed to generate custom token: %v", customTokenErr)
+	}
+	customVerifiedClaims, verifyCustomErr := defaultSigner.VerifyAccessToken(customToken)
+	if verifyCustomErr != nil {
+		t.Fatalf("failed to verify custom token: %v", verifyCustomErr)
+	}
+	if assertErr := customVerifiedClaims.Assert("aud", customAudience); assertErr != nil {
+		t.Fatalf("failed custom aud assert: %v", assertErr)
+	}
+	if assertErr := customVerifiedClaims.Assert("iss", customIssuer); assertErr != nil {
+		t.Fatalf("failed custom iss assert: %v", assertErr)
+	}
+
+	// Mismatched expected audience or issuer must fail assertion
+	if badAudienceErr := customVerifiedClaims.Assert("aud", "wrong-audience"); badAudienceErr == nil {
+		t.Fatal("expected error on mismatched audience")
+	}
+	if badIssuerErr := customVerifiedClaims.Assert("iss", "wrong-issuer"); badIssuerErr == nil {
+		t.Fatal("expected error on mismatched issuer")
+	}
+
+	// 5. Verify dynamic core config update via SetLoadedConfig
+	t.Cleanup(func() {
+		core.SetLoadedConfig(nil)
+	})
+	configuredProject := "Production Gateway"
+	core.SetLoadedConfig(&core.Config{
+		Project: core.ProjectConfig{
+			Name: configuredProject,
+		},
+	})
+	expectedConfiguredIssuer := "production-gateway"
+
+	dynamicSigner, dynamicSignerErr := NewSigner(cryptoKeyManager)
+	if dynamicSignerErr != nil {
+		t.Fatalf("failed to create dynamic Signer: %v", dynamicSignerErr)
+	}
+	if dynamicSigner.KeyID() != expectedConfiguredIssuer+"-ed25519-v1" {
+		t.Fatalf("expected dynamic key ID %s-ed25519-v1, got: %s", expectedConfiguredIssuer, dynamicSigner.KeyID())
+	}
+	dynamicToken, dynamicTokenErr := dynamicSigner.GenerateAccessToken(Claims{
+		Subject: testUserID,
+		Email:   "dyn@example.com",
+	}, 600)
+	if dynamicTokenErr != nil {
+		t.Fatalf("failed to generate dynamic token: %v", dynamicTokenErr)
+	}
+	dynamicClaims, verifyDynamicErr := dynamicSigner.VerifyAccessToken(dynamicToken)
+	if verifyDynamicErr != nil {
+		t.Fatalf("failed to verify dynamic token: %v", verifyDynamicErr)
+	}
+	if assertErr := dynamicClaims.Assert("iss", expectedConfiguredIssuer); assertErr != nil {
+		t.Fatalf("failed dynamic claims iss assert: %v", assertErr)
+	}
+	if assertErr := dynamicClaims.Assert("aud", expectedConfiguredIssuer+":user"); assertErr != nil {
+		t.Fatalf("failed dynamic claims aud assert: %v", assertErr)
 	}
 }

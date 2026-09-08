@@ -46,7 +46,7 @@ linters:
     rules:
       - linters:
           - forbidigo
-        text: 'use of `.*(WriteString|DecodeString|EncodeToString|NewInt|ConnectionString|connectionString)` forbidden'
+        text: 'use of `.*(ReplaceAllString|WriteString|DecodeString|EncodeToString|NewInt|ConnectionString|connectionString)` forbidden'
 
   settings:
     govet:
@@ -107,9 +107,7 @@ linters:
       forbid:
         - pattern: '(?i)\b(admin|administrator|operator)\b'
           msg: "Term prohibited: use 'console user' or 'control plane'"
-        - pattern: '\b(canceledCtx|authCtx|timeoutCtx)\b'
-          msg: "Alternative context identifier prohibited: use 'ctx' with lexical scoping"
-        - pattern: '\b[a-zA-Z0-9]+(Str|Int|String|Bool)\b'
+        - pattern: '\b[a-zA-Z0-9]+(Str|String|Int|Bool|Boolean)\b'
           msg: "Meaningless representation suffix prohibited"
       analyze-types: true
 

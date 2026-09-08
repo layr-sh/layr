@@ -40,6 +40,16 @@ type ProjectConfig struct {
 	Description string `yaml:"description"`
 }
 
+// Slug returns the URL/identifier-friendly slug of the project name.
+func (project ProjectConfig) Slug() string {
+	slugifier := NewSlugifier()
+	slug := slugifier.Slugify(project.Name)
+	if slug == "" {
+		return "layr-app"
+	}
+	return slug
+}
+
 // ServerConfig defines the HTTP server network listener and base URL.
 type ServerConfig struct {
 	ListenAddr string `yaml:"listen_addr"`
@@ -297,36 +307,36 @@ func applyEnvConfigField(config *Config, section, field, value string) {
 		}
 	case "data":
 		if field == "enabled" {
-			config.Data.Enabled = parseBoolean(value)
+			config.Data.Enabled = parseFlag(value)
 		}
 	case "auth":
 		if field == "enabled" {
-			config.Auth.Enabled = parseBoolean(value)
+			config.Auth.Enabled = parseFlag(value)
 		}
 	case "tasks":
 		if field == "enabled" {
-			config.Tasks.Enabled = parseBoolean(value)
+			config.Tasks.Enabled = parseFlag(value)
 		}
 	case "file_storage", "filestorage":
 		if field == "enabled" {
-			config.FileStorage.Enabled = parseBoolean(value)
+			config.FileStorage.Enabled = parseFlag(value)
 		}
 	case "notification":
 		if field == "enabled" {
-			config.Notification.Enabled = parseBoolean(value)
+			config.Notification.Enabled = parseFlag(value)
 		}
 	case "analytics":
 		if field == "enabled" {
-			config.Analytics.Enabled = parseBoolean(value)
+			config.Analytics.Enabled = parseFlag(value)
 		}
 	case "image":
 		if field == "enabled" {
-			config.Image.Enabled = parseBoolean(value)
+			config.Image.Enabled = parseFlag(value)
 		}
 	case "console":
 		switch field {
 		case "enabled":
-			config.Console.Enabled = parseBoolean(value)
+			config.Console.Enabled = parseFlag(value)
 		case "initial_user_email":
 			config.Console.InitialUserEmail = value
 		case "initial_user_password":
@@ -335,7 +345,7 @@ func applyEnvConfigField(config *Config, section, field, value string) {
 	}
 }
 
-func parseBoolean(value string) bool {
+func parseFlag(value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
 	return value == "true" || value == "1" || value == "yes" || value == "on"
 }

@@ -71,7 +71,7 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 	}
 
 	jwk := jwksPayload.Keys[0]
-	if jwk.KeyID != KeyIDEd25519 || jwk.Algorithm != "EdDSA" || jwk.Curve != tls.Ed25519.String() || jwk.KeyType != "OKP" {
+	if jwk.KeyID != signer.KeyID() || jwk.Algorithm != "EdDSA" || jwk.Curve != tls.Ed25519.String() || jwk.KeyType != "OKP" {
 		t.Fatalf("unexpected JWK parameters: %+v", jwk)
 	}
 
@@ -83,7 +83,11 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 	discoveredPublicKey := ed25519.PublicKey(publicKeyBytes)
 
 	userID := uuid.NewV7().String()
-	token, tokenGenerateErr := signer.GenerateAccessToken(userID, "user@example.com", "", "authenticated", false, map[string]any{"premium": true}, 300)
+	token, tokenGenerateErr := signer.GenerateAccessToken(Claims{
+		Subject: userID,
+		Email:   "user@example.com",
+		Claims:  map[string]any{"premium": true},
+	}, 300)
 	if tokenGenerateErr != nil {
 		t.Fatalf("failed to generate access token: %v", tokenGenerateErr)
 	}
