@@ -537,7 +537,7 @@ func TestCoreConfigParseBooleanExhaustiveEdgeCasesUnit(t *testing.T) {
 		"  true  ", "\t1\t", " yes\n", " ON ",
 	}
 	for _, truthyCase := range truthyCases {
-		if !parseBoolean(truthyCase) {
+		if !parseFlag(truthyCase) {
 			t.Fatalf("expected truthy result for input '%s'", truthyCase)
 		}
 	}
@@ -547,7 +547,7 @@ func TestCoreConfigParseBooleanExhaustiveEdgeCasesUnit(t *testing.T) {
 		"", "   ", "\t\n", "none", "null", "undefined", "invalid", "-1", "2", "truee", "yess", "00",
 	}
 	for _, falsyCase := range falsyCases {
-		if parseBoolean(falsyCase) {
+		if parseFlag(falsyCase) {
 			t.Fatalf("expected falsy result for input '%s'", falsyCase)
 		}
 	}
@@ -772,5 +772,40 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 	afterUnloadConfigConfig := GetConfig()
 	if afterUnloadConfigConfig.Project.Name != "layr-app" {
 		t.Fatalf("expected Default after UnloadConfig, got: %s", afterUnloadConfigConfig.Project.Name)
+	}
+}
+
+func TestCoreConfigProjectSlugUnit(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"layr-app", "layr-app"},
+		{"layr", "layr"},
+		{"Layr Application", "layr-application"},
+		{"My Awesome Project! v2.0", "my-awesome-project-v2-0"},
+		{"  Leading And Trailing  ", "leading-and-trailing"},
+		{"---hello---world---", "hello-world"},
+		{"multiple___underscores and   spaces", "multiple-underscores-and-spaces"},
+		{"", "layr-app"},
+		{"   \t\n  ", "layr-app"},
+		{"!@#$%^&*()", "layr-app"},
+		{"Layr 项目 Pro", "layr-xiang-mu-pro"},
+		{"Alpha β Gamma", "alpha-b-gamma"},
+		{"Привет", "privet"},
+		{"こんにちは", "konnichiha"},
+	}
+
+	for _, testCase := range testCases {
+		project := ProjectConfig{Name: testCase.input}
+		actual := project.Slug()
+		if actual != testCase.expected {
+			t.Errorf("ProjectConfig{Name: %q}.Slug() = %q, expected %q", testCase.input, actual, testCase.expected)
+		}
+	}
+
+	project := ProjectConfig{Name: "Custom Service Platform"}
+	if project.Slug() != "custom-service-platform" {
+		t.Errorf("expected project slug 'custom-service-platform', got: %s", project.Slug())
 	}
 }

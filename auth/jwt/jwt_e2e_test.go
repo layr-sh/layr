@@ -50,7 +50,13 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 		"features":          []any{"analytics", "storage"},
 	}
 
-	accessToken, tokenGenerateErr := authSigner.GenerateAccessToken(applicationUserID, userEmail, "+15550001111", userRole, false, userCustomClaims, 3600)
+	accessToken, tokenGenerateErr := authSigner.GenerateAccessToken(Claims{
+		Subject: applicationUserID,
+		Email:   userEmail,
+		Phone:   "+15550001111",
+		Role:    userRole,
+		Claims:  userCustomClaims,
+	}, 3600)
 	if tokenGenerateErr != nil {
 		t.Fatalf("failed to generate access token: %v", tokenGenerateErr)
 	}
@@ -98,7 +104,7 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	// C. Extract and construct public key from discovered JWK
 	var activePublicKey ed25519.PublicKey
 	for _, key := range jwksData.Keys {
-		if key.KeyID == KeyIDEd25519 && key.KeyType == "OKP" && key.Curve == tls.Ed25519.String() {
+		if key.KeyID == authSigner.KeyID() && key.KeyType == "OKP" && key.Curve == tls.Ed25519.String() {
 			rawPublicKeyBytes, publicKeyDecodeErr := base64.RawURLEncoding.DecodeString(key.X)
 			if publicKeyDecodeErr != nil {
 				t.Fatalf("failed to base64 decode key.X: %v", publicKeyDecodeErr)
@@ -135,7 +141,7 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 		t.Fatalf("failed to decode claims payload: %v", claimsDecodeErr)
 	}
 
-	var verifiedClaims AppUserClaims
+	var verifiedClaims Claims
 	if claimsUnmarshalErr := json.Unmarshal(claimsBytes, &verifiedClaims); claimsUnmarshalErr != nil {
 		t.Fatalf("failed to unmarshal verified claims: %v", claimsUnmarshalErr)
 	}
@@ -148,10 +154,12 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	if verifiedClaims.NotBefore > nowTimestamp {
 		t.Fatal("token is not yet valid")
 	}
-	if verifiedClaims.Audience != AudienceAppUser {
+	expectedAudience := core.GetConfig().Project.Slug() + ":user"
+	if verifiedClaims.Audience != expectedAudience {
 		t.Fatalf("unexpected audience: %s", verifiedClaims.Audience)
 	}
-	if verifiedClaims.Issuer != IssuerAppUser {
+	expectedIssuer := core.GetConfig().Project.Slug()
+	if verifiedClaims.Issuer != expectedIssuer {
 		t.Fatalf("unexpected issuer: %s", verifiedClaims.Issuer)
 	}
 	if verifiedClaims.Subject != applicationUserID {
@@ -169,8 +177,23 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	if authorityVerifyErr != nil {
 		t.Fatalf("auth authority internal verification failed: %v", authorityVerifyErr)
 	}
-	if authorityVerifiedClaims.Subject != applicationUserID {
-		t.Fatalf("subject mismatch: expected %s, got %s", applicationUserID, authorityVerifiedClaims.Subject)
+	if assertErr := authorityVerifiedClaims.Assert("sub", applicationUserID); assertErr != nil {
+		t.Fatalf("assert sub failed: %v", assertErr)
+	}
+	if assertErr := authorityVerifiedClaims.Assert("email", userEmail); assertErr != nil {
+		t.Fatalf("assert email failed: %v", assertErr)
+	}
+	if assertErr := authorityVerifiedClaims.Assert("role", userRole); assertErr != nil {
+		t.Fatalf("assert role failed: %v", assertErr)
+	}
+	if assertErr := authorityVerifiedClaims.Assert("aud", expectedAudience); assertErr != nil {
+		t.Fatalf("assert aud failed: %v", assertErr)
+	}
+	if assertErr := authorityVerifiedClaims.Assert("iss", expectedIssuer); assertErr != nil {
+		t.Fatalf("assert iss failed: %v", assertErr)
+	}
+	if assertErr := authorityVerifiedClaims.Assert("subscription_tier", "pro"); assertErr != nil {
+		t.Fatalf("assert subscription_tier failed: %v", assertErr)
 	}
 
 	// 6. Security Invariants: Tampered and Forged Token Rejection
@@ -191,7 +214,10 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	// C. Forged token signed with different key
 	adversaryCryptoKeyManager, _ := core.NewCryptoKeyManager("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
 	adversarySigner, _ := NewSigner(adversaryCryptoKeyManager)
-	adversaryToken, _ := adversarySigner.GenerateAccessToken(applicationUserID, "forged@example.com", "", "authenticated", false, nil, 600)
+	adversaryToken, _ := adversarySigner.GenerateAccessToken(Claims{
+		Subject: applicationUserID,
+		Email:   "forged@example.com",
+	}, 600)
 	if _, adversaryVerifyErr := authSigner.VerifyAccessToken(adversaryToken); adversaryVerifyErr == nil {
 		t.Fatal("expected failure on token signed with adversary key")
 	}

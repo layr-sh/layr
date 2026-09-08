@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 	"uuid"
@@ -15,19 +16,14 @@ import (
 	"layr.sh/core"
 )
 
-// App user token issuer, audience, and key ID constants.
 const (
-	IssuerAppUser   = "layr"
-	AudienceAppUser = "layr:user"
-	KeyIDEd25519    = "layr-ed25519-v1"
+	expectedTokenSegmentCount       = 3
+	defaultAccessTokenExpirySeconds = 900
+	defaultIDTokenExpirySeconds     = 3600
 )
 
-const (
-	expectedTokenSegmentCount = 3
-)
-
-// AppUserClaims represents standard RFC 7519 JWT claims for layr/auth end-users.
-type AppUserClaims struct {
+// Claims represents standard RFC 7519 JWT claims for layr/auth end-users.
+type Claims struct {
 	Subject     string         `json:"sub"`
 	Email       string         `json:"email,omitempty"`
 	Phone       string         `json:"phone,omitempty"`
@@ -40,6 +36,80 @@ type AppUserClaims struct {
 	NotBefore   int64          `json:"nbf"`
 	JWTID       string         `json:"jti"`
 	Claims      map[string]any `json:"claims,omitempty"`
+}
+
+// Assert checks a single standard or custom claim against the expected value.
+// Supported standard claim aliases:
+// - "aud", "audience" -> claims.Audience
+// - "iss", "issuer" -> claims.Issuer
+// - "sub", "subject" -> claims.Subject
+// - "role" -> claims.Role
+// - "email" -> claims.Email
+// - "phone" -> claims.Phone
+// - "is_anonymous" -> claims.IsAnonymous
+// - "jti" -> claims.JWTID
+// All other keys are verified against custom claims.Claims.
+func (claims *Claims) Assert(key string, expected any) error {
+	var actual any
+	switch key {
+	case "aud", "audience":
+		actual = claims.Audience
+	case "iss", "issuer":
+		actual = claims.Issuer
+	case "sub", "subject":
+		actual = claims.Subject
+	case "role":
+		actual = claims.Role
+	case "email":
+		actual = claims.Email
+	case "phone":
+		actual = claims.Phone
+	case "is_anonymous":
+		actual = claims.IsAnonymous
+	case "jti":
+		actual = claims.JWTID
+	default:
+		if claims.Claims == nil {
+			return fmt.Errorf("jwt claim %q not found", key)
+		}
+		val, exists := claims.Claims[key]
+		if !exists {
+			return fmt.Errorf("jwt claim %q not found", key)
+		}
+		actual = val
+	}
+
+	if !assertValueEqual(actual, expected) {
+		return fmt.Errorf("jwt claim %q mismatch: expected %v, got %v", key, expected, actual)
+	}
+	return nil
+}
+
+func assertValueEqual(actual, expected any) bool {
+	if reflect.DeepEqual(actual, expected) {
+		return true
+	}
+
+	actualNum, actualValid := toFloat64(actual)
+	expectedNum, expectedValid := toFloat64(expected)
+	if actualValid && expectedValid {
+		return actualNum == expectedNum
+	}
+
+	return false
+}
+
+func toFloat64(val any) (float64, bool) {
+	switch num := val.(type) {
+	case int:
+		return float64(num), true
+	case int64:
+		return float64(num), true
+	case float64:
+		return num, true
+	default:
+		return 0, false
+	}
 }
 
 // TokenPair contains an access token and a refresh token.
@@ -55,19 +125,32 @@ type Signer struct {
 	privateKey ed25519.PrivateKey
 	publicKey  ed25519.PublicKey
 	seed       []byte
+	keyID      string
 }
 
 // NewSigner derives an Ed25519 keypair from KEY_JWT_SIGNING subkey.
-func NewSigner(keyManager *core.CryptoKeyManager) (*Signer, error) {
+// If customKeyID is provided, it uses it; otherwise it defaults to "<projectSlug>-ed25519-v1".
+func NewSigner(keyManager *core.CryptoKeyManager, customKeyID ...string) (*Signer, error) {
 	seed, _ := keyManager.DeriveSubkey(core.CryptoContextAuthJWTSigning)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
+
+	resolvedKeyID := core.GetConfig().Project.Slug() + "-ed25519-v1"
+	if len(customKeyID) > 0 && customKeyID[0] != "" {
+		resolvedKeyID = customKeyID[0]
+	}
 
 	return &Signer{
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		seed:       seed,
+		keyID:      resolvedKeyID,
 	}, nil
+}
+
+// KeyID returns the configured Ed25519 key ID.
+func (signer *Signer) KeyID() string {
+	return signer.keyID
 }
 
 // PublicKey returns the Ed25519 public key.
@@ -76,38 +159,51 @@ func (signer *Signer) PublicKey() ed25519.PublicKey {
 }
 
 // GenerateAccessToken signs a standard Ed25519 JWT for an authenticated application user.
-func (signer *Signer) GenerateAccessToken(userID, email, phone, role string, isAnonymous bool, claims map[string]any, expirySeconds int) (string, error) {
-	if role == "" {
-		role = "authenticated"
+// Unset claims are populated with sensible defaults:
+// - Role: "authenticated"
+// - Issuer: core.GetConfig().Project.Slug()
+// - Audience: core.GetConfig().Project.Slug() + ":user"
+// - IssuedAt / NotBefore: current UTC timestamp
+// - ExpiresAt: current UTC timestamp + expirySeconds (default 900s)
+// - JWTID: UUIDv7 string
+func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (string, error) {
+	if claims.Role == "" {
+		claims.Role = "authenticated"
 	}
-	if expirySeconds == 0 {
-		expirySeconds = 900
+	projectSlug := core.GetConfig().Project.Slug()
+	if claims.Issuer == "" {
+		claims.Issuer = projectSlug
+	}
+	if claims.Audience == "" {
+		claims.Audience = projectSlug + ":user"
 	}
 
 	now := time.Now().UTC()
-	userClaims := AppUserClaims{
-		Subject:     userID,
-		Email:       email,
-		Phone:       phone,
-		Role:        role,
-		IsAnonymous: isAnonymous,
-		Issuer:      IssuerAppUser,
-		Audience:    AudienceAppUser,
-		IssuedAt:    now.Unix(),
-		NotBefore:   now.Unix(),
-		ExpiresAt:   now.Add(time.Duration(expirySeconds) * time.Second).Unix(),
-		JWTID:       uuid.NewV7().String(),
-		Claims:      claims,
+	if claims.IssuedAt == 0 {
+		claims.IssuedAt = now.Unix()
+	}
+	if claims.NotBefore == 0 {
+		claims.NotBefore = now.Unix()
+	}
+	if claims.ExpiresAt == 0 {
+		expiry := defaultAccessTokenExpirySeconds
+		if len(expirySeconds) > 0 && expirySeconds[0] != 0 {
+			expiry = expirySeconds[0]
+		}
+		claims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
+	}
+	if claims.JWTID == "" {
+		claims.JWTID = uuid.NewV7().String()
 	}
 
 	header := map[string]string{
 		"alg": "EdDSA",
 		"typ": "JWT",
-		"kid": KeyIDEd25519,
+		"kid": signer.keyID,
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(userClaims)
+	claimsJSON, _ := json.Marshal(claims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
@@ -119,8 +215,8 @@ func (signer *Signer) GenerateAccessToken(userID, email, phone, role string, isA
 	return signingInput + "." + signatureBase64, nil
 }
 
-// VerifyAccessToken validates an Ed25519 JWT, asserting signature, expiration, and audience.
-func (signer *Signer) VerifyAccessToken(token string) (*AppUserClaims, error) {
+// VerifyAccessToken validates an Ed25519 JWT, asserting signature and expiration/nbf timestamps.
+func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != expectedTokenSegmentCount {
 		return nil, errors.New("invalid token format: must contain 3 segments")
@@ -143,7 +239,7 @@ func (signer *Signer) VerifyAccessToken(token string) (*AppUserClaims, error) {
 		return nil, fmt.Errorf("invalid claims base64: %w", err)
 	}
 
-	var claims AppUserClaims
+	var claims Claims
 	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
 		return nil, fmt.Errorf("invalid claims json: %w", err)
 	}
@@ -154,12 +250,6 @@ func (signer *Signer) VerifyAccessToken(token string) (*AppUserClaims, error) {
 	}
 	if claims.NotBefore > now {
 		return nil, errors.New("jwt token not valid yet")
-	}
-	if claims.Audience != AudienceAppUser {
-		return nil, fmt.Errorf("invalid jwt audience: expected %s, got %s", AudienceAppUser, claims.Audience)
-	}
-	if claims.Issuer != IssuerAppUser {
-		return nil, fmt.Errorf("invalid jwt issuer: expected %s, got %s", IssuerAppUser, claims.Issuer)
 	}
 
 	return &claims, nil
@@ -208,39 +298,42 @@ type OIDCIDTokenClaims struct {
 }
 
 // GenerateIDToken signs an OpenID Connect Core 1.0 ID token using Ed25519.
-func (signer *Signer) GenerateIDToken(issuer, clientID, userID, email, phone, role, nonce string, emailVerified, phoneVerified, isAnonymous bool, expirySeconds int) (string, error) {
-	if role == "" {
-		role = "authenticated"
+// Unset claims are populated with sensible defaults:
+// - Role: "authenticated"
+// - Issuer: core.GetConfig().Project.Slug()
+// - IssuedAt / AuthTime: current UTC timestamp
+// - ExpiresAt: current UTC timestamp + expirySeconds (default 3600s)
+func (signer *Signer) GenerateIDToken(claims OIDCIDTokenClaims, expirySeconds ...int) (string, error) {
+	if claims.Role == "" {
+		claims.Role = "authenticated"
 	}
-	if expirySeconds == 0 {
-		expirySeconds = 3600
+	if claims.Issuer == "" {
+		claims.Issuer = core.GetConfig().Project.Slug()
 	}
 
 	now := time.Now().UTC()
-	idClaims := OIDCIDTokenClaims{
-		Issuer:              issuer,
-		Subject:             userID,
-		Audience:            clientID,
-		IssuedAt:            now.Unix(),
-		AuthTime:            now.Unix(),
-		ExpiresAt:           now.Add(time.Duration(expirySeconds) * time.Second).Unix(),
-		Nonce:               nonce,
-		Email:               email,
-		EmailVerified:       emailVerified,
-		PhoneNumber:         phone,
-		PhoneNumberVerified: phoneVerified,
-		Role:                role,
-		IsAnonymous:         isAnonymous,
+	if claims.IssuedAt == 0 {
+		claims.IssuedAt = now.Unix()
+	}
+	if claims.AuthTime == 0 {
+		claims.AuthTime = now.Unix()
+	}
+	if claims.ExpiresAt == 0 {
+		expiry := defaultIDTokenExpirySeconds
+		if len(expirySeconds) > 0 && expirySeconds[0] != 0 {
+			expiry = expirySeconds[0]
+		}
+		claims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
 	}
 
 	header := map[string]string{
 		"alg": "EdDSA",
 		"typ": "JWT",
-		"kid": KeyIDEd25519,
+		"kid": signer.keyID,
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(idClaims)
+	claimsJSON, _ := json.Marshal(claims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
