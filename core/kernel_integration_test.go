@@ -1168,6 +1168,39 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	if rootResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 with root service account, got %d", rootResponseRecorder.Code)
 	}
+
+	// 7. Test RequireServiceAccountMiddleware
+	nilRequireServiceAccountHandler := RequireServiceAccountMiddleware(nil)(testHandler)
+	nilRequireRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	nilRequireResponseRecorder := httptest.NewRecorder()
+	nilRequireServiceAccountHandler.ServeHTTP(nilRequireResponseRecorder, nilRequireRequest)
+	if nilRequireResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on nil manager handler, got %d", nilRequireResponseRecorder.Code)
+	}
+
+	requireHandler := RequireServiceAccountMiddleware(kernel.serviceAccountManager)(testHandler)
+	emptyKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	emptyKeyResponseRecorder := httptest.NewRecorder()
+	requireHandler.ServeHTTP(emptyKeyResponseRecorder, emptyKeyRequest)
+	if emptyKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on empty key with RequireServiceAccountMiddleware, got %d", emptyKeyResponseRecorder.Code)
+	}
+
+	badRequireKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	badRequireKeyRequest.Header.Set("X-Layr-Service-Account-Key", "invalid_short_key")
+	badRequireKeyResponseRecorder := httptest.NewRecorder()
+	requireHandler.ServeHTTP(badRequireKeyResponseRecorder, badRequireKeyRequest)
+	if badRequireKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on invalid key with RequireServiceAccountMiddleware, got %d", badRequireKeyResponseRecorder.Code)
+	}
+
+	validRequireKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	validRequireKeyRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
+	validRequireKeyResponseRecorder := httptest.NewRecorder()
+	requireHandler.ServeHTTP(validRequireKeyResponseRecorder, validRequireKeyRequest)
+	if validRequireKeyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid key with RequireServiceAccountMiddleware, got %d", validRequireKeyResponseRecorder.Code)
+	}
 }
 
 func testCanceledContextEndpoints(t *testing.T, server *Server, webhookID string) {

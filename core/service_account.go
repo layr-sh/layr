@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -210,7 +211,7 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 			&serviceAccount.ID, &serviceAccount.Name, &serviceAccount.Description, &serviceAccount.KeyPrefix, &keyHash, &scopesRaw, &serviceAccount.IsEnabled, &serviceAccount.AllowedIPs, &serviceAccount.ExpiresAt, &serviceAccount.ConsoleUserID, &serviceAccount.LastUsedAt, &serviceAccount.CreatedAt, &serviceAccount.LastUpdatedAt,
 		)
 
-		if keyHash == hash {
+		if subtle.ConstantTimeCompare([]byte(keyHash), []byte(hash)) == 1 {
 			_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 			matchedServiceAccount = &serviceAccount
 			break
@@ -239,16 +240,21 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 		}
 	}
 
-	log.Debugf("authenticated service account %s (%q)", matchedServiceAccount.ID, matchedServiceAccount.Name)
-	// Update last_used_at asynchronously (detached from request cancellation)
-	go func(serviceAccountID string) {
-		now := time.Now().UTC()
-		_, _ = serviceAccountManager.db.Exec(context.WithoutCancel(ctx), `
-			UPDATE core.service_accounts SET last_used_at = $1 WHERE id = $2
-		`, now, serviceAccountID)
-	}(matchedServiceAccount.ID)
+	// Update last_used_at asynchronously when nil or older than 60 seconds (detached from request cancellation)
+	if matchedServiceAccount.LastUsedAt == nil || time.Since(*matchedServiceAccount.LastUsedAt) > 60*time.Second {
+		go serviceAccountManager.updateLastUsedAt(context.WithoutCancel(ctx), matchedServiceAccount.ID)
+	}
 
 	return matchedServiceAccount, nil
+}
+
+func (serviceAccountManager *ServiceAccountManager) updateLastUsedAt(ctx context.Context, serviceAccountID string) {
+	now := time.Now().UTC()
+	if _, err := serviceAccountManager.db.Exec(ctx, `
+		UPDATE core.service_accounts SET last_used_at = $1 WHERE id = $2
+	`, now, serviceAccountID); err != nil {
+		log.Warnf("failed to update service account last_used_at (id: %s): %v", serviceAccountID, err)
+	}
 }
 
 // List returns all service accounts.
@@ -464,6 +470,31 @@ func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) 
 			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
 			if err != nil {
 				// Invalid service account key
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
+				return
+			}
+			ctx := WithServiceAccount(request.Context(), serviceAccount)
+			handler.ServeHTTP(responseWriter, request.WithContext(ctx))
+		})
+	}
+}
+
+// RequireServiceAccountMiddleware enforces valid service account authentication on protected routes.
+func RequireServiceAccountMiddleware(serviceAccountManager *ServiceAccountManager) func(http.Handler) http.Handler {
+	return func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			if serviceAccountManager == nil {
+				handler.ServeHTTP(responseWriter, request)
+				return
+			}
+			secretKey := ExtractRequestServiceAccountKey(request)
+			if secretKey == "" {
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
+				return
+			}
+			clientIP := ExtractRequestClientIP(request)
+			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
+			if err != nil {
 				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
 				return
 			}

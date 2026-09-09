@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,9 +74,53 @@ type slogHandler struct {
 	writer   io.Writer
 	scope    string
 	mutex    sync.Mutex
+	attrs    []slog.Attr
+	groups   []string
 }
 
-func (handler *slogHandler) writeMessage(recordTime time.Time, level slog.Level, message string) error {
+func formatAttrs(attrs []slog.Attr) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for _, attr := range attrs {
+		if attr.Key == "" {
+			continue
+		}
+		builder.WriteString(" ")
+		builder.WriteString(attr.Key)
+		builder.WriteString("=")
+		stringValue := attr.Value.String()
+		if strings.ContainsAny(stringValue, " \t\n\"") {
+			builder.WriteString(strconv.Quote(stringValue))
+		} else {
+			builder.WriteString(stringValue)
+		}
+	}
+	return builder.String()
+}
+
+func argsToAttrs(args []any) []slog.Attr {
+	var attrs []slog.Attr
+	for index := 0; index < len(args); index++ {
+		switch value := args[index].(type) {
+		case slog.Attr:
+			attrs = append(attrs, value)
+		case string:
+			if index+1 < len(args) {
+				attrs = append(attrs, slog.Any(value, args[index+1]))
+				index++
+			} else {
+				attrs = append(attrs, slog.String("!BADKEY", value))
+			}
+		default:
+			attrs = append(attrs, slog.Any("!EXTRA", value))
+		}
+	}
+	return attrs
+}
+
+func (handler *slogHandler) writeMessage(recordTime time.Time, level slog.Level, message string, extraAttrs ...[]slog.Attr) error {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()
 
@@ -91,11 +136,20 @@ func (handler *slogHandler) writeMessage(recordTime time.Time, level slog.Level,
 	formattedTime := recordTime.Format("2006/01/02 15:04:05")
 	levelText := formatLevel(level)
 
+	var combinedAttrs []slog.Attr
+	if len(handler.attrs) > 0 {
+		combinedAttrs = append(combinedAttrs, handler.attrs...)
+	}
+	for _, attrList := range extraAttrs {
+		combinedAttrs = append(combinedAttrs, attrList...)
+	}
+	attrsText := formatAttrs(combinedAttrs)
+
 	var logLine string
 	if handler.scope != "" {
-		logLine = fmt.Sprintf("%s [%s] [%s] %s\n", formattedTime, levelText, handler.scope, message)
+		logLine = fmt.Sprintf("%s [%s] [%s] %s%s\n", formattedTime, levelText, handler.scope, message, attrsText)
 	} else {
-		logLine = fmt.Sprintf("%s [%s] %s\n", formattedTime, levelText, message)
+		logLine = fmt.Sprintf("%s [%s] %s%s\n", formattedTime, levelText, message, attrsText)
 	}
 
 	if _, err := io.WriteString(targetWriter, logLine); err != nil {
@@ -108,16 +162,69 @@ func (handler *slogHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= handler.levelVar.Level()
 }
 
-func (handler *slogHandler) Handle(_ context.Context, record slog.Record) error {
-	return handler.writeMessage(record.Time, record.Level, record.Message)
+func (handler *slogHandler) Handle(ctx context.Context, record slog.Record) error {
+	var recordAttrs []slog.Attr
+	prefix := ""
+	if len(handler.groups) > 0 {
+		prefix = strings.Join(handler.groups, ".") + "."
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		if prefix != "" {
+			recordAttrs = append(recordAttrs, slog.Attr{Key: prefix + attr.Key, Value: attr.Value})
+		} else {
+			recordAttrs = append(recordAttrs, attr)
+		}
+		return true
+	})
+
+	return handler.writeMessage(record.Time, record.Level, record.Message, recordAttrs)
 }
 
-func (handler *slogHandler) WithAttrs(_ []slog.Attr) slog.Handler {
-	return handler
+func (handler *slogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	if len(attrs) == 0 {
+		return handler
+	}
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	newAttrs := make([]slog.Attr, len(handler.attrs), len(handler.attrs)+len(attrs))
+	copy(newAttrs, handler.attrs)
+
+	prefix := ""
+	if len(handler.groups) > 0 {
+		prefix = strings.Join(handler.groups, ".") + "."
+	}
+	for _, attr := range attrs {
+		if prefix != "" {
+			newAttrs = append(newAttrs, slog.Attr{Key: prefix + attr.Key, Value: attr.Value})
+		} else {
+			newAttrs = append(newAttrs, attr)
+		}
+	}
+
+	return &slogHandler{
+		levelVar: handler.levelVar,
+		writer:   handler.writer,
+		scope:    handler.scope,
+		attrs:    newAttrs,
+		groups:   append([]string(nil), handler.groups...),
+	}
 }
 
-func (handler *slogHandler) WithGroup(_ string) slog.Handler {
-	return handler
+func (handler *slogHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return handler
+	}
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	return &slogHandler{
+		levelVar: handler.levelVar,
+		writer:   handler.writer,
+		scope:    handler.scope,
+		attrs:    append([]slog.Attr(nil), handler.attrs...),
+		groups:   append(append([]string(nil), handler.groups...), name),
+	}
 }
 
 // Logger provides leveled, formatted logging capabilities backed by log/slog.
@@ -337,6 +444,25 @@ func (logger *Logger) Errorf(format string, args ...any) {
 // Error logs a message at LevelError.
 func (logger *Logger) Error(args ...any) {
 	logger.Log(LevelError, args...)
+}
+
+// With creates a child Logger with the specified structured attributes pre-attached.
+func (logger *Logger) With(args ...any) *Logger {
+	logger.loggerRWMutex.RLock()
+	defer logger.loggerRWMutex.RUnlock()
+
+	attrs := argsToAttrs(args)
+	newHandler := logger.handler.WithAttrs(attrs).(*slogHandler)
+	childLogger := &Logger{
+		scope:      logger.scope,
+		levelVar:   logger.levelVar,
+		handler:    newHandler,
+		slogLogger: slog.New(newHandler),
+	}
+	if logger.hasExplicit {
+		childLogger.hasExplicit = true
+	}
+	return childLogger
 }
 
 func (logger *Logger) resolveEnvLevel() Level {

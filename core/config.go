@@ -52,8 +52,9 @@ type ProjectConfig struct {
 
 // ServerConfig defines the HTTP server network listener and base URL.
 type ServerConfig struct {
-	ListenAddr string `yaml:"listen_addr"`
-	BaseURL    string `yaml:"base_url"`
+	ListenAddr        string `yaml:"listen_addr"`
+	BaseURL           string `yaml:"base_url"`
+	TrustProxyHeaders bool   `yaml:"trust_proxy_headers"`
 }
 
 // DatabaseConfig defines PostgreSQL connection and pool parameters.
@@ -104,8 +105,9 @@ func DefaultConfig() *Config {
 			Description: "Layr Application",
 		},
 		Server: ServerConfig{
-			ListenAddr: ":8080",
-			BaseURL:    "http://localhost:8080",
+			ListenAddr:        ":8080",
+			BaseURL:           "http://localhost:8080",
+			TrustProxyHeaders: true,
 		},
 		Database: DatabaseConfig{
 			URL:                 ".layr/data",

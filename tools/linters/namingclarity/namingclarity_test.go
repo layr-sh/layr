@@ -53,6 +53,7 @@ func TestNamingclarityCanonicalVariableNameUnit(t *testing.T) {
 		{"sync.Pool", "pool"},
 		{"BigInt", "bigInt"},
 		{"big.Int", "bigInt"},
+		{"strings.Builder", "builder"},
 	}
 
 	for _, testCase := range tests {
@@ -256,6 +257,8 @@ func TestNamingclarityShouldReportUnclearNameUnit(t *testing.T) {
 		{"offset", "big.Int", "", false},
 		{"offset", "BigInt", "\"offset\" should be named \"bigInt\" or suffixed with \"BigInt\"", true},
 		{"numericValue", "big.Int", "", false},
+		{"sb", "strings.Builder", "", false},
+		{"builder", "strings.Builder", "", false},
 	}
 
 	for _, testCase := range tests {

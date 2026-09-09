@@ -85,6 +85,18 @@ func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 		t.Fatalf("expected 127.0.0.1 for empty remoteAddr, got %s", clientIP)
 	}
 
+	// Untrusted proxy test: X-Forwarded-For is ignored, RemoteAddr is used
+	untrustedConfig := DefaultConfig()
+	untrustedConfig.Server.TrustProxyHeaders = false
+	SetLoadedConfig(untrustedConfig)
+	spoofedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	spoofedRequest.Header.Set("X-Forwarded-For", "203.0.113.1")
+	spoofedRequest.RemoteAddr = "192.0.2.100:12345"
+	if clientIP := ExtractRequestClientIP(spoofedRequest); clientIP != "192.0.2.100" {
+		t.Fatalf("expected remote addr 192.0.2.100 when proxy headers untrusted, got %s", clientIP)
+	}
+	UnloadConfig()
+
 	// 3. SetSessionCookie and ClearSessionCookie tests
 	cookieResponseRecorder := httptest.NewRecorder()
 	expirationTime := time.Now().Add(time.Hour)

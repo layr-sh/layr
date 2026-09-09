@@ -96,4 +96,18 @@ func TestCoreErrorResponseSerializationAndHelpersUnit(t *testing.T) {
 	if withCodeErrorResponse.Type != "https://layr.sh/errors/auth-forbidden-001" {
 		t.Errorf("unexpected type: %s", withCodeErrorResponse.Type)
 	}
+
+	// 5. Test WriteErrorResponseProblem with 500 Internal Server Error (status >= 500 branch)
+	serverErrorResponseRecorder := httptest.NewRecorder()
+	WriteErrorResponseProblem(serverErrorResponseRecorder, request, http.StatusInternalServerError, "Internal Server Error", "Database connection lost", "LAYR_CORE_500")
+	if serverErrorResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", serverErrorResponseRecorder.Code)
+	}
+
+	// 6. Test WriteErrorResponseProblem with status < 400 (else branch)
+	lowStatusResponseRecorder := httptest.NewRecorder()
+	WriteErrorResponseProblem(lowStatusResponseRecorder, request, http.StatusOK, "OK Notice", "Everything normal", "NOTICE_001")
+	if lowStatusResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", lowStatusResponseRecorder.Code)
+	}
 }

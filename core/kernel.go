@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdlog "log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -303,6 +304,12 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultKernelShutdownTimeout)
 		defer shutdownCancel()
 
+		if kernel.server != nil {
+			_ = kernel.server.Shutdown(shutdownCtx)
+		}
+		if kernel.nodeRegistry != nil {
+			kernel.nodeRegistry.Close()
+		}
 		for i := len(kernel.services) - 1; i >= 0; i-- {
 			_ = kernel.services[i].Stop()
 		}
@@ -311,12 +318,6 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 		}
 		if kernel.kvStore != nil {
 			_ = kernel.kvStore.Close()
-		}
-		if kernel.server != nil {
-			_ = kernel.server.Shutdown(shutdownCtx)
-		}
-		if kernel.nodeRegistry != nil {
-			kernel.nodeRegistry.Close()
 		}
 		if kernel.db != nil {
 			kernel.db.Close()
@@ -438,8 +439,12 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 }
 
 func (kernel *Kernel) writeJSON(responseWriter http.ResponseWriter, data any) {
+	kernel.writeJSONWithStatus(responseWriter, http.StatusOK, data)
+}
+
+func (kernel *Kernel) writeJSONWithStatus(responseWriter http.ResponseWriter, statusCode int, data any) {
 	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
+	responseWriter.WriteHeader(statusCode)
 	_ = json.NewEncoder(responseWriter).Encode(data)
 }
 
@@ -476,7 +481,7 @@ func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.Resp
 			Data:     serviceAccount.ServiceAccount,
 		})
 	}
-	kernel.writeJSON(responseWriter, serviceAccount)
+	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, serviceAccount)
 }
 
 func (kernel *Kernel) handleGetServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
@@ -569,7 +574,7 @@ func (kernel *Kernel) handleCreateWebhookRequest(responseWriter http.ResponseWri
 			Data:     webhook,
 		})
 	}
-	kernel.writeJSON(responseWriter, webhook)
+	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, webhook)
 }
 
 func (kernel *Kernel) handleGetWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
@@ -691,10 +696,10 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	}
 
 	log.Tracef("created linked root service account (id: %s)", createdServiceAccount.ID)
-	log.Infof("Initial console root account created:")
-	log.Infof("  Email:               %s", email)
-	log.Infof("  Password:            %s", plainPassword)
-	log.Infof("  Service Account Key: %s", createdServiceAccount.SecretKey)
+	stdlog.Printf("Initial console root account created:")
+	stdlog.Printf("  Email:               %s", email)
+	stdlog.Printf("  Password:            %s", plainPassword)
+	stdlog.Printf("  Service Account Key: %s", createdServiceAccount.SecretKey)
 
 	return nil
 }

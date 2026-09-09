@@ -23,19 +23,25 @@ func ExtractRequestClientIP(request *http.Request) string {
 	if request == nil {
 		return "127.0.0.1"
 	}
-	if forwardedFor := request.Header.Get("X-Forwarded-For"); forwardedFor != "" {
-		parts := strings.Split(forwardedFor, ",")
-		if len(parts) > 0 {
-			ipAddress := strings.TrimSpace(parts[0])
+	trustProxy := true
+	if activeConfig := GetConfig(); activeConfig != nil {
+		trustProxy = activeConfig.Server.TrustProxyHeaders
+	}
+	if trustProxy {
+		if forwardedFor := request.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+			parts := strings.Split(forwardedFor, ",")
+			if len(parts) > 0 {
+				ipAddress := strings.TrimSpace(parts[0])
+				if ipAddress != "" {
+					return ipAddress
+				}
+			}
+		}
+		if realIP := request.Header.Get("X-Real-IP"); realIP != "" {
+			ipAddress := strings.TrimSpace(realIP)
 			if ipAddress != "" {
 				return ipAddress
 			}
-		}
-	}
-	if realIP := request.Header.Get("X-Real-IP"); realIP != "" {
-		ipAddress := strings.TrimSpace(realIP)
-		if ipAddress != "" {
-			return ipAddress
 		}
 	}
 	if request.RemoteAddr != "" {

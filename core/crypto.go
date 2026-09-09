@@ -36,8 +36,9 @@ const (
 
 // CryptoKeyManager handles cryptographic key derivation and envelope encryption.
 type CryptoKeyManager struct {
-	encryptionKey []byte
-	randomReader  io.Reader // injectable for testing; defaults to crypto/rand.Reader
+	encryptionKey  []byte
+	publishableKey string
+	randomReader   io.Reader // injectable for testing; defaults to crypto/rand.Reader
 }
 
 // NewCryptoKeyManager parses a 32-byte hex/base64 master key.
@@ -59,8 +60,11 @@ func NewCryptoKeyManager(encryptionKeyHex string) (*CryptoKeyManager, error) {
 		return nil, fmt.Errorf("master_encryption_key must be a valid 32-byte hex or base64 encoded string: %w", err)
 	}
 
+	cryptoKeyManager := &CryptoKeyManager{encryptionKey: decodedKey, randomReader: rand.Reader}
+	cryptoKeyManager.publishableKey = hex.EncodeToString(cryptoKeyManager.deriveSubkey(CryptoContextPublishableKey))
+
 	log.Debugf("initialized CryptoKeyManager")
-	return &CryptoKeyManager{encryptionKey: decodedKey, randomReader: rand.Reader}, nil
+	return cryptoKeyManager, nil
 }
 
 // deriveSubkey derives a deterministic 32-byte subkey using HKDF-SHA256.
@@ -155,8 +159,7 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 // DerivePublishableKey returns the deterministic publishable key.
 func (cryptoKeyManager *CryptoKeyManager) DerivePublishableKey() string {
 	log.Debugf("deriving publishable key")
-	subkey := cryptoKeyManager.deriveSubkey(CryptoContextPublishableKey)
-	return hex.EncodeToString(subkey)
+	return cryptoKeyManager.publishableKey
 }
 
 // VerifyPublishableKey checks if the presented key matches the derived publishable key.

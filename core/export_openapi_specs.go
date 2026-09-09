@@ -19,9 +19,6 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 	config.Image.Enabled = true
 	config.Console.Enabled = true
 
-	SetLoadedConfig(config)
-	defer UnloadConfig()
-
 	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
 	server := NewServer(nil, cryptoKeyManager)
 
