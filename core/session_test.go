@@ -86,17 +86,17 @@ func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 	}
 
 	// 3. SetSessionCookie and ClearSessionCookie tests
-	cookieRecorder := httptest.NewRecorder()
+	cookieResponseRecorder := httptest.NewRecorder()
 	expirationTime := time.Now().Add(time.Hour)
 
 	// Set secure cookie
-	SetSessionCookie(cookieRecorder, "__Host-test", "test", "token_value_secure", expirationTime, true)
+	SetSessionCookie(cookieResponseRecorder, "__Host-test", "test", "token_value_secure", expirationTime, true)
 	// Set plain cookie
-	SetSessionCookie(cookieRecorder, "__Host-test", "test", "token_value_plain", expirationTime, false)
+	SetSessionCookie(cookieResponseRecorder, "__Host-test", "test", "token_value_plain", expirationTime, false)
 
 	// Clear cookies
-	ClearSessionCookie(cookieRecorder, "__Host-test", "test", true)
-	ClearSessionCookie(cookieRecorder, "__Host-test", "test", false)
+	ClearSessionCookie(cookieResponseRecorder, "__Host-test", "test", true)
+	ClearSessionCookie(cookieResponseRecorder, "__Host-test", "test", false)
 
 	// 4. ExtractRequestSessionToken tests
 	if token := ExtractRequestSessionToken(nil, "__Host-test", "test"); token != "" {

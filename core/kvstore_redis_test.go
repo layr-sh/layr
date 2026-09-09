@@ -13,7 +13,7 @@ func TestCoreRedisKVStoreUnit(t *testing.T) {
 		Addr: "127.0.0.1:19999",
 	})
 	redisKVStore := &RedisKVStore{
-		client: redisClient,
+		universalClient: redisClient,
 	}
 
 	// Close

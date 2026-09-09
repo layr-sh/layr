@@ -39,14 +39,11 @@ linters:
     - nilnil
     - nilnesserr
     - usestdlibvars
+    - namingclarity
   
   exclusions:
     paths:
       - sdks/go/generated
-    rules:
-      - linters:
-          - forbidigo
-        text: 'use of `.*(ReplaceAllString|WriteString|DecodeString|EncodeToString|NewInt|ConnectionString|connectionString)` forbidden'
 
   settings:
     govet:
@@ -107,8 +104,6 @@ linters:
       forbid:
         - pattern: '(?i)\b(admin|administrator|operator)\b'
           msg: "Term prohibited: use 'console user' or 'control plane'"
-        - pattern: '\b[a-zA-Z0-9]+(Str|String|Int|Bool|Boolean)\b'
-          msg: "Meaningless representation suffix prohibited"
       analyze-types: true
 
     mnd:
@@ -151,6 +146,11 @@ linters:
       sql-isolation-level: true
       tls-signature-scheme: true
       constant-kind: true
+
+    custom:
+      namingclarity:
+        type: module
+        description: Enforces clear variable names based on concrete types
 
 issues:
   max-issues-per-linter: 0

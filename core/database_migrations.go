@@ -16,21 +16,21 @@ type DatabaseMigration struct {
 }
 
 var (
-	registryLock sync.Mutex
-	registered   []DatabaseMigration
+	registryMutex sync.Mutex
+	registered    []DatabaseMigration
 )
 
 // RegisterDatabaseMigration adds a migration to the global db of migrations.
-func RegisterDatabaseMigration(migration DatabaseMigration) {
-	registryLock.Lock()
-	defer registryLock.Unlock()
-	registered = append(registered, migration)
+func RegisterDatabaseMigration(databaseMigration DatabaseMigration) {
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
+	registered = append(registered, databaseMigration)
 }
 
 // GetRegisteredDatabaseMigrations returns all registered migrations deduplicated and sorted by version.
 func GetRegisteredDatabaseMigrations() []DatabaseMigration {
-	registryLock.Lock()
-	defer registryLock.Unlock()
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
 	seen := make(map[int]bool)
 	var registeredMigrations []DatabaseMigration
 	for _, migration := range append(SystemDatabaseMigrations, registered...) {
@@ -39,8 +39,8 @@ func GetRegisteredDatabaseMigrations() []DatabaseMigration {
 			registeredMigrations = append(registeredMigrations, migration)
 		}
 	}
-	sort.Slice(registeredMigrations, func(i, j int) bool {
-		return registeredMigrations[i].Version < registeredMigrations[j].Version
+	sort.Slice(registeredMigrations, func(indexI, indexJ int) bool {
+		return registeredMigrations[indexI].Version < registeredMigrations[indexJ].Version
 	})
 	return registeredMigrations
 }
@@ -220,8 +220,8 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 	// Sort migrations in ascending order
 	sortedMigrations := make([]DatabaseMigration, len(migrations))
 	copy(sortedMigrations, migrations)
-	sort.Slice(sortedMigrations, func(i, j int) bool {
-		return sortedMigrations[i].Version < sortedMigrations[j].Version
+	sort.Slice(sortedMigrations, func(indexI, indexJ int) bool {
+		return sortedMigrations[indexI].Version < sortedMigrations[indexJ].Version
 	})
 
 	log.Debugf("starting MigrateUp (available migrations: %d, target: %d)", len(migrations), targetVersion)
@@ -298,26 +298,26 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 			break
 		}
 
-		migration, ok := migrationMap[version]
+		databaseMigration, ok := migrationMap[version]
 		if !ok {
 			return fmt.Errorf("cannot rollback migration %d: definition not found in registry", version)
 		}
 
-		if migration.DownSQL == "" {
-			return fmt.Errorf("cannot rollback migration %d (%s): no DownSQL specified", migration.Version, migration.Description)
+		if databaseMigration.DownSQL == "" {
+			return fmt.Errorf("cannot rollback migration %d (%s): no DownSQL specified", databaseMigration.Version, databaseMigration.Description)
 		}
 
 		// If this is the base migration (version 1) that drops core, don't execute DELETE afterward
-		if migration.Version != 1 {
-			if _, err := tx.Exec(ctx, "DELETE FROM core.migrations WHERE version = $1", migration.Version); err != nil {
-				return fmt.Errorf("failed to delete migration %d record: %w", migration.Version, err)
+		if databaseMigration.Version != 1 {
+			if _, err := tx.Exec(ctx, "DELETE FROM core.migrations WHERE version = $1", databaseMigration.Version); err != nil {
+				return fmt.Errorf("failed to delete migration %d record: %w", databaseMigration.Version, err)
 			}
 		}
 
-		log.Infof("Rolling back Down migration %d: %s", migration.Version, migration.Description)
-		log.Tracef("executing Down rollback SQL for version %d", migration.Version)
-		if _, err := tx.Exec(ctx, migration.DownSQL); err != nil {
-			return fmt.Errorf("failed Down migration %d (%s): %w", migration.Version, migration.Description, err)
+		log.Infof("Rolling back Down migration %d: %s", databaseMigration.Version, databaseMigration.Description)
+		log.Tracef("executing Down rollback SQL for version %d", databaseMigration.Version)
+		if _, err := tx.Exec(ctx, databaseMigration.DownSQL); err != nil {
+			return fmt.Errorf("failed Down migration %d (%s): %w", databaseMigration.Version, databaseMigration.Description, err)
 		}
 	}
 

@@ -35,7 +35,8 @@ func IsEmbeddedDatabasePath(databaseURL string) bool {
 
 // EmbeddedDatabase manages an embedded PostgreSQL instance.
 type EmbeddedDatabase struct {
-	dataDir    string
+	dataDir string
+	//nolint:namingclarity // prefer simple name postgres over embeddedPostgres
 	postgres   *embeddedpostgres.EmbeddedPostgres
 	port       uint32
 	portFinder func() (uint32, error) // injectable for testing
@@ -142,15 +143,15 @@ type portRange struct {
 // findAvailablePortInRanges scans given port ranges for an available port.
 // Primary range uses randomized offset and dual-stack probing.
 // Fallback ranges use sequential IPv4-only probing.
-func findAvailablePortInRanges(primary portRange, fallbacks ...portRange) (uint32, error) {
-	// Randomize starting index within primary range
-	offsetBig, _ := rand.Int(rand.Reader, big.NewInt(int64(primary.count)))
-	offset := int(offsetBig.Int64())
+func findAvailablePortInRanges(primaryPortRange portRange, fallbacks ...portRange) (uint32, error) {
+	// Randomize starting index within primary port range
+	offsetBigInt, _ := rand.Int(rand.Reader, big.NewInt(int64(primaryPortRange.count)))
+	offset := int(offsetBigInt.Int64())
 
 	var listenConfig net.ListenConfig
 
-	for i := 0; i < primary.count; i++ {
-		port := primary.start + ((offset + i) % primary.count)
+	for i := 0; i < primaryPortRange.count; i++ {
+		port := primaryPortRange.start + ((offset + i) % primaryPortRange.count)
 
 		tcp4Listener, tcp4ListenErr := listenConfig.Listen(context.Background(), "tcp4", fmt.Sprintf("127.0.0.1:%d", port))
 		if tcp4ListenErr != nil {

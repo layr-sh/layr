@@ -28,8 +28,8 @@ const defaultDatabaseSweepInterval = 60 * time.Second
 
 // NewKVStore initializes a KVStore driver based on configuration.
 func NewKVStore(ctx context.Context, db *DatabasePool) (KVStore, error) {
-	kvConfig := GetConfig().KVStore
-	backend := kvConfig.Backend
+	kvStoreConfig := GetConfig().KVStore
+	backend := kvStoreConfig.Backend
 	if backend == "" || backend == "database" {
 		if db == nil {
 			return nil, errors.New("database required for database kv backend")

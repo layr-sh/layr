@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	// patternTestName enforces Test<Subject><Scenario><Tier> where Tier is Unit, Integration, or E2E.
-	patternTestName = regexp.MustCompile(`^Test[A-Z][a-zA-Z0-9]+(Unit|Integration|E2E)$`)
+	// testNamePatterns enforces Test<Subject><Scenario><Tier> where Tier is Unit, Integration, or E2E.
+	testNamePatterns = regexp.MustCompile(`^Test[A-Z][a-zA-Z0-9]+(Unit|Integration|E2E)$`)
 
 	// skippedDirectories are directory names ignored during repository traversal.
 	skippedDirectories = map[string]bool{
@@ -25,6 +25,7 @@ var (
 		".vscode":      true,
 		".agents":      true,
 		".gemini":      true,
+		".local":       true,
 		"vendor":       true,
 		"node_modules": true,
 		"bin":          true,
@@ -104,16 +105,16 @@ func inspectTestFile(fileSet *token.FileSet, filePath, repositoryRoot string) ([
 	testCount := 0
 
 	for _, declaration := range parsedFile.Decls {
-		funcDeclaration, isFunc := declaration.(*ast.FuncDecl)
-		if !isFunc || !strings.HasPrefix(funcDeclaration.Name.Name, "Test") {
+		functionDeclaration, isFunc := declaration.(*ast.FuncDecl)
+		if !isFunc || !strings.HasPrefix(functionDeclaration.Name.Name, "Test") {
 			continue
 		}
 
 		testCount++
-		functionName := funcDeclaration.Name.Name
-		sourcePosition := fileSet.Position(funcDeclaration.Pos())
+		functionName := functionDeclaration.Name.Name
+		sourcePosition := fileSet.Position(functionDeclaration.Pos())
 
-		if !patternTestName.Match([]byte(functionName)) {
+		if !testNamePatterns.Match([]byte(functionName)) {
 			violations = append(violations, Violation{
 				Position:     sourcePosition,
 				FunctionName: functionName,
@@ -236,13 +237,13 @@ func main() {
 			targetPath = filepath.Join(repositoryRoot, targetPath)
 		}
 
-		pathInfo, statErr := os.Stat(targetPath)
+		pathFileInfo, statErr := os.Stat(targetPath)
 		if statErr != nil {
 			fmt.Fprintf(os.Stderr, "Error accessing target path %s: %v\n", targetPath, statErr)
 			os.Exit(1)
 		}
 
-		if !pathInfo.IsDir() {
+		if !pathFileInfo.IsDir() {
 			if strings.HasSuffix(targetPath, "_test.go") {
 				fileViolations, testCount, inspectErr := inspectTestFile(fileSet, targetPath, repositoryRoot)
 				if inspectErr != nil {
@@ -255,9 +256,9 @@ func main() {
 			continue
 		}
 
-		walkErr := filepath.Walk(targetPath, func(filePath string, fileInfo os.FileInfo, walkError error) error {
-			if walkError != nil {
-				return walkError
+		walkErr := filepath.Walk(targetPath, func(filePath string, fileInfo os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
 
 			if fileInfo.IsDir() {

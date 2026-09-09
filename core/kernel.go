@@ -14,10 +14,7 @@ import (
 	"uuid"
 
 	"layr.sh/auth/password"
-	"layr.sh/logger"
 )
-
-var log = logger.New()
 
 const (
 	defaultDatabaseConnectionTimeout = 30 * time.Second
@@ -35,27 +32,28 @@ type ServiceRunner interface {
 type ServiceFactory func(kernel *Kernel) (ServiceRunner, error)
 
 var (
-	serviceFactoriesMutex sync.RWMutex
-	serviceFactories      = make(map[string]ServiceFactory)
+	serviceFactoriesRWMutex sync.RWMutex
+	serviceFactories        = make(map[string]ServiceFactory)
 )
 
 // RegisterServiceFactory registers a named service constructor into the global registry.
-func RegisterServiceFactory(name string, factory ServiceFactory) {
-	serviceFactoriesMutex.Lock()
-	defer serviceFactoriesMutex.Unlock()
-	serviceFactories[name] = factory
+func RegisterServiceFactory(name string, serviceFactory ServiceFactory) {
+	serviceFactoriesRWMutex.Lock()
+	defer serviceFactoriesRWMutex.Unlock()
+	serviceFactories[name] = serviceFactory
 }
 
 // GetServiceFactory retrieves a named service constructor from the global registry.
 func GetServiceFactory(name string) (ServiceFactory, bool) {
-	serviceFactoriesMutex.RLock()
-	defer serviceFactoriesMutex.RUnlock()
-	factory, ok := serviceFactories[name]
-	return factory, ok
+	serviceFactoriesRWMutex.RLock()
+	defer serviceFactoriesRWMutex.RUnlock()
+	serviceFactory, ok := serviceFactories[name]
+	return serviceFactory, ok
 }
 
 // Kernel coordinates the full single-binary runtime lifecycle.
 type Kernel struct {
+	//nolint:namingclarity
 	embeddedDB            *EmbeddedDatabase
 	db                    *DatabasePool
 	nodeRegistry          *NodeRegistry
@@ -64,7 +62,7 @@ type Kernel struct {
 	webhookEventBus       *WebhookEventBus
 	serviceAccountManager *ServiceAccountManager
 	webhookManager        *WebhookManager
-	server                *HTTPServer
+	server                *Server
 	services              []ServiceRunner
 	stopOnce              sync.Once
 }
@@ -116,9 +114,9 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	}
 
 	// Connect pgxpool (derive pool lifecycle timeout from the caller's context)
-	dbContext, dbCancel := context.WithTimeout(ctx, defaultDatabaseConnectionTimeout)
+	dbCtx, dbCancel := context.WithTimeout(ctx, defaultDatabaseConnectionTimeout)
 	defer dbCancel()
-	db, err := NewDatabasePool(dbContext, databaseURL, DatabasePoolOptions{
+	db, err := NewDatabasePool(dbCtx, databaseURL, DatabasePoolOptions{
 		MaxConns:            int32(config.Database.MaxConnections),
 		MinConns:            int32(config.Database.MinConnections),
 		ConnectionTimeoutMs: config.Database.ConnectionTimeoutMs,
@@ -149,11 +147,11 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	_ = kernel.nodeRegistry.Register(ctx)
 
 	// Initialize KV Store
-	store, err := NewKVStore(ctx, kernel.db)
+	kvStore, err := NewKVStore(ctx, kernel.db)
 	if err != nil {
 		return fmt.Errorf("kv store initialization failed: %w", err)
 	}
-	kernel.kvStore = store
+	kernel.kvStore = kvStore
 
 	// Initialize WebhookEventBus and Core Managers
 	kernel.webhookEventBus = NewWebhookEventBus(kernel.db, kernel.cryptoKeyManager)
@@ -174,22 +172,22 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	// Auto-instantiate enabled modular services from registry if not manually registered
 	if len(kernel.services) == 0 {
 		for _, serviceName := range config.GetEnabledServices() {
-			if factory, ok := GetServiceFactory(serviceName); ok {
-				service, err := factory(kernel)
+			if serviceFactory, ok := GetServiceFactory(serviceName); ok {
+				serviceRunner, err := serviceFactory(kernel)
 				if err != nil {
 					return fmt.Errorf("failed to initialize service %s: %w", serviceName, err)
 				}
-				kernel.RegisterService(service)
+				kernel.RegisterService(serviceRunner)
 			}
 		}
 	}
 
 	// Start and register all attached modular services
-	for _, service := range kernel.services {
-		if err := service.Start(ctx); err != nil {
+	for _, serviceRunner := range kernel.services {
+		if err := serviceRunner.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start service: %w", err)
 		}
-		service.RegisterRoutes(kernel.server.Router(), kernel.server.ControlPlaneRouter())
+		serviceRunner.RegisterRoutes(kernel.server.Router(), kernel.server.ControlPlaneRouter())
 	}
 
 	log.Infof("Layr Gateway listening on %s (Services: %v)", config.Server.ListenAddr, config.GetEnabledServices())
@@ -294,15 +292,15 @@ func (kernel *Kernel) SetServiceAccountManager(serviceAccountManager *ServiceAcc
 }
 
 // RegisterService attaches a modular service runner to the kernel.
-func (kernel *Kernel) RegisterService(service ServiceRunner) {
-	kernel.services = append(kernel.services, service)
+func (kernel *Kernel) RegisterService(serviceRunner ServiceRunner) {
+	kernel.services = append(kernel.services, serviceRunner)
 }
 
 // Stop gracefully terminates all subsystems.
 func (kernel *Kernel) Stop(ctx context.Context) error {
 	kernel.stopOnce.Do(func() {
 		log.Debugf("stopping Kernel services...")
-		shutdownContext, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultKernelShutdownTimeout)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultKernelShutdownTimeout)
 		defer shutdownCancel()
 
 		for i := len(kernel.services) - 1; i >= 0; i-- {
@@ -315,7 +313,7 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 			_ = kernel.kvStore.Close()
 		}
 		if kernel.server != nil {
-			_ = kernel.server.Shutdown(shutdownContext)
+			_ = kernel.server.Shutdown(shutdownCtx)
 		}
 		if kernel.nodeRegistry != nil {
 			kernel.nodeRegistry.Close()
@@ -336,9 +334,9 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 // Empty represents an empty JSON object.
 type Empty struct{}
 
-func (kernel *Kernel) registerCoreRoutes(srv *HTTPServer) {
-	mux := srv.Mux()
-	controlPlaneRouter := srv.ControlPlaneRouter()
+func (kernel *Kernel) registerCoreRoutes(server *Server) {
+	serveMux := server.Mux()
+	controlPlaneRouter := server.ControlPlaneRouter()
 
 	// Register Core Routes on Control Plane Router
 	GetRoute[[]ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleListServiceAccountsRequest,
@@ -349,7 +347,7 @@ func (kernel *Kernel) registerCoreRoutes(srv *HTTPServer) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[CreateServiceAccountResult, CreateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleCreateServiceAccountRequest,
+	PostRoute[ServiceAccountWithSecretKey, CreateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleCreateServiceAccountRequest,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Create a new machine service account"),
 		RouteDescription("Creates a machine service account, generates a 32-byte hex secret key, and hashes it."),
@@ -384,34 +382,34 @@ func (kernel *Kernel) registerCoreRoutes(srv *HTTPServer) {
 		RouteSDKMethodName("delete"),
 	)
 
-	GetRoute[[]WebhookSubscription](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleListWebhooksRequest,
+	GetRoute[[]Webhook](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleListWebhooksRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("List all webhook subscriptions"),
-		RouteDescription("Lists all active webhook subscriptions with target URLs, events, and retry policies."),
+		RouteSummary("List all webhooks"),
+		RouteDescription("Lists all active webhooks with target URLs, events, and retry policies."),
 		RouteOperationID("core__webhooks__list"),
 		RouteSDKGroupName("core", "webhooks"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[WebhookSubscription, CreateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleCreateWebhookRequest,
+	PostRoute[Webhook, CreateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleCreateWebhookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Create a new webhook subscription"),
+		RouteSummary("Create a new webhook"),
 		RouteDescription("Creates an event subscription for system event dispatching with HMAC-SHA256 signature verification."),
 		RouteDefaultStatusCode(http.StatusCreated),
 		RouteOperationID("core__webhooks__create"),
 		RouteSDKGroupName("core", "webhooks"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[WebhookSubscription](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleGetWebhookRequest,
+	GetRoute[Webhook](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleGetWebhookRequest,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get webhook by ID"),
-		RouteDescription("Retrieves a webhook subscription by UUID."),
+		RouteDescription("Retrieves a webhook by UUID."),
 		RouteOperationID("core__webhooks__get"),
 		RouteSDKGroupName("core", "webhooks"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[WebhookSubscription, UpdateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleUpdateWebhookRequest,
+	PutRoute[Webhook, UpdateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleUpdateWebhookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Update webhook subscription"),
+		RouteSummary("Update webhook"),
 		RouteDescription("Updates webhook target URL, subscribed events, secret, or enabled status."),
 		RouteOperationID("core__webhooks__update"),
 		RouteSDKGroupName("core", "webhooks"),
@@ -419,8 +417,8 @@ func (kernel *Kernel) registerCoreRoutes(srv *HTTPServer) {
 	)
 	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleDeleteWebhookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Delete webhook subscription"),
-		RouteDescription("Deletes a webhook subscription and purges delivery workers."),
+		RouteSummary("Delete webhook"),
+		RouteDescription("Deletes a webhook and purges delivery workers."),
 		RouteNoContentResponse("Webhook deleted"),
 		RouteOperationID("core__webhooks__delete"),
 		RouteSDKGroupName("core", "webhooks"),
@@ -436,7 +434,7 @@ func (kernel *Kernel) registerCoreRoutes(srv *HTTPServer) {
 	)
 
 	// Mount Core Control Plane Router into root mux with Service Account authentication
-	mux.Handle("/api/v1/_/core/", ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(controlPlaneRouter.Mux()))
+	serveMux.Handle("/api/v1/_/core/", ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(controlPlaneRouter.Mux()))
 }
 
 func (kernel *Kernel) writeJSON(responseWriter http.ResponseWriter, data any) {
@@ -459,12 +457,12 @@ func (kernel *Kernel) handleListServiceAccountsRequest(responseWriter http.Respo
 }
 
 func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var body CreateServiceAccountInput
-	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+	var createServiceAccountInput CreateServiceAccountInput
+	if err := json.NewDecoder(request.Body).Decode(&createServiceAccountInput); err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
 		return
 	}
-	serviceAccount, err := kernel.serviceAccountManager.Create(request.Context(), body)
+	serviceAccount, err := kernel.serviceAccountManager.Create(request.Context(), createServiceAccountInput)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
 		return
@@ -493,12 +491,12 @@ func (kernel *Kernel) handleGetServiceAccountRequest(responseWriter http.Respons
 
 func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	serviceAccountID := request.PathValue("service_account_id")
-	var body UpdateServiceAccountInput
-	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+	var updateServiceAccountInput UpdateServiceAccountInput
+	if err := json.NewDecoder(request.Body).Decode(&updateServiceAccountInput); err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
 		return
 	}
-	serviceAccount, err := kernel.serviceAccountManager.Update(request.Context(), serviceAccountID, body)
+	serviceAccount, err := kernel.serviceAccountManager.Update(request.Context(), serviceAccountID, updateServiceAccountInput)
 	if err != nil {
 		if errors.Is(err, ErrServiceAccountNotFound) {
 			kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
@@ -552,12 +550,12 @@ func (kernel *Kernel) handleListWebhooksRequest(responseWriter http.ResponseWrit
 }
 
 func (kernel *Kernel) handleCreateWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var body CreateWebhookInput
-	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+	var createWebhookInput CreateWebhookInput
+	if err := json.NewDecoder(request.Body).Decode(&createWebhookInput); err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
 		return
 	}
-	webhook, err := kernel.webhookManager.Create(request.Context(), body)
+	webhook, err := kernel.webhookManager.Create(request.Context(), createWebhookInput)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
 		return
@@ -586,12 +584,12 @@ func (kernel *Kernel) handleGetWebhookRequest(responseWriter http.ResponseWriter
 
 func (kernel *Kernel) handleUpdateWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	webhookID := request.PathValue("webhook_id")
-	var body UpdateWebhookInput
-	if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+	var updateWebhookInput UpdateWebhookInput
+	if err := json.NewDecoder(request.Body).Decode(&updateWebhookInput); err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
 		return
 	}
-	webhook, err := kernel.webhookManager.Update(request.Context(), webhookID, body)
+	webhook, err := kernel.webhookManager.Update(request.Context(), webhookID, updateWebhookInput)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusNotFound, "Webhook Not Found", err.Error())
 		return
@@ -682,7 +680,7 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	}
 
 	rootDescription := "Root Service Account (" + email + ")"
-	serviceAccountResult, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+	createdServiceAccount, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		ConsoleUserID: &rootUserID,
 		Name:          "Root Service Account",
 		Description:   &rootDescription,
@@ -692,11 +690,11 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 		return fmt.Errorf("failed to create linked root service account: %w", err)
 	}
 
-	log.Tracef("created linked root service account (id: %s)", serviceAccountResult.ID)
+	log.Tracef("created linked root service account (id: %s)", createdServiceAccount.ID)
 	log.Infof("Initial console root account created:")
 	log.Infof("  Email:               %s", email)
 	log.Infof("  Password:            %s", plainPassword)
-	log.Infof("  Service Account Key: %s", serviceAccountResult.SecretKey)
+	log.Infof("  Service Account Key: %s", createdServiceAccount.SecretKey)
 
 	return nil
 }

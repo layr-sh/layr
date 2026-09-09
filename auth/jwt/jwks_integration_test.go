@@ -29,10 +29,10 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/.well-known/jwks.json", signer.HandleJWKS)
-	serveMux.HandleFunc("/.well-known/openid-configuration", func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Set("Content-Type", "application/json")
-		discovery := BuildOIDCDiscovery("http://" + request.Host)
-		_ = json.NewEncoder(writer).Encode(discovery)
+	serveMux.HandleFunc("/.well-known/openid-configuration", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		oidcConfiguration := BuildOIDCDiscovery("http://" + request.Host)
+		_ = json.NewEncoder(responseWriter).Encode(oidcConfiguration)
 	})
 
 	testServer := httptest.NewServer(serveMux)
@@ -61,16 +61,16 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 		t.Fatalf("failed to read response body: %v", jwksReadErr)
 	}
 
-	var jwksPayload JWKSResponse
-	if jwksUnmarshalErr := json.Unmarshal(bodyBytes, &jwksPayload); jwksUnmarshalErr != nil {
+	var jwks JWKS
+	if jwksUnmarshalErr := json.Unmarshal(bodyBytes, &jwks); jwksUnmarshalErr != nil {
 		t.Fatalf("failed to unmarshal JWKS payload: %v", jwksUnmarshalErr)
 	}
 
-	if len(jwksPayload.Keys) != 1 {
-		t.Fatalf("expected exactly 1 JWK, got: %d", len(jwksPayload.Keys))
+	if len(jwks.Keys) != 1 {
+		t.Fatalf("expected exactly 1 JWK, got: %d", len(jwks.Keys))
 	}
 
-	jwk := jwksPayload.Keys[0]
+	jwk := jwks.Keys[0]
 	if jwk.KeyID != signer.KeyID() || jwk.Algorithm != "EdDSA" || jwk.Curve != tls.Ed25519.String() || jwk.KeyType != "OKP" {
 		t.Fatalf("unexpected JWK parameters: %+v", jwk)
 	}

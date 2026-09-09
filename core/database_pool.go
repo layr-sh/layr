@@ -50,56 +50,56 @@ func NewDatabasePool(ctx context.Context, databaseURL string, databasePoolOption
 		return nil, fmt.Errorf("invalid database url: %w", err)
 	}
 
-	options := DefaultDatabasePoolOptions()
+	effectiveDatabasePoolOptions := DefaultDatabasePoolOptions()
 	if len(databasePoolOptions) > 0 {
-		providedOptions := databasePoolOptions[0]
-		if providedOptions.MaxConns > 0 {
-			options.MaxConns = providedOptions.MaxConns
+		providedDatabasePoolOptions := databasePoolOptions[0]
+		if providedDatabasePoolOptions.MaxConns > 0 {
+			effectiveDatabasePoolOptions.MaxConns = providedDatabasePoolOptions.MaxConns
 		}
-		if providedOptions.MinConns >= 0 {
-			options.MinConns = providedOptions.MinConns
+		if providedDatabasePoolOptions.MinConns >= 0 {
+			effectiveDatabasePoolOptions.MinConns = providedDatabasePoolOptions.MinConns
 		}
-		if providedOptions.ConnectionTimeoutMs > 0 {
-			options.ConnectionTimeoutMs = providedOptions.ConnectionTimeoutMs
+		if providedDatabasePoolOptions.ConnectionTimeoutMs > 0 {
+			effectiveDatabasePoolOptions.ConnectionTimeoutMs = providedDatabasePoolOptions.ConnectionTimeoutMs
 		}
-		if providedOptions.MaxConnLifetime > 0 {
-			options.MaxConnLifetime = providedOptions.MaxConnLifetime
+		if providedDatabasePoolOptions.MaxConnLifetime > 0 {
+			effectiveDatabasePoolOptions.MaxConnLifetime = providedDatabasePoolOptions.MaxConnLifetime
 		}
-		if providedOptions.MaxConnIdleTime > 0 {
-			options.MaxConnIdleTime = providedOptions.MaxConnIdleTime
+		if providedDatabasePoolOptions.MaxConnIdleTime > 0 {
+			effectiveDatabasePoolOptions.MaxConnIdleTime = providedDatabasePoolOptions.MaxConnIdleTime
 		}
-		if providedOptions.HealthCheckPeriod > 0 {
-			options.HealthCheckPeriod = providedOptions.HealthCheckPeriod
+		if providedDatabasePoolOptions.HealthCheckPeriod > 0 {
+			effectiveDatabasePoolOptions.HealthCheckPeriod = providedDatabasePoolOptions.HealthCheckPeriod
 		}
-		if providedOptions.SSLMode != "" {
-			options.SSLMode = providedOptions.SSLMode
+		if providedDatabasePoolOptions.SSLMode != "" {
+			effectiveDatabasePoolOptions.SSLMode = providedDatabasePoolOptions.SSLMode
 		}
-		if providedOptions.SSLRootCert != "" {
-			options.SSLRootCert = providedOptions.SSLRootCert
+		if providedDatabasePoolOptions.SSLRootCert != "" {
+			effectiveDatabasePoolOptions.SSLRootCert = providedDatabasePoolOptions.SSLRootCert
 		}
-		if providedOptions.SSLCert != "" {
-			options.SSLCert = providedOptions.SSLCert
+		if providedDatabasePoolOptions.SSLCert != "" {
+			effectiveDatabasePoolOptions.SSLCert = providedDatabasePoolOptions.SSLCert
 		}
-		if providedOptions.SSLKey != "" {
-			options.SSLKey = providedOptions.SSLKey
+		if providedDatabasePoolOptions.SSLKey != "" {
+			effectiveDatabasePoolOptions.SSLKey = providedDatabasePoolOptions.SSLKey
 		}
 	}
 
 	log.Debugf("initializing database connection pool")
 	log.Tracef("database pool configured (maxConns: %d, minConns: %d)", databaseConfig.MaxConns, databaseConfig.MinConns)
-	databaseConfig.MaxConns = options.MaxConns
-	databaseConfig.MinConns = options.MinConns
-	databaseConfig.MaxConnLifetime = options.MaxConnLifetime
-	databaseConfig.MaxConnIdleTime = options.MaxConnIdleTime
-	databaseConfig.HealthCheckPeriod = options.HealthCheckPeriod
+	databaseConfig.MaxConns = effectiveDatabasePoolOptions.MaxConns
+	databaseConfig.MinConns = effectiveDatabasePoolOptions.MinConns
+	databaseConfig.MaxConnLifetime = effectiveDatabasePoolOptions.MaxConnLifetime
+	databaseConfig.MaxConnIdleTime = effectiveDatabasePoolOptions.MaxConnIdleTime
+	databaseConfig.HealthCheckPeriod = effectiveDatabasePoolOptions.HealthCheckPeriod
 
-	initDatabaseTLS(databaseConfig, options)
+	initDatabaseTLS(databaseConfig, effectiveDatabasePoolOptions)
 
 	pool, _ := pgxpool.NewWithConfig(ctx, databaseConfig) // Infallible with valid parsed config
 
 	// Verify connection
 	var cancel context.CancelFunc
-	ctx, cancel = context.WithTimeout(ctx, time.Duration(options.ConnectionTimeoutMs)*time.Millisecond)
+	ctx, cancel = context.WithTimeout(ctx, time.Duration(effectiveDatabasePoolOptions.ConnectionTimeoutMs)*time.Millisecond)
 	defer cancel()
 
 	if err := pool.Ping(ctx); err != nil {
@@ -114,35 +114,35 @@ func NewDatabasePool(ctx context.Context, databaseURL string, databasePoolOption
 	}, nil
 }
 
-func initDatabaseTLS(databaseConfig *pgxpool.Config, options DatabasePoolOptions) {
-	if options.SSLMode == "disable" {
+func initDatabaseTLS(databaseConfig *pgxpool.Config, databasePoolOptions DatabasePoolOptions) {
+	if databasePoolOptions.SSLMode == "disable" {
 		databaseConfig.ConnConfig.TLSConfig = nil
 		return
 	}
-	if options.SSLMode != "" || options.SSLRootCert != "" || (options.SSLCert != "" && options.SSLKey != "") {
+	if databasePoolOptions.SSLMode != "" || databasePoolOptions.SSLRootCert != "" || (databasePoolOptions.SSLCert != "" && databasePoolOptions.SSLKey != "") {
 		if databaseConfig.ConnConfig.TLSConfig == nil {
 			databaseConfig.ConnConfig.TLSConfig = &tls.Config{}
 		}
-		if options.SSLRootCert != "" {
+		if databasePoolOptions.SSLRootCert != "" {
 			caCertPool := x509.NewCertPool()
-			caCert, _ := os.ReadFile(options.SSLRootCert)
+			caCert, _ := os.ReadFile(databasePoolOptions.SSLRootCert)
 			if len(caCert) == 0 {
-				caCert = []byte(options.SSLRootCert)
+				caCert = []byte(databasePoolOptions.SSLRootCert)
 			}
 			caCertPool.AppendCertsFromPEM(caCert)
 			databaseConfig.ConnConfig.TLSConfig.RootCAs = caCertPool
 		}
-		if options.SSLCert != "" && options.SSLKey != "" {
-			certPEM, _ := os.ReadFile(options.SSLCert)
+		if databasePoolOptions.SSLCert != "" && databasePoolOptions.SSLKey != "" {
+			certPEM, _ := os.ReadFile(databasePoolOptions.SSLCert)
 			if len(certPEM) == 0 {
-				certPEM = []byte(options.SSLCert)
+				certPEM = []byte(databasePoolOptions.SSLCert)
 			}
-			keyPEM, _ := os.ReadFile(options.SSLKey)
+			keyPEM, _ := os.ReadFile(databasePoolOptions.SSLKey)
 			if len(keyPEM) == 0 {
-				keyPEM = []byte(options.SSLKey)
+				keyPEM = []byte(databasePoolOptions.SSLKey)
 			}
-			cert, _ := tls.X509KeyPair(certPEM, keyPEM)
-			databaseConfig.ConnConfig.TLSConfig.Certificates = []tls.Certificate{cert}
+			certificate, _ := tls.X509KeyPair(certPEM, keyPEM)
+			databaseConfig.ConnConfig.TLSConfig.Certificates = []tls.Certificate{certificate}
 		}
 	}
 }

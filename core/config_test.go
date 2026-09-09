@@ -701,11 +701,11 @@ func TestCoreConfigApplyEnvConfigOverridesAliasesAndMalformedInputsUnit(t *testi
 	}
 
 	// Test PORT alias when ListenAddr does not contain a colon
-	configNoColon := DefaultConfig()
-	configNoColon.Server.ListenAddr = "rawaddr"
-	ApplyEnvConfigOverrides(configNoColon)
-	if configNoColon.Server.ListenAddr != ":7777" {
-		t.Fatalf("expected PORT alias override without colon, got %s", configNoColon.Server.ListenAddr)
+	noColonListenAddrConfig := DefaultConfig()
+	noColonListenAddrConfig.Server.ListenAddr = "rawaddr"
+	ApplyEnvConfigOverrides(noColonListenAddrConfig)
+	if noColonListenAddrConfig.Server.ListenAddr != ":7777" {
+		t.Fatalf("expected PORT alias override without colon, got %s", noColonListenAddrConfig.Server.ListenAddr)
 	}
 
 	// Test Invalid PORT alias (should not crash or overwrite valid port)
@@ -795,41 +795,6 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 	}
 }
 
-func TestCoreConfigProjectSlugUnit(t *testing.T) {
-	testCases := []struct {
-		input    string
-		expected string
-	}{
-		{"layr-app", "layr-app"},
-		{"layr", "layr"},
-		{"Layr Application", "layr-application"},
-		{"My Awesome Project! v2.0", "my-awesome-project-v2-0"},
-		{"  Leading And Trailing  ", "leading-and-trailing"},
-		{"---hello---world---", "hello-world"},
-		{"multiple___underscores and   spaces", "multiple-underscores-and-spaces"},
-		{"", "layr-app"},
-		{"   \t\n  ", "layr-app"},
-		{"!@#$%^&*()", "layr-app"},
-		{"Layr 项目 Pro", "layr-xiang-mu-pro"},
-		{"Alpha β Gamma", "alpha-b-gamma"},
-		{"Привет", "privet"},
-		{"こんにちは", "konnichiha"},
-	}
-
-	for _, testCase := range testCases {
-		project := ProjectConfig{Name: testCase.input}
-		actual := project.Slug()
-		if actual != testCase.expected {
-			t.Errorf("ProjectConfig{Name: %q}.Slug() = %q, expected %q", testCase.input, actual, testCase.expected)
-		}
-	}
-
-	project := ProjectConfig{Name: "Custom Service Platform"}
-	if project.Slug() != "custom-service-platform" {
-		t.Errorf("expected project slug 'custom-service-platform', got: %s", project.Slug())
-	}
-}
-
 func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "sub", "config.yaml")
@@ -841,20 +806,20 @@ func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
 		t.Fatalf("unexpected write config file error: %v", writeErr)
 	}
 
-	loaded, loadErr := LoadConfig(targetPath)
+	loadedConfig, loadErr := LoadConfig(targetPath)
 	if loadErr != nil {
 		t.Fatalf("unexpected load config file error: %v", loadErr)
 	}
 
-	if loaded.Server.ListenAddr != ":9123" {
-		t.Errorf("expected server listen addr ':9123', got %q", loaded.Server.ListenAddr)
+	if loadedConfig.Server.ListenAddr != ":9123" {
+		t.Errorf("expected server listen addr ':9123', got %q", loadedConfig.Server.ListenAddr)
 	}
-	if loaded.Project.Name != "Env Written App" {
-		t.Errorf("expected project name 'Env Written App', got %q", loaded.Project.Name)
+	if loadedConfig.Project.Name != "Env Written App" {
+		t.Errorf("expected project name 'Env Written App', got %q", loadedConfig.Project.Name)
 	}
 	const expectedKeyLength = 64
-	if len(loaded.Security.MasterEncryptionKey) != expectedKeyLength {
-		t.Errorf("expected 64-char hex master encryption key, got %q", loaded.Security.MasterEncryptionKey)
+	if len(loadedConfig.Security.MasterEncryptionKey) != expectedKeyLength {
+		t.Errorf("expected 64-char hex master encryption key, got %q", loadedConfig.Security.MasterEncryptionKey)
 	}
 }
 
@@ -871,34 +836,34 @@ func TestCoreConfigWriteConfigFileCustomUnit(t *testing.T) {
 		t.Fatalf("unexpected write error: %v", writeErr)
 	}
 
-	loaded, loadErr := LoadConfig(targetPath)
+	loadedConfig, loadErr := LoadConfig(targetPath)
 	if loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 
-	if loaded.Project.Name != "Explicit Custom App" {
-		t.Errorf("expected 'Explicit Custom App', got %q", loaded.Project.Name)
+	if loadedConfig.Project.Name != "Explicit Custom App" {
+		t.Errorf("expected 'Explicit Custom App', got %q", loadedConfig.Project.Name)
 	}
-	if loaded.Server.ListenAddr != ":443" {
-		t.Errorf("expected ':443', got %q", loaded.Server.ListenAddr)
+	if loadedConfig.Server.ListenAddr != ":443" {
+		t.Errorf("expected ':443', got %q", loadedConfig.Server.ListenAddr)
 	}
-	if loaded.Security.MasterEncryptionKey != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
-		t.Errorf("expected preserved master encryption key, got %q", loaded.Security.MasterEncryptionKey)
+	if loadedConfig.Security.MasterEncryptionKey != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Errorf("expected preserved master encryption key, got %q", loadedConfig.Security.MasterEncryptionKey)
 	}
 
 	emptyKeyPath := filepath.Join(tempDir, "custom_empty_key.yaml")
-	customConfigEmptyKey := *DefaultConfig()
-	customConfigEmptyKey.Security.MasterEncryptionKey = ""
-	if writeEmptyErr := WriteConfigFile(emptyKeyPath, customConfigEmptyKey); writeEmptyErr != nil {
+	customEmptyMasterEncryptionKeyConfig := *DefaultConfig()
+	customEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey = ""
+	if writeEmptyErr := WriteConfigFile(emptyKeyPath, customEmptyMasterEncryptionKeyConfig); writeEmptyErr != nil {
 		t.Fatalf("unexpected write error: %v", writeEmptyErr)
 	}
-	loadedEmptyKey, loadEmptyErr := LoadConfig(emptyKeyPath)
+	loadedEmptyMasterEncryptionKeyConfig, loadEmptyErr := LoadConfig(emptyKeyPath)
 	if loadEmptyErr != nil {
 		t.Fatalf("unexpected load error: %v", loadEmptyErr)
 	}
 	const expectedKeyLength = 64
-	if len(loadedEmptyKey.Security.MasterEncryptionKey) != expectedKeyLength {
-		t.Errorf("expected generated 64-char hex key, got %q", loadedEmptyKey.Security.MasterEncryptionKey)
+	if len(loadedEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey) != expectedKeyLength {
+		t.Errorf("expected generated 64-char hex key, got %q", loadedEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey)
 	}
 }
 
@@ -913,13 +878,13 @@ func TestCoreConfigWriteConfigFileEnvSecurityKeyUnit(t *testing.T) {
 		t.Fatalf("unexpected write error: %v", writeErr)
 	}
 
-	loaded, loadErr := LoadConfig(targetPath)
+	loadedConfig, loadErr := LoadConfig(targetPath)
 	if loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 
-	if loaded.Security.MasterEncryptionKey != expectedKey {
-		t.Errorf("expected master encryption key from env %q, got %q", expectedKey, loaded.Security.MasterEncryptionKey)
+	if loadedConfig.Security.MasterEncryptionKey != expectedKey {
+		t.Errorf("expected master encryption key from env %q, got %q", expectedKey, loadedConfig.Security.MasterEncryptionKey)
 	}
 }
 
@@ -931,13 +896,13 @@ func TestCoreConfigCreateConfigFileAliasUnit(t *testing.T) {
 		t.Fatalf("unexpected create error: %v", createErr)
 	}
 
-	loaded, loadErr := LoadConfig(targetPath)
+	loadedConfig, loadErr := LoadConfig(targetPath)
 	if loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 
-	if loaded.Project.Name != "layr-app" {
-		t.Errorf("expected 'layr-app', got %q", loaded.Project.Name)
+	if loadedConfig.Project.Name != "layr-app" {
+		t.Errorf("expected 'layr-app', got %q", loadedConfig.Project.Name)
 	}
 }
 

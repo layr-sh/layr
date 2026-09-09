@@ -15,7 +15,7 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Boot Postgres testcontainer
-	pgContainer, err := postgres.Run(ctx,
+	postgresContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
 		postgres.WithDatabase("layr"),
 		postgres.WithUsername("layr"),
@@ -30,9 +30,9 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 		t.Skipf("docker not available: %v", err)
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
@@ -72,18 +72,18 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	if setErr := kvStore.Set(ctx, "session:1", "user_123", 0); setErr != nil {
 		t.Fatalf("failed to set key: %v", setErr)
 	}
-	value, getValErr := kvStore.Get(ctx, "session:1")
-	if getValErr != nil || value != "user_123" {
-		t.Fatalf("expected 'user_123', got '%s', err: %v", value, getValErr)
+	value, getValueErr := kvStore.Get(ctx, "session:1")
+	if getValueErr != nil || value != "user_123" {
+		t.Fatalf("expected 'user_123', got '%s', err: %v", value, getValueErr)
 	}
 
 	// Overwrite Set
 	if setErr := kvStore.Set(ctx, "session:1", "user_456", 5*time.Second); setErr != nil {
 		t.Fatalf("failed to overwrite key: %v", setErr)
 	}
-	value, getValErr = kvStore.Get(ctx, "session:1")
-	if getValErr != nil || value != "user_456" {
-		t.Fatalf("expected 'user_456', got '%s', err: %v", value, getValErr)
+	value, getValueErr = kvStore.Get(ctx, "session:1")
+	if getValueErr != nil || value != "user_456" {
+		t.Fatalf("expected 'user_456', got '%s', err: %v", value, getValueErr)
 	}
 
 	// MSet & MGet
@@ -158,8 +158,8 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	_ = databaseKVStore.Close()
 
 	// Test NewDatabaseKVStore with 0 sweepInterval
-	zeroSweepStore := NewDatabaseKVStore(ctx, db, 0)
-	_ = zeroSweepStore.Close()
+	zeroSweepDatabaseKVStore := NewDatabaseKVStore(ctx, db, 0)
+	_ = zeroSweepDatabaseKVStore.Close()
 
 	// Closed DB branches
 	db.Close()
@@ -187,8 +187,8 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	if _, closedIncrErr := kvStore.Increment(ctx, "k", 0); closedIncrErr == nil {
 		t.Fatal("expected error on Increment with closed db connection pool")
 	}
-	databaseKVStoreInstance := kvStore.(*DatabaseKVStore)
-	if _, closedSweepErr := databaseKVStoreInstance.Sweep(ctx); closedSweepErr == nil {
+	otherDatabaseKVStore := kvStore.(*DatabaseKVStore)
+	if _, closedSweepErr := otherDatabaseKVStore.Sweep(ctx); closedSweepErr == nil {
 		t.Fatal("expected error on Sweep with closed db connection pool")
 	}
 

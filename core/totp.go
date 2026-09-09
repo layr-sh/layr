@@ -71,6 +71,7 @@ func (totpManager *TOTPManager) GenerateCode(secretBase32 string, atTime time.Ti
 	counterBytes := make([]byte, totpCounterByteLength)
 	binary.BigEndian.PutUint64(counterBytes, counter)
 
+	//nolint:namingclarity
 	mac := hmac.New(sha1.New, secretKey)
 	mac.Write(counterBytes)
 	hash := mac.Sum(nil)

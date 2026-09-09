@@ -32,10 +32,10 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	// 1. Setup Auth Authority HTTP server serving OIDC discovery and JWKS
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/.well-known/jwks.json", authSigner.HandleJWKS)
-	serveMux.HandleFunc("/.well-known/openid-configuration", func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Set("Content-Type", "application/json")
-		discoveryDocument := BuildOIDCDiscovery("http://" + request.Host)
-		_ = json.NewEncoder(writer).Encode(discoveryDocument)
+	serveMux.HandleFunc("/.well-known/openid-configuration", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		oidcConfiguration := BuildOIDCDiscovery("http://" + request.Host)
+		_ = json.NewEncoder(responseWriter).Encode(oidcConfiguration)
 	})
 
 	authServer := httptest.NewServer(serveMux)
@@ -92,18 +92,18 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	}
 	defer func() { _ = jwksResponse.Body.Close() }()
 
-	var jwksData JWKSResponse
-	if jwksDecodeErr := json.NewDecoder(jwksResponse.Body).Decode(&jwksData); jwksDecodeErr != nil {
+	var jwks JWKS
+	if jwksDecodeErr := json.NewDecoder(jwksResponse.Body).Decode(&jwks); jwksDecodeErr != nil {
 		t.Fatalf("failed to decode JWKS payload: %v", jwksDecodeErr)
 	}
 
-	if len(jwksData.Keys) == 0 {
+	if len(jwks.Keys) == 0 {
 		t.Fatal("expected at least one JWK in discovered keys")
 	}
 
 	// C. Extract and construct public key from discovered JWK
 	var activePublicKey ed25519.PublicKey
-	for _, key := range jwksData.Keys {
+	for _, key := range jwks.Keys {
 		if key.KeyID == authSigner.KeyID() && key.KeyType == "OKP" && key.Curve == tls.Ed25519.String() {
 			rawPublicKeyBytes, publicKeyDecodeErr := base64.RawURLEncoding.DecodeString(key.X)
 			if publicKeyDecodeErr != nil {
@@ -154,11 +154,11 @@ func TestJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	if verifiedClaims.NotBefore > nowTimestamp {
 		t.Fatal("token is not yet valid")
 	}
-	expectedAudience := core.GetConfig().Project.Slug() + ":user"
+	expectedAudience := "layr-app:user"
 	if verifiedClaims.Audience != expectedAudience {
 		t.Fatalf("unexpected audience: %s", verifiedClaims.Audience)
 	}
-	expectedIssuer := core.GetConfig().Project.Slug()
+	expectedIssuer := "layr-app"
 	if verifiedClaims.Issuer != expectedIssuer {
 		t.Fatalf("unexpected issuer: %s", verifiedClaims.Issuer)
 	}

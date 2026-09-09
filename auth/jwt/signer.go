@@ -14,10 +14,7 @@ import (
 	"uuid"
 
 	"layr.sh/core"
-	"layr.sh/logger"
 )
-
-var log = logger.New("auth")
 
 const (
 	expectedTokenSegmentCount       = 3
@@ -75,11 +72,11 @@ func (claims *Claims) Assert(key string, expected any) error {
 		if claims.Claims == nil {
 			return fmt.Errorf("jwt claim %q not found", key)
 		}
-		val, exists := claims.Claims[key]
+		value, exists := claims.Claims[key]
 		if !exists {
 			return fmt.Errorf("jwt claim %q not found", key)
 		}
-		actual = val
+		actual = value
 	}
 
 	log.Tracef("asserting claim key %q (expected %v)", key, expected)
@@ -103,8 +100,8 @@ func assertValueEqual(actual, expected any) bool {
 	return false
 }
 
-func toFloat64(val any) (float64, bool) {
-	switch num := val.(type) {
+func toFloat64(value any) (float64, bool) {
+	switch num := value.(type) {
 	case int:
 		return float64(num), true
 	case int64:
@@ -133,13 +130,19 @@ type Signer struct {
 }
 
 // NewSigner derives an Ed25519 keypair from KEY_JWT_SIGNING subkey.
-// If customKeyID is provided, it uses it; otherwise it defaults to "<projectSlug>-ed25519-v1".
-func NewSigner(keyManager *core.CryptoKeyManager, customKeyID ...string) (*Signer, error) {
-	seed, _ := keyManager.DeriveSubkey(core.CryptoContextAuthJWTSigning)
+// If customKeyID is provided, it uses it; otherwise it defaults to "<handle>-ed25519-v1".
+func NewSigner(cryptoKeyManager *core.CryptoKeyManager, customKeyID ...string) (*Signer, error) {
+	seed, _ := cryptoKeyManager.DeriveSubkey(core.CryptoContextAuthJWTSigning)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	resolvedKeyID := core.GetConfig().Project.Slug() + "-ed25519-v1"
+	slugifier := core.NewSlugifier()
+	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if handle == "" {
+		handle = "layr-app"
+	}
+
+	resolvedKeyID := handle + "-ed25519-v1"
 	if len(customKeyID) > 0 && customKeyID[0] != "" {
 		resolvedKeyID = customKeyID[0]
 	}
@@ -166,8 +169,8 @@ func (signer *Signer) PublicKey() ed25519.PublicKey {
 // GenerateAccessToken signs a standard Ed25519 JWT for an authenticated application user.
 // Unset claims are populated with sensible defaults:
 // - Role: "authenticated"
-// - Issuer: core.GetConfig().Project.Slug()
-// - Audience: core.GetConfig().Project.Slug() + ":user"
+// - Issuer: handle (slugified project name)
+// - Audience: <handle>:user
 // - IssuedAt / NotBefore: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 900s)
 // - JWTID: UUIDv7 string
@@ -175,12 +178,16 @@ func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (
 	if claims.Role == "" {
 		claims.Role = "authenticated"
 	}
-	projectSlug := core.GetConfig().Project.Slug()
+	slugifier := core.NewSlugifier()
+	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if handle == "" {
+		handle = "layr-app"
+	}
 	if claims.Issuer == "" {
-		claims.Issuer = projectSlug
+		claims.Issuer = handle
 	}
 	if claims.Audience == "" {
-		claims.Audience = projectSlug + ":user"
+		claims.Audience = handle + ":user"
 	}
 
 	now := time.Now().UTC()
@@ -286,6 +293,7 @@ func HashRefreshToken(token string) string {
 // SignHMAC signs input string with seed using HMAC-SHA256 for one-time verification tokens.
 func (signer *Signer) SignHMAC(message string) string {
 	log.Tracef("signing message with HMAC-SHA256")
+	//nolint:namingclarity
 	mac := hmac.New(sha256.New, signer.seed)
 	mac.Write([]byte(message))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
@@ -318,30 +326,35 @@ type OIDCIDTokenClaims struct {
 // GenerateIDToken signs an OpenID Connect Core 1.0 ID token using Ed25519.
 // Unset claims are populated with sensible defaults:
 // - Role: "authenticated"
-// - Issuer: core.GetConfig().Project.Slug()
+// - Issuer: handle (slugified project name)
 // - IssuedAt / AuthTime: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 3600s)
-func (signer *Signer) GenerateIDToken(claims OIDCIDTokenClaims, expirySeconds ...int) (string, error) {
-	if claims.Role == "" {
-		claims.Role = "authenticated"
+func (signer *Signer) GenerateIDToken(oidcIDTokenClaims OIDCIDTokenClaims, expirySeconds ...int) (string, error) {
+	if oidcIDTokenClaims.Role == "" {
+		oidcIDTokenClaims.Role = "authenticated"
 	}
-	if claims.Issuer == "" {
-		claims.Issuer = core.GetConfig().Project.Slug()
+	if oidcIDTokenClaims.Issuer == "" {
+		slugifier := core.NewSlugifier()
+		handle := slugifier.Slugify(core.GetConfig().Project.Name)
+		if handle == "" {
+			handle = "layr-app"
+		}
+		oidcIDTokenClaims.Issuer = handle
 	}
 
 	now := time.Now().UTC()
-	if claims.IssuedAt == 0 {
-		claims.IssuedAt = now.Unix()
+	if oidcIDTokenClaims.IssuedAt == 0 {
+		oidcIDTokenClaims.IssuedAt = now.Unix()
 	}
-	if claims.AuthTime == 0 {
-		claims.AuthTime = now.Unix()
+	if oidcIDTokenClaims.AuthTime == 0 {
+		oidcIDTokenClaims.AuthTime = now.Unix()
 	}
-	if claims.ExpiresAt == 0 {
+	if oidcIDTokenClaims.ExpiresAt == 0 {
 		expiry := defaultIDTokenExpirySeconds
 		if len(expirySeconds) > 0 && expirySeconds[0] != 0 {
 			expiry = expirySeconds[0]
 		}
-		claims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
+		oidcIDTokenClaims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
 	}
 
 	header := map[string]string{
@@ -351,16 +364,16 @@ func (signer *Signer) GenerateIDToken(claims OIDCIDTokenClaims, expirySeconds ..
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(claims)
+	claimsJSON, _ := json.Marshal(oidcIDTokenClaims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
 	signingInput := headerBase64 + "." + claimsBase64
-	log.Tracef("signing ID token for subject %s with keyID %s", claims.Subject, signer.keyID)
+	log.Tracef("signing ID token for subject %s with keyID %s", oidcIDTokenClaims.Subject, signer.keyID)
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
-	log.Debugf("issued ID token for subject %s (kid: %s)", claims.Subject, signer.keyID)
+	log.Debugf("issued ID token for subject %s (kid: %s)", oidcIDTokenClaims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
 }

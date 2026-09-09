@@ -10,90 +10,90 @@ import (
 
 func TestCoreErrorResponseSerializationAndHelpersUnit(t *testing.T) {
 	// 1. Test WriteErrorResponse with standard status code and error code
-	recorder := httptest.NewRecorder()
+	responseRecorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/test", nil)
-	WriteErrorResponse(recorder, request, http.StatusNotFound, "Resource not found", "LAYR_CORE_002")
+	WriteErrorResponse(responseRecorder, request, http.StatusNotFound, "Resource not found", "LAYR_CORE_002")
 
-	if recorder.Code != http.StatusNotFound {
-		t.Fatalf("expected status 404, got %d", recorder.Code)
+	if responseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", responseRecorder.Code)
 	}
-	if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json" {
+	if contentType := responseRecorder.Header().Get("Content-Type"); contentType != "application/json" {
 		t.Fatalf("expected application/json, got %s", contentType)
 	}
 
-	var response ErrorResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+	var errorResponse ErrorResponse
+	if err := json.Unmarshal(responseRecorder.Body.Bytes(), &errorResponse); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
 
-	if response.Type != "https://layr.sh/errors/layr-core-002" {
-		t.Errorf("unexpected Type: %s", response.Type)
+	if errorResponse.Type != "https://layr.sh/errors/layr-core-002" {
+		t.Errorf("unexpected Type: %s", errorResponse.Type)
 	}
-	if response.Title != "Not Found" {
-		t.Errorf("unexpected Title: %s", response.Title)
+	if errorResponse.Title != "Not Found" {
+		t.Errorf("unexpected Title: %s", errorResponse.Title)
 	}
-	if response.Status != http.StatusNotFound {
-		t.Errorf("unexpected Status: %d", response.Status)
+	if errorResponse.Status != http.StatusNotFound {
+		t.Errorf("unexpected Status: %d", errorResponse.Status)
 	}
-	if response.Detail != "Resource not found" {
-		t.Errorf("unexpected Detail: %s", response.Detail)
+	if errorResponse.Detail != "Resource not found" {
+		t.Errorf("unexpected Detail: %s", errorResponse.Detail)
 	}
-	if response.Instance != "/api/v1/test" {
-		t.Errorf("unexpected Instance: %s", response.Instance)
+	if errorResponse.Instance != "/api/v1/test" {
+		t.Errorf("unexpected Instance: %s", errorResponse.Instance)
 	}
-	if response.ErrorCode != "LAYR_CORE_002" {
-		t.Errorf("unexpected ErrorCode: %s", response.ErrorCode)
+	if errorResponse.ErrorCode != "LAYR_CORE_002" {
+		t.Errorf("unexpected ErrorCode: %s", errorResponse.ErrorCode)
 	}
-	if response.Error != "layr_core_002" {
-		t.Errorf("unexpected Error: %s", response.Error)
+	if errorResponse.Error != "layr_core_002" {
+		t.Errorf("unexpected Error: %s", errorResponse.Error)
 	}
-	if response.ErrorDescription != "Resource not found" {
-		t.Errorf("unexpected ErrorDescription: %s", response.ErrorDescription)
+	if errorResponse.ErrorDescription != "Resource not found" {
+		t.Errorf("unexpected ErrorDescription: %s", errorResponse.ErrorDescription)
 	}
-	if response.Timestamp == "" {
+	if errorResponse.Timestamp == "" {
 		t.Errorf("expected non-empty timestamp")
 	}
 
 	// 2. Test WriteErrorResponse with non-standard status code (hitting title == "" fallback)
-	recorderUnknown := httptest.NewRecorder()
-	WriteErrorResponse(recorderUnknown, request, 999, "Custom fallback", "")
-	if recorderUnknown.Code != 999 {
-		t.Fatalf("expected status 999, got %d", recorderUnknown.Code)
+	unknownResponseRecorder := httptest.NewRecorder()
+	WriteErrorResponse(unknownResponseRecorder, request, 999, "Custom fallback", "")
+	if unknownResponseRecorder.Code != 999 {
+		t.Fatalf("expected status 999, got %d", unknownResponseRecorder.Code)
 	}
 
-	var unknownResponse ErrorResponse
-	if err := json.Unmarshal(recorderUnknown.Body.Bytes(), &unknownResponse); err != nil {
+	var unknownErrorResponse ErrorResponse
+	if err := json.Unmarshal(unknownResponseRecorder.Body.Bytes(), &unknownErrorResponse); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
-	if unknownResponse.Title != "API Error" {
-		t.Errorf("unexpected fallback title: %s", unknownResponse.Title)
+	if unknownErrorResponse.Title != "API Error" {
+		t.Errorf("unexpected fallback title: %s", unknownErrorResponse.Title)
 	}
-	if unknownResponse.Type != "https://layr.sh/errors/api-error" {
-		t.Errorf("unexpected fallback type: %s", unknownResponse.Type)
+	if unknownErrorResponse.Type != "https://layr.sh/errors/api-error" {
+		t.Errorf("unexpected fallback type: %s", unknownErrorResponse.Type)
 	}
 
 	// 3. Test WriteErrorResponseProblem with nil request (hitting request == nil branch)
-	recorderNilRequest := httptest.NewRecorder()
-	WriteErrorResponseProblem(recorderNilRequest, nil, http.StatusBadRequest, "Invalid Input", "Bad syntax", "")
-	var nilRequestResponse ErrorResponse
-	if err := json.Unmarshal(recorderNilRequest.Body.Bytes(), &nilRequestResponse); err != nil {
+	nilRequestResponseRecorder := httptest.NewRecorder()
+	WriteErrorResponseProblem(nilRequestResponseRecorder, nil, http.StatusBadRequest, "Invalid Input", "Bad syntax", "")
+	var nilRequestErrorResponse ErrorResponse
+	if err := json.Unmarshal(nilRequestResponseRecorder.Body.Bytes(), &nilRequestErrorResponse); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
-	if nilRequestResponse.Instance != "" {
-		t.Errorf("expected empty instance for nil request, got %s", nilRequestResponse.Instance)
+	if nilRequestErrorResponse.Instance != "" {
+		t.Errorf("expected empty instance for nil request, got %s", nilRequestErrorResponse.Instance)
 	}
-	if nilRequestResponse.Type != "https://layr.sh/errors/invalid-input" {
-		t.Errorf("unexpected type: %s", nilRequestResponse.Type)
+	if nilRequestErrorResponse.Type != "https://layr.sh/errors/invalid-input" {
+		t.Errorf("unexpected type: %s", nilRequestErrorResponse.Type)
 	}
 
 	// 4. Test WriteErrorResponseProblem with custom non-empty errorCode
-	recorderWithCode := httptest.NewRecorder()
-	WriteErrorResponseProblem(recorderWithCode, request, http.StatusForbidden, "Forbidden Action", "You cannot access this resource", "AUTH_FORBIDDEN_001")
-	var withCodeResponse ErrorResponse
-	if err := json.Unmarshal(recorderWithCode.Body.Bytes(), &withCodeResponse); err != nil {
+	withCodeResponseRecorder := httptest.NewRecorder()
+	WriteErrorResponseProblem(withCodeResponseRecorder, request, http.StatusForbidden, "Forbidden Action", "You cannot access this resource", "AUTH_FORBIDDEN_001")
+	var withCodeErrorResponse ErrorResponse
+	if err := json.Unmarshal(withCodeResponseRecorder.Body.Bytes(), &withCodeErrorResponse); err != nil {
 		t.Fatalf("failed to decode JSON: %v", err)
 	}
-	if withCodeResponse.Type != "https://layr.sh/errors/auth-forbidden-001" {
-		t.Errorf("unexpected type: %s", withCodeResponse.Type)
+	if withCodeErrorResponse.Type != "https://layr.sh/errors/auth-forbidden-001" {
+		t.Errorf("unexpected type: %s", withCodeErrorResponse.Type)
 	}
 }

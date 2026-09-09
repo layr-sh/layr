@@ -50,16 +50,6 @@ type ProjectConfig struct {
 	Description string `yaml:"description"`
 }
 
-// Slug returns the URL/identifier-friendly slug of the project name.
-func (project ProjectConfig) Slug() string {
-	slugifier := NewSlugifier()
-	slug := slugifier.Slugify(project.Name)
-	if slug == "" {
-		return "layr-app"
-	}
-	return slug
-}
-
 // ServerConfig defines the HTTP server network listener and base URL.
 type ServerConfig struct {
 	ListenAddr string `yaml:"listen_addr"`

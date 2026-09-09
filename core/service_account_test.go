@@ -23,8 +23,8 @@ func TestCoreServiceAccountContextHelpersUnit(t *testing.T) {
 		IsEnabled: true,
 	}
 
-	ctxWithServiceAccount := WithServiceAccount(ctx, testServiceAccount)
-	extractedServiceAccount := GetServiceAccount(ctxWithServiceAccount)
+	withServiceAccountCtx := WithServiceAccount(ctx, testServiceAccount)
+	extractedServiceAccount := GetServiceAccount(withServiceAccountCtx)
 	if extractedServiceAccount == nil || extractedServiceAccount.ID != "sa-123" {
 		t.Fatalf("expected extracted service account ID sa-123, got %+v", extractedServiceAccount)
 	}

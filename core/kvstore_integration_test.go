@@ -16,7 +16,7 @@ func TestCoreKVStoreBackendResolutionIntegration(t *testing.T) {
 	defer cancel()
 
 	// 1. Boot Postgres testcontainer
-	pgContainer, err := postgres.Run(ctx,
+	postgresContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
 		postgres.WithDatabase("layr"),
 		postgres.WithUsername("layr"),
@@ -31,9 +31,9 @@ func TestCoreKVStoreBackendResolutionIntegration(t *testing.T) {
 		t.Skipf("docker not available: %v", err)
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
 	}

@@ -11,18 +11,18 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	dataDirectory := filepath.Join(temporaryDirectory, "data")
 
-	embedded := NewEmbeddedDatabase(dataDirectory)
+	embeddedDatabase := NewEmbeddedDatabase(dataDirectory)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	// Provision and start embedded postgres 18+ daemon
-	databaseURL, err := embedded.Start(ctx)
+	databaseURL, err := embeddedDatabase.Start(ctx)
 	if err != nil {
 		t.Skipf("embedded postgres start failed: %v", err)
 		return
 	}
 	defer func() {
-		_ = embedded.Stop()
+		_ = embeddedDatabase.Stop()
 	}()
 
 	db, err := NewDatabasePool(ctx, databaseURL)
@@ -118,14 +118,14 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Multi-node cluster topology and worker lifecycle
-	nodeRegistryPrimary := NewNodeRegistry(db, "primary-node-1", []string{"data", "auth", "storage", "console"})
-	err = nodeRegistryPrimary.Register(ctx)
+	nodeRegistry := NewNodeRegistry(db, "primary-node-1", []string{"data", "auth", "storage", "console"})
+	err = nodeRegistry.Register(ctx)
 	if err != nil {
 		t.Fatalf("primary node registration failed: %v", err)
 	}
 
-	nodeRegistryWorker := NewNodeRegistry(db, "worker-node-2", []string{"scheduler", "notification"})
-	err = nodeRegistryWorker.Register(ctx)
+	secondNodeRegistry := NewNodeRegistry(db, "worker-node-2", []string{"scheduler", "notification"})
+	err = secondNodeRegistry.Register(ctx)
 	if err != nil {
 		t.Fatalf("worker node registration failed: %v", err)
 	}
@@ -137,8 +137,8 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Graceful node worker decommissioning
-	nodeRegistryWorker.Close()
-	nodeRegistryWorker.Close() // Idempotent double close check
+	secondNodeRegistry.Close()
+	secondNodeRegistry.Close() // Idempotent double close check
 
 	err = db.QueryRow(ctx, "SELECT count(*) FROM core.nodes").Scan(&registeredNodeCount)
 	if err != nil || registeredNodeCount != 1 {
@@ -146,7 +146,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Schema evolution upgrade and rollback flow
-	evolutionMigration := DatabaseMigration{
+	evolutionDatabaseMigration := DatabaseMigration{
 		Version:     2,
 		Description: "Add custom domain items table",
 		UpSQL: `
@@ -161,7 +161,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 		`,
 	}
 
-	fullMigrationsList := append(SystemDatabaseMigrations, evolutionMigration)
+	fullMigrationsList := append(SystemDatabaseMigrations, evolutionDatabaseMigration)
 	err = db.MigrateUp(ctx, fullMigrationsList, 2)
 	if err != nil {
 		t.Fatalf("migration upgrade failed: %v", err)
@@ -193,28 +193,28 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Server shutdown, restart and data persistence verification
-	nodeRegistryPrimary.Close()
+	nodeRegistry.Close()
 	db.Close()
 
-	err = embedded.Stop()
+	err = embeddedDatabase.Stop()
 	if err != nil {
 		t.Fatalf("embedded postgres stop failed: %v", err)
 	}
 
 	// Idempotent Stop on already stopped embedded postgres
-	err = embedded.Stop()
+	err = embeddedDatabase.Stop()
 	if err != nil {
 		t.Fatalf("expected second Stop call to succeed idempotently, got: %v", err)
 	}
 
 	// Re-start embedded postgres from the existing data directory
-	embeddedRestart := NewEmbeddedDatabase(dataDirectory)
-	reconnectedURL, err := embeddedRestart.Start(ctx)
+	restartEmbeddedDatabase := NewEmbeddedDatabase(dataDirectory)
+	reconnectedURL, err := restartEmbeddedDatabase.Start(ctx)
 	if err != nil {
 		t.Fatalf("failed to restart embedded postgres on existing data directory: %v", err)
 	}
 	defer func() {
-		_ = embeddedRestart.Stop()
+		_ = restartEmbeddedDatabase.Stop()
 	}()
 
 	reconnectedDB, err := NewDatabasePool(ctx, reconnectedURL)
@@ -246,7 +246,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 
 	// Clean final shutdown
 	reconnectedDB.Close()
-	if err := embeddedRestart.Stop(); err != nil {
+	if err := restartEmbeddedDatabase.Stop(); err != nil {
 		t.Fatalf("embedded postgres second stop failed: %v", err)
 	}
 
