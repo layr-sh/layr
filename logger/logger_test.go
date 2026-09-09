@@ -355,15 +355,49 @@ func TestLoggerSlogHandlerDirectUnit(t *testing.T) {
 		t.Fatalf("unexpected handle error with nil writer: %v", err)
 	}
 
-	// 4. WithAttrs and WithGroup return self
+	// 4. WithAttrs and WithGroup with empty inputs return self
 	if handler.WithAttrs(nil) != handler {
-		t.Error("expected WithAttrs to return handler")
+		t.Error("expected WithAttrs(nil) to return handler")
 	}
-	if handler.WithGroup("group") != handler {
-		t.Error("expected WithGroup to return handler")
+	if handler.WithGroup("") != handler {
+		t.Error("expected WithGroup(\"\") to return handler")
 	}
 
-	// 5. Handle with failing writer returns error
+	// 5. WithAttrs and WithGroup with non-empty inputs return new handlers with formatting
+	groupedHandler := handler.WithGroup("testgroup")
+	if groupedHandler == handler {
+		t.Error("expected WithGroup to return new handler instance")
+	}
+	attrHandler := groupedHandler.WithAttrs([]slog.Attr{slog.String("sub_key", "sub_val")})
+	if attrHandler == groupedHandler {
+		t.Error("expected WithAttrs to return new handler instance")
+	}
+
+	buffer.Reset()
+	attrRecord := slog.Record{
+		Time:    time.Now(),
+		Level:   LevelInfo,
+		Message: "attr message",
+	}
+	attrRecord.AddAttrs(slog.String("extra", "extra val with space"))
+	if err := attrHandler.Handle(ctx, attrRecord); err != nil {
+		t.Fatalf("unexpected handle error with attrs: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `testgroup.sub_key=sub_val`) || !strings.Contains(buffer.String(), `testgroup.extra="extra val with space"`) {
+		t.Errorf("expected output to contain grouped and quoted attrs, got: %s", buffer.String())
+	}
+
+	// Also test ungrouped handler with record attributes
+	buffer.Reset()
+	ungroupedAttrHandler := handler.WithAttrs([]slog.Attr{slog.String("direct_key", "direct_val")})
+	if err := ungroupedAttrHandler.Handle(ctx, attrRecord); err != nil {
+		t.Fatalf("unexpected handle error with ungrouped attrs: %v", err)
+	}
+	if !strings.Contains(buffer.String(), "direct_key=direct_val") || !strings.Contains(buffer.String(), `extra="extra val with space"`) {
+		t.Errorf("expected ungrouped attrs in output, got: %s", buffer.String())
+	}
+
+	// 6. Handle with failing writer returns error
 	failingHandler := &slogHandler{
 		levelVar: levelVar,
 		writer:   testErrorWriter{},
@@ -378,4 +412,27 @@ type testErrorWriter struct{}
 
 func (testErrorWriter) Write(_ []byte) (int, error) {
 	return 0, errors.New("write failure")
+}
+
+func TestLoggerWithUnit(t *testing.T) {
+	var buffer bytes.Buffer
+	testLogger := New("with-scope")
+	testLogger.SetOutput(&buffer)
+	testLogger.SetLevel(LevelTrace)
+
+	// 1. Test With on Logger with various argument types
+	childWithLogger := testLogger.With("custom_attr", "custom_val", slog.Int("count", 42), slog.String("", "ignored"), 123, "odd_key_only")
+	childWithLogger.SetOutput(&buffer)
+	childWithLogger.Info("with child message")
+	if !strings.Contains(buffer.String(), "custom_attr=custom_val") || !strings.Contains(buffer.String(), "count=42") || !strings.Contains(buffer.String(), "!BADKEY=odd_key_only") || !strings.Contains(buffer.String(), "!EXTRA=123") {
+		t.Errorf("expected structured attrs in output, got: %s", buffer.String())
+	}
+
+	// 2. Test explicit level preservation in With
+	explicitLogger := New("exp")
+	explicitLogger.SetLevel(LevelWarn)
+	explicitChildLogger := explicitLogger.With("key", "val")
+	if explicitChildLogger.GetLevel() != LevelWarn {
+		t.Errorf("expected child logger to retain explicit LevelWarn, got %v", explicitChildLogger.GetLevel())
+	}
 }

@@ -122,6 +122,33 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with Authorization header fallback, got %d", clientAuthHeaderResponseRecorder.Code)
 	}
 
+	// Test public client endpoint with Basic Authorization header fallback -> 200
+	clientBasicAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientBasicAuthRequest.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	clientBasicAuthResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientBasicAuthResponseRecorder, clientBasicAuthRequest)
+	if clientBasicAuthResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected client endpoint 200 with Basic Authorization header fallback, got %d", clientBasicAuthResponseRecorder.Code)
+	}
+
+	// Test public client endpoint with dummy Authorization header -> 401 Unauthorized
+	clientDummyAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientDummyAuthRequest.Header.Set("Authorization", "dummy")
+	clientDummyAuthResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientDummyAuthResponseRecorder, clientDummyAuthRequest)
+	if clientDummyAuthResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected client endpoint 401 with dummy auth header, got %d", clientDummyAuthResponseRecorder.Code)
+	}
+
+	// Test public client endpoint with dummy service account key -> 401 Unauthorized
+	clientDummyKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientDummyKeyRequest.Header.Set("X-Layr-Service-Account-Key", "dummy")
+	clientDummyKeyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientDummyKeyResponseRecorder, clientDummyKeyRequest)
+	if clientDummyKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected client endpoint 401 with dummy service account key, got %d", clientDummyKeyResponseRecorder.Code)
+	}
+
 	// Test PublishableKeyMiddleware with nil CryptoKeyManager -> passes through
 	nilCryptoKeyManagerHttpServer := NewServer(nil, nil)
 	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
@@ -226,5 +253,23 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 
 	if shutdownErr == nil {
 		t.Fatal("expected error from Shutdown with canceled context on active connection, got nil")
+	}
+}
+
+func TestCoreServerPanicRecoveryUnit(t *testing.T) {
+	server := NewServer(nil, nil)
+	GetRoute[string](server.Router(), "/api/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
+		panic("simulated unhandled panic in handler")
+	})
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/panic-endpoint", nil)
+	responseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(responseRecorder, request)
+
+	if responseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500 from panic recovery, got %d", responseRecorder.Code)
+	}
+	if !strings.Contains(responseRecorder.Body.String(), "LAYR_CORE_500") {
+		t.Fatalf("expected body to contain error code LAYR_CORE_500, got: %s", responseRecorder.Body.String())
 	}
 }

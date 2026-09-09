@@ -252,6 +252,9 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	if _, emptyEventsErr := webhookManager.Create(ctx, CreateWebhookInput{Name: "WH", TargetURL: "http://example.com", Events: []string{}}); emptyEventsErr == nil {
 		t.Fatal("expected error on empty events")
 	}
+	if _, ssrfURLErr := webhookManager.Create(ctx, CreateWebhookInput{Name: "WH", TargetURL: "http://169.254.169.254/latest", Events: []string{"*"}}); ssrfURLErr == nil {
+		t.Fatal("expected error on SSRF target URL")
+	}
 
 	// Update all fields of webhook
 	updateAllFieldsWebhook, err := webhookManager.Create(ctx, CreateWebhookInput{
@@ -285,6 +288,15 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected updated webhook fields, got: %+v", updatedAllFieldsWebhook)
 	}
 
+	emptyURL := "   "
+	if _, emptyURLErr := webhookManager.Update(ctx, updateAllFieldsWebhook.ID, UpdateWebhookInput{TargetURL: &emptyURL}); emptyURLErr == nil {
+		t.Fatal("expected error on updating to empty target URL")
+	}
+	ssrfURL := "http://169.254.169.254/latest"
+	if _, ssrfURLErr := webhookManager.Update(ctx, updateAllFieldsWebhook.ID, UpdateWebhookInput{TargetURL: &ssrfURL}); ssrfURLErr == nil {
+		t.Fatal("expected error on updating to SSRF target URL")
+	}
+
 	// 10. EventBus direct dispatch and deliver edge cases
 	nilWebhookEventBus := NewWebhookEventBus(nil, nil)
 	nilWebhookEventBus.dispatch(ctx, WebhookEventEnvelope{Event: "test"})
@@ -303,6 +315,28 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	}))
 	defer errServer.Close()
 	webhookEventBus.deliver(ctx, "err-id", errServer.URL, "", 1, 1, WebhookEventEnvelope{
+		ID:        "01a02ef2-ce86-722a-bffb-879f4b430109",
+		Event:     "test.event",
+		Timestamp: time.Now().UTC(),
+	})
+
+	// Direct deliver with pre-canceled context to cover network error sleep cancellation break (line 318)
+	preCanceledCtx, preCancel := context.WithCancel(context.Background())
+	preCancel()
+	webhookEventBus.deliver(preCanceledCtx, "pre-canceled-id", errServer.URL, "", 2, 5, WebhookEventEnvelope{
+		ID:        "01a02ef2-ce86-722a-bffb-879f4b430109",
+		Event:     "test.event",
+		Timestamp: time.Now().UTC(),
+	})
+
+	// Direct deliver with HTTP 500 and canceled context during retry backoff to cover non-2xx sleep cancellation break (line 348)
+	canceledDeliveryCtx, deliveryCancel := context.WithCancel(context.Background())
+	errCancelServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		time.AfterFunc(10*time.Millisecond, deliveryCancel)
+		responseWriter.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer errCancelServer.Close()
+	webhookEventBus.deliver(canceledDeliveryCtx, "err-id-canceled", errCancelServer.URL, "", 2, 5, WebhookEventEnvelope{
 		ID:        "01a02ef2-ce86-722a-bffb-879f4b430109",
 		Event:     "test.event",
 		Timestamp: time.Now().UTC(),

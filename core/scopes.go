@@ -30,17 +30,17 @@ const (
 	ScopeAuthConfigRead  = "auth:config.read"
 	ScopeAuthConfigWrite = "auth:config.write"
 
-	// Storage scopes
-	ScopeStorageBucketRead  = "storage:bucket.read"
-	ScopeStorageBucketWrite = "storage:bucket.write"
-	ScopeStorageObjectRead  = "storage:object.read"
-	ScopeStorageObjectWrite = "storage:object.write"
+	// FileStorage scopes
+	ScopeFileStorageBucketRead  = "storage:bucket.read"
+	ScopeFileStorageBucketWrite = "storage:bucket.write"
+	ScopeFileStorageObjectRead  = "storage:object.read"
+	ScopeFileStorageObjectWrite = "storage:object.write"
 
-	// Scheduler scopes
-	ScopeSchedulerJobRead        = "scheduler:job.read"
-	ScopeSchedulerJobWrite       = "scheduler:job.write"
-	ScopeSchedulerExecutionRead  = "scheduler:execution.read"
-	ScopeSchedulerExecutionWrite = "scheduler:execution.write"
+	// Tasks scopes
+	ScopeTasksJobRead        = "scheduler:job.read"
+	ScopeTasksJobWrite       = "scheduler:job.write"
+	ScopeTasksExecutionRead  = "scheduler:execution.read"
+	ScopeTasksExecutionWrite = "scheduler:execution.write"
 
 	// Notification scopes
 	ScopeNotificationChannelRead   = "notification:channel.read"
@@ -53,6 +53,8 @@ const (
 	ScopeAnalyticsMetricRead  = "analytics:metric.read"
 	ScopeAnalyticsConfigRead  = "analytics:config.read"
 	ScopeAnalyticsConfigWrite = "analytics:config.write"
+
+	// TODO: Add Image scopes
 
 	// Console scopes
 	ScopeConsoleUserRead  = "console:user.read"

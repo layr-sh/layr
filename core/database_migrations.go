@@ -158,7 +158,9 @@ CREATE TABLE IF NOT EXISTS core.webhook_deliveries (
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX IF NOT EXISTS idx_core_webhook_deliveries_webhook ON core.webhook_deliveries (webhook_id);
+CREATE INDEX IF NOT EXISTS idx_core_webhook_deliveries_created ON core.webhook_deliveries (webhook_id, created_at DESC);
 `,
+
 		DownSQL: `
 DROP TABLE IF EXISTS core.webhook_deliveries CASCADE;
 DROP TABLE IF EXISTS core.webhooks CASCADE;
@@ -207,7 +209,9 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 
 	// Fetch applied migrations
 	rows, _ := tx.Query(ctx, "SELECT version FROM core.migrations ORDER BY version ASC")
-	defer rows.Close()
+	if rows != nil {
+		defer rows.Close()
+	}
 
 	applied := make(map[int]bool)
 	for rows.Next() {
@@ -277,7 +281,9 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 	}
 
 	rows, _ := tx.Query(ctx, "SELECT version FROM core.migrations ORDER BY version DESC")
-	defer rows.Close()
+	if rows != nil {
+		defer rows.Close()
+	}
 
 	var appliedVersions []int
 	for rows.Next() {

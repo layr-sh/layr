@@ -270,4 +270,15 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	if !errors.Is(err, ErrRootAccountProtected) {
 		t.Fatalf("expected ErrRootAccountProtected when removing root scope, got: %v", err)
 	}
+
+	// 21. updateLastUsedAt success path
+	serviceAccountManager.updateLastUsedAt(ctx, rootServiceAccount.ID)
+
+	// 22. updateLastUsedAt error path with closed pool
+	closedDB, cleanupClosed := startTestContainer(t)
+	if closedDB != nil {
+		closedServiceAccountManager := NewServiceAccountManager(closedDB)
+		cleanupClosed() // Closes pool
+		closedServiceAccountManager.updateLastUsedAt(ctx, rootServiceAccount.ID)
+	}
 }

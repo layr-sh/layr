@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -182,7 +184,7 @@ func (webhookEventBus *WebhookEventBus) Publish(ctx context.Context, webhookEven
 	select {
 	case webhookEventBus.dispatchChannel <- webhookEventEnvelope:
 	default:
-		log.Warnf("dispatch buffer full, dropping event %s (%s)", webhookEventEnvelope.ID, webhookEventEnvelope.Event)
+		log.Errorf("dispatch buffer full, dropping event %s (%s)", webhookEventEnvelope.ID, webhookEventEnvelope.Event)
 	}
 }
 
@@ -246,7 +248,11 @@ func (webhookEventBus *WebhookEventBus) dispatch(ctx context.Context, webhookEve
 		}
 
 		if matched {
-			go webhookEventBus.deliver(ctx, webhookID, targetURL, secretEncrypted, maxRetries, timeoutSeconds, webhookEventEnvelope)
+			webhookEventBus.waitGroup.Add(1)
+			go func(deliveryWebhookID, deliveryTargetURL, deliverySecretEncrypted string, deliveryMaxRetries, deliveryTimeoutSeconds int) {
+				defer webhookEventBus.waitGroup.Done()
+				webhookEventBus.deliver(ctx, deliveryWebhookID, deliveryTargetURL, deliverySecretEncrypted, deliveryMaxRetries, deliveryTimeoutSeconds, webhookEventEnvelope)
+			}(webhookID, targetURL, secretEncrypted, maxRetries, timeoutSeconds)
 		}
 	}
 }
@@ -309,7 +315,9 @@ func (webhookEventBus *WebhookEventBus) deliver(ctx context.Context, webhookID, 
 			log.Tracef("webhook %s delivery attempt %d network error: %v", webhookID, attempt, err)
 			errMsg := err.Error()
 			lastErr = &errMsg
-			time.Sleep(CalculateWebhookBackoff(attempt))
+			if !sleepWithContext(ctx, CalculateWebhookBackoff(attempt)) {
+				break
+			}
 			continue
 		}
 
@@ -336,7 +344,9 @@ func (webhookEventBus *WebhookEventBus) deliver(ctx context.Context, webhookID, 
 		log.Tracef("webhook %s delivery attempt %d returned HTTP status %d", webhookID, attempt, status)
 		errMsg := fmt.Sprintf("HTTP error status %d", status)
 		lastErr = &errMsg
-		time.Sleep(CalculateWebhookBackoff(attempt))
+		if !sleepWithContext(ctx, CalculateWebhookBackoff(attempt)) {
+			break
+		}
 	}
 
 	durationMs := time.Since(start).Milliseconds()
@@ -398,6 +408,17 @@ func CalculateWebhookBackoff(attempt int) time.Duration {
 	return time.Duration(1<<attempt) * 100 * time.Millisecond
 }
 
+func sleepWithContext(ctx context.Context, duration time.Duration) bool {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 func matchWebhookEventPattern(pattern, eventName string) bool {
 	pattern = strings.TrimSpace(pattern)
 	eventName = strings.TrimSpace(eventName)
@@ -438,6 +459,9 @@ func (webhookManager *WebhookManager) Create(ctx context.Context, createWebhookI
 	}
 	if strings.TrimSpace(createWebhookInput.TargetURL) == "" {
 		return nil, fmt.Errorf("target_url is required")
+	}
+	if err := validateWebhookTargetURL(createWebhookInput.TargetURL); err != nil {
+		return nil, err
 	}
 	if len(createWebhookInput.Events) == 0 {
 		return nil, fmt.Errorf("at least one event must be specified")
@@ -564,7 +588,13 @@ func (webhookManager *WebhookManager) Update(ctx context.Context, webhookID stri
 		name = *updateWebhookInput.Name
 	}
 	targetURL := currentWebhook.TargetURL
-	if updateWebhookInput.TargetURL != nil && strings.TrimSpace(*updateWebhookInput.TargetURL) != "" {
+	if updateWebhookInput.TargetURL != nil {
+		if strings.TrimSpace(*updateWebhookInput.TargetURL) == "" {
+			return nil, fmt.Errorf("target_url cannot be empty")
+		}
+		if err := validateWebhookTargetURL(*updateWebhookInput.TargetURL); err != nil {
+			return nil, err
+		}
 		targetURL = *updateWebhookInput.TargetURL
 	}
 	events := currentWebhook.Events
@@ -661,4 +691,27 @@ func (webhookManager *WebhookManager) ListDeliveries(ctx context.Context, webhoo
 	}
 	log.Tracef("listed %d webhook deliveries for %s", len(results), webhookID)
 	return results, nil
+}
+
+func validateWebhookTargetURL(targetURL string) error {
+	parsedURL, err := url.Parse(targetURL)
+	if err != nil {
+		return fmt.Errorf("invalid webhook target url: %w", err)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("webhook scheme must be http or https")
+	}
+	hostname := strings.ToLower(parsedURL.Hostname())
+	if hostname == "" {
+		return fmt.Errorf("webhook target hostname is required")
+	}
+	if hostname == "metadata.google.internal" || hostname == "metadata" {
+		return fmt.Errorf("webhook target to metadata service is prohibited")
+	}
+	if parsedIP := net.ParseIP(hostname); parsedIP != nil {
+		if parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast() {
+			return fmt.Errorf("webhook target to link-local address is prohibited")
+		}
+	}
+	return nil
 }

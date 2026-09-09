@@ -141,8 +141,9 @@ func initDatabaseTLS(databaseConfig *pgxpool.Config, databasePoolOptions Databas
 			if len(keyPEM) == 0 {
 				keyPEM = []byte(databasePoolOptions.SSLKey)
 			}
-			certificate, _ := tls.X509KeyPair(certPEM, keyPEM)
-			databaseConfig.ConnConfig.TLSConfig.Certificates = []tls.Certificate{certificate}
+			if certificate, err := tls.X509KeyPair(certPEM, keyPEM); err == nil {
+				databaseConfig.ConnConfig.TLSConfig.Certificates = []tls.Certificate{certificate}
+			}
 		}
 	}
 }

@@ -176,6 +176,8 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		Addr:              config.Server.ListenAddr,
 		Handler:           server.middleware(serveMux),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
 
@@ -218,9 +220,14 @@ func (server *Server) Shutdown(ctx context.Context) error {
 
 func (server *Server) middleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Errorf("panic recovered in HTTP handler: %v", recovered)
+				WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "internal server error", "LAYR_CORE_500")
+			}
+		}()
 		log.Tracef("incoming HTTP request %s %s", request.Method, request.URL.Path)
 		server.requestCount.Add(1)
-		// responseWriter.Header().Set("Layr-Version", "TODO")
 		handler.ServeHTTP(responseWriter, request)
 	})
 }
@@ -300,8 +307,12 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			authHeader := request.Header.Get("Authorization")
 
 			isValid := server.cryptoKeyManager.VerifyPublishableKey(publishableKey)
-			if !isValid && (serviceAccountKey != "" || authHeader != "") {
-				isValid = true
+			if !isValid {
+				hasValidServiceKey := strings.HasPrefix(serviceAccountKey, "sec_")
+				hasValidAuthHeader := strings.HasPrefix(authHeader, "Bearer ") || strings.HasPrefix(authHeader, "Basic ")
+				if hasValidServiceKey || hasValidAuthHeader {
+					isValid = true
+				}
 			}
 
 			if !isValid {

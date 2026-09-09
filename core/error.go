@@ -62,6 +62,12 @@ func WriteErrorResponseProblem(responseWriter http.ResponseWriter, request *http
 		Timestamp:        time.Now().UTC().Format(time.RFC3339),
 	}
 
-	log.Debugf("writing RFC 7807 error response (status: %d, title: %q, error_code: %s, instance: %s, detail: %q)", status, title, errorCode, instance, detail)
+	if status >= http.StatusInternalServerError {
+		log.Errorf("writing RFC 7807 error response (status: %d, title: %q, error_code: %s, instance: %s, detail: %q)", status, title, errorCode, instance, detail)
+	} else if status >= http.StatusBadRequest {
+		log.Warnf("writing RFC 7807 error response (status: %d, title: %q, error_code: %s, instance: %s, detail: %q)", status, title, errorCode, instance, detail)
+	} else {
+		log.Debugf("writing RFC 7807 error response (status: %d, title: %q, error_code: %s, instance: %s, detail: %q)", status, title, errorCode, instance, detail)
+	}
 	_ = json.NewEncoder(responseWriter).Encode(errorResponse)
 }
