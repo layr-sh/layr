@@ -26,15 +26,15 @@ func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
 
 	// 1. Health Probe Flow
 	healthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
-	healthRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(healthRecorder, healthRequest)
+	healthResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(healthResponseRecorder, healthRequest)
 
-	if healthRecorder.Code != http.StatusOK {
-		t.Fatalf("health probe expected 200, got %d", healthRecorder.Code)
+	if healthResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("health probe expected 200, got %d", healthResponseRecorder.Code)
 	}
 
 	var healthPayload map[string]any
-	if err := json.Unmarshal(healthRecorder.Body.Bytes(), &healthPayload); err != nil {
+	if err := json.Unmarshal(healthResponseRecorder.Body.Bytes(), &healthPayload); err != nil {
 		t.Fatalf("failed to decode health JSON: %v", err)
 	}
 	if healthPayload["status"] != "healthy" {
@@ -43,32 +43,32 @@ func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
 
 	// 2. Ready Probe Flow
 	readyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
-	readyRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(readyRecorder, readyRequest)
+	readyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(readyResponseRecorder, readyRequest)
 
-	if readyRecorder.Code != http.StatusOK {
-		t.Fatalf("ready probe expected 200, got %d", readyRecorder.Code)
+	if readyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("ready probe expected 200, got %d", readyResponseRecorder.Code)
 	}
 
 	// 3. Topology Discovery Flow
 	topologyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
-	topologyRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(topologyRecorder, topologyRequest)
+	topologyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(topologyResponseRecorder, topologyRequest)
 
-	if topologyRecorder.Code != http.StatusOK {
-		t.Fatalf("topology expected 200, got %d", topologyRecorder.Code)
+	if topologyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("topology expected 200, got %d", topologyResponseRecorder.Code)
 	}
 
 	// 4. Metrics Probe Flow
 	metricsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
-	metricsRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(metricsRecorder, metricsRequest)
+	metricsResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(metricsResponseRecorder, metricsRequest)
 
-	if metricsRecorder.Code != http.StatusOK {
-		t.Fatalf("metrics expected 200, got %d", metricsRecorder.Code)
+	if metricsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("metrics expected 200, got %d", metricsResponseRecorder.Code)
 	}
-	if !strings.Contains(metricsRecorder.Body.String(), "uptime_seconds") {
-		t.Fatalf("expected prometheus metrics in response: %s", metricsRecorder.Body.String())
+	if !strings.Contains(metricsResponseRecorder.Body.String(), "uptime_seconds") {
+		t.Fatalf("expected prometheus metrics in response: %s", metricsResponseRecorder.Body.String())
 	}
 
 	// 5. Background Server Start and Clean Shutdown
@@ -79,10 +79,10 @@ func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
 	}()
 	time.Sleep(50 * time.Millisecond)
 
-	shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer shutdownCancel()
 
-	if err := server.Shutdown(shutdownContext); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		t.Fatalf("expected clean shutdown, got %v", err)
 	}
 

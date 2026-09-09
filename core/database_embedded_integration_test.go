@@ -11,22 +11,22 @@ func TestCoreEmbeddedDatabaseFullLifecycleAndMigrationsIntegration(t *testing.T)
 	temporaryDirectory := t.TempDir()
 	dataDirectory := filepath.Join(temporaryDirectory, "data")
 
-	embedded := NewEmbeddedDatabase(dataDirectory)
-	if embedded == nil {
-		t.Fatal("expected non-nil Embedded")
+	embeddedDatabase := NewEmbeddedDatabase(dataDirectory)
+	if embeddedDatabase == nil {
+		t.Fatal("expected non-nil embeddedDatabase")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
 	// 1. Start embedded postgres
-	databaseURL, err := embedded.Start(ctx)
+	databaseURL, err := embeddedDatabase.Start(ctx)
 	if err != nil {
 		t.Skipf("embedded postgres binary download/start failed: %v", err)
 		return
 	}
 	defer func() {
-		_ = embedded.Stop()
+		_ = embeddedDatabase.Stop()
 	}()
 
 	if databaseURL == "" {

@@ -43,7 +43,7 @@ func RouteResponseHeader(name, description string) RouteOption {
 
 // RouteBinaryResponse configures an OpenAPI response for binary streaming data (images, files, octet-streams).
 func RouteBinaryResponse(statusCode int, description string, contentTypes ...string) RouteOption {
-	return func(route *fuego.BaseRoute) {
+	return func(baseRoute *fuego.BaseRoute) {
 		if len(contentTypes) == 0 {
 			contentTypes = []string{"application/octet-stream"}
 		}
@@ -53,29 +53,29 @@ func RouteBinaryResponse(statusCode int, description string, contentTypes ...str
 			WithDescription(description).
 			WithContent(content)
 
-		if route.Operation.Responses == nil {
-			route.Operation.Responses = openapi3.NewResponses()
+		if baseRoute.Operation.Responses == nil {
+			baseRoute.Operation.Responses = openapi3.NewResponses()
 		}
-		route.Operation.Responses.Set(strconv.Itoa(statusCode), &openapi3.ResponseRef{Value: response})
+		baseRoute.Operation.Responses.Set(strconv.Itoa(statusCode), &openapi3.ResponseRef{Value: response})
 	}
 }
 
 // RouteNoContentResponse configures a 204 No Content response without content payload.
 func RouteNoContentResponse(description string) RouteOption {
-	return func(route *fuego.BaseRoute) {
+	return func(baseRoute *fuego.BaseRoute) {
 		response := openapi3.NewResponse().WithDescription(description)
-		if route.Operation.Responses == nil {
-			route.Operation.Responses = openapi3.NewResponses()
+		if baseRoute.Operation.Responses == nil {
+			baseRoute.Operation.Responses = openapi3.NewResponses()
 		}
-		route.Operation.Responses.Delete("200")
-		route.Operation.Responses.Set(strconv.Itoa(http.StatusNoContent), &openapi3.ResponseRef{Value: response})
+		baseRoute.Operation.Responses.Delete("200")
+		baseRoute.Operation.Responses.Set(strconv.Itoa(http.StatusNoContent), &openapi3.ResponseRef{Value: response})
 	}
 }
 
 // RouteNoRequestBody removes any generated request body from the route specification.
 func RouteNoRequestBody() RouteOption {
-	return func(route *fuego.BaseRoute) {
-		route.Operation.RequestBody = nil
+	return func(baseRoute *fuego.BaseRoute) {
+		baseRoute.Operation.RequestBody = nil
 	}
 }
 
@@ -91,21 +91,21 @@ func RouteRequestBodyModel(model any, contentTypes ...string) RouteOption {
 
 // RouteSDKGroupName sets the SDK subclient namespace hierarchy (e.g. "data", "cache" or "data", "control").
 func RouteSDKGroupName(names ...string) RouteOption {
-	return func(route *fuego.BaseRoute) {
-		if route.Operation.Extensions == nil {
-			route.Operation.Extensions = make(map[string]any)
+	return func(baseRoute *fuego.BaseRoute) {
+		if baseRoute.Operation.Extensions == nil {
+			baseRoute.Operation.Extensions = make(map[string]any)
 		}
-		route.Operation.Extensions["x-sdk-group-name"] = names
+		baseRoute.Operation.Extensions["x-sdk-group-name"] = names
 	}
 }
 
 // RouteSDKMethodName sets the explicit SDK method name on the generated client.
 func RouteSDKMethodName(name string) RouteOption {
-	return func(route *fuego.BaseRoute) {
-		if route.Operation.Extensions == nil {
-			route.Operation.Extensions = make(map[string]any)
+	return func(baseRoute *fuego.BaseRoute) {
+		if baseRoute.Operation.Extensions == nil {
+			baseRoute.Operation.Extensions = make(map[string]any)
 		}
-		route.Operation.Extensions["x-sdk-method-name"] = name
+		baseRoute.Operation.Extensions["x-sdk-method-name"] = name
 	}
 }
 
@@ -115,7 +115,8 @@ type Router struct {
 }
 
 type netHTTPRouteRegisterer[T, B, P any] struct {
-	server     *fuego.Server
+	server *fuego.Server
+	//nolint:namingclarity
 	controller http.Handler
 	route      fuego.Route[T, B, P]
 	options    []RouteOption

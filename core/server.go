@@ -50,21 +50,23 @@ type TopologyResponse struct {
 	PublishableKey  string              `json:"publishable_key,omitempty"`
 }
 
-// HTTPServer coordinates the Layr HTTP gateway, probes, and API dispatch.
-type HTTPServer struct {
+// Server coordinates the Layr HTTP gateway, probes, and API dispatch.
+type Server struct {
 	db                 *DatabasePool
 	cryptoKeyManager   *CryptoKeyManager
 	router             *Router
 	controlPlaneRouter *Router
-	mux                *http.ServeMux
+	serveMux           *http.ServeMux
 	server             *http.Server
-	uptime             time.Time
-	requestCount       atomic.Uint64
+	//nolint:namingclarity
+	uptime time.Time
+	//nolint:namingclarity
+	requestCount atomic.Uint64
 }
 
 // NewServer initializes the HTTP gateway with type-safe OpenAPI route controllers.
-func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer {
-	mux := http.NewServeMux()
+func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
+	serveMux := http.NewServeMux()
 	config := GetConfig()
 
 	router := NewRouter(fuego.NewServer(
@@ -97,13 +99,13 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 		),
 	))
 
-	log.Debugf("initializing HTTPServer gateway")
-	server := &HTTPServer{
+	log.Debugf("initializing Server gateway")
+	server := &Server{
 		db:                 db,
 		cryptoKeyManager:   cryptoKeyManager,
 		router:             router,
 		controlPlaneRouter: controlPlaneRouter,
-		mux:                mux,
+		serveMux:           serveMux,
 		uptime:             time.Now(),
 	}
 
@@ -142,37 +144,37 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 	)
 
 	// Mount Public Probe Routes directly on root mux (No publishable key required)
-	mux.Handle("/healthz", router.Mux())
-	mux.Handle("/readyz", router.Mux())
-	mux.Handle("/metrics", router.Mux())
+	serveMux.Handle("/healthz", router.Mux())
+	serveMux.Handle("/readyz", router.Mux())
+	serveMux.Handle("/metrics", router.Mux())
 
 	// OIDC & OAuth Discovery (Open access)
-	mux.Handle("/.well-known/", router.Mux())
+	serveMux.Handle("/.well-known/", router.Mux())
 
 	// Lightweight Analytics Tracking Script (Open access)
-	mux.Handle("/analytics-script.js", router.Mux())
+	serveMux.Handle("/analytics-script.js", router.Mux())
 
 	// Embedded Console SPA (Open access)
-	mux.Handle("/console", router.Mux())
-	mux.Handle("/console/", router.Mux())
+	serveMux.Handle("/console", router.Mux())
+	serveMux.Handle("/console/", router.Mux())
 
 	// Public OpenAPI 3.1 Spec (Unrestricted)
-	mux.HandleFunc("/api/v1/spec.json", server.handleSpecJSONRequest)
-	mux.HandleFunc("/api/v1/spec.yaml", server.handleSpecYAMLRequest)
+	serveMux.HandleFunc("/api/v1/spec.json", server.handleSpecJSONRequest)
+	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleSpecYAMLRequest)
 
 	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
-	mux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSONRequest)
-	mux.HandleFunc("/api/v1/_/spec.yaml", server.handleControlPlaneSpecYAMLRequest)
+	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSONRequest)
+	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleControlPlaneSpecYAMLRequest)
 
 	// Mount Control Plane API Router
-	mux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
+	serveMux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
 
 	// Mount Public API Router with Publishable Key Gate
-	mux.Handle("/api/v1/", server.PublishableKeyMiddleware(router.Mux()))
+	serveMux.Handle("/api/v1/", server.PublishableKeyMiddleware(router.Mux()))
 
 	server.server = &http.Server{
 		Addr:              config.Server.ListenAddr,
-		Handler:           server.middleware(mux),
+		Handler:           server.middleware(serveMux),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -181,22 +183,22 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *HTTPServer
 }
 
 // Mux returns the underlying HTTP ServeMux for route registration.
-func (server *HTTPServer) Mux() *http.ServeMux {
-	return server.mux
+func (server *Server) Mux() *http.ServeMux {
+	return server.serveMux
 }
 
 // Router returns the public OpenAPI server router.
-func (server *HTTPServer) Router() *Router {
+func (server *Server) Router() *Router {
 	return server.router
 }
 
 // ControlPlaneRouter returns the control plane OpenAPI server router.
-func (server *HTTPServer) ControlPlaneRouter() *Router {
+func (server *Server) ControlPlaneRouter() *Router {
 	return server.controlPlaneRouter
 }
 
 // Start boots the HTTP server in background.
-func (server *HTTPServer) Start() error {
+func (server *Server) Start() error {
 	log.Debugf("starting HTTP server on %s", server.server.Addr)
 	if err := server.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http server failed to listen and serve: %w", err)
@@ -205,7 +207,7 @@ func (server *HTTPServer) Start() error {
 }
 
 // Shutdown initiates a graceful drain.
-func (server *HTTPServer) Shutdown(ctx context.Context) error {
+func (server *Server) Shutdown(ctx context.Context) error {
 	log.Debugf("shutting down HTTP server")
 	if err := server.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("http server failed to shut down cleanly: %w", err)
@@ -214,17 +216,17 @@ func (server *HTTPServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (server *HTTPServer) middleware(next http.Handler) http.Handler {
+func (server *Server) middleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		log.Tracef("incoming HTTP request %s %s", request.Method, request.URL.Path)
 		server.requestCount.Add(1)
 		// responseWriter.Header().Set("Layr-Version", "TODO")
-		next.ServeHTTP(responseWriter, request)
+		handler.ServeHTTP(responseWriter, request)
 	})
 }
 
 // /healthz - Liveness probe
-func (server *HTTPServer) handleHealthzRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleHealthzRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(HealthResponse{
@@ -235,7 +237,7 @@ func (server *HTTPServer) handleHealthzRequest(responseWriter http.ResponseWrite
 }
 
 // /readyz - Readiness probe
-func (server *HTTPServer) handleReadyzRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleReadyzRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
 	defer cancel()
 
@@ -263,7 +265,7 @@ func (server *HTTPServer) handleReadyzRequest(responseWriter http.ResponseWriter
 }
 
 // /metrics - Minimal Prometheus exposition
-func (server *HTTPServer) handleMetricsRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleMetricsRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
@@ -278,7 +280,7 @@ func (server *HTTPServer) handleMetricsRequest(responseWriter http.ResponseWrite
 }
 
 // PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /api/v1/* routes.
-func (server *HTTPServer) PublishableKeyMiddleware(next http.Handler) http.Handler {
+func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
 		log.Tracef("evaluating publishable key middleware for path %s", path)
@@ -288,7 +290,7 @@ func (server *HTTPServer) PublishableKeyMiddleware(next http.Handler) http.Handl
 			path == "/api/v1/spec.json" ||
 			path == "/api/v1/spec.yaml" ||
 			strings.HasPrefix(path, "/.well-known/") {
-			next.ServeHTTP(responseWriter, request)
+			handler.ServeHTTP(responseWriter, request)
 			return
 		}
 
@@ -308,12 +310,12 @@ func (server *HTTPServer) PublishableKeyMiddleware(next http.Handler) http.Handl
 			}
 		}
 
-		next.ServeHTTP(responseWriter, request)
+		handler.ServeHTTP(responseWriter, request)
 	})
 }
 
 // /api/v1/topology - Dynamic cluster & topology discovery
-func (server *HTTPServer) handleTopologyRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleTopologyRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	publishableKey := ""
 	if server.cryptoKeyManager != nil {
 		publishableKey = server.cryptoKeyManager.DerivePublishableKey()
@@ -336,33 +338,33 @@ func (server *HTTPServer) handleTopologyRequest(responseWriter http.ResponseWrit
 }
 
 // /api/v1/spec.json - Client OpenAPI 3.1 JSON
-func (server *HTTPServer) handleSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	spec := server.router.OutputOpenAPISpec()
-	_ = json.NewEncoder(responseWriter).Encode(spec)
+	openAPISpec := server.router.OutputOpenAPISpec()
+	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
 // /api/v1/spec.yaml - Client OpenAPI 3.1 YAML
-func (server *HTTPServer) handleSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)
-	spec := server.router.OutputOpenAPISpec()
-	_ = yaml.NewEncoder(responseWriter).Encode(spec)
+	openAPISpec := server.router.OutputOpenAPISpec()
+	_ = yaml.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
 // /api/v1/_/spec.json - Protected Control Plane OpenAPI 3.1 JSON
-func (server *HTTPServer) handleControlPlaneSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleControlPlaneSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	spec := server.controlPlaneRouter.OutputOpenAPISpec()
-	_ = json.NewEncoder(responseWriter).Encode(spec)
+	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()
+	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
 // /api/v1/_/spec.yaml - Protected Control Plane OpenAPI 3.1 YAML
-func (server *HTTPServer) handleControlPlaneSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleControlPlaneSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)
-	spec := server.controlPlaneRouter.OutputOpenAPISpec()
-	_ = yaml.NewEncoder(responseWriter).Encode(spec)
+	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()
+	_ = yaml.NewEncoder(responseWriter).Encode(openAPISpec)
 }

@@ -86,8 +86,8 @@ type UpdateServiceAccountInput struct {
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
-// CreateServiceAccountResult returned when creating a new Service Account, containing the plaintext secret.
-type CreateServiceAccountResult struct {
+// ServiceAccountWithSecretKey returned when creating a new Service Account, containing the plaintext secret.
+type ServiceAccountWithSecretKey struct {
 	ServiceAccount
 	SecretKey string `json:"secret_key"`
 }
@@ -120,16 +120,16 @@ func HashSecretKey(secretKey string) string {
 }
 
 // Create creates a new Service Account and returns the plaintext key once.
-func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, input CreateServiceAccountInput) (*CreateServiceAccountResult, error) {
-	log.Debugf("creating service account %q", input.Name)
+func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, createServiceAccountInput CreateServiceAccountInput) (*ServiceAccountWithSecretKey, error) {
+	log.Debugf("creating service account %q", createServiceAccountInput.Name)
 	if serviceAccountManager.db == nil {
 		return nil, fmt.Errorf("db connection pool not available")
 	}
-	if strings.TrimSpace(input.Name) == "" {
+	if strings.TrimSpace(createServiceAccountInput.Name) == "" {
 		return nil, fmt.Errorf("name is required")
 	}
 
-	scopes := input.Scopes
+	scopes := createServiceAccountInput.Scopes
 	if len(scopes) == 0 {
 		scopes = []string{ScopeRoot}
 	}
@@ -138,8 +138,8 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 	scopesJSON, _ := json.Marshal(scopes)
 
 	allowedIPs := []string{}
-	if len(input.AllowedIPs) > 0 {
-		allowedIPs = input.AllowedIPs
+	if len(createServiceAccountInput.AllowedIPs) > 0 {
+		allowedIPs = createServiceAccountInput.AllowedIPs
 	}
 
 	serviceAccountID := uuid.NewV7().String()
@@ -156,7 +156,7 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 	var scopesRaw []byte
 
 	err := serviceAccountManager.db.QueryRow(ctx, query,
-		serviceAccountID, input.Name, input.Description, prefix, hash, scopesJSON, allowedIPs, input.ExpiresAt, input.ConsoleUserID, now,
+		serviceAccountID, createServiceAccountInput.Name, createServiceAccountInput.Description, prefix, hash, scopesJSON, allowedIPs, createServiceAccountInput.ExpiresAt, createServiceAccountInput.ConsoleUserID, now,
 	).Scan(
 		&serviceAccount.ID, &serviceAccount.Name, &serviceAccount.Description, &serviceAccount.KeyPrefix, &scopesRaw, &serviceAccount.IsEnabled, &serviceAccount.AllowedIPs, &serviceAccount.ExpiresAt, &serviceAccount.ConsoleUserID, &serviceAccount.CreatedAt, &serviceAccount.LastUpdatedAt,
 	)
@@ -167,7 +167,7 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 	_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 
 	log.Tracef("created service account %s with prefix %s", serviceAccountID, prefix)
-	return &CreateServiceAccountResult{
+	return &ServiceAccountWithSecretKey{
 		ServiceAccount: serviceAccount,
 		SecretKey:      secretKey,
 	}, nil
@@ -200,7 +200,7 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 	}
 	defer rows.Close()
 
-	var matched *ServiceAccount
+	var matchedServiceAccount *ServiceAccount
 	for rows.Next() {
 		var serviceAccount ServiceAccount
 		var scopesRaw []byte
@@ -212,43 +212,43 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 
 		if keyHash == hash {
 			_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
-			matched = &serviceAccount
+			matchedServiceAccount = &serviceAccount
 			break
 		}
 	}
 
-	if matched == nil {
+	if matchedServiceAccount == nil {
 		log.Debugf("service account authentication failed: no matching active key for prefix %s", prefix)
 		return nil, ErrServiceAccountNotFound
 	}
 
-	if !matched.IsEnabled {
-		log.Warnf("service account authentication rejected: account %s (%q) is disabled", matched.ID, matched.Name)
+	if !matchedServiceAccount.IsEnabled {
+		log.Warnf("service account authentication rejected: account %s (%q) is disabled", matchedServiceAccount.ID, matchedServiceAccount.Name)
 		return nil, ErrServiceAccountDisabled
 	}
 
-	if matched.ExpiresAt != nil && time.Now().UTC().After(*matched.ExpiresAt) {
-		log.Warnf("service account authentication rejected: account %s (%q) expired at %s", matched.ID, matched.Name, matched.ExpiresAt.Format(time.RFC3339))
+	if matchedServiceAccount.ExpiresAt != nil && time.Now().UTC().After(*matchedServiceAccount.ExpiresAt) {
+		log.Warnf("service account authentication rejected: account %s (%q) expired at %s", matchedServiceAccount.ID, matchedServiceAccount.Name, matchedServiceAccount.ExpiresAt.Format(time.RFC3339))
 		return nil, ErrServiceAccountExpired
 	}
 
-	if len(matched.AllowedIPs) > 0 && clientIP != "" {
-		if !isIPAllowed(clientIP, matched.AllowedIPs) {
-			log.Warnf("service account authentication rejected: client IP %s not in allowed list %v for account %s", clientIP, matched.AllowedIPs, matched.ID)
+	if len(matchedServiceAccount.AllowedIPs) > 0 && clientIP != "" {
+		if !isIPAllowed(clientIP, matchedServiceAccount.AllowedIPs) {
+			log.Warnf("service account authentication rejected: client IP %s not in allowed list %v for account %s", clientIP, matchedServiceAccount.AllowedIPs, matchedServiceAccount.ID)
 			return nil, ErrServiceAccountIPBlocked
 		}
 	}
 
-	log.Debugf("authenticated service account %s (%q)", matched.ID, matched.Name)
+	log.Debugf("authenticated service account %s (%q)", matchedServiceAccount.ID, matchedServiceAccount.Name)
 	// Update last_used_at asynchronously (detached from request cancellation)
 	go func(serviceAccountID string) {
 		now := time.Now().UTC()
 		_, _ = serviceAccountManager.db.Exec(context.WithoutCancel(ctx), `
 			UPDATE core.service_accounts SET last_used_at = $1 WHERE id = $2
 		`, now, serviceAccountID)
-	}(matched.ID)
+	}(matchedServiceAccount.ID)
 
-	return matched, nil
+	return matchedServiceAccount, nil
 }
 
 // List returns all service accounts.
@@ -307,45 +307,45 @@ func (serviceAccountManager *ServiceAccountManager) Get(ctx context.Context, ser
 }
 
 // Update updates service account metadata, scopes, or state.
-func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, serviceAccountID string, input UpdateServiceAccountInput) (*ServiceAccount, error) {
+func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, serviceAccountID string, updateServiceAccountInput UpdateServiceAccountInput) (*ServiceAccount, error) {
 	log.Debugf("updating service account %s", serviceAccountID)
-	current, err := serviceAccountManager.Get(ctx, serviceAccountID)
+	currentServiceAccount, err := serviceAccountManager.Get(ctx, serviceAccountID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check root protection if modifying scopes or disabling
-	if HasScope(current.Scopes, ScopeRoot) {
-		if (input.IsEnabled != nil && !*input.IsEnabled) || (len(input.Scopes) > 0 && !HasScope(input.Scopes, ScopeRoot)) {
+	if HasScope(currentServiceAccount.Scopes, ScopeRoot) {
+		if (updateServiceAccountInput.IsEnabled != nil && !*updateServiceAccountInput.IsEnabled) || (len(updateServiceAccountInput.Scopes) > 0 && !HasScope(updateServiceAccountInput.Scopes, ScopeRoot)) {
 			if err := serviceAccountManager.assertOtherRootExists(ctx, serviceAccountID); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	name := current.Name
-	if input.Name != nil && strings.TrimSpace(*input.Name) != "" {
-		name = *input.Name
+	name := currentServiceAccount.Name
+	if updateServiceAccountInput.Name != nil && strings.TrimSpace(*updateServiceAccountInput.Name) != "" {
+		name = *updateServiceAccountInput.Name
 	}
-	description := current.Description
-	if input.Description != nil {
-		description = input.Description
+	description := currentServiceAccount.Description
+	if updateServiceAccountInput.Description != nil {
+		description = updateServiceAccountInput.Description
 	}
-	isEnabled := current.IsEnabled
-	if input.IsEnabled != nil {
-		isEnabled = *input.IsEnabled
+	isEnabled := currentServiceAccount.IsEnabled
+	if updateServiceAccountInput.IsEnabled != nil {
+		isEnabled = *updateServiceAccountInput.IsEnabled
 	}
-	scopes := current.Scopes
-	if len(input.Scopes) > 0 {
-		scopes = input.Scopes
+	scopes := currentServiceAccount.Scopes
+	if len(updateServiceAccountInput.Scopes) > 0 {
+		scopes = updateServiceAccountInput.Scopes
 	}
-	allowedIPs := current.AllowedIPs
-	if input.AllowedIPs != nil {
-		allowedIPs = input.AllowedIPs
+	allowedIPs := currentServiceAccount.AllowedIPs
+	if updateServiceAccountInput.AllowedIPs != nil {
+		allowedIPs = updateServiceAccountInput.AllowedIPs
 	}
-	expiresAt := current.ExpiresAt
-	if input.ExpiresAt != nil {
-		expiresAt = input.ExpiresAt
+	expiresAt := currentServiceAccount.ExpiresAt
+	if updateServiceAccountInput.ExpiresAt != nil {
+		expiresAt = updateServiceAccountInput.ExpiresAt
 	}
 
 	scopesJSON, _ := json.Marshal(scopes)
@@ -375,16 +375,16 @@ func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, 
 // Delete removes a service account with console ownership and root protection assertion.
 func (serviceAccountManager *ServiceAccountManager) Delete(ctx context.Context, serviceAccountID string) error {
 	log.Debugf("deleting service account %s", serviceAccountID)
-	current, err := serviceAccountManager.Get(ctx, serviceAccountID)
+	currentServiceAccount, err := serviceAccountManager.Get(ctx, serviceAccountID)
 	if err != nil {
 		return err
 	}
 
-	if current.ConsoleUserID != nil && *current.ConsoleUserID != "" {
+	if currentServiceAccount.ConsoleUserID != nil && *currentServiceAccount.ConsoleUserID != "" {
 		return ErrServiceAccountOwnedByConsoleUser
 	}
 
-	if HasScope(current.Scopes, ScopeRoot) {
+	if HasScope(currentServiceAccount.Scopes, ScopeRoot) {
 		if rootCheckErr := serviceAccountManager.assertOtherRootExists(ctx, serviceAccountID); rootCheckErr != nil {
 			return rootCheckErr
 		}
@@ -420,8 +420,8 @@ func isIPAllowed(clientIP string, allowedPatterns []string) bool {
 	for _, pattern := range allowedPatterns {
 		pattern = strings.TrimSpace(pattern)
 		if strings.Contains(pattern, "/") {
-			_, subnet, err := net.ParseCIDR(pattern)
-			if err == nil && subnet.Contains(parsedClientIP) {
+			_, ipNet, err := net.ParseCIDR(pattern)
+			if err == nil && ipNet.Contains(parsedClientIP) {
 				return true
 			}
 		} else {
@@ -448,15 +448,15 @@ func ExtractRequestServiceAccountKey(request *http.Request) string {
 
 // ServiceAccountAuthMiddleware authenticates service account keys and injects the account into request context.
 func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	return func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 			if serviceAccountManager == nil {
-				next.ServeHTTP(writer, request)
+				handler.ServeHTTP(responseWriter, request)
 				return
 			}
 			secretKey := ExtractRequestServiceAccountKey(request)
 			if secretKey == "" {
-				next.ServeHTTP(writer, request)
+				handler.ServeHTTP(responseWriter, request)
 				return
 			}
 			log.Tracef("evaluating service account authentication for request %s", request.URL.Path)
@@ -464,29 +464,29 @@ func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) 
 			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
 			if err != nil {
 				// Invalid service account key
-				WriteErrorResponse(writer, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
 				return
 			}
 			ctx := WithServiceAccount(request.Context(), serviceAccount)
-			next.ServeHTTP(writer, request.WithContext(ctx))
+			handler.ServeHTTP(responseWriter, request.WithContext(ctx))
 		})
 	}
 }
 
 // RequireScopeMiddleware enforces that the request has a service account with the required scope.
 func RequireScopeMiddleware(requiredScope string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	return func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 			serviceAccount := GetServiceAccount(request.Context())
 			if serviceAccount == nil {
-				WriteErrorResponse(writer, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
 				return
 			}
 			if !HasScope(serviceAccount.Scopes, requiredScope) {
-				WriteErrorResponse(writer, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
+				WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
 				return
 			}
-			next.ServeHTTP(writer, request)
+			handler.ServeHTTP(responseWriter, request)
 		})
 	}
 }

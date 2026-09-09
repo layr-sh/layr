@@ -17,14 +17,19 @@ type Level = slog.Level
 
 const (
 	// LevelTrace logs fine-grained troubleshooting and tracing messages.
+	//nolint:namingclarity
 	LevelTrace = slog.LevelDebug - 4
 	// LevelDebug logs detailed diagnostic and troubleshooting messages.
+	//nolint:namingclarity
 	LevelDebug = slog.LevelDebug
 	// LevelInfo logs general operational and informational messages.
+	//nolint:namingclarity
 	LevelInfo = slog.LevelInfo
 	// LevelWarn logs warnings about unexpected but recoverable situations.
+	//nolint:namingclarity
 	LevelWarn = slog.LevelWarn
 	// LevelError logs critical errors and operational failures.
+	//nolint:namingclarity
 	LevelError = slog.LevelError
 )
 
@@ -76,6 +81,7 @@ func (handler *slogHandler) writeMessage(recordTime time.Time, level slog.Level,
 
 	targetWriter := handler.writer
 	if targetWriter == nil {
+		//nolint:namingclarity
 		targetWriter = os.Stderr
 	}
 
@@ -206,18 +212,18 @@ func (logger *Logger) WithScope(scope string) *Logger {
 	logger.loggerRWMutex.RLock()
 	defer logger.loggerRWMutex.RUnlock()
 
-	child := New(scope)
+	childLogger := New(scope)
 
 	logger.handler.mutex.Lock()
 	childWriter := logger.handler.writer
 	logger.handler.mutex.Unlock()
 
-	child.SetOutput(childWriter)
+	childLogger.SetOutput(childWriter)
 	if logger.hasExplicit {
-		child.SetLevel(logger.levelVar.Level())
+		childLogger.SetLevel(logger.levelVar.Level())
 	}
 
-	return child
+	return childLogger
 }
 
 // SetVerboseLogging sets verbose logging mode, lowering the threshold to LevelTrace.

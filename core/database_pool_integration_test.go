@@ -14,7 +14,7 @@ func startTestContainer(t *testing.T) (*DatabasePool, func()) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -30,7 +30,7 @@ func startTestContainer(t *testing.T) (*DatabasePool, func()) {
 		return nil, nil
 	}
 
-	databaseURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		cancel()
 		t.Fatalf("failed to get connection string: %v", err)
@@ -51,7 +51,7 @@ func startTestContainer(t *testing.T) (*DatabasePool, func()) {
 
 	cleanup := func() {
 		db.Close()
-		_ = pgContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 		cancel()
 	}
 
@@ -95,9 +95,9 @@ func TestCoreDatabasePoolMigrateUpFullCoverageIntegration(t *testing.T) {
 
 	// 5. MigrateUp with canceled context (tx.Begin error)
 	{
-		canceledContext, cancel := context.WithCancel(ctx)
+		canceledCtx, cancel := context.WithCancel(ctx)
 		cancel() // immediately cancel
-		if err := db.MigrateUp(canceledContext, SystemDatabaseMigrations, 0); err == nil {
+		if err := db.MigrateUp(canceledCtx, SystemDatabaseMigrations, 0); err == nil {
 			t.Fatal("expected error on canceled context Begin")
 		}
 	}
@@ -168,9 +168,9 @@ func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 
 	// 8. MigrateDown with canceled context (tx.Begin error)
 	{
-		canceledContext, cancel := context.WithCancel(ctx)
+		canceledCtx, cancel := context.WithCancel(ctx)
 		cancel()
-		if err := db.MigrateDown(canceledContext, allMigrations, 0); err == nil {
+		if err := db.MigrateDown(canceledCtx, allMigrations, 0); err == nil {
 			t.Fatal("expected error on canceled context Begin")
 		}
 	}

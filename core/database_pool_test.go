@@ -15,24 +15,24 @@ import (
 )
 
 func TestCoreDatabasePoolDefaultOptionsUnit(t *testing.T) {
-	options := DefaultDatabasePoolOptions()
-	if options.MaxConns != 25 {
-		t.Errorf("expected MaxConns 25, got %d", options.MaxConns)
+	databasePoolOptions := DefaultDatabasePoolOptions()
+	if databasePoolOptions.MaxConns != 25 {
+		t.Errorf("expected MaxConns 25, got %d", databasePoolOptions.MaxConns)
 	}
-	if options.MinConns != 2 {
-		t.Errorf("expected MinConns 2, got %d", options.MinConns)
+	if databasePoolOptions.MinConns != 2 {
+		t.Errorf("expected MinConns 2, got %d", databasePoolOptions.MinConns)
 	}
-	if options.ConnectionTimeoutMs != 5000 {
-		t.Errorf("expected ConnectionTimeoutMs 5000, got %d", options.ConnectionTimeoutMs)
+	if databasePoolOptions.ConnectionTimeoutMs != 5000 {
+		t.Errorf("expected ConnectionTimeoutMs 5000, got %d", databasePoolOptions.ConnectionTimeoutMs)
 	}
-	if options.MaxConnLifetime != 30*time.Minute {
-		t.Errorf("expected MaxConnLifetime 30m, got %v", options.MaxConnLifetime)
+	if databasePoolOptions.MaxConnLifetime != 30*time.Minute {
+		t.Errorf("expected MaxConnLifetime 30m, got %v", databasePoolOptions.MaxConnLifetime)
 	}
-	if options.MaxConnIdleTime != 5*time.Minute {
-		t.Errorf("expected MaxConnIdleTime 5m, got %v", options.MaxConnIdleTime)
+	if databasePoolOptions.MaxConnIdleTime != 5*time.Minute {
+		t.Errorf("expected MaxConnIdleTime 5m, got %v", databasePoolOptions.MaxConnIdleTime)
 	}
-	if options.HealthCheckPeriod != 15*time.Second {
-		t.Errorf("expected HealthCheckPeriod 15s, got %v", options.HealthCheckPeriod)
+	if databasePoolOptions.HealthCheckPeriod != 15*time.Second {
+		t.Errorf("expected HealthCheckPeriod 15s, got %v", databasePoolOptions.HealthCheckPeriod)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestCoreDatabasePoolNewOptionsParsingAndTLSUnit(t *testing.T) {
 	})
 
 	// Custom DatabasePoolOptions on unreachable host (tests option parsing)
-	customPoolOptions := DatabasePoolOptions{
+	customDatabasePoolOptions := DatabasePoolOptions{
 		MaxConns:            50,
 		MinConns:            5,
 		ConnectionTimeoutMs: 100,
@@ -87,16 +87,16 @@ func TestCoreDatabasePoolNewOptionsParsingAndTLSUnit(t *testing.T) {
 		MaxConnIdleTime:     10 * time.Minute,
 		HealthCheckPeriod:   30 * time.Second,
 	}
-	_, err = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", customPoolOptions)
+	_, err = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", customDatabasePoolOptions)
 	if err == nil {
 		t.Fatal("expected error connecting to unreachable host with custom options")
 	}
 
 	// Negative ConnectionTimeoutMs fallback
-	badTimeoutPoolOptions := DatabasePoolOptions{
+	badTimeoutDatabasePoolOptions := DatabasePoolOptions{
 		ConnectionTimeoutMs: -1,
 	}
-	_, err = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", badTimeoutPoolOptions)
+	_, err = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", badTimeoutDatabasePoolOptions)
 	if err == nil {
 		t.Fatal("expected error connecting to unreachable host with negative timeout options")
 	}
@@ -108,22 +108,22 @@ func TestCoreDatabasePoolNewOptionsParsingAndTLSUnit(t *testing.T) {
 	keyFile := filepath.Join(temporaryDirectory, "client.key")
 	_ = os.WriteFile(keyFile, []byte("-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----"), 0600)
 
-	sslPoolOptions := DatabasePoolOptions{
+	sslDatabasePoolOptions := DatabasePoolOptions{
 		SSLMode:     "require",
 		SSLRootCert: certFile,
 		SSLCert:     certFile,
 		SSLKey:      keyFile,
 	}
-	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=require", sslPoolOptions)
+	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=require", sslDatabasePoolOptions)
 
 	// SSL with inline PEM string and SSLMode disable
-	sslInlinePoolOptions := DatabasePoolOptions{
+	sslInlineDatabasePoolOptions := DatabasePoolOptions{
 		SSLMode:     "disable",
 		SSLRootCert: "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
 		SSLCert:     "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
 		SSLKey:      "-----BEGIN PRIVATE KEY-----\nMIIE\n-----END PRIVATE KEY-----",
 	}
-	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", sslInlinePoolOptions)
+	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", sslInlineDatabasePoolOptions)
 
 	// SSL with generated valid TLS cert pair to test successful tls.X509KeyPair loading
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -151,13 +151,13 @@ func TestCoreDatabasePoolNewOptionsParsingAndTLSUnit(t *testing.T) {
 		t.Fatalf("failed to marshal private key: %v", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateKeyBytes})
-	validSSLPoolOptions := DatabasePoolOptions{
+	validSSLDatabasePoolOptions := DatabasePoolOptions{
 		SSLMode:     "require",
 		SSLRootCert: string(certPEM),
 		SSLCert:     string(certPEM),
 		SSLKey:      string(keyPEM),
 	}
-	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=require", validSSLPoolOptions)
+	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=require", validSSLDatabasePoolOptions)
 
 	// Test opt.SSLRootCert alone
 	_, _ = NewDatabasePool(ctx, "postgres://user:pass@127.0.0.1:19999/db?sslmode=disable", DatabasePoolOptions{

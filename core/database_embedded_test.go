@@ -61,9 +61,9 @@ func TestCoreEmbeddedDatabaseFindAvailablePortFallbackRangeUnit(t *testing.T) {
 	t.Cleanup(func() { _ = listener.Close() })
 
 	// Also occupy IPv6 to force the primary range IPv6 check failure path
-	occupiedIPv6, err := listenConfig.Listen(context.Background(), "tcp6", "[::1]:29101")
+	occupiedIPv6Listener, err := listenConfig.Listen(context.Background(), "tcp6", "[::1]:29101")
 	if err == nil {
-		t.Cleanup(func() { _ = occupiedIPv6.Close() })
+		t.Cleanup(func() { _ = occupiedIPv6Listener.Close() })
 	}
 
 	// Primary range: only port 29100 (occupied), falls to fallback
@@ -82,11 +82,11 @@ func TestCoreEmbeddedDatabaseFindAvailablePortFallbackRangeUnit(t *testing.T) {
 func TestCoreEmbeddedDatabaseFindAvailablePortIPv6FailureUnit(t *testing.T) {
 	var listenConfig net.ListenConfig
 	// Occupy IPv6 on a port so the dual-stack check fails for that port
-	occupiedIPv6, err := listenConfig.Listen(context.Background(), "tcp6", "[::1]:29301")
+	occupiedIPv6Listener, err := listenConfig.Listen(context.Background(), "tcp6", "[::1]:29301")
 	if err != nil {
 		t.Skip("cannot bind IPv6 port 29301")
 	}
-	t.Cleanup(func() { _ = occupiedIPv6.Close() })
+	t.Cleanup(func() { _ = occupiedIPv6Listener.Close() })
 
 	// Primary has 1 port (29301); fails IPv6 check, falls through to fallback 29400
 	port, err := findAvailablePortInRanges(
@@ -104,16 +104,16 @@ func TestCoreEmbeddedDatabaseFindAvailablePortIPv6FailureUnit(t *testing.T) {
 func TestCoreEmbeddedDatabaseFindAvailablePortAllExhaustedUnit(t *testing.T) {
 	var listenConfig net.ListenConfig
 	// Occupy both ports in all ranges
-	occupiedIPv4Primary, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29500")
+	occupiedIPv4PrimaryListener, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29500")
 	if err != nil {
 		t.Skip("cannot bind")
 	}
-	t.Cleanup(func() { _ = occupiedIPv4Primary.Close() })
-	occupiedIPv4Secondary, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29501")
+	t.Cleanup(func() { _ = occupiedIPv4PrimaryListener.Close() })
+	occupiedIPv4SecondaryListener, err := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29501")
 	if err != nil {
 		t.Skip("cannot bind")
 	}
-	t.Cleanup(func() { _ = occupiedIPv4Secondary.Close() })
+	t.Cleanup(func() { _ = occupiedIPv4SecondaryListener.Close() })
 
 	_, err = findAvailablePortInRanges(
 		portRange{start: 29500, count: 2},
@@ -126,13 +126,13 @@ func TestCoreEmbeddedDatabaseFindAvailablePortAllExhaustedUnit(t *testing.T) {
 func TestCoreEmbeddedDatabaseFindAvailablePortFallbackExhaustedUnit(t *testing.T) {
 	var listenConfig net.ListenConfig
 	// Occupy primary and fallback
-	occupiedPrimary, _ := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29600")
-	if occupiedPrimary != nil {
-		t.Cleanup(func() { _ = occupiedPrimary.Close() })
+	occupiedPrimaryListener, _ := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29600")
+	if occupiedPrimaryListener != nil {
+		t.Cleanup(func() { _ = occupiedPrimaryListener.Close() })
 	}
-	occupiedFallback, _ := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29700")
-	if occupiedFallback != nil {
-		t.Cleanup(func() { _ = occupiedFallback.Close() })
+	occupiedFallbackListener, _ := listenConfig.Listen(context.Background(), "tcp4", "127.0.0.1:29700")
+	if occupiedFallbackListener != nil {
+		t.Cleanup(func() { _ = occupiedFallbackListener.Close() })
 	}
 
 	_, err := findAvailablePortInRanges(
@@ -145,52 +145,52 @@ func TestCoreEmbeddedDatabaseFindAvailablePortFallbackExhaustedUnit(t *testing.T
 }
 
 func TestCoreEmbeddedDatabaseNewUnit(t *testing.T) {
-	embedded := NewEmbeddedDatabase(".layr/data")
-	if embedded == nil {
+	embeddedDatabase := NewEmbeddedDatabase(".layr/data")
+	if embeddedDatabase == nil {
 		t.Fatal("expected non-nil Embedded instance")
 	}
-	if embedded.dataDir != ".layr/data" {
-		t.Errorf("expected dataDir .layr/data, got %s", embedded.dataDir)
+	if embeddedDatabase.dataDir != ".layr/data" {
+		t.Errorf("expected dataDir .layr/data, got %s", embeddedDatabase.dataDir)
 	}
-	if embedded.port != 0 {
-		t.Errorf("expected port 0 (dynamic), got %d", embedded.port)
+	if embeddedDatabase.port != 0 {
+		t.Errorf("expected port 0 (dynamic), got %d", embeddedDatabase.port)
 	}
 }
 
 func TestCoreEmbeddedDatabaseStopUnstartedUnit(t *testing.T) {
-	embedded := NewEmbeddedDatabase(".layr/data")
-	if err := embedded.Stop(); err != nil {
-		t.Fatalf("expected no error stopping unstarted embedded postgres, got %v", err)
+	embeddedDatabase := NewEmbeddedDatabase(".layr/data")
+	if err := embeddedDatabase.Stop(); err != nil {
+		t.Fatalf("expected no error stopping unstarted embeddedDatabase postgres, got %v", err)
 	}
 }
 
 func TestCoreEmbeddedDatabaseExplicitPortAndFailureUnit(t *testing.T) {
 	// Explicit port set
-	embedded := NewEmbeddedDatabase(".layr/data")
-	embedded.port = 25432
-	if embedded.port != 25432 {
-		t.Fatalf("expected port 25432, got %d", embedded.port)
+	embeddedDatabase := NewEmbeddedDatabase(".layr/data")
+	embeddedDatabase.port = 25432
+	if embeddedDatabase.port != 25432 {
+		t.Fatalf("expected port 25432, got %d", embeddedDatabase.port)
 	}
 
 	// Invalid uncreatable directory path
-	embeddedFail := NewEmbeddedDatabase("/dev/null/forbidden/path")
+	invalidDataDirEmbeddedDatabase := NewEmbeddedDatabase("/dev/null/forbidden/path")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if _, err := embeddedFail.Start(ctx); err == nil {
+	if _, err := invalidDataDirEmbeddedDatabase.Start(ctx); err == nil {
 		t.Fatal("expected error starting with forbidden path")
 	}
 }
 
 func TestCoreEmbeddedDatabasePortFinderFailureUnit(t *testing.T) {
-	embedded := NewEmbeddedDatabase(t.TempDir())
-	embedded.portFinder = func() (uint32, error) {
+	embeddedDatabase := NewEmbeddedDatabase(t.TempDir())
+	embeddedDatabase.portFinder = func() (uint32, error) {
 		return 0, fmt.Errorf("all ports exhausted")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := embedded.Start(ctx)
+	_, err := embeddedDatabase.Start(ctx)
 	if err == nil {
 		t.Fatal("expected error when portFinder fails")
 	}

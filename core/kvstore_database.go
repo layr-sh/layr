@@ -55,10 +55,10 @@ func (databaseKVStore *DatabaseKVStore) sweepLoop(ctx context.Context) {
 		case <-databaseKVStore.stopChannel:
 			return
 		case <-ticker.C:
-			detachedContext := context.WithoutCancel(ctx)
-			sweepContext, cancel := context.WithTimeout(detachedContext, defaultSweepTimeout)
-			_, _ = databaseKVStore.Sweep(sweepContext)
-			cancel()
+			detachedCtx := context.WithoutCancel(ctx)
+			sweepCtx, sweepCancel := context.WithTimeout(detachedCtx, defaultSweepTimeout)
+			_, _ = databaseKVStore.Sweep(sweepCtx)
+			sweepCancel()
 		}
 	}
 }
@@ -66,11 +66,11 @@ func (databaseKVStore *DatabaseKVStore) sweepLoop(ctx context.Context) {
 // Sweep prunes all expired cache records from PostgreSQL.
 func (databaseKVStore *DatabaseKVStore) Sweep(ctx context.Context) (int64, error) {
 	log.Tracef("DatabaseKVStore.Sweep executing")
-	commandTag, err := databaseKVStore.db.Exec(ctx, "DELETE FROM core.kv_store WHERE expires_at <= clock_timestamp()")
+	result, err := databaseKVStore.db.Exec(ctx, "DELETE FROM core.kv_store WHERE expires_at <= clock_timestamp()")
 	if err != nil {
 		return 0, fmt.Errorf("failed to sweep expired kv records: %w", err)
 	}
-	return commandTag.RowsAffected(), nil
+	return result.RowsAffected(), nil
 }
 
 // Get retrieves a value by key. Returns ErrKVStoreKeyNotFound if missing or expired.
@@ -190,12 +190,12 @@ func (databaseKVStore *DatabaseKVStore) SetNX(ctx context.Context, key string, v
 			expires_at = EXCLUDED.expires_at
 		WHERE core.kv_store.expires_at <= clock_timestamp()
 	`
-	commandTag, err := databaseKVStore.db.Exec(ctx, query, key, []byte(value), intervalLiteral)
+	result, err := databaseKVStore.db.Exec(ctx, query, key, []byte(value), intervalLiteral)
 	if err != nil {
 		return false, fmt.Errorf("failed to setnx kv key '%s': %w", key, err)
 	}
 
-	return commandTag.RowsAffected() > 0, nil
+	return result.RowsAffected() > 0, nil
 }
 
 // Delete removes a key from cache.
@@ -250,11 +250,11 @@ func (databaseKVStore *DatabaseKVStore) Expire(ctx context.Context, key string, 
 		SET expires_at = clock_timestamp() + $2::interval
 		WHERE key = $1 AND expires_at > clock_timestamp()
 	`
-	commandTag, err := databaseKVStore.db.Exec(ctx, query, key, intervalLiteral)
+	result, err := databaseKVStore.db.Exec(ctx, query, key, intervalLiteral)
 	if err != nil {
 		return fmt.Errorf("failed to expire kv key '%s': %w", key, err)
 	}
-	if commandTag.RowsAffected() == 0 {
+	if result.RowsAffected() == 0 {
 		return ErrKVStoreKeyNotFound
 	}
 

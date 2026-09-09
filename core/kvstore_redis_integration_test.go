@@ -62,9 +62,9 @@ func TestCoreRedisKVStoreIntegration(t *testing.T) {
 	if setErr := kvStore.Set(ctx, "redis:session:1", "data_123", 10*time.Minute); setErr != nil {
 		t.Fatalf("failed to set redis key: %v", setErr)
 	}
-	value, getValErr := kvStore.Get(ctx, "redis:session:1")
-	if getValErr != nil || value != "data_123" {
-		t.Fatalf("expected 'data_123', got '%s', err: %v", value, getValErr)
+	value, getValueErr := kvStore.Get(ctx, "redis:session:1")
+	if getValueErr != nil || value != "data_123" {
+		t.Fatalf("expected 'data_123', got '%s', err: %v", value, getValueErr)
 	}
 
 	// MSet & MGet

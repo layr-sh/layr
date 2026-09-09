@@ -119,14 +119,14 @@ func TestCoreTOTPManagerValidateCodeUnit(t *testing.T) {
 	}
 
 	// 3. Forward skew (+30s within skew window = 1)
-	futureTimestamp := now.Add(30 * time.Second)
-	if !totpManager.ValidateCode(secretBase32, code, futureTimestamp, 1) {
+	futureTime := now.Add(30 * time.Second)
+	if !totpManager.ValidateCode(secretBase32, code, futureTime, 1) {
 		t.Error("expected code to validate within +1 skew window")
 	}
 
 	// 4. Backward skew (-30s within skew window = 1)
-	pastTimestamp := now.Add(-30 * time.Second)
-	if !totpManager.ValidateCode(secretBase32, code, pastTimestamp, 1) {
+	pastTime := now.Add(-30 * time.Second)
+	if !totpManager.ValidateCode(secretBase32, code, pastTime, 1) {
 		t.Error("expected code to validate within -1 skew window")
 	}
 
@@ -139,14 +139,14 @@ func TestCoreTOTPManagerValidateCodeUnit(t *testing.T) {
 	if !totpManager.ValidateCode(secretBase32, code, now, 0) {
 		t.Error("expected exact match validation with skew=0")
 	}
-	futureOutsideZeroSkew := now.Add(35 * time.Second)
-	if totpManager.ValidateCode(secretBase32, code, futureOutsideZeroSkew, 0) {
+	outsideZeroSkewTime := now.Add(35 * time.Second)
+	if totpManager.ValidateCode(secretBase32, code, outsideZeroSkewTime, 0) {
 		t.Error("expected code outside skew=0 window to fail")
 	}
 
 	// 7. Outside skew window (+90s with skew = 1)
-	farFuture := now.Add(90 * time.Second)
-	if totpManager.ValidateCode(secretBase32, code, farFuture, 1) {
+	farFutureTime := now.Add(90 * time.Second)
+	if totpManager.ValidateCode(secretBase32, code, farFutureTime, 1) {
 		t.Error("expected code to fail validation outside skew window")
 	}
 
@@ -198,9 +198,9 @@ func TestCoreTOTPManagerBuildAuthURLUnit(t *testing.T) {
 func TestCoreTOTPManagerSetRandomReaderUnit(t *testing.T) {
 	totpManager := NewTOTPManager("Layr Test")
 
-	buffer := bytes.NewReader(make([]byte, 32))
-	totpManager.SetRandomReader(buffer)
-	if totpManager.randomReader != buffer {
+	reader := bytes.NewReader(make([]byte, 32))
+	totpManager.SetRandomReader(reader)
+	if totpManager.randomReader != reader {
 		t.Fatal("expected custom reader to be set")
 	}
 

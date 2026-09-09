@@ -10,7 +10,8 @@ import (
 
 // NodeRegistry handles cluster heartbeats and active nodes.
 type NodeRegistry struct {
-	db                *DatabasePool
+	db *DatabasePool
+	//nolint:namingclarity
 	nodeID            uuid.UUID
 	nodeName          string
 	services          []string
@@ -39,6 +40,7 @@ const (
 // Register registers this node and starts background heartbeat.
 func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
 	log.Debugf("registering node %s in cluster", nodeRegistry.nodeName)
+	//nolint:namingclarity
 	var nodeID uuid.UUID
 	err := nodeRegistry.db.QueryRow(ctx, `
 		INSERT INTO core.nodes (node_name, enabled_services, last_heartbeat_at)
@@ -66,17 +68,17 @@ func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
 		case <-ticker.C:
 			// Heartbeats must outlive transient request cancellation; detach but keep values.
 			{
-				heartbeatContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), heartbeatTimeoutDuration)
-				_, _ = nodeRegistry.db.Exec(heartbeatContext, "UPDATE core.nodes SET last_heartbeat_at = clock_timestamp() WHERE id = $1", nodeRegistry.nodeID)
-				_, _ = nodeRegistry.db.Exec(heartbeatContext, "DELETE FROM core.nodes WHERE last_heartbeat_at < clock_timestamp() - INTERVAL '60 seconds'")
-				cancel()
+				heartbeatCtx, heartbeatCancel := context.WithTimeout(context.WithoutCancel(ctx), heartbeatTimeoutDuration)
+				_, _ = nodeRegistry.db.Exec(heartbeatCtx, "UPDATE core.nodes SET last_heartbeat_at = clock_timestamp() WHERE id = $1", nodeRegistry.nodeID)
+				_, _ = nodeRegistry.db.Exec(heartbeatCtx, "DELETE FROM core.nodes WHERE last_heartbeat_at < clock_timestamp() - INTERVAL '60 seconds'")
+				heartbeatCancel()
 			}
 		case <-nodeRegistry.stopChannel:
 			// Unregister must run even though stopChannel closed; detach from ctx.
 			{
-				unregisterContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), unregisterTimeoutDuration)
-				_, _ = nodeRegistry.db.Exec(unregisterContext, "DELETE FROM core.nodes WHERE id = $1", nodeRegistry.nodeID)
-				cancel()
+				unregisterCtx, unregisterCancel := context.WithTimeout(context.WithoutCancel(ctx), unregisterTimeoutDuration)
+				_, _ = nodeRegistry.db.Exec(unregisterCtx, "DELETE FROM core.nodes WHERE id = $1", nodeRegistry.nodeID)
+				unregisterCancel()
 			}
 			return
 		}

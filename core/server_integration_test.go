@@ -19,7 +19,7 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -34,10 +34,10 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 		return
 	}
 	defer func() {
-		_ = pgContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 	}()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	db, err := NewDatabasePool(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf("failed to create db connection pool: %v", err)
@@ -54,15 +54,15 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 
 	// 1. Ready probe with healthy DB
 	readyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
-	readyRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(readyRecorder, readyRequest)
+	readyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(readyResponseRecorder, readyRequest)
 
-	if readyRecorder.Code != http.StatusOK {
-		t.Fatalf("expected readyz 200, got %d", readyRecorder.Code)
+	if readyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected readyz 200, got %d", readyResponseRecorder.Code)
 	}
 
 	var readyResponse ReadyResponse
-	if err := json.Unmarshal(readyRecorder.Body.Bytes(), &readyResponse); err != nil {
+	if err := json.Unmarshal(readyResponseRecorder.Body.Bytes(), &readyResponse); err != nil {
 		t.Fatalf("failed to parse readyz response: %v", err)
 	}
 	if readyResponse.Database != "ok" || readyResponse.Status != "ready" {
@@ -72,11 +72,11 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 	// 2. Ready probe with closed / broken DB
 	db.Close()
 	failRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
-	failRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(failRecorder, failRequest)
+	failResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(failResponseRecorder, failRequest)
 
-	if failRecorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected readyz 503 on closed db connection pool, got %d", failRecorder.Code)
+	if failResponseRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected readyz 503 on closed db connection pool, got %d", failResponseRecorder.Code)
 	}
 }
 
@@ -84,7 +84,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -99,10 +99,10 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		return
 	}
 	defer func() {
-		_ = pgContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 	}()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	db, err := NewDatabasePool(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf("failed to create db connection pool: %v", err)
@@ -135,45 +135,45 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 1. Without publishable key -> 401 Unauthorized
 	unauthorizedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
-	unauthorizedRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(unauthorizedRecorder, unauthorizedRequest)
+	unauthorizedResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(unauthorizedResponseRecorder, unauthorizedRequest)
 
-	if unauthorizedRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for unauthenticated db-check, got %d", unauthorizedRecorder.Code)
+	if unauthorizedResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated db-check, got %d", unauthorizedResponseRecorder.Code)
 	}
 
 	// 2. With invalid publishable key -> 401 Unauthorized
 	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
 	invalidKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", "invalid_publishable_key_123456789")
-	invalidKeyRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(invalidKeyRecorder, invalidKeyRequest)
+	invalidKeyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(invalidKeyResponseRecorder, invalidKeyRequest)
 
-	if invalidKeyRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for invalid publishable key, got %d", invalidKeyRecorder.Code)
+	if invalidKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid publishable key, got %d", invalidKeyResponseRecorder.Code)
 	}
 
 	// 3. With valid derived publishable key -> 200 OK and live DB query result
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 	validKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
 	validKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
-	validKeyRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(validKeyRecorder, validKeyRequest)
+	validKeyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(validKeyResponseRecorder, validKeyRequest)
 
-	if validKeyRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 for valid publishable key, got %d", validKeyRecorder.Code)
+	if validKeyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid publishable key, got %d", validKeyResponseRecorder.Code)
 	}
-	if !strings.Contains(validKeyRecorder.Body.String(), "PostgreSQL") {
-		t.Fatalf("expected PostgreSQL version string in body, got: %s", validKeyRecorder.Body.String())
+	if !strings.Contains(validKeyResponseRecorder.Body.String(), "PostgreSQL") {
+		t.Fatalf("expected PostgreSQL version string in body, got: %s", validKeyResponseRecorder.Body.String())
 	}
 
 	// 4. With Service Account key fallback -> 200 OK
 	serviceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
 	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "sec_live_integration_key")
-	serviceAccountRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(serviceAccountRecorder, serviceAccountRequest)
+	serviceAccountResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(serviceAccountResponseRecorder, serviceAccountRequest)
 
-	if serviceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with service account header fallback, got %d", serviceAccountRecorder.Code)
+	if serviceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with service account header fallback, got %d", serviceAccountResponseRecorder.Code)
 	}
 }
 
@@ -202,40 +202,40 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 
 	// 1. Test Public OpenAPI Spec JSON
 	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.json", nil)
-	jsonSpecRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(jsonSpecRecorder, jsonSpecRequest)
+	jsonSpecResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(jsonSpecResponseRecorder, jsonSpecRequest)
 
-	if jsonSpecRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.json 200, got %d", jsonSpecRecorder.Code)
+	if jsonSpecResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
 	}
-	jsonSpecResponseBody := jsonSpecRecorder.Body.String()
+	jsonSpecResponseBody := jsonSpecResponseRecorder.Body.String()
 	if !strings.Contains(jsonSpecResponseBody, "listDataRecords") || !strings.Contains(jsonSpecResponseBody, "Layr Client API Engine") {
 		t.Fatalf("expected listDataRecords operation in public JSON spec: %s", jsonSpecResponseBody)
 	}
 
 	// 2. Test Control Plane OpenAPI Spec JSON
 	controlPlaneJSONSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/spec.json", nil)
-	controlPlaceJSONSpecRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(controlPlaceJSONSpecRecorder, controlPlaneJSONSpecRequest)
+	controlPlaceJSONSpecResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(controlPlaceJSONSpecResponseRecorder, controlPlaneJSONSpecRequest)
 
-	if controlPlaceJSONSpecRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/_/spec.json 200, got %d", controlPlaceJSONSpecRecorder.Code)
+	if controlPlaceJSONSpecResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/_/spec.json 200, got %d", controlPlaceJSONSpecResponseRecorder.Code)
 	}
-	controlPlaneJSONSpecResponseBody := controlPlaceJSONSpecRecorder.Body.String()
+	controlPlaneJSONSpecResponseBody := controlPlaceJSONSpecResponseRecorder.Body.String()
 	if !strings.Contains(controlPlaneJSONSpecResponseBody, "getConsoleStatus") || !strings.Contains(controlPlaneJSONSpecResponseBody, "Layr Control Plane API Engine") {
 		t.Fatalf("expected getConsoleStatus operation in control plane JSON spec: %s", controlPlaneJSONSpecResponseBody)
 	}
 
 	// 3. Test Public OpenAPI Spec YAML
 	yamlSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.yaml", nil)
-	yamlSpecRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(yamlSpecRecorder, yamlSpecRequest)
+	yamlSpecResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(yamlSpecResponseRecorder, yamlSpecRequest)
 
-	if yamlSpecRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.yaml 200, got %d", yamlSpecRecorder.Code)
+	if yamlSpecResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected /api/v1/spec.yaml 200, got %d", yamlSpecResponseRecorder.Code)
 	}
-	if !strings.Contains(yamlSpecRecorder.Body.String(), "openapi: 3.1.0") {
-		t.Fatalf("expected openapi: 3.1.0 in YAML spec: %s", yamlSpecRecorder.Body.String())
+	if !strings.Contains(yamlSpecResponseRecorder.Body.String(), "openapi: 3.1.0") {
+		t.Fatalf("expected openapi: 3.1.0 in YAML spec: %s", yamlSpecResponseRecorder.Body.String())
 	}
 }
 
@@ -267,10 +267,10 @@ func TestCoreServerMiddlewareMetricsAndProbesIntegration(t *testing.T) {
 				targetPath = "/api/v1/topology"
 			}
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, targetPath, nil)
-			recorder := httptest.NewRecorder()
-			server.server.Handler.ServeHTTP(recorder, request)
-			if recorder.Code != http.StatusOK {
-				t.Errorf("expected 200 for %s, got %d", targetPath, recorder.Code)
+			responseResponseRecorder := httptest.NewRecorder()
+			server.server.Handler.ServeHTTP(responseResponseRecorder, request)
+			if responseResponseRecorder.Code != http.StatusOK {
+				t.Errorf("expected 200 for %s, got %d", targetPath, responseResponseRecorder.Code)
 			}
 		}(iteration)
 	}
@@ -278,13 +278,13 @@ func TestCoreServerMiddlewareMetricsAndProbesIntegration(t *testing.T) {
 
 	// Query /metrics and assert http_requests_total includes all handled requests
 	metricsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
-	metricsRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(metricsRecorder, metricsRequest)
+	metricsResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(metricsResponseRecorder, metricsRequest)
 
-	if metricsRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 for /metrics, got %d", metricsRecorder.Code)
+	if metricsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 for /metrics, got %d", metricsResponseRecorder.Code)
 	}
-	metricsBody := metricsRecorder.Body.String()
+	metricsBody := metricsResponseRecorder.Body.String()
 	if !strings.Contains(metricsBody, "http_requests_total") {
 		t.Fatalf("expected http_requests_total metric in output: %s", metricsBody)
 	}

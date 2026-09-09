@@ -9,14 +9,14 @@ func TestCoreDatabaseMigrationsDefinitionsUnit(t *testing.T) {
 		t.Fatal("expected SystemDatabaseMigrations to have at least 1 migration")
 	}
 
-	migrationFirst := SystemDatabaseMigrations[0]
-	if migrationFirst.Version != 1 {
-		t.Errorf("expected version 1, got %d", migrationFirst.Version)
+	firstDatabaseMigration := SystemDatabaseMigrations[0]
+	if firstDatabaseMigration.Version != 1 {
+		t.Errorf("expected version 1, got %d", firstDatabaseMigration.Version)
 	}
-	if migrationFirst.UpSQL == "" {
+	if firstDatabaseMigration.UpSQL == "" {
 		t.Error("expected non-empty UpSQL for system migration 1")
 	}
-	if migrationFirst.DownSQL == "" {
+	if firstDatabaseMigration.DownSQL == "" {
 		t.Error("expected non-empty DownSQL for system migration 1")
 	}
 }
@@ -27,14 +27,14 @@ func TestCoreDatabaseMigrationRegistrationUnit(t *testing.T) {
 		t.Fatal("expected non-empty default registered migrations")
 	}
 
-	customMigration := DatabaseMigration{
+	customDatabaseMigration := DatabaseMigration{
 		Version:     9999,
 		Description: "Custom test migration",
 		UpSQL:       "SELECT 1;",
 		DownSQL:     "SELECT 1;",
 	}
 
-	RegisterDatabaseMigration(customMigration)
+	RegisterDatabaseMigration(customDatabaseMigration)
 	updatedMigrations := GetRegisteredDatabaseMigrations()
 	if len(updatedMigrations) <= len(initialMigrations) {
 		t.Fatalf("expected updated migrations count (%d) to be > initial (%d)", len(updatedMigrations), len(initialMigrations))

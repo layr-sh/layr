@@ -193,13 +193,13 @@ func TestJWTProjectIsolationIntegration(t *testing.T) {
 	if appSignerErr != nil {
 		t.Fatalf("failed to create app signer: %v", appSignerErr)
 	}
-	adminSigner, adminSignerErr := NewSigner(cryptoKeyManager, "admin-key-v1")
-	if adminSignerErr != nil {
-		t.Fatalf("failed to create admin signer: %v", adminSignerErr)
+	consoleUserSigner, consoleUserSignerErr := NewSigner(cryptoKeyManager, "admin-key-v1")
+	if consoleUserSignerErr != nil {
+		t.Fatalf("failed to create admin signer: %v", consoleUserSignerErr)
 	}
 
 	// 1. Both share the same underlying key derivation
-	if !bytes.Equal(appSigner.PublicKey(), adminSigner.PublicKey()) {
+	if !bytes.Equal(appSigner.PublicKey(), consoleUserSigner.PublicKey()) {
 		t.Fatal("expected identical public keys for identical crypto key managers")
 	}
 
@@ -227,12 +227,12 @@ func TestJWTProjectIsolationIntegration(t *testing.T) {
 		t.Fatalf("failed to assert portal iss: %v", assertErr)
 	}
 
-	// 4. Verifier expecting Admin Console audience fails assertion
-	adminClaims, crossVerifyErr := adminSigner.VerifyAccessToken(appToken)
+	// 4. Verifier expecting Console audience fails assertion
+	consoleUserClaims, crossVerifyErr := consoleUserSigner.VerifyAccessToken(appToken)
 	if crossVerifyErr != nil {
 		t.Fatalf("unexpected signature verification failure: %v", crossVerifyErr)
 	}
-	if assertErr := adminClaims.Assert("aud", "admin-console:user"); assertErr == nil {
+	if assertErr := consoleUserClaims.Assert("aud", "admin-console:user"); assertErr == nil {
 		t.Fatal("expected audience assertion failure when verifying with different audience")
 	}
 }

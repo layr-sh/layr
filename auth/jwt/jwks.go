@@ -18,8 +18,8 @@ type JWK struct {
 	X         string `json:"x"`
 }
 
-// JWKSResponse represents the RFC 7517 keys collection.
-type JWKSResponse struct {
+// JWKS represents the RFC 7517 keys collection.
+type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
@@ -42,11 +42,11 @@ type OIDCConfiguration struct {
 }
 
 // BuildJWKS constructs the JWKS payload containing the public key.
-func (signer *Signer) BuildJWKS() JWKSResponse {
+func (signer *Signer) BuildJWKS() JWKS {
 	log.Debugf("building JWKS payload with keyID %s", signer.keyID)
 	publicKeyBase64 := base64.RawURLEncoding.EncodeToString(signer.publicKey)
 	log.Tracef("encoded public key for JWKS keyID %s", signer.keyID)
-	return JWKSResponse{
+	return JWKS{
 		Keys: []JWK{
 			{
 				KeyType:   "OKP",
@@ -85,14 +85,14 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 }
 
 // HandleJWKS serves the GET /.well-known/jwks.json endpoint.
-func (signer *Signer) HandleJWKS(writer http.ResponseWriter, request *http.Request) {
+func (signer *Signer) HandleJWKS(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handling JWKS HTTP request from %s", request.RemoteAddr)
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(http.StatusOK)
-	_ = writeJSON(writer, signer.BuildJWKS())
+	responseWriter.Header().Set("Content-Type", "application/json")
+	responseWriter.WriteHeader(http.StatusOK)
+	_ = writeJSON(responseWriter, signer.BuildJWKS())
 }
 
-func writeJSON(writer http.ResponseWriter, payload any) error {
-	writer.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(writer).Encode(payload)
+func writeJSON(responseWriter http.ResponseWriter, payload any) error {
+	responseWriter.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(responseWriter).Encode(payload)
 }

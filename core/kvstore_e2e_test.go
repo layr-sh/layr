@@ -12,17 +12,17 @@ func TestCoreKVStoreLifecycleE2E(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	dataDirectory := filepath.Join(temporaryDirectory, "data")
 
-	embedded := NewEmbeddedDatabase(dataDirectory)
+	embeddedDatabase := NewEmbeddedDatabase(dataDirectory)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	databaseURL, err := embedded.Start(ctx)
+	databaseURL, err := embeddedDatabase.Start(ctx)
 	if err != nil {
 		t.Skipf("embedded postgres start failed: %v", err)
 		return
 	}
 	defer func() {
-		_ = embedded.Stop()
+		_ = embeddedDatabase.Stop()
 	}()
 
 	db, err := NewDatabasePool(ctx, databaseURL)

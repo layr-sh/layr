@@ -161,16 +161,16 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 	updatedPassword := "EvenStrongerRotatedPassword456!$"
 
 	postJSON := func(endpointURL, payload string) (*http.Response, error) {
-		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpointURL, strings.NewReader(payload))
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodPost, endpointURL, strings.NewReader(payload))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create http request: %w", err)
 		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := testServer.Client().Do(req)
+		request.Header.Set("Content-Type", "application/json")
+		response, err := testServer.Client().Do(request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute http request: %w", err)
 		}
-		return resp, nil
+		return response, nil
 	}
 
 	// 1. User Registration

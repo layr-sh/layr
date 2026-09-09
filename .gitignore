@@ -19,6 +19,7 @@
 
 # Go (Binaries, Build Outputs & Caches)
 /layr
+/custom-gcl
 bin/
 dist/
 build/
@@ -90,3 +91,5 @@ temp/
 *.bak
 *.swp
 *~
+
+.local

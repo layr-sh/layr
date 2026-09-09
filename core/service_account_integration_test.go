@@ -15,7 +15,7 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, containerErr := tcpostgres.Run(ctx,
+	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -29,9 +29,9 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	db, err := NewDatabasePool(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf("failed to create db connection pool: %v", err)
@@ -61,12 +61,12 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 2. Create second scoped account with IP whitelist and expiration
-	future := time.Now().UTC().Add(1 * time.Hour)
-	dataWorkerServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+	futureTime := time.Now().UTC().Add(1 * time.Hour)
+	secondServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		Name:       "Data Worker",
 		Scopes:     []string{"data:query.read", "data:cache.read"},
 		AllowedIPs: []string{"192.168.1.100", "10.0.0.0/8"},
-		ExpiresAt:  &future,
+		ExpiresAt:  &futureTime,
 	})
 	if err != nil {
 		t.Fatalf("failed to create data worker: %v", err)
@@ -91,25 +91,25 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 5. Authenticate Root Account
-	authenticatedRoot, err := serviceAccountManager.Authenticate(ctx, rootServiceAccount.SecretKey, "127.0.0.1")
+	authenticatedRootServiceAccount, err := serviceAccountManager.Authenticate(ctx, rootServiceAccount.SecretKey, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to authenticate root service account: %v", err)
 	}
-	if authenticatedRoot.ID != rootServiceAccount.ID {
-		t.Fatalf("authenticated id mismatch: %s != %s", authenticatedRoot.ID, rootServiceAccount.ID)
+	if authenticatedRootServiceAccount.ID != rootServiceAccount.ID {
+		t.Fatalf("authenticated id mismatch: %s != %s", authenticatedRootServiceAccount.ID, rootServiceAccount.ID)
 	}
 
 	// 6. Authenticate Data Worker with allowed IP
-	authenticatedWorker, err := serviceAccountManager.Authenticate(ctx, dataWorkerServiceAccount.SecretKey, "10.1.2.3")
+	authenticatedServiceAccount, err := serviceAccountManager.Authenticate(ctx, secondServiceAccount.SecretKey, "10.1.2.3")
 	if err != nil {
 		t.Fatalf("failed to authenticate data worker service account with 10.1.2.3: %v", err)
 	}
-	if authenticatedWorker.ID != dataWorkerServiceAccount.ID {
-		t.Fatalf("authenticated id mismatch: %s != %s", authenticatedWorker.ID, dataWorkerServiceAccount.ID)
+	if authenticatedServiceAccount.ID != secondServiceAccount.ID {
+		t.Fatalf("authenticated id mismatch: %s != %s", authenticatedServiceAccount.ID, secondServiceAccount.ID)
 	}
 
 	// 7. Authenticate Data Worker with blocked IP -> ErrServiceAccountIPBlocked
-	_, err = serviceAccountManager.Authenticate(ctx, dataWorkerServiceAccount.SecretKey, "8.8.8.8")
+	_, err = serviceAccountManager.Authenticate(ctx, secondServiceAccount.SecretKey, "8.8.8.8")
 	if !errors.Is(err, ErrServiceAccountIPBlocked) {
 		t.Fatalf("expected ErrServiceAccountIPBlocked, got: %v", err)
 	}
@@ -149,15 +149,15 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected delete to succeed with remaining root, got: %v", deleteRootErr)
 	}
 
-	// 13. Delete dataWorkerServiceAccount (non-root)
-	if deleteWorkerErr := serviceAccountManager.Delete(ctx, dataWorkerServiceAccount.ID); deleteWorkerErr != nil {
-		t.Fatalf("expected delete dataWorkerServiceAccount to succeed, got: %v", deleteWorkerErr)
+	// 13. Delete secondServiceAccount (non-root)
+	if deleteWorkerErr := serviceAccountManager.Delete(ctx, secondServiceAccount.ID); deleteWorkerErr != nil {
+		t.Fatalf("expected delete secondServiceAccount to succeed, got: %v", deleteWorkerErr)
 	}
 
 	// 13b. Attempt deleting service account owned by a console user -> ErrServiceAccountOwnedByConsoleUser
 	consoleUserID := "01918342-9999-7000-8000-000000000001"
 	_, _ = db.Exec(ctx, "INSERT INTO console.users (id, email, password_hash, is_enabled) VALUES ($1, $2, $3, true)", consoleUserID, "owned_service_account_test@layr.local", "dummyhash")
-	userOwnedServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+	userServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		ConsoleUserID: &consoleUserID,
 		Name:          "User Owned Service Account",
 		Scopes:        []string{"data:*"},
@@ -165,17 +165,17 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create user owned service account: %v", err)
 	}
-	err = serviceAccountManager.Delete(ctx, userOwnedServiceAccount.ID)
+	err = serviceAccountManager.Delete(ctx, userServiceAccount.ID)
 	if !errors.Is(err, ErrServiceAccountOwnedByConsoleUser) {
 		t.Fatalf("expected ErrServiceAccountOwnedByConsoleUser, got: %v", err)
 	}
-	// Deleting the console user cascades and removes userOwnedServiceAccount
+	// Deleting the console user cascades and removes userServiceAccount
 	_, err = db.Exec(ctx, "DELETE FROM console.users WHERE id = $1", consoleUserID)
 	if err != nil {
 		t.Fatalf("failed to delete console user: %v", err)
 	}
-	if _, cascadeGetErr := serviceAccountManager.Get(ctx, userOwnedServiceAccount.ID); !errors.Is(cascadeGetErr, ErrServiceAccountNotFound) {
-		t.Fatalf("expected userOwnedServiceAccount to be cascade deleted when user deleted, got: %v", cascadeGetErr)
+	if _, cascadeGetErr := serviceAccountManager.Get(ctx, userServiceAccount.ID); !errors.Is(cascadeGetErr, ErrServiceAccountNotFound) {
+		t.Fatalf("expected userServiceAccount to be cascade deleted when user deleted, got: %v", cascadeGetErr)
 	}
 
 	// 13c. Get non-existent -> ErrServiceAccountNotFound
@@ -190,11 +190,11 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 15. Authenticate with Expired Service Account -> ErrServiceAccountExpired
-	past := time.Now().UTC().Add(-1 * time.Hour)
+	pastTime := time.Now().UTC().Add(-1 * time.Hour)
 	expiredServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		Name:      "Expired Service Account",
 		Scopes:    []string{ScopeDataSchemaRead},
-		ExpiresAt: &past,
+		ExpiresAt: &pastTime,
 	})
 	if err != nil {
 		t.Fatalf("failed to create expired service account: %v", err)
@@ -248,13 +248,13 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	newDescription := "New description"
 	newScopes := []string{ScopeDataQueryWrite}
 	newIPs := []string{"10.0.0.1/32"}
-	futureTime := time.Now().UTC().Add(24 * time.Hour)
+	TomorrowTime := time.Now().UTC().Add(24 * time.Hour)
 	updatedServiceAccount, updateErr := serviceAccountManager.Update(ctx, expiredServiceAccount.ID, UpdateServiceAccountInput{
 		Name:        &newName,
 		Description: &newDescription,
 		Scopes:      newScopes,
 		AllowedIPs:  newIPs,
-		ExpiresAt:   &futureTime,
+		ExpiresAt:   &TomorrowTime,
 	})
 	if updateErr != nil {
 		t.Fatalf("failed to update all fields of service account: %v", updateErr)

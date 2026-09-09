@@ -53,48 +53,48 @@ func TestCoreRouterWrapperMethodsUnit(t *testing.T) {
 
 	// Test invoking registered routes
 	getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test-get", nil)
-	getRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(getRecorder, getRequest)
-	if getRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from test-get, got %d", getRecorder.Code)
+	getResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(getResponseRecorder, getRequest)
+	if getResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from test-get, got %d", getResponseRecorder.Code)
 	}
 
 	headRequest := httptest.NewRequestWithContext(context.Background(), http.MethodHead, "/test-head", nil)
-	headRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(headRecorder, headRequest)
-	if headRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from test-head, got %d", headRecorder.Code)
+	headResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(headResponseRecorder, headRequest)
+	if headResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from test-head, got %d", headResponseRecorder.Code)
 	}
 
 	postRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test-post", strings.NewReader(`{"key":"value"}`))
 	postRequest.Header.Set("Content-Type", "application/json")
-	postRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(postRecorder, postRequest)
-	if postRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 201 from test-post, got %d", postRecorder.Code)
+	postResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(postResponseRecorder, postRequest)
+	if postResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 201 from test-post, got %d", postResponseRecorder.Code)
 	}
 
 	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/test-put", strings.NewReader(`{"key":"value"}`))
 	putRequest.Header.Set("Content-Type", "application/json")
-	putRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(putRecorder, putRequest)
-	if putRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from test-put, got %d", putRecorder.Code)
+	putResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(putResponseRecorder, putRequest)
+	if putResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from test-put, got %d", putResponseRecorder.Code)
 	}
 
 	deleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/test-delete", nil)
-	deleteRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(deleteRecorder, deleteRequest)
-	if deleteRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 from test-delete, got %d", deleteRecorder.Code)
+	deleteResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(deleteResponseRecorder, deleteRequest)
+	if deleteResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from test-delete, got %d", deleteResponseRecorder.Code)
 	}
 
 	patchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/test-patch", strings.NewReader(`{"key":"value"}`))
 	patchRequest.Header.Set("Content-Type", "application/json")
-	patchRecorder := httptest.NewRecorder()
-	router.Mux().ServeHTTP(patchRecorder, patchRequest)
-	if patchRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from test-patch, got %d", patchRecorder.Code)
+	patchResponseRecorder := httptest.NewRecorder()
+	router.Mux().ServeHTTP(patchResponseRecorder, patchRequest)
+	if patchResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from test-patch, got %d", patchResponseRecorder.Code)
 	}
 }
 
@@ -119,18 +119,17 @@ func TestCoreRouterHelpersAndSanitizeOpenAPIUnit(t *testing.T) {
 	// Test calling on raw BaseRoute with nil Responses and Extensions to cover initialization
 	emptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
 	RouteBinaryResponse(http.StatusOK, "raw binary")(emptyBaseRoute)
-	emptyBaseRoute2 := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
-	RouteNoContentResponse("raw no content")(emptyBaseRoute2)
-	emptyBaseRoute3 := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
-	RouteSDKGroupName("data", "cache")(emptyBaseRoute3)
-	RouteSDKMethodName("customMethod")(emptyBaseRoute3)
+	secondEmptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
+	RouteNoContentResponse("raw no content")(secondEmptyBaseRoute)
+	thirdEmptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
+	RouteSDKGroupName("data", "cache")(thirdEmptyBaseRoute)
+	RouteSDKMethodName("customMethod")(thirdEmptyBaseRoute)
 	// Call again with non-nil Extensions
-	RouteSDKGroupName("data", "store")(emptyBaseRoute3)
-	RouteSDKMethodName("anotherMethod")(emptyBaseRoute3)
-
-	emptyBaseRoute4 := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
-	RouteSDKMethodName("standaloneMethod")(emptyBaseRoute4)
-	RouteNoRequestBody()(emptyBaseRoute4)
+	RouteSDKGroupName("data", "store")(thirdEmptyBaseRoute)
+	RouteSDKMethodName("anotherMethod")(thirdEmptyBaseRoute)
+	fourthEmptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
+	RouteSDKMethodName("standaloneMethod")(fourthEmptyBaseRoute)
+	RouteNoRequestBody()(fourthEmptyBaseRoute)
 
 	// Router OutputOpenAPISpec test on empty engine
 	emptyRouter := &Router{}
@@ -150,10 +149,10 @@ func TestCoreRouterTypedMethodsUnit(t *testing.T) {
 		Name string `json:"name"`
 	}
 
-	dummyHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"message":"ok"}`))
+	dummyHandler := func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write([]byte(`{"message":"ok"}`))
 	}
 
 	GetRoute[DummyResponse](router, "/test/typed/get", dummyHandler, RouteTag("Test"), RouteSummary("Get Typed"))
@@ -167,10 +166,10 @@ func TestCoreRouterTypedMethodsUnit(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 		request := httptest.NewRequestWithContext(context.Background(), method, "/test/typed/"+strings.ToLower(method), strings.NewReader(`{"name":"layr"}`))
 		request.Header.Set("Content-Type", "application/json")
-		recorder := httptest.NewRecorder()
-		engine.Mux.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("expected status 200 for %s, got %d", method, recorder.Code)
+		responseResponseRecorder := httptest.NewRecorder()
+		engine.Mux.ServeHTTP(responseResponseRecorder, request)
+		if responseResponseRecorder.Code != http.StatusOK {
+			t.Fatalf("expected status 200 for %s, got %d", method, responseResponseRecorder.Code)
 		}
 	}
 }

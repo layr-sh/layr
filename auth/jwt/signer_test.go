@@ -59,16 +59,16 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	if assertErr := claims.Assert("subject", userID); assertErr != nil {
 		t.Fatalf("assert subject alias failed: %v", assertErr)
 	}
-	if assertErr := claims.Assert("aud", core.GetConfig().Project.Slug()+":user"); assertErr != nil {
+	if assertErr := claims.Assert("aud", "layr-app:user"); assertErr != nil {
 		t.Fatalf("assert aud failed: %v", assertErr)
 	}
-	if assertErr := claims.Assert("audience", core.GetConfig().Project.Slug()+":user"); assertErr != nil {
+	if assertErr := claims.Assert("audience", "layr-app:user"); assertErr != nil {
 		t.Fatalf("assert audience alias failed: %v", assertErr)
 	}
-	if assertErr := claims.Assert("iss", core.GetConfig().Project.Slug()); assertErr != nil {
+	if assertErr := claims.Assert("iss", "layr-app"); assertErr != nil {
 		t.Fatalf("assert iss failed: %v", assertErr)
 	}
-	if assertErr := claims.Assert("issuer", core.GetConfig().Project.Slug()); assertErr != nil {
+	if assertErr := claims.Assert("issuer", "layr-app"); assertErr != nil {
 		t.Fatalf("assert issuer alias failed: %v", assertErr)
 	}
 	if assertErr := claims.Assert("role", "authenticated"); assertErr != nil {
@@ -184,8 +184,8 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	// Future NotBefore token
 	futureClaims := Claims{
 		Subject:   userID,
-		Issuer:    core.GetConfig().Project.Slug(),
-		Audience:  core.GetConfig().Project.Slug() + ":user",
+		Issuer:    "layr-app",
+		Audience:  "layr-app:user",
 		IssuedAt:  time.Now().Unix() + 100,
 		NotBefore: time.Now().Unix() + 100,
 		ExpiresAt: time.Now().Unix() + 1000,
@@ -207,11 +207,11 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badAudienceClaimsBase64 := base64.RawURLEncoding.EncodeToString(badAudienceJSON)
 	badAudienceSignature := ed25519.Sign(signer.privateKey, []byte(headerBase64+"."+badAudienceClaimsBase64))
 	badAudienceToken := headerBase64 + "." + badAudienceClaimsBase64 + "." + base64.RawURLEncoding.EncodeToString(badAudienceSignature)
-	verifiedBadAudience, verifyAudienceErr := signer.VerifyAccessToken(badAudienceToken)
+	verifiedBadAudienceClaims, verifyAudienceErr := signer.VerifyAccessToken(badAudienceToken)
 	if verifyAudienceErr != nil {
 		t.Fatalf("expected signature verification to pass, got: %v", verifyAudienceErr)
 	}
-	if assertErr := verifiedBadAudience.Assert("aud", core.GetConfig().Project.Slug()+":user"); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
+	if assertErr := verifiedBadAudienceClaims.Assert("aud", "layr-app:user"); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
 		t.Fatalf("expected audience mismatch error, got: %v", assertErr)
 	}
 
@@ -223,11 +223,11 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badIssuerClaimsBase64 := base64.RawURLEncoding.EncodeToString(badIssuerJSON)
 	badIssuerSignature := ed25519.Sign(signer.privateKey, []byte(headerBase64+"."+badIssuerClaimsBase64))
 	badIssuerToken := headerBase64 + "." + badIssuerClaimsBase64 + "." + base64.RawURLEncoding.EncodeToString(badIssuerSignature)
-	verifiedBadIssuer, verifyIssuerErr := signer.VerifyAccessToken(badIssuerToken)
+	verifiedBadIssuerClaims, verifyIssuerErr := signer.VerifyAccessToken(badIssuerToken)
 	if verifyIssuerErr != nil {
 		t.Fatalf("expected signature verification to pass, got: %v", verifyIssuerErr)
 	}
-	if assertErr := verifiedBadIssuer.Assert("iss", core.GetConfig().Project.Slug()); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
+	if assertErr := verifiedBadIssuerClaims.Assert("iss", "layr-app"); assertErr == nil || !strings.Contains(assertErr.Error(), "mismatch") {
 		t.Fatalf("expected issuer mismatch error, got: %v", assertErr)
 	}
 }
@@ -296,25 +296,25 @@ func TestJWTGenerateIDTokenAndOIDCDiscoveryUnit(t *testing.T) {
 		t.Fatalf("failed to decode claims base64: %v", claimsDecodeErr)
 	}
 
-	var claims OIDCIDTokenClaims
-	if unmarshalErr := json.Unmarshal(claimsBytes, &claims); unmarshalErr != nil {
+	var oidcIDTokenClaims OIDCIDTokenClaims
+	if unmarshalErr := json.Unmarshal(claimsBytes, &oidcIDTokenClaims); unmarshalErr != nil {
 		t.Fatalf("failed to parse claims JSON: %v", unmarshalErr)
 	}
 
-	if claims.Issuer != "https://auth.example.com" {
-		t.Errorf("expected issuer https://auth.example.com, got %s", claims.Issuer)
+	if oidcIDTokenClaims.Issuer != "https://auth.example.com" {
+		t.Errorf("expected issuer https://auth.example.com, got %s", oidcIDTokenClaims.Issuer)
 	}
-	if claims.Audience != "client-123" {
-		t.Errorf("expected audience client-123, got %s", claims.Audience)
+	if oidcIDTokenClaims.Audience != "client-123" {
+		t.Errorf("expected audience client-123, got %s", oidcIDTokenClaims.Audience)
 	}
-	if claims.Subject != userID {
-		t.Errorf("expected subject %s, got %s", userID, claims.Subject)
+	if oidcIDTokenClaims.Subject != userID {
+		t.Errorf("expected subject %s, got %s", userID, oidcIDTokenClaims.Subject)
 	}
-	if claims.Email != "test@example.com" || !claims.EmailVerified {
-		t.Errorf("unexpected email claims: %s, %v", claims.Email, claims.EmailVerified)
+	if oidcIDTokenClaims.Email != "test@example.com" || !oidcIDTokenClaims.EmailVerified {
+		t.Errorf("unexpected email claims: %s, %v", oidcIDTokenClaims.Email, oidcIDTokenClaims.EmailVerified)
 	}
-	if claims.Nonce != "nonce-xyz" {
-		t.Errorf("expected nonce nonce-xyz, got %s", claims.Nonce)
+	if oidcIDTokenClaims.Nonce != "nonce-xyz" {
+		t.Errorf("expected nonce nonce-xyz, got %s", oidcIDTokenClaims.Nonce)
 	}
 
 	// Test GenerateIDToken with empty role, empty issuer (fallback to core.GetConfig().Project.Slug()), and expiry 0
@@ -330,32 +330,32 @@ func TestJWTGenerateIDTokenAndOIDCDiscoveryUnit(t *testing.T) {
 	}
 
 	defaultSegments := strings.Split(defaultIDToken, ".")
-	defaultClaimsBytes, defaultClaimsDecodeErr := base64.RawURLEncoding.DecodeString(defaultSegments[1])
+	defaultOIDCIDTokenClaimsBytes, defaultClaimsDecodeErr := base64.RawURLEncoding.DecodeString(defaultSegments[1])
 	if defaultClaimsDecodeErr != nil {
 		t.Fatalf("failed to decode default claims: %v", defaultClaimsDecodeErr)
 	}
-	var defaultClaims OIDCIDTokenClaims
-	if defaultUnmarshalErr := json.Unmarshal(defaultClaimsBytes, &defaultClaims); defaultUnmarshalErr != nil {
+	var defaultOIDCIDTokenClaims OIDCIDTokenClaims
+	if defaultUnmarshalErr := json.Unmarshal(defaultOIDCIDTokenClaimsBytes, &defaultOIDCIDTokenClaims); defaultUnmarshalErr != nil {
 		t.Fatalf("failed to unmarshal default claims: %v", defaultUnmarshalErr)
 	}
-	if defaultClaims.Issuer != core.GetConfig().Project.Slug() {
-		t.Fatalf("expected fallback issuer %s, got: %s", core.GetConfig().Project.Slug(), defaultClaims.Issuer)
+	if defaultOIDCIDTokenClaims.Issuer != "layr-app" {
+		t.Fatalf("expected fallback issuer 'layr-app', got: %s", defaultOIDCIDTokenClaims.Issuer)
 	}
 
 	// Verify discovery
-	discovery := BuildOIDCDiscovery("https://auth.example.com")
-	if discovery.Issuer != "https://auth.example.com" {
-		t.Errorf("expected discovery issuer https://auth.example.com, got %s", discovery.Issuer)
+	oidcConfiguration := BuildOIDCDiscovery("https://auth.example.com")
+	if oidcConfiguration.Issuer != "https://auth.example.com" {
+		t.Errorf("expected discovery issuer https://auth.example.com, got %s", oidcConfiguration.Issuer)
 	}
-	if discovery.EndSessionEndpoint != "https://auth.example.com/api/v1/auth/oauth/sign-out" {
-		t.Errorf("expected sign-out end session endpoint, got %s", discovery.EndSessionEndpoint)
+	if oidcConfiguration.EndSessionEndpoint != "https://auth.example.com/api/v1/auth/oauth/sign-out" {
+		t.Errorf("expected sign-out end session endpoint, got %s", oidcConfiguration.EndSessionEndpoint)
 	}
-	if len(discovery.GrantTypesSupported) == 0 || discovery.GrantTypesSupported[0] != "authorization_code" {
-		t.Errorf("unexpected grant types: %v", discovery.GrantTypesSupported)
+	if len(oidcConfiguration.GrantTypesSupported) == 0 || oidcConfiguration.GrantTypesSupported[0] != "authorization_code" {
+		t.Errorf("unexpected grant types: %v", oidcConfiguration.GrantTypesSupported)
 	}
 }
 
-func TestJWTProjectSlugConfigurationUnit(t *testing.T) {
+func TestJWTProjectHandleConfigurationUnit(t *testing.T) {
 	cryptoKeyManager, managerErr := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if managerErr != nil {
 		t.Fatalf("failed to create KeyManager: %v", managerErr)
@@ -479,22 +479,55 @@ func TestJWTProjectSlugConfigurationUnit(t *testing.T) {
 	if assertErr := dynamicClaims.Assert("aud", expectedConfiguredIssuer+":user"); assertErr != nil {
 		t.Fatalf("failed dynamic claims aud assert: %v", assertErr)
 	}
+
+	// 6. Verify empty project name fallback to "layr-app"
+	core.SetLoadedConfig(&core.Config{
+		Project: core.ProjectConfig{
+			Name: "",
+		},
+	})
+	emptySigner, emptySignerErr := NewSigner(cryptoKeyManager)
+	if emptySignerErr != nil {
+		t.Fatalf("failed to create Signer with empty project config: %v", emptySignerErr)
+	}
+	if emptySigner.KeyID() != "layr-app-ed25519-v1" {
+		t.Fatalf("expected fallback key ID layr-app-ed25519-v1, got: %s", emptySigner.KeyID())
+	}
+	emptyToken, emptyTokenErr := emptySigner.GenerateAccessToken(Claims{Subject: "u1"})
+	if emptyTokenErr != nil {
+		t.Fatalf("failed to generate access token with empty config: %v", emptyTokenErr)
+	}
+	emptyVerifiedClaims, verifyEmptyErr := emptySigner.VerifyAccessToken(emptyToken)
+	if verifyEmptyErr != nil {
+		t.Fatalf("failed to verify access token: %v", verifyEmptyErr)
+	}
+	if assertErr := emptyVerifiedClaims.Assert("iss", "layr-app"); assertErr != nil {
+		t.Fatalf("expected fallback issuer 'layr-app', got err: %v", assertErr)
+	}
+	emptyIDToken, emptyIDErr := emptySigner.GenerateIDToken(OIDCIDTokenClaims{Subject: "u1"})
+	if emptyIDErr != nil {
+		t.Fatalf("failed to generate id token with empty config: %v", emptyIDErr)
+	}
+	if emptyIDToken == "" {
+		t.Fatal("expected non-empty id token")
+	}
+	core.SetLoadedConfig(nil)
 }
 
 func TestJWTSignerAutomaticLoggingScopeUnit(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
+	var buffer bytes.Buffer
+	log.SetOutput(&buffer)
 	defer log.SetOutput(nil)
 
 	log.SetLevel(logger.LevelDebug)
 	defer log.ResetLevel()
 
-	keyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	signer, err := NewSigner(keyManager)
+	signer, err := NewSigner(cryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create signer: %v", err)
 	}
@@ -504,19 +537,19 @@ func TestJWTSignerAutomaticLoggingScopeUnit(t *testing.T) {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
 
-	output := buf.String()
+	output := buffer.String()
 	expectedLog := "[DEBUG] [auth] issued access token for subject user-123"
 	if !strings.Contains(output, expectedLog) {
 		t.Errorf("expected log output to contain %q, but got:\n%s", expectedLog, output)
 	}
 
-	buf.Reset()
+	buffer.Reset()
 	_, err = signer.VerifyAccessToken(token)
 	if err != nil {
 		t.Fatalf("failed to verify access token: %v", err)
 	}
 
-	verifyOutput := buf.String()
+	verifyOutput := buffer.String()
 	expectedVerifyLog := "[DEBUG] [auth] verified access token for subject user-123"
 	if !strings.Contains(verifyOutput, expectedVerifyLog) {
 		t.Errorf("expected log output to contain %q, but got:\n%s", expectedVerifyLog, verifyOutput)

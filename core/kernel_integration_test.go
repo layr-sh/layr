@@ -113,7 +113,7 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -128,10 +128,10 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 		return
 	}
 	defer func() {
-		_ = pgContainer.Terminate(ctx)
+		_ = postgresContainer.Terminate(ctx)
 	}()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -151,11 +151,11 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 	}
 
 	errChannel := make(chan error, 1)
-	startContext, startCancel := context.WithCancel(ctx)
+	startCtx, startCancel := context.WithCancel(ctx)
 	defer startCancel()
 
 	go func() {
-		errChannel <- kernel.Start(startContext)
+		errChannel <- kernel.Start(startCtx)
 	}()
 
 	// Wait for boot
@@ -183,7 +183,7 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -197,9 +197,9 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -224,8 +224,8 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// Send SIGINT to test signal handling path
-	proc, _ := os.FindProcess(os.Getpid())
-	_ = proc.Signal(os.Interrupt)
+	process, _ := os.FindProcess(os.Getpid())
+	_ = process.Signal(os.Interrupt)
 
 	select {
 	case err := <-errChannel:
@@ -249,7 +249,7 @@ func TestCoreKernelServerErrorIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -263,9 +263,9 @@ func TestCoreKernelServerErrorIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -285,7 +285,7 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -299,9 +299,9 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -360,7 +360,7 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -374,9 +374,9 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -399,10 +399,10 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	runnerKernel, _ := NewKernel()
 	runnerKernel.RegisterService(successRunner)
 	runnerKernel.RegisterService(plainRunner)
-	runnerContext, runnerCancel := context.WithCancel(ctx)
+	runnerCtx, runnerCancel := context.WithCancel(ctx)
 	errChannel := make(chan error, 1)
 	go func() {
-		errChannel <- runnerKernel.Start(runnerContext)
+		errChannel <- runnerKernel.Start(runnerCtx)
 	}()
 	for i := 0; i < 60; i++ {
 		if successRunner.started && successRunner.registered && successRunner.openAPIRegistered {
@@ -457,7 +457,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -471,9 +471,9 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
@@ -489,13 +489,13 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	}
 
 	// Test failing service factory auto-instantiation
-	oldDataFactory, hadOldData := GetServiceFactory("data")
-	RegisterServiceFactory("data", func(k *Kernel) (ServiceRunner, error) {
+	oldServiceFactory, hadOldData := GetServiceFactory("data")
+	RegisterServiceFactory("data", func(kernel *Kernel) (ServiceRunner, error) {
 		return nil, errors.New("data factory failure")
 	})
 	defer func() {
 		if hadOldData {
-			RegisterServiceFactory("data", oldDataFactory)
+			RegisterServiceFactory("data", oldServiceFactory)
 		}
 	}()
 
@@ -505,9 +505,9 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	}
 
 	// Test failing bootstrap root console user during kernel.Start
-	if cleanupPool, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupPool != nil {
-		_, _ = cleanupPool.Exec(ctx, "DELETE FROM console.users")
-		cleanupPool.Close()
+	if cleanupDB, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupDB != nil {
+		_, _ = cleanupDB.Exec(ctx, "DELETE FROM console.users")
+		cleanupDB.Close()
 	}
 
 	defaultPasswordHasher.SetRandomReader(&coreErrReader{})
@@ -518,10 +518,10 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	defaultPasswordHasher.SetRandomReader(nil)
 
 	// Test failing bootstrap root service account during kernel.Start
-	if cleanupPool, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupPool != nil {
-		_, _ = cleanupPool.Exec(ctx, "DELETE FROM core.service_accounts")
-		_, _ = cleanupPool.Exec(ctx, "ALTER TABLE core.service_accounts ADD CONSTRAINT fail_service_account_bootstrap CHECK (name != 'Root Service Account')")
-		cleanupPool.Close()
+	if cleanupDB, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupDB != nil {
+		_, _ = cleanupDB.Exec(ctx, "DELETE FROM core.service_accounts")
+		_, _ = cleanupDB.Exec(ctx, "ALTER TABLE core.service_accounts ADD CONSTRAINT fail_service_account_bootstrap CHECK (name != 'Root Service Account')")
+		cleanupDB.Close()
 	}
 
 	failingServiceAccountBootstrapKernel, _ := NewKernel()
@@ -529,9 +529,9 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 		t.Fatal("expected kernel start failure on failing bootstrap service account")
 	}
 
-	if cleanupPool, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupPool != nil {
-		_, _ = cleanupPool.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT fail_service_account_bootstrap")
-		cleanupPool.Close()
+	if cleanupDB, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupDB != nil {
+		_, _ = cleanupDB.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT fail_service_account_bootstrap")
+		cleanupDB.Close()
 	}
 
 	// Test successful service factory auto-instantiation
@@ -540,10 +540,10 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 		return successAutoRunner, nil
 	})
 	successFactoryKernel, _ := NewKernel()
-	factoryContext, factoryCancel := context.WithCancel(ctx)
+	factoryCtx, factoryCancel := context.WithCancel(ctx)
 	autoErrorChannel := make(chan error, 1)
 	go func() {
-		autoErrorChannel <- successFactoryKernel.Start(factoryContext)
+		autoErrorChannel <- successFactoryKernel.Start(factoryCtx)
 	}()
 	for i := 0; i < 60; i++ {
 		if successAutoRunner.started && successAutoRunner.registered {
@@ -563,7 +563,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, containerErr := tcpostgres.Run(ctx,
+	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -577,12 +577,12 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	db, poolErr := NewDatabasePool(ctx, databaseURL)
-	if poolErr != nil {
-		t.Fatalf("failed to create db connection pool: %v", poolErr)
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	db, dbErr := NewDatabasePool(ctx, databaseURL)
+	if dbErr != nil {
+		t.Fatalf("failed to create db connection pool: %v", dbErr)
 	}
 	defer db.Close()
 
@@ -614,180 +614,180 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	// POST /api/v1/_/core/service-accounts
 	createServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{"name":"HTTP Service Account","scopes":["*"]}`))
 	createServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	createServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(createServiceAccountRecorder, createServiceAccountRequest)
-	if createServiceAccountRecorder.Code != http.StatusOK && createServiceAccountRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 for POST service accounts, got %d: %s", createServiceAccountRecorder.Code, createServiceAccountRecorder.Body.String())
+	createServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(createServiceAccountResponseRecorder, createServiceAccountRequest)
+	if createServiceAccountResponseRecorder.Code != http.StatusOK && createServiceAccountResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 for POST service accounts, got %d: %s", createServiceAccountResponseRecorder.Code, createServiceAccountResponseRecorder.Body.String())
 	}
-	var serviceAccountRes CreateServiceAccountResult
-	_ = json.Unmarshal(createServiceAccountRecorder.Body.Bytes(), &serviceAccountRes)
+	var createdServiceAccount ServiceAccount
+	_ = json.Unmarshal(createServiceAccountResponseRecorder.Body.Bytes(), &createdServiceAccount)
 
 	// GET /api/v1/_/core/service-accounts
 	listServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts", nil)
-	listServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(listServiceAccountRecorder, listServiceAccountRequest)
-	if listServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET service accounts, got %d", listServiceAccountRecorder.Code)
+	listServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(listServiceAccountResponseRecorder, listServiceAccountRequest)
+	if listServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET service accounts, got %d", listServiceAccountResponseRecorder.Code)
 	}
 
 	// GET /api/v1/_/core/service-accounts/:id
-	getServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, nil)
-	getServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(getServiceAccountRecorder, getServiceAccountRequest)
-	if getServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET service account by ID, got %d", getServiceAccountRecorder.Code)
+	getServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, nil)
+	getServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(getServiceAccountResponseRecorder, getServiceAccountRequest)
+	if getServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET service account by ID, got %d", getServiceAccountResponseRecorder.Code)
 	}
 
 	// PUT /api/v1/_/core/service-accounts/:id
-	updateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, strings.NewReader(`{"name":"Updated HTTP Service Account"}`))
+	updateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, strings.NewReader(`{"name":"Updated HTTP Service Account"}`))
 	updateServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	updateServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(updateServiceAccountRecorder, updateServiceAccountRequest)
-	if updateServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for PUT service account by ID, got %d", updateServiceAccountRecorder.Code)
+	updateServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(updateServiceAccountResponseRecorder, updateServiceAccountRequest)
+	if updateServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for PUT service account by ID, got %d", updateServiceAccountResponseRecorder.Code)
 	}
 
 	// 2. Webhooks HTTP API
 	// POST /api/v1/_/core/webhooks
 	createWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":"HTTP Webhook","target_url":"http://localhost:8080/webhook","events":["*"],"signing_secret":"secret123"}`))
 	createWebhookRequest.Header.Set("Content-Type", "application/json")
-	createWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(createWebhookRecorder, createWebhookRequest)
-	if createWebhookRecorder.Code != http.StatusOK && createWebhookRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 for POST webhooks, got %d: %s", createWebhookRecorder.Code, createWebhookRecorder.Body.String())
+	createWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(createWebhookResponseRecorder, createWebhookRequest)
+	if createWebhookResponseRecorder.Code != http.StatusOK && createWebhookResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 for POST webhooks, got %d: %s", createWebhookResponseRecorder.Code, createWebhookResponseRecorder.Body.String())
 	}
-	var webhookRes WebhookSubscription
-	_ = json.Unmarshal(createWebhookRecorder.Body.Bytes(), &webhookRes)
+	var webhook Webhook
+	_ = json.Unmarshal(createWebhookResponseRecorder.Body.Bytes(), &webhook)
 
 	// GET /api/v1/_/core/webhooks
 	listWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	listWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(listWebhookRecorder, listWebhookRequest)
-	if listWebhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhooks, got %d", listWebhookRecorder.Code)
+	listWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(listWebhookResponseRecorder, listWebhookRequest)
+	if listWebhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET webhooks, got %d", listWebhookResponseRecorder.Code)
 	}
 
 	// GET /api/v1/_/core/webhooks/:id
-	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookRes.ID, nil)
-	getWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(getWebhookRecorder, getWebhookRequest)
-	if getWebhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhook by ID, got %d", getWebhookRecorder.Code)
+	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
+	getWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(getWebhookResponseRecorder, getWebhookRequest)
+	if getWebhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET webhook by ID, got %d", getWebhookResponseRecorder.Code)
 	}
 
 	// PUT /api/v1/_/core/webhooks/:id
-	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhookRes.ID, strings.NewReader(`{"name":"Updated HTTP Webhook"}`))
+	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`{"name":"Updated HTTP Webhook"}`))
 	updateWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(updateWebhookRecorder, updateWebhookRequest)
-	if updateWebhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for PUT webhook by ID, got %d", updateWebhookRecorder.Code)
+	updateWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(updateWebhookResponseRecorder, updateWebhookRequest)
+	if updateWebhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for PUT webhook by ID, got %d", updateWebhookResponseRecorder.Code)
 	}
 
 	// GET /api/v1/_/core/webhooks/:id/deliveries
-	deliveriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookRes.ID+"/deliveries", nil)
-	deliveriesRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(deliveriesRecorder, deliveriesRequest)
-	if deliveriesRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhook deliveries, got %d", deliveriesRecorder.Code)
+	deliveriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID+"/deliveries", nil)
+	deliveriesResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(deliveriesResponseRecorder, deliveriesRequest)
+	if deliveriesResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET webhook deliveries, got %d", deliveriesResponseRecorder.Code)
 	}
 
 	// DELETE /api/v1/_/core/webhooks/:id
-	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhookRes.ID, nil)
-	deleteWebhookDeliveryRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(deleteWebhookDeliveryRecorder, deleteWebhookDeliveryRequest)
-	if deleteWebhookDeliveryRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 for DELETE webhook, got %d", deleteWebhookDeliveryRecorder.Code)
+	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
+	deleteWebhookDeliveryResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(deleteWebhookDeliveryResponseRecorder, deleteWebhookDeliveryRequest)
+	if deleteWebhookDeliveryResponseRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 for DELETE webhook, got %d", deleteWebhookDeliveryResponseRecorder.Code)
 	}
 
 	// Create 2nd root service account to allow deleting 1st
-	secondRoot, _ := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "2nd Root", Scopes: []string{ScopeRoot}})
-	_ = secondRoot
+	secondRootServiceAccount, _ := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "2nd Root", Scopes: []string{ScopeRoot}})
+	_ = secondRootServiceAccount
 
 	// DELETE /api/v1/_/core/service-accounts/:id
-	deleteServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, nil)
-	deleteServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(deleteServiceAccountRecorder, deleteServiceAccountRequest)
-	if deleteServiceAccountRecorder.Code != http.StatusNoContent && deleteServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 for DELETE service account, got %d", deleteServiceAccountRecorder.Code)
+	deleteServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, nil)
+	deleteServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(deleteServiceAccountResponseRecorder, deleteServiceAccountRequest)
+	if deleteServiceAccountResponseRecorder.Code != http.StatusNoContent && deleteServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 for DELETE service account, got %d", deleteServiceAccountResponseRecorder.Code)
 	}
 
 	// 3. Error handling & Edge Cases for service accounts and webhooks HTTP Handlers
 	// Invalid JSON on POST /service-accounts
 	badJSONServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{invalid-json`))
 	badJSONServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	badJSONServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONServiceAccountRecorder, badJSONServiceAccountRequest)
-	if badJSONServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", badJSONServiceAccountRecorder.Code)
+	badJSONServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONServiceAccountResponseRecorder, badJSONServiceAccountRequest)
+	if badJSONServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", badJSONServiceAccountResponseRecorder.Code)
 	}
 
 	// Empty name on POST /service-accounts
 	emptyNameServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{"name":""}`))
 	emptyNameServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	emptyNameServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(emptyNameServiceAccountRecorder, emptyNameServiceAccountRequest)
-	if emptyNameServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", emptyNameServiceAccountRecorder.Code)
+	emptyNameServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(emptyNameServiceAccountResponseRecorder, emptyNameServiceAccountRequest)
+	if emptyNameServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", emptyNameServiceAccountResponseRecorder.Code)
 	}
 
 	// Not Found on GET /service-accounts/:id
 	notFoundServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000", nil)
-	notFoundServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(notFoundServiceAccountRecorder, notFoundServiceAccountRequest)
-	if notFoundServiceAccountRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 Not Found, got %d", notFoundServiceAccountRecorder.Code)
+	notFoundServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundServiceAccountResponseRecorder, notFoundServiceAccountRequest)
+	if notFoundServiceAccountResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundServiceAccountResponseRecorder.Code)
 	}
 
 	// Bad JSON on PUT /service-accounts/:id
-	badJSONPutServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+secondRoot.ID, strings.NewReader(`{bad`))
+	badJSONPutServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+secondRootServiceAccount.ID, strings.NewReader(`{bad`))
 	badJSONPutServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	badJSONPutServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONPutServiceAccountRecorder, badJSONPutServiceAccountRequest)
-	if badJSONPutServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", badJSONPutServiceAccountRecorder.Code)
+	badJSONPutServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONPutServiceAccountResponseRecorder, badJSONPutServiceAccountRequest)
+	if badJSONPutServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", badJSONPutServiceAccountResponseRecorder.Code)
 	}
 
 	// Root Protection on DELETE last root service account
-	deleteLastRootServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+secondRoot.ID, nil)
-	deleteLastRootServiceAccountRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(deleteLastRootServiceAccountRecorder, deleteLastRootServiceAccountRequest)
-	if deleteLastRootServiceAccountRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden for deleting last root service account, got %d", deleteLastRootServiceAccountRecorder.Code)
+	deleteLastRootServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+secondRootServiceAccount.ID, nil)
+	deleteLastRootServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(deleteLastRootServiceAccountResponseRecorder, deleteLastRootServiceAccountRequest)
+	if deleteLastRootServiceAccountResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for deleting last root service account, got %d", deleteLastRootServiceAccountResponseRecorder.Code)
 	}
 
 	// Bad JSON on POST /webhooks
 	badJSONWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{bad`))
 	badJSONWebhookRequest.Header.Set("Content-Type", "application/json")
-	badJSONWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONWebhookRecorder, badJSONWebhookRequest)
-	if badJSONWebhookRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", badJSONWebhookRecorder.Code)
+	badJSONWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONWebhookResponseRecorder, badJSONWebhookRequest)
+	if badJSONWebhookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", badJSONWebhookResponseRecorder.Code)
 	}
 
 	// Not Found on GET /webhooks/:id
 	notFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(notFoundWebhookRecorder, notFoundWebhookRequest)
-	if notFoundWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 Not Found, got %d", notFoundWebhookRecorder.Code)
+	notFoundWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundWebhookResponseRecorder, notFoundWebhookRequest)
+	if notFoundWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundWebhookResponseRecorder.Code)
 	}
 
 	// Bad JSON on PUT /webhooks/:id
 	badJSONPutWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{bad`))
 	badJSONPutWebhookRequest.Header.Set("Content-Type", "application/json")
-	badJSONPutWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONPutWebhookRecorder, badJSONPutWebhookRequest)
-	if badJSONPutWebhookRecorder.Code != http.StatusBadRequest && badJSONPutWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 400/404, got %d", badJSONPutWebhookRecorder.Code)
+	badJSONPutWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONPutWebhookResponseRecorder, badJSONPutWebhookRequest)
+	if badJSONPutWebhookResponseRecorder.Code != http.StatusBadRequest && badJSONPutWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 400/404, got %d", badJSONPutWebhookResponseRecorder.Code)
 	}
 
 	// Not Found on DELETE /webhooks/:id
 	notFoundDelWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundDelWebhookRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(notFoundDelWebhookRecorder, notFoundDelWebhookRequest)
-	if notFoundDelWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 Not Found, got %d", notFoundDelWebhookRecorder.Code)
+	notFoundDelWebhookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundDelWebhookResponseRecorder, notFoundDelWebhookRequest)
+	if notFoundDelWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundDelWebhookResponseRecorder.Code)
 	}
 }
 
@@ -795,7 +795,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, containerErr := tcpostgres.Run(ctx,
+	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -809,12 +809,12 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	db, poolErr := NewDatabasePool(ctx, databaseURL)
-	if poolErr != nil {
-		t.Fatalf("failed to create db connection pool: %v", poolErr)
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	db, dbErr := NewDatabasePool(ctx, databaseURL)
+	if dbErr != nil {
+		t.Fatalf("failed to create db connection pool: %v", dbErr)
 	}
 	defer db.Close()
 
@@ -842,162 +842,162 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 
 	// Test 1: List Service Accounts via Control Plane Router
 	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts", nil)
-	recorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from control router list service accounts, got %d: %s", recorder.Code, recorder.Body.String())
+	responseResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(responseResponseRecorder, request)
+	if responseResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from control router list service accounts, got %d: %s", responseResponseRecorder.Code, responseResponseRecorder.Body.String())
 	}
 
 	// Test 2: Create Service Account via Control Plane Router
 	createServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{"name":"Router Test Service Account","scopes":["*"]}`))
 	createServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	createServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(createServiceAccountRecorder, createServiceAccountRequest)
-	if createServiceAccountRecorder.Code != http.StatusOK && createServiceAccountRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 from control router create service account, got %d: %s", createServiceAccountRecorder.Code, createServiceAccountRecorder.Body.String())
+	createServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(createServiceAccountResponseRecorder, createServiceAccountRequest)
+	if createServiceAccountResponseRecorder.Code != http.StatusOK && createServiceAccountResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 from control router create service account, got %d: %s", createServiceAccountResponseRecorder.Code, createServiceAccountResponseRecorder.Body.String())
 	}
-	var serviceAccountRes CreateServiceAccountResult
-	_ = json.Unmarshal(createServiceAccountRecorder.Body.Bytes(), &serviceAccountRes)
+	var createdServiceAccount ServiceAccount
+	_ = json.Unmarshal(createServiceAccountResponseRecorder.Body.Bytes(), &createdServiceAccount)
 
 	// Test 3: Get Service Account by ID
-	getServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, nil)
-	getServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(getServiceAccountRecorder, getServiceAccountRequest)
-	if getServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from get service account by ID, got %d", getServiceAccountRecorder.Code)
+	getServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, nil)
+	getServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(getServiceAccountResponseRecorder, getServiceAccountRequest)
+	if getServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from get service account by ID, got %d", getServiceAccountResponseRecorder.Code)
 	}
 
 	// Test 4: Update Service Account by ID
-	updateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, strings.NewReader(`{"name":"Updated Router Service Account"}`))
+	updateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, strings.NewReader(`{"name":"Updated Router Service Account"}`))
 	updateServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	updateServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateServiceAccountRecorder, updateServiceAccountRequest)
-	if updateServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from update service account, got %d: %s", updateServiceAccountRecorder.Code, updateServiceAccountRecorder.Body.String())
+	updateServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateServiceAccountResponseRecorder, updateServiceAccountRequest)
+	if updateServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from update service account, got %d: %s", updateServiceAccountResponseRecorder.Code, updateServiceAccountResponseRecorder.Body.String())
 	}
 
 	// Test 5: List Webhooks
 	webhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	webhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(webhookRecorder, webhookRequest)
-	if webhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from list webhooks, got %d", webhookRecorder.Code)
+	webhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(webhookResponseRecorder, webhookRequest)
+	if webhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list webhooks, got %d", webhookResponseRecorder.Code)
 	}
 
 	// Test 6: Create Webhook
 	createWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":"Router WH","target_url":"http://localhost:8080/hook","events":["*"],"signing_secret":"secret123"}`))
 	createWebhookRequest.Header.Set("Content-Type", "application/json")
-	createWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(createWebhookRecorder, createWebhookRequest)
-	if createWebhookRecorder.Code != http.StatusOK && createWebhookRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 from create webhook, got %d: %s", createWebhookRecorder.Code, createWebhookRecorder.Body.String())
+	createWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(createWebhookResponseRecorder, createWebhookRequest)
+	if createWebhookResponseRecorder.Code != http.StatusOK && createWebhookResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 from create webhook, got %d: %s", createWebhookResponseRecorder.Code, createWebhookResponseRecorder.Body.String())
 	}
-	var webhookRes WebhookSubscription
-	_ = json.Unmarshal(createWebhookRecorder.Body.Bytes(), &webhookRes)
+	var webhook Webhook
+	_ = json.Unmarshal(createWebhookResponseRecorder.Body.Bytes(), &webhook)
 
 	// Test 7: Get Webhook by ID
-	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookRes.ID, nil)
-	getWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(getWebhookRecorder, getWebhookRequest)
-	if getWebhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from get webhook by ID, got %d", getWebhookRecorder.Code)
+	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
+	getWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(getWebhookResponseRecorder, getWebhookRequest)
+	if getWebhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from get webhook by ID, got %d", getWebhookResponseRecorder.Code)
 	}
 
 	// Test 8: Update Webhook
-	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhookRes.ID, strings.NewReader(`{"name":"Updated Router WH"}`))
+	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`{"name":"Updated Router WH"}`))
 	updateWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateWebhookRecorder, updateWebhookRequest)
-	if updateWebhookRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from update webhook, got %d", updateWebhookRecorder.Code)
+	updateWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateWebhookResponseRecorder, updateWebhookRequest)
+	if updateWebhookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from update webhook, got %d", updateWebhookResponseRecorder.Code)
 	}
 
 	// Test 9: List Webhook Deliveries
-	webhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookRes.ID+"/deliveries", nil)
-	webhookDeliveryRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(webhookDeliveryRecorder, webhookDeliveryRequest)
-	if webhookDeliveryRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from list deliveries, got %d", webhookDeliveryRecorder.Code)
+	webhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID+"/deliveries", nil)
+	webhookDeliveryResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(webhookDeliveryResponseRecorder, webhookDeliveryRequest)
+	if webhookDeliveryResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list deliveries, got %d", webhookDeliveryResponseRecorder.Code)
 	}
 
 	// Test 10: Delete Webhook
-	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhookRes.ID, nil)
-	deleteWebhookDeliveryRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteWebhookDeliveryRecorder, deleteWebhookDeliveryRequest)
-	if deleteWebhookDeliveryRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 from delete webhook, got %d", deleteWebhookDeliveryRecorder.Code)
+	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
+	deleteWebhookDeliveryResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteWebhookDeliveryResponseRecorder, deleteWebhookDeliveryRequest)
+	if deleteWebhookDeliveryResponseRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 from delete webhook, got %d", deleteWebhookDeliveryResponseRecorder.Code)
 	}
 
 	// Create 2nd root service account so we can delete the first
 	_, _ = kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "2nd Root", Scopes: []string{ScopeRoot}})
 
 	// Test 11: Delete Service Account
-	deleteServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+serviceAccountRes.ID, nil)
-	deleteServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteServiceAccountRecorder, deleteServiceAccountRequest)
-	if deleteServiceAccountRecorder.Code != http.StatusNoContent && deleteServiceAccountRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 from delete service account, got %d", deleteServiceAccountRecorder.Code)
+	deleteServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/"+createdServiceAccount.ID, nil)
+	deleteServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteServiceAccountResponseRecorder, deleteServiceAccountRequest)
+	if deleteServiceAccountResponseRecorder.Code != http.StatusNoContent && deleteServiceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 from delete service account, got %d", deleteServiceAccountResponseRecorder.Code)
 	}
 
 	// Test Error Branches
 	// Invalid Create service account body (missing name)
 	badCreateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{"name":""}`))
 	badCreateServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	badCreateServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateServiceAccountRecorder, badCreateServiceAccountRequest)
-	if badCreateServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for empty name in create service account, got %d", badCreateServiceAccountRecorder.Code)
+	badCreateServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateServiceAccountResponseRecorder, badCreateServiceAccountRequest)
+	if badCreateServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name in create service account, got %d", badCreateServiceAccountResponseRecorder.Code)
 	}
 
 	// Invalid Create Webhook body (missing name)
 	badCreateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":""}`))
 	badCreateWebhookRequest.Header.Set("Content-Type", "application/json")
-	badCreateWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateWebhookRecorder, badCreateWebhookRequest)
-	if badCreateWebhookRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for empty name in create webhook, got %d", badCreateWebhookRecorder.Code)
+	badCreateWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateWebhookResponseRecorder, badCreateWebhookRequest)
+	if badCreateWebhookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name in create webhook, got %d", badCreateWebhookResponseRecorder.Code)
 	}
 
 	// A. Not found service account
 	notFoundServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000", nil)
-	notFoundServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundServiceAccountRecorder, notFoundServiceAccountRequest)
-	if notFoundServiceAccountRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for not found service account, got %d", notFoundServiceAccountRecorder.Code)
+	notFoundServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundServiceAccountResponseRecorder, notFoundServiceAccountRequest)
+	if notFoundServiceAccountResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for not found service account, got %d", notFoundServiceAccountResponseRecorder.Code)
 	}
 
 	// B. Not found Webhook
 	notFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundWebhookRecorder, notFoundWebhookRequest)
-	if notFoundWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for not found webhook, got %d", notFoundWebhookRecorder.Code)
+	notFoundWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundWebhookResponseRecorder, notFoundWebhookRequest)
+	if notFoundWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for not found webhook, got %d", notFoundWebhookResponseRecorder.Code)
 	}
 
 	// C. Update not found service account
 	updateNotFoundServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000", strings.NewReader(`{"name":"NF"}`))
 	updateNotFoundServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	updateNotFoundServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundServiceAccountRecorder, updateNotFoundServiceAccountRequest)
-	if updateNotFoundServiceAccountRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for update not found service account, got %d", updateNotFoundServiceAccountRecorder.Code)
+	updateNotFoundServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundServiceAccountResponseRecorder, updateNotFoundServiceAccountRequest)
+	if updateNotFoundServiceAccountResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for update not found service account, got %d", updateNotFoundServiceAccountResponseRecorder.Code)
 	}
 
 	// D. Update not found Webhook
 	updateNotFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{"name":"NF"}`))
 	updateNotFoundWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateNotFoundWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundWebhookRecorder, updateNotFoundWebhookRequest)
-	if updateNotFoundWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for update not found webhook, got %d", updateNotFoundWebhookRecorder.Code)
+	updateNotFoundWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundWebhookResponseRecorder, updateNotFoundWebhookRequest)
+	if updateNotFoundWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for update not found webhook, got %d", updateNotFoundWebhookResponseRecorder.Code)
 	}
 
 	// E. Delete not found service account
 	deleteNotFoundServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000", nil)
-	deleteNotFoundServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundServiceAccountRecorder, deleteNotFoundServiceAccountRequest)
-	if deleteNotFoundServiceAccountRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for delete not found service account, got %d", deleteNotFoundServiceAccountRecorder.Code)
+	deleteNotFoundServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundServiceAccountResponseRecorder, deleteNotFoundServiceAccountRequest)
+	if deleteNotFoundServiceAccountResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for delete not found service account, got %d", deleteNotFoundServiceAccountResponseRecorder.Code)
 	}
 
 	// H. Update Root Account Disabled -> 403 Forbidden
@@ -1011,53 +1011,53 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 	updateRootServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+singleRootServiceAccount.ID, strings.NewReader(`{"is_enabled":false}`))
 	updateRootServiceAccountRequest.Header.Set("Content-Type", "application/json")
-	updateRootServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateRootServiceAccountRecorder, updateRootServiceAccountRequest)
-	if updateRootServiceAccountRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden for root account update disabling, got: %d", updateRootServiceAccountRecorder.Code)
+	updateRootServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateRootServiceAccountResponseRecorder, updateRootServiceAccountRequest)
+	if updateRootServiceAccountResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for root account update disabling, got: %d", updateRootServiceAccountResponseRecorder.Code)
 	}
 
 	// Additional error coverage for kernel handlers with canceled context
-	testCanceledContextEndpoints(t, server, webhookRes.ID)
+	testCanceledContextEndpoints(t, server, webhook.ID)
 
 	// Create service account invalid JSON body
 	invalidCreateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`invalid-json`))
-	invalidCreateServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateServiceAccountRecorder, invalidCreateServiceAccountRequest)
-	if invalidCreateServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON create service account, got %d", invalidCreateServiceAccountRecorder.Code)
+	invalidCreateServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateServiceAccountResponseRecorder, invalidCreateServiceAccountRequest)
+	if invalidCreateServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON create service account, got %d", invalidCreateServiceAccountResponseRecorder.Code)
 	}
 
 	// Update service account invalid JSON body
 	invalidUpdateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/service-accounts/"+singleRootServiceAccount.ID, strings.NewReader(`invalid-json`))
-	invalidUpdateServiceAccountRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateServiceAccountRecorder, invalidUpdateServiceAccountRequest)
-	if invalidUpdateServiceAccountRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON update service account, got %d", invalidUpdateServiceAccountRecorder.Code)
+	invalidUpdateServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateServiceAccountResponseRecorder, invalidUpdateServiceAccountRequest)
+	if invalidUpdateServiceAccountResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON update service account, got %d", invalidUpdateServiceAccountResponseRecorder.Code)
 	}
 
 	// Create webhook invalid JSON body
 	invalidCreateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`invalid-json`))
-	invalidCreateWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateWebhookRecorder, invalidCreateWebhookRequest)
-	if invalidCreateWebhookRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON create webhook, got %d", invalidCreateWebhookRecorder.Code)
+	invalidCreateWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateWebhookResponseRecorder, invalidCreateWebhookRequest)
+	if invalidCreateWebhookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON create webhook, got %d", invalidCreateWebhookResponseRecorder.Code)
 	}
 
 	// Update webhook invalid JSON body
-	invalidUpdateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhookRes.ID, strings.NewReader(`invalid-json`))
-	invalidUpdateWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateWebhookRecorder, invalidUpdateWebhookRequest)
-	if invalidUpdateWebhookRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON update webhook, got %d", invalidUpdateWebhookRecorder.Code)
+	invalidUpdateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`invalid-json`))
+	invalidUpdateWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateWebhookResponseRecorder, invalidUpdateWebhookRequest)
+	if invalidUpdateWebhookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON update webhook, got %d", invalidUpdateWebhookResponseRecorder.Code)
 	}
 
 	// Delete not found webhook
 	deleteNotFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	deleteNotFoundWebhookRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundWebhookRecorder, deleteNotFoundWebhookRequest)
-	if deleteNotFoundWebhookRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for delete not found webhook, got %d", deleteNotFoundWebhookRecorder.Code)
+	deleteNotFoundWebhookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundWebhookResponseRecorder, deleteNotFoundWebhookRequest)
+	if deleteNotFoundWebhookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for delete not found webhook, got %d", deleteNotFoundWebhookResponseRecorder.Code)
 	}
 
 	// Test ServiceAccountAuthMiddleware & RequireScopeMiddleware
@@ -1069,133 +1069,133 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("failed to create middleware service account: %v", err)
 	}
 
-	testHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	testHandler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		serviceAccount := GetServiceAccount(request.Context())
 		if serviceAccount == nil {
-			http.Error(writer, "no service account in context", http.StatusUnauthorized)
+			http.Error(responseWriter, "no service account in context", http.StatusUnauthorized)
 			return
 		}
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write([]byte(serviceAccount.ID))
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write([]byte(serviceAccount.ID))
 	})
 
 	// 1. Nil manager pass-through
-	nilServiceAccountManagerChain := ServiceAccountAuthMiddleware(nil)(testHandler)
+	nilServiceAccountManagerHandler := ServiceAccountAuthMiddleware(nil)(testHandler)
 	nilServiceAccountManagerRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	nilServiceAccountManagerRecorder := httptest.NewRecorder()
-	nilServiceAccountManagerChain.ServeHTTP(nilServiceAccountManagerRecorder, nilServiceAccountManagerRequest)
-	if nilServiceAccountManagerRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 when serviceAccount not in context, got %d", nilServiceAccountManagerRecorder.Code)
+	nilServiceAccountManagerResponseRecorder := httptest.NewRecorder()
+	nilServiceAccountManagerHandler.ServeHTTP(nilServiceAccountManagerResponseRecorder, nilServiceAccountManagerRequest)
+	if nilServiceAccountManagerResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when serviceAccount not in context, got %d", nilServiceAccountManagerResponseRecorder.Code)
 	}
 
 	// 2. Empty key pass-through
-	chain := ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(testHandler)
+	handler := ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(testHandler)
 	noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	noKeyRecorder := httptest.NewRecorder()
-	chain.ServeHTTP(noKeyRecorder, noKeyRequest)
-	if noKeyRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on empty key pass through, got %d", noKeyRecorder.Code)
+	noKeyResponseRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(noKeyResponseRecorder, noKeyRequest)
+	if noKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on empty key pass through, got %d", noKeyResponseRecorder.Code)
 	}
 
 	// 3. Invalid key -> 401
 	badKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 	badKeyRequest.Header.Set("X-Layr-Service-Account-Key", "invalid_short_key")
-	badKeyRecorder := httptest.NewRecorder()
-	chain.ServeHTTP(badKeyRecorder, badKeyRequest)
-	if badKeyRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on invalid key, got %d", badKeyRecorder.Code)
+	badKeyResponseRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(badKeyResponseRecorder, badKeyRequest)
+	if badKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on invalid key, got %d", badKeyResponseRecorder.Code)
 	}
 
 	// 4. Valid Service Account Key via X-Forwarded-For IP & Bearer Header
 	validKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 	validKeyRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	validKeyRequest.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")
-	validKeyRecorder := httptest.NewRecorder()
-	chain.ServeHTTP(validKeyRecorder, validKeyRequest)
-	if validKeyRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key, got %d", validKeyRecorder.Code)
+	validKeyResponseRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(validKeyResponseRecorder, validKeyRequest)
+	if validKeyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid service account key, got %d", validKeyResponseRecorder.Code)
 	}
 
 	// 5. Valid Service Account Key via X-Real-IP
 	validXRealRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 	validXRealRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
 	validXRealRequest.Header.Set("X-Real-IP", "127.0.0.1")
-	validXRealRecorder := httptest.NewRecorder()
-	chain.ServeHTTP(validXRealRecorder, validXRealRequest)
-	if validXRealRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key with X-Real-IP, got %d", validXRealRecorder.Code)
+	validXRealResponseRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(validXRealResponseRecorder, validXRealRequest)
+	if validXRealResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid service account key with X-Real-IP, got %d", validXRealResponseRecorder.Code)
 	}
 
 	// 5b. Valid Service Account Key with plain RemoteAddr
 	plainRemoteRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
 	plainRemoteRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
 	plainRemoteRequest.RemoteAddr = "127.0.0.1" // no port, tests SplitHostPort fallback
-	plainRemoteRecorder := httptest.NewRecorder()
-	chain.ServeHTTP(plainRemoteRecorder, plainRemoteRequest)
-	if plainRemoteRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key with plain RemoteAddr, got %d", plainRemoteRecorder.Code)
+	plainRemoteResponseRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(plainRemoteResponseRecorder, plainRemoteRequest)
+	if plainRemoteResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid service account key with plain RemoteAddr, got %d", plainRemoteResponseRecorder.Code)
 	}
 
 	// 6. Test RequireScopeMiddleware
-	scopeGuardedHandler := RequireScopeMiddleware("core:service-account.read")(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
+	scopeGuardedHandler := RequireScopeMiddleware("core:service-account.read")(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusOK)
 	}))
 
 	// Without service account in context -> 401
 	unauthScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	unauthScopeRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(unauthScopeRecorder, unauthScopeRequest)
-	if unauthScopeRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without service account in context, got %d", unauthScopeRecorder.Code)
+	unauthScopeResponseRecorder := httptest.NewRecorder()
+	scopeGuardedHandler.ServeHTTP(unauthScopeResponseRecorder, unauthScopeRequest)
+	if unauthScopeResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without service account in context, got %d", unauthScopeResponseRecorder.Code)
 	}
 
 	// With service account lacking scope -> 403
 	scopedServiceAccount := &ServiceAccount{ID: "test", Scopes: []string{"data:query.read"}}
-	insufficientContext := WithServiceAccount(ctx, scopedServiceAccount)
-	insufficientRequest := httptest.NewRequestWithContext(insufficientContext, http.MethodGet, "/test", nil)
-	insufficientRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(insufficientRecorder, insufficientRequest)
-	if insufficientRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 on insufficient scope, got %d", insufficientRecorder.Code)
+	insufficientCtx := WithServiceAccount(ctx, scopedServiceAccount)
+	insufficientRequest := httptest.NewRequestWithContext(insufficientCtx, http.MethodGet, "/test", nil)
+	insufficientResponseRecorder := httptest.NewRecorder()
+	scopeGuardedHandler.ServeHTTP(insufficientResponseRecorder, insufficientRequest)
+	if insufficientResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on insufficient scope, got %d", insufficientResponseRecorder.Code)
 	}
 
 	// With service account holding wildcard scope -> 200
 	rootServiceAccount := &ServiceAccount{ID: "root", Scopes: []string{ScopeRoot}}
-	rootContext := WithServiceAccount(ctx, rootServiceAccount)
-	rootRequest := httptest.NewRequestWithContext(rootContext, http.MethodGet, "/test", nil)
-	rootRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(rootRecorder, rootRequest)
-	if rootRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with root service account, got %d", rootRecorder.Code)
+	rootCtx := WithServiceAccount(ctx, rootServiceAccount)
+	rootRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/test", nil)
+	rootResponseRecorder := httptest.NewRecorder()
+	scopeGuardedHandler.ServeHTTP(rootResponseRecorder, rootRequest)
+	if rootResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with root service account, got %d", rootResponseRecorder.Code)
 	}
 }
 
-func testCanceledContextEndpoints(t *testing.T, server *HTTPServer, webhookID string) {
+func testCanceledContextEndpoints(t *testing.T, server *Server, webhookID string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	// List service accounts canceled context
 	listCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/service-accounts", nil)
-	listCanceledRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(listCanceledRecorder, listCanceledRequest)
-	if listCanceledRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 for canceled context on list service accounts, got %d", listCanceledRecorder.Code)
+	listCanceledResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(listCanceledResponseRecorder, listCanceledRequest)
+	if listCanceledResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for canceled context on list service accounts, got %d", listCanceledResponseRecorder.Code)
 	}
 
 	// List webhooks canceled context
 	listWebhooksCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	listWebhooksCanceledRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(listWebhooksCanceledRecorder, listWebhooksCanceledRequest)
-	if listWebhooksCanceledRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 for canceled context on list webhooks, got %d", listWebhooksCanceledRecorder.Code)
+	listWebhooksCanceledResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(listWebhooksCanceledResponseRecorder, listWebhooksCanceledRequest)
+	if listWebhooksCanceledResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for canceled context on list webhooks, got %d", listWebhooksCanceledResponseRecorder.Code)
 	}
 
 	// List webhook deliveries canceled context
 	listDeliveriesCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookID+"/deliveries", nil)
-	listDeliveriesCanceledRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(listDeliveriesCanceledRecorder, listDeliveriesCanceledRequest)
-	if listDeliveriesCanceledRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 for canceled context on list deliveries, got %d", listDeliveriesCanceledRecorder.Code)
+	listDeliveriesCanceledResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(listDeliveriesCanceledResponseRecorder, listDeliveriesCanceledRequest)
+	if listDeliveriesCanceledResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for canceled context on list deliveries, got %d", listDeliveriesCanceledResponseRecorder.Code)
 	}
 }
 
@@ -1203,7 +1203,7 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -1217,9 +1217,9 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	db, err := NewDatabasePool(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf("failed to create db connection pool: %v", err)
@@ -1282,7 +1282,7 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 
 type coreErrReader struct{}
 
-func (coreErrReader) Read(p []byte) (int, error) {
+func (coreErrReader) Read(destinationBuffer []byte) (int, error) {
 	return 0, errors.New("simulated rand reader failure")
 }
 
@@ -1290,7 +1290,7 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -1303,9 +1303,9 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer func() { _ = pgContainer.Terminate(context.WithoutCancel(ctx)) }()
+	defer func() { _ = postgresContainer.Terminate(context.WithoutCancel(ctx)) }()
 
-	databaseURL, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
@@ -1340,22 +1340,22 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
 	defaultPasswordHasher.SetRandomReader(&coreErrReader{})
-	kernelInstance := &Kernel{db: db, serviceAccountManager: serviceAccountManager}
-	if err := kernelInstance.bootstrapRootAccount(ctx); err == nil {
+	kernel := &Kernel{db: db, serviceAccountManager: serviceAccountManager}
+	if err := kernel.bootstrapRootAccount(ctx); err == nil {
 		t.Fatal("expected error on hasher failure")
 	}
 	defaultPasswordHasher.SetRandomReader(nil)
 
 	// 4. Insert console user failure
 	_, _ = db.Exec(ctx, "ALTER TABLE console.users ADD CONSTRAINT test_bootstrap_fail CHECK (email != 'root@layr.local')")
-	if err := kernelInstance.bootstrapRootAccount(ctx); err == nil {
+	if err := kernel.bootstrapRootAccount(ctx); err == nil {
 		t.Fatal("expected error on insert console user constraint failure")
 	}
 	_, _ = db.Exec(ctx, "ALTER TABLE console.users DROP CONSTRAINT test_bootstrap_fail")
 
 	// 5. Create service account failure
 	_, _ = db.Exec(ctx, "ALTER TABLE core.service_accounts ADD CONSTRAINT test_service_account_fail CHECK (name != 'Root Service Account')")
-	if err := kernelInstance.bootstrapRootAccount(ctx); err == nil {
+	if err := kernel.bootstrapRootAccount(ctx); err == nil {
 		t.Fatal("expected error on create service account constraint failure")
 	}
 	_, _ = db.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT test_service_account_fail")
@@ -1365,7 +1365,7 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
 
 	// 6. Successful default bootstrap (generates random password and linked service account)
-	if err := kernelInstance.bootstrapRootAccount(ctx); err != nil {
+	if err := kernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("failed default bootstrapRootAccount: %v", err)
 	}
 
@@ -1377,7 +1377,7 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	}
 
 	// 7. Idempotent re-run when count > 0
-	if err := kernelInstance.bootstrapRootAccount(ctx); err != nil {
+	if err := kernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("idempotent bootstrapRootAccount failed: %v", err)
 	}
 

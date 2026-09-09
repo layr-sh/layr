@@ -12,10 +12,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/argon2"
-	"layr.sh/logger"
 )
-
-var log = logger.New("auth")
 
 const (
 	expectedHashSegmentCount = 6
@@ -151,10 +148,10 @@ func (hasher *Hasher) Verify(plainPassword, encodedHash string) (bool, error) {
 	computedHash := argon2.IDKey([]byte(plainPassword), salt, iterations, memory, uint8(parallelism), uint32(len(expectedHash)))
 
 	matched := subtle.ConstantTimeCompare(computedHash, expectedHash) == 1
-	log.Tracef("Argon2id password verification completed (match=%t)", matched)
-	if matched {
-		return true, nil
+	if !matched {
+		log.Debug("Argon2id password verification failed: hash mismatch")
+		return false, nil
 	}
-
-	return false, nil
+	log.Debug("Argon2id password verification succeeded: hash matched")
+	return true, nil
 }

@@ -50,7 +50,7 @@ func WriteErrorResponseProblem(responseWriter http.ResponseWriter, request *http
 		oauthError = strings.ToLower(errorCode)
 	}
 
-	errResponse := ErrorResponse{
+	errorResponse := ErrorResponse{
 		Error:            oauthError,
 		ErrorDescription: detail,
 		Type:             typeURL,
@@ -63,5 +63,5 @@ func WriteErrorResponseProblem(responseWriter http.ResponseWriter, request *http
 	}
 
 	log.Debugf("writing RFC 7807 error response (status: %d, title: %q, error_code: %s, instance: %s, detail: %q)", status, title, errorCode, instance, detail)
-	_ = json.NewEncoder(responseWriter).Encode(errResponse)
+	_ = json.NewEncoder(responseWriter).Encode(errorResponse)
 }

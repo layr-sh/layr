@@ -11,17 +11,17 @@ func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
 	validHexKey := strings.Repeat("0", 64)
 
 	// 1. Non-existent file returns default config with zero error
-	loadedDefault, defaultErr := LoadConfig("non_existent_file_path.yaml")
-	if defaultErr != nil || loadedDefault == nil {
+	loadedDefaultConfig, defaultErr := LoadConfig("non_existent_file_path.yaml")
+	if defaultErr != nil || loadedDefaultConfig == nil {
 		t.Fatalf("expected default configuration on non-existent file, got %v", defaultErr)
 	}
-	if loadedDefault.Project.Name != "layr-app" {
-		t.Fatalf("expected default project name 'layr-app', got '%s'", loadedDefault.Project.Name)
+	if loadedDefaultConfig.Project.Name != "layr-app" {
+		t.Fatalf("expected default project name 'layr-app', got '%s'", loadedDefaultConfig.Project.Name)
 	}
 
 	// 2. Empty string path returns default config
-	loadedEmpty, emptyErr := LoadConfig("")
-	if emptyErr != nil || loadedEmpty == nil {
+	loadedEmptyConfig, emptyErr := LoadConfig("")
+	if emptyErr != nil || loadedEmptyConfig == nil {
 		t.Fatalf("expected default configuration on empty path, got %v", emptyErr)
 	}
 
@@ -78,20 +78,20 @@ console:
 		t.Fatalf("failed to write complete yaml file: %v", writeErr)
 	}
 
-	loadedComplete, completeErr := LoadConfig(completeYAMLFile)
+	loadedCompleteConfig, completeErr := LoadConfig(completeYAMLFile)
 	if completeErr != nil {
 		t.Fatalf("failed to load complete yaml config: %v", completeErr)
 	}
-	if valErr := loadedComplete.Validate(); valErr != nil {
+	if valErr := loadedCompleteConfig.Validate(); valErr != nil {
 		t.Fatalf("validation failed on valid complete yaml config: %v", valErr)
 	}
 
-	if loadedComplete.Project.Name != "production-app" ||
-		loadedComplete.Server.ListenAddr != ":8443" ||
-		loadedComplete.Database.MaxConnections != 50 ||
-		loadedComplete.KVStore.Backend != "redis" ||
-		len(loadedComplete.GetFunctionalServices()) != 7 {
-		t.Fatalf("complete config fields mismatch: %+v", loadedComplete)
+	if loadedCompleteConfig.Project.Name != "production-app" ||
+		loadedCompleteConfig.Server.ListenAddr != ":8443" ||
+		loadedCompleteConfig.Database.MaxConnections != 50 ||
+		loadedCompleteConfig.KVStore.Backend != "redis" ||
+		len(loadedCompleteConfig.GetFunctionalServices()) != 7 {
+		t.Fatalf("complete config fields mismatch: %+v", loadedCompleteConfig)
 	}
 
 	// 5. Minimal YAML configuration file (omitted fields use defaults)
@@ -107,14 +107,14 @@ data:
 		t.Fatalf("failed to write minimal yaml file: %v", minWriteErr)
 	}
 
-	loadedMinimal, minErr := LoadConfig(minimalYAMLFile)
+	loadedMinimalConfig, minErr := LoadConfig(minimalYAMLFile)
 	if minErr != nil {
 		t.Fatalf("failed to load minimal yaml config: %v", minErr)
 	}
-	if minValErr := loadedMinimal.Validate(); minValErr != nil {
+	if minValErr := loadedMinimalConfig.Validate(); minValErr != nil {
 		t.Fatalf("validation failed on valid minimal yaml config: %v", minValErr)
 	}
-	if loadedMinimal.Project.Name != "layr-app" || loadedMinimal.Server.ListenAddr != ":8080" || loadedMinimal.Database.URL != ".layr/data" {
+	if loadedMinimalConfig.Project.Name != "layr-app" || loadedMinimalConfig.Server.ListenAddr != ":8080" || loadedMinimalConfig.Database.URL != ".layr/data" {
 		t.Fatal("expected minimal config to retain defaults for omitted fields")
 	}
 

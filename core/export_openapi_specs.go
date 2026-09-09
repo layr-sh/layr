@@ -32,36 +32,36 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 
 	kernel.registerCoreRoutes(server)
 
-	serviceFactoriesMutex.RLock()
+	serviceFactoriesRWMutex.RLock()
 	serviceNames := make([]string, 0, len(serviceFactories))
 	for name := range serviceFactories {
 		serviceNames = append(serviceNames, name)
 	}
-	serviceFactoriesMutex.RUnlock()
+	serviceFactoriesRWMutex.RUnlock()
 	sort.Strings(serviceNames)
 	log.Tracef("registering service routes for OpenAPI export: %v", serviceNames)
 
 	for _, serviceName := range serviceNames {
-		factory, ok := GetServiceFactory(serviceName)
+		serviceFactory, ok := GetServiceFactory(serviceName)
 		if ok {
-			svc, err := factory(kernel)
+			serviceRunner, err := serviceFactory(kernel)
 			if err == nil {
-				svc.RegisterRoutes(server.Router(), server.ControlPlaneRouter())
+				serviceRunner.RegisterRoutes(server.Router(), server.ControlPlaneRouter())
 			}
 		}
 	}
 
-	publicSpec := server.Router().OutputOpenAPISpec()
-	controlSpec := server.ControlPlaneRouter().OutputOpenAPISpec()
-	unifiedSpec := MergeOpenAPISpecs(publicSpec, controlSpec)
+	openAPISpec := server.Router().OutputOpenAPISpec()
+	controlPlaneOpenAPISpec := server.ControlPlaneRouter().OutputOpenAPISpec()
+	unifiedOpenAPISpec := MergeOpenAPISpecs(openAPISpec, controlPlaneOpenAPISpec)
 	log.Trace("synthesized public, control plane, and unified OpenAPI specifications")
 
-	return publicSpec, controlSpec, unifiedSpec, nil
+	return openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec, nil
 }
 
 // MergeOpenAPISpecs combines public and control plane OpenAPI 3.1 specifications into a single unified specification.
-func MergeOpenAPISpecs(publicSpec, controlSpec *openapi3.T) *openapi3.T {
-	unifiedSpec := &openapi3.T{
+func MergeOpenAPISpecs(openAPISpec, controlPlaneOpenAPISpec *openapi3.T) *openapi3.T {
+	unifiedOpenAPISpec := &openapi3.T{
 		OpenAPI: "3.1.0",
 		Info: &openapi3.Info{
 			Title:       "Layr Unified API Engine",
@@ -74,34 +74,34 @@ func MergeOpenAPISpecs(publicSpec, controlSpec *openapi3.T) *openapi3.T {
 		},
 	}
 
-	if publicSpec != nil {
-		if publicSpec.OpenAPI != "" {
-			unifiedSpec.OpenAPI = publicSpec.OpenAPI
+	if openAPISpec != nil {
+		if openAPISpec.OpenAPI != "" {
+			unifiedOpenAPISpec.OpenAPI = openAPISpec.OpenAPI
 		}
-		if publicSpec.Paths != nil {
-			for _, path := range publicSpec.Paths.InMatchingOrder() {
-				unifiedSpec.Paths.Set(path, publicSpec.Paths.Find(path))
+		if openAPISpec.Paths != nil {
+			for _, path := range openAPISpec.Paths.InMatchingOrder() {
+				unifiedOpenAPISpec.Paths.Set(path, openAPISpec.Paths.Find(path))
 			}
 		}
-		if publicSpec.Components != nil && publicSpec.Components.Schemas != nil {
-			for name, schema := range publicSpec.Components.Schemas {
-				unifiedSpec.Components.Schemas[name] = schema
-			}
-		}
-	}
-
-	if controlSpec != nil {
-		if controlSpec.Paths != nil {
-			for _, path := range controlSpec.Paths.InMatchingOrder() {
-				unifiedSpec.Paths.Set(path, controlSpec.Paths.Find(path))
-			}
-		}
-		if controlSpec.Components != nil && controlSpec.Components.Schemas != nil {
-			for name, schema := range controlSpec.Components.Schemas {
-				unifiedSpec.Components.Schemas[name] = schema
+		if openAPISpec.Components != nil && openAPISpec.Components.Schemas != nil {
+			for name, schema := range openAPISpec.Components.Schemas {
+				unifiedOpenAPISpec.Components.Schemas[name] = schema
 			}
 		}
 	}
 
-	return unifiedSpec
+	if controlPlaneOpenAPISpec != nil {
+		if controlPlaneOpenAPISpec.Paths != nil {
+			for _, path := range controlPlaneOpenAPISpec.Paths.InMatchingOrder() {
+				unifiedOpenAPISpec.Paths.Set(path, controlPlaneOpenAPISpec.Paths.Find(path))
+			}
+		}
+		if controlPlaneOpenAPISpec.Components != nil && controlPlaneOpenAPISpec.Components.Schemas != nil {
+			for name, schema := range controlPlaneOpenAPISpec.Components.Schemas {
+				unifiedOpenAPISpec.Components.Schemas[name] = schema
+			}
+		}
+	}
+
+	return unifiedOpenAPISpec
 }

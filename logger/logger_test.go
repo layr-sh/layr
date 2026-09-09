@@ -28,27 +28,27 @@ func TestLoggerLevelUnit(t *testing.T) {
 
 	// 2. Verify ParseLevel
 	testCases := []struct {
-		input       string
-		expected    Level
-		expectError bool
+		input         string
+		expectedLevel Level
+		expectError   bool
 	}{
-		{input: "TRACE", expected: LevelTrace, expectError: false},
-		{input: "trace", expected: LevelTrace, expectError: false},
-		{input: "  TrAcE  ", expected: LevelTrace, expectError: false},
-		{input: "DEBUG", expected: LevelDebug, expectError: false},
-		{input: "debug", expected: LevelDebug, expectError: false},
-		{input: "  DeBuG  ", expected: LevelDebug, expectError: false},
-		{input: "INFO", expected: LevelInfo, expectError: false},
-		{input: "info", expected: LevelInfo, expectError: false},
-		{input: "", expected: LevelInfo, expectError: false},
-		{input: "   ", expected: LevelInfo, expectError: false},
-		{input: "WARN", expected: LevelWarn, expectError: false},
-		{input: "warn", expected: LevelWarn, expectError: false},
-		{input: "WARNING", expected: LevelWarn, expectError: false},
-		{input: "warning", expected: LevelWarn, expectError: false},
-		{input: "ERROR", expected: LevelError, expectError: false},
-		{input: "error", expected: LevelError, expectError: false},
-		{input: "invalid_level", expected: LevelInfo, expectError: true},
+		{input: "TRACE", expectedLevel: LevelTrace, expectError: false},
+		{input: "trace", expectedLevel: LevelTrace, expectError: false},
+		{input: "  TrAcE  ", expectedLevel: LevelTrace, expectError: false},
+		{input: "DEBUG", expectedLevel: LevelDebug, expectError: false},
+		{input: "debug", expectedLevel: LevelDebug, expectError: false},
+		{input: "  DeBuG  ", expectedLevel: LevelDebug, expectError: false},
+		{input: "INFO", expectedLevel: LevelInfo, expectError: false},
+		{input: "info", expectedLevel: LevelInfo, expectError: false},
+		{input: "", expectedLevel: LevelInfo, expectError: false},
+		{input: "   ", expectedLevel: LevelInfo, expectError: false},
+		{input: "WARN", expectedLevel: LevelWarn, expectError: false},
+		{input: "warn", expectedLevel: LevelWarn, expectError: false},
+		{input: "WARNING", expectedLevel: LevelWarn, expectError: false},
+		{input: "warning", expectedLevel: LevelWarn, expectError: false},
+		{input: "ERROR", expectedLevel: LevelError, expectError: false},
+		{input: "error", expectedLevel: LevelError, expectError: false},
+		{input: "invalid_level", expectedLevel: LevelInfo, expectError: true},
 	}
 
 	for _, testCase := range testCases {
@@ -61,8 +61,8 @@ func TestLoggerLevelUnit(t *testing.T) {
 			if parseErr != nil {
 				t.Errorf("ParseLevel(%q): unexpected error: %v", testCase.input, parseErr)
 			}
-			if parsedLevel != testCase.expected {
-				t.Errorf("ParseLevel(%q): expected %v, got %v", testCase.input, testCase.expected, parsedLevel)
+			if parsedLevel != testCase.expectedLevel {
+				t.Errorf("ParseLevel(%q): expected %v, got %v", testCase.input, testCase.expectedLevel, parsedLevel)
 			}
 		}
 	}
@@ -227,9 +227,9 @@ func TestLoggerScopeUnit(t *testing.T) {
 
 	// Test WithScope with explicit level on parent
 	logger.SetLevel(LevelWarn)
-	scopedExplicit := logger.WithScope("explicit-child")
-	if scopedExplicit.GetLevel() != LevelWarn {
-		t.Errorf("expected child to inherit explicit level LevelWarn, got %v", scopedExplicit.GetLevel())
+	explicitScopeLogger := logger.WithScope("explicit-child")
+	if explicitScopeLogger.GetLevel() != LevelWarn {
+		t.Errorf("expected child to inherit explicit level LevelWarn, got %v", explicitScopeLogger.GetLevel())
 	}
 }
 
@@ -240,11 +240,11 @@ func TestLoggerSubsystemAndGlobalEnvironmentUnit(t *testing.T) {
 		savedEnv[key] = os.Getenv(key)
 	}
 	defer func() {
-		for key, val := range savedEnv {
-			if val == "" {
+		for key, value := range savedEnv {
+			if value == "" {
 				_ = os.Unsetenv(key)
 			} else {
-				_ = os.Setenv(key, val)
+				_ = os.Setenv(key, value)
 			}
 		}
 	}()
@@ -297,9 +297,9 @@ func TestLoggerSubsystemAndGlobalEnvironmentUnit(t *testing.T) {
 	clearAllEnv()
 	_ = os.Setenv("AUTH_LOG_LEVEL", "info")
 	_ = os.Setenv("LAYR_AUTH_LOG_LEVEL", "error")
-	scopedPrecedence := New("auth")
-	if scopedPrecedence.GetLevel() != LevelError {
-		t.Errorf("expected LAYR_AUTH_LOG_LEVEL=error to take precedence, got %v", scopedPrecedence.GetLevel())
+	precedenceScopeLogger := New("auth")
+	if precedenceScopeLogger.GetLevel() != LevelError {
+		t.Errorf("expected LAYR_AUTH_LOG_LEVEL=error to take precedence, got %v", precedenceScopeLogger.GetLevel())
 	}
 
 	// 6. Invalid level falls back to default

@@ -18,7 +18,7 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	pgContainer, containerErr := tcpostgres.Run(ctx,
+	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -32,9 +32,9 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 		t.Skip("docker not available")
 		return
 	}
-	defer func() { _ = pgContainer.Terminate(ctx) }()
+	defer func() { _ = postgresContainer.Terminate(ctx) }()
 
-	databaseURL, _ := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	databaseURL, _ := postgresContainer.ConnectionString(ctx, "sslmode=disable")
 	db, err := NewDatabasePool(ctx, databaseURL)
 	if err != nil {
 		t.Fatalf("failed to create db connection pool: %v", err)
@@ -53,18 +53,18 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 
 	// 1. Create a local HTTP receiver server to test successful webhook delivery
 	receivedChannel := make(chan string, 1)
-	webhookServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+	webhookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		receivedChannel <- request.Header.Get("X-Layr-Event")
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write([]byte(`{"status":"ok"}`))
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer webhookServer.Close()
 
 	// In-memory subscription test
 	inMemoryReceivedChannel := make(chan string, 10)
-	webhookEventBus.Subscribe("core.*", func(ctx context.Context, event WebhookEventEnvelope) error {
+	webhookEventBus.Subscribe("core.*", func(ctx context.Context, webhookEventEnvelope WebhookEventEnvelope) error {
 		select {
-		case inMemoryReceivedChannel <- event.Event:
+		case inMemoryReceivedChannel <- webhookEventEnvelope.Event:
 		default:
 		}
 		return nil
@@ -112,15 +112,15 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 4. Update
-	newName := "Updated Webhook"
-	updated, err := webhookManager.Update(ctx, webhook.ID, UpdateWebhookInput{
+	newName := "Updated Webhook Subscription"
+	updatedWebhook, err := webhookManager.Update(ctx, webhook.ID, UpdateWebhookInput{
 		Name: &newName,
 	})
 	if err != nil {
 		t.Fatalf("failed to update webhook: %v", err)
 	}
-	if updated.Name != "Updated Webhook" {
-		t.Fatalf("expected name 'Updated Webhook', got: %s", updated.Name)
+	if updatedWebhook.Name != "Updated Webhook Subscription" {
+		t.Fatalf("expected name 'Updated Webhook', got: %s", updatedWebhook.Name)
 	}
 
 	// 5. Publish Event & Deliver
@@ -178,17 +178,17 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 
 	// 8. Test Failed Delivery & Broadcast to core.webhook.delivery_failed
 	failChannel := make(chan string, 10)
-	webhookEventBus.Subscribe("core.webhook.delivery_failed", func(ctx context.Context, event WebhookEventEnvelope) error {
+	webhookEventBus.Subscribe("core.webhook.delivery_failed", func(ctx context.Context, webhookEventEnvelope WebhookEventEnvelope) error {
 		select {
-		case failChannel <- event.Event:
+		case failChannel <- webhookEventEnvelope.Event:
 		default:
 		}
 		return nil
 	})
 
-	failServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(`internal error`))
+	failServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusInternalServerError)
+		_, _ = responseWriter.Write([]byte(`internal error`))
 	}))
 	defer failServer.Close()
 
@@ -223,22 +223,22 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 
 	// 9. WebhookManager nil db connection pool and error branches
 	nilWebhookManager := NewWebhookManager(nil, nil, nil)
-	if _, nilPoolErr := nilWebhookManager.Create(ctx, CreateWebhookInput{Name: "X", TargetURL: "http://example.com", Events: []string{"*"}}); nilPoolErr == nil {
+	if _, nilDBErr := nilWebhookManager.Create(ctx, CreateWebhookInput{Name: "X", TargetURL: "http://example.com", Events: []string{"*"}}); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool Create")
 	}
-	if _, nilPoolErr := nilWebhookManager.List(ctx); nilPoolErr == nil {
+	if _, nilDBErr := nilWebhookManager.List(ctx); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool List")
 	}
-	if _, nilPoolErr := nilWebhookManager.Get(ctx, "00000000-0000-0000-0000-000000000000"); nilPoolErr == nil {
+	if _, nilDBErr := nilWebhookManager.Get(ctx, "00000000-0000-0000-0000-000000000000"); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool Get")
 	}
-	if _, nilPoolErr := nilWebhookManager.Update(ctx, "00000000-0000-0000-0000-000000000000", UpdateWebhookInput{}); nilPoolErr == nil {
+	if _, nilDBErr := nilWebhookManager.Update(ctx, "00000000-0000-0000-0000-000000000000", UpdateWebhookInput{}); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool Update")
 	}
-	if nilPoolErr := nilWebhookManager.Delete(ctx, "00000000-0000-0000-0000-000000000000"); nilPoolErr == nil {
+	if nilDBErr := nilWebhookManager.Delete(ctx, "00000000-0000-0000-0000-000000000000"); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool Delete")
 	}
-	if _, nilPoolErr := nilWebhookManager.ListDeliveries(ctx, "00000000-0000-0000-0000-000000000000"); nilPoolErr == nil {
+	if _, nilDBErr := nilWebhookManager.ListDeliveries(ctx, "00000000-0000-0000-0000-000000000000"); nilDBErr == nil {
 		t.Fatal("expected error on nil db connection pool ListDeliveries")
 	}
 
@@ -254,7 +254,7 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// Update all fields of webhook
-	updateTargetWebhook, err := webhookManager.Create(ctx, CreateWebhookInput{
+	updateAllFieldsWebhook, err := webhookManager.Create(ctx, CreateWebhookInput{
 		Name:      "Update Target",
 		TargetURL: "http://example.com/target",
 		Events:    []string{"core.*"},
@@ -270,7 +270,7 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	updateTimeout := 20
 	updateSecret := "new_secret_12345"
 
-	updateWebhookResult, err := webhookManager.Update(ctx, updateTargetWebhook.ID, UpdateWebhookInput{
+	updatedAllFieldsWebhook, err := webhookManager.Update(ctx, updateAllFieldsWebhook.ID, UpdateWebhookInput{
 		TargetURL:      &updateTargetURL,
 		Events:         updateEvents,
 		IsEnabled:      &updateEnabled,
@@ -281,28 +281,28 @@ func TestCoreWebhookFullLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to update all webhook fields: %v", err)
 	}
-	if updateWebhookResult.TargetURL != updateTargetURL || updateWebhookResult.IsEnabled != false || updateWebhookResult.MaxRetries != 5 {
-		t.Fatalf("expected updated webhook fields, got: %+v", updateWebhookResult)
+	if updatedAllFieldsWebhook.TargetURL != updateTargetURL || updatedAllFieldsWebhook.IsEnabled != false || updatedAllFieldsWebhook.MaxRetries != 5 {
+		t.Fatalf("expected updated webhook fields, got: %+v", updatedAllFieldsWebhook)
 	}
 
-	// 10. EventBus direct dispatch and deliverWebhook edge cases
-	nilEventBus := NewWebhookEventBus(nil, nil)
-	nilEventBus.dispatch(ctx, WebhookEventEnvelope{Event: "test"})
+	// 10. EventBus direct dispatch and deliver edge cases
+	nilWebhookEventBus := NewWebhookEventBus(nil, nil)
+	nilWebhookEventBus.dispatch(ctx, WebhookEventEnvelope{Event: "test"})
 
-	// Direct deliverWebhook with invalid URL & zero retries/timeouts
-	webhookEventBus.deliverWebhook(ctx, "invalid-id", "://invalid-url", "", 0, 0, WebhookEventEnvelope{
+	// Direct deliver with invalid URL & zero retries/timeouts
+	webhookEventBus.deliver(ctx, "invalid-id", "://invalid-url", "", 0, 0, WebhookEventEnvelope{
 		ID:        "01a02ef2-ce86-722a-bffb-879f4b430109",
 		Event:     "test.event",
 		Timestamp: time.Now().UTC(),
 	})
 
-	// Direct deliverWebhook with HTTP 500 status code to cover non-2xx error path
-	errServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusInternalServerError)
-		_, _ = writer.Write([]byte(strings.Repeat("A", 2048)))
+	// Direct deliver with HTTP 500 status code to cover non-2xx error path
+	errServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusInternalServerError)
+		_, _ = responseWriter.Write([]byte(strings.Repeat("A", 2048)))
 	}))
 	defer errServer.Close()
-	webhookEventBus.deliverWebhook(ctx, "err-id", errServer.URL, "", 1, 1, WebhookEventEnvelope{
+	webhookEventBus.deliver(ctx, "err-id", errServer.URL, "", 1, 1, WebhookEventEnvelope{
 		ID:        "01a02ef2-ce86-722a-bffb-879f4b430109",
 		Event:     "test.event",
 		Timestamp: time.Now().UTC(),
