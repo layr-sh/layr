@@ -20,8 +20,7 @@ func NewRedisKVStore(ctx context.Context) (*RedisKVStore, error) {
 	var universalClient redis.UniversalClient
 
 	if len(kvStoreConfig.ClusterURLs) > 0 {
-		//nolint:namingclarity
-		universalClient = redis.NewClusterClient(&redis.ClusterOptions{
+		universalClient = redis.NewClusterClient(&redis.ClusterOptions{ //nolint:namingclarity
 			Addrs: kvStoreConfig.ClusterURLs,
 		})
 	} else if kvStoreConfig.URL != "" {

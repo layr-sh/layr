@@ -6,6 +6,10 @@ import (
 )
 
 // Prohibited representation suffixes (Hungarian notation).
+// Identifiers must convey domain purpose rather than encoding their primitive data type.
+// Examples:
+//   - Disallowed: countInt, nameStr, validBool, activeBoolean
+//   - Allowed:    count, name, isValid, active
 var prohibitedSuffixes = []string{
 	"Boolean",
 	"Bool",
@@ -13,14 +17,23 @@ var prohibitedSuffixes = []string{
 	"Int",
 }
 
-// Known acronyms to preserve or lowercase consistently in camelCase.
+// Known acronyms to preserve or lowercase consistently according to standard Go conventions.
+// Go initialisms should either be all-uppercase (e.g. "URL", "ID", "HTTP") or all-lowercase
+// when starting an unexported camelCase identifier (e.g. "url", "id", "httpServer").
+// Examples:
+//   - Correct:   userID, databaseURL, httpHandler, oauthToken
+//   - Incorrect: userId, databaseUrl, HttpHandler, oAuthToken
 var knownInitialisms = []string{
 	"OAuth", "OIDC", "UUID", "HTTP", "JSON", "HTML", "SMTP", "TOTP",
 	"REST", "JWT", "URL", "TTL", "API", "SMS", "OTP", "TLS", "TCP",
 	"UDP", "SQL", "URI", "UID", "GID", "IP", "ID", "DB",
 }
 
-// Bad initialism casing when used as component words (e.g. "Id", "Url", "Ttl", "Jwt", "Sid").
+// Bad initialism casing when used as component words.
+// Maps Pascal-cased acronym misnomers to their standard lowercase form.
+// Examples:
+//   - Disallowed: userId, serverUrl, tokenTtl, sessionSid
+//   - Expected:   userID, serverURL, tokenTTL, sessionSID
 var badInitialisms = map[string]string{
 	"Id":  "id",
 	"Url": "url",
@@ -30,6 +43,24 @@ var badInitialisms = map[string]string{
 }
 
 // Disallowed standalone component words.
+// Stored as map[string]bool to serve as an idiomatic Go Set providing O(1) hash lookup.
+//
+// Identifiers are split into camelCase component words via splitIdentifierWords(name)
+// before checking against this set. This flags standalone shorthand or ambiguous abbreviations
+// without causing false positives on legitimate English words.
+//
+// Examples of flagged identifiers:
+//   - "userCfg"   -> word "Cfg" is disallowed (use "config" or "configuration")
+//   - "authReq"   -> word "Req" is disallowed (use "request")
+//   - "apiResp"   -> word "Resp" is disallowed (use "response")
+//   - "userMgr"   -> word "Mgr" is disallowed (use "manager")
+//   - "saToken"   -> word "Sa" is disallowed (use "serviceAccount")
+//
+// Examples of allowed identifiers (NOT falsely flagged because they are whole distinct words):
+//   - "validate", "value", "valid"   (contains "val", but "val" is not a standalone component)
+//   - "result", "resource", "reset"  (contains "res", but "res" is not a standalone component)
+//   - "channel", "check", "cache"    (contains "ch", but "ch" is not a standalone component)
+//   - "column", "collection"         (contains "col", but "col" is not a standalone component)
 var disallowedWords = map[string]bool{
 	"b64":           true,
 	"cfg":           true,
@@ -59,6 +90,18 @@ var disallowedWords = map[string]bool{
 }
 
 // Disallowed compound substrings.
+// Checked via strings.Contains(strings.ToLower(identifier), pattern) across the entire identifier.
+//
+// Unlike disallowedWords (which checks split camelCase words), this list catches mashed-together
+// compound slang and abbreviations where no camelCase boundary exists.
+//
+// Examples of flagged identifiers:
+//   - "keymgr"     -> flags "mykeymgrService", "keymgr" (use "keyManager")
+//   - "sakey"      -> flags "sakey", "userSakey" (use "serviceAccountKey")
+//   - "said"       -> flags "said" (use "serviceAccountID")
+//   - "valrows"    -> flags "valrows" (use "valueRows")
+//   - "colquoted"  -> flags "colquoted" (use "columnQuoted")
+//   - "tzmap"      -> flags "tzmap" (use "timeZoneMap")
 var disallowedCompoundPatterns = []string{
 	"b64",
 	"keymgr",
@@ -83,6 +126,14 @@ var disallowedCompoundPatterns = []string{
 	"cpuser",
 }
 
+// specialTypeRule defines variable naming constraints for specific Go types.
+//
+// Fields:
+//   - canonicalName: The preferred standalone variable name (e.g. "ctx" for context.Context).
+//   - expectedTail:  The required camelCase suffix if not using canonicalName (e.g. "Ctx" for userCtx).
+//   - allowPlural:   When true, pluralized forms ("s" or "es") are accepted (e.g. "connections").
+//   - isAllowed:     Custom validator predicate. Returning true disables suffix enforcement
+//     for general-purpose types (e.g. time.Duration, big.Int, strings.Builder).
 type specialTypeRule struct {
 	canonicalName string
 	expectedTail  string
@@ -90,6 +141,7 @@ type specialTypeRule struct {
 	isAllowed     func(name string) bool
 }
 
+// checkAllowed evaluates whether an identifier satisfies this rule, including optional plural suffixes.
 func (r specialTypeRule) checkAllowed(name string) bool {
 	if r.isAllowed == nil {
 		return false
@@ -108,8 +160,11 @@ func (r specialTypeRule) checkAllowed(name string) bool {
 	return false
 }
 
-// Every imported type rule is standardized with its package prefix (pkg.Type).
+// specialTypeRules maps concrete Go type names (pkg.Type) to their naming constraints.
 // Builtin universe types without package (error) remain bare.
+//
+// Types configured with `isAllowed: func(name string) bool { return true }` allow any domain name
+// without enforcing artificial type suffixes (e.g. big.Int, time.Duration, strings.Builder).
 var specialTypeRules = map[string]specialTypeRule{
 	"context.Context": {
 		canonicalName: "ctx",
@@ -357,6 +412,11 @@ var specialTypeRules = map[string]specialTypeRule{
 	},
 }
 
+// findSpecialTypeRule looks up a naming rule by exact type name or package suffix.
+// Examples:
+//   - "context.Context" -> matches rule for "context.Context"
+//   - "Context"         -> matches rule for "context.Context" via dot suffix ".Context"
+//   - "error" / "Error" -> matches rule for "error"
 func findSpecialTypeRule(concreteName string) (specialTypeRule, bool) {
 	if rule, ok := specialTypeRules[concreteName]; ok {
 		return rule, true
@@ -373,6 +433,10 @@ func findSpecialTypeRule(concreteName string) (specialTypeRule, bool) {
 	return specialTypeRule{}, false
 }
 
+// bareTypeName strips the package prefix from a type name.
+// Examples:
+//   - "context.Context" -> "Context"
+//   - "error"           -> "error"
 func bareTypeName(concreteName string) string {
 	if idx := strings.LastIndex(concreteName, "."); idx != -1 {
 		return concreteName[idx+1:]
@@ -380,6 +444,11 @@ func bareTypeName(concreteName string) string {
 	return concreteName
 }
 
+// isErrorAllowed checks if an identifier satisfies Go error naming conventions.
+// Examples:
+//   - Allowed variables: "err", "dbErr", "readErr"
+//   - Allowed sentinels: "ErrNotFound", "ErrTimeout" (starts with "Err" followed by capital letter)
+//   - Prohibited:        "error", "e", "myError"
 func isErrorAllowed(name string) bool {
 	if name == "err" || strings.HasSuffix(name, "Err") {
 		return true

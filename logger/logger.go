@@ -18,20 +18,15 @@ type Level = slog.Level
 
 const (
 	// LevelTrace logs fine-grained troubleshooting and tracing messages.
-	//nolint:namingclarity
-	LevelTrace = slog.LevelDebug - 4
+	LevelTrace = slog.LevelDebug - 4 //nolint:namingclarity
 	// LevelDebug logs detailed diagnostic and troubleshooting messages.
-	//nolint:namingclarity
-	LevelDebug = slog.LevelDebug
+	LevelDebug = slog.LevelDebug //nolint:namingclarity
 	// LevelInfo logs general operational and informational messages.
-	//nolint:namingclarity
-	LevelInfo = slog.LevelInfo
+	LevelInfo = slog.LevelInfo //nolint:namingclarity
 	// LevelWarn logs warnings about unexpected but recoverable situations.
-	//nolint:namingclarity
-	LevelWarn = slog.LevelWarn
+	LevelWarn = slog.LevelWarn //nolint:namingclarity
 	// LevelError logs critical errors and operational failures.
-	//nolint:namingclarity
-	LevelError = slog.LevelError
+	LevelError = slog.LevelError //nolint:namingclarity
 )
 
 // ParseLevel parses a string into a Level.
@@ -126,8 +121,7 @@ func (handler *slogHandler) writeMessage(recordTime time.Time, level slog.Level,
 
 	targetWriter := handler.writer
 	if targetWriter == nil {
-		//nolint:namingclarity
-		targetWriter = os.Stderr
+		targetWriter = os.Stderr //nolint:namingclarity
 	}
 
 	if recordTime.IsZero() {

@@ -115,9 +115,8 @@ type Router struct {
 }
 
 type netHTTPRouteRegisterer[T, B, P any] struct {
-	server *fuego.Server
-	//nolint:namingclarity
-	controller http.Handler
+	server     *fuego.Server
+	controller http.Handler //nolint:namingclarity
 	route      fuego.Route[T, B, P]
 	options    []RouteOption
 }

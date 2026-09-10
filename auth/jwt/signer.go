@@ -293,8 +293,7 @@ func HashRefreshToken(token string) string {
 // SignHMAC signs input string with seed using HMAC-SHA256 for one-time verification tokens.
 func (signer *Signer) SignHMAC(message string) string {
 	log.Tracef("signing message with HMAC-SHA256")
-	//nolint:namingclarity
-	mac := hmac.New(sha256.New, signer.seed)
+	mac := hmac.New(sha256.New, signer.seed) //nolint:namingclarity
 	mac.Write([]byte(message))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }

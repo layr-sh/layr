@@ -35,9 +35,8 @@ func IsEmbeddedDatabasePath(databaseURL string) bool {
 
 // EmbeddedDatabase manages an embedded PostgreSQL instance.
 type EmbeddedDatabase struct {
-	dataDir string
-	//nolint:namingclarity // prefer simple name postgres over embeddedPostgres
-	postgres   *embeddedpostgres.EmbeddedPostgres
+	dataDir    string
+	postgres   *embeddedpostgres.EmbeddedPostgres //nolint:namingclarity // prefer simple name postgres over embeddedPostgres
 	port       uint32
 	portFinder func() (uint32, error) // injectable for testing
 }

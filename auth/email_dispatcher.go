@@ -47,14 +47,11 @@ type EmailDispatcherMessageKind string
 
 const (
 	// EmailDispatcherMessageKindPasswordReset identifies password reset emails.
-	//nolint:namingclarity
-	EmailDispatcherMessageKindPasswordReset EmailDispatcherMessageKind = "password_reset"
+	EmailDispatcherMessageKindPasswordReset EmailDispatcherMessageKind = "password_reset" //nolint:namingclarity
 	// EmailDispatcherMessageKindSignInOTP identifies one-time-password sign-in emails.
-	//nolint:namingclarity
-	EmailDispatcherMessageKindSignInOTP EmailDispatcherMessageKind = "sign_in_otp"
+	EmailDispatcherMessageKindSignInOTP EmailDispatcherMessageKind = "sign_in_otp" //nolint:namingclarity
 	// EmailDispatcherMessageKindEmailVerification identifies email address verification emails.
-	//nolint:namingclarity
-	EmailDispatcherMessageKindEmailVerification EmailDispatcherMessageKind = "email_verification"
+	EmailDispatcherMessageKindEmailVerification EmailDispatcherMessageKind = "email_verification" //nolint:namingclarity
 )
 
 // EmailDispatcherConfig contains configuration for email delivery.
@@ -566,8 +563,7 @@ func (dispatcher *EmailDispatcher) sendViaWebhook(ctx context.Context, emailDisp
 	if signingSecret != "" {
 		timestamp := fmt.Sprintf("%d", time.Now().Unix())
 		signaturePayload := timestamp + "." + string(payloadBytes)
-		//nolint:namingclarity
-		mac := hmac.New(sha256.New, []byte(signingSecret))
+		mac := hmac.New(sha256.New, []byte(signingSecret)) //nolint:namingclarity
 		mac.Write([]byte(signaturePayload))
 		signature := hex.EncodeToString(mac.Sum(nil))
 		request.Header.Set("X-Layr-Signature", fmt.Sprintf("t=%s,v1=%s", timestamp, signature))

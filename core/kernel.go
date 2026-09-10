@@ -55,8 +55,7 @@ func GetServiceFactory(name string) (ServiceFactory, bool) {
 
 // Kernel coordinates the full single-binary runtime lifecycle.
 type Kernel struct {
-	//nolint:namingclarity
-	embeddedDB            *EmbeddedDatabase
+	embeddedDB            *EmbeddedDatabase //nolint:namingclarity
 	db                    *DatabasePool
 	nodeRegistry          *NodeRegistry
 	kvStore               KVStore
