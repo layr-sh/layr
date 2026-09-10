@@ -59,15 +59,15 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to create console session: %v", err)
 	}
 
-	// 3. Record an audit log for console user action
-	var auditLogID string
+	// 3. Record an event for console user action
+	var eventID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO console.audit_logs (user_id, action, target_service, entity_id, diff_payload, ip_address)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+		INSERT INTO core.events (type, action, resource_type, resource_id, actor_type, actor_id, payload, ip_address)
+		VALUES ($1, $2, $3, $4, 'console_user', $5, $6::jsonb, $7)
 		RETURNING id::text
-	`, consoleUserID, "create", "service_account", "sa_01", []byte(`{"name":"api-client"}`), "127.0.0.1").Scan(&auditLogID)
-	if err != nil || auditLogID == "" {
-		t.Fatalf("failed to record audit log: %v", err)
+	`, "core.service_account.created", "create", "service_account", "sa_01", consoleUserID, []byte(`{"name":"api-client"}`), "127.0.0.1").Scan(&eventID)
+	if err != nil || eventID == "" {
+		t.Fatalf("failed to record event: %v", err)
 	}
 
 	// 4. Create a service account tied to the console user
@@ -81,25 +81,25 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to create service account: %v", err)
 	}
 
-	// 5. Register a webhook and record a delivery event
-	var webhookID string
+	// 5. Register an event hook and record a delivery event
+	var eventHookID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO core.webhooks (name, target_url, events)
-		VALUES ($1, $2, $3::jsonb)
+		INSERT INTO core.event_hooks (name, driver, http_target_url, event_types)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id::text
-	`, "Slack Alerts", "https://hooks.slack.com/services/test", []byte(`["user.created", "user.deleted"]`)).Scan(&webhookID)
-	if err != nil || webhookID == "" {
-		t.Fatalf("failed to create webhook: %v", err)
+	`, "Slack Alerts", "http", "https://hooks.slack.com/services/test", []string{"user.created", "user.deleted"}).Scan(&eventHookID)
+	if err != nil || eventHookID == "" {
+		t.Fatalf("failed to create event hook: %v", err)
 	}
 
 	var deliveryID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO core.webhook_deliveries (webhook_id, event_id, event_type, payload, response_status, is_delivered)
-		VALUES ($1, uuidv7(), $2, $3::jsonb, $4, $5)
+		INSERT INTO core.event_hook_deliveries (event_hook_id, event_id, event_type, payload, http_response_status, is_delivered)
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6)
 		RETURNING id::text
-	`, webhookID, "user.created", []byte(`{"user_id":"123"}`), 200, true).Scan(&deliveryID)
+	`, eventHookID, eventID, "user.created", []byte(`{"user_id":"123"}`), 200, true).Scan(&deliveryID)
 	if err != nil || deliveryID == "" {
-		t.Fatalf("failed to record webhook delivery: %v", err)
+		t.Fatalf("failed to record event hook delivery: %v", err)
 	}
 
 	// 6. Test KV Store unlogged table operations
@@ -237,11 +237,11 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected persisted service account name 'Backend Worker', got %s, err: %v", persistedServiceAccountName, err)
 	}
 
-	// Assert webhook and delivery survived restart
-	var persistedWebhookName string
-	err = reconnectedDB.QueryRow(ctx, "SELECT name FROM core.webhooks WHERE id = $1", webhookID).Scan(&persistedWebhookName)
-	if err != nil || persistedWebhookName != "Slack Alerts" {
-		t.Fatalf("expected persisted webhook 'Slack Alerts', got %s, err: %v", persistedWebhookName, err)
+	// Assert event hook and delivery survived restart
+	var persistedEventHookName string
+	err = reconnectedDB.QueryRow(ctx, "SELECT name FROM core.event_hooks WHERE id = $1", eventHookID).Scan(&persistedEventHookName)
+	if err != nil || persistedEventHookName != "Slack Alerts" {
+		t.Fatalf("expected persisted event hook 'Slack Alerts', got %s, err: %v", persistedEventHookName, err)
 	}
 
 	// Clean final shutdown

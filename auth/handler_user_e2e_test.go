@@ -24,12 +24,12 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
@@ -141,12 +141,12 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
@@ -257,12 +257,12 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()

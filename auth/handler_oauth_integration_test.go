@@ -27,9 +27,9 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	testKVStore := newInMemoryKVStore()
 	handler.SetKVStore(testKVStore)
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
-	handler.SetWebhookEventBus(webhookEventBus)
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
+	handler.SetEventBus(eventBus)
 
 	// Configure Google OAuth provider
 	activeConfig := DefaultConfig()

@@ -347,6 +347,14 @@ var specialTypeRules = map[string]specialTypeRule{
 			return true
 		},
 	},
+	"uuid.UUID": {
+		canonicalName: "id",
+		expectedTail:  "ID",
+		allowPlural:   false,
+		isAllowed: func(name string) bool {
+			return name == "id" || strings.HasSuffix(name, "ID") || name == "uuid" || strings.HasSuffix(name, "UUID")
+		},
+	},
 }
 
 func findSpecialTypeRule(concreteName string) (specialTypeRule, bool) {

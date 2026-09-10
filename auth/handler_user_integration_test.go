@@ -27,22 +27,22 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 
 	// Capture emitted events
-	emittedEvents := make([]core.WebhookEventEnvelope, 0)
-	webhookEventBus.Subscribe("auth.user.email_verified", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
-		emittedEvents = append(emittedEvents, webhookEventEnvelope)
+	emittedEvents := make([]core.Event, 0)
+	eventBus.Subscribe("auth.user.email_verified", func(eventCtx context.Context, event core.Event) error {
+		emittedEvents = append(emittedEvents, event)
 		return nil
 	})
-	webhookEventBus.Subscribe("auth.user.phone_verified", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
-		emittedEvents = append(emittedEvents, webhookEventEnvelope)
+	eventBus.Subscribe("auth.user.phone_verified", func(eventCtx context.Context, event core.Event) error {
+		emittedEvents = append(emittedEvents, event)
 		return nil
 	})
 
@@ -532,13 +532,13 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	configManager.Set(activeConfig)
 
 	testKVStore := newInMemoryKVStore()
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	serviceAccountManager := core.NewServiceAccountManager(db)
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
 	handler.SetKVStore(testKVStore)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetServiceAccountManager(serviceAccountManager)
 
 	userEmail := "selfservice.user@example.com"

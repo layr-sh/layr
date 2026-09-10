@@ -23,16 +23,16 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	}
 
 	testKVStore := newInMemoryKVStore()
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
 	handler.SetKVStore(testKVStore)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 
-	emittedEvents := make([]core.WebhookEventEnvelope, 0)
-	webhookEventBus.Subscribe("auth.session.deleted", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
-		emittedEvents = append(emittedEvents, webhookEventEnvelope)
+	emittedEvents := make([]core.Event, 0)
+	eventBus.Subscribe("auth.session.deleted", func(eventCtx context.Context, event core.Event) error {
+		emittedEvents = append(emittedEvents, event)
 		return nil
 	})
 

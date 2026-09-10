@@ -49,16 +49,16 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	}
 
 	// 4. HandlePutConfig with plaintext secrets and event bus
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
-	configManager.SetEventBus(webhookEventBus)
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
+	configManager.SetEventBus(eventBus)
 
 	var mutex sync.Mutex
-	var receivedWebhookEventEnvelope core.WebhookEventEnvelope
-	webhookEventBus.Subscribe("auth.config.updated", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
+	var receivedEvent core.Event
+	eventBus.Subscribe("auth.config.updated", func(eventCtx context.Context, event core.Event) error {
 		mutex.Lock()
 		defer mutex.Unlock()
-		receivedWebhookEventEnvelope = webhookEventEnvelope
+		receivedEvent = event
 		return nil
 	})
 
@@ -119,10 +119,10 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	// Allow event bus propagation
 	time.Sleep(50 * time.Millisecond)
 	mutex.Lock()
-	capturedWebhookEventEnvelope := receivedWebhookEventEnvelope
+	capturedEvent := receivedEvent
 	mutex.Unlock()
-	if capturedWebhookEventEnvelope.Event != "auth.config.updated" {
-		t.Fatalf("expected auth.config.updated event, got: %+v", capturedWebhookEventEnvelope)
+	if capturedEvent.Type != "auth.config.updated" {
+		t.Fatalf("expected auth.config.updated event, got: %+v", capturedEvent)
 	}
 
 	// 5. Preserving existing secrets when omitted in subsequent PUT

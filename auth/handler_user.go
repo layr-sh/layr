@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"uuid"
 
 	"layr.sh/auth/otp"
 	"layr.sh/core"
@@ -168,15 +167,12 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 	log.Tracef("dispatching email verification code to %s", recipientEmail)
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, targetUserID)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.otp.sent",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "otp",
-			Action:    "sent",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.otp.sent",
+			ResourceType: "otp",
+			Action:       "sent",
+			Payload: map[string]interface{}{
 				"recipient": recipientEmail,
 				"purpose":   "email_verification",
 				"user_id":   targetUserID,
@@ -291,28 +287,22 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.email_verified",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "email_verified",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.email_verified",
+				ResourceType: "user",
+				Action:       "email_verified",
+				Payload: map[string]interface{}{
 					"user_id": userRecord.ID,
 					"email":   recipientEmail,
 				},
 			})
 			if isCallerAnonymous {
-				handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-					ID:        uuid.NewV7().String(),
-					Event:     "auth.user.converted",
-					Timestamp: time.Now().UTC(),
-					Service:   "auth",
-					Resource:  "user",
-					Action:    "converted",
-					Data: map[string]string{
+				handler.eventBus.Publish(ctx, core.Event{
+					Type:         "auth.user.converted",
+					ResourceType: "user",
+					Action:       "converted",
+					Payload: map[string]interface{}{
 						"user_id": userRecord.ID,
 					},
 				})
@@ -336,15 +326,12 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 		return
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.user.email_verified",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "user",
-			Action:    "email_verified",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.user.email_verified",
+			ResourceType: "user",
+			Action:       "email_verified",
+			Payload: map[string]interface{}{
 				"user_id": userID,
 				"email":   recipientEmail,
 			},
@@ -449,15 +436,12 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 	log.Tracef("dispatching phone verification code to %s", recipientPhone)
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.otp.sent",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "otp",
-			Action:    "sent",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.otp.sent",
+			ResourceType: "otp",
+			Action:       "sent",
+			Payload: map[string]interface{}{
 				"recipient": recipientPhone,
 				"purpose":   "phone_verification",
 				"user_id":   targetUserID,
@@ -580,28 +564,22 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.phone_verified",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "phone_verified",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.phone_verified",
+				ResourceType: "user",
+				Action:       "phone_verified",
+				Payload: map[string]interface{}{
 					"user_id": userRecord.ID,
 					"phone":   recipientPhone,
 				},
 			})
 			if isCallerAnonymous {
-				handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-					ID:        uuid.NewV7().String(),
-					Event:     "auth.user.converted",
-					Timestamp: time.Now().UTC(),
-					Service:   "auth",
-					Resource:  "user",
-					Action:    "converted",
-					Data: map[string]string{
+				handler.eventBus.Publish(ctx, core.Event{
+					Type:         "auth.user.converted",
+					ResourceType: "user",
+					Action:       "converted",
+					Payload: map[string]interface{}{
 						"user_id": userRecord.ID,
 					},
 				})
@@ -625,15 +603,12 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 		return
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.user.phone_verified",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "user",
-			Action:    "phone_verified",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.user.phone_verified",
+			ResourceType: "user",
+			Action:       "phone_verified",
+			Payload: map[string]interface{}{
 				"user_id": userID,
 				"phone":   recipientPhone,
 			},
@@ -773,15 +748,12 @@ func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseW
 		_ = json.Unmarshal(rawProperties, &userProperties)
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.user.updated",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "user",
-			Action:    "updated",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.user.updated",
+			ResourceType: "user",
+			Action:       "updated",
+			Payload: map[string]interface{}{
 				"user_id": userID,
 			},
 		})
@@ -857,15 +829,12 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 			return
 		}
 
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.converted",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "converted",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.converted",
+				ResourceType: "user",
+				Action:       "converted",
+				Payload: map[string]interface{}{
 					"user_id": anonymousUserRecord.ID,
 				},
 			})
@@ -888,15 +857,12 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 	log.Tracef("dispatching update email verification code to %s", recipientEmail)
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.otp.sent",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "otp",
-			Action:    "sent",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.otp.sent",
+			ResourceType: "otp",
+			Action:       "sent",
+			Payload: map[string]interface{}{
 				"recipient": recipientEmail,
 				"purpose":   "email_verification",
 				"user_id":   authUserID,
@@ -977,15 +943,12 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 			return
 		}
 
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.converted",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "converted",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.converted",
+				ResourceType: "user",
+				Action:       "converted",
+				Payload: map[string]interface{}{
 					"user_id": anonymousUserRecord.ID,
 				},
 			})
@@ -1008,15 +971,12 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 	log.Tracef("dispatching update phone verification code to %s", recipientPhone)
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.otp.sent",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "otp",
-			Action:    "sent",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.otp.sent",
+			ResourceType: "otp",
+			Action:       "sent",
+			Payload: map[string]interface{}{
 				"recipient": recipientPhone,
 				"purpose":   "phone_verification",
 				"user_id":   authUserID,
@@ -1101,15 +1061,12 @@ func (handler *Handler) handleUpdateUserPassword(responseWriter http.ResponseWri
 		WHERE id = $2
 	`, hashedPassword, userID)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.password.changed",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "password",
-			Action:    "changed",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.password.changed",
+			ResourceType: "password",
+			Action:       "changed",
+			Payload: map[string]interface{}{
 				"user_id": userID,
 			},
 		})
@@ -1168,15 +1125,12 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 	isSecure := core.IsSecureRequest(request)
 	core.ClearSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, isSecure)
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.user.deleted",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "user",
-			Action:    "deleted",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.user.deleted",
+			ResourceType: "user",
+			Action:       "deleted",
+			Payload: map[string]interface{}{
 				"user_id": userID,
 			},
 		})
