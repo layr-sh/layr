@@ -626,7 +626,7 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 			Type:         "auth.config.updated",
 			ResourceType: "config",
 			Action:       "updated",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"key": ConfigKey,
 			},
 		})

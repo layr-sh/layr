@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS core.events (
     status TEXT NOT NULL DEFAULT 'success',
     reason TEXT,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 CREATE INDEX IF NOT EXISTS idx_core_events_created_at ON core.events(created_at DESC);

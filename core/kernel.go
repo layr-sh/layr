@@ -532,7 +532,7 @@ func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.Resp
 			ResourceType: "service_account",
 			Action:       "created",
 			ResourceID:   &serviceAccount.ID,
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"id":     serviceAccount.ID,
 				"name":   serviceAccount.Name,
 				"scopes": serviceAccount.Scopes,
@@ -574,7 +574,7 @@ func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.Resp
 			ResourceType: "service_account",
 			Action:       "updated",
 			ResourceID:   &serviceAccount.ID,
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"id":     serviceAccount.ID,
 				"name":   serviceAccount.Name,
 				"scopes": serviceAccount.Scopes,
@@ -601,7 +601,7 @@ func (kernel *Kernel) handleDeleteServiceAccountRequest(responseWriter http.Resp
 			ResourceType: "service_account",
 			Action:       "deleted",
 			ResourceID:   &serviceAccountID,
-			Payload:      map[string]interface{}{"id": serviceAccountID},
+			Data:         map[string]interface{}{"id": serviceAccountID},
 		})
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -644,7 +644,7 @@ func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseW
 			ResourceType: "event_hook",
 			Action:       "created",
 			ResourceID:   &hookResourceID,
-			Payload:      map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
+			Data:         map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
 		})
 	}
 	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, eventHook)
@@ -691,7 +691,7 @@ func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseW
 			ResourceType: "event_hook",
 			Action:       "updated",
 			ResourceID:   &hookResourceID,
-			Payload:      map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
+			Data:         map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
 		})
 	}
 	kernel.writeJSON(responseWriter, eventHook)
@@ -715,7 +715,7 @@ func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseW
 			ResourceType: "event_hook",
 			Action:       "deleted",
 			ResourceID:   &hookResourceID,
-			Payload:      map[string]interface{}{"id": hookResourceID},
+			Data:         map[string]interface{}{"id": hookResourceID},
 		})
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)

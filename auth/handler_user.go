@@ -172,7 +172,7 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 			Type:         "auth.otp.sent",
 			ResourceType: "otp",
 			Action:       "sent",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipientEmail,
 				"purpose":   "email_verification",
 				"user_id":   targetUserID,
@@ -292,7 +292,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 				Type:         "auth.user.email_verified",
 				ResourceType: "user",
 				Action:       "email_verified",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": userRecord.ID,
 					"email":   recipientEmail,
 				},
@@ -302,7 +302,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 					Type:         "auth.user.converted",
 					ResourceType: "user",
 					Action:       "converted",
-					Payload: map[string]interface{}{
+					Data: map[string]interface{}{
 						"user_id": userRecord.ID,
 					},
 				})
@@ -331,7 +331,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 			Type:         "auth.user.email_verified",
 			ResourceType: "user",
 			Action:       "email_verified",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userID,
 				"email":   recipientEmail,
 			},
@@ -441,7 +441,7 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 			Type:         "auth.otp.sent",
 			ResourceType: "otp",
 			Action:       "sent",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipientPhone,
 				"purpose":   "phone_verification",
 				"user_id":   targetUserID,
@@ -569,7 +569,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 				Type:         "auth.user.phone_verified",
 				ResourceType: "user",
 				Action:       "phone_verified",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": userRecord.ID,
 					"phone":   recipientPhone,
 				},
@@ -579,7 +579,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 					Type:         "auth.user.converted",
 					ResourceType: "user",
 					Action:       "converted",
-					Payload: map[string]interface{}{
+					Data: map[string]interface{}{
 						"user_id": userRecord.ID,
 					},
 				})
@@ -608,7 +608,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 			Type:         "auth.user.phone_verified",
 			ResourceType: "user",
 			Action:       "phone_verified",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userID,
 				"phone":   recipientPhone,
 			},
@@ -753,7 +753,7 @@ func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseW
 			Type:         "auth.user.updated",
 			ResourceType: "user",
 			Action:       "updated",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userID,
 			},
 		})
@@ -834,7 +834,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 				Type:         "auth.user.converted",
 				ResourceType: "user",
 				Action:       "converted",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": anonymousUserRecord.ID,
 				},
 			})
@@ -862,7 +862,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 			Type:         "auth.otp.sent",
 			ResourceType: "otp",
 			Action:       "sent",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipientEmail,
 				"purpose":   "email_verification",
 				"user_id":   authUserID,
@@ -948,7 +948,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 				Type:         "auth.user.converted",
 				ResourceType: "user",
 				Action:       "converted",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": anonymousUserRecord.ID,
 				},
 			})
@@ -976,7 +976,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 			Type:         "auth.otp.sent",
 			ResourceType: "otp",
 			Action:       "sent",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipientPhone,
 				"purpose":   "phone_verification",
 				"user_id":   authUserID,
@@ -1066,7 +1066,7 @@ func (handler *Handler) handleUpdateUserPassword(responseWriter http.ResponseWri
 			Type:         "auth.password.changed",
 			ResourceType: "password",
 			Action:       "changed",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userID,
 			},
 		})
@@ -1130,7 +1130,7 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 			Type:         "auth.user.deleted",
 			ResourceType: "user",
 			Action:       "deleted",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userID,
 			},
 		})

@@ -62,7 +62,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	// 3. Record an event for console user action
 	var eventID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO core.events (type, action, resource_type, resource_id, actor_type, actor_id, payload, ip_address)
+		INSERT INTO core.events (type, action, resource_type, resource_id, actor_type, actor_id, data, ip_address)
 		VALUES ($1, $2, $3, $4, 'console_user', $5, $6::jsonb, $7)
 		RETURNING id::text
 	`, "core.service_account.created", "create", "service_account", "sa_01", consoleUserID, []byte(`{"name":"api-client"}`), "127.0.0.1").Scan(&eventID)

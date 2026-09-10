@@ -157,7 +157,7 @@ func (handler *Handler) handleRevokeSession(responseWriter http.ResponseWriter, 
 			Type:         "auth.session.deleted",
 			ResourceType: "session",
 			Action:       "deleted",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"session_id": targetSessionID,
 				"user_id":    userID,
 			},
@@ -256,7 +256,7 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 			Type:         "auth.session.deleted",
 			ResourceType: "session",
 			Action:       "deleted",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id":       userID,
 				"revoked_count": strconv.Itoa(len(deletedHashes)),
 			},
