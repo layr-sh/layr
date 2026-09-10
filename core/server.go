@@ -58,10 +58,8 @@ type Server struct {
 	controlPlaneRouter *Router
 	serveMux           *http.ServeMux
 	server             *http.Server
-	//nolint:namingclarity
-	uptime time.Time
-	//nolint:namingclarity
-	requestCount atomic.Uint64
+	uptime             time.Time     //nolint:namingclarity
+	requestCount       atomic.Uint64 //nolint:namingclarity
 }
 
 // NewServer initializes the HTTP gateway with type-safe OpenAPI route controllers.

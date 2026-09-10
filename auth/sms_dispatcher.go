@@ -39,14 +39,11 @@ type SMSDispatcherMessageKind string
 
 const (
 	// SMSDispatcherMessageKindPasswordReset identifies password reset SMS.
-	//nolint:namingclarity
-	SMSDispatcherMessageKindPasswordReset SMSDispatcherMessageKind = "password_reset"
+	SMSDispatcherMessageKindPasswordReset SMSDispatcherMessageKind = "password_reset" //nolint:namingclarity
 	// SMSDispatcherMessageKindSignInOTP identifies one-time-password sign-in SMS.
-	//nolint:namingclarity
-	SMSDispatcherMessageKindSignInOTP SMSDispatcherMessageKind = "sign_in_otp"
+	SMSDispatcherMessageKindSignInOTP SMSDispatcherMessageKind = "sign_in_otp" //nolint:namingclarity
 	// SMSDispatcherMessageKindPhoneVerification identifies phone number verification SMS.
-	//nolint:namingclarity
-	SMSDispatcherMessageKindPhoneVerification SMSDispatcherMessageKind = "phone_verification"
+	SMSDispatcherMessageKindPhoneVerification SMSDispatcherMessageKind = "phone_verification" //nolint:namingclarity
 )
 
 // SMSDispatcherConfig contains configuration for SMS delivery.
@@ -390,8 +387,7 @@ func (dispatcher *SMSDispatcher) sendViaWebhook(ctx context.Context, smsDispatch
 	if signingSecret != "" {
 		timestamp := fmt.Sprintf("%d", time.Now().Unix())
 		signaturePayload := timestamp + "." + string(payloadBytes)
-		//nolint:namingclarity
-		mac := hmac.New(sha256.New, []byte(signingSecret))
+		mac := hmac.New(sha256.New, []byte(signingSecret)) //nolint:namingclarity
 		mac.Write([]byte(signaturePayload))
 		signature := hex.EncodeToString(mac.Sum(nil))
 		request.Header.Set("X-Layr-Signature", fmt.Sprintf("t=%s,v1=%s", timestamp, signature))

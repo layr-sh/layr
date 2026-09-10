@@ -10,8 +10,7 @@ import (
 
 // NodeRegistry handles cluster heartbeats and active nodes.
 type NodeRegistry struct {
-	db *DatabasePool
-	//nolint:namingclarity
+	db                *DatabasePool
 	nodeID            uuid.UUID
 	nodeName          string
 	services          []string
@@ -42,7 +41,6 @@ const (
 // Register registers this node and starts background heartbeat.
 func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
 	log.Debugf("registering node %s in cluster", nodeRegistry.nodeName)
-	//nolint:namingclarity
 	var nodeID uuid.UUID
 	err := nodeRegistry.db.QueryRow(ctx, `
 		INSERT INTO core.nodes (node_name, enabled_services, last_heartbeat_at)

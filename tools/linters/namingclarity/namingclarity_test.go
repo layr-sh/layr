@@ -54,6 +54,7 @@ func TestNamingclarityCanonicalVariableNameUnit(t *testing.T) {
 		{"BigInt", "bigInt"},
 		{"big.Int", "bigInt"},
 		{"strings.Builder", "builder"},
+		{"uuid.UUID", "id"},
 	}
 
 	for _, testCase := range tests {
@@ -259,6 +260,11 @@ func TestNamingclarityShouldReportUnclearNameUnit(t *testing.T) {
 		{"numericValue", "big.Int", "", false},
 		{"sb", "strings.Builder", "", false},
 		{"builder", "strings.Builder", "", false},
+		{"id", "uuid.UUID", "", false},
+		{"userID", "uuid.UUID", "", false},
+		{"uuid", "uuid.UUID", "", false},
+		{"sessionUUID", "uuid.UUID", "", false},
+		{"badIdentifier", "uuid.UUID", "\"badIdentifier\" should be named \"id\" or suffixed with \"ID\"", true},
 	}
 
 	for _, testCase := range tests {
