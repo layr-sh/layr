@@ -165,7 +165,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 			Type:         "auth.passkey.created",
 			ResourceType: "passkey",
 			Action:       "created",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id":       targetUserID,
 				"friendly_name": passkeySignUpVerifyRequest.FriendlyName,
 			},
@@ -175,7 +175,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 				Type:         "auth.user.converted",
 				ResourceType: "user",
 				Action:       "converted",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": targetUserID,
 				},
 			})

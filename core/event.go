@@ -51,7 +51,7 @@ type Event struct {
 	Status       string                 `json:"status"`
 	Reason       *string                `json:"reason,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata"`
-	Payload      map[string]interface{} `json:"payload"`
+	Data         map[string]interface{} `json:"data"`
 	CreatedAt    time.Time              `json:"created_at"`
 }
 
@@ -95,18 +95,18 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 		metadataJSON = []byte("{}")
 	}
 
-	payloadJSON, err := json.Marshal(preparedEvent.Payload)
+	dataJSON, err := json.Marshal(preparedEvent.Data)
 	if err != nil {
-		payloadJSON = []byte("{}")
+		dataJSON = []byte("{}")
 	}
 
 	query := `
 		INSERT INTO core.events (
-			id, type, actor_id, actor_type, ip_address, user_agent, action, resource_type, resource_id, status, reason, metadata, payload, created_at
+			id, type, actor_id, actor_type, ip_address, user_agent, action, resource_type, resource_id, status, reason, metadata, data, created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 		)
-		RETURNING id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, payload, created_at
+		RETURNING id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, data, created_at
 	`
 
 	var recordedEvent Event
@@ -116,7 +116,7 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 	var resourceID *string
 	var reason *string
 	var metadataRaw []byte
-	var payloadRaw []byte
+	var dataRaw []byte
 
 	err = eventManager.db.QueryRow(ctx, query,
 		preparedEvent.ID,
@@ -131,7 +131,7 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 		preparedEvent.Status,
 		preparedEvent.Reason,
 		metadataJSON,
-		payloadJSON,
+		dataJSON,
 		preparedEvent.CreatedAt,
 	).Scan(
 		&recordedEvent.ID,
@@ -146,7 +146,7 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 		&recordedEvent.Status,
 		&reason,
 		&metadataRaw,
-		&payloadRaw,
+		&dataRaw,
 		&recordedEvent.CreatedAt,
 	)
 	if err != nil {
@@ -159,7 +159,7 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 	recordedEvent.ResourceID = resourceID
 	recordedEvent.Reason = reason
 	_ = json.Unmarshal(metadataRaw, &recordedEvent.Metadata)
-	_ = json.Unmarshal(payloadRaw, &recordedEvent.Payload)
+	_ = json.Unmarshal(dataRaw, &recordedEvent.Data)
 
 	log.Tracef("recorded event %s (%s)", recordedEvent.ID, recordedEvent.Type)
 	return recordedEvent, nil
@@ -172,7 +172,7 @@ func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) 
 	}
 
 	query := `
-		SELECT id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, payload, created_at
+		SELECT id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, data, created_at
 		FROM core.events
 		WHERE id = $1
 	`
@@ -184,7 +184,7 @@ func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) 
 	var resourceID *string
 	var reason *string
 	var metadataRaw []byte
-	var payloadRaw []byte
+	var dataRaw []byte
 
 	err := eventManager.db.QueryRow(ctx, query, eventUUID).Scan(
 		&event.ID,
@@ -199,7 +199,7 @@ func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) 
 		&event.Status,
 		&reason,
 		&metadataRaw,
-		&payloadRaw,
+		&dataRaw,
 		&event.CreatedAt,
 	)
 	if err != nil {
@@ -212,7 +212,7 @@ func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) 
 	event.ResourceID = resourceID
 	event.Reason = reason
 	_ = json.Unmarshal(metadataRaw, &event.Metadata)
-	_ = json.Unmarshal(payloadRaw, &event.Payload)
+	_ = json.Unmarshal(dataRaw, &event.Data)
 
 	return event, nil
 }
@@ -287,7 +287,7 @@ func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFil
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, payload, created_at
+		SELECT id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, status, reason, metadata, data, created_at
 		FROM core.events
 		%s
 		ORDER BY created_at DESC
@@ -311,7 +311,7 @@ func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFil
 		var resourceID *string
 		var reason *string
 		var metadataRaw []byte
-		var payloadRaw []byte
+		var dataRaw []byte
 
 		_ = rows.Scan(
 			&event.ID,
@@ -326,7 +326,7 @@ func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFil
 			&event.Status,
 			&reason,
 			&metadataRaw,
-			&payloadRaw,
+			&dataRaw,
 			&event.CreatedAt,
 		)
 
@@ -336,7 +336,7 @@ func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFil
 		event.ResourceID = resourceID
 		event.Reason = reason
 		_ = json.Unmarshal(metadataRaw, &event.Metadata)
-		_ = json.Unmarshal(payloadRaw, &event.Payload)
+		_ = json.Unmarshal(dataRaw, &event.Data)
 
 		results = append(results, event)
 	}
@@ -464,8 +464,8 @@ func prepareEvent(event Event) Event {
 	if event.Metadata == nil {
 		event.Metadata = make(map[string]interface{})
 	}
-	if event.Payload == nil {
-		event.Payload = make(map[string]interface{})
+	if event.Data == nil {
+		event.Data = make(map[string]interface{})
 	}
 	return event
 }

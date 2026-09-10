@@ -129,7 +129,7 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 			Type:         "auth.password.reset_requested",
 			ResourceType: "password",
 			Action:       "reset_requested",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipient,
 				"user_id":   userID,
 				"code":      code,
@@ -269,7 +269,7 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 			Type:         "auth.password.reset",
 			ResourceType: "password",
 			Action:       "reset",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"recipient": recipient,
 				"user_id":   userRecord.ID,
 			},

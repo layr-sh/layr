@@ -125,7 +125,7 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 			RequestID: &requestID,
 		},
 		Metadata: map[string]interface{}{"source": "registration_form"},
-		Payload:  map[string]interface{}{"email": "user@example.com"},
+		Data:     map[string]interface{}{"email": "user@example.com"},
 	}
 
 	eventBus.Publish(ctx, sampleEvent)
@@ -205,7 +205,7 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 	_, unmarshalRecordErr := eventManager.Record(ctx, Event{
 		Type:     "test.unmarshal.fallback",
 		Metadata: map[string]interface{}{"invalid": make(chan int)},
-		Payload:  map[string]interface{}{"invalid": make(chan int)},
+		Data:     map[string]interface{}{"invalid": make(chan int)},
 	})
 	if unmarshalRecordErr != nil {
 		t.Fatalf("expected record to succeed with json fallback, got: %v", unmarshalRecordErr)

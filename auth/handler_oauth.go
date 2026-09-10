@@ -318,7 +318,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 				Type:         "auth.user.converted",
 				ResourceType: "user",
 				Action:       "converted",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": userRecord.ID,
 				},
 			})
@@ -370,7 +370,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 				Type:         "auth.user.signed_up",
 				ResourceType: "user",
 				Action:       "signed_up",
-				Payload: map[string]interface{}{
+				Data: map[string]interface{}{
 					"user_id": userRecord.ID,
 				},
 			})

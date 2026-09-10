@@ -72,8 +72,8 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 	if preparedEvent.Metadata == nil {
 		t.Fatal("expected initialized Metadata map")
 	}
-	if preparedEvent.Payload == nil {
-		t.Fatal("expected initialized Payload map")
+	if preparedEvent.Data == nil {
+		t.Fatal("expected initialized Data map")
 	}
 
 	// Existing fields should be preserved
@@ -87,7 +87,7 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 		ResourceType: "user",
 		Status:       "failed",
 		Metadata:     map[string]interface{}{"key": "val"},
-		Payload:      map[string]interface{}{"foo": "bar"},
+		Data:         map[string]interface{}{"foo": "bar"},
 		CreatedAt:    customTime,
 	}
 	preservedEvent := prepareEvent(existingEvent)
@@ -143,7 +143,7 @@ func TestCoreEventBusLifecycleUnit(t *testing.T) {
 	testEvent := Event{
 		Type:         "test.created",
 		ResourceType: "test",
-		Payload:      map[string]interface{}{"name": "unit-test"},
+		Data:         map[string]interface{}{"name": "unit-test"},
 	}
 
 	eventBus.Publish(ctx, testEvent)

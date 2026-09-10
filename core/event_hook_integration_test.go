@@ -70,7 +70,7 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 		Type:         "test.event.fired",
 		Action:       "fired",
 		ResourceType: "test",
-		Payload:      map[string]interface{}{"key": "value"},
+		Data:         map[string]interface{}{"key": "value"},
 	})
 	if err != nil {
 		t.Fatalf("failed to record base event: %v", err)

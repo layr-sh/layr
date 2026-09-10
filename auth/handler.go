@@ -291,7 +291,7 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 			Type:         "auth.session.created",
 			ResourceType: "session",
 			Action:       "created",
-			Payload: map[string]interface{}{
+			Data: map[string]interface{}{
 				"user_id": userRecord.ID,
 			},
 		})

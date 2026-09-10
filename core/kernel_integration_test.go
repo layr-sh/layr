@@ -691,7 +691,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 		Type:         "core.test.integration",
 		Action:       "tested",
 		ResourceType: "test",
-		Payload:      map[string]interface{}{"status": "ok"},
+		Data:         map[string]interface{}{"status": "ok"},
 	})
 	createdEventHookDelivery, _ := kernel.eventHookManager.Deliver(ctx, createdEventHook, recordedEvent)
 
