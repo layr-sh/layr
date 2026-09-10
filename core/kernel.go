@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -60,9 +61,10 @@ type Kernel struct {
 	nodeRegistry          *NodeRegistry
 	kvStore               KVStore
 	cryptoKeyManager      *CryptoKeyManager
-	webhookEventBus       *WebhookEventBus
+	eventBus              *EventBus
+	eventManager          *EventManager
+	eventHookManager      *EventHookManager
 	serviceAccountManager *ServiceAccountManager
-	webhookManager        *WebhookManager
 	server                *Server
 	services              []ServiceRunner
 	stopOnce              sync.Once
@@ -154,10 +156,14 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	}
 	kernel.kvStore = kvStore
 
-	// Initialize WebhookEventBus and Core Managers
-	kernel.webhookEventBus = NewWebhookEventBus(kernel.db, kernel.cryptoKeyManager)
+	// Initialize EventBus and Core Managers
+	kernel.eventBus = NewEventBus(kernel.db, kernel.cryptoKeyManager)
+	kernel.eventManager = NewEventManager(kernel.db)
+	kernel.eventHookManager = NewEventHookManager(kernel.db, kernel.cryptoKeyManager, kernel.eventBus)
 	kernel.serviceAccountManager = NewServiceAccountManager(kernel.db)
-	kernel.webhookManager = NewWebhookManager(kernel.db, kernel.cryptoKeyManager, kernel.webhookEventBus)
+
+	kernel.eventBus.SetEventManager(kernel.eventManager)
+	kernel.eventBus.SetEventHookManager(kernel.eventHookManager)
 
 	// Bootstrap Initial Root Account (Console User + Linked Service Account)
 	if err := kernel.bootstrapRootAccount(ctx); err != nil {
@@ -240,12 +246,28 @@ func (kernel *Kernel) KVStore() KVStore {
 	return kernel.kvStore
 }
 
-// WebhookEventBus returns the platform event bus.
-func (kernel *Kernel) WebhookEventBus() *WebhookEventBus {
+// EventBus returns the platform event bus.
+func (kernel *Kernel) EventBus() *EventBus {
 	if kernel == nil {
 		return nil
 	}
-	return kernel.webhookEventBus
+	return kernel.eventBus
+}
+
+// EventManager returns the event manager.
+func (kernel *Kernel) EventManager() *EventManager {
+	if kernel == nil {
+		return nil
+	}
+	return kernel.eventManager
+}
+
+// EventHookManager returns the event hook manager.
+func (kernel *Kernel) EventHookManager() *EventHookManager {
+	if kernel == nil {
+		return nil
+	}
+	return kernel.eventHookManager
 }
 
 // ServiceAccountManager returns the machine service account manager.
@@ -254,14 +276,6 @@ func (kernel *Kernel) ServiceAccountManager() *ServiceAccountManager {
 		return nil
 	}
 	return kernel.serviceAccountManager
-}
-
-// WebhookManager returns the webhook delivery manager.
-func (kernel *Kernel) WebhookManager() *WebhookManager {
-	if kernel == nil {
-		return nil
-	}
-	return kernel.webhookManager
 }
 
 // SetDB sets the database connection pool on the kernel.
@@ -278,10 +292,24 @@ func (kernel *Kernel) SetKVStore(kvStore KVStore) {
 	}
 }
 
-// SetWebhookEventBus sets the platform event bus on the kernel.
-func (kernel *Kernel) SetWebhookEventBus(webhookEventBus *WebhookEventBus) {
+// SetEventBus sets the platform event bus on the kernel.
+func (kernel *Kernel) SetEventBus(eventBus *EventBus) {
 	if kernel != nil {
-		kernel.webhookEventBus = webhookEventBus
+		kernel.eventBus = eventBus
+	}
+}
+
+// SetEventManager sets the event manager on the kernel.
+func (kernel *Kernel) SetEventManager(eventManager *EventManager) {
+	if kernel != nil {
+		kernel.eventManager = eventManager
+	}
+}
+
+// SetEventHookManager sets the event hook manager on the kernel.
+func (kernel *Kernel) SetEventHookManager(eventHookManager *EventHookManager) {
+	if kernel != nil {
+		kernel.eventHookManager = eventHookManager
 	}
 }
 
@@ -313,8 +341,8 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 		for i := len(kernel.services) - 1; i >= 0; i-- {
 			_ = kernel.services[i].Stop()
 		}
-		if kernel.webhookEventBus != nil {
-			kernel.webhookEventBus.Close()
+		if kernel.eventBus != nil {
+			kernel.eventBus.Close()
 		}
 		if kernel.kvStore != nil {
 			_ = kernel.kvStore.Close()
@@ -383,55 +411,82 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKMethodName("delete"),
 	)
 
-	GetRoute[[]Webhook](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleListWebhooksRequest,
+	// Event Hooks Routes
+	GetRoute[[]EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleListEventHooksRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("List all webhooks"),
-		RouteDescription("Lists all active webhooks with target URLs, events, and retry policies."),
-		RouteOperationID("core__webhooks__list"),
-		RouteSDKGroupName("core", "webhooks"),
+		RouteSummary("List all event hooks"),
+		RouteDescription("Lists all active event hooks with driver, target URLs/functions, events, and retry policies."),
+		RouteOperationID("core__event_hooks__list"),
+		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[Webhook, CreateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks", kernel.handleCreateWebhookRequest,
+	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleCreateEventHookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Create a new webhook"),
-		RouteDescription("Creates an event subscription for system event dispatching with HMAC-SHA256 signature verification."),
+		RouteSummary("Create a new event hook"),
+		RouteDescription("Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching."),
 		RouteDefaultStatusCode(http.StatusCreated),
-		RouteOperationID("core__webhooks__create"),
-		RouteSDKGroupName("core", "webhooks"),
+		RouteOperationID("core__event_hooks__create"),
+		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[Webhook](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleGetWebhookRequest,
+	GetRoute[EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleGetEventHookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Get webhook by ID"),
-		RouteDescription("Retrieves a webhook by UUID."),
-		RouteOperationID("core__webhooks__get"),
-		RouteSDKGroupName("core", "webhooks"),
+		RouteSummary("Get event hook by ID"),
+		RouteDescription("Retrieves an event hook by UUID."),
+		RouteOperationID("core__event_hooks__get"),
+		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[Webhook, UpdateWebhookInput](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleUpdateWebhookRequest,
+	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleUpdateEventHookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Update webhook"),
-		RouteDescription("Updates webhook target URL, subscribed events, secret, or enabled status."),
-		RouteOperationID("core__webhooks__update"),
-		RouteSDKGroupName("core", "webhooks"),
+		RouteSummary("Update event hook"),
+		RouteDescription("Updates event hook driver, targets, subscribed events, secret, or enabled status."),
+		RouteOperationID("core__event_hooks__update"),
+		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("update"),
 	)
-	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}", kernel.handleDeleteWebhookRequest,
+	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleDeleteEventHookRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("Delete webhook"),
-		RouteDescription("Deletes a webhook and purges delivery workers."),
-		RouteNoContentResponse("Webhook deleted"),
-		RouteOperationID("core__webhooks__delete"),
-		RouteSDKGroupName("core", "webhooks"),
+		RouteSummary("Delete event hook"),
+		RouteDescription("Deletes an event hook."),
+		RouteNoContentResponse("Event hook deleted"),
+		RouteOperationID("core__event_hooks__delete"),
+		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("delete"),
 	)
-	GetRoute[[]WebhookDelivery](controlPlaneRouter, "/api/v1/_/core/webhooks/{webhook_id}/deliveries", kernel.handleListWebhookDeliveriesRequest,
+	GetRoute[[]EventHookDelivery](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries", kernel.handleListEventHookDeliveriesRequest,
 		RouteTag("Core Control Plane"),
-		RouteSummary("List webhook deliveries"),
-		RouteDescription("Queries recent dispatch attempts, response codes, and latency for a webhook."),
-		RouteOperationID("core__webhooks__deliveries__list"),
-		RouteSDKGroupName("core", "webhooks", "deliveries"),
+		RouteSummary("List event hook deliveries"),
+		RouteDescription("Queries recent dispatch attempts, response status, and latency for an event hook."),
+		RouteOperationID("core__event_hooks__deliveries__list"),
+		RouteSDKGroupName("core", "eventHooks", "deliveries"),
 		RouteSDKMethodName("list"),
+	)
+	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", kernel.handleRetryEventHookDeliveryRequest,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Retry event hook delivery"),
+		RouteDescription("Manually redrives a past event hook delivery attempt."),
+		RouteOperationID("core__event_hooks__deliveries__retry"),
+		RouteSDKGroupName("core", "eventHooks", "deliveries"),
+		RouteSDKMethodName("retry"),
+	)
+
+	// Events Routes
+	GetRoute[[]Event](controlPlaneRouter, "/api/v1/_/core/events", kernel.handleListEventsRequest,
+		RouteTag("Core Control Plane"),
+		RouteSummary("List events"),
+		RouteDescription("Queries immutable system and domain events with multi-field filtering and pagination."),
+		RouteOperationID("core__events__list"),
+		RouteSDKGroupName("core", "events"),
+		RouteSDKMethodName("list"),
+	)
+	GetRoute[Event](controlPlaneRouter, "/api/v1/_/core/events/{event_id}", kernel.handleGetEventRequest,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Get event by ID"),
+		RouteDescription("Retrieves an individual event entry by UUID."),
+		RouteOperationID("core__events__get"),
+		RouteSDKGroupName("core", "events"),
+		RouteSDKMethodName("get"),
 	)
 
 	// Mount Core Control Plane Router into root mux with Service Account authentication
@@ -472,13 +527,17 @@ func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.Resp
 		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.service_account.created",
-			Service:  "core",
-			Resource: "service_account",
-			Action:   "created",
-			Data:     serviceAccount.ServiceAccount,
+	if kernel.eventBus != nil {
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.service_account.created",
+			ResourceType: "service_account",
+			Action:       "created",
+			ResourceID:   &serviceAccount.ID,
+			Payload: map[string]interface{}{
+				"id":     serviceAccount.ID,
+				"name":   serviceAccount.Name,
+				"scopes": serviceAccount.Scopes,
+			},
 		})
 	}
 	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, serviceAccount)
@@ -510,13 +569,17 @@ func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.Resp
 		kernel.writeError(responseWriter, http.StatusForbidden, "Root Account Protected", err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.service_account.updated",
-			Service:  "core",
-			Resource: "service_account",
-			Action:   "updated",
-			Data:     serviceAccount,
+	if kernel.eventBus != nil {
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.service_account.updated",
+			ResourceType: "service_account",
+			Action:       "updated",
+			ResourceID:   &serviceAccount.ID,
+			Payload: map[string]interface{}{
+				"id":     serviceAccount.ID,
+				"name":   serviceAccount.Name,
+				"scopes": serviceAccount.Scopes,
+			},
 		})
 	}
 	kernel.writeJSON(responseWriter, serviceAccount)
@@ -533,111 +596,218 @@ func (kernel *Kernel) handleDeleteServiceAccountRequest(responseWriter http.Resp
 		kernel.writeError(responseWriter, http.StatusForbidden, "Root Account Protected", err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.service_account.deleted",
-			Service:  "core",
-			Resource: "service_account",
-			Action:   "deleted",
-			Data:     map[string]string{"id": serviceAccountID},
+	if kernel.eventBus != nil {
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.service_account.deleted",
+			ResourceType: "service_account",
+			Action:       "deleted",
+			ResourceID:   &serviceAccountID,
+			Payload:      map[string]interface{}{"id": serviceAccountID},
 		})
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (kernel *Kernel) handleListWebhooksRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	webhooks, err := kernel.webhookManager.List(request.Context())
+func (kernel *Kernel) handleListEventHooksRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	queryValues := request.URL.Query()
+	eventHookFilter := EventHookFilter{}
+	if driverQueryParam := queryValues.Get("driver"); driverQueryParam != "" {
+		eventHookFilter.Driver = &driverQueryParam
+	}
+	if isEnabledQueryParam := queryValues.Get("is_enabled"); isEnabledQueryParam != "" {
+		parsedIsEnabled := isEnabledQueryParam == "true" || isEnabledQueryParam == "1"
+		eventHookFilter.IsEnabled = &parsedIsEnabled
+	}
+
+	eventHooks, err := kernel.eventHookManager.List(request.Context(), eventHookFilter)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
 		return
 	}
-	kernel.writeJSON(responseWriter, webhooks)
+	kernel.writeJSON(responseWriter, eventHooks)
 }
 
-func (kernel *Kernel) handleCreateWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var createWebhookInput CreateWebhookInput
-	if err := json.NewDecoder(request.Body).Decode(&createWebhookInput); err != nil {
+func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	var createEventHookInput CreateEventHookInput
+	if err := json.NewDecoder(request.Body).Decode(&createEventHookInput); err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
 		return
 	}
-	webhook, err := kernel.webhookManager.Create(request.Context(), createWebhookInput)
+	eventHook, err := kernel.eventHookManager.Create(request.Context(), createEventHookInput)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.webhook.created",
-			Service:  "core",
-			Resource: "webhook",
-			Action:   "created",
-			Data:     webhook,
+	if kernel.eventBus != nil {
+		hookResourceID := eventHook.ID.String()
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.event_hook.created",
+			ResourceType: "event_hook",
+			Action:       "created",
+			ResourceID:   &hookResourceID,
+			Payload:      map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
 		})
 	}
-	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, webhook)
+	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, eventHook)
 }
 
-func (kernel *Kernel) handleGetWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	webhookID := request.PathValue("webhook_id")
-	webhook, err := kernel.webhookManager.Get(request.Context(), webhookID)
+func (kernel *Kernel) handleGetEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Webhook Not Found", err.Error())
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
 		return
 	}
-	kernel.writeJSON(responseWriter, webhook)
+	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+		return
+	}
+	kernel.writeJSON(responseWriter, eventHook)
 }
 
-func (kernel *Kernel) handleUpdateWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	webhookID := request.PathValue("webhook_id")
-	var updateWebhookInput UpdateWebhookInput
-	if err := json.NewDecoder(request.Body).Decode(&updateWebhookInput); err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
-		return
-	}
-	webhook, err := kernel.webhookManager.Update(request.Context(), webhookID, updateWebhookInput)
+func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Webhook Not Found", err.Error())
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.webhook.updated",
-			Service:  "core",
-			Resource: "webhook",
-			Action:   "updated",
-			Data:     webhook,
+	var updateEventHookInput UpdateEventHookInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&updateEventHookInput); decodeErr != nil {
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", decodeErr.Error())
+		return
+	}
+	eventHook, err := kernel.eventHookManager.Update(request.Context(), hookID, updateEventHookInput)
+	if err != nil {
+		if errors.Is(err, ErrEventHookNotFound) {
+			kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+			return
+		}
+		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
+		return
+	}
+	if kernel.eventBus != nil {
+		hookResourceID := eventHook.ID.String()
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.event_hook.updated",
+			ResourceType: "event_hook",
+			Action:       "updated",
+			ResourceID:   &hookResourceID,
+			Payload:      map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
 		})
 	}
-	kernel.writeJSON(responseWriter, webhook)
+	kernel.writeJSON(responseWriter, eventHook)
 }
 
-func (kernel *Kernel) handleDeleteWebhookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	webhookID := request.PathValue("webhook_id")
-	err := kernel.webhookManager.Delete(request.Context(), webhookID)
+func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Webhook Not Found", err.Error())
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
 		return
 	}
-	if kernel.webhookEventBus != nil {
-		kernel.webhookEventBus.Publish(request.Context(), WebhookEventEnvelope{
-			Event:    "core.webhook.deleted",
-			Service:  "core",
-			Resource: "webhook",
-			Action:   "deleted",
-			Data:     map[string]string{"id": webhookID},
+	err = kernel.eventHookManager.Delete(request.Context(), hookID)
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+		return
+	}
+	if kernel.eventBus != nil {
+		hookResourceID := hookID.String()
+		kernel.eventBus.Publish(request.Context(), Event{
+			Type:         "core.event_hook.deleted",
+			ResourceType: "event_hook",
+			Action:       "deleted",
+			ResourceID:   &hookResourceID,
+			Payload:      map[string]interface{}{"id": hookResourceID},
 		})
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (kernel *Kernel) handleListWebhookDeliveriesRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	webhookID := request.PathValue("webhook_id")
-	deliveries, err := kernel.webhookManager.ListDeliveries(request.Context(), webhookID)
+func (kernel *Kernel) handleListEventHookDeliveriesRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
+		return
+	}
+	deliveries, err := kernel.eventHookManager.ListDeliveries(request.Context(), hookID)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, deliveries)
+}
+
+func (kernel *Kernel) handleRetryEventHookDeliveryRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	deliveryID, err := uuid.Parse(request.PathValue("delivery_id"))
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Delivery ID", err.Error())
+		return
+	}
+	eventHookDelivery, err := kernel.eventHookManager.RetryDelivery(request.Context(), deliveryID)
+	if err != nil {
+		if errors.Is(err, ErrEventHookNotFound) || errors.Is(err, ErrEventHookDeliveryNotFound) {
+			kernel.writeError(responseWriter, http.StatusNotFound, "Not Found", err.Error())
+			return
+		}
+		kernel.writeError(responseWriter, http.StatusInternalServerError, "Delivery Failed", err.Error())
+		return
+	}
+	kernel.writeJSON(responseWriter, eventHookDelivery)
+}
+
+func (kernel *Kernel) handleListEventsRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	queryValues := request.URL.Query()
+	eventFilter := EventFilter{}
+	if typeQueryParam := queryValues.Get("type"); typeQueryParam != "" {
+		eventFilter.Type = &typeQueryParam
+	}
+	if actorTypeQueryParam := queryValues.Get("actor_type"); actorTypeQueryParam != "" {
+		eventFilter.ActorType = &actorTypeQueryParam
+	}
+	if actorIDQueryParam := queryValues.Get("actor_id"); actorIDQueryParam != "" {
+		if parsedActorID, parseErr := uuid.Parse(actorIDQueryParam); parseErr == nil {
+			eventFilter.ActorID = &parsedActorID
+		}
+	}
+	if resourceTypeQueryParam := queryValues.Get("resource_type"); resourceTypeQueryParam != "" {
+		eventFilter.ResourceType = &resourceTypeQueryParam
+	}
+	if resourceIDQueryParam := queryValues.Get("resource_id"); resourceIDQueryParam != "" {
+		eventFilter.ResourceID = &resourceIDQueryParam
+	}
+	if statusQueryParam := queryValues.Get("status"); statusQueryParam != "" {
+		eventFilter.Status = &statusQueryParam
+	}
+	if limitQueryParam := queryValues.Get("limit"); limitQueryParam != "" {
+		if parsedLimit, parseErr := strconv.Atoi(limitQueryParam); parseErr == nil {
+			eventFilter.Limit = parsedLimit
+		}
+	}
+	if offsetQueryParam := queryValues.Get("offset"); offsetQueryParam != "" {
+		if parsedOffset, parseErr := strconv.Atoi(offsetQueryParam); parseErr == nil {
+			eventFilter.Offset = parsedOffset
+		}
+	}
+
+	events, err := kernel.eventManager.List(request.Context(), eventFilter)
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
+		return
+	}
+	kernel.writeJSON(responseWriter, events)
+}
+
+func (kernel *Kernel) handleGetEventRequest(responseWriter http.ResponseWriter, request *http.Request) {
+	eventID, err := uuid.Parse(request.PathValue("event_id"))
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Event ID", err.Error())
+		return
+	}
+	event, err := kernel.eventManager.Get(request.Context(), eventID)
+	if err != nil {
+		kernel.writeError(responseWriter, http.StatusNotFound, "Event Not Found", err.Error())
+		return
+	}
+	kernel.writeJSON(responseWriter, event)
 }
 
 var defaultPasswordHasher = password.NewHasher()

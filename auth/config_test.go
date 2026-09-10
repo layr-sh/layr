@@ -180,9 +180,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test HandlePutConfig success and event bus publish
-	webhookEventBus := core.NewWebhookEventBus(nil, cryptoKeyManager)
-	defer webhookEventBus.Close()
-	configManager.SetEventBus(webhookEventBus)
+	eventBus := core.NewEventBus(nil, cryptoKeyManager)
+	defer eventBus.Close()
+	configManager.SetEventBus(eventBus)
 
 	validPutBody := `{"password":{"enabled":true,"min_length":10},"smtp":{"password":"new-smtp-password"}}`
 	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validPutBody))

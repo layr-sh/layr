@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"uuid"
 
 	"layr.sh/auth/otp"
 	"layr.sh/core"
@@ -125,15 +124,12 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 		_ = handler.smsDispatcher.SendPasswordReset(ctx, recipient, code, userID)
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.password.reset_requested",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "password",
-			Action:    "reset_requested",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.password.reset_requested",
+			ResourceType: "password",
+			Action:       "reset_requested",
+			Payload: map[string]interface{}{
 				"recipient": recipient,
 				"user_id":   userID,
 				"code":      code,
@@ -268,15 +264,12 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 		_ = json.Unmarshal(rawProps, &userRecord.Properties)
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.password.reset",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "password",
-			Action:    "reset",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.password.reset",
+			ResourceType: "password",
+			Action:       "reset",
+			Payload: map[string]interface{}{
 				"recipient": recipient,
 				"user_id":   userRecord.ID,
 			},

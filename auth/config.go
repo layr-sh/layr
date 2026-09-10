@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
+	"layr.sh/core"
 	"net/http"
 	"strings"
 	"sync"
-	"uuid"
-
-	"github.com/jackc/pgx/v5"
-	"layr.sh/core"
 )
 
 // Named constants for default durations and limits to satisfy linter checks.
@@ -220,7 +218,7 @@ type ConfigManager struct {
 	db                    *core.DatabasePool
 	cryptoKeyManager      *core.CryptoKeyManager
 	serviceAccountManager *core.ServiceAccountManager
-	webhookEventBus       *core.WebhookEventBus
+	eventBus              *core.EventBus
 	rwMutex               sync.RWMutex
 	config                Config
 }
@@ -240,8 +238,8 @@ func (configManager *ConfigManager) SetServiceAccountManager(serviceAccountManag
 }
 
 // SetEventBus configures the platform event bus.
-func (configManager *ConfigManager) SetEventBus(webhookEventBus *core.WebhookEventBus) {
-	configManager.webhookEventBus = webhookEventBus
+func (configManager *ConfigManager) SetEventBus(eventBus *core.EventBus) {
+	configManager.eventBus = eventBus
 }
 
 func (configManager *ConfigManager) checkScope(request *http.Request, requiredScope string) bool {
@@ -623,14 +621,12 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 		return
 	}
 
-	if configManager.webhookEventBus != nil {
-		configManager.webhookEventBus.Publish(request.Context(), core.WebhookEventEnvelope{
-			ID:       uuid.NewV7().String(),
-			Event:    "auth.config.updated",
-			Service:  "auth",
-			Resource: "config",
-			Action:   "updated",
-			Data: map[string]string{
+	if configManager.eventBus != nil {
+		configManager.eventBus.Publish(request.Context(), core.Event{
+			Type:         "auth.config.updated",
+			ResourceType: "config",
+			Action:       "updated",
+			Payload: map[string]interface{}{
 				"key": ConfigKey,
 			},
 		})

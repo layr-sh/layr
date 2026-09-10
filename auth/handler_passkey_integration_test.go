@@ -27,21 +27,21 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	activeConfig.Passkeys.Enabled = true
 	configManager.Set(activeConfig)
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 
-	emittedEvents := make([]core.WebhookEventEnvelope, 0)
-	webhookEventBus.Subscribe("auth.passkey.created", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
-		emittedEvents = append(emittedEvents, webhookEventEnvelope)
+	emittedEvents := make([]core.Event, 0)
+	eventBus.Subscribe("auth.passkey.created", func(eventCtx context.Context, event core.Event) error {
+		emittedEvents = append(emittedEvents, event)
 		return nil
 	})
-	webhookEventBus.Subscribe("auth.user.converted", func(eventCtx context.Context, webhookEventEnvelope core.WebhookEventEnvelope) error {
-		emittedEvents = append(emittedEvents, webhookEventEnvelope)
+	eventBus.Subscribe("auth.user.converted", func(eventCtx context.Context, event core.Event) error {
+		emittedEvents = append(emittedEvents, event)
 		return nil
 	})
 

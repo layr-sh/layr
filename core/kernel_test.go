@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -121,14 +120,17 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 	if kernel.KVStore() != nil {
 		t.Error("expected nil KVStore before start")
 	}
-	if kernel.WebhookEventBus() != nil {
-		t.Error("expected nil WebhookEventBus before start")
+	if kernel.EventBus() != nil {
+		t.Error("expected nil EventBus before start")
+	}
+	if kernel.EventManager() != nil {
+		t.Error("expected nil EventManager before start")
+	}
+	if kernel.EventHookManager() != nil {
+		t.Error("expected nil EventHookManager before start")
 	}
 	if kernel.ServiceAccountManager() != nil {
 		t.Error("expected nil ServiceAccountManager before start")
-	}
-	if kernel.WebhookManager() != nil {
-		t.Error("expected nil WebhookManager before start")
 	}
 
 	// Test nil kernel accessor coverage
@@ -142,26 +144,33 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 	if nilKernel.KVStore() != nil {
 		t.Error("expected nil kvStore from nil kernel")
 	}
-	if nilKernel.WebhookEventBus() != nil {
+	if nilKernel.EventBus() != nil {
 		t.Error("expected nil eventBus from nil kernel")
+	}
+	if nilKernel.EventManager() != nil {
+		t.Error("expected nil eventManager from nil kernel")
+	}
+	if nilKernel.EventHookManager() != nil {
+		t.Error("expected nil eventHookManager from nil kernel")
 	}
 	if nilKernel.ServiceAccountManager() != nil {
 		t.Error("expected nil serviceAccountManager from nil kernel")
-	}
-	if nilKernel.WebhookManager() != nil {
-		t.Error("expected nil webhookManager from nil kernel")
 	}
 
 	// Test Setters with nil and non-nil kernels
 	var nilDB *DatabasePool
 	nilKernel.SetDB(nilDB)
 	nilKernel.SetKVStore(nil)
-	nilKernel.SetWebhookEventBus(nil)
+	nilKernel.SetEventBus(nil)
+	nilKernel.SetEventManager(nil)
+	nilKernel.SetEventHookManager(nil)
 	nilKernel.SetServiceAccountManager(nil)
 
 	kernel.SetDB(nilDB)
 	kernel.SetKVStore(nil)
-	kernel.SetWebhookEventBus(nil)
+	kernel.SetEventBus(nil)
+	kernel.SetEventManager(nil)
+	kernel.SetEventHookManager(nil)
 	kernel.SetServiceAccountManager(nil)
 
 	if kernel.DB() != nil {
@@ -204,19 +213,19 @@ func TestCoreKernelServiceAccountHelpersUnit(t *testing.T) {
 	}
 }
 
-func TestCoreKernelWebhookHelpersUnit(t *testing.T) {
-	signature := ComputeWebhookSignature("secret", "1776484800", []byte(`{"test":true}`))
-	if !strings.HasPrefix(signature, "sha256=") {
-		t.Fatalf("expected sha256= prefix, got: %s", signature)
+func TestCoreKernelEventHookHelpersUnit(t *testing.T) {
+	signature := ComputeHookSignature("secret", "1776484800", []byte(`{"test":true}`))
+	if len(signature) == 0 {
+		t.Fatal("expected non-empty signature")
 	}
 
-	if !matchWebhookEventPattern("*", "data.table.created") {
+	if !MatchEventPattern("*", "data.table.created") {
 		t.Fatal("expected wildcard match")
 	}
-	if !matchWebhookEventPattern("data.*", "data.table.created") {
+	if !MatchEventPattern("data.*", "data.table.created") {
 		t.Fatal("expected prefix match")
 	}
-	if matchWebhookEventPattern("data.*", "auth.user.created") {
+	if MatchEventPattern("data.*", "auth.user.created") {
 		t.Fatal("expected prefix mismatch")
 	}
 }

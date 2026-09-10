@@ -60,12 +60,12 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 	configManager.Set(activeConfig)
 
-	webhookEventBus := core.NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
 	handler := NewHandler(db, configManager, cryptoKeyManager)
-	handler.SetWebhookEventBus(webhookEventBus)
+	handler.SetEventBus(eventBus)
 	handler.SetKVStore(testKVStore)
 	handler.SetEmailDispatcher(NewEmailDispatcher(db, func() *EmailDispatcherConfig {
 		emailDispatcherConfig := activeConfig.EmailDispatcher

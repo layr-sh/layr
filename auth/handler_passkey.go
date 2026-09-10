@@ -160,28 +160,22 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 		return
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.passkey.created",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "passkey",
-			Action:    "created",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.passkey.created",
+			ResourceType: "passkey",
+			Action:       "created",
+			Payload: map[string]interface{}{
 				"user_id":       targetUserID,
 				"friendly_name": passkeySignUpVerifyRequest.FriendlyName,
 			},
 		})
 		if isAnonymousConversion {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.converted",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "converted",
-				Data: map[string]string{
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.converted",
+				ResourceType: "user",
+				Action:       "converted",
+				Payload: map[string]interface{}{
 					"user_id": targetUserID,
 				},
 			})

@@ -152,15 +152,12 @@ func (handler *Handler) handleRevokeSession(responseWriter http.ResponseWriter, 
 		_ = handler.kvStore.Delete(ctx, "layr:auth:session:"+deletedRefreshTokenHash)
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.session.deleted",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "session",
-			Action:    "deleted",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.session.deleted",
+			ResourceType: "session",
+			Action:       "deleted",
+			Payload: map[string]interface{}{
 				"session_id": targetSessionID,
 				"user_id":    userID,
 			},
@@ -254,15 +251,12 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 		}
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.session.deleted",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "session",
-			Action:    "deleted",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, core.Event{
+			Type:         "auth.session.deleted",
+			ResourceType: "session",
+			Action:       "deleted",
+			Payload: map[string]interface{}{
 				"user_id":       userID,
 				"revoked_count": strconv.Itoa(len(deletedHashes)),
 			},

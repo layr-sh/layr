@@ -126,7 +126,7 @@ type Handler struct {
 	smsDispatcher         *SMSDispatcher
 	kvStore               core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
-	webhookEventBus       *core.WebhookEventBus
+	eventBus              *core.EventBus
 }
 
 // NewHandler creates a new Auth HTTP Handler.
@@ -192,10 +192,10 @@ func (handler *Handler) SetServiceAccountManager(serviceAccountManager *core.Ser
 	handler.serviceAccountManager = serviceAccountManager
 }
 
-// SetWebhookEventBus sets the platform event bus for broadcasting events.
-func (handler *Handler) SetWebhookEventBus(webhookEventBus *core.WebhookEventBus) {
-	log.Debug("configuring webhook event bus on auth handler")
-	handler.webhookEventBus = webhookEventBus
+// SetEventBus sets the platform event bus for broadcasting events.
+func (handler *Handler) SetEventBus(eventBus *core.EventBus) {
+	log.Debug("configuring event bus on auth handler")
+	handler.eventBus = eventBus
 }
 
 // GetTOTPManager returns the active TOTP manager.
@@ -286,15 +286,12 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 		}
 	}
 
-	if handler.webhookEventBus != nil {
-		handler.webhookEventBus.Publish(request.Context(), core.WebhookEventEnvelope{
-			ID:        uuid.NewV7().String(),
-			Event:     "auth.session.created",
-			Timestamp: time.Now().UTC(),
-			Service:   "auth",
-			Resource:  "session",
-			Action:    "created",
-			Data: map[string]string{
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(request.Context(), core.Event{
+			Type:         "auth.session.created",
+			ResourceType: "session",
+			Action:       "created",
+			Payload: map[string]interface{}{
 				"user_id": userRecord.ID,
 			},
 		})

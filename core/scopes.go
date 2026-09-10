@@ -11,8 +11,9 @@ const (
 	// Core scopes
 	ScopeCoreServiceAccountRead  = "core:service-account.read"
 	ScopeCoreServiceAccountWrite = "core:service-account.write"
-	ScopeCoreWebhookRead         = "core:webhook.read"
-	ScopeCoreWebhookWrite        = "core:webhook.write"
+	ScopeCoreEventRead           = "core:event.read"
+	ScopeCoreEventHookRead       = "core:event-hook.read"
+	ScopeCoreEventHookWrite      = "core:event-hook.write"
 
 	// Data scopes
 	ScopeDataSchemaRead  = "data:schema.read"
@@ -59,7 +60,6 @@ const (
 	// Console scopes
 	ScopeConsoleUserRead  = "console:user.read"
 	ScopeConsoleUserWrite = "console:user.write"
-	ScopeConsoleAuditRead = "console:audit.read"
 )
 
 // HasScope checks if the provided slice of granted scopes satisfies the required scope.

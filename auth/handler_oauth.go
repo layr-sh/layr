@@ -313,15 +313,12 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.converted",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "converted",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.converted",
+				ResourceType: "user",
+				Action:       "converted",
+				Payload: map[string]interface{}{
 					"user_id": userRecord.ID,
 				},
 			})
@@ -368,15 +365,12 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		`, userRecord.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		log.Tracef("created new federated user %s for %s:%s", userRecord.ID, provider, userInfo.ProviderUserID)
-		if handler.webhookEventBus != nil {
-			handler.webhookEventBus.Publish(ctx, core.WebhookEventEnvelope{
-				ID:        uuid.NewV7().String(),
-				Event:     "auth.user.signed_up",
-				Timestamp: time.Now().UTC(),
-				Service:   "auth",
-				Resource:  "user",
-				Action:    "signed_up",
-				Data: map[string]string{
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, core.Event{
+				Type:         "auth.user.signed_up",
+				ResourceType: "user",
+				Action:       "signed_up",
+				Payload: map[string]interface{}{
 					"user_id": userRecord.ID,
 				},
 			})

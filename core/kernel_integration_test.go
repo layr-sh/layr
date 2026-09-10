@@ -16,6 +16,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"uuid"
 )
 
 func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
@@ -603,9 +604,10 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	}
 	kernel.db = db
 	kernel.serviceAccountManager = NewServiceAccountManager(db)
-	kernel.webhookEventBus = NewWebhookEventBus(db, kernel.cryptoKeyManager)
-	defer kernel.webhookEventBus.Close()
-	kernel.webhookManager = NewWebhookManager(db, kernel.cryptoKeyManager, kernel.webhookEventBus)
+	kernel.eventBus = NewEventBus(db, kernel.cryptoKeyManager)
+	defer kernel.eventBus.Close()
+	kernel.eventHookManager = NewEventHookManager(db, kernel.cryptoKeyManager, kernel.eventBus)
+	kernel.eventManager = NewEventManager(db)
 
 	server := NewServer(db, kernel.cryptoKeyManager)
 	kernel.registerCoreRoutes(server)
@@ -647,57 +649,138 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK for PUT service account by ID, got %d", updateServiceAccountResponseRecorder.Code)
 	}
 
-	// 2. Webhooks HTTP API
-	// POST /api/v1/_/core/webhooks
-	createWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":"HTTP Webhook","target_url":"http://localhost:8080/webhook","events":["*"],"signing_secret":"secret123"}`))
-	createWebhookRequest.Header.Set("Content-Type", "application/json")
-	createWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(createWebhookResponseRecorder, createWebhookRequest)
-	if createWebhookResponseRecorder.Code != http.StatusOK && createWebhookResponseRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 for POST webhooks, got %d: %s", createWebhookResponseRecorder.Code, createWebhookResponseRecorder.Body.String())
+	// 2. Event Hooks HTTP API
+	// POST /api/v1/_/core/event-hooks
+	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks", strings.NewReader(`{"name":"HTTP Hook","driver":"http","http_target_url":"http://localhost:8080/hook","event_types":["*"],"signing_secret":"secret123"}`))
+	createHookRequest.Header.Set("Content-Type", "application/json")
+	createHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(createHookResponseRecorder, createHookRequest)
+	if createHookResponseRecorder.Code != http.StatusOK && createHookResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 for POST event hooks, got %d: %s", createHookResponseRecorder.Code, createHookResponseRecorder.Body.String())
 	}
-	var webhook Webhook
-	_ = json.Unmarshal(createWebhookResponseRecorder.Body.Bytes(), &webhook)
+	var createdEventHook EventHook
+	_ = json.Unmarshal(createHookResponseRecorder.Body.Bytes(), &createdEventHook)
 
-	// GET /api/v1/_/core/webhooks
-	listWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	listWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(listWebhookResponseRecorder, listWebhookRequest)
-	if listWebhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhooks, got %d", listWebhookResponseRecorder.Code)
-	}
-
-	// GET /api/v1/_/core/webhooks/:id
-	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
-	getWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(getWebhookResponseRecorder, getWebhookRequest)
-	if getWebhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhook by ID, got %d", getWebhookResponseRecorder.Code)
+	// GET /api/v1/_/core/event-hooks
+	listHooksRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks", nil)
+	listHooksResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(listHooksResponseRecorder, listHooksRequest)
+	if listHooksResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET event hooks, got %d", listHooksResponseRecorder.Code)
 	}
 
-	// PUT /api/v1/_/core/webhooks/:id
-	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`{"name":"Updated HTTP Webhook"}`))
-	updateWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(updateWebhookResponseRecorder, updateWebhookRequest)
-	if updateWebhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for PUT webhook by ID, got %d", updateWebhookResponseRecorder.Code)
+	// GET /api/v1/_/core/event-hooks/:event_hook_id
+	getHookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), nil)
+	getHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(getHookResponseRecorder, getHookRequest)
+	if getHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET event hook by ID, got %d", getHookResponseRecorder.Code)
 	}
 
-	// GET /api/v1/_/core/webhooks/:id/deliveries
-	deliveriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID+"/deliveries", nil)
+	// PUT /api/v1/_/core/event-hooks/:event_hook_id
+	updateHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), strings.NewReader(`{"name":"Updated HTTP Hook"}`))
+	updateHookRequest.Header.Set("Content-Type", "application/json")
+	updateHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(updateHookResponseRecorder, updateHookRequest)
+	if updateHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for PUT event hook by ID, got %d", updateHookResponseRecorder.Code)
+	}
+
+	// 3. Events HTTP API and Hook Deliveries
+	recordedEvent, _ := kernel.eventManager.Record(ctx, Event{
+		Type:         "core.test.integration",
+		Action:       "tested",
+		ResourceType: "test",
+		Payload:      map[string]interface{}{"status": "ok"},
+	})
+	createdEventHookDelivery, _ := kernel.eventHookManager.Deliver(ctx, createdEventHook, recordedEvent)
+
+	// GET /api/v1/_/core/event-hooks with filters
+	filteredHooksRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks?driver=http&is_enabled=true", nil)
+	filteredHooksResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(filteredHooksResponseRecorder, filteredHooksRequest)
+	if filteredHooksResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET event hooks with filters, got %d", filteredHooksResponseRecorder.Code)
+	}
+
+	disabledHooksRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks?is_enabled=false", nil)
+	disabledHooksResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(disabledHooksResponseRecorder, disabledHooksRequest)
+	if disabledHooksResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET disabled event hooks, got %d", disabledHooksResponseRecorder.Code)
+	}
+
+	// GET /api/v1/_/core/event-hooks/:event_hook_id/deliveries
+	deliveriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String()+"/deliveries", nil)
 	deliveriesResponseRecorder := httptest.NewRecorder()
 	server.Mux().ServeHTTP(deliveriesResponseRecorder, deliveriesRequest)
 	if deliveriesResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK for GET webhook deliveries, got %d", deliveriesResponseRecorder.Code)
+		t.Fatalf("expected 200 OK for GET event hook deliveries, got %d", deliveriesResponseRecorder.Code)
 	}
 
-	// DELETE /api/v1/_/core/webhooks/:id
-	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
-	deleteWebhookDeliveryResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(deleteWebhookDeliveryResponseRecorder, deleteWebhookDeliveryRequest)
-	if deleteWebhookDeliveryResponseRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 for DELETE webhook, got %d", deleteWebhookDeliveryResponseRecorder.Code)
+	// POST /api/v1/_/core/event-hooks/:event_hook_id/deliveries/:delivery_id/retry (Failure -> 500)
+	retryDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String()+"/deliveries/"+createdEventHookDelivery.ID.String()+"/retry", nil)
+	retryDeliveryResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(retryDeliveryResponseRecorder, retryDeliveryRequest)
+	if retryDeliveryResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for failed delivery retry, got %d", retryDeliveryResponseRecorder.Code)
+	}
+
+	// Successful delivery retry -> 200
+	successHookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusOK)
+	}))
+	defer successHookServer.Close()
+
+	successEventHook, err := kernel.eventHookManager.Create(ctx, CreateEventHookInput{
+		Name:          "Success Retry Hook",
+		Driver:        EventHookDriverHTTP,
+		HTTPTargetURL: &successHookServer.URL,
+		EventTypes:    []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create success hook: %v", err)
+	}
+	successEventHookDelivery, _ := kernel.eventHookManager.Deliver(ctx, *successEventHook, recordedEvent)
+
+	successRetryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks/"+successEventHook.ID.String()+"/deliveries/"+successEventHookDelivery.ID.String()+"/retry", nil)
+	successRetryResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(successRetryResponseRecorder, successRetryRequest)
+	if successRetryResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for successful delivery retry, got %d: %s", successRetryResponseRecorder.Code, successRetryResponseRecorder.Body.String())
+	}
+	_ = kernel.eventHookManager.Delete(ctx, successEventHook.ID)
+
+	// DELETE /api/v1/_/core/event-hooks/:event_hook_id
+	deleteHookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), nil)
+	deleteHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(deleteHookResponseRecorder, deleteHookRequest)
+	if deleteHookResponseRecorder.Code != http.StatusNoContent && deleteHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 for DELETE event hook, got %d", deleteHookResponseRecorder.Code)
+	}
+
+	// GET /api/v1/_/core/events
+	listEventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events", nil)
+	listEventsResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(listEventsResponseRecorder, listEventsRequest)
+	if listEventsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET events, got %d", listEventsResponseRecorder.Code)
+	}
+
+	// GET /api/v1/_/core/events with query parameters
+	filteredEventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events?type=core.test.integration&actor_type=system&resource_type=test&resource_id=123&status=success&limit=10&offset=0&actor_id="+recordedEvent.ID.String(), nil)
+	filteredEventsResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(filteredEventsResponseRecorder, filteredEventsRequest)
+	if filteredEventsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET filtered events, got %d", filteredEventsResponseRecorder.Code)
+	}
+
+	// GET /api/v1/_/core/events/:event_id
+	getEventRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events/"+recordedEvent.ID.String(), nil)
+	getEventResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(getEventResponseRecorder, getEventRequest)
+	if getEventResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for GET event by ID, got %d", getEventResponseRecorder.Code)
 	}
 
 	// Create 2nd root service account to allow deleting 1st
@@ -712,7 +795,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 204/200 for DELETE service account, got %d", deleteServiceAccountResponseRecorder.Code)
 	}
 
-	// 3. Error handling & Edge Cases for service accounts and webhooks HTTP Handlers
+	// 4. Error handling & Edge Cases for service accounts, event hooks, and events
 	// Invalid JSON on POST /service-accounts
 	badJSONServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`{invalid-json`))
 	badJSONServiceAccountRequest.Header.Set("Content-Type", "application/json")
@@ -756,38 +839,111 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden for deleting last root service account, got %d", deleteLastRootServiceAccountResponseRecorder.Code)
 	}
 
-	// Bad JSON on POST /webhooks
-	badJSONWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{bad`))
-	badJSONWebhookRequest.Header.Set("Content-Type", "application/json")
-	badJSONWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONWebhookResponseRecorder, badJSONWebhookRequest)
-	if badJSONWebhookResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request, got %d", badJSONWebhookResponseRecorder.Code)
+	// Bad JSON on POST /event-hooks
+	badJSONHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks", strings.NewReader(`{bad`))
+	badJSONHookRequest.Header.Set("Content-Type", "application/json")
+	badJSONHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONHookResponseRecorder, badJSONHookRequest)
+	if badJSONHookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", badJSONHookResponseRecorder.Code)
 	}
 
-	// Not Found on GET /webhooks/:id
-	notFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(notFoundWebhookResponseRecorder, notFoundWebhookRequest)
-	if notFoundWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 Not Found, got %d", notFoundWebhookResponseRecorder.Code)
+	// Not Found on GET /event-hooks/:event_hook_id
+	notFoundHookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", nil)
+	notFoundHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundHookResponseRecorder, notFoundHookRequest)
+	if notFoundHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundHookResponseRecorder.Code)
 	}
 
-	// Bad JSON on PUT /webhooks/:id
-	badJSONPutWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{bad`))
-	badJSONPutWebhookRequest.Header.Set("Content-Type", "application/json")
-	badJSONPutWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(badJSONPutWebhookResponseRecorder, badJSONPutWebhookRequest)
-	if badJSONPutWebhookResponseRecorder.Code != http.StatusBadRequest && badJSONPutWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 400/404, got %d", badJSONPutWebhookResponseRecorder.Code)
+	// Bad JSON on PUT /event-hooks/:event_hook_id
+	badJSONPutHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{bad`))
+	badJSONPutHookRequest.Header.Set("Content-Type", "application/json")
+	badJSONPutHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badJSONPutHookResponseRecorder, badJSONPutHookRequest)
+	if badJSONPutHookResponseRecorder.Code != http.StatusBadRequest && badJSONPutHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 400/404, got %d", badJSONPutHookResponseRecorder.Code)
 	}
 
-	// Not Found on DELETE /webhooks/:id
-	notFoundDelWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundDelWebhookResponseRecorder := httptest.NewRecorder()
-	server.Mux().ServeHTTP(notFoundDelWebhookResponseRecorder, notFoundDelWebhookRequest)
-	if notFoundDelWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 Not Found, got %d", notFoundDelWebhookResponseRecorder.Code)
+	// Not Found on DELETE /event-hooks/:event_hook_id
+	notFoundDelHookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", nil)
+	notFoundDelHookResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundDelHookResponseRecorder, notFoundDelHookRequest)
+	if notFoundDelHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundDelHookResponseRecorder.Code)
+	}
+
+	// Not Found on GET /events/:event_id
+	notFoundEventRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events/00000000-0000-0000-0000-000000000000", nil)
+	notFoundEventResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundEventResponseRecorder, notFoundEventRequest)
+	if notFoundEventResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundEventResponseRecorder.Code)
+	}
+
+	// Invalid UUIDs for Event Hook & Event endpoints
+	invalidHookIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/invalid-uuid", nil)
+	invalidHookIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidHookIDResponseRecorder, invalidHookIDRequest)
+	if invalidHookIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidHookIDResponseRecorder.Code)
+	}
+
+	invalidPutHookIDRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/invalid-uuid", strings.NewReader(`{}`))
+	invalidPutHookIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidPutHookIDResponseRecorder, invalidPutHookIDRequest)
+	if invalidPutHookIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidPutHookIDResponseRecorder.Code)
+	}
+
+	tempEventHook, _ := kernel.eventHookManager.Create(ctx, CreateEventHookInput{
+		Name:          "Temp Hook",
+		Driver:        EventHookDriverHTTP,
+		HTTPTargetURL: stringPointer("http://localhost:8080"),
+		EventTypes:    []string{"*"},
+	})
+	badUpdateHookBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/"+tempEventHook.ID.String(), strings.NewReader(`{"name":""}`))
+	badUpdateHookBodyRequest.Header.Set("Content-Type", "application/json")
+	badUpdateHookBodyResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(badUpdateHookBodyResponseRecorder, badUpdateHookBodyRequest)
+	if badUpdateHookBodyResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", badUpdateHookBodyResponseRecorder.Code)
+	}
+	_ = kernel.eventHookManager.Delete(ctx, tempEventHook.ID)
+
+	invalidDeleteHookIDRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/event-hooks/invalid-uuid", nil)
+	invalidDeleteHookIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidDeleteHookIDResponseRecorder, invalidDeleteHookIDRequest)
+	if invalidDeleteHookIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidDeleteHookIDResponseRecorder.Code)
+	}
+
+	invalidDeliveriesHookIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/invalid-uuid/deliveries", nil)
+	invalidDeliveriesHookIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidDeliveriesHookIDResponseRecorder, invalidDeliveriesHookIDRequest)
+	if invalidDeliveriesHookIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidDeliveriesHookIDResponseRecorder.Code)
+	}
+
+	invalidRetryDeliveryIDRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000/deliveries/invalid-uuid/retry", nil)
+	invalidRetryDeliveryIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidRetryDeliveryIDResponseRecorder, invalidRetryDeliveryIDRequest)
+	if invalidRetryDeliveryIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidRetryDeliveryIDResponseRecorder.Code)
+	}
+
+	notFoundRetryDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000/deliveries/00000000-0000-0000-0000-000000000000/retry", nil)
+	notFoundRetryDeliveryResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(notFoundRetryDeliveryResponseRecorder, notFoundRetryDeliveryRequest)
+	if notFoundRetryDeliveryResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found, got %d", notFoundRetryDeliveryResponseRecorder.Code)
+	}
+
+	invalidEventIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events/invalid-uuid", nil)
+	invalidEventIDResponseRecorder := httptest.NewRecorder()
+	server.Mux().ServeHTTP(invalidEventIDResponseRecorder, invalidEventIDRequest)
+	if invalidEventIDResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", invalidEventIDResponseRecorder.Code)
 	}
 }
 
@@ -832,9 +988,10 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	kernel := &Kernel{
 		cryptoKeyManager:      cryptoKeyManager,
 		db:                    db,
-		webhookEventBus:       NewWebhookEventBus(db, cryptoKeyManager),
+		eventBus:              NewEventBus(db, cryptoKeyManager),
 		serviceAccountManager: NewServiceAccountManager(db),
-		webhookManager:        NewWebhookManager(db, cryptoKeyManager, nil),
+		eventHookManager:      NewEventHookManager(db, cryptoKeyManager, nil),
+		eventManager:          NewEventManager(db),
 	}
 
 	server := NewServer(db, cryptoKeyManager)
@@ -876,56 +1033,76 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 200 from update service account, got %d: %s", updateServiceAccountResponseRecorder.Code, updateServiceAccountResponseRecorder.Body.String())
 	}
 
-	// Test 5: List Webhooks
-	webhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	webhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(webhookResponseRecorder, webhookRequest)
-	if webhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from list webhooks, got %d", webhookResponseRecorder.Code)
+	// Test 5: List Event Hooks
+	hookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks", nil)
+	hookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(hookResponseRecorder, hookRequest)
+	if hookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list event hooks, got %d", hookResponseRecorder.Code)
 	}
 
-	// Test 6: Create Webhook
-	createWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":"Router WH","target_url":"http://localhost:8080/hook","events":["*"],"signing_secret":"secret123"}`))
-	createWebhookRequest.Header.Set("Content-Type", "application/json")
-	createWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(createWebhookResponseRecorder, createWebhookRequest)
-	if createWebhookResponseRecorder.Code != http.StatusOK && createWebhookResponseRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 from create webhook, got %d: %s", createWebhookResponseRecorder.Code, createWebhookResponseRecorder.Body.String())
+	// Test 6: Create Event Hook
+	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks", strings.NewReader(`{"name":"Router Hook","driver":"http","http_target_url":"http://localhost:8080/hook","event_types":["*"],"signing_secret":"secret123"}`))
+	createHookRequest.Header.Set("Content-Type", "application/json")
+	createHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(createHookResponseRecorder, createHookRequest)
+	if createHookResponseRecorder.Code != http.StatusOK && createHookResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected 200/201 from create event hook, got %d: %s", createHookResponseRecorder.Code, createHookResponseRecorder.Body.String())
 	}
-	var webhook Webhook
-	_ = json.Unmarshal(createWebhookResponseRecorder.Body.Bytes(), &webhook)
+	var createdEventHook EventHook
+	_ = json.Unmarshal(createHookResponseRecorder.Body.Bytes(), &createdEventHook)
 
-	// Test 7: Get Webhook by ID
-	getWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
-	getWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(getWebhookResponseRecorder, getWebhookRequest)
-	if getWebhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from get webhook by ID, got %d", getWebhookResponseRecorder.Code)
-	}
-
-	// Test 8: Update Webhook
-	updateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`{"name":"Updated Router WH"}`))
-	updateWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateWebhookResponseRecorder, updateWebhookRequest)
-	if updateWebhookResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from update webhook, got %d", updateWebhookResponseRecorder.Code)
+	// Test 7: Get Event Hook by ID
+	getHookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), nil)
+	getHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(getHookResponseRecorder, getHookRequest)
+	if getHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from get event hook by ID, got %d", getHookResponseRecorder.Code)
 	}
 
-	// Test 9: List Webhook Deliveries
-	webhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhook.ID+"/deliveries", nil)
-	webhookDeliveryResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(webhookDeliveryResponseRecorder, webhookDeliveryRequest)
-	if webhookDeliveryResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from list deliveries, got %d", webhookDeliveryResponseRecorder.Code)
+	// Test 8: Update Event Hook
+	updateHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), strings.NewReader(`{"name":"Updated Router Hook"}`))
+	updateHookRequest.Header.Set("Content-Type", "application/json")
+	updateHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateHookResponseRecorder, updateHookRequest)
+	if updateHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from update event hook, got %d", updateHookResponseRecorder.Code)
 	}
 
-	// Test 10: Delete Webhook
-	deleteWebhookDeliveryRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/"+webhook.ID, nil)
-	deleteWebhookDeliveryResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteWebhookDeliveryResponseRecorder, deleteWebhookDeliveryRequest)
-	if deleteWebhookDeliveryResponseRecorder.Code != http.StatusNoContent && deleteWebhookDeliveryResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 204/200 from delete webhook, got %d", deleteWebhookDeliveryResponseRecorder.Code)
+	// Test 9: List Event Hook Deliveries
+	deliveriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String()+"/deliveries", nil)
+	deliveriesResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deliveriesResponseRecorder, deliveriesRequest)
+	if deliveriesResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list deliveries, got %d", deliveriesResponseRecorder.Code)
+	}
+
+	// Test 10: Delete Event Hook
+	deleteHookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), nil)
+	deleteHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteHookResponseRecorder, deleteHookRequest)
+	if deleteHookResponseRecorder.Code != http.StatusNoContent && deleteHookResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 204/200 from delete event hook, got %d", deleteHookResponseRecorder.Code)
+	}
+
+	// Test Events endpoints
+	recordedEvent, _ := kernel.eventManager.Record(ctx, Event{
+		Type:         "core.router.event",
+		Action:       "tested",
+		ResourceType: "router",
+	})
+	eventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events", nil)
+	eventsResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(eventsResponseRecorder, eventsRequest)
+	if eventsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from list events, got %d", eventsResponseRecorder.Code)
+	}
+
+	singleEventRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events/"+recordedEvent.ID.String(), nil)
+	singleEventResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(singleEventResponseRecorder, singleEventRequest)
+	if singleEventResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from get event by ID, got %d", singleEventResponseRecorder.Code)
 	}
 
 	// Create 2nd root service account so we can delete the first
@@ -949,13 +1126,13 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 400 for empty name in create service account, got %d", badCreateServiceAccountResponseRecorder.Code)
 	}
 
-	// Invalid Create Webhook body (missing name)
-	badCreateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`{"name":""}`))
-	badCreateWebhookRequest.Header.Set("Content-Type", "application/json")
-	badCreateWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateWebhookResponseRecorder, badCreateWebhookRequest)
-	if badCreateWebhookResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for empty name in create webhook, got %d", badCreateWebhookResponseRecorder.Code)
+	// Invalid Create Hook body (missing name)
+	badCreateHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks", strings.NewReader(`{"name":""}`))
+	badCreateHookRequest.Header.Set("Content-Type", "application/json")
+	badCreateHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(badCreateHookResponseRecorder, badCreateHookRequest)
+	if badCreateHookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name in create event hook, got %d", badCreateHookResponseRecorder.Code)
 	}
 
 	// A. Not found service account
@@ -966,12 +1143,12 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 404 for not found service account, got %d", notFoundServiceAccountResponseRecorder.Code)
 	}
 
-	// B. Not found Webhook
-	notFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	notFoundWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundWebhookResponseRecorder, notFoundWebhookRequest)
-	if notFoundWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for not found webhook, got %d", notFoundWebhookResponseRecorder.Code)
+	// B. Not found Event Hook
+	notFoundHookRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", nil)
+	notFoundHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(notFoundHookResponseRecorder, notFoundHookRequest)
+	if notFoundHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for not found event hook, got %d", notFoundHookResponseRecorder.Code)
 	}
 
 	// C. Update not found service account
@@ -983,13 +1160,13 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 404 for update not found service account, got %d", updateNotFoundServiceAccountResponseRecorder.Code)
 	}
 
-	// D. Update not found Webhook
-	updateNotFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{"name":"NF"}`))
-	updateNotFoundWebhookRequest.Header.Set("Content-Type", "application/json")
-	updateNotFoundWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundWebhookResponseRecorder, updateNotFoundWebhookRequest)
-	if updateNotFoundWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for update not found webhook, got %d", updateNotFoundWebhookResponseRecorder.Code)
+	// D. Update not found Event Hook
+	updateNotFoundHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", strings.NewReader(`{"name":"NF"}`))
+	updateNotFoundHookRequest.Header.Set("Content-Type", "application/json")
+	updateNotFoundHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(updateNotFoundHookResponseRecorder, updateNotFoundHookRequest)
+	if updateNotFoundHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for update not found event hook, got %d", updateNotFoundHookResponseRecorder.Code)
 	}
 
 	// E. Delete not found service account
@@ -1018,7 +1195,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 
 	// Additional error coverage for kernel handlers with canceled context
-	testCanceledContextEndpoints(t, server, webhook.ID)
+	testCanceledContextEndpoints(t, server, createdEventHook.ID.String())
 
 	// Create service account invalid JSON body
 	invalidCreateServiceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/service-accounts", strings.NewReader(`invalid-json`))
@@ -1036,28 +1213,28 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 400 for bad JSON update service account, got %d", invalidUpdateServiceAccountResponseRecorder.Code)
 	}
 
-	// Create webhook invalid JSON body
-	invalidCreateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/webhooks", strings.NewReader(`invalid-json`))
-	invalidCreateWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateWebhookResponseRecorder, invalidCreateWebhookRequest)
-	if invalidCreateWebhookResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON create webhook, got %d", invalidCreateWebhookResponseRecorder.Code)
+	// Invalid Create Hook body (invalid json)
+	invalidCreateHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/core/event-hooks", strings.NewReader(`invalid-json`))
+	invalidCreateHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidCreateHookResponseRecorder, invalidCreateHookRequest)
+	if invalidCreateHookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON create event hook, got %d", invalidCreateHookResponseRecorder.Code)
 	}
 
-	// Update webhook invalid JSON body
-	invalidUpdateWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/webhooks/"+webhook.ID, strings.NewReader(`invalid-json`))
-	invalidUpdateWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateWebhookResponseRecorder, invalidUpdateWebhookRequest)
-	if invalidUpdateWebhookResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for bad JSON update webhook, got %d", invalidUpdateWebhookResponseRecorder.Code)
+	// Update hook invalid JSON body
+	invalidUpdateHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/core/event-hooks/"+createdEventHook.ID.String(), strings.NewReader(`invalid-json`))
+	invalidUpdateHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(invalidUpdateHookResponseRecorder, invalidUpdateHookRequest)
+	if invalidUpdateHookResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for bad JSON update event hook, got %d", invalidUpdateHookResponseRecorder.Code)
 	}
 
-	// Delete not found webhook
-	deleteNotFoundWebhookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/webhooks/00000000-0000-0000-0000-000000000000", nil)
-	deleteNotFoundWebhookResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundWebhookResponseRecorder, deleteNotFoundWebhookRequest)
-	if deleteNotFoundWebhookResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for delete not found webhook, got %d", deleteNotFoundWebhookResponseRecorder.Code)
+	// Delete not found hook
+	deleteNotFoundHookRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000", nil)
+	deleteNotFoundHookResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(deleteNotFoundHookResponseRecorder, deleteNotFoundHookRequest)
+	if deleteNotFoundHookResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for delete not found event hook, got %d", deleteNotFoundHookResponseRecorder.Code)
 	}
 
 	// Test ServiceAccountAuthMiddleware & RequireScopeMiddleware
@@ -1203,7 +1380,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 }
 
-func testCanceledContextEndpoints(t *testing.T, server *Server, webhookID string) {
+func testCanceledContextEndpoints(t *testing.T, server *Server, eventHookID string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -1215,20 +1392,28 @@ func testCanceledContextEndpoints(t *testing.T, server *Server, webhookID string
 		t.Fatalf("expected 500 for canceled context on list service accounts, got %d", listCanceledResponseRecorder.Code)
 	}
 
-	// List webhooks canceled context
-	listWebhooksCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks", nil)
-	listWebhooksCanceledResponseRecorder := httptest.NewRecorder()
-	server.ControlPlaneRouter().Mux().ServeHTTP(listWebhooksCanceledResponseRecorder, listWebhooksCanceledRequest)
-	if listWebhooksCanceledResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 for canceled context on list webhooks, got %d", listWebhooksCanceledResponseRecorder.Code)
+	// List event hooks canceled context
+	listHooksCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks", nil)
+	listHooksCanceledResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(listHooksCanceledResponseRecorder, listHooksCanceledRequest)
+	if listHooksCanceledResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for canceled context on list event hooks, got %d", listHooksCanceledResponseRecorder.Code)
 	}
 
-	// List webhook deliveries canceled context
-	listDeliveriesCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/webhooks/"+webhookID+"/deliveries", nil)
+	// List event hook deliveries canceled context
+	listDeliveriesCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/event-hooks/"+eventHookID+"/deliveries", nil)
 	listDeliveriesCanceledResponseRecorder := httptest.NewRecorder()
 	server.ControlPlaneRouter().Mux().ServeHTTP(listDeliveriesCanceledResponseRecorder, listDeliveriesCanceledRequest)
 	if listDeliveriesCanceledResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 for canceled context on list deliveries, got %d", listDeliveriesCanceledResponseRecorder.Code)
+	}
+
+	// List events canceled context
+	listEventsCanceledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events", nil)
+	listEventsCanceledResponseRecorder := httptest.NewRecorder()
+	server.ControlPlaneRouter().Mux().ServeHTTP(listEventsCanceledResponseRecorder, listEventsCanceledRequest)
+	if listEventsCanceledResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for canceled context on list events, got %d", listEventsCanceledResponseRecorder.Code)
 	}
 }
 
@@ -1260,29 +1445,30 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
 
 	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	webhookEventBus := NewWebhookEventBus(db, cryptoKeyManager)
-	defer webhookEventBus.Close()
+	eventBus := NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
 
 	serviceAccountManager := NewServiceAccountManager(db)
-	webhookManager := NewWebhookManager(db, cryptoKeyManager, webhookEventBus)
+	eventHookManager := NewEventHookManager(db, cryptoKeyManager, eventBus)
+	eventManager := NewEventManager(db)
 
 	serviceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "Target Service Account"})
 	if err != nil {
 		t.Fatalf("create serviceAccount failed: %v", err)
 	}
-	webhook, err := webhookManager.Create(ctx, CreateWebhookInput{Name: "Target Webhook", TargetURL: "http://localhost:19999", Events: []string{"*"}})
+	eventHook, err := eventHookManager.Create(ctx, CreateEventHookInput{Name: "Target Hook", Driver: EventHookDriverHTTP, HTTPTargetURL: stringPointer("http://localhost:19999"), EventTypes: []string{"*"}})
 	if err != nil {
-		t.Fatalf("create webhook failed: %v", err)
+		t.Fatalf("create hook failed: %v", err)
 	}
 
 	// Fill dispatchChannel to trigger buffer full drop path in Publish
-	testWebhookEventBus := &WebhookEventBus{
-		dispatchChannel: make(chan WebhookEventEnvelope, 1),
+	testEventBus := &EventBus{
+		dispatchChannel: make(chan Event, 1),
 	}
-	testWebhookEventBus.dispatchChannel <- WebhookEventEnvelope{ID: "dummy"}
-	testWebhookEventBus.Publish(ctx, WebhookEventEnvelope{ID: "overflow", Event: "overflow"})
+	testEventBus.dispatchChannel <- Event{ID: uuid.NewV7()}
+	testEventBus.Publish(ctx, Event{Type: "overflow"})
 
-	// Close pool to trigger query error paths in service account and webhook managers
+	// Close pool to trigger query error paths in managers
 	db.Close()
 
 	if _, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "Fail Service Account"}); err == nil {
@@ -1298,19 +1484,22 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 		t.Fatal("expected error on Authenticate service account with closed pool")
 	}
 
-	if _, err := webhookManager.Create(ctx, CreateWebhookInput{Name: "Fail Webhook", TargetURL: "http://example.com", Events: []string{"*"}}); err == nil {
-		t.Fatal("expected error on Create webhook with closed pool")
+	if _, err := eventHookManager.Create(ctx, CreateEventHookInput{Name: "Fail Hook", Driver: EventHookDriverHTTP, HTTPTargetURL: stringPointer("http://example.com"), EventTypes: []string{"*"}}); err == nil {
+		t.Fatal("expected error on Create hook with closed pool")
 	}
-	if _, err := webhookManager.Update(ctx, webhook.ID, UpdateWebhookInput{}); err == nil {
-		t.Fatal("expected error on Update webhook with closed pool")
+	if _, err := eventHookManager.Update(ctx, eventHook.ID, UpdateEventHookInput{}); err == nil {
+		t.Fatal("expected error on Update hook with closed pool")
 	}
-	if _, err := webhookManager.List(ctx); err == nil {
-		t.Fatal("expected error on List webhooks with closed pool")
+	if _, err := eventHookManager.List(ctx, EventHookFilter{}); err == nil {
+		t.Fatal("expected error on List hooks with closed pool")
 	}
-	if _, err := webhookManager.ListDeliveries(ctx, webhook.ID); err == nil {
+	if _, err := eventHookManager.ListDeliveries(ctx, eventHook.ID); err == nil {
 		t.Fatal("expected error on ListDeliveries with closed pool")
 	}
-	webhookEventBus.dispatch(ctx, WebhookEventEnvelope{Event: "test.event"})
+	if _, err := eventManager.Record(ctx, Event{Type: "fail.event"}); err == nil {
+		t.Fatal("expected error on Record event with closed pool")
+	}
+	eventBus.dispatch(ctx, Event{Type: "test.event"})
 }
 
 type coreErrReader struct{}

@@ -53,11 +53,11 @@ func TestAuthHandlerInitializationUnit(t *testing.T) {
 		t.Fatal("expected ServiceAccountManager to be set")
 	}
 
-	webhookEventBus := core.NewWebhookEventBus(nil, cryptoKeyManager)
-	defer webhookEventBus.Close()
-	handler.SetWebhookEventBus(webhookEventBus)
-	if handler.webhookEventBus != webhookEventBus {
-		t.Fatal("expected WebhookEventBus to be set")
+	eventBus := core.NewEventBus(nil, cryptoKeyManager)
+	defer eventBus.Close()
+	handler.SetEventBus(eventBus)
+	if handler.eventBus != eventBus {
+		t.Fatal("expected EventBus to be set")
 	}
 
 	totpManager := handler.GetTOTPManager()

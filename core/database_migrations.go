@@ -99,17 +99,26 @@ CREATE TABLE IF NOT EXISTS console.sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_console_sessions_hash ON console.sessions(session_token_hash);
 
-CREATE TABLE IF NOT EXISTS console.audit_logs (
+CREATE TABLE IF NOT EXISTS core.events (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    user_id UUID REFERENCES console.users(id) ON DELETE SET NULL,
-    action VARCHAR(128) NOT NULL,
-    target_service VARCHAR(64) NOT NULL,
-    entity_id VARCHAR(255),
-    diff_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    ip_address INET NOT NULL,
+    type TEXT NOT NULL,
+    actor_id UUID,
+    actor_type TEXT NOT NULL DEFAULT 'system',
+    ip_address INET,
+    user_agent TEXT,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    reason TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
-CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON console.audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_core_events_created_at ON core.events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_core_events_type ON core.events(type);
+CREATE INDEX IF NOT EXISTS idx_core_events_actor ON core.events(actor_type, actor_id);
+CREATE INDEX IF NOT EXISTS idx_core_events_resource ON core.events(resource_type, resource_id);
 
 CREATE TABLE IF NOT EXISTS core.service_accounts (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
@@ -129,27 +138,31 @@ CREATE TABLE IF NOT EXISTS core.service_accounts (
 CREATE INDEX IF NOT EXISTS idx_core_service_accounts_prefix ON core.service_accounts (key_prefix);
 CREATE INDEX IF NOT EXISTS idx_core_service_accounts_console_user_id ON core.service_accounts(console_user_id);
 
-CREATE TABLE IF NOT EXISTS core.webhooks (
+CREATE TABLE IF NOT EXISTS core.event_hooks (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     name TEXT NOT NULL,
-    target_url TEXT NOT NULL,
-    events JSONB NOT NULL DEFAULT '[]'::jsonb,
+    driver TEXT NOT NULL,
+    sql_function_name TEXT,
+    http_target_url TEXT,
+    http_encrypted_signing_secret TEXT,
+    event_types TEXT[] NOT NULL DEFAULT '{}'::text[],
     is_enabled BOOLEAN NOT NULL DEFAULT true,
-    signing_secret_enc TEXT,
     max_retries INT NOT NULL DEFAULT 3,
     timeout_seconds INT NOT NULL DEFAULT 10,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
+CREATE INDEX IF NOT EXISTS idx_core_event_hooks_is_enabled ON core.event_hooks(is_enabled);
+CREATE INDEX IF NOT EXISTS idx_core_event_hooks_event_types ON core.event_hooks USING gin(event_types);
 
-CREATE TABLE IF NOT EXISTS core.webhook_deliveries (
+CREATE TABLE IF NOT EXISTS core.event_hook_deliveries (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    webhook_id UUID NOT NULL REFERENCES core.webhooks(id) ON DELETE CASCADE,
-    event_id UUID NOT NULL,
+    event_hook_id UUID NOT NULL REFERENCES core.event_hooks(id) ON DELETE CASCADE,
+    event_id UUID NOT NULL REFERENCES core.events(id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,
     payload JSONB NOT NULL,
-    response_status INT,
-    response_body TEXT,
+    http_response_status INT,
+    result TEXT,
     error_message TEXT,
     attempt_count INT NOT NULL DEFAULT 1,
     duration_ms BIGINT NOT NULL DEFAULT 0,
@@ -157,17 +170,17 @@ CREATE TABLE IF NOT EXISTS core.webhook_deliveries (
     delivered_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
-CREATE INDEX IF NOT EXISTS idx_core_webhook_deliveries_webhook ON core.webhook_deliveries (webhook_id);
-CREATE INDEX IF NOT EXISTS idx_core_webhook_deliveries_created ON core.webhook_deliveries (webhook_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_core_event_hook_deliveries_hook_created ON core.event_hook_deliveries (event_hook_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_core_event_hook_deliveries_event_id ON core.event_hook_deliveries (event_id);
 `,
 
 		DownSQL: `
-DROP TABLE IF EXISTS core.webhook_deliveries CASCADE;
-DROP TABLE IF EXISTS core.webhooks CASCADE;
+DROP TABLE IF EXISTS core.event_hook_deliveries CASCADE;
+DROP TABLE IF EXISTS core.event_hooks CASCADE;
 DROP TABLE IF EXISTS core.service_accounts CASCADE;
 DROP TABLE IF EXISTS core.nodes CASCADE;
 DROP TABLE IF EXISTS core.kv_store CASCADE;
-DROP TABLE IF EXISTS console.audit_logs CASCADE;
+DROP TABLE IF EXISTS core.events CASCADE;
 DROP TABLE IF EXISTS console.sessions CASCADE;
 DROP TABLE IF EXISTS console.users CASCADE;
 DROP TABLE IF EXISTS core.migrations CASCADE;
