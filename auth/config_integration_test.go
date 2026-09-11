@@ -92,7 +92,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK from HandlePutConfig, got: %d (body: %s)", putResponseRecorder.Code, putResponseRecorder.Body.String())
 	}
 
-	// Verify zero-decryption projection in PUT response
+	// Verify sanitized secrets in PUT response
 	if !strings.Contains(putResponseRecorder.Body.String(), `"client_secret_configured":true`) || !strings.Contains(putResponseRecorder.Body.String(), `"password_configured":true`) {
 		t.Fatalf("expected configured flags in PUT response: %s", putResponseRecorder.Body.String())
 	}

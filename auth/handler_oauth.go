@@ -314,14 +314,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.converted",
-				ResourceType: "user",
-				Action:       "converted",
-				Data: map[string]interface{}{
-					"user_id": userRecord.ID,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 		}
 
 		handler.CompleteOAuthFlow(responseWriter, request, userRecord, parsedOAuthStatePayload, isPayload)
@@ -366,14 +359,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 
 		log.Tracef("created new federated user %s for %s:%s", userRecord.ID, provider, userInfo.ProviderUserID)
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.signed_up",
-				ResourceType: "user",
-				Action:       "signed_up",
-				Data: map[string]interface{}{
-					"user_id": userRecord.ID,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
 		}
 	}
 

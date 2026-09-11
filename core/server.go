@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"uuid"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-fuego/fuego"
@@ -226,7 +227,20 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 		}()
 		log.Tracef("incoming HTTP request %s %s", request.Method, request.URL.Path)
 		server.requestCount.Add(1)
-		handler.ServeHTTP(responseWriter, request)
+
+		clientIP := ExtractRequestClientIP(request)
+		userAgent := request.UserAgent()
+		requestID := request.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.NewV7().String()
+		}
+
+		ctx := WithEventContext(request.Context(), EventContext{
+			IPAddress: &clientIP,
+			UserAgent: &userAgent,
+			RequestID: &requestID,
+		})
+		handler.ServeHTTP(responseWriter, request.WithContext(ctx))
 	})
 }
 

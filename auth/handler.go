@@ -258,15 +258,22 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 	clientIP := core.ExtractRequestClientIP(request)
 	userAgent := nilIfEmpty(request.UserAgent())
 
+	var sessionID string
+	var sessionCreatedAt time.Time
 	if handler.db != nil {
 		log.Tracef("persisting session record in database for user %s", userRecord.ID)
-		_, execErr := handler.db.Exec(request.Context(), `
+		queryErr := handler.db.QueryRow(request.Context(), `
 			INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 			VALUES ($1, $2, $3, $4, $5, clock_timestamp())
-		`, userRecord.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt)
-		if execErr != nil {
-			log.Debugf("failed to persist database session for user %s: %v", userRecord.ID, execErr)
+			RETURNING id, created_at
+		`, userRecord.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
+		if queryErr != nil {
+			log.Debugf("failed to persist database session for user %s: %v", userRecord.ID, queryErr)
 		}
+	}
+	if sessionID == "" {
+		sessionID = uuid.NewV7().String()
+		sessionCreatedAt = time.Now().UTC()
 	}
 
 	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
@@ -287,14 +294,18 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(request.Context(), core.Event{
-			Type:         "auth.session.created",
-			ResourceType: "session",
-			Action:       "created",
-			Data: map[string]interface{}{
-				"user_id": userRecord.ID,
-			},
-		})
+		var ipAddressPtr *string
+		if clientIP != "" {
+			ipAddressPtr = &clientIP
+		}
+		handler.eventBus.Publish(request.Context(), NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+			ID:        sessionID,
+			UserID:    userRecord.ID,
+			IPAddress: ipAddressPtr,
+			UserAgent: userAgent,
+			ExpiresAt: refreshTokenExpiredAt,
+			CreatedAt: sessionCreatedAt,
+		}))
 	}
 
 	isSecure := core.IsSecureRequest(request)

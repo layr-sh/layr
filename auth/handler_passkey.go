@@ -149,11 +149,12 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 	}
 
 	// Insert passkey credential
+	passkeyID := uuid.NewV7().String()
 	_, execErr := handler.db.Exec(ctx, `
 		INSERT INTO layr_auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
 		VALUES ($1, $2, $3, $4, 0, $5, $6, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
-	`, uuid.NewV7().String(), targetUserID, credentialIDBytes, publicKeyBytes, passkeySignUpVerifyRequest.Transports, passkeySignUpVerifyRequest.FriendlyName)
+	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, passkeySignUpVerifyRequest.Transports, passkeySignUpVerifyRequest.FriendlyName)
 	if execErr != nil {
 		log.Debugf("failed to insert passkey credential for user %s: %v", targetUserID, execErr)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to store passkey credential", "LAYR_AUTH_001")
@@ -161,24 +162,14 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.passkey.created",
-			ResourceType: "passkey",
-			Action:       "created",
-			Data: map[string]interface{}{
-				"user_id":       targetUserID,
-				"friendly_name": passkeySignUpVerifyRequest.FriendlyName,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewPasskeyCreatedEvent(passkeyID, PasskeyCreatedEventData{
+			ID:           passkeyID,
+			UserID:       targetUserID,
+			FriendlyName: passkeySignUpVerifyRequest.FriendlyName,
+			Transports:   passkeySignUpVerifyRequest.Transports,
+		}))
 		if isAnonymousConversion {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.converted",
-				ResourceType: "user",
-				Action:       "converted",
-				Data: map[string]interface{}{
-					"user_id": targetUserID,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 		}
 	}
 

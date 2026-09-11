@@ -768,8 +768,14 @@ func TestNamingclarityASTHelpersUnit(t *testing.T) {
 	if checkDisallowedIdentifier(analysisPass, ast.NewIdent("pool"), "pgxpool.Pool") {
 		t.Error("expected false for pool with pgxpool.Pool")
 	}
+	if checkDisallowedIdentifier(analysisPass, ast.NewIdent("pool"), "sync.Pool") {
+		t.Error("expected false for pool with sync.Pool")
+	}
 	if !checkDisallowedIdentifier(analysisPass, ast.NewIdent("pool"), "core.DatabasePool") {
 		t.Error("expected true for pool with core.DatabasePool")
+	}
+	if !checkDisallowedIdentifier(analysisPass, ast.NewIdent("saUUID"), "uuid.UUID") {
+		t.Error("expected true for saUUID with uuid.UUID")
 	}
 
 	// checkIdentifier with allowed name (no report)
@@ -818,6 +824,18 @@ func TestNamingclarityASTHelpersUnit(t *testing.T) {
 	}
 	analysisPass.TypesInfo.Types[funcParamsList.List[1].Type] = types.TypeAndValue{Type: namedType}
 	checkFuncParams(analysisPass, funcParamsList)
+
+	// checkFuncParams with single letter args (d time.Duration, _ blank, t testing.T)
+	singleLetterParamsList := &ast.FieldList{
+		List: []*ast.Field{
+			{Names: []*ast.Ident{ast.NewIdent("_")}, Type: ast.NewIdent("int")},
+			{Names: []*ast.Ident{testFileIdentifier}, Type: ast.NewIdent("T")},
+			{Names: []*ast.Ident{ast.NewIdent("d")}, Type: ast.NewIdent("Duration")},
+		},
+	}
+	analysisPass.TypesInfo.Types[singleLetterParamsList.List[0].Type] = types.TypeAndValue{Type: types.Typ[types.Int]}
+	analysisPass.TypesInfo.Types[singleLetterParamsList.List[1].Type] = types.TypeAndValue{Type: testingNamedType}
+	checkFuncParams(analysisPass, singleLetterParamsList)
 
 	// checkAssignment non-tuple multi-lhs
 	assignNonTupleStmt := &ast.AssignStmt{

@@ -82,8 +82,8 @@ console:
 	if completeErr != nil {
 		t.Fatalf("failed to load complete yaml config: %v", completeErr)
 	}
-	if valErr := loadedCompleteConfig.Validate(); valErr != nil {
-		t.Fatalf("validation failed on valid complete yaml config: %v", valErr)
+	if valueErr := loadedCompleteConfig.Validate(); valueErr != nil {
+		t.Fatalf("validation failed on valid complete yaml config: %v", valueErr)
 	}
 
 	if loadedCompleteConfig.Project.Name != "production-app" ||
@@ -111,8 +111,8 @@ data:
 	if minErr != nil {
 		t.Fatalf("failed to load minimal yaml config: %v", minErr)
 	}
-	if minValErr := loadedMinimalConfig.Validate(); minValErr != nil {
-		t.Fatalf("validation failed on valid minimal yaml config: %v", minValErr)
+	if minValueErr := loadedMinimalConfig.Validate(); minValueErr != nil {
+		t.Fatalf("validation failed on valid minimal yaml config: %v", minValueErr)
 	}
 	if loadedMinimalConfig.Project.Name != "layr-app" || loadedMinimalConfig.Server.ListenAddr != ":8080" || loadedMinimalConfig.Database.URL != ".layr/data" {
 		t.Fatal("expected minimal config to retain defaults for omitted fields")

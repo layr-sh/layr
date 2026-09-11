@@ -3,7 +3,6 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 	"uuid"
@@ -153,15 +152,10 @@ func (handler *Handler) handleRevokeSession(responseWriter http.ResponseWriter, 
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.session.deleted",
-			ResourceType: "session",
-			Action:       "deleted",
-			Data: map[string]interface{}{
-				"session_id": targetSessionID,
-				"user_id":    userID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(targetSessionID, SessionDeletedEventData{
+			SessionID: &targetSessionID,
+			UserID:    userID,
+		}))
 	}
 
 	log.Debugf("session %s successfully revoked for user %s", targetSessionID, userID)
@@ -252,15 +246,11 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.session.deleted",
-			ResourceType: "session",
-			Action:       "deleted",
-			Data: map[string]interface{}{
-				"user_id":       userID,
-				"revoked_count": strconv.Itoa(len(deletedHashes)),
-			},
-		})
+		revokedCount := len(deletedHashes)
+		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
+			UserID:       userID,
+			RevokedCount: &revokedCount,
+		}))
 	}
 
 	log.Debugf("revoked %d other session(s) for user %s", len(deletedHashes), userID)

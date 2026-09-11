@@ -202,10 +202,14 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 	}
 
 	// 4. Test EventManager.Record unmarshal fallback with non-marshalable values
+	fallbackResourceID := "fallback_123"
 	_, unmarshalRecordErr := eventManager.Record(ctx, Event{
-		Type:     "test.unmarshal.fallback",
-		Metadata: map[string]interface{}{"invalid": make(chan int)},
-		Data:     map[string]interface{}{"invalid": make(chan int)},
+		Type:         "test.unmarshal.fallback",
+		Action:       "fallback",
+		ResourceType: "test",
+		ResourceID:   &fallbackResourceID,
+		Metadata:     map[string]interface{}{"invalid": make(chan int)},
+		Data:         map[string]interface{}{"invalid": make(chan int)},
 	})
 	if unmarshalRecordErr != nil {
 		t.Fatalf("expected record to succeed with json fallback, got: %v", unmarshalRecordErr)
@@ -218,7 +222,6 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 	targetActorType := "user"
 	targetResourceType := "user"
 	targetResourceID := "usr_123456"
-	targetStatus := "success"
 
 	filteredEvents, filterErr := eventManager.List(ctx, EventFilter{
 		Type:         &sampleEvent.Type,
@@ -226,7 +229,6 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 		ActorID:      &actorID,
 		ResourceType: &targetResourceType,
 		ResourceID:   &targetResourceID,
-		Status:       &targetStatus,
 		StartDate:    &startTime,
 		EndDate:      &endTime,
 		Limit:        500, // exceeds maxEventListLimit -> tests limit cap

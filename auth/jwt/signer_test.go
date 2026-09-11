@@ -160,7 +160,7 @@ func TestJWTSignerAndVerifierUnit(t *testing.T) {
 	badClaimsPayload := "eyJhbGciOiJFZERTQSJ9.!bad-b64!"
 	badSignature := ed25519.Sign(signer.privateKey, []byte(badClaimsPayload))
 	badClaimsToken := badClaimsPayload + "." + base64.RawURLEncoding.EncodeToString(badSignature)
-	if _, verifyClaimsB64Err := signer.VerifyAccessToken(badClaimsToken); verifyClaimsB64Err == nil {
+	if _, verifyClaimsDecodeErr := signer.VerifyAccessToken(badClaimsToken); verifyClaimsDecodeErr == nil {
 		t.Fatalf("expected error on bad claims base64")
 	}
 

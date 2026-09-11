@@ -35,7 +35,7 @@ func TestCoreCryptoZeroDecryptionLifecycleE2E(t *testing.T) {
 		t.Fatal("expected failure on empty publishable key")
 	}
 
-	// Scenario 2: Secret Input Envelope Encryption & Zero-Decryption UI Projection
+	// Scenario 2: Secret Input Envelope Encryption & Sanitized UI Output
 	testSecrets := [][]byte{
 		[]byte("aws-s3-secret-access-key-xyz987654321"),
 		[]byte(""),
