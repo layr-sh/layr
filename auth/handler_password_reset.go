@@ -125,16 +125,10 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.password.reset_requested",
-			ResourceType: "password",
-			Action:       "reset_requested",
-			Data: map[string]interface{}{
-				"recipient": recipient,
-				"user_id":   userID,
-				"code":      code,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(userID, PasswordResetRequestedEventData{
+			UserID:    userID,
+			Recipient: recipient,
+		}))
 	}
 
 	log.Debugf("password reset code dispatched to %s", recipient)
@@ -265,15 +259,10 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.password.reset",
-			ResourceType: "password",
-			Action:       "reset",
-			Data: map[string]interface{}{
-				"recipient": recipient,
-				"user_id":   userRecord.ID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewPasswordResetEvent(userRecord.ID, PasswordResetEventData{
+			Recipient: recipient,
+			User:      userRecord,
+		}))
 	}
 
 	log.Debugf("password reset successful for user %s", userRecord.ID)

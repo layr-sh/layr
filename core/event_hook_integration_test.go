@@ -66,10 +66,12 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 	eventManager := eventBus.eventManager
 
 	// Record a base event in core.events so foreign key constraints on deliveries succeed
+	baseResourceID := "test_1"
 	baseEvent, err := eventManager.Record(ctx, Event{
 		Type:         "test.event.fired",
 		Action:       "fired",
 		ResourceType: "test",
+		ResourceID:   &baseResourceID,
 		Data:         map[string]interface{}{"key": "value"},
 	})
 	if err != nil {

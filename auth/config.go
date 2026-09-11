@@ -402,7 +402,7 @@ func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Conf
 func (configManager *ConfigManager) GetUnencrypted() Config {
 	config := configManager.Get()
 
-	// Strip raw secret strings and project *_configured flags
+	// Strip raw secret strings and set *_configured flags
 	if config.OAuthProviders != nil {
 		configProviders := make(map[string]OAuthProviderConfig)
 		for providerKey, provider := range config.OAuthProviders {
@@ -476,7 +476,7 @@ func (configManager *ConfigManager) GetUnencrypted() Config {
 	return config
 }
 
-// HandleGetConfig handles GET /api/v1/_/auth/config returning zero-decryption projected config.
+// HandleGetConfig handles GET /api/v1/_/auth/config returning sanitized config without raw secrets.
 func (configManager *ConfigManager) HandleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("HandleGetConfig invoked")
 
@@ -622,17 +622,10 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 	}
 
 	if configManager.eventBus != nil {
-		configManager.eventBus.Publish(request.Context(), core.Event{
-			Type:         "auth.config.updated",
-			ResourceType: "config",
-			Action:       "updated",
-			Data: map[string]interface{}{
-				"key": ConfigKey,
-			},
-		})
+		configManager.eventBus.Publish(request.Context(), NewConfigUpdatedEvent(ConfigKey, ConfigUpdatedEventData(configManager.GetUnencrypted())))
 	}
 
-	log.Debugf("HandlePutConfig successfully saved and projected configuration")
+	log.Debugf("HandlePutConfig successfully saved and sanitized configuration")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(configManager.GetUnencrypted())

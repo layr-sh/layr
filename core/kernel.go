@@ -527,17 +527,7 @@ func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.Resp
 		return
 	}
 	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.service_account.created",
-			ResourceType: "service_account",
-			Action:       "created",
-			ResourceID:   &serviceAccount.ID,
-			Data: map[string]interface{}{
-				"id":     serviceAccount.ID,
-				"name":   serviceAccount.Name,
-				"scopes": serviceAccount.Scopes,
-			},
-		})
+		kernel.eventBus.Publish(request.Context(), NewServiceAccountCreatedEvent(serviceAccount.ID, ServiceAccountCreatedEventData(serviceAccount.ServiceAccount)))
 	}
 	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, serviceAccount)
 }
@@ -569,40 +559,25 @@ func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.Resp
 		return
 	}
 	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.service_account.updated",
-			ResourceType: "service_account",
-			Action:       "updated",
-			ResourceID:   &serviceAccount.ID,
-			Data: map[string]interface{}{
-				"id":     serviceAccount.ID,
-				"name":   serviceAccount.Name,
-				"scopes": serviceAccount.Scopes,
-			},
-		})
+		kernel.eventBus.Publish(request.Context(), NewServiceAccountUpdatedEvent(serviceAccount.ID, ServiceAccountUpdatedEventData(*serviceAccount)))
 	}
 	kernel.writeJSON(responseWriter, serviceAccount)
 }
 
 func (kernel *Kernel) handleDeleteServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	serviceAccountID := request.PathValue("service_account_id")
-	err := kernel.serviceAccountManager.Delete(request.Context(), serviceAccountID)
+	serviceAccount, err := kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
 	if err != nil {
-		if errors.Is(err, ErrServiceAccountNotFound) {
-			kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
-			return
-		}
+		kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
+		return
+	}
+	err = kernel.serviceAccountManager.Delete(request.Context(), serviceAccountID)
+	if err != nil {
 		kernel.writeError(responseWriter, http.StatusForbidden, "Root Account Protected", err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.service_account.deleted",
-			ResourceType: "service_account",
-			Action:       "deleted",
-			ResourceID:   &serviceAccountID,
-			Data:         map[string]interface{}{"id": serviceAccountID},
-		})
+		kernel.eventBus.Publish(request.Context(), NewServiceAccountDeletedEvent(serviceAccountID, ServiceAccountDeletedEventData(*serviceAccount)))
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -639,13 +614,7 @@ func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseW
 	}
 	if kernel.eventBus != nil {
 		hookResourceID := eventHook.ID.String()
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.event_hook.created",
-			ResourceType: "event_hook",
-			Action:       "created",
-			ResourceID:   &hookResourceID,
-			Data:         map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
-		})
+		kernel.eventBus.Publish(request.Context(), NewEventHookCreatedEvent(hookResourceID, EventHookCreatedEventData(*eventHook)))
 	}
 	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, eventHook)
 }
@@ -686,13 +655,7 @@ func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseW
 	}
 	if kernel.eventBus != nil {
 		hookResourceID := eventHook.ID.String()
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.event_hook.updated",
-			ResourceType: "event_hook",
-			Action:       "updated",
-			ResourceID:   &hookResourceID,
-			Data:         map[string]interface{}{"id": hookResourceID, "name": eventHook.Name, "driver": eventHook.Driver},
-		})
+		kernel.eventBus.Publish(request.Context(), NewEventHookUpdatedEvent(hookResourceID, EventHookUpdatedEventData(*eventHook)))
 	}
 	kernel.writeJSON(responseWriter, eventHook)
 }
@@ -703,20 +666,15 @@ func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseW
 		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
 		return
 	}
-	err = kernel.eventHookManager.Delete(request.Context(), hookID)
+	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
 	if err != nil {
 		kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
 		return
 	}
+	_ = kernel.eventHookManager.Delete(request.Context(), hookID)
 	if kernel.eventBus != nil {
 		hookResourceID := hookID.String()
-		kernel.eventBus.Publish(request.Context(), Event{
-			Type:         "core.event_hook.deleted",
-			ResourceType: "event_hook",
-			Action:       "deleted",
-			ResourceID:   &hookResourceID,
-			Data:         map[string]interface{}{"id": hookResourceID},
-		})
+		kernel.eventBus.Publish(request.Context(), NewEventHookDeletedEvent(hookResourceID, EventHookDeletedEventData(*eventHook)))
 	}
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -772,9 +730,6 @@ func (kernel *Kernel) handleListEventsRequest(responseWriter http.ResponseWriter
 	}
 	if resourceIDQueryParam := queryValues.Get("resource_id"); resourceIDQueryParam != "" {
 		eventFilter.ResourceID = &resourceIDQueryParam
-	}
-	if statusQueryParam := queryValues.Get("status"); statusQueryParam != "" {
-		eventFilter.Status = &statusQueryParam
 	}
 	if limitQueryParam := queryValues.Get("limit"); limitQueryParam != "" {
 		if parsedLimit, parseErr := strconv.Atoi(limitQueryParam); parseErr == nil {

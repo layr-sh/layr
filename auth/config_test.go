@@ -106,7 +106,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected fallback rate limiting and cache, got: %+v", fallbackConfig)
 	}
 
-	// Test GetUnencrypted secret projection
+	// Test GetUnencrypted sanitized secrets
 	secretPassword := "super-secret-smtp-password"
 	encryptedPassword, err := cryptoKeyManager.EncryptField([]byte(secretPassword))
 	if err != nil {
@@ -276,7 +276,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected encrypted sms webhook signing secret, got: %s", savedConfig.SMSDispatcher.Webhook.SigningSecret)
 	}
 
-	// Test GetUnencrypted zero-decryption projection for Email and SMS
+	// Test GetUnencrypted sanitized configuration for Email and SMS
 	unencryptedConfig = configManager.GetUnencrypted()
 	if !unencryptedConfig.EmailDispatcher.SMTP.PasswordConfigured || !unencryptedConfig.EmailDispatcher.Webhook.SigningSecretConfigured {
 		t.Fatalf("expected email secrets configured in GetUnencrypted, got: %+v", unencryptedConfig.EmailDispatcher)
@@ -566,7 +566,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		t.Fatal("expected GetOIDCClient to return false for non-matching client ID")
 	}
 
-	// 4. Test GetUnencrypted zero-decryption projection
+	// 4. Test GetUnencrypted sanitized configuration
 	unencryptedConfig := configManager.GetUnencrypted()
 	if unencryptedConfig.OIDC.SignInUI.CustomCSS != ".auth-card { border-radius: 12px; }" {
 		t.Fatalf("expected unencrypted custom_css preserved, got: %s", unencryptedConfig.OIDC.SignInUI.CustomCSS)

@@ -687,10 +687,12 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	}
 
 	// 3. Events HTTP API and Hook Deliveries
+	testIntegrationResourceID := "123"
 	recordedEvent, _ := kernel.eventManager.Record(ctx, Event{
 		Type:         "core.test.integration",
 		Action:       "tested",
 		ResourceType: "test",
+		ResourceID:   &testIntegrationResourceID,
 		Data:         map[string]interface{}{"status": "ok"},
 	})
 	createdEventHookDelivery, _ := kernel.eventHookManager.Deliver(ctx, createdEventHook, recordedEvent)
@@ -768,7 +770,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	}
 
 	// GET /api/v1/_/core/events with query parameters
-	filteredEventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events?type=core.test.integration&actor_type=system&resource_type=test&resource_id=123&status=success&limit=10&offset=0&actor_id="+recordedEvent.ID.String(), nil)
+	filteredEventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events?type=core.test.integration&actor_type=system&resource_type=test&resource_id=123&limit=10&offset=0&actor_id="+recordedEvent.ID.String(), nil)
 	filteredEventsResponseRecorder := httptest.NewRecorder()
 	server.Mux().ServeHTTP(filteredEventsResponseRecorder, filteredEventsRequest)
 	if filteredEventsResponseRecorder.Code != http.StatusOK {
@@ -1086,10 +1088,12 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 
 	// Test Events endpoints
+	routerResourceID := "router_1"
 	recordedEvent, _ := kernel.eventManager.Record(ctx, Event{
 		Type:         "core.router.event",
 		Action:       "tested",
 		ResourceType: "router",
+		ResourceID:   &routerResourceID,
 	})
 	eventsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/core/events", nil)
 	eventsResponseRecorder := httptest.NewRecorder()
@@ -1466,7 +1470,13 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 		dispatchChannel: make(chan Event, 1),
 	}
 	testEventBus.dispatchChannel <- Event{ID: uuid.NewV7()}
-	testEventBus.Publish(ctx, Event{Type: "overflow"})
+	overflowResourceID := "overflow_1"
+	testEventBus.Publish(ctx, Event{
+		Type:         "overflow",
+		ResourceType: "test",
+		Action:       "overflow",
+		ResourceID:   &overflowResourceID,
+	})
 
 	// Close pool to trigger query error paths in managers
 	db.Close()
@@ -1496,10 +1506,21 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 	if _, err := eventHookManager.ListDeliveries(ctx, eventHook.ID); err == nil {
 		t.Fatal("expected error on ListDeliveries with closed pool")
 	}
-	if _, err := eventManager.Record(ctx, Event{Type: "fail.event"}); err == nil {
+	failResourceID := "fail_1"
+	if _, err := eventManager.Record(ctx, Event{
+		Type:         "fail.event",
+		ResourceType: "test",
+		Action:       "fail",
+		ResourceID:   &failResourceID,
+	}); err == nil {
 		t.Fatal("expected error on Record event with closed pool")
 	}
-	eventBus.dispatch(ctx, Event{Type: "test.event"})
+	eventBus.dispatch(ctx, Event{
+		Type:         "test.event",
+		ResourceType: "test",
+		Action:       "test",
+		ResourceID:   &failResourceID,
+	})
 }
 
 type coreErrReader struct{}

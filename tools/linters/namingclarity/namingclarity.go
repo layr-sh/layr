@@ -98,19 +98,15 @@ func checkFuncParams(pass *analysis.Pass, params *ast.FieldList) {
 
 		for _, identifier := range field.Names {
 			if len(identifier.Name) == 1 && identifier.Name != "_" {
-				if isExemptIdentifier(pass, identifier, concreteName) {
+				if isTestingT(pass, identifier) {
 					continue
 				}
 
-				if concreteName != "" {
-					inspectIdentifier(pass, identifier, concreteName)
-				} else {
-					pass.Reportf(
-						identifier.Pos(),
-						"single-letter argument prohibited: %s",
-						identifier.Name,
-					)
-				}
+				pass.Reportf(
+					identifier.Pos(),
+					"single-letter argument prohibited: %s",
+					identifier.Name,
+				)
 				continue
 			}
 
@@ -119,22 +115,27 @@ func checkFuncParams(pass *analysis.Pass, params *ast.FieldList) {
 	}
 }
 
+func isTestingT(pass *analysis.Pass, identifier *ast.Ident) bool {
+	if identifier.Name != "t" {
+		return false
+	}
+	if typeValue := pass.TypesInfo.TypeOf(identifier); typeValue != nil {
+		if strings.Contains(typeValue.String(), "testing.") {
+			return true
+		}
+	}
+	file := pass.Fset.File(identifier.Pos())
+	return file != nil && strings.HasSuffix(file.Name(), "_test.go")
+}
+
 func isExemptIdentifier(pass *analysis.Pass, identifier *ast.Ident, concreteName string) bool {
 	name := identifier.Name
 	if name == "_" || name == "ok" {
 		return true
 	}
 
-	if name == "t" {
-		if typeValue := pass.TypesInfo.TypeOf(identifier); typeValue != nil {
-			if strings.Contains(typeValue.String(), "testing.") {
-				return true
-			}
-		}
-		file := pass.Fset.File(identifier.Pos())
-		if file != nil && strings.HasSuffix(file.Name(), "_test.go") {
-			return true
-		}
+	if isTestingT(pass, identifier) {
+		return true
 	}
 
 	if rule, ok := findSpecialTypeRule(concreteName); ok {
@@ -369,21 +370,23 @@ func checkDisallowedIdentifier(pass *analysis.Pass, identifier *ast.Ident, concr
 		actualConcreteName = concreteName[0]
 	}
 
-	if isExemptIdentifier(pass, identifier, actualConcreteName) {
+	term, isDisallowed := isDisallowedIdentifier(identifier.Name)
+	if !isDisallowed {
 		return false
 	}
 
-	if term, isDisallowed := isDisallowedIdentifier(identifier.Name); isDisallowed {
-		pass.Reportf(
-			identifier.Pos(),
-			"disallowed identifier term %q prohibited: %s",
-			term,
-			identifier.Name,
-		)
-		return true
+	// The word "pool" is allowed when representing sync.Pool or pgxpool.Pool
+	if term == "pool" && (actualConcreteName == "pgxpool.Pool" || actualConcreteName == "sync.Pool") {
+		return false
 	}
 
-	return false
+	pass.Reportf(
+		identifier.Pos(),
+		"disallowed identifier term %q prohibited: %s",
+		term,
+		identifier.Name,
+	)
+	return true
 }
 
 func splitIdentifierWords(name string) []string {

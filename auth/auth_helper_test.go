@@ -203,10 +203,10 @@ func setupTestDatabase(t *testing.T) (*core.DatabasePool, *core.CryptoKeyManager
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	db, poolErr := core.NewDatabasePool(ctx, databaseURL)
-	if poolErr != nil {
+	db, databaseErr := core.NewDatabasePool(ctx, databaseURL)
+	if databaseErr != nil {
 		_ = postgresContainer.Terminate(ctx)
-		t.Fatalf("failed to create db pool: %v", poolErr)
+		t.Fatalf("failed to create db pool: %v", databaseErr)
 	}
 
 	// Apply Core + Auth Migrations

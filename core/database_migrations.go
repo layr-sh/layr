@@ -108,9 +108,7 @@ CREATE TABLE IF NOT EXISTS core.events (
     user_agent TEXT,
     action TEXT NOT NULL,
     resource_type TEXT NOT NULL,
-    resource_id TEXT,
-    status TEXT NOT NULL DEFAULT 'success',
-    reason TEXT,
+    resource_id TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     data JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()

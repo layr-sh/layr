@@ -168,16 +168,11 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, targetUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.otp.sent",
-			ResourceType: "otp",
-			Action:       "sent",
-			Data: map[string]interface{}{
-				"recipient": recipientEmail,
-				"purpose":   "email_verification",
-				"user_id":   targetUserID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(targetUserID, OTPSentEventData{
+			UserID:    targetUserID,
+			Recipient: recipientEmail,
+			Purpose:   "email_verification",
+		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -288,24 +283,9 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.email_verified",
-				ResourceType: "user",
-				Action:       "email_verified",
-				Data: map[string]interface{}{
-					"user_id": userRecord.ID,
-					"email":   recipientEmail,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
 			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, core.Event{
-					Type:         "auth.user.converted",
-					ResourceType: "user",
-					Action:       "converted",
-					Data: map[string]interface{}{
-						"user_id": userRecord.ID,
-					},
-				})
+				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 			}
 		}
 
@@ -313,29 +293,31 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 		return
 	}
 
-	var userID string
+	var userRecord UserRecord
+	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE layr_auth.users 
 		SET email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE email = $1 
-		RETURNING id
-	`, recipientEmail).Scan(&userID)
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+	`, recipientEmail).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
 	if err != nil {
 		log.Debugf("failed to update unauthenticated user email verification for %s: %v", recipientEmail, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update email verification status", "LAYR_AUTH_001")
 		return
 	}
 
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.user.email_verified",
-			ResourceType: "user",
-			Action:       "email_verified",
-			Data: map[string]interface{}{
-				"user_id": userID,
-				"email":   recipientEmail,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -437,16 +419,11 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.otp.sent",
-			ResourceType: "otp",
-			Action:       "sent",
-			Data: map[string]interface{}{
-				"recipient": recipientPhone,
-				"purpose":   "phone_verification",
-				"user_id":   targetUserID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(targetUserID, OTPSentEventData{
+			UserID:    targetUserID,
+			Recipient: recipientPhone,
+			Purpose:   "phone_verification",
+		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -565,24 +542,9 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.phone_verified",
-				ResourceType: "user",
-				Action:       "phone_verified",
-				Data: map[string]interface{}{
-					"user_id": userRecord.ID,
-					"phone":   recipientPhone,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
 			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, core.Event{
-					Type:         "auth.user.converted",
-					ResourceType: "user",
-					Action:       "converted",
-					Data: map[string]interface{}{
-						"user_id": userRecord.ID,
-					},
-				})
+				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 			}
 		}
 
@@ -590,29 +552,31 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 		return
 	}
 
-	var userID string
+	var userRecord UserRecord
+	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE layr_auth.users 
 		SET phone_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE phone = $1 
-		RETURNING id
-	`, recipientPhone).Scan(&userID)
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+	`, recipientPhone).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
 	if err != nil {
 		log.Debugf("failed to update unauthenticated user phone verification for %s: %v", recipientPhone, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update phone verification status", "LAYR_AUTH_001")
 		return
 	}
 
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.user.phone_verified",
-			ResourceType: "user",
-			Action:       "phone_verified",
-			Data: map[string]interface{}{
-				"user_id": userID,
-				"phone":   recipientPhone,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -729,37 +693,35 @@ func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseW
 	propertiesJSON, _ := json.Marshal(cleanedInputProperties)
 
 	ctx := request.Context()
+	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE layr_auth.users
 		SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
 		    last_updated_at = clock_timestamp()
 		WHERE id = $2
-		RETURNING properties
-	`, propertiesJSON, userID).Scan(&rawProperties)
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+	`, propertiesJSON, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
 	if err != nil {
 		log.Debugf("failed to update user properties for %s: %v", userID, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update user properties", "LAYR_AUTH_001")
 		return
 	}
 
-	userProperties := make(map[string]any)
+	userRecord.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userProperties)
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.user.updated",
-			ResourceType: "user",
-			Action:       "updated",
-			Data: map[string]interface{}{
-				"user_id": userID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 	}
 
-	cleanedProperties := sanitizeUserProperties(userProperties)
+	cleanedProperties := sanitizeUserProperties(userRecord.Properties)
 
 	log.Debugf("user properties successfully updated for %s", userID)
 	handler.writeJSON(responseWriter, http.StatusOK, UpdateUserPropertiesResponse{
@@ -829,15 +791,11 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 			return
 		}
 
+		anonymousUserRecord.Email = &recipientEmail
+		anonymousUserRecord.IsAnonymous = false
+		anonymousUserRecord.LastUpdatedAt = time.Now().UTC()
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.converted",
-				ResourceType: "user",
-				Action:       "converted",
-				Data: map[string]interface{}{
-					"user_id": anonymousUserRecord.ID,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUserRecord.ID, UserConvertedEventData(*anonymousUserRecord)))
 		}
 	}
 
@@ -858,16 +816,11 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.otp.sent",
-			ResourceType: "otp",
-			Action:       "sent",
-			Data: map[string]interface{}{
-				"recipient": recipientEmail,
-				"purpose":   "email_verification",
-				"user_id":   authUserID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(authUserID, OTPSentEventData{
+			UserID:    authUserID,
+			Recipient: recipientEmail,
+			Purpose:   "email_verification",
+		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -943,15 +896,11 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 			return
 		}
 
+		anonymousUserRecord.Phone = &recipientPhone
+		anonymousUserRecord.IsAnonymous = false
+		anonymousUserRecord.LastUpdatedAt = time.Now().UTC()
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, core.Event{
-				Type:         "auth.user.converted",
-				ResourceType: "user",
-				Action:       "converted",
-				Data: map[string]interface{}{
-					"user_id": anonymousUserRecord.ID,
-				},
-			})
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUserRecord.ID, UserConvertedEventData(*anonymousUserRecord)))
 		}
 	}
 
@@ -972,16 +921,11 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.otp.sent",
-			ResourceType: "otp",
-			Action:       "sent",
-			Data: map[string]interface{}{
-				"recipient": recipientPhone,
-				"purpose":   "phone_verification",
-				"user_id":   authUserID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(authUserID, OTPSentEventData{
+			UserID:    authUserID,
+			Recipient: recipientPhone,
+			Purpose:   "phone_verification",
+		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -1055,21 +999,28 @@ func (handler *Handler) handleUpdateUserPassword(responseWriter http.ResponseWri
 
 	hashedPassword, _ := handler.hasher.Hash(updateUserPasswordRequest.NewPassword)
 
-	_, _ = handler.db.Exec(ctx, `
+	var userRecord UserRecord
+	var rawProperties []byte
+	queryErr := handler.db.QueryRow(ctx, `
 		UPDATE layr_auth.users
 		SET password_hash = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
-	`, hashedPassword, userID)
-
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.password.changed",
-			ResourceType: "password",
-			Action:       "changed",
-			Data: map[string]interface{}{
-				"user_id": userID,
-			},
-		})
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+	`, hashedPassword, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	if queryErr == nil {
+		userRecord.Properties = make(map[string]any)
+		if len(rawProperties) > 0 {
+			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		}
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(userRecord.ID, PasswordChangedEventData{
+				User: userRecord,
+			}))
+		}
 	}
 
 	log.Debugf("user password successfully updated for %s", userID)
@@ -1093,9 +1044,20 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 
 	ctx := request.Context()
 
-	var email *string
-	var phone *string
-	_ = handler.db.QueryRow(ctx, "SELECT email, phone FROM layr_auth.users WHERE id = $1", userID).Scan(&email, &phone)
+	var userRecord UserRecord
+	var rawProperties []byte
+	_ = handler.db.QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at 
+		FROM layr_auth.users WHERE id = $1
+	`, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
 
 	sessionRows, err := handler.db.Query(ctx, "SELECT refresh_token_hash FROM layr_auth.sessions WHERE user_id = $1", userID)
 	if err == nil {
@@ -1115,25 +1077,18 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 		return
 	}
 
-	if email != nil && *email != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *email)
+	if userRecord.Email != nil && *userRecord.Email != "" {
+		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *userRecord.Email)
 	}
-	if phone != nil && *phone != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *phone)
+	if userRecord.Phone != nil && *userRecord.Phone != "" {
+		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *userRecord.Phone)
 	}
 
 	isSecure := core.IsSecureRequest(request)
 	core.ClearSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, isSecure)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, core.Event{
-			Type:         "auth.user.deleted",
-			ResourceType: "user",
-			Action:       "deleted",
-			Data: map[string]interface{}{
-				"user_id": userID,
-			},
-		})
+		handler.eventBus.Publish(ctx, NewUserDeletedEvent(userRecord.ID, UserDeletedEventData(userRecord)))
 	}
 
 	log.Debugf("user account %s deleted successfully", userID)
