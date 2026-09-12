@@ -43,12 +43,12 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 		if ok {
 			serviceRunner, err := serviceFactory(kernel)
 			if err == nil {
-				serviceRunner.RegisterRoutes(server.Router(), server.ControlPlaneRouter())
+				serviceRunner.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter())
 			}
 		}
 	}
 
-	openAPISpec := server.Router().OutputOpenAPISpec()
+	openAPISpec := server.BaseRouter().OutputOpenAPISpec()
 	controlPlaneOpenAPISpec := server.ControlPlaneRouter().OutputOpenAPISpec()
 	unifiedOpenAPISpec := MergeOpenAPISpecs(openAPISpec, controlPlaneOpenAPISpec)
 	log.Trace("synthesized public, control plane, and unified OpenAPI specifications")

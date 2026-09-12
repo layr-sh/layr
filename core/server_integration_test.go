@@ -123,7 +123,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	server := NewServer(db, cryptoKeyManager)
 
 	// Register a public endpoint that queries the live PostgreSQL database
-	GetRoute[string](server.Router(), "/api/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/api/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var postgresVersion string
 		if err := db.QueryRow(request.Context(), "SELECT version()").Scan(&postgresVersion); err != nil {
 			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", "LAYR_DB_ERROR")
@@ -188,8 +188,8 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
 	server := NewServer(nil, cryptoKeyManager)
 
-	// Register operations on Router
-	GetRoute[string](server.Router(), "/api/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
+	// Register operations on BaseRouter
+	GetRoute[string](server.BaseRouter(), "/api/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok"))
 	}, RouteTag("Data"), RouteSummary("List Data Records"), RouteOperationID("listDataRecords"))

@@ -26,7 +26,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	if server.Mux() == nil {
 		t.Fatal("expected non-nil Mux")
 	}
-	if server.Router() == nil {
+	if server.BaseRouter() == nil {
 		t.Fatal("expected non-nil Router")
 	}
 	if server.ControlPlaneRouter() == nil {
@@ -80,13 +80,13 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected topology 200 without key, got %d", noKeyTopologyResponseRecorder.Code)
 	}
 
-	// Register a public client test endpoint on router
-	GetRoute[string](server.Router(), "/api/v1/client-test", func(responseWriter http.ResponseWriter, request *http.Request) {
+	// Register a base client test endpoint on router
+	GetRoute[string](server.BaseRouter(), "/api/v1/client-test", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok-client"))
 	})
 
-	// Test public client endpoint without publishable key -> 401
+	// Test base client endpoint without publishable key -> 401
 	noKeyClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	noKeyClientResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(noKeyClientResponseRecorder, noKeyClientRequest)
@@ -94,7 +94,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 401 without key, got %d", noKeyClientResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with valid publishable key -> 200
+	// Test base client endpoint with valid publishable key -> 200
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 	clientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
@@ -104,7 +104,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with valid key, got %d", clientResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with Service Account Key fallback -> 200
+	// Test base client endpoint with Service Account Key fallback -> 200
 	clientServiceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientServiceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "sec_test_key_123456789")
 	clientServiceAccountResponseRecorder := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with service account key fallback, got %d", clientServiceAccountResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with Authorization header fallback -> 200
+	// Test base client endpoint with Authorization header fallback -> 200
 	clientAuthHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer test_token")
 	clientAuthHeaderResponseRecorder := httptest.NewRecorder()
@@ -122,7 +122,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with Authorization header fallback, got %d", clientAuthHeaderResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with Basic Authorization header fallback -> 200
+	// Test base client endpoint with Basic Authorization header fallback -> 200
 	clientBasicAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientBasicAuthRequest.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
 	clientBasicAuthResponseRecorder := httptest.NewRecorder()
@@ -131,7 +131,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with Basic Authorization header fallback, got %d", clientBasicAuthResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with dummy Authorization header -> 401 Unauthorized
+	// Test base client endpoint with dummy Authorization header -> 401 Unauthorized
 	clientDummyAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientDummyAuthRequest.Header.Set("Authorization", "dummy")
 	clientDummyAuthResponseRecorder := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 401 with dummy auth header, got %d", clientDummyAuthResponseRecorder.Code)
 	}
 
-	// Test public client endpoint with dummy service account key -> 401 Unauthorized
+	// Test base client endpoint with dummy service account key -> 401 Unauthorized
 	clientDummyKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
 	clientDummyKeyRequest.Header.Set("X-Layr-Service-Account-Key", "dummy")
 	clientDummyKeyResponseRecorder := httptest.NewRecorder()
@@ -216,7 +216,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 	handlerStartedChannel := make(chan struct{})
 	unblockHandlerChannel := make(chan struct{})
 
-	GetRoute[string](drainServer.Router(), "/api/v1/blocking-test", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](drainServer.BaseRouter(), "/api/v1/blocking-test", func(responseWriter http.ResponseWriter, request *http.Request) {
 		close(handlerStartedChannel)
 		<-unblockHandlerChannel
 		responseWriter.WriteHeader(http.StatusOK)
@@ -258,7 +258,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 
 func TestCoreServerPanicRecoveryUnit(t *testing.T) {
 	server := NewServer(nil, nil)
-	GetRoute[string](server.Router(), "/api/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/api/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
 		panic("simulated unhandled panic in handler")
 	})
 

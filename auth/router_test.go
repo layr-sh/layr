@@ -14,25 +14,25 @@ func TestAuthRouterUnit(t *testing.T) {
 	// 1. Test nil safety
 	service.RegisterRoutes(nil, nil)
 
-	isolatedPublicRouter := core.NewRouter(fuego.NewServer())
-	service.RegisterRoutes(isolatedPublicRouter, nil)
+	isolatedBaseRouter := core.NewRouter(fuego.NewServer())
+	service.RegisterRoutes(isolatedBaseRouter, nil)
 
 	isolatedControlPlaneRouter := core.NewRouter(fuego.NewServer())
 	service.RegisterRoutes(nil, isolatedControlPlaneRouter)
 
 	// 2. Test nil handler safety
 	nilHandlerService := &Service{}
-	nilHandlerPublicRouter := core.NewRouter(fuego.NewServer())
+	nilHandlerBaseRouter := core.NewRouter(fuego.NewServer())
 	nilHandlerControlPlaneRouter := core.NewRouter(fuego.NewServer())
-	nilHandlerService.RegisterRoutes(nilHandlerPublicRouter, nilHandlerControlPlaneRouter)
+	nilHandlerService.RegisterRoutes(nilHandlerBaseRouter, nilHandlerControlPlaneRouter)
 
 	// 3. Register both public and control plane routes on fresh routers
-	publicRouter := core.NewRouter(fuego.NewServer())
+	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
-	service.RegisterRoutes(publicRouter, controlPlaneRouter)
+	service.RegisterRoutes(baseRouter, controlPlaneRouter)
 
 	// 4. Inspect generated OpenAPI specifications
-	publicOpenAPISpec := publicRouter.OutputOpenAPISpec()
+	publicOpenAPISpec := baseRouter.OutputOpenAPISpec()
 	if publicOpenAPISpec == nil {
 		t.Fatal("expected non-nil public OpenAPI specification")
 	}

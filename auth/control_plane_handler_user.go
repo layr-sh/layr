@@ -13,22 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// UserCreateRequest defines parameters for creating an application user via control plane.
-type UserCreateRequest struct {
-	Email         string         `json:"email"`
-	Phone         string         `json:"phone"`
-	Password      string         `json:"password"`
-	Role          string         `json:"role"`
-	EmailVerified bool           `json:"email_verified"`
-	PhoneVerified bool           `json:"phone_verified"`
-	Properties    map[string]any `json:"properties"`
-}
-
-// UserLockRequest defines parameters for locking an application user account.
-type UserLockRequest struct {
-	LockedUntil *time.Time `json:"locked_until"`
-}
-
 // HandleListUsers lists registered application users with filtering and pagination (auth:user.read).
 func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("HandleListUsers invoked")
