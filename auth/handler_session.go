@@ -260,11 +260,3 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 		RevokedCount: int64(len(deletedHashes)),
 	})
 }
-
-// RegisterSessionRoutes registers user session management endpoints on the provided router.
-func (handler *Handler) RegisterSessionRoutes(router *core.Router) {
-	log.Debug("registering session management routes on router")
-	router.Mux().HandleFunc("GET /api/v1/auth/user/sessions", handler.handleListSessions)
-	router.Mux().HandleFunc("DELETE /api/v1/auth/user/sessions/{session_id}", handler.handleRevokeSession)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/sessions/revoke-others", handler.handleRevokeOtherSessions)
-}

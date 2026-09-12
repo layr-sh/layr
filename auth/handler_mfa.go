@@ -226,10 +226,3 @@ func (handler *Handler) handleMFAVerify(responseWriter http.ResponseWriter, requ
 
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }
-
-// RegisterMFARoutes registers multi-factor authentication routes on the provided router.
-func (handler *Handler) RegisterMFARoutes(router *core.Router) {
-	log.Debug("registering MFA authentication routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/mfa/setup", handler.handleMFASetup)
-	router.Mux().HandleFunc("POST /api/v1/auth/mfa/verify", handler.handleMFAVerify)
-}

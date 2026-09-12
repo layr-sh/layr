@@ -468,13 +468,3 @@ func (handler *Handler) HandleOAuthUserInfo(responseWriter http.ResponseWriter, 
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(userRecord)
 }
-
-// RegisterOAuthRoutes registers the OAuth endpoints on the provided router.
-func (handler *Handler) RegisterOAuthRoutes(router *core.Router) {
-	log.Debug("registering OAuth routes on router")
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/{provider}/authorize", handler.HandleOAuthAuthorize)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/{provider}/token", handler.HandleOAuthToken)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/{provider}/callback", handler.HandleOAuthCallback)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/{provider}/callback", handler.HandleOAuthCallback)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/userinfo", handler.HandleOAuthUserInfo)
-}

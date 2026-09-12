@@ -2,13 +2,11 @@ package auth
 
 import (
 	"context"
+	"layr.sh/auth/jwt"
+	"layr.sh/core"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/go-fuego/fuego"
-	"layr.sh/auth/jwt"
-	"layr.sh/core"
 )
 
 func TestAuthHandlerExportUnit(t *testing.T) {
@@ -68,9 +66,4 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	if matchedResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on matched export with nil db pool, got: %d", matchedResponseRecorder.Code)
 	}
-
-	// 5. RegisterExportRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterExportRoutes(router)
 }

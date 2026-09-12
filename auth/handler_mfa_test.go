@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
@@ -138,9 +137,4 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	if emptyIssuerHandler.GetTOTPManager() == nil {
 		t.Fatal("expected non-nil TOTP manager")
 	}
-
-	// 9. RegisterMFARoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterMFARoutes(router)
 }

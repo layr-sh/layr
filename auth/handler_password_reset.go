@@ -268,10 +268,3 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 	log.Debugf("password reset successful for user %s", userRecord.ID)
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }
-
-// RegisterPasswordResetRoutes registers password reset endpoints on the provided router.
-func (handler *Handler) RegisterPasswordResetRoutes(router *core.Router) {
-	log.Debug("registering password reset routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/password-reset/request", handler.handlePasswordResetRequest)
-	router.Mux().HandleFunc("POST /api/v1/auth/password-reset/confirm", handler.handlePasswordResetConfirm)
-}

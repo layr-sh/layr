@@ -336,11 +336,6 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	if formBodyResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on fake state with provider in form body, got: %d", formBodyResponseRecorder.Code)
 	}
-
-	// 15. RegisterOAuthRoutes
-	server := core.NewServer(nil, cryptoKeyManager)
-	router := server.Router()
-	handler.RegisterOAuthRoutes(router)
 }
 
 func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {

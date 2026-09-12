@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
@@ -148,12 +147,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 500 on passkey sign-in verify with nil pool, got: %d", nilDBPasskeySignInResponseRecorder.Code)
 	}
 
-	// 10. RegisterPasskeyRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterPasskeyRoutes(router)
-
-	// 11. Entropy failure branches -> 500
+	// 10. Entropy failure branches -> 500
 	failingPasskeyManager := passkey.NewManager("localhost", "Layr")
 	failingPasskeyManager.SetRandomReader(errEntropyReader{})
 	handler.SetPasskeyManager(failingPasskeyManager)

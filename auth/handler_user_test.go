@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
@@ -392,9 +391,4 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	if claimsPhoneResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool claims phone confirm, got: %d", claimsPhoneResponseRecorder.Code)
 	}
-
-	// 6. RegisterUserRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterUserRoutes(router)
 }

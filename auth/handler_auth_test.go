@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 )
 
@@ -165,9 +164,4 @@ func TestAuthHandlerAuthUnit(t *testing.T) {
 	if anonymousNilDBResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on anonymous signin with nil db, got: %d", anonymousNilDBResponseRecorder.Code)
 	}
-
-	// 8. RegisterAuthRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterAuthRoutes(router)
 }

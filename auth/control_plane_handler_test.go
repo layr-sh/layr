@@ -2,13 +2,11 @@ package auth
 
 import (
 	"context"
+	"layr.sh/auth/password"
+	"layr.sh/core"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/go-fuego/fuego"
-	"layr.sh/auth/password"
-	"layr.sh/core"
 )
 
 func TestAuthControlPlaneHandlerUnit(t *testing.T) {
@@ -60,9 +58,4 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	if extractedID != "01234567-89ab-cdef-0123-456789abcdef" {
 		t.Fatalf("expected extracted ID from fallback path, got: %s", extractedID)
 	}
-
-	// 6. Test RegisterRoutes wiring
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	controlPlaneHandler.RegisterRoutes(router)
 }

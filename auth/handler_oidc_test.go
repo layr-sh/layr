@@ -11,7 +11,6 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 )
 
@@ -522,11 +521,6 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	if emptyCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing code in token exchange, got: %d", emptyCodeResponseRecorder.Code)
 	}
-
-	// 20. RegisterOIDCRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterOIDCRoutes(router)
 }
 
 func TestAuthOIDCClientCredentialsUnit(t *testing.T) {

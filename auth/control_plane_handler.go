@@ -86,9 +86,3 @@ func (controlPlaneHandler *ControlPlaneHandler) extractUserID(request *http.Requ
 	}
 	return ""
 }
-
-// RegisterRoutes registers all control plane user and session routes on the provided router.
-func (controlPlaneHandler *ControlPlaneHandler) RegisterRoutes(router *core.Router) {
-	controlPlaneHandler.RegisterUserRoutes(router)
-	controlPlaneHandler.RegisterSessionRoutes(router)
-}

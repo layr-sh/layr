@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 )
 
@@ -147,9 +146,4 @@ func TestAuthPasswordResetHandlerUnit(t *testing.T) {
 	if validConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool confirm, got: %d", validConfirmResponseRecorder.Code)
 	}
-
-	// 7. RegisterPasswordResetRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterPasswordResetRoutes(router)
 }
