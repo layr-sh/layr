@@ -321,7 +321,7 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 		Claims:       customClaims,
 	}
 
-	handler.writeJSON(responseWriter, http.StatusOK, sessionResponse)
+	handler.writeJSON(responseWriter, sessionResponse)
 }
 
 func (handler *Handler) issueOIDCAuthorizationCode(ctx context.Context, clientID, redirectURI, userID, scope, codeChallenge, codeChallengeMethod, nonce string) string {
@@ -345,10 +345,10 @@ func (handler *Handler) issueOIDCAuthorizationCode(ctx context.Context, clientID
 	return code
 }
 
-func (handler *Handler) writeJSON(responseWriter http.ResponseWriter, statusCode int, payload any) {
-	log.Tracef("writing JSON response with status %d", statusCode)
+func (handler *Handler) writeJSON(responseWriter http.ResponseWriter, payload any) {
+	log.Trace("writing JSON response with status 200")
 	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(statusCode)
+	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(payload)
 }
 

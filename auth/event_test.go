@@ -212,4 +212,50 @@ func TestAuthEventsUnit(t *testing.T) {
 	if _, hasCode := otpEvent.Data["code"]; hasCode {
 		t.Fatal("expected code to be omitted from otp sent event data")
 	}
+
+	// 15. OTPVerified
+	otpVerifiedEvent := NewOTPVerifiedEvent("usr_123", OTPVerifiedEventData{
+		UserID:    "usr_123",
+		Recipient: "test@example.com",
+		Purpose:   "signin",
+	})
+	if otpVerifiedEvent.Type != "auth.otp.verified" || otpVerifiedEvent.Action != "verified" {
+		t.Fatalf("unexpected otp verified event: %+v", otpVerifiedEvent)
+	}
+	if otpVerifiedEvent.Data["purpose"] != "signin" {
+		t.Fatalf("unexpected purpose in otp verified event: %v", otpVerifiedEvent.Data["purpose"])
+	}
+
+	// 16. UserCreated
+	userCreatedEvent := NewUserCreatedEvent("usr_123", UserCreatedEventData(userRecord))
+	if userCreatedEvent.Type != "auth.user.created" || userCreatedEvent.Action != "created" {
+		t.Fatalf("unexpected user created event: %+v", userCreatedEvent)
+	}
+	if userCreatedEvent.Data["id"] != "usr_123" {
+		t.Fatalf("unexpected id in user created event: %v", userCreatedEvent.Data["id"])
+	}
+
+	// 17. UserLocked
+	lockedUntilTime := now.Add(24 * time.Hour)
+	userLockedEvent := NewUserLockedEvent("usr_123", UserLockedEventData{
+		UserID:      "usr_123",
+		LockedUntil: &lockedUntilTime,
+	})
+	if userLockedEvent.Type != "auth.user.locked" || userLockedEvent.Action != "locked" {
+		t.Fatalf("unexpected user locked event: %+v", userLockedEvent)
+	}
+	if userLockedEvent.Data["user_id"] != "usr_123" {
+		t.Fatalf("unexpected user_id in user locked event: %v", userLockedEvent.Data["user_id"])
+	}
+
+	// 18. UserUnlocked
+	userUnlockedEvent := NewUserUnlockedEvent("usr_123", UserUnlockedEventData{
+		UserID: "usr_123",
+	})
+	if userUnlockedEvent.Type != "auth.user.unlocked" || userUnlockedEvent.Action != "unlocked" {
+		t.Fatalf("unexpected user unlocked event: %+v", userUnlockedEvent)
+	}
+	if userUnlockedEvent.Data["user_id"] != "usr_123" {
+		t.Fatalf("unexpected user_id in user unlocked event: %v", userUnlockedEvent.Data["user_id"])
+	}
 }
