@@ -664,7 +664,7 @@ func (handler *Handler) handleGetUser(responseWriter http.ResponseWriter, reques
 	}
 
 	log.Debugf("user profile successfully retrieved for %s", userID)
-	handler.writeJSON(responseWriter, http.StatusOK, userResponse)
+	handler.writeJSON(responseWriter, userResponse)
 }
 
 func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
@@ -724,7 +724,7 @@ func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseW
 	cleanedProperties := sanitizeUserProperties(userRecord.Properties)
 
 	log.Debugf("user properties successfully updated for %s", userID)
-	handler.writeJSON(responseWriter, http.StatusOK, UpdateUserPropertiesResponse{
+	handler.writeJSON(responseWriter, UpdateUserPropertiesResponse{
 		Properties: cleanedProperties,
 	})
 }

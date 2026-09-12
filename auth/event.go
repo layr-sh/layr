@@ -145,3 +145,44 @@ type OTPSentEventData struct {
 func NewOTPSentEvent(resourceID string, otpSentEventData OTPSentEventData) core.Event {
 	return core.NewEvent("auth.otp.sent", otpSentEventData).WithResourceID(resourceID)
 }
+
+// OTPVerifiedEventData represents the payload for auth.otp.verified.
+type OTPVerifiedEventData struct {
+	UserID    string `json:"user_id"`
+	Recipient string `json:"recipient"`
+	Purpose   string `json:"purpose"`
+}
+
+// NewOTPVerifiedEvent creates a typed event for verified one-time passwords.
+func NewOTPVerifiedEvent(resourceID string, otpVerifiedEventData OTPVerifiedEventData) core.Event {
+	return core.NewEvent("auth.otp.verified", otpVerifiedEventData).WithResourceID(resourceID)
+}
+
+// UserCreatedEventData represents the payload for auth.user.created.
+type UserCreatedEventData UserRecord
+
+// NewUserCreatedEvent creates a typed event for user creation.
+func NewUserCreatedEvent(resourceID string, userCreatedEventData UserCreatedEventData) core.Event {
+	return core.NewEvent("auth.user.created", userCreatedEventData).WithResourceID(resourceID)
+}
+
+// UserLockedEventData represents the payload for auth.user.locked.
+type UserLockedEventData struct {
+	UserID      string     `json:"user_id"`
+	LockedUntil *time.Time `json:"locked_until,omitempty"`
+}
+
+// NewUserLockedEvent creates a typed event for user account lockout.
+func NewUserLockedEvent(resourceID string, userLockedEventData UserLockedEventData) core.Event {
+	return core.NewEvent("auth.user.locked", userLockedEventData).WithResourceID(resourceID)
+}
+
+// UserUnlockedEventData represents the payload for auth.user.unlocked.
+type UserUnlockedEventData struct {
+	UserID string `json:"user_id"`
+}
+
+// NewUserUnlockedEvent creates a typed event for user account unlocking.
+func NewUserUnlockedEvent(resourceID string, userUnlockedEventData UserUnlockedEventData) core.Event {
+	return core.NewEvent("auth.user.unlocked", userUnlockedEventData).WithResourceID(resourceID)
+}

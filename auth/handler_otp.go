@@ -1,0 +1,316 @@
+package auth
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"layr.sh/auth/otp"
+	"layr.sh/core"
+)
+
+const (
+	defaultOTPCooldown = 60 * time.Second
+)
+
+// OTPSendRequest defines parameters for dispatching a one-time passcode.
+type OTPSendRequest struct {
+	Recipient string `json:"recipient"`
+	Purpose   string `json:"purpose"` // 'signin' | 'signup' | 'mfa'
+}
+
+func (handler *Handler) handleOTPSend(responseWriter http.ResponseWriter, request *http.Request) {
+	config := handler.configManager.Get()
+	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+
+	var otpSendRequest OTPSendRequest
+	if err := json.NewDecoder(request.Body).Decode(&otpSendRequest); err != nil || otpSendRequest.Recipient == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required", "LAYR_AUTH_001")
+		return
+	}
+
+	recipient := strings.TrimSpace(strings.ToLower(otpSendRequest.Recipient))
+	purpose := otpSendRequest.Purpose
+	if purpose == "" {
+		purpose = "signin"
+	}
+
+	isEmail := strings.Contains(recipient, "@")
+	var tokenExpiryMinutes int
+	if isEmail {
+		if !config.EmailOTP.Enabled {
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			return
+		}
+		if !handler.assertEmailDeliveryReady(responseWriter, request) {
+			return
+		}
+		tokenExpiryMinutes = config.EmailOTP.TokenExpiryMinutes
+	} else {
+		if !config.SMSOTP.Enabled {
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			return
+		}
+		if !handler.assertSMSDeliveryReady(responseWriter, request) {
+			return
+		}
+		normalizedPhone, err := NormalizePhone(recipient)
+		if err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			return
+		}
+		recipient = normalizedPhone
+		tokenExpiryMinutes = config.SMSOTP.TokenExpiryMinutes
+	}
+
+	codeTTL := time.Duration(tokenExpiryMinutes) * time.Minute
+
+	code, _ := otp.GenerateCode(nil)
+	codeHash := otp.HashCode(code)
+
+	ctx := request.Context()
+
+	if handler.kvStore != nil {
+		clientIP := core.ExtractRequestClientIP(request)
+		ipRateKey := fmt.Sprintf("layr:auth:ratelimit:otp:ip:%s", clientIP)
+		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.", "LAYR_AUTH_RATE_LIMIT_EXCEEDED")
+			return
+		}
+
+		cooldownKey := fmt.Sprintf("layr:auth:cooldown:%s:%s", purpose, recipient)
+		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code", "LAYR_AUTH_COOLDOWN")
+			return
+		}
+	}
+
+	if handler.db == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		return
+	}
+
+	expiresAt := time.Now().UTC().Add(codeTTL)
+
+	query := `
+		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		VALUES ($1, $2, $3, 0, $4, clock_timestamp())
+	`
+	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, purpose, expiresAt)
+	if handler.kvStore != nil {
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:%s:%s", purpose, recipient), code, codeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:cooldown:%s:%s", purpose, recipient), "1", defaultOTPCooldown)
+	}
+
+	if isEmail {
+		_ = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
+	} else {
+		_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+	}
+
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
+			Recipient: recipient,
+			Purpose:   purpose,
+		}))
+	}
+
+	responseWriter.WriteHeader(http.StatusNoContent)
+}
+
+// OTPVerifyRequest defines parameters for verifying a one-time passcode.
+type OTPVerifyRequest struct {
+	Recipient string `json:"recipient"`
+	Code      string `json:"code"`
+	Purpose   string `json:"purpose"`
+}
+
+func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, request *http.Request) {
+	config := handler.configManager.Get()
+	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+
+	var otpVerifyRequest OTPVerifyRequest
+	if err := json.NewDecoder(request.Body).Decode(&otpVerifyRequest); err != nil || otpVerifyRequest.Recipient == "" || otpVerifyRequest.Code == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code required", "LAYR_AUTH_001")
+		return
+	}
+
+	recipient := strings.TrimSpace(strings.ToLower(otpVerifyRequest.Recipient))
+	purpose := otpVerifyRequest.Purpose
+	if purpose == "" {
+		purpose = "signin"
+	}
+
+	isEmail := strings.Contains(recipient, "@")
+	if isEmail {
+		if !config.EmailOTP.Enabled {
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			return
+		}
+	} else {
+		if !config.SMSOTP.Enabled {
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			return
+		}
+		normalizedPhone, err := NormalizePhone(recipient)
+		if err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			return
+		}
+		recipient = normalizedPhone
+	}
+
+	if handler.db == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		return
+	}
+
+	ctx := request.Context()
+	var otpID, storedHash string
+	var attempts int
+	var expiresAt time.Time
+
+	err := handler.db.QueryRow(ctx, `
+		SELECT id, code_hash, attempts, expires_at 
+		FROM layr_auth.otps 
+		WHERE recipient = $1 AND purpose = $2 AND expires_at > clock_timestamp()
+		ORDER BY created_at DESC 
+		LIMIT 1
+	`, recipient, purpose).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+	if err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired OTP code", "LAYR_AUTH_001")
+		return
+	}
+
+	if !otp.VerifyCode(otpVerifyRequest.Code, storedHash) {
+		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code", "LAYR_AUTH_001")
+		return
+	}
+
+	// Delete used OTP
+	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+	if handler.kvStore != nil {
+		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("layr:auth:otp:%s:%s", purpose, recipient))
+	}
+
+	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)
+	if anonymousUserRecord != nil {
+		var conflictingUserID string
+		var checkQuery string
+		if isEmail {
+			checkQuery = "SELECT id FROM layr_auth.users WHERE email = $1"
+		} else {
+			checkQuery = "SELECT id FROM layr_auth.users WHERE phone = $1"
+		}
+		conflictErr := handler.db.QueryRow(ctx, checkQuery, recipient).Scan(&conflictingUserID)
+		if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
+			if isEmail {
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
+			} else {
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account", "LAYR_AUTH_001")
+			}
+			return
+		}
+
+		var userRecord UserRecord
+		var rawProperties []byte
+		if isEmail {
+			_ = handler.db.QueryRow(ctx, `
+				UPDATE layr_auth.users 
+				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
+				WHERE id = $2
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			`, recipient, anonymousUserRecord.ID).Scan(
+				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			)
+		} else {
+			_ = handler.db.QueryRow(ctx, `
+				UPDATE layr_auth.users 
+				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
+				WHERE id = $2
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			`, recipient, anonymousUserRecord.ID).Scan(
+				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			)
+		}
+
+		userRecord.Properties = make(map[string]any)
+		if len(rawProperties) > 0 {
+			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		}
+
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(userRecord.ID, OTPVerifiedEventData{
+				UserID:    userRecord.ID,
+				Recipient: recipient,
+				Purpose:   purpose,
+			}))
+		}
+
+		handler.issueSessionResponse(responseWriter, request, userRecord)
+		return
+	}
+
+	// Ensure User exists
+	var userRecord UserRecord
+	var rawProperties []byte
+	if isEmail {
+		_ = handler.db.QueryRow(ctx, `
+			INSERT INTO layr_auth.users (email, role, email_verified_at, created_at, last_updated_at)
+			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
+			ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(layr_auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		`, recipient).Scan(
+			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		)
+	} else {
+		_ = handler.db.QueryRow(ctx, `
+			INSERT INTO layr_auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
+			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
+			ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(layr_auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		`, recipient).Scan(
+			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		)
+	}
+
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(userRecord.ID, OTPVerifiedEventData{
+			UserID:    userRecord.ID,
+			Recipient: recipient,
+			Purpose:   purpose,
+		}))
+	}
+
+	handler.issueSessionResponse(responseWriter, request, userRecord)
+}
+
+// RegisterOTPRoutes registers passwordless OTP routes on the provided router.
+func (handler *Handler) RegisterOTPRoutes(router *core.Router) {
+	log.Debug("registering OTP authentication routes on router")
+	router.Mux().HandleFunc("POST /api/v1/auth/otp/send", handler.handleOTPSend)
+	router.Mux().HandleFunc("POST /api/v1/auth/otp/verify", handler.handleOTPVerify)
+}
