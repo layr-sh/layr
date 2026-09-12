@@ -116,7 +116,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 	var rawProperties []byte
 	if isAnonymousConversion {
 		err = handler.db.QueryRow(ctx, `
-			UPDATE layr_auth.users
+			UPDATE auth.users
 			SET is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $1
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -127,7 +127,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 		)
 	} else {
 		err = handler.db.QueryRow(ctx, `
-			INSERT INTO layr_auth.users (id, role, created_at, last_updated_at)
+			INSERT INTO auth.users (id, role, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp())
 			ON CONFLICT (id) DO UPDATE SET last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -151,7 +151,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 	// Insert passkey credential
 	passkeyID := uuid.NewV7().String()
 	_, execErr := handler.db.Exec(ctx, `
-		INSERT INTO layr_auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
+		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
 		VALUES ($1, $2, $3, $4, 0, $5, $6, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
 	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, passkeySignUpVerifyRequest.Transports, passkeySignUpVerifyRequest.FriendlyName)
@@ -243,7 +243,7 @@ func (handler *Handler) handlePasskeySignInVerify(responseWriter http.ResponseWr
 
 	ctx := request.Context()
 	var userID string
-	err := handler.db.QueryRow(ctx, "SELECT user_id FROM layr_auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID)
+	err := handler.db.QueryRow(ctx, "SELECT user_id FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID)
 	if err != nil {
 		log.Debugf("passkey sign-in verify rejected: credential not found: %v", err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found", "LAYR_AUTH_006")
@@ -254,7 +254,7 @@ func (handler *Handler) handlePasskeySignInVerify(responseWriter http.ResponseWr
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
@@ -271,7 +271,7 @@ func (handler *Handler) handlePasskeySignInVerify(responseWriter http.ResponseWr
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
-	_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
+	_, _ = handler.db.Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }

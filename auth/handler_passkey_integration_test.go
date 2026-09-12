@@ -94,7 +94,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 
 	// Verify DB record
 	var passkeyCount int
-	_ = db.QueryRow(ctx, "SELECT count(*) FROM layr_auth.passkeys WHERE user_id = $1", newUserID).Scan(&passkeyCount)
+	_ = db.QueryRow(ctx, "SELECT count(*) FROM auth.passkeys WHERE user_id = $1", newUserID).Scan(&passkeyCount)
 	if passkeyCount != 1 {
 		t.Fatalf("expected 1 passkey record in DB, got: %d", passkeyCount)
 	}
@@ -147,7 +147,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	// 6. Sign-up Verify for Anonymous User (Converts anonymous caller)
 	anonUserID := "01918a24-7777-7000-8000-000000000007"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, '{"tier":"free"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 	anonToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -174,7 +174,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	}
 
 	var isStillAnonymous bool
-	_ = db.QueryRow(ctx, "SELECT is_anonymous FROM layr_auth.users WHERE id = $1", anonUserID).Scan(&isStillAnonymous)
+	_ = db.QueryRow(ctx, "SELECT is_anonymous FROM auth.users WHERE id = $1", anonUserID).Scan(&isStillAnonymous)
 	if isStillAnonymous {
 		t.Fatalf("expected anonymous user to be converted to non-anonymous after passkey registration")
 	}
@@ -202,13 +202,13 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	var fkConstraintName string
 	_ = db.QueryRow(ctx, `
 		SELECT constraint_name FROM information_schema.table_constraints
-		WHERE table_schema = 'layr_auth' AND table_name = 'passkeys' AND constraint_type = 'FOREIGN KEY'
+		WHERE table_schema = 'auth' AND table_name = 'passkeys' AND constraint_type = 'FOREIGN KEY'
 	`).Scan(&fkConstraintName)
 	if fkConstraintName != "" {
-		_, _ = db.Exec(ctx, "ALTER TABLE layr_auth.passkeys DROP CONSTRAINT "+fkConstraintName)
+		_, _ = db.Exec(ctx, "ALTER TABLE auth.passkeys DROP CONSTRAINT "+fkConstraintName)
 	}
 	_, insertErr := db.Exec(ctx, `
-		INSERT INTO layr_auth.passkeys (id, user_id, credential_id, public_key, counter, created_at, last_used_at)
+		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, created_at, last_used_at)
 		VALUES ('01918a24-8888-7000-8000-000000000099', $1, $2, 'mockpubkey', 0, clock_timestamp(), clock_timestamp())
 	`, ghostUserID, []byte(ghostUserCredentialID))
 	if insertErr != nil {
@@ -229,7 +229,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 
 	// 9. Error branch: passkey insert fails -> 500
 	_, _ = db.Exec(ctx, `
-		CREATE OR REPLACE FUNCTION layr_auth.trg_fail_passkey_insert_fn() RETURNS trigger AS $$
+		CREATE OR REPLACE FUNCTION auth.trg_fail_passkey_insert_fn() RETURNS trigger AS $$
 		BEGIN
 			IF NEW.friendly_name = 'fail_insert_trigger' THEN
 				RAISE EXCEPTION 'simulated passkey insert failure';
@@ -237,9 +237,9 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 			RETURN NEW;
 		END;
 		$$ LANGUAGE plpgsql;
-		DROP TRIGGER IF EXISTS trg_fail_passkey_insert ON layr_auth.passkeys;
-		CREATE TRIGGER trg_fail_passkey_insert BEFORE INSERT ON layr_auth.passkeys
-		FOR EACH ROW EXECUTE FUNCTION layr_auth.trg_fail_passkey_insert_fn();
+		DROP TRIGGER IF EXISTS trg_fail_passkey_insert ON auth.passkeys;
+		CREATE TRIGGER trg_fail_passkey_insert BEFORE INSERT ON auth.passkeys
+		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_passkey_insert_fn();
 	`)
 	failChallenge, _ := handler.passkeyManager.GenerateChallenge(newUserID)
 	failVerifyPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
@@ -256,7 +256,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on passkey insert trigger failure, got: %d", failVerifyResponseRecorder.Code)
 	}
 	_, _ = db.Exec(ctx, `
-		DROP TRIGGER IF EXISTS trg_fail_passkey_insert ON layr_auth.passkeys;
-		DROP FUNCTION IF EXISTS layr_auth.trg_fail_passkey_insert_fn();
+		DROP TRIGGER IF EXISTS trg_fail_passkey_insert ON auth.passkeys;
+		DROP FUNCTION IF EXISTS auth.trg_fail_passkey_insert_fn();
 	`)
 }

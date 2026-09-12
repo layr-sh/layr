@@ -66,7 +66,7 @@ func (handler *Handler) handleMFASetup(responseWriter http.ResponseWriter, reque
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
@@ -91,7 +91,7 @@ func (handler *Handler) handleMFASetup(responseWriter http.ResponseWriter, reque
 	propertiesJSON, _ := json.Marshal(userRecord.Properties)
 
 	_, _ = handler.db.Exec(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET properties = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
 	`, propertiesJSON, userRecord.ID)
@@ -160,7 +160,7 @@ func (handler *Handler) handleMFAVerify(responseWriter http.ResponseWriter, requ
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
@@ -204,7 +204,7 @@ func (handler *Handler) handleMFAVerify(responseWriter http.ResponseWriter, requ
 	propertiesJSON, _ := json.Marshal(userRecord.Properties)
 
 	_, _ = handler.db.Exec(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET properties = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
 	`, propertiesJSON, userRecord.ID)

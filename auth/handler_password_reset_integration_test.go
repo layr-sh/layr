@@ -84,7 +84,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	initialHash, _ := handler.hasher.Hash(initialPassword)
 
 	_, err := db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, password_hash, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, password_hash, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, $2, $3, $4, 'authenticated', false, clock_timestamp(), clock_timestamp())
 	`, resetUserID, resetEmail, resetPhone, initialHash)
 	if err != nil {
@@ -165,7 +165,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 
 	// Verify updated password in DB
 	var updatedPasswordHash string
-	_ = db.QueryRow(ctx, "SELECT password_hash FROM layr_auth.users WHERE id = $1", resetUserID).Scan(&updatedPasswordHash)
+	_ = db.QueryRow(ctx, "SELECT password_hash FROM auth.users WHERE id = $1", resetUserID).Scan(&updatedPasswordHash)
 	valid, _ := handler.hasher.Verify(newPassword, updatedPasswordHash)
 	if !valid {
 		t.Fatalf("expected new password to match stored hash in database")
@@ -199,7 +199,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	maxAttemptsCode := "999888"
 	maxAttemptsHash := otp.HashCode(maxAttemptsCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 5, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, resetEmail, maxAttemptsHash)
 	maxAttemptsPayload, _ := json.Marshal(PasswordResetConfirmRequest{
@@ -232,7 +232,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	orphanCode := "333222"
 	orphanHash := otp.HashCode(orphanCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, orphanRecipient, orphanHash)
 	orphanConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{

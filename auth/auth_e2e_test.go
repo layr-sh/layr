@@ -260,7 +260,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	// 1. Anonymous User Setup
 	anonUserID := "01918a24-7777-7000-8000-000000000007"
 	_, err := db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}', clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 	if err != nil {
@@ -320,7 +320,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	// 5. Convert Anonymous User to Verified User by inserting/linking an email
 	claimedEmail := "e2e.converted@example.com"
 	_, err = db.Exec(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET email = $1, is_anonymous = false, email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp()
 		WHERE id = $2
 	`, claimedEmail, anonUserID)

@@ -98,7 +98,7 @@ func (handler *Handler) handleOTPSend(responseWriter http.ResponseWriter, reques
 	expiresAt := time.Now().UTC().Add(codeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, $3, 0, $4, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, purpose, expiresAt)
@@ -180,7 +180,7 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, code_hash, attempts, expires_at 
-		FROM layr_auth.otps 
+		FROM auth.otps 
 		WHERE recipient = $1 AND purpose = $2 AND expires_at > clock_timestamp()
 		ORDER BY created_at DESC 
 		LIMIT 1
@@ -191,13 +191,13 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 	}
 
 	if !otp.VerifyCode(otpVerifyRequest.Code, storedHash) {
-		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code", "LAYR_AUTH_001")
 		return
 	}
 
 	// Delete used OTP
-	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 	if handler.kvStore != nil {
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient))
 	}
@@ -207,9 +207,9 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 		var conflictingUserID string
 		var checkQuery string
 		if isEmail {
-			checkQuery = "SELECT id FROM layr_auth.users WHERE email = $1"
+			checkQuery = "SELECT id FROM auth.users WHERE email = $1"
 		} else {
-			checkQuery = "SELECT id FROM layr_auth.users WHERE phone = $1"
+			checkQuery = "SELECT id FROM auth.users WHERE phone = $1"
 		}
 		conflictErr := handler.db.QueryRow(ctx, checkQuery, recipient).Scan(&conflictingUserID)
 		if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
@@ -225,7 +225,7 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 		var rawProperties []byte
 		if isEmail {
 			_ = handler.db.QueryRow(ctx, `
-				UPDATE layr_auth.users 
+				UPDATE auth.users 
 				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -236,7 +236,7 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 			)
 		} else {
 			_ = handler.db.QueryRow(ctx, `
-				UPDATE layr_auth.users 
+				UPDATE auth.users 
 				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -270,9 +270,9 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 	var rawProperties []byte
 	if isEmail {
 		_ = handler.db.QueryRow(ctx, `
-			INSERT INTO layr_auth.users (email, role, email_verified_at, created_at, last_updated_at)
+			INSERT INTO auth.users (email, role, email_verified_at, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
-			ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(layr_auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+			ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
 		`, recipient).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
@@ -281,9 +281,9 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 		)
 	} else {
 		_ = handler.db.QueryRow(ctx, `
-			INSERT INTO layr_auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
+			INSERT INTO auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
-			ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(layr_auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+			ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
 		`, recipient).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,

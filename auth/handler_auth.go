@@ -62,7 +62,7 @@ func (handler *Handler) handleAnonymousSignIn(responseWriter http.ResponseWriter
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		INSERT INTO layr_auth.users (role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ('authenticated', true, $1, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
 	`
@@ -155,7 +155,7 @@ func (handler *Handler) handleSignUp(responseWriter http.ResponseWriter, request
 	if anonymousUserRecord != nil {
 		var existingUserID string
 		err := handler.db.QueryRow(ctx, `
-			SELECT id FROM layr_auth.users 
+			SELECT id FROM auth.users 
 			WHERE (email IS NOT NULL AND email = $1) 
 			   OR (phone IS NOT NULL AND phone = $2)
 			LIMIT 1
@@ -173,7 +173,7 @@ func (handler *Handler) handleSignUp(responseWriter http.ResponseWriter, request
 		var userRecord UserRecord
 		var rawProperties []byte
 		updateQuery := `
-			UPDATE layr_auth.users
+			UPDATE auth.users
 			SET email = $1, phone = $2, password_hash = $3, is_anonymous = false,
 			    properties = COALESCE(properties, '{}'::jsonb) || $4::jsonb,
 			    last_updated_at = clock_timestamp()
@@ -207,7 +207,7 @@ func (handler *Handler) handleSignUp(responseWriter http.ResponseWriter, request
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		INSERT INTO layr_auth.users (email, phone, password_hash, role, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (email, phone, password_hash, role, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'authenticated', $4, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
 	`
@@ -283,7 +283,7 @@ func (handler *Handler) handleSignIn(responseWriter http.ResponseWriter, request
 
 	query := `
 		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE email = $1 OR phone = $1
 	`
 	err := handler.db.QueryRow(ctx, query, identifier).Scan(
@@ -354,7 +354,7 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 				log.Tracef("fast-path session cache hit for user %s", cachedSession.User.ID)
 				_ = handler.kvStore.Delete(ctx, "auth:session:"+tokenHash)
 				if handler.db != nil {
-					_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.sessions WHERE refresh_token_hash = $1", tokenHash)
+					_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				}
 				handler.issueSessionResponse(responseWriter, request, cachedSession.User)
 				return
@@ -373,7 +373,7 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, user_id, expires_at 
-		FROM layr_auth.sessions 
+		FROM auth.sessions 
 		WHERE refresh_token_hash = $1
 	`, tokenHash).Scan(&sessionID, &userID, &expiresAt)
 
@@ -385,7 +385,7 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 
 	if time.Now().UTC().After(expiresAt) {
 		log.Debugf("token refresh rejected: session %s expired at %v", sessionID, expiresAt)
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.sessions WHERE id = $1", sessionID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token expired", "LAYR_AUTH_003")
 		return
 	}
@@ -394,7 +394,7 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
@@ -412,7 +412,7 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 	}
 
 	// Rotate refresh token
-	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.sessions WHERE id = $1", sessionID)
+	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }
 
@@ -434,7 +434,7 @@ func (handler *Handler) handleSignOut(responseWriter http.ResponseWriter, reques
 		if handler.db != nil {
 			var sessionID, userID string
 			err := handler.db.QueryRow(request.Context(), `
-				DELETE FROM layr_auth.sessions 
+				DELETE FROM auth.sessions 
 				WHERE refresh_token_hash = $1
 				RETURNING id, user_id
 			`, tokenHash).Scan(&sessionID, &userID)

@@ -39,7 +39,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 	// Create test user directly in DB
 	testUserID := uuid.NewV7().String()
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, password_hash, role, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, password_hash, role, properties, created_at, last_updated_at)
 		VALUES ($1, 'session-test@example.com', 'hash', 'authenticated', '{}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, testUserID)
 	if err != nil {
@@ -48,7 +48,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 
 	// Insert session for user
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, 'hash_abc', '127.0.0.1', 'Mozilla/5.0', clock_timestamp() + interval '30 days', clock_timestamp())
 	`, testUserID)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 
 	// Verify sessions are gone
 	var count int
-	_ = db.QueryRow(ctx, "SELECT COUNT(*) FROM layr_auth.sessions WHERE user_id = $1", testUserID).Scan(&count)
+	_ = db.QueryRow(ctx, "SELECT COUNT(*) FROM auth.sessions WHERE user_id = $1", testUserID).Scan(&count)
 	if count != 0 {
 		t.Fatalf("expected 0 sessions after revocation, got: %d", count)
 	}

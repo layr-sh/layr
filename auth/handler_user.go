@@ -120,7 +120,7 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 	ctx := request.Context()
 	var existingUserID string
 	var emailVerifiedAt *time.Time
-	err := handler.db.QueryRow(ctx, "SELECT id, email_verified_at FROM layr_auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
+	err := handler.db.QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
 
 	targetUserID := existingUserID
 	if authErr == nil && authUserID != "" {
@@ -156,7 +156,7 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 	expiresAt := time.Now().UTC().Add(otp.CodeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
@@ -216,7 +216,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 
 	query := `
 		SELECT id, code_hash, attempts, expires_at 
-		FROM layr_auth.otps 
+		FROM auth.otps 
 		WHERE recipient = $1 AND purpose = 'email_verification'
 		ORDER BY created_at DESC 
 		LIMIT 1
@@ -237,19 +237,19 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
 		log.Debugf("email verification confirmation failed: max attempts exceeded for %s", recipientEmail)
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
 		log.Debugf("email verification confirmation failed: invalid code for %s", recipientEmail)
-		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code", "LAYR_AUTH_001")
 		return
 	}
 
-	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1 AND purpose = 'email_verification'", recipientEmail)
+	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'email_verification'", recipientEmail)
 	if handler.kvStore != nil {
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail))
 	}
@@ -257,12 +257,12 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 	authUserID, authErr := handler.authenticateUser(request)
 	if authErr == nil && authUserID != "" {
 		isCallerAnonymous := false
-		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM layr_auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
+		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
 		var userRecord UserRecord
 		var rawProperties []byte
 		err = handler.db.QueryRow(ctx, `
-			UPDATE layr_auth.users 
+			UPDATE auth.users 
 			SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -296,7 +296,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		UPDATE layr_auth.users 
+		UPDATE auth.users 
 		SET email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE email = $1 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -371,7 +371,7 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 	ctx := request.Context()
 	var existingUserID string
 	var phoneVerifiedAt *time.Time
-	err = handler.db.QueryRow(ctx, "SELECT id, phone_verified_at FROM layr_auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID, &phoneVerifiedAt)
+	err = handler.db.QueryRow(ctx, "SELECT id, phone_verified_at FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID, &phoneVerifiedAt)
 
 	targetUserID := existingUserID
 	if authErr == nil && authUserID != "" {
@@ -407,7 +407,7 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 	expiresAt := time.Now().UTC().Add(otp.CodeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
@@ -475,7 +475,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 
 	query := `
 		SELECT id, code_hash, attempts, expires_at 
-		FROM layr_auth.otps 
+		FROM auth.otps 
 		WHERE recipient = $1 AND purpose = 'phone_verification'
 		ORDER BY created_at DESC 
 		LIMIT 1
@@ -496,19 +496,19 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
 		log.Debugf("phone verification confirmation failed: max attempts exceeded for %s", recipientPhone)
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
 		log.Debugf("phone verification confirmation failed: invalid code for %s", recipientPhone)
-		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code", "LAYR_AUTH_001")
 		return
 	}
 
-	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1 AND purpose = 'phone_verification'", recipientPhone)
+	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'phone_verification'", recipientPhone)
 	if handler.kvStore != nil {
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone))
 	}
@@ -516,12 +516,12 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 	authUserID, authErr := handler.authenticateUser(request)
 	if authErr == nil && authUserID != "" {
 		isCallerAnonymous := false
-		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM layr_auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
+		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
 		var userRecord UserRecord
 		var rawProperties []byte
 		err = handler.db.QueryRow(ctx, `
-			UPDATE layr_auth.users 
+			UPDATE auth.users 
 			SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -555,7 +555,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		UPDATE layr_auth.users 
+		UPDATE auth.users 
 		SET phone_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE phone = $1 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -608,7 +608,7 @@ func (handler *Handler) handleGetUser(responseWriter http.ResponseWriter, reques
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
@@ -641,7 +641,7 @@ func (handler *Handler) handleGetUser(responseWriter http.ResponseWriter, reques
 
 	if !isMFAEnabled {
 		var hasPasskey bool
-		err = handler.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM layr_auth.passkeys WHERE user_id = $1)", userID).Scan(&hasPasskey)
+		err = handler.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM auth.passkeys WHERE user_id = $1)", userID).Scan(&hasPasskey)
 		if err == nil && hasPasskey {
 			isMFAEnabled = true
 		}
@@ -696,7 +696,7 @@ func (handler *Handler) handleUpdateUserProperties(responseWriter http.ResponseW
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
 		    last_updated_at = clock_timestamp()
 		WHERE id = $2
@@ -764,7 +764,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 
 	ctx := request.Context()
 	var existingUserID string
-	err := handler.db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID)
+	err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
 		log.Debugf("update user email conflict: email %s already in use by user %s", recipientEmail, existingUserID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
@@ -781,7 +781,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 	if anonymousUserRecord != nil {
 		log.Debugf("converting anonymous user %s with email %s", anonymousUserRecord.ID, recipientEmail)
 		_, updateErr := handler.db.Exec(ctx, `
-			UPDATE layr_auth.users
+			UPDATE auth.users
 			SET email = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
 		`, recipientEmail, anonymousUserRecord.ID)
@@ -804,7 +804,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 	expiresAt := time.Now().UTC().Add(otp.CodeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
@@ -869,7 +869,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 
 	ctx := request.Context()
 	var existingUserID string
-	err = handler.db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID)
+	err = handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
 		log.Debugf("update user phone conflict: phone %s already in use by user %s", recipientPhone, existingUserID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account", "LAYR_AUTH_001")
@@ -886,7 +886,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 	if anonymousUserRecord != nil {
 		log.Debugf("converting anonymous user %s with phone %s", anonymousUserRecord.ID, recipientPhone)
 		_, updateErr := handler.db.Exec(ctx, `
-			UPDATE layr_auth.users
+			UPDATE auth.users
 			SET phone = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
 		`, recipientPhone, anonymousUserRecord.ID)
@@ -909,7 +909,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 	expiresAt := time.Now().UTC().Add(otp.CodeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
@@ -961,7 +961,7 @@ func (handler *Handler) handleUpdateUserPassword(responseWriter http.ResponseWri
 
 	err = handler.db.QueryRow(ctx, `
 		SELECT is_anonymous, email, phone, password_hash
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(&isCallerAnonymous, &email, &phone, &existingPasswordHash)
 	if err != nil {
@@ -1002,7 +1002,7 @@ func (handler *Handler) handleUpdateUserPassword(responseWriter http.ResponseWri
 	var userRecord UserRecord
 	var rawProperties []byte
 	queryErr := handler.db.QueryRow(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET password_hash = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -1048,7 +1048,7 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 	var rawProperties []byte
 	_ = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at 
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
@@ -1059,7 +1059,7 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
-	sessionRows, err := handler.db.Query(ctx, "SELECT refresh_token_hash FROM layr_auth.sessions WHERE user_id = $1", userID)
+	sessionRows, err := handler.db.Query(ctx, "SELECT refresh_token_hash FROM auth.sessions WHERE user_id = $1", userID)
 	if err == nil {
 		for sessionRows.Next() {
 			var refreshTokenHash string
@@ -1070,7 +1070,7 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 		sessionRows.Close()
 	}
 
-	_, err = handler.db.Exec(ctx, "DELETE FROM layr_auth.users WHERE id = $1", userID)
+	_, err = handler.db.Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
 	if err != nil {
 		log.Debugf("failed to delete user account %s: %v", userID, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete user account", "LAYR_AUTH_001")
@@ -1078,10 +1078,10 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 	}
 
 	if userRecord.Email != nil && *userRecord.Email != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *userRecord.Email)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *userRecord.Email)
 	}
 	if userRecord.Phone != nil && *userRecord.Phone != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1", *userRecord.Phone)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *userRecord.Phone)
 	}
 
 	isSecure := core.IsSecureRequest(request)

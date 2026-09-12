@@ -216,7 +216,7 @@ func (handler *Handler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWr
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE email = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
@@ -252,7 +252,7 @@ func (handler *Handler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWr
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Sessions.RefreshTokenExpirySeconds) * time.Second)
 	sessionID := uuid.NewV7().String()
 	_, _ = handler.db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, clock_timestamp())
 	`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
 
@@ -521,7 +521,7 @@ func (handler *Handler) handleOIDCTokenAuthorizationCode(responseWriter http.Res
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, oidcAuthorizationCodePayload.UserID).Scan(
@@ -565,7 +565,7 @@ func (handler *Handler) handleOIDCTokenAuthorizationCode(responseWriter http.Res
 	expiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
 	sessionID := uuid.NewV7().String()
 	_, _ = handler.db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, clock_timestamp())
 	`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
 
@@ -635,7 +635,7 @@ func (handler *Handler) handleOIDCTokenRefreshToken(responseWriter http.Response
 
 	var sessionID, userID string
 	err := handler.db.QueryRow(ctx, `
-		SELECT id, user_id FROM layr_auth.sessions
+		SELECT id, user_id FROM auth.sessions
 		WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
 	`, refreshTokenHash).Scan(&sessionID, &userID)
 	if err != nil {
@@ -651,7 +651,7 @@ func (handler *Handler) handleOIDCTokenRefreshToken(responseWriter http.Response
 	newExpiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
 
 	_, _ = handler.db.Exec(ctx, `
-		UPDATE layr_auth.sessions
+		UPDATE auth.sessions
 		SET refresh_token_hash = $1, expires_at = $2
 		WHERE id = $3
 	`, newRefreshTokenHash, newExpiresAt, sessionID)
@@ -659,7 +659,7 @@ func (handler *Handler) handleOIDCTokenRefreshToken(responseWriter http.Response
 	var userRecord UserRecord
 	_ = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt)
 
 	accessExpiry := config.Sessions.AccessTokenExpirySeconds
@@ -734,7 +734,7 @@ func (handler *Handler) handleOIDCUserInfo(responseWriter http.ResponseWriter, r
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, claims.Subject).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,

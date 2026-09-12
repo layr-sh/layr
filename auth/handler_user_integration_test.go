@@ -46,13 +46,13 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		return nil
 	})
 
-	// Create test user in layr_auth.users
+	// Create test user in auth.users
 	testUserID := "01918a24-1111-7000-8000-000000000001"
 	testEmail := "verifyuser@example.com"
 	testPhone := "+15554443333"
 
 	insertUserQuery := `
-		INSERT INTO layr_auth.users (id, email, phone, role, email_verified_at, phone_verified_at, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, email_verified_at, phone_verified_at, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'user', NULL, NULL, clock_timestamp(), clock_timestamp())
 	`
 	if _, err := db.Exec(ctx, insertUserQuery, testUserID, testEmail, testPhone); err != nil {
@@ -159,7 +159,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 
 	// Verify database was updated
 	var emailVerifiedAt *time.Time
-	err := db.QueryRow(ctx, "SELECT email_verified_at FROM layr_auth.users WHERE id = $1", testUserID).Scan(&emailVerifiedAt)
+	err := db.QueryRow(ctx, "SELECT email_verified_at FROM auth.users WHERE id = $1", testUserID).Scan(&emailVerifiedAt)
 	if err != nil || emailVerifiedAt == nil {
 		t.Fatalf("expected user email_verified_at to be populated in database: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	}
 
 	var phoneVerifiedAt *time.Time
-	err = db.QueryRow(ctx, "SELECT phone_verified_at FROM layr_auth.users WHERE id = $1", testUserID).Scan(&phoneVerifiedAt)
+	err = db.QueryRow(ctx, "SELECT phone_verified_at FROM auth.users WHERE id = $1", testUserID).Scan(&phoneVerifiedAt)
 	if err != nil || phoneVerifiedAt == nil {
 		t.Fatalf("expected user phone_verified_at to be populated in database: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	anonEmail := "anonconverted@example.com"
 	anonPhone := "+15558887777"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 
@@ -248,14 +248,14 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	anonEmailCode := "987654"
 	anonEmailHash := otp.HashCode(anonEmailCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, anonEmail, anonEmailHash)
 
 	anonPhoneCode := "456789"
 	anonPhoneHash := otp.HashCode(anonPhoneCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, anonPhone, anonPhoneHash)
 
@@ -341,7 +341,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	expiredCode := "111222"
 	expiredHash := otp.HashCode(expiredCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('expired@example.com', $1, 'email_verification', 0, clock_timestamp() - interval '10 minutes', clock_timestamp() - interval '15 minutes')
 	`, expiredHash)
 	expiredEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"expired@example.com","code":"%s"}`, expiredCode)))
@@ -352,7 +352,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	}
 
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('+15559992222', $1, 'phone_verification', 0, clock_timestamp() - interval '10 minutes', clock_timestamp() - interval '15 minutes')
 	`, expiredHash)
 	expiredPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"+15559992222","code":"%s"}`, expiredCode)))
@@ -366,7 +366,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	maxAttemptsCode := "333444"
 	maxAttemptsHash := otp.HashCode(maxAttemptsCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('maxattempts@example.com', $1, 'email_verification', 5, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, maxAttemptsHash)
 	maxAttemptsEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"maxattempts@example.com","code":"%s"}`, maxAttemptsCode)))
@@ -377,7 +377,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	}
 
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('+15559993333', $1, 'phone_verification', 5, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, maxAttemptsHash)
 	maxAttemptsPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"+15559993333","code":"%s"}`, maxAttemptsCode)))
@@ -391,7 +391,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	wrongCode := "555666"
 	wrongCodeHash := otp.HashCode(wrongCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('+15559994444', $1, 'phone_verification', 1, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, wrongCodeHash)
 	wrongCodePhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"phone":"+15559994444","code":"999999"}`))
@@ -401,7 +401,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("expected 400 on invalid code, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
 	var attemptsAfter int
-	_ = db.QueryRow(ctx, "SELECT attempts FROM layr_auth.otps WHERE recipient = '+15559994444'").Scan(&attemptsAfter)
+	_ = db.QueryRow(ctx, "SELECT attempts FROM auth.otps WHERE recipient = '+15559994444'").Scan(&attemptsAfter)
 	if attemptsAfter != 2 {
 		t.Fatalf("expected attempts to increment to 2, got: %d", attemptsAfter)
 	}
@@ -418,7 +418,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	wrongEmailCode := "777888"
 	wrongEmailHash := otp.HashCode(wrongEmailCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('wrongcode@example.com', $1, 'email_verification', 1, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, wrongEmailHash)
 	wrongCodeEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"email":"wrongcode@example.com","code":"000000"}`))
@@ -428,7 +428,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("expected 400 on invalid email verification code, got: %d (%s)", wrongCodeEmailResponseRecorder.Code, wrongCodeEmailResponseRecorder.Body.String())
 	}
 	var emailAttemptsAfter int
-	_ = db.QueryRow(ctx, "SELECT attempts FROM layr_auth.otps WHERE recipient = 'wrongcode@example.com'").Scan(&emailAttemptsAfter)
+	_ = db.QueryRow(ctx, "SELECT attempts FROM auth.otps WHERE recipient = 'wrongcode@example.com'").Scan(&emailAttemptsAfter)
 	if emailAttemptsAfter != 2 {
 		t.Fatalf("expected email attempts to increment to 2, got: %d", emailAttemptsAfter)
 	}
@@ -438,7 +438,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	orphanEmailCode := "654987"
 	orphanEmailHash := otp.HashCode(orphanEmailCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, orphanEmail, orphanEmailHash)
 	orphanEmailConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"%s","code":"%s"}`, orphanEmail, orphanEmailCode)))
@@ -453,7 +453,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	orphanPhoneCode := "987654"
 	orphanPhoneHash := otp.HashCode(orphanPhoneCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, orphanPhone, orphanPhoneHash)
 	orphanPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"%s","code":"%s"}`, orphanPhone, orphanPhoneCode)))
@@ -467,7 +467,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	anonPhoneUserID := "01918a24-9999-7000-8000-000000000088"
 	anonPhoneRecipient := "+15554449988"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonPhoneUserID)
 	anonPhoneToken, err := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -482,7 +482,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	anonPhoneConfirmCode := "123789"
 	anonPhoneConfirmHash := otp.HashCode(anonPhoneConfirmCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, anonPhoneRecipient, anonPhoneConfirmHash)
 
@@ -552,7 +552,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		"tier":    "starter",
 	})
 	_, err := db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, password_hash, role, properties, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, password_hash, role, properties, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'user', $4, false, clock_timestamp(), clock_timestamp())
 	`, userID, userEmail, hashedPassword, propertiesJSON)
 	if err != nil {
@@ -591,7 +591,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// 3. User with enrolled MFA Totp
 	_, _ = db.Exec(ctx, `
-		UPDATE layr_auth.users 
+		UPDATE auth.users 
 		SET properties = properties || '{"mfa_secret_enc": "enc_totp_secret", "mfa_pending": false}'::jsonb
 		WHERE id = $1
 	`, userID)
@@ -688,7 +688,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Verify updated password hash matches
 	var updatedHash string
-	_ = db.QueryRow(ctx, "SELECT password_hash FROM layr_auth.users WHERE id = $1", userID).Scan(&updatedHash)
+	_ = db.QueryRow(ctx, "SELECT password_hash FROM auth.users WHERE id = $1", userID).Scan(&updatedHash)
 	valid, verifyErr := handler.hasher.Verify(newValidPassword, updatedHash)
 	if verifyErr != nil || !valid {
 		t.Fatalf("expected new password to verify against stored hash")
@@ -697,7 +697,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	// 6. Prohibit setting password on anonymous accounts
 	anonUserID := "01918a24-7777-7000-8000-000000000007"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 	anonAccessToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -720,7 +720,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	// 7. Prohibit setting password on accounts without email and phone
 	noIdentifierUserID := "01918a24-8888-7000-8000-000000000008"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'user', false, clock_timestamp(), clock_timestamp())
 	`, noIdentifierUserID)
 	noIdentifierToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -741,7 +741,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	passkeyUserID := "01918a24-9999-7000-8000-000000000009"
 	passkeyEmail := "passkey.user@example.com"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, 'user', false, '{}', clock_timestamp(), clock_timestamp())
 	`, passkeyUserID, passkeyEmail)
 	passkeyToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -763,7 +763,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Insert passkey
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.passkeys (id, user_id, credential_id, public_key, counter, created_at, last_used_at)
+		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, created_at, last_used_at)
 		VALUES ('01918a24-9999-7000-8000-000000000099', $1, 'credential-1', 'mockpubkey', 0, clock_timestamp(), clock_timestamp())
 	`, passkeyUserID)
 	if err != nil {
@@ -784,7 +784,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	convertedUserID := "01918a24-2222-7000-8000-000000000002"
 	convertedUserEmail := "converted.user@example.com"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, password_hash, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, password_hash, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, NULL, 'user', false, '{}', clock_timestamp(), clock_timestamp())
 	`, convertedUserID, convertedUserEmail)
 	if err != nil {
@@ -813,7 +813,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	otherUserEmail := "other.user.existing@example.com"
 	otherUserPhone := "+15557778888"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'user', false, '{}', clock_timestamp(), clock_timestamp())
 	`, otherUserID, otherUserEmail, otherUserPhone)
 	if err != nil {
@@ -879,7 +879,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	// 10d. Anonymous user conversion error paths
 	anonFailUserID := "01918a24-4444-7000-8000-000000000005"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}', clock_timestamp(), clock_timestamp())
 	`, anonFailUserID)
 	if err != nil {
@@ -905,7 +905,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Trigger DB update error -> 500 on phone update
 	_, err = db.Exec(ctx, `
-		CREATE OR REPLACE FUNCTION layr_auth.trg_fail_update_phone_fn() RETURNS trigger AS $$
+		CREATE OR REPLACE FUNCTION auth.trg_fail_update_phone_fn() RETURNS trigger AS $$
 		BEGIN
 			IF NEW.phone = '+15559990000' THEN
 				RAISE EXCEPTION 'simulated update failure';
@@ -913,9 +913,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 			RETURN NEW;
 		END;
 		$$ LANGUAGE plpgsql;
-		DROP TRIGGER IF EXISTS trg_fail_update_phone ON layr_auth.users;
-		CREATE TRIGGER trg_fail_update_phone BEFORE UPDATE ON layr_auth.users
-		FOR EACH ROW EXECUTE FUNCTION layr_auth.trg_fail_update_phone_fn();
+		DROP TRIGGER IF EXISTS trg_fail_update_phone ON auth.users;
+		CREATE TRIGGER trg_fail_update_phone BEFORE UPDATE ON auth.users
+		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_update_phone_fn();
 	`)
 	if err != nil {
 		t.Fatalf("failed to create fail trigger: %v", err)
@@ -931,15 +931,15 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}
 
 	_, _ = db.Exec(ctx, `
-		DROP TRIGGER IF EXISTS trg_fail_update_phone ON layr_auth.users;
-		DROP FUNCTION IF EXISTS layr_auth.trg_fail_update_phone_fn();
+		DROP TRIGGER IF EXISTS trg_fail_update_phone ON auth.users;
+		DROP FUNCTION IF EXISTS auth.trg_fail_update_phone_fn();
 	`)
 
 	// 11. Authenticate User via Insecure Cookie, X-Refresh-Token, and X-Session-Token
 	testSessionRefreshToken := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	testSessionRefreshHash := jwt.HashRefreshToken(testSessionRefreshToken)
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, convertedUserID, testSessionRefreshHash)
 	if err != nil {
@@ -987,19 +987,19 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	phoneUserEmail := "phone.delete@example.com"
 	phoneUserPhone := "+15554321098"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'user', false, '{}', clock_timestamp(), clock_timestamp())
 	`, phoneUserID, phoneUserEmail, phoneUserPhone)
 	if err != nil {
 		t.Fatalf("failed to insert phone user: %v", err)
 	}
-	_, _ = db.Exec(ctx, "INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at) VALUES ($1, 'dummyhash', 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())", phoneUserPhone)
-	_, _ = db.Exec(ctx, "INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at) VALUES ($1, 'dummyhash', 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())", phoneUserEmail)
+	_, _ = db.Exec(ctx, "INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at) VALUES ($1, 'dummyhash', 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())", phoneUserPhone)
+	_, _ = db.Exec(ctx, "INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at) VALUES ($1, 'dummyhash', 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())", phoneUserEmail)
 
 	phoneUserSessionRefresh := "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000"
 	phoneUserSessionHash := jwt.HashRefreshToken(phoneUserSessionRefresh)
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, phoneUserID, phoneUserSessionHash)
 	if err != nil {
@@ -1022,7 +1022,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on phone user deletion, got: %d", deletePhoneUserResponseRecorder.Code)
 	}
 	var remainingOTPs int
-	_ = db.QueryRow(ctx, "SELECT count(*) FROM layr_auth.otps WHERE recipient = $1 OR recipient = $2", phoneUserPhone, phoneUserEmail).Scan(&remainingOTPs)
+	_ = db.QueryRow(ctx, "SELECT count(*) FROM auth.otps WHERE recipient = $1 OR recipient = $2", phoneUserPhone, phoneUserEmail).Scan(&remainingOTPs)
 	if remainingOTPs != 0 {
 		t.Fatalf("expected all OTPs for deleted user to be removed, got: %d", remainingOTPs)
 	}
@@ -1037,7 +1037,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}
 
 	var userCount int
-	_ = db.QueryRow(ctx, "SELECT count(*) FROM layr_auth.users WHERE id = $1", userID).Scan(&userCount)
+	_ = db.QueryRow(ctx, "SELECT count(*) FROM auth.users WHERE id = $1", userID).Scan(&userCount)
 	if userCount != 0 {
 		t.Fatalf("expected user to be completely removed from database")
 	}
@@ -1055,7 +1055,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	authEmailVerificationCode := "876543"
 	authEmailVerificationHash := otp.HashCode(authEmailVerificationCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, authEmailVerificationUser, authEmailVerificationHash)
 
@@ -1076,7 +1076,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	authPhoneVerificationCode := "654321"
 	authPhoneVerificationHash := otp.HashCode(authPhoneVerificationCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, authPhoneVerificationUser, authPhoneVerificationHash)
 
@@ -1096,7 +1096,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	nullPropsUserID := "01918a24-5555-7000-8000-000000000005"
 	nullPropsEmail := "nullprops@example.com"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, 'user', false, '{}', clock_timestamp(), clock_timestamp())
 	`, nullPropsUserID, nullPropsEmail)
 	if err != nil {
@@ -1119,7 +1119,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Update user to have mfa_secret_enc without mfa_pending
 	_, _ = db.Exec(ctx, `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET properties = '{"mfa_secret_enc": "enc_secret_value"}'::jsonb
 		WHERE id = $1
 	`, nullPropsUserID)
@@ -1137,7 +1137,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	boolMFAUserID := "01918a24-5555-7000-8000-000000000055"
 	boolMFAEmail := "boolmfa@example.com"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, 'user', false, '{"mfa_enabled": true}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, boolMFAUserID, boolMFAEmail)
 	boolMFAToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{Subject: boolMFAUserID, Email: boolMFAEmail, Role: "user"}, 3600)
@@ -1155,7 +1155,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	stringMFAUserID := "01918a24-5555-7000-8000-000000000056"
 	stringMFAEmail := "strmfa@example.com"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, $2, 'user', false, '{"mfa_enabled": "true"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, stringMFAUserID, stringMFAEmail)
 	stringMFAToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{Subject: stringMFAUserID, Email: stringMFAEmail, Role: "user"}, 3600)
@@ -1198,7 +1198,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	ghostEmailCode := "112233"
 	ghostEmailHash := otp.HashCode(ghostEmailCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('ghost.confirm@example.com', $1, 'email_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, ghostEmailHash)
 	ghostEmailConfirmPayload, _ := json.Marshal(map[string]any{
@@ -1216,7 +1216,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	ghostPhoneCode := "332211"
 	ghostPhoneHash := otp.HashCode(ghostPhoneCode)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ('+15559997777', $1, 'phone_verification', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, ghostPhoneHash)
 	ghostPhoneConfirmPayload, _ := json.Marshal(map[string]any{
@@ -1261,7 +1261,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	// 20. Anonymous user converts email and phone via PATCH (publishes event)
 	anonPatchEmailUserID := "01918a24-7777-7000-8000-000000000077"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonPatchEmailUserID)
 	anonPatchEmailToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -1280,7 +1280,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	anonPatchPhoneUserID := "01918a24-7777-7000-8000-000000000078"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonPatchPhoneUserID)
 	anonPatchPhoneToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{

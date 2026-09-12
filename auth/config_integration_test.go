@@ -102,7 +102,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 
 	// Verify database contains envelope-encrypted secrets
 	var rawJSONInDB []byte
-	err := db.QueryRow(ctx, "SELECT value FROM layr_auth.config WHERE key = $1", ConfigKey).Scan(&rawJSONInDB)
+	err := db.QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawJSONInDB)
 	if err != nil {
 		t.Fatalf("failed to query config from db: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 
 	// Verify database persistence of null driver
 	var rawNullDriverJSON []byte
-	if err := db.QueryRow(ctx, "SELECT value FROM layr_auth.config WHERE key = $1", ConfigKey).Scan(&rawNullDriverJSON); err != nil {
+	if err := db.QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawNullDriverJSON); err != nil {
 		t.Fatalf("failed to query config from db: %v", err)
 	}
 	var nullDriverConfig Config
@@ -194,7 +194,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	}
 
 	// 6. Test invalid JSON in DB table
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.config SET value = '123' WHERE key = $1", ConfigKey)
+	_, _ = db.Exec(ctx, "UPDATE auth.config SET value = '123' WHERE key = $1", ConfigKey)
 	if err := configManager.Load(ctx); err == nil {
 		t.Fatal("expected error on corrupted JSON in database")
 	}

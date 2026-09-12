@@ -68,7 +68,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 
 	baseQuery := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE 1=1
 	`
 	arguments := []any{}
@@ -198,7 +198,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		INSERT INTO layr_auth.users (email, phone, password_hash, role, email_verified_at, phone_verified_at, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (email, phone, password_hash, role, email_verified_at, phone_verified_at, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
 	`
@@ -249,7 +249,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
@@ -296,7 +296,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 	}
 
 	ctx := request.Context()
-	result, err := controlPlaneHandler.db.Exec(ctx, "DELETE FROM layr_auth.users WHERE id = $1", userID)
+	result, err := controlPlaneHandler.db.Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
 	if err != nil {
 		log.Debugf("HandleDeleteUser exec failed: %v", err)
 		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to delete user", "LAYR_AUTH_001")
@@ -350,7 +350,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET locked_until = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
@@ -373,7 +373,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 
 	// Revoke active sessions and invalidate cache
-	if deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM layr_auth.sessions WHERE user_id = $1 RETURNING refresh_token_hash", userID); deleteErr == nil {
+	if deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING refresh_token_hash", userID); deleteErr == nil {
 		for deletedSessionRows.Next() {
 			var refreshTokenHash string
 			if scanErr := deletedSessionRows.Scan(&refreshTokenHash); scanErr == nil && controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
@@ -420,7 +420,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		UPDATE layr_auth.users
+		UPDATE auth.users
 		SET locked_until = NULL, last_updated_at = clock_timestamp()
 		WHERE id = $1
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at

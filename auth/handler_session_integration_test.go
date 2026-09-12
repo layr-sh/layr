@@ -40,7 +40,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	userID := "01918a24-3333-7000-8000-000000000003"
 	userEmail := "session.user@example.com"
 	_, err := db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, $2, 'authenticated', false, clock_timestamp(), clock_timestamp())
 	`, userID, userEmail)
 	if err != nil {
@@ -65,7 +65,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	device3UA := "Firefox Linux"
 
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, user_agent, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, user_agent, expires_at, created_at)
 		VALUES 
 			($1, $4, $5, $8, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '20 minutes'),
 			($2, $4, $6, $9, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '10 minutes'),
@@ -147,12 +147,12 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	// 3. List Sessions for single session user (Single session fallback)
 	singleUserID := "01918a24-5555-7000-8000-000000000005"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, email, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'single@example.com', 'authenticated', false, clock_timestamp(), clock_timestamp())
 	`, singleUserID)
 	singleSessionID := "01918a24-5555-7000-8000-000000000015"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, 'singlehash', clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, singleSessionID, singleUserID)
 	singleToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -181,7 +181,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 
 	// Verify deleted from DB and KV store
 	var session1DBCount int
-	_ = db.QueryRow(ctx, "SELECT count(*) FROM layr_auth.sessions WHERE id = $1", session1ID).Scan(&session1DBCount)
+	_ = db.QueryRow(ctx, "SELECT count(*) FROM auth.sessions WHERE id = $1", session1ID).Scan(&session1DBCount)
 	if session1DBCount != 0 {
 		t.Fatalf("expected session1 to be deleted from database")
 	}
@@ -214,7 +214,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	session4Refresh := "test_refresh_token_4"
 	session4Hash := jwt.HashRefreshToken(session4Refresh)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, session4ID, userID, session4Hash)
 
@@ -238,7 +238,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	session5Refresh := "test_refresh_token_5"
 	session5Hash := jwt.HashRefreshToken(session5Refresh)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, session5ID, userID, session5Hash)
 

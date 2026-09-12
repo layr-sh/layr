@@ -48,7 +48,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	userEmail := "mfa.user@example.com"
 	var userID string
 	err := db.QueryRow(ctx, `
-		INSERT INTO layr_auth.users (email, role, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (email, role, properties, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', '{}', clock_timestamp(), clock_timestamp())
 		RETURNING id
 	`, userEmail).Scan(&userID)
@@ -92,7 +92,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// Verify properties in DB
 	var rawProperties []byte
-	err = db.QueryRow(ctx, "SELECT properties FROM layr_auth.users WHERE id = $1", userID).Scan(&rawProperties)
+	err = db.QueryRow(ctx, "SELECT properties FROM auth.users WHERE id = $1", userID).Scan(&rawProperties)
 	if err != nil {
 		t.Fatalf("failed to query user properties: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// Verify user properties updated in DB
 	properties = make(map[string]any)
-	err = db.QueryRow(ctx, "SELECT properties FROM layr_auth.users WHERE id = $1", userID).Scan(&rawProperties)
+	err = db.QueryRow(ctx, "SELECT properties FROM auth.users WHERE id = $1", userID).Scan(&rawProperties)
 	if err != nil {
 		t.Fatalf("failed to query updated user properties: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
 	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
@@ -174,10 +174,10 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	if lockedVerifyResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user verify, got: %d", lockedVerifyResponseRecorder.Code)
 	}
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.users SET locked_until = NULL WHERE id = $1", userID)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
 
 	// 5. Test corrupted encrypted secret -> 500
-	_, _ = db.Exec(ctx, `UPDATE layr_auth.users SET properties = '{"mfa_secret_enc":"invalid-secret"}'::jsonb WHERE id = $1`, userID)
+	_, _ = db.Exec(ctx, `UPDATE auth.users SET properties = '{"mfa_secret_enc":"invalid-secret"}'::jsonb WHERE id = $1`, userID)
 	corruptedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
@@ -187,7 +187,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 
 	// 6. Test missing MFA secret in properties -> 400
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.users SET properties = '{}'::jsonb WHERE id = $1", userID)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET properties = '{}'::jsonb WHERE id = $1", userID)
 	noSecretVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()
@@ -227,7 +227,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	var phoneUserID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO layr_auth.users (phone, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ('+15554321098', 'authenticated', false, clock_timestamp(), clock_timestamp())
 		RETURNING id
 	`).Scan(&phoneUserID)

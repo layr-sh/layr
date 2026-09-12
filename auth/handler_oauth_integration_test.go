@@ -142,7 +142,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	// First, create an anonymous user in the database
 	anonUserID := uuid.NewV7().String()
 	_, insertErr := db.Exec(context.Background(), `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{"theme":"dark"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 	if insertErr != nil {
@@ -209,7 +209,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	// 7. Conflict handling: identity conflict (another anonymous user tries to link already linked sub)
 	anonUserID2 := uuid.NewV7().String()
 	_, _ = db.Exec(context.Background(), `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID2)
 	anonAccessToken2, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -280,9 +280,9 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 302 Found redirect on OIDC state linkage, got: %d", oidcLinkResponseResponseRecorder.Code)
 	}
 
-	// Verify session inserted in layr_auth.sessions
+	// Verify session inserted in auth.sessions
 	var sessionCount int
-	_ = db.QueryRow(context.Background(), "SELECT count(*) FROM layr_auth.sessions").Scan(&sessionCount)
+	_ = db.QueryRow(context.Background(), "SELECT count(*) FROM auth.sessions").Scan(&sessionCount)
 	if sessionCount == 0 {
 		t.Fatal("expected sessions to be inserted in database")
 	}
@@ -356,7 +356,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	refreshTokenRaw := "db-test-refresh-token-xyz"
 	refreshHash := jwt.HashRefreshToken(refreshTokenRaw)
 	_, _ = db.Exec(context.Background(), `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, $2, '127.0.0.1', 'test-agent', clock_timestamp() + interval '1 day', clock_timestamp())
 	`, firstSessionResponse.User.ID, refreshHash)
 
@@ -381,7 +381,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	// 15. Failed anonymous user conversion update error
 	failAnonUserID := uuid.NewV7().String()
 	_, _ = db.Exec(context.Background(), `
-		INSERT INTO layr_auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, failAnonUserID)
 
@@ -397,7 +397,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 			RAISE EXCEPTION 'forced update error';
 		END;
 		$$ LANGUAGE plpgsql;
-		CREATE TRIGGER fail_update_trigger BEFORE UPDATE ON layr_auth.users FOR EACH ROW EXECUTE FUNCTION public.test_fail_update();
+		CREATE TRIGGER fail_update_trigger BEFORE UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION public.test_fail_update();
 	`)
 
 	oauth.SetHTTPClient(&mockOAuthClient{
@@ -423,7 +423,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	handler.HandleOAuthCallback(failUpdateResponseResponseRecorder, failUpdateRequest)
 
 	_, _ = db.Exec(context.Background(), `
-		DROP TRIGGER IF EXISTS fail_update_trigger ON layr_auth.users;
+		DROP TRIGGER IF EXISTS fail_update_trigger ON auth.users;
 		DROP FUNCTION IF EXISTS public.test_fail_update();
 	`)
 

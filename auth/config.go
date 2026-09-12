@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"layr.sh/core"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/jackc/pgx/v5"
+	"layr.sh/core"
 )
 
 // Named constants for default durations and limits to satisfy linter checks.
@@ -25,7 +26,7 @@ const (
 	defaultTokenExpiryMinutes        = 15
 )
 
-// ConfigKey is the primary key in layr_auth.config table.
+// ConfigKey is the primary key in auth.config table.
 const ConfigKey = "auth_config"
 
 // Config represents the full dynamic configuration for layr/auth.
@@ -213,7 +214,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// ConfigManager handles loading, validating, caching, and envelope encryption of layr_auth.config.
+// ConfigManager handles loading, validating, caching, and envelope encryption of auth.config.
 type ConfigManager struct {
 	db                    *core.DatabasePool
 	cryptoKeyManager      *core.CryptoKeyManager
@@ -344,7 +345,7 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 	configManager.config = updatedConfig
 }
 
-// Load fetches the configuration from layr_auth.config table.
+// Load fetches the configuration from auth.config table.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
 	log.Tracef("loading auth configuration from database")
 
@@ -352,7 +353,7 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 		return nil
 	}
 	var rawJSON []byte
-	err := configManager.db.QueryRow(ctx, "SELECT value FROM layr_auth.config WHERE key = $1", ConfigKey).Scan(&rawJSON)
+	err := configManager.db.QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			defaultConfig := DefaultConfig()
@@ -360,12 +361,12 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 			log.Debugf("no existing auth config found in database; initialized and saving defaults")
 			return configManager.Save(ctx, defaultConfig)
 		}
-		return fmt.Errorf("failed to query layr_auth.config: %w", err)
+		return fmt.Errorf("failed to query auth.config: %w", err)
 	}
 
 	var loadedConfig Config
 	if err := json.Unmarshal(rawJSON, &loadedConfig); err != nil {
-		return fmt.Errorf("failed to parse layr_auth.config JSON: %w", err)
+		return fmt.Errorf("failed to parse auth.config JSON: %w", err)
 	}
 
 	configManager.Set(loadedConfig)
@@ -373,7 +374,7 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 	return nil
 }
 
-// Save persists the configuration to layr_auth.config table.
+// Save persists the configuration to auth.config table.
 func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Config) error {
 	log.Tracef("saving auth configuration to database")
 
@@ -384,13 +385,13 @@ func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Conf
 	rawJSON, _ := json.Marshal(updatedConfig)
 
 	query := `
-		INSERT INTO layr_auth.config (key, value, last_updated_at)
+		INSERT INTO auth.config (key, value, last_updated_at)
 		VALUES ($1, $2, clock_timestamp())
 		ON CONFLICT (key) DO UPDATE
 		SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
 	`
 	if _, err := configManager.db.Exec(ctx, query, ConfigKey, rawJSON); err != nil {
-		return fmt.Errorf("failed to persist layr_auth.config: %w", err)
+		return fmt.Errorf("failed to persist auth.config: %w", err)
 	}
 
 	configManager.Set(updatedConfig)

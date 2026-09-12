@@ -303,7 +303,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	// 5. Convert anonymous user via OTP
 	anonUserID := uuid.NewV7().String()
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
 	anonAccessToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -365,13 +365,13 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	existingConflictEmail := "existing.conflict@example.com"
 	existingConflictPhone := "+15553334444"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (email, phone, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (email, phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, $2, 'authenticated', false, clock_timestamp(), clock_timestamp())
 	`, existingConflictEmail, existingConflictPhone)
 
 	conflictAnonID := uuid.NewV7().String()
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, conflictAnonID)
 	conflictAnonToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
@@ -435,7 +435,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	// 8. Anonymous user conversion via phone -> 200 OK
 	phoneAnonID := uuid.NewV7().String()
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (id, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, phoneAnonID)
 	phoneAnonToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
