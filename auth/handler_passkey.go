@@ -275,12 +275,3 @@ func (handler *Handler) handlePasskeySignInVerify(responseWriter http.ResponseWr
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }
-
-// RegisterPasskeyRoutes registers WebAuthn Passkey ceremonies on the provided router.
-func (handler *Handler) RegisterPasskeyRoutes(router *core.Router) {
-	log.Debug("registering passkey ceremony routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/passkeys/sign-up", handler.handlePasskeySignUp)
-	router.Mux().HandleFunc("POST /api/v1/auth/passkeys/sign-up/verify", handler.handlePasskeySignUpVerify)
-	router.Mux().HandleFunc("POST /api/v1/auth/passkeys/sign-in", handler.handlePasskeySignIn)
-	router.Mux().HandleFunc("POST /api/v1/auth/passkeys/sign-in/verify", handler.handlePasskeySignInVerify)
-}

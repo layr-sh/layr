@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 )
 
@@ -211,9 +210,4 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	if eventOTPSendResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on event OTP send nil pool, got: %d", eventOTPSendResponseRecorder.Code)
 	}
-
-	// 9. RegisterOTPRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterOTPRoutes(router)
 }

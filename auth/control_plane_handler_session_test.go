@@ -7,7 +7,6 @@ import (
 	"testing"
 	"uuid"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 )
 
@@ -75,9 +74,4 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	if nilDBRevokeResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil db HandleRevokeUserSessions, got: %d", nilDBRevokeResponseRecorder.Code)
 	}
-
-	// 4. Test RegisterSessionRoutes wiring
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	controlPlaneHandler.RegisterSessionRoutes(router)
 }

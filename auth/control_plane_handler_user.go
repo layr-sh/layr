@@ -11,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"layr.sh/core"
 )
 
 // UserCreateRequest defines parameters for creating an application user via control plane.
@@ -449,15 +448,4 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, userRecord)
-}
-
-// RegisterUserRoutes registers control plane user management endpoints on the provided router.
-func (controlPlaneHandler *ControlPlaneHandler) RegisterUserRoutes(router *core.Router) {
-	log.Debug("registering control plane user management routes on router")
-	router.Mux().HandleFunc("GET /api/v1/_/auth/users", controlPlaneHandler.HandleListUsers)
-	router.Mux().HandleFunc("POST /api/v1/_/auth/users", controlPlaneHandler.HandleCreateUser)
-	router.Mux().HandleFunc("GET /api/v1/_/auth/users/{user_id}", controlPlaneHandler.HandleGetUser)
-	router.Mux().HandleFunc("DELETE /api/v1/_/auth/users/{user_id}", controlPlaneHandler.HandleDeleteUser)
-	router.Mux().HandleFunc("POST /api/v1/_/auth/users/{user_id}/lock", controlPlaneHandler.HandleLockUser)
-	router.Mux().HandleFunc("DELETE /api/v1/_/auth/users/{user_id}/lock", controlPlaneHandler.HandleUnlockUser)
 }

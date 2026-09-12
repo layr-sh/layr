@@ -3,15 +3,13 @@ package auth
 import (
 	"bytes"
 	"context"
+	"layr.sh/auth/password"
+	"layr.sh/core"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 	"uuid"
-
-	"github.com/go-fuego/fuego"
-	"layr.sh/auth/password"
-	"layr.sh/core"
 )
 
 func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
@@ -185,9 +183,4 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	if lockWithTimeResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on HandleLockUser with nil db and timestamp, got: %d", lockWithTimeResponseRecorder.Code)
 	}
-
-	// 9. Test RegisterUserRoutes wiring
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	controlPlaneHandler.RegisterUserRoutes(router)
 }

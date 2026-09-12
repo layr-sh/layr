@@ -3,8 +3,6 @@ package auth
 import (
 	"net/http"
 	"uuid"
-
-	"layr.sh/core"
 )
 
 // HandleListUserSessions lists active sessions for a user (auth:user.read).
@@ -108,11 +106,4 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// RegisterSessionRoutes registers control plane session management endpoints on the provided router.
-func (controlPlaneHandler *ControlPlaneHandler) RegisterSessionRoutes(router *core.Router) {
-	log.Debug("registering control plane session management routes on router")
-	router.Mux().HandleFunc("GET /api/v1/_/auth/users/{user_id}/sessions", controlPlaneHandler.HandleListUserSessions)
-	router.Mux().HandleFunc("POST /api/v1/_/auth/users/{user_id}/sessions/revoke", controlPlaneHandler.HandleRevokeUserSessions)
 }

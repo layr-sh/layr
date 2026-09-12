@@ -307,10 +307,3 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 
 	handler.issueSessionResponse(responseWriter, request, userRecord)
 }
-
-// RegisterOTPRoutes registers passwordless OTP routes on the provided router.
-func (handler *Handler) RegisterOTPRoutes(router *core.Router) {
-	log.Debug("registering OTP authentication routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/otp/send", handler.handleOTPSend)
-	router.Mux().HandleFunc("POST /api/v1/auth/otp/verify", handler.handleOTPVerify)
-}

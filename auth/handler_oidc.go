@@ -1167,16 +1167,3 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`
-
-// RegisterOIDCRoutes registers OpenID Connect Identity Provider routes on the provided router.
-func (handler *Handler) RegisterOIDCRoutes(router *core.Router) {
-	log.Debug("registering OIDC Identity Provider routes on router")
-	router.Mux().HandleFunc("GET /.well-known/openid-configuration", handler.handleOIDCDiscovery)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/jwks.json", handler.handleJWKS)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/authorize", handler.handleOIDCAuthorize)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/authorize", handler.handleOIDCAuthorizeSubmit)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/token", handler.handleOIDCToken)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/userinfo", handler.handleOIDCUserInfo)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/sign-out", handler.handleOIDCSignOut)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/sign-out", handler.handleOIDCSignOut)
-}

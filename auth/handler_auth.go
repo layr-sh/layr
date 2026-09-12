@@ -452,13 +452,3 @@ func (handler *Handler) handleSignOut(responseWriter http.ResponseWriter, reques
 
 	handler.writeJSON(responseWriter, map[string]bool{"ok": true})
 }
-
-// RegisterAuthRoutes registers core authentication endpoints on the provided router.
-func (handler *Handler) RegisterAuthRoutes(router *core.Router) {
-	log.Debug("registering core authentication routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/anonymous", handler.handleAnonymousSignIn)
-	router.Mux().HandleFunc("POST /api/v1/auth/sign-up", handler.handleSignUp)
-	router.Mux().HandleFunc("POST /api/v1/auth/sign-in", handler.handleSignIn)
-	router.Mux().HandleFunc("POST /api/v1/auth/token/refresh", handler.handleTokenRefresh)
-	router.Mux().HandleFunc("POST /api/v1/auth/sign-out", handler.handleSignOut)
-}

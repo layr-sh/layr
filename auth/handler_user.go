@@ -1094,18 +1094,3 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 	log.Debugf("user account %s deleted successfully", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
-
-// RegisterUserRoutes registers end-user self-service endpoints on the provided router.
-func (handler *Handler) RegisterUserRoutes(router *core.Router) {
-	log.Debug("registering user self-service routes on router")
-	router.Mux().HandleFunc("GET /api/v1/auth/user", handler.handleGetUser)
-	router.Mux().HandleFunc("PATCH /api/v1/auth/user/properties", handler.handleUpdateUserProperties)
-	router.Mux().HandleFunc("PATCH /api/v1/auth/user/email", handler.handleUpdateUserEmail)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/email/verification/request", handler.handleUserEmailVerificationRequest)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/email/verification/confirm", handler.handleUserEmailVerificationConfirm)
-	router.Mux().HandleFunc("PATCH /api/v1/auth/user/phone", handler.handleUpdateUserPhone)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/phone/verification/request", handler.handleUserPhoneVerificationRequest)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/phone/verification/confirm", handler.handleUserPhoneVerificationConfirm)
-	router.Mux().HandleFunc("PATCH /api/v1/auth/user/password", handler.handleUpdateUserPassword)
-	router.Mux().HandleFunc("DELETE /api/v1/auth/user", handler.handleDeleteUser)
-}

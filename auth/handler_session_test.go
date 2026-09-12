@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-fuego/fuego"
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
@@ -107,9 +106,4 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	if unauthRevokeOthersRequestResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on unauthorized revoke others, got: %d", unauthRevokeOthersRequestResponseRecorder.Code)
 	}
-
-	// 8. RegisterSessionRoutes
-	fuegoEngine := fuego.NewServer()
-	router := core.NewRouter(fuegoEngine)
-	handler.RegisterSessionRoutes(router)
 }

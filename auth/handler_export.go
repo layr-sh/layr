@@ -104,9 +104,3 @@ func (handler *Handler) handleUserExport(responseWriter http.ResponseWriter, req
 
 	handler.writeJSON(responseWriter, exportUserDataResponse)
 }
-
-// RegisterExportRoutes registers GDPR user export endpoints on the provided router.
-func (handler *Handler) RegisterExportRoutes(router *core.Router) {
-	log.Debug("registering GDPR user export routes on router")
-	router.Mux().HandleFunc("POST /api/v1/auth/users/{user_id}/export", handler.handleUserExport)
-}
