@@ -111,11 +111,11 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 429 on cooldown active, got: %d", cooldownResponseRecorder.Code)
 	}
 	// Clear cooldown for further tests
-	_ = testKVStore.Delete(ctx, "layr:auth:cooldown:password_reset:"+resetEmail)
+	_ = testKVStore.Delete(ctx, "auth:cooldown:password_reset:"+resetEmail)
 
 	// 3. IP Rate Limit Exceeded -> 429
 	clientIP := core.ExtractRequestClientIP(resetEmailRequest)
-	ipRateKey := fmt.Sprintf("layr:auth:ratelimit:otp:ip:%s", clientIP)
+	ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 	for i := 0; i < 11; i++ {
 		_, _ = testKVStore.Increment(ctx, ipRateKey, time.Hour)
 	}

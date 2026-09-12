@@ -75,14 +75,14 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 
 	if handler.kvStore != nil {
 		clientIP := core.ExtractRequestClientIP(request)
-		ipRateKey := fmt.Sprintf("layr:auth:ratelimit:otp:ip:%s", clientIP)
+		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > ipPasswordResetLimit {
 			log.Debugf("password reset request rejected: IP rate limit exceeded for %s", clientIP)
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.", "LAYR_AUTH_RATE_LIMIT_EXCEEDED")
 			return
 		}
 
-		cooldownKey := fmt.Sprintf("layr:auth:cooldown:password_reset:%s", recipient)
+		cooldownKey := fmt.Sprintf("auth:cooldown:password_reset:%s", recipient)
 		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
 			log.Debugf("password reset request rejected: cooldown active for recipient %s", recipient)
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code", "LAYR_AUTH_COOLDOWN")
@@ -114,8 +114,8 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 	`
 	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:password_reset:%s", recipient), code, otp.CodeTTL)
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:cooldown:password_reset:%s", recipient), "1", passwordResetCooldownTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient), code, otp.CodeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:password_reset:%s", recipient), "1", passwordResetCooldownTTL)
 	}
 
 	if isEmail {
@@ -230,7 +230,7 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 	// Delete used OTP
 	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("layr:auth:otp:password_reset:%s", recipient))
+		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient))
 	}
 
 	passHash, _ := handler.hasher.Hash(passwordResetConfirmRequest.Password)

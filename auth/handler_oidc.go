@@ -163,7 +163,7 @@ func (handler *Handler) handleOIDCAuthorize(responseWriter http.ResponseWriter, 
 
 	if handler.kvStore != nil {
 		payloadJSON, _ := json.Marshal(oidcAuthorizationStatePayload)
-		_ = handler.kvStore.Set(request.Context(), "layr:auth:oidc:state:"+stateID, string(payloadJSON), 10*time.Minute)
+		_ = handler.kvStore.Set(request.Context(), "auth:oidc:state:"+stateID, string(payloadJSON), 10*time.Minute)
 	}
 
 	handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "")
@@ -189,7 +189,7 @@ func (handler *Handler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWr
 		return
 	}
 
-	stateJSON, err := handler.kvStore.Get(request.Context(), "layr:auth:oidc:state:"+stateID)
+	stateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+stateID)
 	if err != nil || stateJSON == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
 		return
@@ -241,7 +241,7 @@ func (handler *Handler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWr
 	}
 
 	// Delete state payload to prevent replay / CSRF fixation
-	_ = handler.kvStore.Delete(ctx, "layr:auth:oidc:state:"+stateID)
+	_ = handler.kvStore.Delete(ctx, "auth:oidc:state:"+stateID)
 
 	// Issue authorization code
 	code := handler.issueOIDCAuthorizationCode(ctx, oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, userRecord.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
@@ -482,14 +482,14 @@ func (handler *Handler) handleOIDCTokenAuthorizationCode(responseWriter http.Res
 		return
 	}
 
-	codeJSON, err := handler.kvStore.Get(request.Context(), "layr:auth:code:"+code)
+	codeJSON, err := handler.kvStore.Get(request.Context(), "auth:code:"+code)
 	if err != nil || codeJSON == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization code invalid or expired", "invalid_grant")
 		return
 	}
 
 	// Delete code immediately (single-use)
-	_ = handler.kvStore.Delete(request.Context(), "layr:auth:code:"+code)
+	_ = handler.kvStore.Delete(request.Context(), "auth:code:"+code)
 
 	var oidcAuthorizationCodePayload OIDCAuthorizationCodePayload
 	if unmarshalErr := json.Unmarshal([]byte(codeJSON), &oidcAuthorizationCodePayload); unmarshalErr != nil {

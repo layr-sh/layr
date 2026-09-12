@@ -138,7 +138,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 204 No Content from /otp send, got: %d", otpSendResponseRecorder.Code)
 	}
 
-	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", userEmail))
+	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
 	if err != nil || otpCode == "" {
 		t.Fatalf("failed to get OTP code from kvstore: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 204 No Content on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
 
-	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", "+1234567890"))
+	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", "+1234567890"))
 	if err != nil || phoneCode == "" {
 		t.Fatalf("failed to get phone OTP code from kvstore: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 204 No Content from /password-reset/request, got: %d", resetResponseRecorder.Code)
 	}
 
-	resetCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:password_reset:%s", userEmail))
+	resetCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:password_reset:%s", userEmail))
 	if err != nil || resetCode == "" {
 		t.Fatalf("failed to get password reset code from kvstore: %v", err)
 	}

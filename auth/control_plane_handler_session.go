@@ -95,7 +95,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 		revokedCount++
 		var refreshTokenHash string
 		if scanErr := deletedSessionRows.Scan(&refreshTokenHash); scanErr == nil && controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
-			_ = controlPlaneHandler.kvStore.Delete(ctx, "layr:auth:session:"+refreshTokenHash)
+			_ = controlPlaneHandler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
 		}
 	}
 	deletedSessionRows.Close()

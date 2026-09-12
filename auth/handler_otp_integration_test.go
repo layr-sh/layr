@@ -101,7 +101,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		UPDATE core.kv_store 
 		SET expires_at = clock_timestamp() - interval '1 second' 
 		WHERE key = $1
-	`, fmt.Sprintf("layr:auth:cooldown:signin:%s", targetEmail))
+	`, fmt.Sprintf("auth:cooldown:signin:%s", targetEmail))
 	if err != nil {
 		t.Fatalf("failed to expire cooldown key: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", otpSendResponseRecorder.Code, otpSendResponseRecorder.Body.String())
 	}
 
-	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", userEmail))
+	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
 	if err != nil || otpCode == "" {
 		t.Fatalf("failed to retrieve OTP code from kvstore: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
 
-	phoneCode, phoneCodeErr := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", phoneRecipient))
+	phoneCode, phoneCodeErr := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", phoneRecipient))
 	if phoneCodeErr != nil || phoneCode == "" {
 		t.Fatalf("failed to retrieve phone OTP code: %v", phoneCodeErr)
 	}
@@ -324,7 +324,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on convert OTP send: %d", convertSendResponseRecorder.Code)
 	}
 
-	convertCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", convertEmail))
+	convertCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", convertEmail))
 
 	convertVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertEmail,
@@ -391,7 +391,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	if conflictEmailSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict email OTP send: %d", conflictEmailSendResponseRecorder.Code)
 	}
-	conflictEmailCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", existingConflictEmail))
+	conflictEmailCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", existingConflictEmail))
 
 	conflictEmailVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictEmail,
@@ -417,7 +417,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	if conflictPhoneSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict phone OTP send: %d", conflictPhoneSendResponseRecorder.Code)
 	}
-	conflictPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", existingConflictPhone))
+	conflictPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", existingConflictPhone))
 
 	conflictPhoneVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictPhone,
@@ -452,7 +452,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	convertPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertPhoneSendPayload))
 	convertPhoneSendResponseRecorder := httptest.NewRecorder()
 	handler.handleOTPSend(convertPhoneSendResponseRecorder, convertPhoneSendRequest)
-	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("layr:auth:otp:signin:%s", convertPhoneRecipient))
+	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", convertPhoneRecipient))
 
 	convertPhoneVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertPhoneRecipient,

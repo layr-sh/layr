@@ -161,7 +161,7 @@ func (handler *Handler) handleUserEmailVerificationRequest(responseWriter http.R
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 	}
 
 	log.Tracef("dispatching email verification code to %s", recipientEmail)
@@ -251,7 +251,7 @@ func (handler *Handler) handleUserEmailVerificationConfirm(responseWriter http.R
 
 	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1 AND purpose = 'email_verification'", recipientEmail)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("layr:auth:otp:email_verification:%s", recipientEmail))
+		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail))
 	}
 
 	authUserID, authErr := handler.authenticateUser(request)
@@ -412,7 +412,7 @@ func (handler *Handler) handleUserPhoneVerificationRequest(responseWriter http.R
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 	}
 
 	log.Tracef("dispatching phone verification code to %s", recipientPhone)
@@ -510,7 +510,7 @@ func (handler *Handler) handleUserPhoneVerificationConfirm(responseWriter http.R
 
 	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE recipient = $1 AND purpose = 'phone_verification'", recipientPhone)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("layr:auth:otp:phone_verification:%s", recipientPhone))
+		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone))
 	}
 
 	authUserID, authErr := handler.authenticateUser(request)
@@ -809,7 +809,7 @@ func (handler *Handler) handleUpdateUserEmail(responseWriter http.ResponseWriter
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 	}
 
 	log.Tracef("dispatching update email verification code to %s", recipientEmail)
@@ -914,7 +914,7 @@ func (handler *Handler) handleUpdateUserPhone(responseWriter http.ResponseWriter
 	`
 	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 	}
 
 	log.Tracef("dispatching update phone verification code to %s", recipientPhone)
@@ -1064,7 +1064,7 @@ func (handler *Handler) handleDeleteUser(responseWriter http.ResponseWriter, req
 		for sessionRows.Next() {
 			var refreshTokenHash string
 			if scanErr := sessionRows.Scan(&refreshTokenHash); scanErr == nil && handler.kvStore != nil {
-				_ = handler.kvStore.Delete(ctx, "layr:auth:session:"+refreshTokenHash)
+				_ = handler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
 			}
 		}
 		sessionRows.Close()

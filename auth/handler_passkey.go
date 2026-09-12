@@ -45,7 +45,7 @@ func (handler *Handler) handlePasskeySignUp(responseWriter http.ResponseWriter, 
 	}
 
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(request.Context(), "layr:auth:challenge:"+signUpOptions.Challenge, passkeySignUpRequest.UserID, defaultPasskeyChallengeTTL)
+		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signUpOptions.Challenge, passkeySignUpRequest.UserID, defaultPasskeyChallengeTTL)
 	}
 
 	log.Debugf("passkey sign up ceremony initiated for user %s", passkeySignUpRequest.UserID)
@@ -82,7 +82,7 @@ func (handler *Handler) handlePasskeySignUpVerify(responseWriter http.ResponseWr
 
 	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(passkeySignUpVerifyRequest.Challenge)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "layr:auth:challenge:"+passkeySignUpVerifyRequest.Challenge)
+		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+passkeySignUpVerifyRequest.Challenge)
 	}
 	if err != nil || (expectedUserID != "" && expectedUserID != passkeySignUpVerifyRequest.UserID) {
 		log.Debugf("passkey challenge consumption failed (expected: %q, got: %q): %v", expectedUserID, passkeySignUpVerifyRequest.UserID, err)
@@ -194,7 +194,7 @@ func (handler *Handler) handlePasskeySignIn(responseWriter http.ResponseWriter, 
 	}
 
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(request.Context(), "layr:auth:challenge:"+signInOptions.Challenge, "", defaultPasskeyChallengeTTL)
+		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signInOptions.Challenge, "", defaultPasskeyChallengeTTL)
 	}
 
 	log.Debug("passkey sign-in challenge generated")
@@ -231,7 +231,7 @@ func (handler *Handler) handlePasskeySignInVerify(responseWriter http.ResponseWr
 		return
 	}
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "layr:auth:challenge:"+passkeySignInVerifyRequest.Challenge)
+		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+passkeySignInVerifyRequest.Challenge)
 	}
 
 	credentialIDBytes := []byte(passkeySignInVerifyRequest.CredentialID)

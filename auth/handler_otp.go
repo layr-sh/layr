@@ -77,13 +77,13 @@ func (handler *Handler) handleOTPSend(responseWriter http.ResponseWriter, reques
 
 	if handler.kvStore != nil {
 		clientIP := core.ExtractRequestClientIP(request)
-		ipRateKey := fmt.Sprintf("layr:auth:ratelimit:otp:ip:%s", clientIP)
+		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.", "LAYR_AUTH_RATE_LIMIT_EXCEEDED")
 			return
 		}
 
-		cooldownKey := fmt.Sprintf("layr:auth:cooldown:%s:%s", purpose, recipient)
+		cooldownKey := fmt.Sprintf("auth:cooldown:%s:%s", purpose, recipient)
 		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code", "LAYR_AUTH_COOLDOWN")
 			return
@@ -103,8 +103,8 @@ func (handler *Handler) handleOTPSend(responseWriter http.ResponseWriter, reques
 	`
 	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, purpose, expiresAt)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:otp:%s:%s", purpose, recipient), code, codeTTL)
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("layr:auth:cooldown:%s:%s", purpose, recipient), "1", defaultOTPCooldown)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient), code, codeTTL)
+		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:%s:%s", purpose, recipient), "1", defaultOTPCooldown)
 	}
 
 	if isEmail {
@@ -199,7 +199,7 @@ func (handler *Handler) handleOTPVerify(responseWriter http.ResponseWriter, requ
 	// Delete used OTP
 	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("layr:auth:otp:%s:%s", purpose, recipient))
+		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient))
 	}
 
 	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)

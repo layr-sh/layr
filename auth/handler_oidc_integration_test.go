@@ -213,7 +213,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	// Bad redirect URI in state payload
 	badRedirectStateID := "bad-redirect-state-id"
 	badRedirectPayload, _ := json.Marshal(OIDCAuthorizationStatePayload{ClientID: "client-dashboard", RedirectURI: "://invalid-url", Scope: "openid"})
-	_ = databaseKVStore.Set(ctx, "layr:auth:oidc:state:"+badRedirectStateID, string(badRedirectPayload), 5*time.Minute)
+	_ = databaseKVStore.Set(ctx, "auth:oidc:state:"+badRedirectStateID, string(badRedirectPayload), 5*time.Minute)
 	badRedirectValues := url.Values{"state": {badRedirectStateID}, "email": {testUserEmail}, "password": {testUserPassword}}
 	badRedirectRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(badRedirectValues.Encode()))
 	badRedirectRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -534,7 +534,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		CodeChallengeMethod: "S256",
 		ClientState:         "client_state_integration",
 	})
-	_ = databaseKVStore.Set(ctx, "layr:auth:oidc:state:"+oidcStateIDInteg, string(oidcPayloadJSONInteg), 10*time.Minute)
+	_ = databaseKVStore.Set(ctx, "auth:oidc:state:"+oidcStateIDInteg, string(oidcPayloadJSONInteg), 10*time.Minute)
 
 	oauthStatePayload := OAuthStatePayload{
 		StateID:     "oauth_state_integ",
