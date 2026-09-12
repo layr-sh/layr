@@ -30,7 +30,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	defer func() { _ = service.Stop() }()
 
 	coreServer := core.NewServer(db, cryptoKeyManager)
-	service.RegisterRoutes(coreServer.Router(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 
 	userEmail := "e2e-app-user@example.com"
@@ -149,7 +149,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	defer func() { _ = service.Stop() }()
 
 	coreServer := core.NewServer(db, cryptoKeyManager)
-	service.RegisterRoutes(coreServer.Router(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 
 	userEmail := "e2e-sessions-user@example.com"
@@ -254,7 +254,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	service.configManager.Set(activeConfig)
 
 	coreServer := core.NewServer(db, cryptoKeyManager)
-	service.RegisterRoutes(coreServer.Router(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 
 	// 1. Anonymous User Setup
@@ -267,7 +267,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to insert anonymous test user: %v", err)
 	}
 
-	currentAccessToken, err := service.handler.signer.GenerateAccessToken(jwt.Claims{
+	currentAccessToken, err := service.baseHandler.signer.GenerateAccessToken(jwt.Claims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,

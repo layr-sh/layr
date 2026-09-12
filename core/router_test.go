@@ -13,7 +13,7 @@ import (
 
 func TestCoreRouterWrapperMethodsUnit(t *testing.T) {
 	server := NewServer(nil, nil)
-	router := server.Router()
+	router := server.BaseRouter()
 
 	// Test nil engine router creation
 	if nilRouter := NewRouter(nil); nilRouter.Engine() != nil {

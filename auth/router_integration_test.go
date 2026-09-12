@@ -22,17 +22,17 @@ func TestAuthRouterIntegration(t *testing.T) {
 	}
 
 	fuegoEngine := fuego.NewServer()
-	publicRouter := core.NewRouter(fuegoEngine)
+	baseRouter := core.NewRouter(fuegoEngine)
 
 	controlPlaneFuegoEngine := fuego.NewServer()
 	controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
 
-	service.RegisterRoutes(publicRouter, controlPlaneRouter)
+	service.RegisterRoutes(baseRouter, controlPlaneRouter)
 
 	// 1. Verify Public OIDC Discovery endpoint
 	discoveryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/.well-known/openid-configuration", nil)
 	discoveryResponseRecorder := httptest.NewRecorder()
-	publicRouter.Mux().ServeHTTP(discoveryResponseRecorder, discoveryRequest)
+	baseRouter.Mux().ServeHTTP(discoveryResponseRecorder, discoveryRequest)
 	if discoveryResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from openid-configuration, got: %d", discoveryResponseRecorder.Code)
 	}
@@ -43,7 +43,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	// 2. Verify Public JWKS endpoint
 	jwksRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/.well-known/jwks.json", nil)
 	jwksResponseRecorder := httptest.NewRecorder()
-	publicRouter.Mux().ServeHTTP(jwksResponseRecorder, jwksRequest)
+	baseRouter.Mux().ServeHTTP(jwksResponseRecorder, jwksRequest)
 	if jwksResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from jwks.json, got: %d", jwksResponseRecorder.Code)
 	}
@@ -70,7 +70,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	// 5. Verify session user-prefixed alias route on public router
 	sessionAliasRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
 	sessionAliasResponseRecorder := httptest.NewRecorder()
-	publicRouter.Mux().ServeHTTP(sessionAliasResponseRecorder, sessionAliasRequest)
+	baseRouter.Mux().ServeHTTP(sessionAliasResponseRecorder, sessionAliasRequest)
 	if sessionAliasResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized on unauthenticated session alias, got: %d", sessionAliasResponseRecorder.Code)
 	}

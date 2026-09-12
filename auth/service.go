@@ -29,7 +29,7 @@ type Service struct {
 	db                    *core.DatabasePool
 	cryptoKeyManager      *core.CryptoKeyManager
 	configManager         *ConfigManager
-	handler               *Handler
+	baseHandler           *BaseHandler
 	controlPlaneHandler   *ControlPlaneHandler
 	kvStore               core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
@@ -40,16 +40,16 @@ type Service struct {
 func NewService(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) *Service {
 	configManager := NewConfigManager(db, cryptoKeyManager)
 	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	var handler *Handler
+	var baseHandler *BaseHandler
 	if cryptoKeyManager != nil {
-		handler = NewHandler(db, configManager, cryptoKeyManager)
+		baseHandler = NewBaseHandler(db, configManager, cryptoKeyManager)
 	}
 	return &Service{
 		db:                  db,
 		cryptoKeyManager:    cryptoKeyManager,
 		configManager:       configManager,
 		controlPlaneHandler: controlPlaneHandler,
-		handler:             handler,
+		baseHandler:         baseHandler,
 	}
 }
 
@@ -59,8 +59,8 @@ func (service *Service) SetKVStore(kvStore core.KVStore) {
 	if service.controlPlaneHandler != nil {
 		service.controlPlaneHandler.SetKVStore(kvStore)
 	}
-	if service.handler != nil {
-		service.handler.SetKVStore(kvStore)
+	if service.baseHandler != nil {
+		service.baseHandler.SetKVStore(kvStore)
 	}
 }
 
@@ -73,8 +73,8 @@ func (service *Service) SetServiceAccountManager(serviceAccountManager *core.Ser
 	if service.controlPlaneHandler != nil {
 		service.controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 	}
-	if service.handler != nil {
-		service.handler.SetServiceAccountManager(serviceAccountManager)
+	if service.baseHandler != nil {
+		service.baseHandler.SetServiceAccountManager(serviceAccountManager)
 	}
 }
 
@@ -87,8 +87,8 @@ func (service *Service) SetEventBus(eventBus *core.EventBus) {
 	if service.controlPlaneHandler != nil {
 		service.controlPlaneHandler.SetEventBus(eventBus)
 	}
-	if service.handler != nil {
-		service.handler.SetEventBus(eventBus)
+	if service.baseHandler != nil {
+		service.baseHandler.SetEventBus(eventBus)
 	}
 }
 
@@ -116,15 +116,15 @@ func (service *Service) Start(ctx context.Context) error {
 	}
 
 	if service.cryptoKeyManager != nil {
-		service.handler = NewHandler(service.db, service.configManager, service.cryptoKeyManager)
+		service.baseHandler = NewBaseHandler(service.db, service.configManager, service.cryptoKeyManager)
 		if service.kvStore != nil {
-			service.handler.SetKVStore(service.kvStore)
+			service.baseHandler.SetKVStore(service.kvStore)
 		}
 		if service.serviceAccountManager != nil {
-			service.handler.SetServiceAccountManager(service.serviceAccountManager)
+			service.baseHandler.SetServiceAccountManager(service.serviceAccountManager)
 		}
 		if service.eventBus != nil {
-			service.handler.SetEventBus(service.eventBus)
+			service.baseHandler.SetEventBus(service.eventBus)
 		}
 	}
 	return nil
@@ -140,9 +140,9 @@ func (service *Service) GetConfigManager() *ConfigManager {
 	return service.configManager
 }
 
-// GetHandler returns the active auth handler.
-func (service *Service) GetHandler() *Handler {
-	return service.handler
+// GetHandler returns the active auth base handler.
+func (service *Service) GetHandler() *BaseHandler {
+	return service.baseHandler
 }
 
 // GetControlPlaneHandler returns the control plane handler.

@@ -55,7 +55,7 @@ type TopologyResponse struct {
 type Server struct {
 	db                 *DatabasePool
 	cryptoKeyManager   *CryptoKeyManager
-	router             *Router
+	baseRouter         *Router
 	controlPlaneRouter *Router
 	serveMux           *http.ServeMux
 	server             *http.Server
@@ -68,7 +68,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	serveMux := http.NewServeMux()
 	config := GetConfig()
 
-	router := NewRouter(fuego.NewServer(
+	baseRouter := NewRouter(fuego.NewServer(
 		fuego.WithEngineOptions(
 			fuego.WithOpenAPIConfig(fuego.OpenAPIConfig{
 				DisableLocalSave:     true,
@@ -102,14 +102,14 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	server := &Server{
 		db:                 db,
 		cryptoKeyManager:   cryptoKeyManager,
-		router:             router,
+		baseRouter:         baseRouter,
 		controlPlaneRouter: controlPlaneRouter,
 		serveMux:           serveMux,
 		uptime:             time.Now(),
 	}
 
 	// Register Core Routes on Public Router
-	GetRoute[HealthResponse](router, "/healthz", server.handleHealthzRequest,
+	GetRoute[HealthResponse](baseRouter, "/healthz", server.handleHealthzRequest,
 		RouteTag("Probes"),
 		RouteSummary("Liveness probe"),
 		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
@@ -117,7 +117,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("healthz"),
 	)
-	GetRoute[ReadyResponse](router, "/readyz", server.handleReadyzRequest,
+	GetRoute[ReadyResponse](baseRouter, "/readyz", server.handleReadyzRequest,
 		RouteTag("Probes"),
 		RouteSummary("Readiness probe"),
 		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
@@ -125,7 +125,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("readyz"),
 	)
-	GetRoute[string](router, "/metrics", server.handleMetricsRequest,
+	GetRoute[string](baseRouter, "/metrics", server.handleMetricsRequest,
 		RouteTag("Observability"),
 		RouteSummary("Prometheus metrics exposition"),
 		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
@@ -133,7 +133,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("metrics"),
 	)
-	GetRoute[TopologyResponse](router, "/api/v1/topology", server.handleTopologyRequest,
+	GetRoute[TopologyResponse](baseRouter, "/api/v1/topology", server.handleTopologyRequest,
 		RouteTag("Discovery"),
 		RouteSummary("Get dynamic cluster topology and enabled services"),
 		RouteDescription("Returns dynamic cluster topology, enabled service flags, project metadata, and publishable key for SDK initialization."),
@@ -143,23 +143,23 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	)
 
 	// Mount Public Probe Routes directly on root mux (No publishable key required)
-	serveMux.Handle("/healthz", router.Mux())
-	serveMux.Handle("/readyz", router.Mux())
-	serveMux.Handle("/metrics", router.Mux())
+	serveMux.Handle("/healthz", baseRouter.Mux())
+	serveMux.Handle("/readyz", baseRouter.Mux())
+	serveMux.Handle("/metrics", baseRouter.Mux())
 
 	// OIDC & OAuth Discovery (Open access)
-	serveMux.Handle("/.well-known/", router.Mux())
+	serveMux.Handle("/.well-known/", baseRouter.Mux())
 
 	// Lightweight Analytics Tracking Script (Open access)
-	serveMux.Handle("/analytics-script.js", router.Mux())
+	serveMux.Handle("/analytics-script.js", baseRouter.Mux())
 
 	// Embedded Console SPA (Open access)
-	serveMux.Handle("/console", router.Mux())
-	serveMux.Handle("/console/", router.Mux())
+	serveMux.Handle("/console", baseRouter.Mux())
+	serveMux.Handle("/console/", baseRouter.Mux())
 
 	// Public OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/spec.json", server.handleSpecJSONRequest)
-	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleSpecYAMLRequest)
+	serveMux.HandleFunc("/api/v1/spec.json", server.handleBaseSpecJSONRequest)
+	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleBaseSpecYAMLRequest)
 
 	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
 	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSONRequest)
@@ -169,7 +169,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	serveMux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
 
 	// Mount Public API Router with Publishable Key Gate
-	serveMux.Handle("/api/v1/", server.PublishableKeyMiddleware(router.Mux()))
+	serveMux.Handle("/api/v1/", server.PublishableKeyMiddleware(baseRouter.Mux()))
 
 	server.server = &http.Server{
 		Addr:              config.Server.ListenAddr,
@@ -188,9 +188,9 @@ func (server *Server) Mux() *http.ServeMux {
 	return server.serveMux
 }
 
-// Router returns the public OpenAPI server router.
-func (server *Server) Router() *Router {
-	return server.router
+// BaseRouter returns the base OpenAPI server router.
+func (server *Server) BaseRouter() *Router {
+	return server.baseRouter
 }
 
 // ControlPlaneRouter returns the control plane OpenAPI server router.
@@ -361,18 +361,18 @@ func (server *Server) handleTopologyRequest(responseWriter http.ResponseWriter, 
 }
 
 // /api/v1/spec.json - Client OpenAPI 3.1 JSON
-func (server *Server) handleSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleBaseSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.router.OutputOpenAPISpec()
+	openAPISpec := server.baseRouter.OutputOpenAPISpec()
 	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
 // /api/v1/spec.yaml - Client OpenAPI 3.1 YAML
-func (server *Server) handleSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleBaseSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.router.OutputOpenAPISpec()
+	openAPISpec := server.baseRouter.OutputOpenAPISpec()
 	_ = yaml.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
