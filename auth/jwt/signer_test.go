@@ -511,6 +511,22 @@ func TestJWTProjectHandleConfigurationUnit(t *testing.T) {
 	if emptyIDToken == "" {
 		t.Fatal("expected non-empty id token")
 	}
+
+	emptyM2MToken, emptyM2MErr := emptySigner.GenerateM2MToken("sa-empty", nil, 3600)
+	if emptyM2MErr != nil {
+		t.Fatalf("failed to generate m2m token with empty config: %v", emptyM2MErr)
+	}
+	emptyVerifiedM2MClaims, verifyEmptyM2MErr := emptySigner.VerifyM2MToken(emptyM2MToken)
+	if verifyEmptyM2MErr != nil {
+		t.Fatalf("failed to verify m2m token: %v", verifyEmptyM2MErr)
+	}
+	if emptyVerifiedM2MClaims.Issuer != "layr" {
+		t.Errorf("expected fallback issuer 'layr', got: %s", emptyVerifiedM2MClaims.Issuer)
+	}
+	if emptyVerifiedM2MClaims.Audience != "layr:service_account" {
+		t.Errorf("expected fallback audience 'layr:service_account', got: %s", emptyVerifiedM2MClaims.Audience)
+	}
+
 	core.SetLoadedConfig(nil)
 }
 
@@ -553,5 +569,161 @@ func TestJWTSignerAutomaticLoggingScopeUnit(t *testing.T) {
 	expectedVerifyLog := "[DEBUG] [auth] verified access token for subject user-123"
 	if !strings.Contains(verifyOutput, expectedVerifyLog) {
 		t.Errorf("expected log output to contain %q, but got:\n%s", expectedVerifyLog, verifyOutput)
+	}
+}
+
+func TestJWTM2MTokenSuccessUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create key manager: %v", err)
+	}
+
+	signer, err := NewSigner(cryptoKeyManager, "layr-ed25519-v1")
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	// 1. Default expiry and nil scopes
+	serviceAccountID := uuid.NewV7().String()
+	defaultToken, err := signer.GenerateM2MToken(serviceAccountID, nil, 0)
+	if err != nil {
+		t.Fatalf("failed to generate default M2M token: %v", err)
+	}
+
+	defaultM2MClaims, err := signer.VerifyM2MToken(defaultToken)
+	if err != nil {
+		t.Fatalf("failed to verify default M2M token: %v", err)
+	}
+	if defaultM2MClaims.Subject != serviceAccountID {
+		t.Errorf("expected subject %s, got %s", serviceAccountID, defaultM2MClaims.Subject)
+	}
+	slugifier := core.NewSlugifier()
+	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if expectedHandle == "" {
+		expectedHandle = "layr"
+	}
+	if defaultM2MClaims.Issuer != expectedHandle {
+		t.Errorf("expected issuer %s, got %s", expectedHandle, defaultM2MClaims.Issuer)
+	}
+	if defaultM2MClaims.Audience != expectedHandle+":service_account" {
+		t.Errorf("expected audience %s:service_account, got %s", expectedHandle, defaultM2MClaims.Audience)
+	}
+	if len(defaultM2MClaims.Scopes) != 0 {
+		t.Errorf("expected empty scopes, got %v", defaultM2MClaims.Scopes)
+	}
+	if defaultM2MClaims.JWTID == "" {
+		t.Errorf("expected non-empty JWTID")
+	}
+
+	// 2. Custom expiry and custom scopes
+	customScopes := []string{"data:read", "auth:admin"}
+	customToken, err := signer.GenerateM2MToken(serviceAccountID, customScopes, 7200)
+	if err != nil {
+		t.Fatalf("failed to generate custom M2M token: %v", err)
+	}
+
+	customM2MClaims, err := signer.VerifyM2MToken(customToken)
+	if err != nil {
+		t.Fatalf("failed to verify custom M2M token: %v", err)
+	}
+	if len(customM2MClaims.Scopes) != 2 || customM2MClaims.Scopes[0] != "data:read" || customM2MClaims.Scopes[1] != "auth:admin" {
+		t.Errorf("expected scopes %v, got %v", customScopes, customM2MClaims.Scopes)
+	}
+
+	// 3. Test empty signer.keyID fallback
+	emptyKeyIDSigner := &Signer{
+		privateKey: signer.privateKey,
+		publicKey:  signer.publicKey,
+		seed:       signer.seed,
+		keyID:      "",
+	}
+	fallbackToken, err := emptyKeyIDSigner.GenerateM2MToken(serviceAccountID, customScopes, -1)
+	if err != nil {
+		t.Fatalf("failed to generate fallback M2M token: %v", err)
+	}
+	tokenSegments := strings.Split(fallbackToken, ".")
+	headerBytes, _ := base64.RawURLEncoding.DecodeString(tokenSegments[0])
+	var headerMap map[string]string
+	_ = json.Unmarshal(headerBytes, &headerMap)
+	if headerMap["kid"] != "layr-ed25519-v1" {
+		t.Errorf("expected fallback kid layr-ed25519-v1, got %s", headerMap["kid"])
+	}
+
+	// 4. Test Claims.Assert with "scopes"
+	scopesClaims := Claims{
+		Subject: serviceAccountID,
+		Scopes:  customScopes,
+	}
+	if assertScopesErr := scopesClaims.Assert("scopes", customScopes); assertScopesErr != nil {
+		t.Errorf("failed to assert scopes on Claims: %v", assertScopesErr)
+	}
+}
+
+func TestJWTM2MTokenFailureUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create key manager: %v", err)
+	}
+
+	signer, err := NewSigner(cryptoKeyManager)
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	// 0. Empty service account ID and uninitialized private key
+	if _, emptyIDErr := signer.GenerateM2MToken("", nil, 3600); emptyIDErr == nil {
+		t.Errorf("expected error on empty serviceAccountID")
+	}
+	emptySigner := &Signer{}
+	if _, uninitializedErr := emptySigner.GenerateM2MToken("sa-1", nil, 3600); uninitializedErr == nil {
+		t.Errorf("expected error on uninitialized signer")
+	}
+
+	// 1. Invalid segment count
+	if _, segmentErr := signer.VerifyM2MToken("invalid.token"); segmentErr == nil {
+		t.Errorf("expected error on invalid segments")
+	}
+
+	// 2. Invalid signature base64
+	if _, sigBase64Err := signer.VerifyM2MToken("eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiIxIn0.!!invalid!!"); sigBase64Err == nil {
+		t.Errorf("expected error on invalid signature base64")
+	}
+
+	// 3. Signature verification failure
+	if _, sigVerifyErr := signer.VerifyM2MToken("eyJhbGciOiJFZERTQSJ9.e30.c2lnbmF0dXJl"); sigVerifyErr == nil {
+		t.Errorf("expected error on signature mismatch")
+	}
+
+	// 4. Invalid claims base64
+	validToken, _ := signer.GenerateM2MToken("sa-1", nil, 3600)
+	segments := strings.Split(validToken, ".")
+	invalidBase64SigningInput := segments[0] + ".!!invalid!!"
+	invalidBase64Signature := ed25519.Sign(signer.privateKey, []byte(invalidBase64SigningInput))
+	badClaimsToken := invalidBase64SigningInput + "." + base64.RawURLEncoding.EncodeToString(invalidBase64Signature)
+	if _, claimsBase64Err := signer.VerifyM2MToken(badClaimsToken); claimsBase64Err == nil {
+		t.Errorf("expected error on invalid claims base64")
+	}
+
+	// 5. Invalid claims JSON
+	nonJSONClaims := base64.RawURLEncoding.EncodeToString([]byte("not-json"))
+	nonJSONSigningInput := segments[0] + "." + nonJSONClaims
+	signature := ed25519.Sign(signer.privateKey, []byte(nonJSONSigningInput))
+	tamperedNonJSONToken := nonJSONSigningInput + "." + base64.RawURLEncoding.EncodeToString(signature)
+	if _, jsonUnmarshalErr := signer.VerifyM2MToken(tamperedNonJSONToken); jsonUnmarshalErr == nil {
+		t.Errorf("expected error on invalid claims JSON")
+	}
+
+	// 6. Expired token
+	expiredM2MClaims := M2MClaims{
+		Subject:   "sa-expired",
+		ExpiresAt: time.Now().UTC().Add(-1 * time.Hour).Unix(),
+	}
+	expiredClaimsJSON, _ := json.Marshal(expiredM2MClaims)
+	expiredClaimsBase64 := base64.RawURLEncoding.EncodeToString(expiredClaimsJSON)
+	expiredSigningInput := segments[0] + "." + expiredClaimsBase64
+	expiredSignature := ed25519.Sign(signer.privateKey, []byte(expiredSigningInput))
+	expiredToken := expiredSigningInput + "." + base64.RawURLEncoding.EncodeToString(expiredSignature)
+	if _, expiredErr := signer.VerifyM2MToken(expiredToken); expiredErr == nil || !strings.Contains(expiredErr.Error(), "expired") {
+		t.Errorf("expected token expired error, got %v", expiredErr)
 	}
 }

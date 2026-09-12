@@ -528,3 +528,75 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	router := core.NewRouter(fuegoEngine)
 	handler.RegisterOIDCRoutes(router)
 }
+
+func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
+	testCtx := context.Background()
+
+	// 1. Missing secret
+	handler := &Handler{}
+	missingSecretRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
+	missingSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	missingSecretResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(missingSecretResponseRecorder, missingSecretRequest)
+	if missingSecretResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on missing secret, got: %d", missingSecretResponseRecorder.Code)
+	}
+
+	// 2. Nil ServiceAccountManager
+	nilManagerRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
+	nilManagerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	nilManagerResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(nilManagerResponseRecorder, nilManagerRequest)
+	if nilManagerResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on nil serviceAccountManager, got: %d", nilManagerResponseRecorder.Code)
+	}
+
+	// 3. ServiceAccountManager Authenticate error (e.g. nil database pool)
+	serviceAccountManager := core.NewServiceAccountManager(nil)
+	managerHandler := &Handler{serviceAccountManager: serviceAccountManager}
+	authErrorRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
+	authErrorRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	authErrorResponseRecorder := httptest.NewRecorder()
+	managerHandler.handleOIDCToken(authErrorResponseRecorder, authErrorRequest)
+	if authErrorResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on auth error, got: %d", authErrorResponseRecorder.Code)
+	}
+
+	// 4. JSON body parsing with Content-Type application/json
+	jsonRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"sec_123","scope":"data:read"}`
+	jsonRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(jsonRequestBody))
+	jsonRequest.Header.Set("Content-Type", "application/json")
+	jsonResponseRecorder := httptest.NewRecorder()
+	managerHandler.handleOIDCToken(jsonResponseRecorder, jsonRequest)
+	if jsonResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 from json request through auth error, got: %d", jsonResponseRecorder.Code)
+	}
+
+	// 5. JSON body parsing without Content-Type header
+	untypedJSONRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"sec_123"}`
+	untypedJSONRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(untypedJSONRequestBody))
+	untypedJSONResponseRecorder := httptest.NewRecorder()
+	managerHandler.handleOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)
+	if untypedJSONResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 from untyped json request, got: %d", untypedJSONResponseRecorder.Code)
+	}
+
+	// 6. Basic Auth header extraction
+	basicAuthRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&scope=data:read"))
+	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	basicAuthRequest.SetBasicAuth("sa-basic", "secret-basic")
+	basicAuthResponseRecorder := httptest.NewRecorder()
+	managerHandler.handleOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
+	if basicAuthResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 from basic auth request through auth error, got: %d", basicAuthResponseRecorder.Code)
+	}
+
+	// 7. handleOAuthToken delegation
+	delegatedRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
+	delegatedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	delegatedResponseRecorder := httptest.NewRecorder()
+	handler.handleOAuthToken(delegatedResponseRecorder, delegatedRequest)
+	if delegatedResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 from handleOAuthToken, got: %d", delegatedResponseRecorder.Code)
+	}
+}

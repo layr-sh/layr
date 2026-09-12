@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,6 +18,8 @@ import (
 	"layr.sh/core"
 )
 
+const defaultM2MTokenExpirySeconds = 3600
+
 // OIDCTokenResponse represents the standard OAuth 2.0 / OIDC token response.
 type OIDCTokenResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -24,6 +28,19 @@ type OIDCTokenResponse struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 	IDToken      string `json:"id_token,omitempty"`
 	Scope        string `json:"scope,omitempty"`
+}
+
+// OAuthTokenRequest represents incoming parameters for OAuth 2.0 token requests.
+type OAuthTokenRequest struct {
+	GrantType    string `json:"grant_type"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	Code         string `json:"code"`
+	RedirectURI  string `json:"redirect_uri"`
+	CodeVerifier string `json:"code_verifier"`
+	RefreshToken string `json:"refresh_token"`
+	Scope        string `json:"scope"`
+	Provider     string `json:"provider"`
 }
 
 // OIDCUserInfoResponse represents OpenID Connect Core 1.0 standard claims.
@@ -266,18 +283,76 @@ func (handler *Handler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWr
 	http.Redirect(responseWriter, request, targetURL.String(), http.StatusFound)
 }
 
+func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
+	var oauthTokenRequest OAuthTokenRequest
+
+	if strings.Contains(request.Header.Get("Content-Type"), "application/json") && request.Body != nil {
+		bodyBytes, readErr := io.ReadAll(request.Body)
+		if readErr == nil {
+			_ = json.Unmarshal(bodyBytes, &oauthTokenRequest)
+			request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		}
+	} else {
+		_ = request.ParseForm()
+		if request.FormValue("grant_type") == "" && request.Body != nil {
+			bodyBytes, readErr := io.ReadAll(request.Body)
+			if readErr == nil {
+				_ = json.Unmarshal(bodyBytes, &oauthTokenRequest)
+				request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
+	}
+
+	if oauthTokenRequest.GrantType == "" {
+		oauthTokenRequest.GrantType = request.FormValue("grant_type")
+	}
+	if oauthTokenRequest.ClientID == "" {
+		oauthTokenRequest.ClientID = request.FormValue("client_id")
+	}
+	if oauthTokenRequest.ClientSecret == "" {
+		oauthTokenRequest.ClientSecret = request.FormValue("client_secret")
+	}
+	if oauthTokenRequest.Code == "" {
+		oauthTokenRequest.Code = request.FormValue("code")
+	}
+	if oauthTokenRequest.RedirectURI == "" {
+		oauthTokenRequest.RedirectURI = request.FormValue("redirect_uri")
+	}
+	if oauthTokenRequest.CodeVerifier == "" {
+		oauthTokenRequest.CodeVerifier = request.FormValue("code_verifier")
+	}
+	if oauthTokenRequest.RefreshToken == "" {
+		oauthTokenRequest.RefreshToken = request.FormValue("refresh_token")
+	}
+	if oauthTokenRequest.Scope == "" {
+		oauthTokenRequest.Scope = request.FormValue("scope")
+	}
+	if oauthTokenRequest.Provider == "" {
+		oauthTokenRequest.Provider = request.FormValue("provider")
+	}
+
+	basicClientID, basicClientSecret, hasBasicAuth := request.BasicAuth()
+	if hasBasicAuth && (basicClientID != "" || basicClientSecret != "") {
+		oauthTokenRequest.ClientID = basicClientID
+		oauthTokenRequest.ClientSecret = basicClientSecret
+	}
+
+	return oauthTokenRequest
+}
+
 // 4. Token Endpoint (POST /api/v1/auth/oauth/token)
 
 func (handler *Handler) handleOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
-	grantType := request.FormValue("grant_type")
-	if grantType == "" {
-		_ = request.ParseForm()
-		grantType = request.FormValue("grant_type")
-	}
+	oauthTokenRequest := parseOAuthTokenRequest(request)
 
 	// If no grant_type or if provider parameter is present, delegate to handleOAuthCallback for compatibility
-	if grantType == "" || request.FormValue("provider") != "" {
+	if oauthTokenRequest.GrantType == "" || oauthTokenRequest.Provider != "" {
 		handler.HandleOAuthCallback(responseWriter, request)
+		return
+	}
+
+	if oauthTokenRequest.GrantType == "client_credentials" {
+		handler.handleOAuthClientCredentials(responseWriter, request, oauthTokenRequest)
 		return
 	}
 
@@ -287,17 +362,88 @@ func (handler *Handler) handleOIDCToken(responseWriter http.ResponseWriter, requ
 		return
 	}
 
-	if grantType == "authorization_code" {
+	if oauthTokenRequest.GrantType == "authorization_code" {
 		handler.handleOIDCTokenAuthorizationCode(responseWriter, request)
 		return
 	}
 
-	if grantType == "refresh_token" {
+	if oauthTokenRequest.GrantType == "refresh_token" {
 		handler.handleOIDCTokenRefreshToken(responseWriter, request)
 		return
 	}
 
-	core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Unsupported grant_type '%s'", grantType), "unsupported_grant_type")
+	core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Unsupported grant_type '%s'", oauthTokenRequest.GrantType), "unsupported_grant_type")
+}
+
+func (handler *Handler) handleOAuthClientCredentials(responseWriter http.ResponseWriter, request *http.Request, oauthTokenRequest OAuthTokenRequest) {
+	clientID := oauthTokenRequest.ClientID
+	clientSecret := oauthTokenRequest.ClientSecret
+
+	if clientSecret == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		return
+	}
+
+	if handler.serviceAccountManager == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		return
+	}
+
+	clientIP := core.ExtractRequestClientIP(request)
+	serviceAccount, authErr := handler.serviceAccountManager.Authenticate(request.Context(), clientSecret, clientIP)
+	if authErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		return
+	}
+
+	if clientID != "" && serviceAccount.ID != clientID && serviceAccount.KeyPrefix != clientID {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		return
+	}
+
+	var grantedScopes []string
+	trimmedScope := strings.TrimSpace(oauthTokenRequest.Scope)
+	if trimmedScope != "" {
+		requestedScopes := strings.Fields(trimmedScope)
+		for _, requestedScope := range requestedScopes {
+			if !core.HasScope(serviceAccount.Scopes, requestedScope) {
+				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope exceeds permissions granted to the client", "invalid_scope")
+				return
+			}
+		}
+		grantedScopes = requestedScopes
+	} else {
+		grantedScopes = serviceAccount.Scopes
+	}
+
+	if handler.signer == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Token signer not available", "server_error")
+		return
+	}
+
+	accessToken, tokenErr := handler.signer.GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds)
+	if tokenErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to generate M2M access token", "server_error")
+		return
+	}
+
+	oidcTokenResponse := OIDCTokenResponse{
+		AccessToken: accessToken,
+		TokenType:   "Bearer",
+		ExpiresIn:   defaultM2MTokenExpirySeconds,
+		Scope:       strings.Join(grantedScopes, " "),
+	}
+
+	responseWriter.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	responseWriter.Header().Set("Cache-Control", "no-store")
+	responseWriter.Header().Set("Pragma", "no-cache")
+	responseWriter.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(responseWriter).Encode(oidcTokenResponse)
+}
+
+// handleOAuthToken delegates to handleOIDCToken for OAuth 2.0 token requests.
+func (handler *Handler) handleOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+	handler.handleOIDCToken(responseWriter, request)
 }
 
 func (handler *Handler) handleOIDCTokenAuthorizationCode(responseWriter http.ResponseWriter, request *http.Request) {

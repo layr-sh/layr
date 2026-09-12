@@ -236,3 +236,46 @@ func TestJWTProjectIsolationIntegration(t *testing.T) {
 		t.Fatal("expected audience assertion failure when verifying with different audience")
 	}
 }
+
+func TestJWTM2MTokenIntegration(t *testing.T) {
+	masterKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	cryptoKeyManager, err := core.NewCryptoKeyManager(masterKeyHex)
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+
+	signer, err := NewSigner(cryptoKeyManager, "layr-ed25519-v1")
+	if err != nil {
+		t.Fatalf("failed to create signer: %v", err)
+	}
+
+	serviceAccountID := uuid.NewV7().String()
+	scopes := []string{"auth:read", "data:write"}
+	m2mToken, err := signer.GenerateM2MToken(serviceAccountID, scopes, 1800)
+	if err != nil {
+		t.Fatalf("failed to generate M2M token: %v", err)
+	}
+
+	m2mClaims, err := signer.VerifyM2MToken(m2mToken)
+	if err != nil {
+		t.Fatalf("failed to verify M2M token: %v", err)
+	}
+
+	if m2mClaims.Subject != serviceAccountID {
+		t.Errorf("expected subject %s, got %s", serviceAccountID, m2mClaims.Subject)
+	}
+	slugifier := core.NewSlugifier()
+	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if expectedHandle == "" {
+		expectedHandle = "layr"
+	}
+	if m2mClaims.Issuer != expectedHandle {
+		t.Errorf("expected issuer %s, got %s", expectedHandle, m2mClaims.Issuer)
+	}
+	if m2mClaims.Audience != expectedHandle+":service_account" {
+		t.Errorf("expected audience %s:service_account, got %s", expectedHandle, m2mClaims.Audience)
+	}
+	if len(m2mClaims.Scopes) != 2 || m2mClaims.Scopes[0] != "auth:read" || m2mClaims.Scopes[1] != "data:write" {
+		t.Errorf("expected scopes %v, got %v", scopes, m2mClaims.Scopes)
+	}
+}

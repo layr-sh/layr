@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -550,5 +551,246 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	handler.CompleteOAuthFlow(completeOIDCResponseRecorder, completeOIDCRequest, userRecord, oauthStatePayload, true)
 	if completeOIDCResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect from CompleteOAuthFlow with OIDCStateID, got: %d", completeOIDCResponseRecorder.Code)
+	}
+}
+
+func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	if err := configManager.Load(ctx); err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	serviceAccountManager := core.NewServiceAccountManager(db)
+	handler := NewHandler(db, configManager, cryptoKeyManager)
+	handler.SetServiceAccountManager(serviceAccountManager)
+
+	activeServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+		Name:   "M2M Worker Service",
+		Scopes: []string{"data:*", "auth:read"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create active service account: %v", err)
+	}
+
+	// 1. Basic Auth credentials flow (inherits all scopes)
+	basicAuthValues := url.Values{
+		"grant_type": {"client_credentials"},
+	}
+	basicAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(basicAuthValues.Encode()))
+	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	basicAuthRequest.SetBasicAuth(activeServiceAccount.ID, activeServiceAccount.SecretKey)
+	basicAuthResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
+
+	if basicAuthResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on Basic Auth client_credentials, got %d (%s)", basicAuthResponseRecorder.Code, basicAuthResponseRecorder.Body.String())
+	}
+	if cacheControl := basicAuthResponseRecorder.Header().Get("Cache-Control"); cacheControl != "no-store" {
+		t.Errorf("expected Cache-Control: no-store, got %s", cacheControl)
+	}
+
+	var basicOIDCTokenResponse OIDCTokenResponse
+	if unmarshalErr := json.Unmarshal(basicAuthResponseRecorder.Body.Bytes(), &basicOIDCTokenResponse); unmarshalErr != nil {
+		t.Fatalf("failed to unmarshal token response: %v", unmarshalErr)
+	}
+	if basicOIDCTokenResponse.TokenType != "Bearer" || basicOIDCTokenResponse.ExpiresIn != 3600 {
+		t.Errorf("unexpected token type or expiry: %+v", basicOIDCTokenResponse)
+	}
+	if basicOIDCTokenResponse.RefreshToken != "" || basicOIDCTokenResponse.IDToken != "" {
+		t.Errorf("expected no refresh token or id token in M2M response, got %+v", basicOIDCTokenResponse)
+	}
+
+	m2MClaims, verifyErr := handler.signer.VerifyM2MToken(basicOIDCTokenResponse.AccessToken)
+	if verifyErr != nil {
+		t.Fatalf("failed to verify M2M token: %v", verifyErr)
+	}
+	if m2MClaims.Subject != activeServiceAccount.ID {
+		t.Errorf("expected subject %s, got %s", activeServiceAccount.ID, m2MClaims.Subject)
+	}
+	slugifier := core.NewSlugifier()
+	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if expectedHandle == "" {
+		expectedHandle = "layr"
+	}
+	if m2MClaims.Audience != expectedHandle+":service_account" {
+		t.Errorf("expected audience %s:service_account, got %s", expectedHandle, m2MClaims.Audience)
+	}
+	if len(m2MClaims.Scopes) != 2 {
+		t.Errorf("expected 2 scopes, got %v", m2MClaims.Scopes)
+	}
+
+	// 2. Form body credentials with scope down-scoping
+	formValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.KeyPrefix},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"scope":         {"data:schema.read"},
+	}
+	formRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(formValues.Encode()))
+	formRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	formResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(formResponseRecorder, formRequest)
+
+	if formResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on form down-scoping, got %d (%s)", formResponseRecorder.Code, formResponseRecorder.Body.String())
+	}
+	var formOIDCTokenResponse OIDCTokenResponse
+	_ = json.Unmarshal(formResponseRecorder.Body.Bytes(), &formOIDCTokenResponse)
+	if formOIDCTokenResponse.Scope != "data:schema.read" {
+		t.Errorf("expected scope data:schema.read, got %s", formOIDCTokenResponse.Scope)
+	}
+
+	// 3. JSON body credentials
+	jsonBodyMap := map[string]string{
+		"grant_type":    "client_credentials",
+		"client_id":     activeServiceAccount.ID,
+		"client_secret": activeServiceAccount.SecretKey,
+		"scope":         "auth:read",
+	}
+	jsonBytes, _ := json.Marshal(jsonBodyMap)
+	jsonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", bytes.NewReader(jsonBytes))
+	jsonRequest.Header.Set("Content-Type", "application/json")
+	jsonResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(jsonResponseRecorder, jsonRequest)
+
+	if jsonResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on JSON client_credentials, got %d (%s)", jsonResponseRecorder.Code, jsonResponseRecorder.Body.String())
+	}
+
+	// 4. Invalid scope exceeding permissions -> 400 Bad Request (invalid_scope)
+	invalidScopeValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"scope":         {"admin:super"},
+	}
+	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(invalidScopeValues.Encode()))
+	invalidScopeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invalidScopeResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(invalidScopeResponseRecorder, invalidScopeRequest)
+
+	if invalidScopeResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(invalidScopeResponseRecorder.Body.String(), "invalid_scope") {
+		t.Fatalf("expected 400 invalid_scope, got %d (%s)", invalidScopeResponseRecorder.Code, invalidScopeResponseRecorder.Body.String())
+	}
+
+	// 5. Client ID mismatch -> 401 Unauthorized
+	mismatchValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {"sa_wrong_id_123"},
+		"client_secret": {activeServiceAccount.SecretKey},
+	}
+	mismatchRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(mismatchValues.Encode()))
+	mismatchRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mismatchResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(mismatchResponseRecorder, mismatchRequest)
+
+	if mismatchResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on client_id mismatch, got %d", mismatchResponseRecorder.Code)
+	}
+
+	// 6. Disabled Service Account -> 401 Unauthorized
+	disabledServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+		Name:   "Disabled M2M SA",
+		Scopes: []string{"data:read"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create disabled service account: %v", err)
+	}
+	disabledFalse := false
+	_, err = serviceAccountManager.Update(ctx, disabledServiceAccount.ID, core.UpdateServiceAccountInput{
+		IsEnabled: &disabledFalse,
+	})
+	if err != nil {
+		t.Fatalf("failed to disable service account: %v", err)
+	}
+	disabledValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_secret": {disabledServiceAccount.SecretKey},
+	}
+	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(disabledValues.Encode()))
+	disabledRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disabledResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(disabledResponseRecorder, disabledRequest)
+
+	if disabledResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on disabled service account, got %d", disabledResponseRecorder.Code)
+	}
+
+	// 7. Expired Service Account -> 401 Unauthorized
+	pastTime := time.Now().UTC().Add(-24 * time.Hour)
+	expiredServiceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+		Name:      "Expired M2M SA",
+		ExpiresAt: &pastTime,
+	})
+	expiredValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_secret": {expiredServiceAccount.SecretKey},
+	}
+	expiredRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(expiredValues.Encode()))
+	expiredRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	expiredResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(expiredResponseRecorder, expiredRequest)
+
+	if expiredResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on expired service account, got %d", expiredResponseRecorder.Code)
+	}
+
+	// 8. IP restricted Service Account -> 401 Unauthorized
+	ipRestrictedServiceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+		Name:       "IP Restricted M2M SA",
+		AllowedIPs: []string{"10.0.0.1"},
+	})
+	ipValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_secret": {ipRestrictedServiceAccount.SecretKey},
+	}
+	ipRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(ipValues.Encode()))
+	ipRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	ipRequest.RemoteAddr = "192.168.1.5:1234"
+	ipResponseRecorder := httptest.NewRecorder()
+	handler.handleOIDCToken(ipResponseRecorder, ipRequest)
+
+	if ipResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on blocked IP, got %d", ipResponseRecorder.Code)
+	}
+
+	// 9. Handler with nil signer -> 500
+	nilSignerHandler := &Handler{
+		serviceAccountManager: serviceAccountManager,
+		signer:                nil,
+	}
+	nilSignerValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_secret": {activeServiceAccount.SecretKey},
+	}
+	nilSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(nilSignerValues.Encode()))
+	nilSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	nilSignerResponseRecorder := httptest.NewRecorder()
+	nilSignerHandler.handleOIDCToken(nilSignerResponseRecorder, nilSignerRequest)
+
+	if nilSignerResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on nil signer, got %d", nilSignerResponseRecorder.Code)
+	}
+
+	// 10. Handler with uninitialized signer -> 500
+	uninitSignerHandler := &Handler{
+		serviceAccountManager: serviceAccountManager,
+		signer:                &jwt.Signer{},
+	}
+	uninitSignerValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_secret": {activeServiceAccount.SecretKey},
+	}
+	uninitSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(uninitSignerValues.Encode()))
+	uninitSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	uninitSignerResponseRecorder := httptest.NewRecorder()
+	uninitSignerHandler.handleOIDCToken(uninitSignerResponseRecorder, uninitSignerRequest)
+
+	if uninitSignerResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on uninitialized signer token error, got %d", uninitSignerResponseRecorder.Code)
 	}
 }

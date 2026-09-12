@@ -110,6 +110,14 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 400 on fake code JSON exchange, got: %d", oauthTokenJSONResponseRecorder.Code)
 	}
 
+	oauthTokenGrantRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials"))
+	oauthTokenGrantRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	oauthTokenGrantResponseRecorder := httptest.NewRecorder()
+	handler.HandleOAuthToken(oauthTokenGrantResponseRecorder, oauthTokenGrantRequest)
+	if oauthTokenGrantResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on grant_type token exchange without credentials, got: %d", oauthTokenGrantResponseRecorder.Code)
+	}
+
 	// 6. Callback provider error parameter -> 400
 	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:err-state", "err-state", 10*time.Minute)
 	oauthErrorCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?error=access_denied&error_description=user_cancelled&state=err-state", nil)

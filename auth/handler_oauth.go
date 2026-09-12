@@ -100,6 +100,10 @@ func (handler *Handler) HandleOAuthAuthorize(responseWriter http.ResponseWriter,
 
 // HandleOAuthToken handles token exchange requests.
 func (handler *Handler) HandleOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.FormValue("grant_type") != "" {
+		handler.handleOIDCToken(responseWriter, request)
+		return
+	}
 	handler.HandleOAuthCallback(responseWriter, request)
 }
 
