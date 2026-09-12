@@ -25,14 +25,14 @@ func TestAuthMigrationsExecutionIntegration(t *testing.T) {
 		err := db.QueryRow(ctx, `
 			SELECT EXISTS (
 				SELECT FROM information_schema.tables 
-				WHERE table_schema = 'layr_auth' AND table_name = $1
+				WHERE table_schema = 'auth' AND table_name = $1
 			)
 		`, tableName).Scan(&exists)
 		if err != nil {
 			t.Fatalf("failed to query table existence for %s: %v", tableName, err)
 		}
 		if !exists {
-			t.Fatalf("table layr_auth.%s does not exist after running migrations", tableName)
+			t.Fatalf("table auth.%s does not exist after running migrations", tableName)
 		}
 	}
 }

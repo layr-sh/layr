@@ -397,7 +397,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 
 	// 10. User Export via POST /api/v1/auth/users/{user_id}/export
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
+		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
 		VALUES ($1, 'github', 'gh_user_123', '{"login":"alice"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, signupSessionResponse.User.ID)
 	if err != nil {
@@ -684,7 +684,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	otpExpiresAt := time.Now().UTC().Add(15 * time.Minute)
 
 	_, execErr := db.Exec(ctx, `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'signin', 0, $3, clock_timestamp())
 	`, otpRecipient, otpHash, otpExpiresAt)
 	if execErr != nil {
@@ -721,7 +721,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 
 	var emailVerifiedAt *time.Time
-	queryEmailErr := db.QueryRow(ctx, "SELECT email_verified_at FROM layr_auth.users WHERE id = $1", secondAnonymousUserID).Scan(&emailVerifiedAt)
+	queryEmailErr := db.QueryRow(ctx, "SELECT email_verified_at FROM auth.users WHERE id = $1", secondAnonymousUserID).Scan(&emailVerifiedAt)
 	if queryEmailErr != nil || emailVerifiedAt == nil {
 		t.Fatalf("expected email_verified_at to be populated in DB after OTP verify: %v", queryEmailErr)
 	}
@@ -747,7 +747,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	var isAnonymousAfterEmailUpdate bool
 	var emailAfterUpdate *string
-	queryUpdateErr := db.QueryRow(ctx, "SELECT is_anonymous, email FROM layr_auth.users WHERE id = $1", thirdAnonymousUserID).Scan(&isAnonymousAfterEmailUpdate, &emailAfterUpdate)
+	queryUpdateErr := db.QueryRow(ctx, "SELECT is_anonymous, email FROM auth.users WHERE id = $1", thirdAnonymousUserID).Scan(&isAnonymousAfterEmailUpdate, &emailAfterUpdate)
 	if queryUpdateErr != nil {
 		t.Fatalf("failed to query user after email update: %v", queryUpdateErr)
 	}
@@ -779,7 +779,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	var isAnonymousAfterPhoneUpdate bool
 	var phoneAfterUpdate *string
-	queryPhoneErr := db.QueryRow(ctx, "SELECT is_anonymous, phone FROM layr_auth.users WHERE id = $1", fourthAnonymousUserID).Scan(&isAnonymousAfterPhoneUpdate, &phoneAfterUpdate)
+	queryPhoneErr := db.QueryRow(ctx, "SELECT is_anonymous, phone FROM auth.users WHERE id = $1", fourthAnonymousUserID).Scan(&isAnonymousAfterPhoneUpdate, &phoneAfterUpdate)
 	if queryPhoneErr != nil {
 		t.Fatalf("failed to query user after phone update: %v", queryPhoneErr)
 	}
@@ -893,11 +893,11 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	// 3. Locked User Account Sign-In
 	var phoneUserID string
-	err := db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE phone = $1", phoneUser).Scan(&phoneUserID)
+	err := db.QueryRow(ctx, "SELECT id FROM auth.users WHERE phone = $1", phoneUser).Scan(&phoneUserID)
 	if err != nil {
 		t.Fatalf("failed to query phone user ID: %v", err)
 	}
-	_, err = db.Exec(ctx, "UPDATE layr_auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", phoneUserID)
+	_, err = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", phoneUserID)
 	if err != nil {
 		t.Fatalf("failed to lock user account: %v", err)
 	}
@@ -914,7 +914,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// Reset locked_until
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.users SET locked_until = NULL WHERE id = $1", phoneUserID)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", phoneUserID)
 
 	// 4. In-Place Conversion Conflicts (Email & Phone)
 	conflictEmail := "existing_conflict@example.com"
@@ -960,12 +960,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// 5. Conversion DB Update Error via CHECK constraint
-	_, err = db.Exec(ctx, "ALTER TABLE layr_auth.users ADD CONSTRAINT layr_test_block_convert CHECK (email != 'block_convert@example.com')")
+	_, err = db.Exec(ctx, "ALTER TABLE auth.users ADD CONSTRAINT layr_test_block_convert CHECK (email != 'block_convert@example.com')")
 	if err != nil {
 		t.Fatalf("failed to add test constraint: %v", err)
 	}
 	defer func() {
-		_, _ = db.Exec(context.Background(), "ALTER TABLE layr_auth.users DROP CONSTRAINT IF EXISTS layr_test_block_convert")
+		_, _ = db.Exec(context.Background(), "ALTER TABLE auth.users DROP CONSTRAINT IF EXISTS layr_test_block_convert")
 	}()
 
 	blockConvertPayload, _ := json.Marshal(SignUpRequest{
@@ -979,7 +979,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	if blockConvertResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on conversion failure via DB constraint, got: %d (%s)", blockConvertResponseRecorder.Code, blockConvertResponseRecorder.Body.String())
 	}
-	_, _ = db.Exec(ctx, "ALTER TABLE layr_auth.users DROP CONSTRAINT IF EXISTS layr_test_block_convert")
+	_, _ = db.Exec(ctx, "ALTER TABLE auth.users DROP CONSTRAINT IF EXISTS layr_test_block_convert")
 
 	// 6. DB Scan Errors on Anonymous Sign-In and Direct Sign-Up via canceled context
 	canceledCtx, cancel := context.WithCancel(context.Background())
@@ -1020,12 +1020,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	// B) Expired session in DB -> 401
 	var conflictUserID string
-	_ = db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE email = $1", conflictEmail).Scan(&conflictUserID)
+	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", conflictEmail).Scan(&conflictUserID)
 
 	expiredToken := "expired-token-val"
 	expiredHash := jwt.HashRefreshToken(expiredToken)
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() - interval '10 minutes', clock_timestamp() - interval '1 hour')
 	`, conflictUserID, expiredHash)
 	if err != nil {
@@ -1041,14 +1041,14 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// C) Session referencing deleted user -> 401
-	_, err = db.Exec(ctx, "ALTER TABLE layr_auth.sessions DROP CONSTRAINT IF EXISTS sessions_user_id_fkey")
+	_, err = db.Exec(ctx, "ALTER TABLE auth.sessions DROP CONSTRAINT IF EXISTS sessions_user_id_fkey")
 	if err != nil {
 		t.Fatalf("failed to drop foreign key constraint: %v", err)
 	}
 	defer func() {
 		_, _ = db.Exec(context.Background(), `
-			ALTER TABLE layr_auth.sessions 
-			ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES layr_auth.users(id) ON DELETE CASCADE
+			ALTER TABLE auth.sessions 
+			ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 		`)
 	}()
 
@@ -1056,7 +1056,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	deletedUserHash := jwt.HashRefreshToken(deletedUserToken)
 	nonExistentUserID := "018f2234-5678-789a-bcde-f0123456789b"
 	_, err = db.Exec(ctx, `
-		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, nonExistentUserID, deletedUserHash)
 	if err != nil {
@@ -1071,10 +1071,10 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("expected 401 on non-existent user token refresh in DB, got: %d (%s)", deletedUserRefreshResponseRecorder.Code, deletedUserRefreshResponseRecorder.Body.String())
 	}
 
-	_, _ = db.Exec(ctx, "DELETE FROM layr_auth.sessions WHERE refresh_token_hash = $1", deletedUserHash)
+	_, _ = db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", deletedUserHash)
 	_, _ = db.Exec(ctx, `
-		ALTER TABLE layr_auth.sessions 
-		ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES layr_auth.users(id) ON DELETE CASCADE
+		ALTER TABLE auth.sessions 
+		ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 	`)
 
 	// D) Valid DB session refresh -> 200 OK

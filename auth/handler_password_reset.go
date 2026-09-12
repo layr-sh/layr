@@ -97,7 +97,7 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 	}
 
 	var userID string
-	err := handler.db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE email = $1 OR phone = $1", recipient).Scan(&userID)
+	err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1 OR phone = $1", recipient).Scan(&userID)
 	if err != nil {
 		log.Debugf("password reset request rejected: user not found for recipient %s: %v", recipient, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
@@ -109,7 +109,7 @@ func (handler *Handler) handlePasswordResetRequest(responseWriter http.ResponseW
 	expiresAt := time.Now().UTC().Add(otp.CodeTTL)
 
 	query := `
-		INSERT INTO layr_auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 0, $3, clock_timestamp())
 	`
 	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, expiresAt)
@@ -202,7 +202,7 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, code_hash, attempts, expires_at 
-		FROM layr_auth.otps 
+		FROM auth.otps 
 		WHERE recipient = $1 AND purpose = 'password_reset' AND expires_at > clock_timestamp()
 		ORDER BY created_at DESC 
 		LIMIT 1
@@ -215,20 +215,20 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 
 	if attempts >= maxPasswordResetAttempts {
 		log.Debugf("password reset confirmation failed: max attempts exceeded for %s", recipient)
-		_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
 		return
 	}
 
 	if !otp.VerifyCode(passwordResetConfirmRequest.Code, storedHash) {
 		log.Debugf("password reset confirmation failed: invalid code for %s", recipient)
-		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code", "LAYR_AUTH_001")
 		return
 	}
 
 	// Delete used OTP
-	_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.otps WHERE id = $1", otpID)
+	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 	if handler.kvStore != nil {
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient))
 	}
@@ -238,7 +238,7 @@ func (handler *Handler) handlePasswordResetConfirm(responseWriter http.ResponseW
 	var userRecord UserRecord
 	var rawProps []byte
 	err = handler.db.QueryRow(ctx, `
-		UPDATE layr_auth.users 
+		UPDATE auth.users 
 		SET password_hash = $1, last_updated_at = clock_timestamp() 
 		WHERE email = $2 OR phone = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at

@@ -251,7 +251,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 
 	// 1. Check existing identity
 	var existingUserID string
-	err = handler.db.QueryRow(ctx, "SELECT user_id FROM layr_auth.identities WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID).Scan(&existingUserID)
+	err = handler.db.QueryRow(ctx, "SELECT user_id FROM auth.identities WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID).Scan(&existingUserID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		log.Debugf("OAuth callback database query error: %v", err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database error", "LAYR_AUTH_001")
@@ -274,7 +274,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		if userInfo.Email != "" {
 			emailPtr = &userInfo.Email
 			var conflictingUserID string
-			conflictErr := handler.db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
+			conflictErr := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
 			if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
 				log.Debugf("conflict: email %s is already in use by user %s", userInfo.Email, conflictingUserID)
 				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
@@ -286,14 +286,14 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 
 		// Link identity
 		_, _ = handler.db.Exec(ctx, `
-			INSERT INTO layr_auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
+			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET user_id = $1, last_sign_in_at = clock_timestamp(), properties = $4
 		`, anonymousUserRecord.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		// Convert anonymous user to authenticated
 		updateQuery := `
-			UPDATE layr_auth.users
+			UPDATE auth.users
 			SET email = COALESCE(email, $1),
 			    email_verified_at = CASE WHEN $1 IS NOT NULL THEN COALESCE(email_verified_at, clock_timestamp()) ELSE email_verified_at END,
 			    is_anonymous = false,
@@ -329,13 +329,13 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		log.Debugf("logging in existing federated user %s via %s", existingUserID, provider)
 		_ = handler.db.QueryRow(ctx, `
 			SELECT id, email, phone, role, is_anonymous, properties, created_at, last_updated_at 
-			FROM layr_auth.users WHERE id = $1
+			FROM auth.users WHERE id = $1
 		`, existingUserID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
 		userRecord.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
-		_, _ = handler.db.Exec(ctx, "UPDATE layr_auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
+		_, _ = handler.db.Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
 	} else {
 		log.Debugf("registering new federated user via %s", provider)
 		var emailPtr *string
@@ -345,7 +345,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		propertiesJSON, _ := json.Marshal(userInfo.Properties)
 
 		_ = handler.db.QueryRow(ctx, `
-			INSERT INTO layr_auth.users (email, role, email_verified_at, properties, created_at, last_updated_at)
+			INSERT INTO auth.users (email, role, email_verified_at, properties, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), $2, clock_timestamp(), clock_timestamp())
 			ON CONFLICT (email) DO UPDATE SET last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, properties, created_at, last_updated_at
@@ -356,7 +356,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		}
 
 		_, _ = handler.db.Exec(ctx, `
-			INSERT INTO layr_auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
+			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET last_sign_in_at = clock_timestamp()
 		`, userRecord.ID, provider, userInfo.ProviderUserID, propertiesJSON)
@@ -392,7 +392,7 @@ func (handler *Handler) CompleteOAuthFlow(responseWriter http.ResponseWriter, re
 				if handler.db != nil {
 					log.Tracef("saving session for OIDC flow for user %s", userRecord.ID)
 					_, _ = handler.db.Exec(request.Context(), `
-						INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
+						INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 						VALUES ($1, $2, $3, clock_timestamp())
 					`, userRecord.ID, refreshTokenHash, expiresAt)
 				}
@@ -446,7 +446,7 @@ func (handler *Handler) HandleOAuthUserInfo(responseWriter http.ResponseWriter, 
 	var rawProperties []byte
 	err = handler.db.QueryRow(request.Context(), `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, claims.Subject).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,

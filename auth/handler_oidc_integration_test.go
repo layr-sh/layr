@@ -48,7 +48,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 	var testUserID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO layr_auth.users (email, password_hash, role, is_anonymous, created_at, last_updated_at)
+		INSERT INTO auth.users (email, password_hash, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, $2, 'authenticated', false, clock_timestamp(), clock_timestamp())
 		RETURNING id
 	`, testUserEmail, passwordHash).Scan(&testUserID)
@@ -172,11 +172,11 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("expected 400 Bad Request on tampered state, got: %d", tamperedResponseRecorder.Code)
 	}
 
-	_, _ = db.Exec(ctx, "UPDATE layr_auth.users SET phone = '+15551234567', properties = '{\"name\":\"Test User Name\"}'::jsonb WHERE email = $1", testUserEmail)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET phone = '+15551234567', properties = '{\"name\":\"Test User Name\"}'::jsonb WHERE email = $1", testUserEmail)
 
 	lockedPasswordHash, _ := handler.hasher.Hash("LockedPass123!")
 	_, _ = db.Exec(ctx, `
-		INSERT INTO layr_auth.users (email, password_hash, role, locked_until)
+		INSERT INTO auth.users (email, password_hash, role, locked_until)
 		VALUES ('locked.user@example.com', $1, 'authenticated', clock_timestamp() + interval '1 hour')
 	`, lockedPasswordHash)
 
@@ -276,7 +276,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// 6. Token Exchange (POST /api/v1/auth/oauth/token)
-	_ = db.QueryRow(ctx, "SELECT id FROM layr_auth.users WHERE email = $1", testUserEmail).Scan(&testUserID)
+	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", testUserEmail).Scan(&testUserID)
 
 	// Test redirect_uri mismatch -> 400
 	mismatchCode := handler.issueOIDCAuthorizationCode(ctx, "client-dashboard", "https://dashboard.example.com/callback", testUserID, "openid profile email", codeChallenge, "S256", "nonce-mismatch")

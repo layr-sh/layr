@@ -16,12 +16,12 @@ func TestAuthMigrationsDefinitionUnit(t *testing.T) {
 	}
 
 	requiredTables := []string{
-		"layr_auth.config",
-		"layr_auth.users",
-		"layr_auth.identities",
-		"layr_auth.sessions",
-		"layr_auth.passkeys",
-		"layr_auth.otps",
+		"auth.config",
+		"auth.users",
+		"auth.identities",
+		"auth.sessions",
+		"auth.passkeys",
+		"auth.otps",
 	}
 
 	for _, tableName := range requiredTables {

@@ -43,7 +43,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 	// 1. Seed user in database
 	userEmail := "e2e-email-verify@example.com"
 	insertUserQuery := `
-		INSERT INTO layr_auth.users (id, email, role, email_verified_at, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, role, email_verified_at, created_at, last_updated_at)
 		VALUES (uuidv7(), $1, 'user', NULL, clock_timestamp(), clock_timestamp())
 	`
 	if _, err := db.Exec(ctx, insertUserQuery, userEmail); err != nil {
@@ -122,7 +122,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 
 	// 5. Assert user email_verified_at is set in database
 	var emailVerifiedAt *time.Time
-	queryErr := db.QueryRow(ctx, "SELECT email_verified_at FROM layr_auth.users WHERE email = $1", userEmail).Scan(&emailVerifiedAt)
+	queryErr := db.QueryRow(ctx, "SELECT email_verified_at FROM auth.users WHERE email = $1", userEmail).Scan(&emailVerifiedAt)
 	if queryErr != nil {
 		t.Fatalf("failed to query user email verification status: %v", queryErr)
 	}
@@ -160,7 +160,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 	// Create user with phone
 	testPhoneNumber := "+15550009999"
 	insertUserQuery := `
-		INSERT INTO layr_auth.users (id, email, phone, role, email_verified_at, phone_verified_at, created_at, last_updated_at)
+		INSERT INTO auth.users (id, email, phone, role, email_verified_at, phone_verified_at, created_at, last_updated_at)
 		VALUES (uuidv7(), 'phone-e2e@example.com', $1, 'user', NULL, NULL, clock_timestamp(), clock_timestamp())
 	`
 	if _, err := db.Exec(ctx, insertUserQuery, testPhoneNumber); err != nil {
@@ -238,7 +238,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 
 	// 3. Assert user phone_verified_at is set in database
 	var phoneVerifiedAt *time.Time
-	queryErr := db.QueryRow(ctx, "SELECT phone_verified_at FROM layr_auth.users WHERE phone = $1", testPhoneNumber).Scan(&phoneVerifiedAt)
+	queryErr := db.QueryRow(ctx, "SELECT phone_verified_at FROM auth.users WHERE phone = $1", testPhoneNumber).Scan(&phoneVerifiedAt)
 	if queryErr != nil {
 		t.Fatalf("failed to query user phone verification status: %v", queryErr)
 	}

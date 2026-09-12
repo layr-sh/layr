@@ -35,7 +35,7 @@ type AnonymousSignInRequest struct {
 	Properties map[string]any `json:"properties,omitempty"`
 }
 
-// UserRecord represents a user in layr_auth.users.
+// UserRecord represents a user in auth.users.
 type UserRecord struct {
 	ID              string         `json:"id"`
 	Email           *string        `json:"email"`
@@ -51,7 +51,7 @@ type UserRecord struct {
 	LastUpdatedAt   time.Time      `json:"last_updated_at"`
 }
 
-// SessionRecord represents an active refresh session in layr_auth.sessions.
+// SessionRecord represents an active refresh session in auth.sessions.
 type SessionRecord struct {
 	ID               string    `json:"id"`
 	UserID           string    `json:"user_id"`
@@ -263,7 +263,7 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 	if handler.db != nil {
 		log.Tracef("persisting session record in database for user %s", userRecord.ID)
 		queryErr := handler.db.QueryRow(request.Context(), `
-			INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+			INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 			VALUES ($1, $2, $3, $4, $5, clock_timestamp())
 			RETURNING id, created_at
 		`, userRecord.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
@@ -490,7 +490,7 @@ func (handler *Handler) authenticateUser(request *http.Request) (string, error) 
 		log.Tracef("looking up active session in database via %s", tokenSource)
 		var userID string
 		err := handler.db.QueryRow(request.Context(), `
-			SELECT user_id FROM layr_auth.sessions
+			SELECT user_id FROM auth.sessions
 			WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
 		`, refreshTokenHash).Scan(&userID)
 		if err == nil && userID != "" {
@@ -525,7 +525,7 @@ func (handler *Handler) resolveAnonymousCaller(request *http.Request) (*UserReco
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
-		FROM layr_auth.users
+		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,

@@ -58,7 +58,7 @@ func (handler *Handler) handleUserExport(responseWriter http.ResponseWriter, req
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
-		FROM layr_auth.users WHERE id = $1
+		FROM auth.users WHERE id = $1
 	`, targetUserID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
@@ -78,7 +78,7 @@ func (handler *Handler) handleUserExport(responseWriter http.ResponseWriter, req
 	identities := make([]ExportIdentityRecord, 0)
 	identityRows, queryErr := handler.db.Query(ctx, `
 		SELECT provider, provider_user_id, properties, created_at, last_sign_in_at 
-		FROM layr_auth.identities 
+		FROM auth.identities 
 		WHERE user_id = $1
 	`, targetUserID)
 	if queryErr == nil {

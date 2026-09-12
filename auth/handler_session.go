@@ -49,7 +49,7 @@ func (handler *Handler) handleListSessions(responseWriter http.ResponseWriter, r
 	ctx := request.Context()
 	rows, err := handler.db.Query(ctx, `
 		SELECT id, ip_address::text, user_agent, refresh_token_hash, expires_at, created_at
-		FROM layr_auth.sessions
+		FROM auth.sessions
 		WHERE user_id = $1 AND expires_at > clock_timestamp()
 		ORDER BY created_at DESC
 	`, userID)
@@ -136,7 +136,7 @@ func (handler *Handler) handleRevokeSession(responseWriter http.ResponseWriter, 
 	ctx := request.Context()
 	var deletedRefreshTokenHash string
 	err = handler.db.QueryRow(ctx, `
-		DELETE FROM layr_auth.sessions
+		DELETE FROM auth.sessions
 		WHERE id = $1 AND user_id = $2
 		RETURNING refresh_token_hash
 	`, targetSessionID, userID).Scan(&deletedRefreshTokenHash)
@@ -187,14 +187,14 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 	}
 	if resolvedCurrentSessionID == "" && currentRefreshTokenHash != "" {
 		_ = handler.db.QueryRow(ctx, `
-			SELECT id FROM layr_auth.sessions WHERE user_id = $1 AND refresh_token_hash = $2
+			SELECT id FROM auth.sessions WHERE user_id = $1 AND refresh_token_hash = $2
 		`, userID, currentRefreshTokenHash).Scan(&resolvedCurrentSessionID)
 	}
 
 	if resolvedCurrentSessionID == "" {
 		var activeSessionCount int
 		err = handler.db.QueryRow(ctx, `
-			SELECT count(*) FROM layr_auth.sessions WHERE user_id = $1 AND expires_at > clock_timestamp()
+			SELECT count(*) FROM auth.sessions WHERE user_id = $1 AND expires_at > clock_timestamp()
 		`, userID).Scan(&activeSessionCount)
 		if err != nil {
 			log.Debugf("failed to count active sessions for user %s: %v", userID, err)
@@ -218,7 +218,7 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 	}
 
 	rows, err := handler.db.Query(ctx, `
-		DELETE FROM layr_auth.sessions
+		DELETE FROM auth.sessions
 		WHERE user_id = $1 AND id != $2
 		RETURNING refresh_token_hash
 	`, userID, resolvedCurrentSessionID)

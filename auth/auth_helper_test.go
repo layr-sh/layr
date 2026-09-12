@@ -184,7 +184,7 @@ func setupTestDatabase(t *testing.T) (*core.DatabasePool, *core.CryptoKeyManager
 
 	postgresContainer, err := postgres.Run(ctx,
 		"postgres:18-alpine",
-		postgres.WithDatabase("layr_auth_test"),
+		postgres.WithDatabase("auth_test"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("secret"),
 		testcontainers.WithWaitStrategy(

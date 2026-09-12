@@ -33,7 +33,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 	ctx := request.Context()
 	rows, err := controlPlaneHandler.db.Query(ctx, `
 		SELECT id, user_id, refresh_token_hash, ip_address::text, user_agent, expires_at, created_at
-		FROM layr_auth.sessions
+		FROM auth.sessions
 		WHERE user_id = $1
 		ORDER BY created_at DESC
 	`, userID)
@@ -84,7 +84,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	}
 
 	ctx := request.Context()
-	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM layr_auth.sessions WHERE user_id = $1 RETURNING refresh_token_hash", userID)
+	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING refresh_token_hash", userID)
 	if deleteErr != nil {
 		log.Debugf("HandleRevokeUserSessions delete failed: %v", deleteErr)
 		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to revoke sessions", "LAYR_AUTH_001")
