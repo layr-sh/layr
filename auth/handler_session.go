@@ -148,7 +148,7 @@ func (handler *Handler) handleRevokeSession(responseWriter http.ResponseWriter, 
 	}
 
 	if handler.kvStore != nil && deletedRefreshTokenHash != "" {
-		_ = handler.kvStore.Delete(ctx, "layr:auth:session:"+deletedRefreshTokenHash)
+		_ = handler.kvStore.Delete(ctx, "auth:session:"+deletedRefreshTokenHash)
 	}
 
 	if handler.eventBus != nil {
@@ -240,7 +240,7 @@ func (handler *Handler) handleRevokeOtherSessions(responseWriter http.ResponseWr
 	if handler.kvStore != nil {
 		for _, hash := range deletedHashes {
 			if hash != "" {
-				_ = handler.kvStore.Delete(ctx, "layr:auth:session:"+hash)
+				_ = handler.kvStore.Delete(ctx, "auth:session:"+hash)
 			}
 		}
 	}

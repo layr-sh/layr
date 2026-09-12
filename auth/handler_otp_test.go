@@ -170,7 +170,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}, nil))
 
 	// 6. Rate limits & Cooldown
-	_ = testKVStore.Set(context.Background(), "layr:auth:cooldown:signin:cooldown_user@example.com", "1", 60*time.Second)
+	_ = testKVStore.Set(context.Background(), "auth:cooldown:signin:cooldown_user@example.com", "1", 60*time.Second)
 	cooldownOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"cooldown_user@example.com","purpose":"signin"}`))
 	cooldownOTPResponseRecorder := httptest.NewRecorder()
 	handler.handleOTPSend(cooldownOTPResponseRecorder, cooldownOTPRequest)
@@ -178,7 +178,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 429 on cooldown OTP request, got: %d", cooldownOTPResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:ratelimit:otp:ip:203.0.113.50", "10", time.Hour)
+	_ = testKVStore.Set(context.Background(), "auth:ratelimit:otp:ip:203.0.113.50", "10", time.Hour)
 	rateLimitedOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"fresh_user@example.com","purpose":"signin"}`))
 	rateLimitedOTPRequest.RemoteAddr = "203.0.113.50:1234"
 	rateLimitedOTPResponseRecorder := httptest.NewRecorder()

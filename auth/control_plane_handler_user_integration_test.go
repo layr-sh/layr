@@ -123,7 +123,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	// 5. Lock and Unlock User
-	_ = kvStore.Set(ctx, "layr:auth:session:lock_hash", "cached_session", time.Hour)
+	_ = kvStore.Set(ctx, "auth:session:lock_hash", "cached_session", time.Hour)
 	_, _ = db.Exec(ctx, `
 		INSERT INTO layr_auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, 'lock_hash', '127.0.0.1', 'Mozilla/5.0', clock_timestamp() + interval '30 days', clock_timestamp())

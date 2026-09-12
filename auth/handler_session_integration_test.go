@@ -72,9 +72,9 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 			($3, $4, $7, $10, clock_timestamp() + interval '1 hour', clock_timestamp());
 	`, session1ID, session2ID, session3ID, userID, session1Hash, session2Hash, session3Hash, device1UA, device2UA, device3UA)
 
-	_ = testKVStore.Set(ctx, "layr:auth:session:"+session1Hash, "active1", time.Hour)
-	_ = testKVStore.Set(ctx, "layr:auth:session:"+session2Hash, "active2", time.Hour)
-	_ = testKVStore.Set(ctx, "layr:auth:session:"+session3Hash, "active3", time.Hour)
+	_ = testKVStore.Set(ctx, "auth:session:"+session1Hash, "active1", time.Hour)
+	_ = testKVStore.Set(ctx, "auth:session:"+session2Hash, "active2", time.Hour)
+	_ = testKVStore.Set(ctx, "auth:session:"+session3Hash, "active3", time.Hour)
 
 	userToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
 		Subject:     userID,
@@ -185,7 +185,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	if session1DBCount != 0 {
 		t.Fatalf("expected session1 to be deleted from database")
 	}
-	if _, getErr := testKVStore.Get(ctx, "layr:auth:session:"+session1Hash); getErr == nil {
+	if _, getErr := testKVStore.Get(ctx, "auth:session:"+session1Hash); getErr == nil {
 		t.Fatalf("expected session1 to be purged from KV store")
 	}
 

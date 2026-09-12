@@ -201,7 +201,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 		CreatedAt:           time.Now().UTC(),
 	}
 	stateBytes, _ := json.Marshal(oidcAuthorizationStatePayload)
-	_ = testKVStore.Set(context.Background(), "layr:auth:oidc:state:"+validStateID, string(stateBytes), 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+validStateID, string(stateBytes), 10*time.Minute)
 
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -370,7 +370,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 
 	// 7. handleOIDCAuthorizeSubmit corrupt state JSON in kvStore -> 400
-	_ = testKVStore.Set(context.Background(), "layr:auth:oidc:state:corrupt_state", "{invalid_json", 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:oidc:state:corrupt_state", "{invalid_json", 5*time.Minute)
 	corruptStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state=corrupt_state"))
 	corruptStateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptStateResponseRecorder := httptest.NewRecorder()
@@ -385,7 +385,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:    "client-spa-1",
 		RedirectURI: "https://demo.app/callback",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:oidc:state:"+validStateID, string(validStatePayload), 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+validStateID, string(validStatePayload), 5*time.Minute)
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCredsResponseRecorder := httptest.NewRecorder()
@@ -421,7 +421,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 
 	// 11. handleOIDCTokenAuthorizationCode corrupt code JSON in kvStore -> 400
-	_ = testKVStore.Set(context.Background(), "layr:auth:code:corrupt_code_123", "{invalid_json", 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:code:corrupt_code_123", "{invalid_json", 5*time.Minute)
 	corruptCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=corrupt_code_123"))
 	corruptCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptCodeResponseRecorder := httptest.NewRecorder()
@@ -434,7 +434,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	mismatchedClientPayload, _ := json.Marshal(OIDCAuthorizationCodePayload{
 		ClientID: "other-client-id",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:code:mismatch_client_code", string(mismatchedClientPayload), 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:code:mismatch_client_code", string(mismatchedClientPayload), 5*time.Minute)
 	mismatchClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_client_code"))
 	mismatchClientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchClientResponseRecorder := httptest.NewRecorder()
@@ -448,7 +448,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:    "client-spa-1",
 		RedirectURI: "https://demo.app/expected_callback",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:code:mismatch_redirect_code", string(mismatchedRedirectPayload), 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:code:mismatch_redirect_code", string(mismatchedRedirectPayload), 5*time.Minute)
 	mismatchRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_redirect_code&redirect_uri=https://demo.app/other_callback"))
 	mismatchRedirectRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchRedirectResponseRecorder := httptest.NewRecorder()
@@ -462,7 +462,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:      "client-spa-1",
 		CodeChallenge: "expected_pkce_challenge_hash",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:code:bad_pkce_code", string(badPKCEPayload), 5*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:code:bad_pkce_code", string(badPKCEPayload), 5*time.Minute)
 	badPKCERequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=bad_pkce_code&code_verifier=invalid_verifier"))
 	badPKCERequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badPKCEResponseRecorder := httptest.NewRecorder()

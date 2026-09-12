@@ -97,7 +97,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	}
 
 	// 4. Second callback with same identity logs in existing user
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:re-login-state", "re-login-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:re-login-state", "re-login-state", 10*time.Minute)
 	secondCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-mock-code&state=re-login-state", nil)
 	secondCallbackRequest.SetPathValue("provider", "google")
 	secondCallbackResponseResponseRecorder := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:anon-conversion-state", "anon-conversion-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:anon-conversion-state", "anon-conversion-state", 10*time.Minute)
 	conversionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=anon-conversion-state", nil)
 	conversionRequest.SetPathValue("provider", "google")
 	conversionRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
@@ -218,7 +218,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		IsAnonymous: true,
 	}, 900)
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:identity-conflict-state", "identity-conflict-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:identity-conflict-state", "identity-conflict-state", 10*time.Minute)
 	conflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-code&state=identity-conflict-state", nil)
 	conflictRequest.SetPathValue("provider", "google")
 	conflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
@@ -244,7 +244,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:email-conflict-state", "email-conflict-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:email-conflict-state", "email-conflict-state", 10*time.Minute)
 	emailConflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-email-code&state=email-conflict-state", nil)
 	emailConflictRequest.SetPathValue("provider", "google")
 	emailConflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
@@ -263,14 +263,14 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		CodeChallenge: "challenge_integ_xyz",
 		ClientState:   "client_state_integ",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
 
 	oauthStateWithOIDCJSON, _ := json.Marshal(OAuthStatePayload{
 		StateID:     "oauth_oidc_state",
 		Provider:    "google",
 		OIDCStateID: oidcStateID,
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:oauth_oidc_state", string(oauthStateWithOIDCJSON), 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:oauth_oidc_state", string(oauthStateWithOIDCJSON), 10*time.Minute)
 
 	oidcLinkRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=oauth_oidc_state", nil)
 	oidcLinkRequest.SetPathValue("provider", "google")
@@ -292,7 +292,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	brokenHandler := NewHandler(brokenDB, configManager, cryptoKeyManager)
 	brokenHandler.SetKVStore(testKVStore)
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)
 	brokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=broken-pool-state", nil)
 	brokenRequest.SetPathValue("provider", "google")
 	brokenResponseRecorder := httptest.NewRecorder()
@@ -415,7 +415,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:fail-update-state", "fail-update-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:fail-update-state", "fail-update-state", 10*time.Minute)
 	failUpdateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=fail-update-state", nil)
 	failUpdateRequest.SetPathValue("provider", "google")
 	failUpdateRequest.Header.Set("Authorization", "Bearer "+failAnonToken)

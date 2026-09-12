@@ -1005,7 +1005,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to insert test session for phone user: %v", err)
 	}
-	_ = testKVStore.Set(ctx, "layr:auth:session:"+phoneUserSessionHash, "active", 3600*time.Second)
+	_ = testKVStore.Set(ctx, "auth:session:"+phoneUserSessionHash, "active", 3600*time.Second)
 
 	phoneUserAccessToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
 		Subject:     phoneUserID,

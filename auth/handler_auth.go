@@ -262,7 +262,7 @@ func (handler *Handler) handleSignIn(responseWriter http.ResponseWriter, request
 	ctx := request.Context()
 	config := handler.configManager.Get()
 	if config.RateLimiting.Enabled && handler.kvStore != nil && identifier != "" {
-		rateKey := fmt.Sprintf("layr:auth:ratelimit:signin:%s", identifier)
+		rateKey := fmt.Sprintf("auth:ratelimit:signin:%s", identifier)
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
 		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSigninAttempts) {
 			log.Debugf("sign-in rejected: rate limit exceeded for identifier %s (count: %d)", identifier, count)
@@ -317,7 +317,7 @@ func (handler *Handler) handleSignIn(responseWriter http.ResponseWriter, request
 
 	// Reset rate limit on successful authentication
 	if handler.kvStore != nil && identifier != "" {
-		rateKey := fmt.Sprintf("layr:auth:ratelimit:signin:%s", identifier)
+		rateKey := fmt.Sprintf("auth:ratelimit:signin:%s", identifier)
 		_ = handler.kvStore.Delete(ctx, rateKey)
 	}
 
@@ -348,11 +348,11 @@ func (handler *Handler) handleTokenRefresh(responseWriter http.ResponseWriter, r
 
 	config := handler.configManager.Get()
 	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
-		if cachedData, err := handler.kvStore.Get(ctx, "layr:auth:session:"+tokenHash); err == nil && cachedData != "" {
+		if cachedData, err := handler.kvStore.Get(ctx, "auth:session:"+tokenHash); err == nil && cachedData != "" {
 			var cachedSession CachedSession
 			if err := json.Unmarshal([]byte(cachedData), &cachedSession); err == nil && cachedSession.User.ID != "" {
 				log.Tracef("fast-path session cache hit for user %s", cachedSession.User.ID)
-				_ = handler.kvStore.Delete(ctx, "layr:auth:session:"+tokenHash)
+				_ = handler.kvStore.Delete(ctx, "auth:session:"+tokenHash)
 				if handler.db != nil {
 					_, _ = handler.db.Exec(ctx, "DELETE FROM layr_auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				}
@@ -429,7 +429,7 @@ func (handler *Handler) handleSignOut(responseWriter http.ResponseWriter, reques
 	if refreshTokenRequest.RefreshToken != "" {
 		tokenHash := jwt.HashRefreshToken(refreshTokenRequest.RefreshToken)
 		if handler.kvStore != nil {
-			_ = handler.kvStore.Delete(request.Context(), "layr:auth:session:"+tokenHash)
+			_ = handler.kvStore.Delete(request.Context(), "auth:session:"+tokenHash)
 		}
 		if handler.db != nil {
 			var sessionID, userID string

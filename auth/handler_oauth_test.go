@@ -83,7 +83,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 400 on broken oauth authorize, got: %d", brokenOAuthAuthResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:broken-state", "broken-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:broken-state", "broken-state", 10*time.Minute)
 	brokenOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/broken/callback?code=mock_code&state=broken-state", nil)
 	brokenOAuthCallbackRequest.SetPathValue("provider", "broken")
 	brokenOAuthCallbackResponseRecorder := httptest.NewRecorder()
@@ -93,7 +93,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 5. Token form & JSON endpoints
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:form-state", "form-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:form-state", "form-state", 10*time.Minute)
 	oauthTokenFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/google/token", strings.NewReader("code=authcode123&redirect_uri=http://localhost:3000/callback&state=form-state"))
 	oauthTokenFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	oauthTokenFormResponseRecorder := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 400 on fake code exchange, got: %d", oauthTokenFormResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:json-state", "json-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:json-state", "json-state", 10*time.Minute)
 	oauthTokenJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(`{"provider":"google","code":"authcode123","state":"json-state"}`))
 	oauthTokenJSONResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthToken(oauthTokenJSONResponseRecorder, oauthTokenJSONRequest)
@@ -119,7 +119,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 6. Callback provider error parameter -> 400
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:err-state", "err-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:err-state", "err-state", 10*time.Minute)
 	oauthErrorCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?error=access_denied&error_description=user_cancelled&state=err-state", nil)
 	oauthErrorCallbackResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(oauthErrorCallbackResponseRecorder, oauthErrorCallbackRequest)
@@ -128,7 +128,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 7. Callback with code and state -> 400 (mock code fails live exchange)
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:mock-state", "mock-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:mock-state", "mock-state", 10*time.Minute)
 	oauthGetCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock-code&state=mock-state", nil)
 	oauthGetCallbackResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(oauthGetCallbackResponseRecorder, oauthGetCallbackRequest)
@@ -137,7 +137,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 8. Callback with disabled provider -> 404
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:disabled-provider-state", "disabled-provider-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:disabled-provider-state", "disabled-provider-state", 10*time.Minute)
 	oauthDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/unknown_disabled_provider/callback?code=123&state=disabled-provider-state", nil)
 	oauthDisabledCallbackResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(oauthDisabledCallbackResponseRecorder, oauthDisabledCallbackRequest)
@@ -175,7 +175,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 403 on fake state GET, got: %d", fakeStateGetResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:mismatched-state", "different-stored-value", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:mismatched-state", "different-stored-value", 10*time.Minute)
 	mismatchedStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=any-code&state=mismatched-state", nil)
 	mismatchedStateResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(mismatchedStateResponseRecorder, mismatchedStateRequest)
@@ -192,7 +192,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 	handler.SetKVStore(testKVStore)
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:missing-code-state", "missing-code-state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:missing-code-state", "missing-code-state", 10*time.Minute)
 	missingCodeStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?state=missing-code-state", nil)
 	missingCodeStateResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(missingCodeStateResponseRecorder, missingCodeStateRequest)
@@ -253,7 +253,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	})
 	defer oauth.SetHTTPClient(nil)
 
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:mock_state", "mock_state", 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:mock_state", "mock_state", 10*time.Minute)
 	nilDBOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock_code&state=mock_state", nil)
 	nilDBOAuthCallbackResponseRecorder := httptest.NewRecorder()
 	handler.HandleOAuthCallback(nilDBOAuthCallbackResponseRecorder, nilDBOAuthCallbackRequest)
@@ -281,7 +281,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		StateID:  "different_state_id",
 		Provider: "google",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:pkce:mismatch_state", string(mismatchedPayloadJSON), 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:mismatch_state", string(mismatchedPayloadJSON), 10*time.Minute)
 	mismatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock_code&state=mismatch_state", nil)
 	mismatchRequest.SetPathValue("provider", "google")
 	mismatchResponseRecorder := httptest.NewRecorder()
@@ -299,7 +299,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		CodeChallenge: "challenge123",
 		ClientState:   "client_state_abc",
 	})
-	_ = testKVStore.Set(context.Background(), "layr:auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
+	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
 
 	oAuthStatePayload := OAuthStatePayload{
 		StateID:     "oauth_state_123",

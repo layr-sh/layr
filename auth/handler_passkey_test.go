@@ -96,7 +96,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	challenge1, _ := handler.passkeyManager.GenerateChallenge(testUserUUID)
-	_ = testKVStore.Set(context.Background(), "layr:auth:challenge:"+challenge1, testUserUUID, 0)
+	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge1, testUserUUID, 0)
 	mismatchUserPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"mismatched-user-uuid","challenge":"`+challenge1+`"}`))
 	mismatchUserPasskeyResponseRecorder := httptest.NewRecorder()
 	handler.handlePasskeySignUpVerify(mismatchUserPasskeyResponseRecorder, mismatchUserPasskeyRequest)
@@ -106,7 +106,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 
 	// 5. Passkey SignUp Verify Empty Friendly Name on Nil Pool -> 500
 	challenge2, _ := handler.passkeyManager.GenerateChallenge(testUserUUID)
-	_ = testKVStore.Set(context.Background(), "layr:auth:challenge:"+challenge2, testUserUUID, 0)
+	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge2, testUserUUID, 0)
 	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"`+testUserUUID+`","challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
 	emptyFriendlyPasskeyResponseRecorder := httptest.NewRecorder()
 	handler.handlePasskeySignUpVerify(emptyFriendlyPasskeyResponseRecorder, emptyFriendlyPasskeyRequest)
@@ -140,7 +140,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 
 	// 9. Passkey SignIn Verify Valid Challenge on Nil Pool -> 500
 	validSignInChallenge, _ := handler.passkeyManager.GenerateChallenge("")
-	_ = testKVStore.Set(context.Background(), "layr:auth:challenge:"+validSignInChallenge, "", 0)
+	_ = testKVStore.Set(context.Background(), "auth:challenge:"+validSignInChallenge, "", 0)
 	nilDBPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"`+validSignInChallenge+`","credential_id":"cred_123"}`))
 	nilDBPasskeySignInResponseRecorder := httptest.NewRecorder()
 	handler.handlePasskeySignInVerify(nilDBPasskeySignInResponseRecorder, nilDBPasskeySignInRequest)

@@ -86,7 +86,7 @@ func (handler *Handler) HandleOAuthAuthorize(responseWriter http.ResponseWriter,
 		}
 		payloadJSON, _ := json.Marshal(oAuthStatePayload)
 		log.Tracef("persisting OAuth state payload to KV store: %s", state)
-		_ = handler.kvStore.Set(request.Context(), "layr:auth:pkce:"+state, string(payloadJSON), 10*time.Minute)
+		_ = handler.kvStore.Set(request.Context(), "auth:pkce:"+state, string(payloadJSON), 10*time.Minute)
 	}
 
 	if scopeQuery := request.URL.Query().Get("scope"); scopeQuery != "" {
@@ -165,7 +165,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	storedState, err := handler.kvStore.Get(request.Context(), "layr:auth:pkce:"+state)
+	storedState, err := handler.kvStore.Get(request.Context(), "auth:pkce:"+state)
 	if err != nil || storedState == "" {
 		log.Debugf("OAuth callback rejected: state %s not found in KV store or expired", state)
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OAuth state has expired or is invalid", "LAYR_AUTH_INVALID_STATE")
@@ -190,7 +190,7 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	_ = handler.kvStore.Delete(request.Context(), "layr:auth:pkce:"+state)
+	_ = handler.kvStore.Delete(request.Context(), "auth:pkce:"+state)
 
 	if provider == "" || code == "" {
 		log.Debug("OAuth callback rejected: provider and authorization code are required")
@@ -374,12 +374,12 @@ func (handler *Handler) HandleOAuthCallback(responseWriter http.ResponseWriter, 
 func (handler *Handler) CompleteOAuthFlow(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord, parsedOAuthStatePayload OAuthStatePayload, isPayload bool) {
 	log.Debugf("completing OAuth flow for user %s (isPayload: %t, OIDCStateID: %s)", userRecord.ID, isPayload, parsedOAuthStatePayload.OIDCStateID)
 	if isPayload && parsedOAuthStatePayload.OIDCStateID != "" && handler.kvStore != nil {
-		oidcStateJSON, err := handler.kvStore.Get(request.Context(), "layr:auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
+		oidcStateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 		if err == nil && oidcStateJSON != "" {
 			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 			if err := json.Unmarshal([]byte(oidcStateJSON), &oidcAuthorizationStatePayload); err == nil {
 				log.Tracef("resolving linked OIDC state %s for client %s", parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload.ClientID)
-				_ = handler.kvStore.Delete(request.Context(), "layr:auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
+				_ = handler.kvStore.Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, userRecord.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
 				refreshToken := jwt.GenerateRefreshToken()
 				refreshTokenHash := jwt.HashRefreshToken(refreshToken)

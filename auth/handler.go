@@ -277,7 +277,7 @@ func (handler *Handler) issueSessionResponse(responseWriter http.ResponseWriter,
 	}
 
 	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
-		sessionKey := "layr:auth:session:" + refreshHash
+		sessionKey := "auth:session:" + refreshHash
 		cachedSession := CachedSession{
 			User:   userRecord,
 			Claims: customClaims,
@@ -340,7 +340,7 @@ func (handler *Handler) issueOIDCAuthorizationCode(ctx context.Context, clientID
 	payloadJSON, _ := json.Marshal(oidcAuthorizationCodePayload)
 	if handler.kvStore != nil {
 		log.Tracef("caching OIDC authorization code in KV store: %s", code)
-		_ = handler.kvStore.Set(ctx, "layr:auth:code:"+code, string(payloadJSON), defaultOIDCAuthCodeCacheTTL)
+		_ = handler.kvStore.Set(ctx, "auth:code:"+code, string(payloadJSON), defaultOIDCAuthCodeCacheTTL)
 	}
 	return code
 }
