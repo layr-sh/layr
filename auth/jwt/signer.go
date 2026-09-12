@@ -20,6 +20,7 @@ const (
 	expectedTokenSegmentCount       = 3
 	defaultAccessTokenExpirySeconds = 900
 	defaultIDTokenExpirySeconds     = 3600
+	defaultM2MTokenExpirySeconds    = 3600
 )
 
 // Claims represents standard RFC 7519 JWT claims for layr/auth end-users.
@@ -35,6 +36,7 @@ type Claims struct {
 	IssuedAt    int64          `json:"iat"`
 	NotBefore   int64          `json:"nbf"`
 	JWTID       string         `json:"jti"`
+	Scopes      []string       `json:"scopes,omitempty"`
 	Claims      map[string]any `json:"claims,omitempty"`
 }
 
@@ -48,6 +50,7 @@ type Claims struct {
 // - "phone" -> claims.Phone
 // - "is_anonymous" -> claims.IsAnonymous
 // - "jti" -> claims.JWTID
+// - "scopes" -> claims.Scopes
 // All other keys are verified against custom claims.Claims.
 func (claims *Claims) Assert(key string, expected any) error {
 	var actual any
@@ -68,6 +71,8 @@ func (claims *Claims) Assert(key string, expected any) error {
 		actual = claims.IsAnonymous
 	case "jti":
 		actual = claims.JWTID
+	case "scopes":
+		actual = claims.Scopes
 	default:
 		if claims.Claims == nil {
 			return fmt.Errorf("jwt claim %q not found", key)
@@ -375,4 +380,127 @@ func (signer *Signer) GenerateIDToken(oidcIDTokenClaims OIDCIDTokenClaims, expir
 
 	log.Debugf("issued ID token for subject %s (kid: %s)", oidcIDTokenClaims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
+}
+
+// M2MClaims represents JWT claims for machine-to-machine tokens.
+type M2MClaims struct {
+	Subject   string   `json:"sub"`
+	Issuer    string   `json:"iss"`
+	Audience  string   `json:"aud"`
+	Scopes    []string `json:"scopes"`
+	ExpiresAt int64    `json:"exp"`
+	IssuedAt  int64    `json:"iat"`
+	JWTID     string   `json:"jti"`
+}
+
+// GenerateM2MToken signs a machine-to-machine OAuth 2.0 Client Credentials token.
+// Headers: {"alg": "EdDSA", "typ": "JWT", "kid": <keyID>}
+// Claims:
+// - sub: serviceAccountID
+// - iss: handle (slugified project name)
+// - aud: <handle>:service_account
+// - scopes: granted scopes
+// - exp: current UTC timestamp + expirySeconds (default 3600s)
+// - iat: current UTC timestamp
+// - jti: UUIDv7 string
+func (signer *Signer) GenerateM2MToken(serviceAccountID string, scopes []string, expirySeconds int) (string, error) {
+	if serviceAccountID == "" {
+		return "", errors.New("service account ID is required")
+	}
+	if len(signer.privateKey) == 0 {
+		return "", errors.New("signer private key is not initialized")
+	}
+	if scopes == nil {
+		scopes = []string{}
+	}
+	if expirySeconds <= 0 {
+		expirySeconds = defaultM2MTokenExpirySeconds
+	}
+
+	slugifier := core.NewSlugifier()
+	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if handle == "" {
+		handle = "layr"
+	}
+
+	now := time.Now().UTC()
+	m2mClaims := M2MClaims{
+		Subject:   serviceAccountID,
+		Issuer:    handle,
+		Audience:  handle + ":service_account",
+		Scopes:    scopes,
+		ExpiresAt: now.Add(time.Duration(expirySeconds) * time.Second).Unix(),
+		IssuedAt:  now.Unix(),
+		JWTID:     uuid.NewV7().String(),
+	}
+
+	keyID := signer.keyID
+	if keyID == "" {
+		keyID = "layr-ed25519-v1"
+	}
+
+	header := map[string]string{
+		"alg": "EdDSA",
+		"typ": "JWT",
+		"kid": keyID,
+	}
+
+	headerJSON, _ := json.Marshal(header)
+	claimsJSON, _ := json.Marshal(m2mClaims)
+
+	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
+
+	signingInput := headerBase64 + "." + claimsBase64
+	log.Tracef("signing M2M token for service account %s with keyID %s", serviceAccountID, keyID)
+	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
+	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
+
+	log.Debugf("issued M2M token for service account %s (kid: %s)", serviceAccountID, keyID)
+	return signingInput + "." + signatureBase64, nil
+}
+
+// VerifyM2MToken validates an Ed25519 M2M JWT, asserting signature and expiration timestamps.
+func (signer *Signer) VerifyM2MToken(token string) (*M2MClaims, error) {
+	log.Tracef("verifying M2M token with keyID %s", signer.keyID)
+	tokenSegments := strings.Split(token, ".")
+	if len(tokenSegments) != expectedTokenSegmentCount {
+		log.Debugf("m2m jwt verification failed: invalid segment count %d", len(tokenSegments))
+		return nil, errors.New("invalid token format: must contain 3 segments")
+	}
+
+	// 1. Verify signature
+	signingInput := tokenSegments[0] + "." + tokenSegments[1]
+	signature, signatureDecodeErr := base64.RawURLEncoding.DecodeString(tokenSegments[2])
+	if signatureDecodeErr != nil {
+		log.Debugf("m2m jwt verification failed: invalid signature encoding: %v", signatureDecodeErr)
+		return nil, errors.New("invalid signature encoding")
+	}
+
+	if !ed25519.Verify(signer.publicKey, []byte(signingInput), signature) {
+		log.Debugf("m2m jwt verification failed: Ed25519 signature mismatch for keyID %s", signer.keyID)
+		return nil, errors.New("jwt signature verification failed")
+	}
+
+	// 2. Decode claims
+	claimsJSON, claimsDecodeErr := base64.RawURLEncoding.DecodeString(tokenSegments[1])
+	if claimsDecodeErr != nil {
+		log.Debugf("m2m jwt verification failed: invalid claims base64: %v", claimsDecodeErr)
+		return nil, fmt.Errorf("invalid claims base64: %w", claimsDecodeErr)
+	}
+
+	var m2mClaims M2MClaims
+	if claimsUnmarshalErr := json.Unmarshal(claimsJSON, &m2mClaims); claimsUnmarshalErr != nil {
+		log.Debugf("m2m jwt verification failed: invalid claims json: %v", claimsUnmarshalErr)
+		return nil, fmt.Errorf("invalid claims json: %w", claimsUnmarshalErr)
+	}
+
+	now := time.Now().UTC().Unix()
+	if m2mClaims.ExpiresAt < now {
+		log.Debugf("m2m jwt verification failed: token expired at %d (current: %d)", m2mClaims.ExpiresAt, now)
+		return nil, errors.New("jwt token expired")
+	}
+
+	log.Debugf("verified M2M token for subject %s (kid: %s)", m2mClaims.Subject, signer.keyID)
+	return &m2mClaims, nil
 }
