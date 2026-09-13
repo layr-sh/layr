@@ -258,3 +258,254 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on phone-only user MFA verify, got: %d", phoneVerifyResponseRecorder.Code)
 	}
 }
+
+func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	if err := configManager.Load(ctx); err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	authConfig := configManager.Get()
+	authConfig.MFA.Enabled = true
+	authConfig.Password.Enabled = true
+	if err := configManager.Save(ctx, authConfig); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	testKVStore := newInMemoryKVStore()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
+
+	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler.SetEventBus(eventBus)
+	baseHandler.SetKVStore(testKVStore)
+
+	// Create user with password
+	userEmail := "mfa.challenge.user@example.com"
+	rawPassword := "SecurePassword123!"
+	passwordHash, hashErr := baseHandler.hasher.Hash(rawPassword)
+	if hashErr != nil {
+		t.Fatalf("failed to hash password: %v", hashErr)
+	}
+
+	var userID string
+	err := db.QueryRow(ctx, `
+		INSERT INTO auth.users (email, password_hash, role, properties, created_at, last_updated_at)
+		VALUES ($1, $2, 'authenticated', '{}', clock_timestamp(), clock_timestamp())
+		RETURNING id
+	`, userEmail, passwordHash).Scan(&userID)
+	if err != nil {
+		t.Fatalf("failed to insert test user: %v", err)
+	}
+
+	// 1. Password sign-in BEFORE MFA enabled -> issues session directly
+	signInPayload, _ := json.Marshal(SignInRequest{
+		Email:    userEmail,
+		Password: rawPassword,
+	})
+	preMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	preMFAResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(preMFAResponseRecorder, preMFARequest)
+	if preMFAResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on pre-MFA sign in, got: %d (%s)", preMFAResponseRecorder.Code, preMFAResponseRecorder.Body.String())
+	}
+	var preMFASessionResponse SessionResponse
+	if decodeErr := json.NewDecoder(preMFAResponseRecorder.Body).Decode(&preMFASessionResponse); decodeErr != nil || preMFASessionResponse.AccessToken == "" {
+		t.Fatalf("expected valid SessionResponse before MFA enabled, got: %+v", preMFASessionResponse)
+	}
+
+	// 2. Setup and enable MFA on user
+	validAccessToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		Subject: userID,
+		Email:   userEmail,
+		Role:    "authenticated",
+	}, 900)
+
+	setupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
+	setupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
+	setupResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFASetup(setupResponseRecorder, setupRequest)
+	if setupResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on MFA setup, got: %d", setupResponseRecorder.Code)
+	}
+
+	var mfaSetupResponse MFASetupResponse
+	_ = json.NewDecoder(setupResponseRecorder.Body).Decode(&mfaSetupResponse)
+
+	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
+	verifyPayload, _ := json.Marshal(map[string]any{"code": totpCode})
+	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
+	verifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
+	verifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAVerify(verifyResponseRecorder, verifyRequest)
+	if verifyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on MFA verify, got: %d", verifyResponseRecorder.Code)
+	}
+
+	// 3. Password sign-in AFTER MFA enabled -> intercepted, issues MFA ticket
+	postMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	postMFAResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(postMFAResponseRecorder, postMFARequest)
+	if postMFAResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on MFA-intercepted sign in, got: %d (%s)", postMFAResponseRecorder.Code, postMFAResponseRecorder.Body.String())
+	}
+
+	var signInResponse SignInResponse
+	if decodeErr := json.NewDecoder(postMFAResponseRecorder.Body).Decode(&signInResponse); decodeErr != nil {
+		t.Fatalf("failed to decode SignInResponse: %v", decodeErr)
+	}
+	if !signInResponse.MFARequired || signInResponse.MFATicket == "" || signInResponse.Factor != "totp" {
+		t.Fatalf("expected MFA required with ticket, got: %+v", signInResponse)
+	}
+
+	// Sign-in with nil KV store when MFA enabled -> 200
+	baseHandler.SetKVStore(nil)
+	nilKVRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	nilKVResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(nilKVResponseRecorder, nilKVRequest)
+	if nilKVResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on sign-in with nil kvStore, got: %d", nilKVResponseRecorder.Code)
+	}
+	baseHandler.SetKVStore(testKVStore)
+
+	// 4. MFA Challenge: Invalid/missing fields -> 400
+	emptyChallengePayload, _ := json.Marshal(MFAChallengeRequest{})
+	emptyChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(emptyChallengePayload))
+	emptyChallengeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(emptyChallengeResponseRecorder, emptyChallengeRequest)
+	if emptyChallengeResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on empty MFA challenge, got: %d", emptyChallengeResponseRecorder.Code)
+	}
+
+	// 5. MFA Challenge: Non-existent ticket -> 401
+	ghostChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: "mfa_tk_non_existent",
+		Code:      "123456",
+	})
+	ghostChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostChallengePayload))
+	ghostChallengeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(ghostChallengeResponseRecorder, ghostChallengeRequest)
+	if ghostChallengeResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on non-existent MFA ticket, got: %d", ghostChallengeResponseRecorder.Code)
+	}
+
+	// 6. MFA Challenge: Wrong TOTP code -> 401
+	wrongCodePayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: signInResponse.MFATicket,
+		Code:      "000000",
+	})
+	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
+	wrongCodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(wrongCodeResponseRecorder, wrongCodeRequest)
+	if wrongCodeResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on wrong TOTP code in MFA challenge, got: %d", wrongCodeResponseRecorder.Code)
+	}
+
+	// 7. Replay attack: The previous ticket was consumed on attempt -> 401
+	replayRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
+	replayResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(replayResponseRecorder, replayRequest)
+	if replayResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on replayed MFA ticket, got: %d", replayResponseRecorder.Code)
+	}
+
+	// 8. Generate fresh ticket via sign-in and succeed with valid TOTP code
+	freshSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	freshSignInResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(freshSignInResponseRecorder, freshSignInRequest)
+	var freshSignInResponse SignInResponse
+	_ = json.NewDecoder(freshSignInResponseRecorder.Body).Decode(&freshSignInResponse)
+
+	currentCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
+	validChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: freshSignInResponse.MFATicket,
+		Code:      currentCode,
+	})
+	validChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(validChallengePayload))
+	validChallengeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(validChallengeResponseRecorder, validChallengeRequest)
+	if validChallengeResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on valid MFA challenge, got: %d (%s)", validChallengeResponseRecorder.Code, validChallengeResponseRecorder.Body.String())
+	}
+
+	var mfaSessionResponse SessionResponse
+	if decodeErr := json.NewDecoder(validChallengeResponseRecorder.Body).Decode(&mfaSessionResponse); decodeErr != nil || mfaSessionResponse.AccessToken == "" {
+		t.Fatalf("expected valid SessionResponse from MFA challenge: %+v", mfaSessionResponse)
+	}
+	if mfaSessionResponse.User.ID != userID {
+		t.Fatalf("expected user ID %s, got: %s", userID, mfaSessionResponse.User.ID)
+	}
+
+	// 9. Locked account branch: locked user -> 423
+	lockedTicket := "mfa_tk_locked"
+	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+lockedTicket, userID, 5*time.Minute)
+	lockedUntil := time.Now().UTC().Add(time.Hour)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
+
+	lockedChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: lockedTicket,
+		Code:      currentCode,
+	})
+	lockedChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(lockedChallengePayload))
+	lockedChallengeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(lockedChallengeResponseRecorder, lockedChallengeRequest)
+	if lockedChallengeResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 on locked user in MFA challenge, got: %d", lockedChallengeResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
+
+	// 10. Missing MFA secret branch -> 400
+	noSecretTicket := "mfa_tk_no_secret"
+	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+noSecretTicket, userID, 5*time.Minute)
+	var backupEncryptedSecret string
+	_ = db.QueryRow(ctx, "SELECT encrypted_mfa_secret FROM auth.users WHERE id = $1", userID).Scan(&backupEncryptedSecret)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", userID)
+
+	noSecretPayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: noSecretTicket,
+		Code:      currentCode,
+	})
+	noSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(noSecretPayload))
+	noSecretResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(noSecretResponseRecorder, noSecretRequest)
+	if noSecretResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on missing secret in MFA challenge, got: %d", noSecretResponseRecorder.Code)
+	}
+
+	// 11. Corrupted MFA secret branch -> 500
+	corruptSecretTicket := "mfa_tk_corrupt_secret"
+	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+corruptSecretTicket, userID, 5*time.Minute)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupt-secret' WHERE id = $1", userID)
+
+	corruptSecretPayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: corruptSecretTicket,
+		Code:      currentCode,
+	})
+	corruptSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(corruptSecretPayload))
+	corruptSecretResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(corruptSecretResponseRecorder, corruptSecretRequest)
+	if corruptSecretResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on corrupted secret in MFA challenge, got: %d", corruptSecretResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = $1 WHERE id = $2", backupEncryptedSecret, userID)
+
+	// 12. Orphaned ticket for deleted user -> 401
+	ghostUserTicket := "mfa_tk_ghost_user"
+	ghostUserID := "01918a24-9999-7000-8000-000000000009"
+	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+ghostUserTicket, ghostUserID, 5*time.Minute)
+
+	ghostUserPayload, _ := json.Marshal(MFAChallengeRequest{
+		MFATicket: ghostUserTicket,
+		Code:      currentCode,
+	})
+	ghostUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostUserPayload))
+	ghostUserResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(ghostUserResponseRecorder, ghostUserRequest)
+	if ghostUserResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on non-existent user for MFA ticket, got: %d", ghostUserResponseRecorder.Code)
+	}
+}

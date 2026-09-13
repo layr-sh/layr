@@ -71,6 +71,18 @@ func NewPasskeyCreatedEvent(resourceID string, passkeyCreatedEventData PasskeyCr
 	return core.NewEvent("auth.passkey.created", passkeyCreatedEventData).WithResourceID(resourceID)
 }
 
+// PasskeyDeletedEventData represents the payload for auth.passkey.deleted.
+type PasskeyDeletedEventData struct {
+	ID   string     `json:"id"`
+	User UserRecord `json:"user"`
+}
+
+// NewPasskeyDeletedEvent creates a typed event for passkey credential revocation.
+func NewPasskeyDeletedEvent(resourceID string, passkeyDeletedEventData PasskeyDeletedEventData) core.Event {
+	passkeyDeletedEventData.User = sanitizeEventUserRecord(passkeyDeletedEventData.User)
+	return core.NewEvent("auth.passkey.deleted", passkeyDeletedEventData).WithResourceID(resourceID)
+}
+
 // UserSignedUpEventData represents the payload for auth.user.signed_up.
 type UserSignedUpEventData UserRecord
 

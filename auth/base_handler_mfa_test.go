@@ -138,3 +138,66 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 		t.Fatal("expected non-nil TOTP manager")
 	}
 }
+
+func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+
+	// 1. MFA disabled -> 403
+	disabledConfig := DefaultConfig()
+	disabledConfig.MFA.Enabled = false
+	configManager.Set(disabledConfig)
+
+	mfaChallengeDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/challenge", strings.NewReader(`{}`))
+	mfaChallengeDisabledResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(mfaChallengeDisabledResponseRecorder, mfaChallengeDisabledRequest)
+	if mfaChallengeDisabledResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on MFA challenge when MFA disabled, got: %d", mfaChallengeDisabledResponseRecorder.Code)
+	}
+
+	// Enable MFA
+	enabledConfig := DefaultConfig()
+	enabledConfig.MFA.Enabled = true
+	configManager.Set(enabledConfig)
+
+	// 2. Bad JSON body -> 400
+	badJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/challenge", strings.NewReader(`{invalid`))
+	badJSONResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(badJSONResponseRecorder, badJSONRequest)
+	if badJSONResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on bad JSON in MFA challenge, got: %d", badJSONResponseRecorder.Code)
+	}
+
+	// 3. Missing ticket or code -> 400
+	missingFieldsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"","code":""}`))
+	missingFieldsResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(missingFieldsResponseRecorder, missingFieldsRequest)
+	if missingFieldsResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on missing ticket/code in MFA challenge, got: %d", missingFieldsResponseRecorder.Code)
+	}
+
+	// 4. KV store nil -> 500
+	validPayloadRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"mfa_tk_test","code":"123456"}`))
+	validPayloadResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(validPayloadResponseRecorder, validPayloadRequest)
+	if validPayloadResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on nil KV store in MFA challenge, got: %d", validPayloadResponseRecorder.Code)
+	}
+
+	// 5. KV store with ticket on nil DB pool -> 500
+	testKVStore := newInMemoryKVStore()
+	_ = testKVStore.Set(context.Background(), "auth:mfa_ticket:mfa_tk_test", "test-user-id", 0)
+	baseHandler.SetKVStore(testKVStore)
+
+	nilDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"mfa_tk_test","code":"123456"}`))
+	nilDBResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFAChallenge(nilDBResponseRecorder, nilDBRequest)
+	if nilDBResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on nil DB pool in MFA challenge, got: %d", nilDBResponseRecorder.Code)
+	}
+}

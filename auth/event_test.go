@@ -121,6 +121,23 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 	assertSanitizedProps(passkeyUser, "PasskeyCreated")
 
+	// 4b. PasskeyDeleted (nested user)
+	passkeyDeletedEvent := NewPasskeyDeletedEvent("passkey_123", PasskeyDeletedEventData{
+		ID:   "passkey_123",
+		User: userRecord,
+	})
+	if passkeyDeletedEvent.Type != "auth.passkey.deleted" || passkeyDeletedEvent.ResourceType != "auth.passkey" || passkeyDeletedEvent.Action != "deleted" {
+		t.Fatalf("unexpected passkey deleted event: %+v", passkeyDeletedEvent)
+	}
+	if passkeyDeletedEvent.Data["id"] != "passkey_123" {
+		t.Fatalf("unexpected passkey deleted ID: %v", passkeyDeletedEvent.Data["id"])
+	}
+	passkeyDeletedUser, ok := passkeyDeletedEvent.Data["user"].(map[string]any)
+	if !ok || passkeyDeletedUser["id"] != "usr_123" {
+		t.Fatalf("expected nested user in passkey deleted event, got: %v", passkeyDeletedEvent.Data["user"])
+	}
+	assertSanitizedProps(passkeyDeletedUser, "PasskeyDeleted")
+
 	// 5. UserSignedUp (flat user)
 	signedUpEvent := NewUserSignedUpEvent("usr_123", UserSignedUpEventData(userRecord))
 	if signedUpEvent.Type != "auth.user.signed_up" || signedUpEvent.ResourceType != "auth.user" || signedUpEvent.Action != "signed_up" {

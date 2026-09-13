@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"layr.sh/auth/jwt"
 	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
@@ -171,4 +172,87 @@ type errEntropyReader struct{}
 
 func (errEntropyReader) Read(_ []byte) (int, error) {
 	return 0, errors.New("entropy failure")
+}
+
+func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if err != nil {
+		t.Fatalf("failed to create key manager: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	testKVStore := newInMemoryKVStore()
+	baseHandler.SetKVStore(testKVStore)
+
+	testUserUUID := "01918a24-5678-789a-bcde-f0123456789a"
+	validToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		Subject: testUserUUID,
+		Role:    "authenticated",
+	}, 3600)
+	bearerHeader := "Bearer " + validToken
+
+	// 1. List user passkeys - unauthenticated -> 401
+	unauthListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	unauthListResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleListUserPasskeys(unauthListResponseRecorder, unauthListRequest)
+	if unauthListResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on unauthenticated list user passkeys, got: %d", unauthListResponseRecorder.Code)
+	}
+
+	// 2. List user passkeys - authenticated on nil DB -> 500
+	authListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	authListRequest.Header.Set("Authorization", bearerHeader)
+	authListResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleListUserPasskeys(authListResponseRecorder, authListRequest)
+	if authListResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on list user passkeys with nil DB, got: %d", authListResponseRecorder.Code)
+	}
+
+	// 3. Delete user passkey - unauthenticated -> 401
+	unauthDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
+	unauthDeleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(unauthDeleteResponseRecorder, unauthDeleteRequest)
+	if unauthDeleteResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on unauthenticated delete user passkey, got: %d", unauthDeleteResponseRecorder.Code)
+	}
+
+	// 4. Delete user passkey - authenticated with empty ID -> 400
+	emptyIDDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/", nil)
+	emptyIDDeleteRequest.Header.Set("Authorization", bearerHeader)
+	emptyIDDeleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(emptyIDDeleteResponseRecorder, emptyIDDeleteRequest)
+	if emptyIDDeleteResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on delete passkey with empty ID, got: %d", emptyIDDeleteResponseRecorder.Code)
+	}
+
+	// 5. Delete user passkey - authenticated with valid ID on nil DB -> 500
+	validIDDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
+	validIDDeleteRequest.SetPathValue("id", "pk-1")
+	validIDDeleteRequest.Header.Set("Authorization", bearerHeader)
+	validIDDeleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(validIDDeleteResponseRecorder, validIDDeleteRequest)
+	if validIDDeleteResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on delete passkey with nil DB, got: %d", validIDDeleteResponseRecorder.Code)
+	}
+
+	// 6. Passkey SignUp with Bearer Token and empty user_id -> 200
+	authSignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
+	authSignUpRequest.Header.Set("Authorization", bearerHeader)
+	authSignUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignUp(authSignUpResponseRecorder, authSignUpRequest)
+	if authSignUpResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on passkey sign-up with bearer token, got: %d", authSignUpResponseRecorder.Code)
+	}
+
+	// 7. Passkey SignUpVerify with Bearer Token and empty user_id on nil DB -> 500
+	challenge, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
+	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge, testUserUUID, 0)
+	authVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
+	authVerifyRequest.Header.Set("Authorization", bearerHeader)
+	authVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignUpVerify(authVerifyResponseRecorder, authVerifyRequest)
+	if authVerifyResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on passkey verify with bearer token on nil DB, got: %d", authVerifyResponseRecorder.Code)
+	}
 }
