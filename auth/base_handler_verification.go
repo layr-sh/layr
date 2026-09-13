@@ -94,10 +94,12 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, targetUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(targetUserID, OTPSentEventData{
-			UserID:    targetUserID,
+		userRecord, _ := fetchUserRecordByID(ctx, handler.db, targetUserID)
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
 			Recipient: recipientEmail,
 			Purpose:   "email_verification",
+			Channel:   "email",
+			User:      &userRecord,
 		}))
 	}
 
@@ -191,10 +193,11 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 			UPDATE auth.users 
 			SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, recipientEmail, authUserID).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
@@ -210,12 +213,13 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 			if isCallerAnonymous {
 				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 			}
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord)
+		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
 		return
 	}
 
@@ -225,10 +229,11 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		UPDATE auth.users 
 		SET email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE email = $1 
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, recipientEmail).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -244,6 +249,7 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -345,10 +351,12 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(targetUserID, OTPSentEventData{
-			UserID:    targetUserID,
+		userRecord, _ := fetchUserRecordByID(ctx, handler.db, targetUserID)
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
 			Recipient: recipientPhone,
 			Purpose:   "phone_verification",
+			Channel:   "sms",
+			User:      &userRecord,
 		}))
 	}
 
@@ -450,10 +458,11 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 			UPDATE auth.users 
 			SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, recipientPhone, authUserID).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
@@ -469,12 +478,13 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 			if isCallerAnonymous {
 				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 			}
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord)
+		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
 		return
 	}
 
@@ -484,10 +494,11 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		UPDATE auth.users 
 		SET phone_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE phone = $1 
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, recipientPhone).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -503,6 +514,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -601,10 +613,17 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(authUserID, OTPSentEventData{
-			UserID:    authUserID,
+		var targetUserRecord *UserRecord
+		if anonymousUserRecord != nil {
+			targetUserRecord = anonymousUserRecord
+		} else if userRecord, err := fetchUserRecordByID(ctx, handler.db, authUserID); err == nil {
+			targetUserRecord = &userRecord
+		}
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
 			Recipient: recipientEmail,
 			Purpose:   "email_verification",
+			Channel:   "email",
+			User:      targetUserRecord,
 		}))
 	}
 
@@ -706,10 +725,17 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(authUserID, OTPSentEventData{
-			UserID:    authUserID,
+		var targetUserRecord *UserRecord
+		if anonymousUserRecord != nil {
+			targetUserRecord = anonymousUserRecord
+		} else if userRecord, err := fetchUserRecordByID(ctx, handler.db, authUserID); err == nil {
+			targetUserRecord = &userRecord
+		}
+		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
 			Recipient: recipientPhone,
 			Purpose:   "phone_verification",
+			Channel:   "sms",
+			User:      targetUserRecord,
 		}))
 	}
 

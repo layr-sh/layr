@@ -592,7 +592,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	// 3. User with enrolled MFA Totp
 	_, _ = db.Exec(ctx, `
 		UPDATE auth.users 
-		SET properties = properties || '{"mfa_secret_enc": "enc_totp_secret", "mfa_pending": false}'::jsonb
+		SET encrypted_mfa_secret = 'enc_totp_secret', mfa_enabled = true
 		WHERE id = $1
 	`, userID)
 	mfaRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil)
@@ -604,16 +604,12 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	if !mfaUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be true after TOTP enrollment")
 	}
-	if _, exists := mfaUserResponse.Properties["mfa_secret_enc"]; exists {
-		t.Fatalf("expected sensitive property mfa_secret_enc to be stripped from profile")
-	}
 
 	// 4. PATCH /api/v1/auth/user/properties - Merge custom properties
 	patchPayload, _ := json.Marshal(UpdateUserPropertiesRequest{
 		Properties: map[string]any{
-			"theme":          "nord",
-			"tier":           "enterprise",
-			"mfa_secret_enc": "attacker_override_attempt",
+			"theme": "nord",
+			"tier":  "enterprise",
 		},
 	})
 	patchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/properties", bytes.NewReader(patchPayload))
@@ -628,9 +624,6 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	_ = json.NewDecoder(patchResponseRecorder.Body).Decode(&updateUserPropertiesResponse)
 	if updateUserPropertiesResponse.Properties["theme"] != "nord" || updateUserPropertiesResponse.Properties["tier"] != "enterprise" {
 		t.Fatalf("expected updated properties in response, got: %+v", updateUserPropertiesResponse.Properties)
-	}
-	if _, exists := updateUserPropertiesResponse.Properties["mfa_secret_enc"]; exists {
-		t.Fatalf("expected mfa_secret_enc to be stripped from sanitized response")
 	}
 
 	// 5. PATCH /api/v1/auth/user/password - Validations
@@ -1092,7 +1085,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on authenticated phone verification confirm, got: %d (%s)", authPhoneConfirmResponseRecorder.Code, authPhoneConfirmResponseRecorder.Body.String())
 	}
 
-	// 16. User with NULL properties and mfa_secret_enc without pending
+	// 16. User with NULL properties and encrypted_mfa_secret without pending
 	nullPropsUserID := "01918a24-5555-7000-8000-000000000005"
 	nullPropsEmail := "nullprops@example.com"
 	_, err = db.Exec(ctx, `
@@ -1117,10 +1110,10 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 200 for user with NULL properties, got: %d", nullPropsProfileResponseRecorder.Code)
 	}
 
-	// Update user to have mfa_secret_enc without mfa_pending
+	// Update user to have mfa_enabled = true
 	_, _ = db.Exec(ctx, `
 		UPDATE auth.users
-		SET properties = '{"mfa_secret_enc": "enc_secret_value"}'::jsonb
+		SET encrypted_mfa_secret = 'enc_secret_value', mfa_enabled = true
 		WHERE id = $1
 	`, nullPropsUserID)
 	mfaSecretOnlyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil)
@@ -1130,15 +1123,15 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	var mfaSecretOnlyUserResponse UserResponse
 	_ = json.NewDecoder(mfaSecretOnlyResponseRecorder.Body).Decode(&mfaSecretOnlyUserResponse)
 	if !mfaSecretOnlyUserResponse.MFAEnabled {
-		t.Fatalf("expected MFAEnabled to be true with mfa_secret_enc and no pending")
+		t.Fatalf("expected MFAEnabled to be true with mfa_enabled")
 	}
 
-	// User with boolean mfa_enabled
+	// User with boolean mfa_enabled column
 	boolMFAUserID := "01918a24-5555-7000-8000-000000000055"
 	boolMFAEmail := "boolmfa@example.com"
 	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
-		VALUES ($1, $2, 'user', false, '{"mfa_enabled": true}'::jsonb, clock_timestamp(), clock_timestamp())
+		INSERT INTO auth.users (id, email, role, is_anonymous, mfa_enabled, properties, created_at, last_updated_at)
+		VALUES ($1, $2, 'user', false, true, '{}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, boolMFAUserID, boolMFAEmail)
 	boolMFAToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{Subject: boolMFAUserID, Email: boolMFAEmail, Role: "user"}, 3600)
 	boolMFARequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil)
@@ -1149,24 +1142,6 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	_ = json.NewDecoder(boolMFAResponseRecorder.Body).Decode(&boolMFAUserResponse)
 	if !boolMFAUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be true for boolean mfa_enabled")
-	}
-
-	// User with string mfa_enabled "true"
-	stringMFAUserID := "01918a24-5555-7000-8000-000000000056"
-	stringMFAEmail := "strmfa@example.com"
-	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.users (id, email, role, is_anonymous, properties, created_at, last_updated_at)
-		VALUES ($1, $2, 'user', false, '{"mfa_enabled": "true"}'::jsonb, clock_timestamp(), clock_timestamp())
-	`, stringMFAUserID, stringMFAEmail)
-	stringMFAToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{Subject: stringMFAUserID, Email: stringMFAEmail, Role: "user"}, 3600)
-	stringMFARequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil)
-	stringMFARequest.Header.Set("Authorization", "Bearer "+stringMFAToken)
-	stringMFAResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleGetUser(stringMFAResponseRecorder, stringMFARequest)
-	var stringMFAUserResponse UserResponse
-	_ = json.NewDecoder(stringMFAResponseRecorder.Body).Decode(&stringMFAUserResponse)
-	if !stringMFAUserResponse.MFAEnabled {
-		t.Fatalf("expected MFAEnabled to be true for string mfa_enabled")
 	}
 
 	// 17. Non-existent user in valid token -> Update fails with 500, Password change fails with 404
@@ -1346,6 +1321,19 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		baseHandler.issueSessionResponse(canceledSessionResponseRecorder, canceledSessionRequest, dummyUserRecord)
 		if canceledSessionResponseRecorder.Code != http.StatusOK {
 			t.Fatalf("expected 200 even if session db insert fails, got: %d", canceledSessionResponseRecorder.Code)
+		}
+	}
+
+	// 24. fetchUserRecordByID and fetchUserRecordByRecipient error branches
+	{
+		ghostUserRecord, ghostErr := fetchUserRecordByID(ctx, db, "01918a24-9999-7000-8000-000000000000")
+		if ghostErr == nil || ghostUserRecord.ID != "01918a24-9999-7000-8000-000000000000" {
+			t.Fatalf("expected error and fallback user record for ghost user ID, got: %v, %v", ghostUserRecord, ghostErr)
+		}
+
+		ghostRecipientUserRecord, ghostRecipientErr := fetchUserRecordByRecipient(ctx, db, "nonexistent@example.com")
+		if ghostRecipientErr == nil || ghostRecipientUserRecord.ID != "" {
+			t.Fatalf("expected error for nonexistent recipient, got: %v, %v", ghostRecipientUserRecord, ghostRecipientErr)
 		}
 	}
 }

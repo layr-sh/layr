@@ -61,8 +61,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	if inputProperties == nil {
 		inputProperties = make(map[string]any)
 	}
-	cleanedProperties := sanitizeUserProperties(inputProperties)
-	propertiesJSON, _ := json.Marshal(cleanedProperties)
+	propertiesJSON, _ := json.Marshal(inputProperties)
 
 	if handler.db == nil {
 		log.Debug("sign-up rejected: database pool unavailable")
@@ -106,11 +105,12 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			    properties = COALESCE(properties, '{}'::jsonb) || $4::jsonb,
 			    last_updated_at = clock_timestamp()
 			WHERE id = $5
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`
 		err = handler.db.QueryRow(ctx, updateQuery, emailPtr, phonePtr, passHash, propertiesJSON, anonymousUserRecord.ID).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
@@ -128,7 +128,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord)
+		handler.issueSessionResponse(responseWriter, request, userRecord, "password")
 		return
 	}
 
@@ -137,11 +137,12 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	query := `
 		INSERT INTO auth.users (email, phone, password_hash, role, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, 'authenticated', $4, clock_timestamp(), clock_timestamp())
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := handler.db.QueryRow(ctx, query, emailPtr, phonePtr, passHash, propertiesJSON).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -159,7 +160,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "password")
 }
 
 func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, request *http.Request) {
@@ -210,13 +211,14 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	var rawProperties []byte
 
 	query := `
-		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE email = $1 OR phone = $1
 	`
 	err := handler.db.QueryRow(ctx, query, identifier).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &passHash, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -249,7 +251,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		_ = handler.kvStore.Delete(ctx, rateKey)
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "password")
 }
 
 func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.ResponseWriter, request *http.Request) {
@@ -324,13 +326,13 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		return
 	}
 
-	var userID string
-	err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1 OR phone = $1", recipient).Scan(&userID)
+	userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient)
 	if err != nil {
 		log.Debugf("password reset request rejected: user not found for recipient %s: %v", recipient, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
 		return
 	}
+	userID := userRecord.ID
 
 	code, _ := otp.GenerateCode(nil)
 	codeHash := otp.HashCode(code)
@@ -353,9 +355,9 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(userID, PasswordResetRequestedEventData{
-			UserID:    userID,
+		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(userRecord.ID, PasswordResetRequestedEventData{
 			Recipient: recipient,
+			User:      userRecord,
 		}))
 	}
 
@@ -460,10 +462,11 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		UPDATE auth.users 
 		SET password_hash = $1, last_updated_at = clock_timestamp() 
 		WHERE email = $2 OR phone = $2
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, passHash, recipient).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProps, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -485,7 +488,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 	}
 
 	log.Debugf("password reset successful for user %s", userRecord.ID)
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "password_reset")
 }
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
@@ -562,10 +565,11 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		UPDATE auth.users
 		SET password_hash = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, hashedPassword, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if queryErr == nil {
@@ -574,9 +578,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(userRecord.ID, PasswordChangedEventData{
-				User: userRecord,
-			}))
+			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(userRecord.ID, PasswordChangedEventData(userRecord)))
 		}
 	}
 

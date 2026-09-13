@@ -132,9 +132,10 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 	}
 
 	if handler.eventBus != nil {
+		userRecord, _ := fetchUserRecordByID(ctx, handler.db, userID)
 		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(targetSessionID, SessionDeletedEventData{
+			User:      userRecord,
 			SessionID: &targetSessionID,
-			UserID:    userID,
 		}))
 	}
 
@@ -226,9 +227,10 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 	}
 
 	if handler.eventBus != nil {
+		userRecord, _ := fetchUserRecordByID(ctx, handler.db, userID)
 		revokedCount := len(deletedHashes)
 		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
-			UserID:       userID,
+			User:         userRecord,
 			RevokedCount: &revokedCount,
 		}))
 	}
@@ -273,7 +275,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 				if handler.db != nil {
 					_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				}
-				handler.issueSessionResponse(responseWriter, request, cachedSession.User)
+				handler.issueSessionResponse(responseWriter, request, cachedSession.User, "session_refresh")
 				return
 			}
 		}
@@ -310,11 +312,12 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -330,7 +333,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 
 	// Rotate refresh token
 	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "session_refresh")
 }
 
 func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, request *http.Request) {
@@ -356,9 +359,10 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 				RETURNING id, user_id
 			`, tokenHash).Scan(&sessionID, &userID)
 			if err == nil && handler.eventBus != nil {
+				userRecord, _ := fetchUserRecordByID(request.Context(), handler.db, userID)
 				handler.eventBus.Publish(request.Context(), NewSessionDeletedEvent(sessionID, SessionDeletedEventData{
+					User:      userRecord,
 					SessionID: &sessionID,
-					UserID:    userID,
 				}))
 			}
 		}

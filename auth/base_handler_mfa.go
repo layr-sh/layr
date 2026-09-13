@@ -45,12 +45,13 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	var userRecord UserRecord
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -66,15 +67,14 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	secretBase32, _ := handler.totpManager.GenerateSecret()
 	encryptedSecret, _ := handler.cryptoKeyManager.EncryptField([]byte(secretBase32))
 
-	userRecord.Properties["mfa_secret_enc"] = encryptedSecret
-	userRecord.Properties["mfa_pending"] = true
-	propertiesJSON, _ := json.Marshal(userRecord.Properties)
+	userRecord.EncryptedMFASecret = &encryptedSecret
+	userRecord.MFAEnabled = false
 
 	_, _ = handler.db.Exec(ctx, `
 		UPDATE auth.users
-		SET properties = $1, last_updated_at = clock_timestamp()
+		SET encrypted_mfa_secret = $1, mfa_enabled = false, last_updated_at = clock_timestamp()
 		WHERE id = $2
-	`, propertiesJSON, userRecord.ID)
+	`, encryptedSecret, userRecord.ID)
 
 	accountName := userRecord.ID
 	if userRecord.Email != nil && *userRecord.Email != "" {
@@ -139,12 +139,13 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 	var userRecord UserRecord
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -162,13 +163,12 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	encryptedSecret, ok := userRecord.Properties["mfa_secret_enc"].(string)
-	if !ok || encryptedSecret == "" {
+	if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA is not set up on this account", "LAYR_AUTH_001")
 		return
 	}
 
-	secretBytes, err := handler.cryptoKeyManager.DecryptField(encryptedSecret)
+	secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to decrypt MFA secret", "LAYR_AUTH_001")
 		return
@@ -179,30 +179,18 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	userRecord.Properties["mfa_enabled"] = true
-	delete(userRecord.Properties, "mfa_pending")
-	propertiesJSON, _ := json.Marshal(userRecord.Properties)
+	userRecord.MFAEnabled = true
 
 	_, _ = handler.db.Exec(ctx, `
 		UPDATE auth.users
-		SET properties = $1, last_updated_at = clock_timestamp()
-		WHERE id = $2
-	`, propertiesJSON, userRecord.ID)
+		SET mfa_enabled = true, last_updated_at = clock_timestamp()
+		WHERE id = $1
+	`, userRecord.ID)
 
 	if handler.eventBus != nil {
-		recipient := userRecord.ID
-		if userRecord.Email != nil && *userRecord.Email != "" {
-			recipient = *userRecord.Email
-		} else if userRecord.Phone != nil && *userRecord.Phone != "" {
-			recipient = *userRecord.Phone
-		}
-		handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(userRecord.ID, OTPVerifiedEventData{
-			UserID:    userRecord.ID,
-			Recipient: recipient,
-			Purpose:   "mfa",
-		}))
+		handler.eventBus.Publish(ctx, NewMFAEnabledEvent(userRecord.ID, MFAEnabledEventData(userRecord)))
 		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "mfa")
 }

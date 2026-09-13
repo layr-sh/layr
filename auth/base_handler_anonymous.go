@@ -25,8 +25,7 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 	if inputProperties == nil {
 		inputProperties = make(map[string]any)
 	}
-	cleanedProperties := sanitizeUserProperties(inputProperties)
-	propertiesJSON, _ := json.Marshal(cleanedProperties)
+	propertiesJSON, _ := json.Marshal(inputProperties)
 
 	if handler.db == nil {
 		log.Debug("anonymous sign-in rejected: database pool unavailable")
@@ -40,11 +39,12 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 	query := `
 		INSERT INTO auth.users (role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ('authenticated', true, $1, clock_timestamp(), clock_timestamp())
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := handler.db.QueryRow(ctx, query, propertiesJSON).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -62,5 +62,5 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "anonymous")
 }

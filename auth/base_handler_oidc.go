@@ -178,14 +178,15 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE email = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
 		&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
-		&userRecord.LockedUntil, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if scanErr != nil || userRecord.PasswordHash == nil {
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
@@ -225,7 +226,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 			ID:        sessionID,
-			UserID:    userRecord.ID,
+			User:      userRecord,
 			ExpiresAt: expiresAt,
 			CreatedAt: time.Now().UTC(),
 		}))
@@ -535,7 +536,7 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 			ID:        sessionID,
-			UserID:    userRecord.ID,
+			User:      userRecord,
 			ExpiresAt: expiresAt,
 			CreatedAt: time.Now().UTC(),
 		}))
