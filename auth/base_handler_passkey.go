@@ -3,9 +3,11 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 	"uuid"
 
+	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
 
@@ -21,8 +23,22 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 	}
 
 	var passkeySignUpRequest PasskeySignUpRequest
-	if err := json.NewDecoder(request.Body).Decode(&passkeySignUpRequest); err != nil || passkeySignUpRequest.UserID == "" {
-		log.Debugf("passkey sign up rejected: invalid request or empty user_id: %v", err)
+	if request.Body != nil && request.ContentLength != 0 {
+		if err := json.NewDecoder(request.Body).Decode(&passkeySignUpRequest); err != nil {
+			log.Debugf("passkey sign up rejected: invalid JSON body: %v", err)
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+			return
+		}
+	}
+
+	if passkeySignUpRequest.UserID == "" {
+		if authUserID, err := handler.authenticateUser(request); err == nil && authUserID != "" {
+			passkeySignUpRequest.UserID = authUserID
+		}
+	}
+
+	if passkeySignUpRequest.UserID == "" {
+		log.Debug("passkey sign up rejected: empty user_id")
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID required", "LAYR_AUTH_001")
 		return
 	}
@@ -62,6 +78,12 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		log.Debugf("passkey sign up verify rejected: invalid JSON body: %v", err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_006")
 		return
+	}
+
+	if passkeySignUpVerifyRequest.UserID == "" {
+		if authUserID, authErr := handler.authenticateUser(request); authErr == nil && authUserID != "" {
+			passkeySignUpVerifyRequest.UserID = authUserID
+		}
 	}
 
 	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(passkeySignUpVerifyRequest.Challenge)
@@ -225,11 +247,23 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 
 	ctx := request.Context()
 	var userID string
-	err := handler.db.QueryRow(ctx, "SELECT user_id FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID)
+	var publicKey []byte
+	err := handler.db.QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
 	if err != nil {
 		log.Debugf("passkey sign-in verify rejected: credential not found: %v", err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found", "LAYR_AUTH_006")
 		return
+	}
+
+	if passkeySignInVerifyRequest.Signature != "" {
+		clientDataBytes := []byte(passkeySignInVerifyRequest.ClientDataJSON)
+		authenticatorDataBytes := []byte(passkeySignInVerifyRequest.AuthenticatorData)
+		signatureBytes := []byte(passkeySignInVerifyRequest.Signature)
+		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
+			log.Debug("passkey sign-in verify rejected: invalid assertion signature")
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid passkey signature", "LAYR_AUTH_006")
+			return
+		}
 	}
 
 	var userRecord UserRecord
@@ -249,6 +283,12 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		return
 	}
 
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Debugf("passkey sign-in rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
+	}
+
 	userRecord.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -257,4 +297,116 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 	_, _ = handler.db.Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
 	handler.issueSessionResponse(responseWriter, request, userRecord, "passkey")
+}
+
+func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Debug("handling list user passkeys request")
+	userID, err := handler.authenticateUser(request)
+	if err != nil {
+		log.Debugf("list user passkeys rejected: unauthenticated caller: %v", err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		return
+	}
+
+	if handler.db == nil {
+		log.Debug("list user passkeys rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		return
+	}
+
+	ctx := request.Context()
+	rows, err := handler.db.Query(ctx, `
+		SELECT id, friendly_name, transports, created_at, last_used_at
+		FROM auth.passkeys
+		WHERE user_id = $1
+		ORDER BY created_at DESC
+	`, userID)
+	if err != nil {
+		log.Debugf("list user passkeys failed for user %s: %v", userID, err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to list passkeys", "LAYR_AUTH_001")
+		return
+	}
+	defer rows.Close()
+
+	userPasskeyResponses := make([]UserPasskeyResponse, 0)
+	for rows.Next() {
+		var userPasskeyResponse UserPasskeyResponse
+		_ = rows.Scan(
+			&userPasskeyResponse.ID,
+			&userPasskeyResponse.FriendlyName,
+			&userPasskeyResponse.Transports,
+			&userPasskeyResponse.CreatedAt,
+			&userPasskeyResponse.LastUsedAt,
+		)
+		userPasskeyResponses = append(userPasskeyResponses, userPasskeyResponse)
+	}
+
+	handler.writeJSON(responseWriter, userPasskeyResponses)
+}
+
+func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Debug("handling delete user passkey request")
+	userID, err := handler.authenticateUser(request)
+	if err != nil {
+		log.Debugf("delete user passkey rejected: unauthenticated caller: %v", err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		return
+	}
+
+	passkeyID := strings.TrimSpace(request.PathValue("id"))
+	if passkeyID == "" {
+		log.Debug("delete user passkey rejected: passkey id is empty")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID required", "LAYR_AUTH_001")
+		return
+	}
+
+	if handler.db == nil {
+		log.Debug("delete user passkey rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		return
+	}
+
+	ctx := request.Context()
+	result, err := handler.db.Exec(ctx, `
+		DELETE FROM auth.passkeys
+		WHERE id = $1 AND user_id = $2
+	`, passkeyID, userID)
+	if err != nil {
+		log.Debugf("delete user passkey %s failed for user %s: %v", passkeyID, userID, err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete passkey", "LAYR_AUTH_001")
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		log.Debugf("passkey %s not found for user %s", passkeyID, userID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Passkey not found", "LAYR_AUTH_001")
+		return
+	}
+
+	if handler.eventBus != nil {
+		var userRecord UserRecord
+		var rawProperties []byte
+		fetchErr := handler.db.QueryRow(ctx, `
+			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+			FROM auth.users
+			WHERE id = $1
+		`, userID).Scan(
+			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		)
+		if fetchErr == nil {
+			userRecord.Properties = make(map[string]any)
+			if len(rawProperties) > 0 {
+				_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			}
+			handler.eventBus.Publish(ctx, NewPasskeyDeletedEvent(passkeyID, PasskeyDeletedEventData{
+				ID:   passkeyID,
+				User: userRecord,
+			}))
+		}
+	}
+
+	responseWriter.WriteHeader(http.StatusNoContent)
 }

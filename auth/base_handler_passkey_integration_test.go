@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
@@ -259,4 +261,260 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		DROP TRIGGER IF EXISTS trg_fail_passkey_insert ON auth.passkeys;
 		DROP FUNCTION IF EXISTS auth.trg_fail_passkey_insert_fn();
 	`)
+}
+
+func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	defer cleanupDatabase()
+
+	ctx := context.Background()
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	if err := configManager.Load(ctx); err != nil {
+		t.Fatalf("failed to load initial auth config: %v", err)
+	}
+
+	activeConfig := configManager.Get()
+	activeConfig.Passkeys.Enabled = true
+	configManager.Set(activeConfig)
+
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
+	testKVStore := newInMemoryKVStore()
+
+	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler.SetEventBus(eventBus)
+	baseHandler.SetKVStore(testKVStore)
+
+	var emittedEvents []core.Event
+	var eventsMutex sync.Mutex
+	eventBus.Subscribe("auth.passkey.*", func(eventCtx context.Context, event core.Event) error {
+		eventsMutex.Lock()
+		defer eventsMutex.Unlock()
+		emittedEvents = append(emittedEvents, event)
+		return nil
+	})
+
+	// Create user
+	userID := "01918a24-2222-7000-8000-000000000002"
+	_, err := db.Exec(ctx, `
+		INSERT INTO auth.users (id, role, properties, created_at, last_updated_at)
+		VALUES ($1, 'authenticated', '{"tier":"pro"}', clock_timestamp(), clock_timestamp())
+	`, userID)
+	if err != nil {
+		t.Fatalf("failed to insert test user: %v", err)
+	}
+
+	userToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		Subject: userID,
+		Role:    "authenticated",
+	}, 3600)
+	if err != nil {
+		t.Fatalf("failed to generate access token: %v", err)
+	}
+	bearerHeader := "Bearer " + userToken
+
+	// 1. Authenticated caller registers passkey using session token (empty user_id in payload)
+	signUpPayload, _ := json.Marshal(PasskeySignUpRequest{
+		UserName: "Bob Session",
+	})
+	signUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(signUpPayload))
+	signUpRequest.Header.Set("Authorization", bearerHeader)
+	signUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignUp(signUpResponseRecorder, signUpRequest)
+	if signUpResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on authenticated passkey sign-up, got: %d (%s)", signUpResponseRecorder.Code, signUpResponseRecorder.Body.String())
+	}
+
+	var signUpResponse map[string]any
+	_ = json.NewDecoder(signUpResponseRecorder.Body).Decode(&signUpResponse)
+	signUpChallenge := signUpResponse["challenge"].(string)
+
+	credentialID1 := "cred-bob-session-1"
+	verifySignUpPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+		Challenge:    signUpChallenge,
+		CredentialID: credentialID1,
+		PublicKey:    "public-key-blob-1",
+		FriendlyName: "Work Laptop",
+		Transports:   []string{"internal"},
+	})
+	verifySignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verifySignUpPayload))
+	verifySignUpRequest.Header.Set("Authorization", bearerHeader)
+	verifySignUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignUpVerify(verifySignUpResponseRecorder, verifySignUpRequest)
+	if verifySignUpResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on authenticated passkey sign-up verify, got: %d (%s)", verifySignUpResponseRecorder.Code, verifySignUpResponseRecorder.Body.String())
+	}
+
+	// 2. Register a second passkey with empty public key (to test VerifySignature false branch)
+	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(userID)
+	credentialID2 := "cred-bob-session-2"
+	verify2Payload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+		UserID:       userID,
+		Challenge:    challenge2,
+		CredentialID: credentialID2,
+		PublicKey:    "",
+		FriendlyName: "Backup Security Key",
+		Transports:   []string{"usb"},
+	})
+	verify2Request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verify2Payload))
+	verify2ResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignUpVerify(verify2ResponseRecorder, verify2Request)
+	if verify2ResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on second passkey verify, got: %d", verify2ResponseRecorder.Code)
+	}
+
+	// 3. List passkeys -> 200 with 2 items
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	listRequest.Header.Set("Authorization", bearerHeader)
+	listResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleListUserPasskeys(listResponseRecorder, listRequest)
+	if listResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on list user passkeys, got: %d (%s)", listResponseRecorder.Code, listResponseRecorder.Body.String())
+	}
+
+	var passkeyItems []UserPasskeyResponse
+	if decodeErr := json.NewDecoder(listResponseRecorder.Body).Decode(&passkeyItems); decodeErr != nil {
+		t.Fatalf("failed to decode list passkeys response: %v", decodeErr)
+	}
+	if len(passkeyItems) != 2 {
+		t.Fatalf("expected 2 passkeys, got: %d", len(passkeyItems))
+	}
+
+	// 4. Sign-in verify with assertion signature:
+	// 4a. Valid signature over non-empty public key -> 200
+	signInChallenge1, _ := baseHandler.passkeyManager.GenerateChallenge("")
+	verifySigPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+		Challenge:         signInChallenge1,
+		CredentialID:      credentialID1,
+		ClientDataJSON:    `{"type":"webauthn.get"}`,
+		AuthenticatorData: "authenticator-data",
+		Signature:         "test-signature",
+	})
+	verifySigRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(verifySigPayload))
+	verifySigResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignInVerify(verifySigResponseRecorder, verifySigRequest)
+	if verifySigResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on passkey verify with valid signature, got: %d (%s)", verifySigResponseRecorder.Code, verifySigResponseRecorder.Body.String())
+	}
+
+	// 4b. Signature over credential with empty public key -> 401
+	signInChallenge2, _ := baseHandler.passkeyManager.GenerateChallenge("")
+	invalidSigPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+		Challenge:         signInChallenge2,
+		CredentialID:      credentialID2,
+		ClientDataJSON:    `{"type":"webauthn.get"}`,
+		AuthenticatorData: "authenticator-data",
+		Signature:         "test-signature",
+	})
+	invalidSigRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(invalidSigPayload))
+	invalidSigResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignInVerify(invalidSigResponseRecorder, invalidSigRequest)
+	if invalidSigResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on invalid passkey assertion signature, got: %d", invalidSigResponseRecorder.Code)
+	}
+
+	// 5. Sign-in verify with locked account -> 423
+	lockedUntil := time.Now().UTC().Add(time.Hour)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
+
+	lockedSignInChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
+	lockedPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+		Challenge:    lockedSignInChallenge,
+		CredentialID: credentialID1,
+	})
+	lockedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(lockedPayload))
+	lockedResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasskeySignInVerify(lockedResponseRecorder, lockedRequest)
+	if lockedResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 on locked user passkey sign-in, got: %d", lockedResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
+
+	// 6. Delete passkey -> 204 No Content
+	passkeyToDeleteID := passkeyItems[0].ID
+	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
+	deleteRequest.SetPathValue("id", passkeyToDeleteID)
+	deleteRequest.Header.Set("Authorization", bearerHeader)
+	deleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(deleteResponseRecorder, deleteRequest)
+	if deleteResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on delete passkey, got: %d (%s)", deleteResponseRecorder.Code, deleteResponseRecorder.Body.String())
+	}
+
+	// Verify auth.passkey.deleted event was emitted
+	var deletedEventFound bool
+	for attempt := 0; attempt < 50; attempt++ {
+		eventsMutex.Lock()
+		for _, evt := range emittedEvents {
+			if evt.Type == "auth.passkey.deleted" {
+				deletedEventFound = true
+				if evt.Data["id"] != passkeyToDeleteID {
+					eventsMutex.Unlock()
+					t.Fatalf("expected passkey id %s in event, got: %v", passkeyToDeleteID, evt.Data["id"])
+				}
+				userMap, ok := evt.Data["user"].(map[string]any)
+				if !ok || userMap["id"] != userID {
+					eventsMutex.Unlock()
+					t.Fatalf("expected nested user in passkey deleted event: %v", evt.Data["user"])
+				}
+				break
+			}
+		}
+		eventsMutex.Unlock()
+		if deletedEventFound {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !deletedEventFound {
+		t.Fatal("expected auth.passkey.deleted event was published")
+	}
+
+	// 7. Delete non-existent passkey -> 404
+	delete404Request := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
+	delete404Request.SetPathValue("id", passkeyToDeleteID)
+	delete404Request.Header.Set("Authorization", bearerHeader)
+	delete404ResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(delete404ResponseRecorder, delete404Request)
+	if delete404ResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on deleting already deleted passkey, got: %d", delete404ResponseRecorder.Code)
+	}
+
+	// 8. Delete passkey with trigger/DB error -> 500
+	_, _ = db.Exec(ctx, `
+		CREATE OR REPLACE FUNCTION auth.trg_fail_passkey_delete_fn() RETURNS trigger AS $$
+		BEGIN
+			RAISE EXCEPTION 'simulated passkey delete failure';
+		END;
+		$$ LANGUAGE plpgsql;
+		DROP TRIGGER IF EXISTS trg_fail_passkey_delete ON auth.passkeys;
+		CREATE TRIGGER trg_fail_passkey_delete BEFORE DELETE ON auth.passkeys
+		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_passkey_delete_fn();
+	`)
+
+	passkeyToFailDeleteID := passkeyItems[1].ID
+	failDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil)
+	failDeleteRequest.SetPathValue("id", passkeyToFailDeleteID)
+	failDeleteRequest.Header.Set("Authorization", bearerHeader)
+	failDeleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteUserPasskey(failDeleteResponseRecorder, failDeleteRequest)
+	if failDeleteResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on passkey delete failure trigger, got: %d", failDeleteResponseRecorder.Code)
+	}
+
+	_, _ = db.Exec(ctx, `
+		DROP TRIGGER IF EXISTS trg_fail_passkey_delete ON auth.passkeys;
+		DROP FUNCTION IF EXISTS auth.trg_fail_passkey_delete_fn();
+	`)
+
+	// 9. List passkeys with canceled context -> 500
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	canceledListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	canceledListRequest.Header.Set("Authorization", bearerHeader)
+	canceledListResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleListUserPasskeys(canceledListResponseRecorder, canceledListRequest)
+	if canceledListResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled context list passkeys, got: %d", canceledListResponseRecorder.Code)
+	}
 }

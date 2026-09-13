@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
 	"layr.sh/auth/otp"
 	"layr.sh/core"
@@ -15,6 +16,7 @@ const (
 	maxPasswordResetAttempts = 5
 	ipPasswordResetLimit     = 10
 	passwordResetCooldownTTL = 60 * time.Second
+	mfaTicketTTL             = 5 * time.Minute
 )
 
 func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, request *http.Request) {
@@ -249,6 +251,19 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	if handler.kvStore != nil && identifier != "" {
 		rateKey := fmt.Sprintf("auth:ratelimit:signin:%s", identifier)
 		_ = handler.kvStore.Delete(ctx, rateKey)
+	}
+
+	if userRecord.MFAEnabled {
+		mfaTicket := "mfa_tk_" + uuid.NewV7().String()
+		if handler.kvStore != nil {
+			_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, userRecord.ID, mfaTicketTTL)
+		}
+		handler.writeJSON(responseWriter, SignInResponse{
+			MFARequired: true,
+			MFATicket:   mfaTicket,
+			Factor:      "totp",
+		})
+		return
 	}
 
 	handler.issueSessionResponse(responseWriter, request, userRecord, "password")

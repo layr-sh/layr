@@ -49,6 +49,14 @@ type SessionResponse struct {
 	Claims       map[string]any `json:"claims,omitempty"`
 }
 
+// SignInResponse represents the response to a sign-in attempt, either returning session tokens or an MFA challenge.
+type SignInResponse struct {
+	SessionResponse
+	MFARequired bool   `json:"mfa_required,omitempty"`
+	MFATicket   string `json:"mfa_ticket,omitempty"`
+	Factor      string `json:"factor,omitempty"`
+}
+
 // UserResponse represents the sanitized authenticated user details.
 type UserResponse struct {
 	ID            string         `json:"id"`
@@ -207,6 +215,12 @@ type MFAVerifyRequest struct {
 	Code   string `json:"code"`
 }
 
+// MFAChallengeRequest defines input to satisfy an MFA challenge during sign-in.
+type MFAChallengeRequest struct {
+	MFATicket string `json:"mfa_ticket"`
+	Code      string `json:"code"`
+}
+
 // PasskeySignUpRequest defines input for passkey sign up ceremony.
 type PasskeySignUpRequest struct {
 	UserID   string `json:"user_id"`
@@ -225,8 +239,20 @@ type PasskeySignUpVerifyRequest struct {
 
 // PasskeySignInVerifyRequest defines input to complete passkey assertion ceremony.
 type PasskeySignInVerifyRequest struct {
-	Challenge    string `json:"challenge"`
-	CredentialID string `json:"credential_id"`
+	Challenge         string `json:"challenge"`
+	CredentialID      string `json:"credential_id"`
+	ClientDataJSON    string `json:"client_data_json,omitempty"`
+	AuthenticatorData string `json:"authenticator_data,omitempty"`
+	Signature         string `json:"signature,omitempty"`
+}
+
+// UserPasskeyResponse represents a user's registered passkey credential.
+type UserPasskeyResponse struct {
+	ID           string    `json:"id"`
+	FriendlyName string    `json:"friendly_name"`
+	Transports   []string  `json:"transports"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastUsedAt   time.Time `json:"last_used_at"`
 }
 
 // OAuthTokenExchangeRequest defines the body for OAuth token exchange.

@@ -138,6 +138,23 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "signIn"),
 		core.RouteSDKMethodName("verify"),
 	)
+	core.GetRoute[[]UserPasskeyResponse](router, "/api/v1/auth/user/passkeys", service.baseHandler.handleListUserPasskeys,
+		core.RouteTag("Passkeys"),
+		core.RouteSummary("List registered passkeys for current user"),
+		core.RouteDescription("Retrieves all registered WebAuthn passkey credentials belonging to the authenticated user."),
+		core.RouteOperationID("auth__user__passkeys__list"),
+		core.RouteSDKGroupName("auth", "user", "passkeys"),
+		core.RouteSDKMethodName("list"),
+	)
+	core.DeleteRoute[core.Empty](router, "/api/v1/auth/user/passkeys/{id}", service.baseHandler.handleDeleteUserPasskey,
+		core.RouteTag("Passkeys"),
+		core.RouteSummary("Revoke a registered passkey"),
+		core.RouteDescription("Revokes and deletes a registered WebAuthn passkey credential belonging to the authenticated user."),
+		core.RouteNoContentResponse("Passkey revoked"),
+		core.RouteOperationID("auth__user__passkeys__delete"),
+		core.RouteSDKGroupName("auth", "user", "passkeys"),
+		core.RouteSDKMethodName("delete"),
+	)
 
 	// 5. Passwordless OTP
 	core.PostRoute[core.Empty, OTPSendRequest](router, "/api/v1/auth/otp", service.baseHandler.handleOTPSend,
@@ -174,6 +191,14 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteOperationID("auth__mfa__verify"),
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("verify"),
+	)
+	core.PostRoute[SessionResponse, MFAChallengeRequest](router, "/api/v1/auth/mfa/challenge", service.baseHandler.handleMFAChallenge,
+		core.RouteTag("Multi-Factor Authentication"),
+		core.RouteSummary("Verify MFA challenge ticket with TOTP code"),
+		core.RouteDescription("Verifies the short-lived MFA challenge ticket and TOTP code after password sign-in and issues an authenticated session."),
+		core.RouteOperationID("auth__mfa__challenge"),
+		core.RouteSDKGroupName("auth", "mfa"),
+		core.RouteSDKMethodName("challenge"),
 	)
 
 	// 7. OAuth & OpenID Connect
@@ -224,6 +249,8 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	router.Mux().HandleFunc("POST /api/v1/auth/password/reset/confirm", service.baseHandler.handlePasswordResetConfirm)
 	router.Mux().HandleFunc("POST /api/v1/auth/otp/send", service.baseHandler.handleOTPSend)
 	router.Mux().HandleFunc("POST /api/v1/auth/mfa/setup", service.baseHandler.handleMFASetup)
+	router.Mux().HandleFunc("GET /api/v1/auth/passkeys", service.baseHandler.handleListUserPasskeys)
+	router.Mux().HandleFunc("DELETE /api/v1/auth/passkeys/{id}", service.baseHandler.handleDeleteUserPasskey)
 
 	// 8. GDPR Export
 	core.PostRoute[ExportUserDataResponse, core.Empty](router, "/api/v1/auth/users/{user_id}/export", service.baseHandler.handleUserExport,
