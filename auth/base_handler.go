@@ -148,9 +148,18 @@ func (handler *BaseHandler) assertSMSDeliveryReady(responseWriter http.ResponseW
 	return true
 }
 
-func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord) {
+func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord, sessionMeta ...string) {
 	log.Debugf("issuing session response for user %s (role: %s, is_anonymous: %t)", userRecord.ID, userRecord.Role, userRecord.IsAnonymous)
 	config := handler.configManager.Get()
+
+	var authMethod string
+	var provider string
+	if len(sessionMeta) > 0 {
+		authMethod = sessionMeta[0]
+	}
+	if len(sessionMeta) > 1 {
+		provider = sessionMeta[1]
+	}
 
 	email := ""
 	if userRecord.Email != nil {
@@ -223,13 +232,24 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		if clientIP != "" {
 			ipAddressPtr = &clientIP
 		}
-		handler.eventBus.Publish(request.Context(), NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
-			ID:        sessionID,
-			UserID:    userRecord.ID,
-			IPAddress: ipAddressPtr,
-			UserAgent: userAgent,
-			ExpiresAt: refreshTokenExpiredAt,
-			CreatedAt: sessionCreatedAt,
+		publishCtx := request.Context()
+		if parsedUserUUID, parseErr := uuid.Parse(userRecord.ID); parseErr == nil {
+			role := userRecord.Role
+			publishCtx = core.WithEventActor(publishCtx, core.EventActor{
+				Type: "user",
+				ID:   &parsedUserUUID,
+				Role: &role,
+			})
+		}
+		handler.eventBus.Publish(publishCtx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+			ID:         sessionID,
+			User:       userRecord,
+			AuthMethod: authMethod,
+			Provider:   provider,
+			IPAddress:  ipAddressPtr,
+			UserAgent:  userAgent,
+			ExpiresAt:  refreshTokenExpiredAt,
+			CreatedAt:  sessionCreatedAt,
 		}))
 	}
 
@@ -353,6 +373,14 @@ func (handler *BaseHandler) authenticateSessionRequest(request *http.Request) (s
 
 	currentSessionID := request.Header.Get("X-Session-ID")
 	log.Tracef("session request authenticated for subject %s (source: %s, sessionID: %s)", claims.Subject, tokenSource, currentSessionID)
+	if parsedUserUUID, parseErr := uuid.Parse(claims.Subject); parseErr == nil {
+		role := claims.Role
+		*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
+			Type: "user",
+			ID:   &parsedUserUUID,
+			Role: &role,
+		}))
+	}
 	return claims.Subject, currentRefreshTokenHash, currentSessionID, nil
 }
 
@@ -385,6 +413,14 @@ func (handler *BaseHandler) authenticateUser(request *http.Request) (string, err
 		claims, err := handler.signer.VerifyAccessToken(token)
 		if err == nil && claims != nil && claims.Subject != "" {
 			log.Tracef("user authenticated via access token: %s", claims.Subject)
+			if parsedUserUUID, parseErr := uuid.Parse(claims.Subject); parseErr == nil {
+				role := claims.Role
+				*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
+					Type: "user",
+					ID:   &parsedUserUUID,
+					Role: &role,
+				}))
+			}
 			return claims.Subject, nil
 		}
 		log.Debugf("access token verification failed during user authentication: %v", err)
@@ -420,6 +456,14 @@ func (handler *BaseHandler) authenticateUser(request *http.Request) (string, err
 		`, refreshTokenHash).Scan(&userID)
 		if err == nil && userID != "" {
 			log.Tracef("user authenticated via session refresh token: %s", userID)
+			if parsedUserUUID, parseErr := uuid.Parse(userID); parseErr == nil {
+				role := "authenticated"
+				*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
+					Type: "user",
+					ID:   &parsedUserUUID,
+					Role: &role,
+				}))
+			}
 			return userID, nil
 		}
 		log.Debugf("session lookup via refresh token failed (source: %s): %v", tokenSource, err)
@@ -449,12 +493,13 @@ func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {

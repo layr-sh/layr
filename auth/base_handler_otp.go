@@ -101,16 +101,24 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:%s:%s", purpose, recipient), "1", defaultOTPCooldown)
 	}
 
+	channel := "sms"
 	if isEmail {
+		channel = "email"
 		_ = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
 	} else {
 		_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
 	}
 
 	if handler.eventBus != nil {
+		var targetUserRecord *UserRecord
+		if userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient); err == nil {
+			targetUserRecord = &userRecord
+		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
 			Recipient: recipient,
 			Purpose:   purpose,
+			Channel:   channel,
+			User:      targetUserRecord,
 		}))
 	}
 
@@ -215,10 +223,11 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				UPDATE auth.users 
 				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
-				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 			`, recipient, anonymousUserRecord.ID).Scan(
 				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 			)
 		} else {
@@ -226,10 +235,11 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				UPDATE auth.users 
 				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
-				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 			`, recipient, anonymousUserRecord.ID).Scan(
 				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 			)
 		}
@@ -239,43 +249,51 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 
+		channel := "sms"
+		if isEmail {
+			channel = "email"
+		}
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
-			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(userRecord.ID, OTPVerifiedEventData{
-				UserID:    userRecord.ID,
+			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
 				Recipient: recipient,
 				Purpose:   purpose,
+				Channel:   channel,
+				User:      &userRecord,
 			}))
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord)
+		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
 		return
 	}
 
 	// Ensure User exists
 	var userRecord UserRecord
 	var rawProperties []byte
+	var isNewUser bool
 	if isEmail {
 		_ = handler.db.QueryRow(ctx, `
 			INSERT INTO auth.users (email, role, email_verified_at, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 		`, recipient).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
 		)
 	} else {
 		_ = handler.db.QueryRow(ctx, `
 			INSERT INTO auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 		`, recipient).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
 		)
 	}
 
@@ -284,13 +302,21 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
+	channel := "sms"
+	if isEmail {
+		channel = "email"
+	}
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(userRecord.ID, OTPVerifiedEventData{
-			UserID:    userRecord.ID,
+		if isNewUser {
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+		}
+		handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
 			Recipient: recipient,
 			Purpose:   purpose,
+			Channel:   channel,
+			User:      &userRecord,
 		}))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
 }

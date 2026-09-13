@@ -8,16 +8,41 @@ import (
 func TestAuthEventsUnit(t *testing.T) {
 	now := time.Now().UTC()
 	passwordHash := "secret-hashed-password"
+	email := "test@example.com"
+	phone := "+1234567890"
+	encryptedMFASecret := "enc:secret:totp"
 	userRecord := UserRecord{
-		ID:            "usr_123",
-		Email:         nil,
-		Phone:         nil,
-		PasswordHash:  &passwordHash,
-		Role:          "authenticated",
-		IsAnonymous:   false,
-		Properties:    map[string]any{"plan": "pro"},
+		ID:                 "usr_123",
+		Email:              &email,
+		Phone:              &phone,
+		PasswordHash:       &passwordHash,
+		EncryptedMFASecret: &encryptedMFASecret,
+		MFAEnabled:         true,
+		Role:               "authenticated",
+		IsAnonymous:        false,
+		Properties: map[string]any{
+			"plan": "pro",
+		},
 		CreatedAt:     now,
 		LastUpdatedAt: now,
+	}
+
+	// Helper function to assert sanitized properties
+	assertSanitizedProps := func(data map[string]any, eventType string) {
+		t.Helper()
+		props, ok := data["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("[%s] expected properties map in data, got %v", eventType, data["properties"])
+		}
+		if _, hasSecret := data["encrypted_mfa_secret"]; hasSecret {
+			t.Fatalf("[%s] expected encrypted_mfa_secret to be omitted from event data", eventType)
+		}
+		if _, hasSecret := props["encrypted_mfa_secret"]; hasSecret {
+			t.Fatalf("[%s] expected encrypted_mfa_secret not in properties", eventType)
+		}
+		if props["plan"] != "pro" {
+			t.Fatalf("[%s] expected plan=pro preserved, got %v", eventType, props["plan"])
+		}
 	}
 
 	// 1. ConfigUpdated
@@ -29,16 +54,18 @@ func TestAuthEventsUnit(t *testing.T) {
 		t.Fatalf("unexpected config resource ID: %v", configEvent.ResourceID)
 	}
 
-	// 2. SessionCreated
+	// 2. SessionCreated (nested user)
 	clientIP := "127.0.0.1"
 	userAgent := "Go-Test"
 	sessionCreatedEvent := NewSessionCreatedEvent("sess_123", SessionCreatedEventData{
-		ID:        "sess_123",
-		UserID:    "usr_123",
-		IPAddress: &clientIP,
-		UserAgent: &userAgent,
-		ExpiresAt: now.Add(time.Hour),
-		CreatedAt: now,
+		ID:         "sess_123",
+		User:       userRecord,
+		AuthMethod: "password",
+		Provider:   "google",
+		IPAddress:  &clientIP,
+		UserAgent:  &userAgent,
+		ExpiresAt:  now.Add(time.Hour),
+		CreatedAt:  now,
 	})
 	if sessionCreatedEvent.Type != "auth.session.created" || sessionCreatedEvent.ResourceType != "auth.session" || sessionCreatedEvent.Action != "created" {
 		t.Fatalf("unexpected session created event: %+v", sessionCreatedEvent)
@@ -46,105 +73,110 @@ func TestAuthEventsUnit(t *testing.T) {
 	if sessionCreatedEvent.ResourceID == nil || *sessionCreatedEvent.ResourceID != "sess_123" {
 		t.Fatalf("unexpected session resource ID: %v", sessionCreatedEvent.ResourceID)
 	}
-	if sessionCreatedEvent.Data["id"] != "sess_123" || sessionCreatedEvent.Data["user_id"] != "usr_123" {
+	if sessionCreatedEvent.Data["id"] != "sess_123" || sessionCreatedEvent.Data["auth_method"] != "password" || sessionCreatedEvent.Data["provider"] != "google" {
 		t.Fatalf("unexpected session data: %+v", sessionCreatedEvent.Data)
 	}
+	userData, ok := sessionCreatedEvent.Data["user"].(map[string]any)
+	if !ok || userData["id"] != "usr_123" {
+		t.Fatalf("expected nested user with id in session created event, got: %v", sessionCreatedEvent.Data["user"])
+	}
+	assertSanitizedProps(userData, "SessionCreated")
 
-	// 3. SessionDeleted
+	// 3. SessionDeleted (nested user)
 	sessionID := "sess_123"
-	revokedCount := 3
+	revokedCount := 5
 	sessionDeletedEvent := NewSessionDeletedEvent("sess_123", SessionDeletedEventData{
+		User:         userRecord,
 		SessionID:    &sessionID,
-		UserID:       "usr_123",
 		RevokedCount: &revokedCount,
 	})
-	if sessionDeletedEvent.Type != "auth.session.deleted" || sessionDeletedEvent.Action != "deleted" {
+	if sessionDeletedEvent.Type != "auth.session.deleted" || sessionDeletedEvent.ResourceType != "auth.session" || sessionDeletedEvent.Action != "deleted" {
 		t.Fatalf("unexpected session deleted event: %+v", sessionDeletedEvent)
 	}
-	if sessionDeletedEvent.Data["session_id"] != "sess_123" || sessionDeletedEvent.Data["user_id"] != "usr_123" {
+	if sessionDeletedEvent.Data["session_id"] != "sess_123" {
 		t.Fatalf("unexpected session deleted data: %+v", sessionDeletedEvent.Data)
 	}
+	userDeletedSess, ok := sessionDeletedEvent.Data["user"].(map[string]any)
+	if !ok || userDeletedSess["id"] != "usr_123" {
+		t.Fatalf("expected nested user in session deleted event, got: %v", sessionDeletedEvent.Data["user"])
+	}
+	assertSanitizedProps(userDeletedSess, "SessionDeleted")
 
-	// 4. PasskeyCreated
+	// 4. PasskeyCreated (nested user)
 	passkeyEvent := NewPasskeyCreatedEvent("passkey_123", PasskeyCreatedEventData{
 		ID:           "passkey_123",
-		UserID:       "usr_123",
-		FriendlyName: "MacBook Passkey",
+		User:         userRecord,
+		FriendlyName: "MacBook Touch ID",
 		Transports:   []string{"internal"},
 	})
-	if passkeyEvent.Type != "auth.passkey.created" || passkeyEvent.Action != "created" {
+	if passkeyEvent.Type != "auth.passkey.created" || passkeyEvent.ResourceType != "auth.passkey" || passkeyEvent.Action != "created" {
 		t.Fatalf("unexpected passkey event: %+v", passkeyEvent)
 	}
-	if passkeyEvent.ResourceID == nil || *passkeyEvent.ResourceID != "passkey_123" {
-		t.Fatalf("unexpected passkey resource ID: %v", passkeyEvent.ResourceID)
+	if passkeyEvent.Data["friendly_name"] != "MacBook Touch ID" {
+		t.Fatalf("unexpected friendly name: %v", passkeyEvent.Data["friendly_name"])
 	}
-	if passkeyEvent.Data["friendly_name"] != "MacBook Passkey" {
-		t.Fatalf("unexpected passkey friendly_name: %v", passkeyEvent.Data["friendly_name"])
+	passkeyUser, ok := passkeyEvent.Data["user"].(map[string]any)
+	if !ok || passkeyUser["id"] != "usr_123" {
+		t.Fatalf("expected nested user in passkey created event, got: %v", passkeyEvent.Data["user"])
 	}
+	assertSanitizedProps(passkeyUser, "PasskeyCreated")
 
-	// 5. UserSignedUp
+	// 5. UserSignedUp (flat user)
 	signedUpEvent := NewUserSignedUpEvent("usr_123", UserSignedUpEventData(userRecord))
-	if signedUpEvent.Type != "auth.user.signed_up" || signedUpEvent.Action != "signed_up" {
+	if signedUpEvent.Type != "auth.user.signed_up" || signedUpEvent.ResourceType != "auth.user" || signedUpEvent.Action != "signed_up" {
 		t.Fatalf("unexpected user signed up event: %+v", signedUpEvent)
 	}
 	if signedUpEvent.Data["id"] != "usr_123" {
 		t.Fatalf("unexpected user signed up ID: %v", signedUpEvent.Data["id"])
 	}
 	if _, hasHash := signedUpEvent.Data["password_hash"]; hasHash {
-		t.Fatal("expected password_hash to be omitted from signed up event data")
+		t.Fatal("expected password_hash to be omitted from user signed up event data")
 	}
+	assertSanitizedProps(signedUpEvent.Data, "UserSignedUp")
 
-	// 6. UserConverted
+	// 6. UserConverted (flat user)
 	convertedEvent := NewUserConvertedEvent("usr_123", UserConvertedEventData(userRecord))
-	if convertedEvent.Type != "auth.user.converted" || convertedEvent.Action != "converted" {
+	if convertedEvent.Type != "auth.user.converted" || convertedEvent.ResourceType != "auth.user" || convertedEvent.Action != "converted" {
 		t.Fatalf("unexpected user converted event: %+v", convertedEvent)
 	}
 	if convertedEvent.Data["id"] != "usr_123" {
 		t.Fatalf("unexpected user converted ID: %v", convertedEvent.Data["id"])
 	}
-	if _, hasHash := convertedEvent.Data["password_hash"]; hasHash {
-		t.Fatal("expected password_hash to be omitted from converted event data")
-	}
+	assertSanitizedProps(convertedEvent.Data, "UserConverted")
 
-	// 7. UserEmailVerified
+	// 7. UserEmailVerified (flat user)
 	emailVerifiedEvent := NewUserEmailVerifiedEvent("usr_123", UserEmailVerifiedEventData(userRecord))
-	if emailVerifiedEvent.Type != "auth.user.email_verified" || emailVerifiedEvent.Action != "email_verified" {
-		t.Fatalf("unexpected email verified event: %+v", emailVerifiedEvent)
+	if emailVerifiedEvent.Type != "auth.user.email_verified" || emailVerifiedEvent.ResourceType != "auth.user" || emailVerifiedEvent.Action != "email_verified" {
+		t.Fatalf("unexpected user email verified event: %+v", emailVerifiedEvent)
 	}
 	if emailVerifiedEvent.Data["id"] != "usr_123" {
-		t.Fatalf("unexpected email verified ID: %v", emailVerifiedEvent.Data["id"])
+		t.Fatalf("unexpected user email verified ID: %v", emailVerifiedEvent.Data["id"])
 	}
-	if _, hasHash := emailVerifiedEvent.Data["password_hash"]; hasHash {
-		t.Fatal("expected password_hash to be omitted from email verified event data")
-	}
+	assertSanitizedProps(emailVerifiedEvent.Data, "UserEmailVerified")
 
-	// 8. UserPhoneVerified
+	// 8. UserPhoneVerified (flat user)
 	phoneVerifiedEvent := NewUserPhoneVerifiedEvent("usr_123", UserPhoneVerifiedEventData(userRecord))
-	if phoneVerifiedEvent.Type != "auth.user.phone_verified" || phoneVerifiedEvent.Action != "phone_verified" {
-		t.Fatalf("unexpected phone verified event: %+v", phoneVerifiedEvent)
+	if phoneVerifiedEvent.Type != "auth.user.phone_verified" || phoneVerifiedEvent.ResourceType != "auth.user" || phoneVerifiedEvent.Action != "phone_verified" {
+		t.Fatalf("unexpected user phone verified event: %+v", phoneVerifiedEvent)
 	}
 	if phoneVerifiedEvent.Data["id"] != "usr_123" {
-		t.Fatalf("unexpected phone verified ID: %v", phoneVerifiedEvent.Data["id"])
+		t.Fatalf("unexpected user phone verified ID: %v", phoneVerifiedEvent.Data["id"])
 	}
-	if _, hasHash := phoneVerifiedEvent.Data["password_hash"]; hasHash {
-		t.Fatal("expected password_hash to be omitted from phone verified event data")
-	}
+	assertSanitizedProps(phoneVerifiedEvent.Data, "UserPhoneVerified")
 
-	// 9. UserUpdated
+	// 9. UserUpdated (flat user)
 	updatedEvent := NewUserUpdatedEvent("usr_123", UserUpdatedEventData(userRecord))
-	if updatedEvent.Type != "auth.user.updated" || updatedEvent.Action != "updated" {
+	if updatedEvent.Type != "auth.user.updated" || updatedEvent.ResourceType != "auth.user" || updatedEvent.Action != "updated" {
 		t.Fatalf("unexpected user updated event: %+v", updatedEvent)
 	}
 	if updatedEvent.Data["id"] != "usr_123" {
 		t.Fatalf("unexpected user updated ID: %v", updatedEvent.Data["id"])
 	}
-	if _, hasHash := updatedEvent.Data["password_hash"]; hasHash {
-		t.Fatal("expected password_hash to be omitted from user updated event data")
-	}
+	assertSanitizedProps(updatedEvent.Data, "UserUpdated")
 
-	// 10. UserDeleted
+	// 10. UserDeleted (flat user)
 	deletedEvent := NewUserDeletedEvent("usr_123", UserDeletedEventData(userRecord))
-	if deletedEvent.Type != "auth.user.deleted" || deletedEvent.Action != "deleted" {
+	if deletedEvent.Type != "auth.user.deleted" || deletedEvent.ResourceType != "auth.user" || deletedEvent.Action != "deleted" {
 		t.Fatalf("unexpected user deleted event: %+v", deletedEvent)
 	}
 	if deletedEvent.Data["id"] != "usr_123" {
@@ -153,20 +185,26 @@ func TestAuthEventsUnit(t *testing.T) {
 	if _, hasHash := deletedEvent.Data["password_hash"]; hasHash {
 		t.Fatal("expected password_hash to be omitted from user deleted event data")
 	}
+	assertSanitizedProps(deletedEvent.Data, "UserDeleted")
 
-	// 11. PasswordResetRequested
+	// 11. PasswordResetRequested (nested user)
 	resetRequestedEvent := NewPasswordResetRequestedEvent("usr_123", PasswordResetRequestedEventData{
-		UserID:    "usr_123",
 		Recipient: "test@example.com",
+		User:      userRecord,
 	})
 	if resetRequestedEvent.Type != "auth.password.reset_requested" || resetRequestedEvent.Action != "reset_requested" {
 		t.Fatalf("unexpected password reset requested event: %+v", resetRequestedEvent)
 	}
-	if _, hasCode := resetRequestedEvent.Data["code"]; hasCode {
-		t.Fatal("expected code to be omitted from reset requested event data")
+	if resetRequestedEvent.Data["recipient"] != "test@example.com" {
+		t.Fatalf("unexpected recipient: %v", resetRequestedEvent.Data["recipient"])
 	}
+	resetRequestedUser, ok := resetRequestedEvent.Data["user"].(map[string]any)
+	if !ok || resetRequestedUser["id"] != "usr_123" {
+		t.Fatalf("expected nested user in password reset requested event, got: %v", resetRequestedEvent.Data["user"])
+	}
+	assertSanitizedProps(resetRequestedUser, "PasswordResetRequested")
 
-	// 12. PasswordReset
+	// 12. PasswordReset (nested user)
 	resetEvent := NewPasswordResetEvent("usr_123", PasswordResetEventData{
 		Recipient: "test@example.com",
 		User:      userRecord,
@@ -174,59 +212,109 @@ func TestAuthEventsUnit(t *testing.T) {
 	if resetEvent.Type != "auth.password.reset" || resetEvent.Action != "reset" {
 		t.Fatalf("unexpected password reset event: %+v", resetEvent)
 	}
-	userDataMap, isMap := resetEvent.Data["user"].(map[string]any)
-	if !isMap {
+	if resetEvent.Data["recipient"] != "test@example.com" {
+		t.Fatalf("expected recipient in reset event data, got: %v", resetEvent.Data["recipient"])
+	}
+	resetUser, ok := resetEvent.Data["user"].(map[string]any)
+	if !ok || resetUser["id"] != "usr_123" {
 		t.Fatalf("expected nested user in reset event data, got: %v", resetEvent.Data["user"])
 	}
-	if _, hasHash := userDataMap["password_hash"]; hasHash {
+	if _, hasHash := resetUser["password_hash"]; hasHash {
 		t.Fatal("expected password_hash to be omitted from password reset user data")
 	}
+	assertSanitizedProps(resetUser, "PasswordReset")
 
-	// 13. PasswordChanged
-	changedEvent := NewPasswordChangedEvent("usr_123", PasswordChangedEventData{
-		User: userRecord,
-	})
+	// 13. PasswordChanged (flat user)
+	changedEvent := NewPasswordChangedEvent("usr_123", PasswordChangedEventData(userRecord))
 	if changedEvent.Type != "auth.password.changed" || changedEvent.Action != "changed" {
 		t.Fatalf("unexpected password changed event: %+v", changedEvent)
 	}
-	changedUserDataMap, isMap := changedEvent.Data["user"].(map[string]any)
-	if !isMap {
-		t.Fatalf("expected nested user in changed event data, got: %v", changedEvent.Data["user"])
+	if changedEvent.Data["id"] != "usr_123" {
+		t.Fatalf("expected flat user id in changed event data, got: %v", changedEvent.Data["id"])
 	}
-	if _, hasHash := changedUserDataMap["password_hash"]; hasHash {
+	if _, hasHash := changedEvent.Data["password_hash"]; hasHash {
 		t.Fatal("expected password_hash to be omitted from password changed user data")
 	}
+	assertSanitizedProps(changedEvent.Data, "PasswordChanged")
 
-	// 14. OTPSent
-	otpEvent := NewOTPSentEvent("usr_123", OTPSentEventData{
-		UserID:    "usr_123",
+	// 14. MFAEnabled & MFADisabled (flat user)
+	mfaEnabledEvent := NewMFAEnabledEvent("usr_123", MFAEnabledEventData(userRecord))
+	if mfaEnabledEvent.Type != "auth.mfa.enabled" || mfaEnabledEvent.Action != "enabled" || mfaEnabledEvent.ResourceType != "auth.mfa" {
+		t.Fatalf("unexpected mfa enabled event: %+v", mfaEnabledEvent)
+	}
+	if mfaEnabledEvent.Data["id"] != "usr_123" {
+		t.Fatalf("expected flat user id in mfa enabled event: %v", mfaEnabledEvent.Data["id"])
+	}
+	assertSanitizedProps(mfaEnabledEvent.Data, "MFAEnabled")
+
+	mfaDisabledEvent := NewMFADisabledEvent("usr_123", MFADisabledEventData(userRecord))
+	if mfaDisabledEvent.Type != "auth.mfa.disabled" || mfaDisabledEvent.Action != "disabled" || mfaDisabledEvent.ResourceType != "auth.mfa" {
+		t.Fatalf("unexpected mfa disabled event: %+v", mfaDisabledEvent)
+	}
+	if mfaDisabledEvent.Data["id"] != "usr_123" {
+		t.Fatalf("expected flat user id in mfa disabled event: %v", mfaDisabledEvent.Data["id"])
+	}
+	assertSanitizedProps(mfaDisabledEvent.Data, "MFADisabled")
+
+	// 15. OTPSent (nested user when present, and with nil user)
+	otpWithUserEvent := NewOTPSentEvent("test@example.com", OTPSentEventData{
 		Recipient: "test@example.com",
 		Purpose:   "email_verification",
+		Channel:   "email",
+		User:      &userRecord,
 	})
-	if otpEvent.Type != "auth.otp.sent" || otpEvent.Action != "sent" {
-		t.Fatalf("unexpected otp sent event: %+v", otpEvent)
+	if otpWithUserEvent.Type != "auth.otp.sent" || otpWithUserEvent.Action != "sent" {
+		t.Fatalf("unexpected otp sent event: %+v", otpWithUserEvent)
 	}
-	if otpEvent.Data["purpose"] != "email_verification" {
-		t.Fatalf("unexpected purpose in otp sent event: %v", otpEvent.Data["purpose"])
+	if otpWithUserEvent.Data["purpose"] != "email_verification" || otpWithUserEvent.Data["channel"] != "email" {
+		t.Fatalf("unexpected data in otp sent event: %+v", otpWithUserEvent.Data)
 	}
-	if _, hasCode := otpEvent.Data["code"]; hasCode {
-		t.Fatal("expected code to be omitted from otp sent event data")
+	otpUser, ok := otpWithUserEvent.Data["user"].(map[string]any)
+	if !ok || otpUser["id"] != "usr_123" {
+		t.Fatalf("expected nested user in otp sent event, got: %v", otpWithUserEvent.Data["user"])
 	}
+	assertSanitizedProps(otpUser, "OTPSentWithUser")
 
-	// 15. OTPVerified
-	otpVerifiedEvent := NewOTPVerifiedEvent("usr_123", OTPVerifiedEventData{
-		UserID:    "usr_123",
+	otpNilUserEvent := NewOTPSentEvent("test@example.com", OTPSentEventData{
 		Recipient: "test@example.com",
 		Purpose:   "signin",
+		Channel:   "email",
+		User:      nil,
+	})
+	if _, hasUser := otpNilUserEvent.Data["user"]; hasUser {
+		t.Fatalf("expected user to be omitted when nil in otp sent event: %v", otpNilUserEvent.Data)
+	}
+
+	// 16. OTPVerified (nested user when present, and with nil user)
+	otpVerifiedEvent := NewOTPVerifiedEvent("test@example.com", OTPVerifiedEventData{
+		Recipient: "test@example.com",
+		Purpose:   "signin",
+		Channel:   "email",
+		User:      &userRecord,
 	})
 	if otpVerifiedEvent.Type != "auth.otp.verified" || otpVerifiedEvent.Action != "verified" {
 		t.Fatalf("unexpected otp verified event: %+v", otpVerifiedEvent)
 	}
-	if otpVerifiedEvent.Data["purpose"] != "signin" {
-		t.Fatalf("unexpected purpose in otp verified event: %v", otpVerifiedEvent.Data["purpose"])
+	if otpVerifiedEvent.Data["purpose"] != "signin" || otpVerifiedEvent.Data["channel"] != "email" {
+		t.Fatalf("unexpected data in otp verified event: %+v", otpVerifiedEvent.Data)
+	}
+	otpVerifiedUser, ok := otpVerifiedEvent.Data["user"].(map[string]any)
+	if !ok || otpVerifiedUser["id"] != "usr_123" {
+		t.Fatalf("expected nested user in otp verified event, got: %v", otpVerifiedEvent.Data["user"])
+	}
+	assertSanitizedProps(otpVerifiedUser, "OTPVerifiedWithUser")
+
+	otpVerifiedNilUserEvent := NewOTPVerifiedEvent("test@example.com", OTPVerifiedEventData{
+		Recipient: "test@example.com",
+		Purpose:   "signin",
+		Channel:   "email",
+		User:      nil,
+	})
+	if _, hasUser := otpVerifiedNilUserEvent.Data["user"]; hasUser {
+		t.Fatalf("expected user to be omitted when nil in otp verified event: %v", otpVerifiedNilUserEvent.Data)
 	}
 
-	// 16. UserCreated
+	// 17. UserCreated (flat user)
 	userCreatedEvent := NewUserCreatedEvent("usr_123", UserCreatedEventData(userRecord))
 	if userCreatedEvent.Type != "auth.user.created" || userCreatedEvent.Action != "created" {
 		t.Fatalf("unexpected user created event: %+v", userCreatedEvent)
@@ -234,28 +322,37 @@ func TestAuthEventsUnit(t *testing.T) {
 	if userCreatedEvent.Data["id"] != "usr_123" {
 		t.Fatalf("unexpected id in user created event: %v", userCreatedEvent.Data["id"])
 	}
+	assertSanitizedProps(userCreatedEvent.Data, "UserCreated")
 
-	// 17. UserLocked
+	// 18. UserLocked (nested user)
 	lockedUntilTime := now.Add(24 * time.Hour)
 	userLockedEvent := NewUserLockedEvent("usr_123", UserLockedEventData{
-		UserID:      "usr_123",
+		User:        userRecord,
 		LockedUntil: &lockedUntilTime,
 	})
 	if userLockedEvent.Type != "auth.user.locked" || userLockedEvent.Action != "locked" {
 		t.Fatalf("unexpected user locked event: %+v", userLockedEvent)
 	}
-	if userLockedEvent.Data["user_id"] != "usr_123" {
-		t.Fatalf("unexpected user_id in user locked event: %v", userLockedEvent.Data["user_id"])
+	userLockedData, ok := userLockedEvent.Data["user"].(map[string]any)
+	if !ok || userLockedData["id"] != "usr_123" {
+		t.Fatalf("expected nested user in user locked event, got: %v", userLockedEvent.Data["user"])
 	}
+	assertSanitizedProps(userLockedData, "UserLocked")
 
-	// 18. UserUnlocked
-	userUnlockedEvent := NewUserUnlockedEvent("usr_123", UserUnlockedEventData{
-		UserID: "usr_123",
-	})
+	// 19. UserUnlocked (flat user)
+	userUnlockedEvent := NewUserUnlockedEvent("usr_123", UserUnlockedEventData(userRecord))
 	if userUnlockedEvent.Type != "auth.user.unlocked" || userUnlockedEvent.Action != "unlocked" {
 		t.Fatalf("unexpected user unlocked event: %+v", userUnlockedEvent)
 	}
-	if userUnlockedEvent.Data["user_id"] != "usr_123" {
-		t.Fatalf("unexpected user_id in user unlocked event: %v", userUnlockedEvent.Data["user_id"])
+	if userUnlockedEvent.Data["id"] != "usr_123" {
+		t.Fatalf("unexpected flat user id in user unlocked event: %v", userUnlockedEvent.Data["id"])
+	}
+	assertSanitizedProps(userUnlockedEvent.Data, "UserUnlocked")
+
+	// 20. Edge case: sanitizeEventUserRecord with nil properties
+	nilPropsUserRecord := UserRecord{ID: "nil_props", Properties: nil}
+	sanitizedNilUserRecord := sanitizeEventUserRecord(nilPropsUserRecord)
+	if sanitizedNilUserRecord.Properties != nil {
+		t.Fatalf("expected nil properties preserved, got %v", sanitizedNilUserRecord.Properties)
 	}
 }

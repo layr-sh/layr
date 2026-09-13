@@ -103,10 +103,11 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 			UPDATE auth.users
 			SET is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $1
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, targetUserID).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 	} else {
@@ -114,10 +115,11 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 			INSERT INTO auth.users (id, role, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp())
 			ON CONFLICT (id) DO UPDATE SET last_updated_at = clock_timestamp()
-			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, targetUserID).Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 	}
@@ -148,17 +150,19 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewPasskeyCreatedEvent(passkeyID, PasskeyCreatedEventData{
 			ID:           passkeyID,
-			UserID:       targetUserID,
+			User:         userRecord,
 			FriendlyName: passkeySignUpVerifyRequest.FriendlyName,
 			Transports:   passkeySignUpVerifyRequest.Transports,
 		}))
 		if isAnonymousConversion {
 			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+		} else {
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
 		}
 	}
 
 	log.Debugf("passkey sign up verified and session issued for user %s", targetUserID)
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "passkey")
 }
 
 func (handler *BaseHandler) handlePasskeySignIn(responseWriter http.ResponseWriter, request *http.Request) {
@@ -231,11 +235,12 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -251,5 +256,5 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 
 	_, _ = handler.db.Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	handler.issueSessionResponse(responseWriter, request, userRecord, "passkey")
 }

@@ -90,16 +90,15 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected issuer LayrAuthIntegration, got: %s", mfaSetupResponse.Issuer)
 	}
 
-	// Verify properties in DB
-	var rawProperties []byte
-	err = db.QueryRow(ctx, "SELECT properties FROM auth.users WHERE id = $1", userID).Scan(&rawProperties)
+	// Verify MFA columns in DB
+	var dbEncryptedMFASecret *string
+	var dbMFAEnabled bool
+	err = db.QueryRow(ctx, "SELECT encrypted_mfa_secret, mfa_enabled FROM auth.users WHERE id = $1", userID).Scan(&dbEncryptedMFASecret, &dbMFAEnabled)
 	if err != nil {
-		t.Fatalf("failed to query user properties: %v", err)
+		t.Fatalf("failed to query user mfa state: %v", err)
 	}
-	var properties map[string]any
-	_ = json.Unmarshal(rawProperties, &properties)
-	if properties["mfa_pending"] != true || properties["mfa_secret_enc"] == nil {
-		t.Fatalf("expected mfa_pending=true and mfa_secret_enc present, got: %v", properties)
+	if dbMFAEnabled || dbEncryptedMFASecret == nil || *dbEncryptedMFASecret == "" {
+		t.Fatalf("expected mfa_enabled=false and encrypted_mfa_secret present, got: enabled=%v, secret=%v", dbMFAEnabled, dbEncryptedMFASecret)
 	}
 
 	// 2. Verify with wrong code -> 401
@@ -134,34 +133,29 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK on valid MFA verify, got: %d (%s)", validVerifyResponseRecorder.Code, validVerifyResponseRecorder.Body.String())
 	}
 
-	// Verify user properties updated in DB
-	properties = make(map[string]any)
-	err = db.QueryRow(ctx, "SELECT properties FROM auth.users WHERE id = $1", userID).Scan(&rawProperties)
+	// Verify user mfa_enabled updated in DB
+	err = db.QueryRow(ctx, "SELECT mfa_enabled FROM auth.users WHERE id = $1", userID).Scan(&dbMFAEnabled)
 	if err != nil {
-		t.Fatalf("failed to query updated user properties: %v", err)
+		t.Fatalf("failed to query updated user mfa status: %v", err)
 	}
-	_ = json.Unmarshal(rawProperties, &properties)
-	if properties["mfa_enabled"] != true {
-		t.Fatal("expected mfa_enabled to be true in user properties")
-	}
-	if _, exists := properties["mfa_pending"]; exists {
-		t.Fatal("expected mfa_pending to be removed from user properties")
+	if !dbMFAEnabled {
+		t.Fatal("expected mfa_enabled to be true in database")
 	}
 
 	// Verify events
 	eventsMutex.Lock()
-	var otpVerifiedFound, userUpdatedFound bool
+	var mfaEnabledFound, userUpdatedFound bool
 	for _, event := range capturedEvents {
-		if event.Type == "auth.otp.verified" {
-			otpVerifiedFound = true
+		if event.Type == "auth.mfa.enabled" {
+			mfaEnabledFound = true
 		}
 		if event.Type == "auth.user.updated" {
 			userUpdatedFound = true
 		}
 	}
 	eventsMutex.Unlock()
-	if !otpVerifiedFound || !userUpdatedFound {
-		t.Fatalf("expected auth.otp.verified and auth.user.updated events, got otpVerified=%t userUpdated=%t", otpVerifiedFound, userUpdatedFound)
+	if !mfaEnabledFound || !userUpdatedFound {
+		t.Fatalf("expected auth.mfa.enabled and auth.user.updated events, got mfaEnabled=%t userUpdated=%t", mfaEnabledFound, userUpdatedFound)
 	}
 
 	// 4. Test locked user -> 423
@@ -177,7 +171,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
 
 	// 5. Test corrupted encrypted secret -> 500
-	_, _ = db.Exec(ctx, `UPDATE auth.users SET properties = '{"mfa_secret_enc":"invalid-secret"}'::jsonb WHERE id = $1`, userID)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'invalid-secret' WHERE id = $1", userID)
 	corruptedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
@@ -186,8 +180,8 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on corrupted secret decrypt, got: %d", corruptedVerifyResponseRecorder.Code)
 	}
 
-	// 6. Test missing MFA secret in properties -> 400
-	_, _ = db.Exec(ctx, "UPDATE auth.users SET properties = '{}'::jsonb WHERE id = $1", userID)
+	// 6. Test missing MFA secret in DB -> 400
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL, mfa_enabled = false WHERE id = $1", userID)
 	noSecretVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()

@@ -50,7 +50,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 	var err error
 
 	baseQuery := `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE 1=1
 	`
@@ -87,6 +87,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 		_ = rows.Scan(
 			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -183,11 +184,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 	query := `
 		INSERT INTO auth.users (email, phone, password_hash, role, email_verified_at, phone_verified_at, properties, created_at, last_updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, emailPointer, phonePointer, passwordHash, role, emailVerifiedAt, phoneVerifiedAt, propertiesJSON).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -231,13 +233,14 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 	var userRecord UserRecord
 	var rawProperties []byte
 	query := `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -279,20 +282,36 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 	}
 
 	ctx := request.Context()
-	result, err := controlPlaneHandler.db.Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
+	var userRecord UserRecord
+	var rawProperties []byte
+	err := controlPlaneHandler.db.QueryRow(ctx, `
+		DELETE FROM auth.users
+		WHERE id = $1
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+	`, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			log.Debugf("HandleDeleteUser: user %s not found", userID)
+			controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			return
+		}
 		log.Debugf("HandleDeleteUser exec failed: %v", err)
 		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to delete user", "LAYR_AUTH_001")
 		return
 	}
-	if result.RowsAffected() == 0 {
-		log.Debugf("HandleDeleteUser: user %s not found", userID)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
-		return
+
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
 	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserDeletedEvent(userID, UserDeletedEventData{ID: userID}))
+		controlPlaneHandler.eventBus.Publish(ctx, NewUserDeletedEvent(userRecord.ID, UserDeletedEventData(userRecord)))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]bool{"ok": true})
@@ -336,11 +355,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 		UPDATE auth.users
 		SET locked_until = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, lockedUntil, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -368,7 +388,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 
 	if controlPlaneHandler.eventBus != nil {
 		controlPlaneHandler.eventBus.Publish(ctx, NewUserLockedEvent(userID, UserLockedEventData{
-			UserID:      userID,
+			User:        userRecord,
 			LockedUntil: &lockedUntil,
 		}))
 	}
@@ -406,11 +426,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 		UPDATE auth.users
 		SET locked_until = NULL, last_updated_at = clock_timestamp()
 		WHERE id = $1
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -426,9 +447,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 
 	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData{
-			UserID: userID,
-		}))
+		controlPlaneHandler.eventBus.Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(userRecord)))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, userRecord)

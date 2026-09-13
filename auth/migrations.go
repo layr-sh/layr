@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS auth.users (
     email VARCHAR(255) UNIQUE,
     phone VARCHAR(32) UNIQUE,
     password_hash VARCHAR(255),
+    encrypted_mfa_secret TEXT,
+    mfa_enabled BOOLEAN NOT NULL DEFAULT false,
     role VARCHAR(64) NOT NULL DEFAULT 'authenticated',
     is_anonymous BOOLEAN NOT NULL DEFAULT false,
     email_verified_at TIMESTAMPTZ,

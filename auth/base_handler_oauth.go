@@ -320,9 +320,9 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 	if err == nil {
 		log.Debugf("logging in existing federated user %s via %s", existingUserID, provider)
 		_ = handler.db.QueryRow(ctx, `
-			SELECT id, email, phone, role, is_anonymous, properties, created_at, last_updated_at 
+			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 			FROM auth.users WHERE id = $1
-		`, existingUserID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
+		`, existingUserID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
 		userRecord.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -340,8 +340,8 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			INSERT INTO auth.users (email, role, email_verified_at, properties, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), $2, clock_timestamp(), clock_timestamp())
 			ON CONFLICT (email) DO UPDATE SET last_updated_at = clock_timestamp()
-			RETURNING id, email, phone, role, is_anonymous, properties, created_at, last_updated_at
-		`, emailPtr, propertiesJSON).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		`, emailPtr, propertiesJSON).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
 		userRecord.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -407,7 +407,8 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 		}
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord)
+	provider := request.PathValue("provider")
+	handler.issueSessionResponse(responseWriter, request, userRecord, "oauth", provider)
 }
 
 // HandleOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
@@ -437,11 +438,13 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(request.Context(), `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, claims.Subject).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

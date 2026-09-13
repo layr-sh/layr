@@ -6,18 +6,20 @@ import (
 
 // UserRecord represents a user in auth.users.
 type UserRecord struct {
-	ID              string         `json:"id"`
-	Email           *string        `json:"email"`
-	Phone           *string        `json:"phone"`
-	PasswordHash    *string        `json:"-"`
-	Role            string         `json:"role"`
-	IsAnonymous     bool           `json:"is_anonymous"`
-	EmailVerifiedAt *time.Time     `json:"email_verified_at,omitempty"`
-	PhoneVerifiedAt *time.Time     `json:"phone_verified_at,omitempty"`
-	LockedUntil     *time.Time     `json:"locked_until,omitempty"`
-	Properties      map[string]any `json:"properties"`
-	CreatedAt       time.Time      `json:"created_at"`
-	LastUpdatedAt   time.Time      `json:"last_updated_at"`
+	ID                 string         `json:"id"`
+	Email              *string        `json:"email"`
+	Phone              *string        `json:"phone"`
+	PasswordHash       *string        `json:"-"`
+	EncryptedMFASecret *string        `json:"-"`
+	MFAEnabled         bool           `json:"mfa_enabled"`
+	Role               string         `json:"role"`
+	IsAnonymous        bool           `json:"is_anonymous"`
+	EmailVerifiedAt    *time.Time     `json:"email_verified_at,omitempty"`
+	PhoneVerifiedAt    *time.Time     `json:"phone_verified_at,omitempty"`
+	LockedUntil        *time.Time     `json:"locked_until,omitempty"`
+	Properties         map[string]any `json:"properties"`
+	CreatedAt          time.Time      `json:"created_at"`
+	LastUpdatedAt      time.Time      `json:"last_updated_at"`
 }
 
 // SessionRecord represents an active refresh session in auth.sessions.

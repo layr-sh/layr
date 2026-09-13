@@ -335,26 +335,14 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 500 on nil pool phone confirm, got: %d", validPhoneConfirmResponseRecorder.Code)
 	}
 
-	// 4. Property Sanitization Test
-	dirtyProperties := map[string]any{
-		"mfa_secret_enc": "enc:v1:secret",
-		"mfa_pending":    true,
-		"mfa_enabled":    true,
-		"display_name":   "Alice",
-		"theme":          "dark",
+	// 4. User Properties Clean Pass-through Test
+	userProps := map[string]any{
+		"display_name": "Alice",
+		"theme":        "dark",
 	}
-	cleanProperties := sanitizeUserProperties(dirtyProperties)
-	if _, exists := cleanProperties["mfa_secret_enc"]; exists {
-		t.Fatalf("expected mfa_secret_enc to be stripped")
-	}
-	if _, exists := cleanProperties["mfa_pending"]; exists {
-		t.Fatalf("expected mfa_pending to be stripped")
-	}
-	if _, exists := cleanProperties["mfa_enabled"]; exists {
-		t.Fatalf("expected mfa_enabled to be stripped from properties")
-	}
-	if cleanProperties["display_name"] != "Alice" || cleanProperties["theme"] != "dark" {
-		t.Fatalf("expected display_name and theme preserved: %+v", cleanProperties)
+	cleanProps := sanitizeUserProperties(userProps)
+	if cleanProps["display_name"] != "Alice" || cleanProps["theme"] != "dark" {
+		t.Fatalf("expected display_name and theme preserved: %+v", cleanProps)
 	}
 
 	// 5. Claims-based email and phone verification confirm
@@ -390,5 +378,16 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	baseHandler.handleUserPhoneVerificationConfirm(claimsPhoneResponseRecorder, claimsPhoneRequest)
 	if claimsPhoneResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool claims phone confirm, got: %d", claimsPhoneResponseRecorder.Code)
+	}
+
+	// 6. Nil database pool error handling in fetchUserRecordByID and fetchUserRecordByRecipient
+	nilDBUserRecord, nilDBErr := fetchUserRecordByID(context.Background(), nil, "user-nil-db")
+	if nilDBErr == nil || nilDBUserRecord.ID != "user-nil-db" {
+		t.Fatalf("expected error and fallback user record with nil DB, got: %v, %v", nilDBUserRecord, nilDBErr)
+	}
+
+	nilDBRecipientUserRecord, nilDBRecipientErr := fetchUserRecordByRecipient(context.Background(), nil, "user@example.com")
+	if nilDBRecipientErr == nil || nilDBRecipientUserRecord.ID != "" {
+		t.Fatalf("expected error and empty user record with nil DB, got: %v, %v", nilDBRecipientUserRecord, nilDBRecipientErr)
 	}
 }

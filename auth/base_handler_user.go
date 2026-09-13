@@ -1,18 +1,17 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"layr.sh/core"
 )
 
 func sanitizeUserProperties(properties map[string]any) map[string]any {
-	cleanedProperties := make(map[string]any)
+	cleanedProperties := make(map[string]any, len(properties))
 	for propertyKey, propertyValue := range properties {
-		if propertyKey == "mfa_secret_enc" || propertyKey == "mfa_pending" || propertyKey == "mfa_enabled" {
-			continue
-		}
 		cleanedProperties[propertyKey] = propertyValue
 	}
 	return cleanedProperties
@@ -37,12 +36,13 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 	var userRecord UserRecord
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -56,19 +56,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
-	isMFAEnabled := false
-	if enabledValue, ok := userRecord.Properties["mfa_enabled"]; ok {
-		if boolValue, boolOk := enabledValue.(bool); boolOk && boolValue {
-			isMFAEnabled = true
-		} else if stringValue, isString := enabledValue.(string); isString && stringValue == "true" {
-			isMFAEnabled = true
-		}
-	} else if secretValue, hasSecret := userRecord.Properties["mfa_secret_enc"]; hasSecret && secretValue != nil && secretValue != "" {
-		if pendingValue, hasPending := userRecord.Properties["mfa_pending"]; !hasPending || pendingValue == false || pendingValue == "false" {
-			isMFAEnabled = true
-		}
-	}
-
+	isMFAEnabled := userRecord.MFAEnabled
 	if !isMFAEnabled {
 		var hasPasskey bool
 		err = handler.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM auth.passkeys WHERE user_id = $1)", userID).Scan(&hasPasskey)
@@ -76,8 +64,6 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 			isMFAEnabled = true
 		}
 	}
-
-	cleanedProperties := sanitizeUserProperties(userRecord.Properties)
 
 	userResponse := UserResponse{
 		ID:            userRecord.ID,
@@ -88,7 +74,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 		EmailVerified: userRecord.EmailVerifiedAt != nil,
 		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
 		MFAEnabled:    isMFAEnabled,
-		Properties:    cleanedProperties,
+		Properties:    userRecord.Properties,
 		CreatedAt:     userRecord.CreatedAt,
 		LastUpdatedAt: userRecord.LastUpdatedAt,
 	}
@@ -130,10 +116,11 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
 		    last_updated_at = clock_timestamp()
 		WHERE id = $2
-		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at
+		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, propertiesJSON, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
@@ -151,11 +138,9 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
 	}
 
-	cleanedProperties := sanitizeUserProperties(userRecord.Properties)
-
 	log.Debugf("user properties successfully updated for %s", userID)
 	handler.writeJSON(responseWriter, UpdateUserPropertiesResponse{
-		Properties: cleanedProperties,
+		Properties: userRecord.Properties,
 	})
 }
 
@@ -179,11 +164,12 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 	var userRecord UserRecord
 	var rawProperties []byte
 	_ = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, properties, created_at, last_updated_at 
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	userRecord.Properties = make(map[string]any)
@@ -225,4 +211,56 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 
 	log.Debugf("user account %s deleted successfully", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
+}
+
+func fetchUserRecordByID(ctx context.Context, db *core.DatabasePool, userID string) (UserRecord, error) {
+	if db == nil {
+		return UserRecord{ID: userID}, errors.New("database pool unavailable")
+	}
+	var userRecord UserRecord
+	var rawProperties []byte
+	err := db.QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		FROM auth.users
+		WHERE id = $1
+	`, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	if err != nil {
+		return UserRecord{ID: userID}, err
+	}
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+	return userRecord, nil
+}
+
+func fetchUserRecordByRecipient(ctx context.Context, db *core.DatabasePool, recipient string) (UserRecord, error) {
+	if db == nil {
+		return UserRecord{}, errors.New("database pool unavailable")
+	}
+	var userRecord UserRecord
+	var rawProperties []byte
+	err := db.QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		FROM auth.users
+		WHERE email = $1 OR phone = $1
+	`, recipient).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	if err != nil {
+		return UserRecord{}, err
+	}
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+	return userRecord, nil
 }

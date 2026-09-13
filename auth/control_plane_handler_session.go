@@ -99,8 +99,9 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	deletedSessionRows.Close()
 
 	if controlPlaneHandler.eventBus != nil {
+		userRecord, _ := fetchUserRecordByID(ctx, controlPlaneHandler.db, userID)
 		controlPlaneHandler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
-			UserID:       userID,
+			User:         userRecord,
 			RevokedCount: &revokedCount,
 		}))
 	}
