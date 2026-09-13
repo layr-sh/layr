@@ -112,6 +112,18 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected same user ID %s on second login, got: %s", firstSessionResponse.User.ID, secondSessionResponse.User.ID)
 	}
 
+	// 4b. Locked federated user callback -> 423
+	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", firstSessionResponse.User.ID)
+	_ = testKVStore.Set(context.Background(), "auth:pkce:locked-login-state", "locked-login-state", 10*time.Minute)
+	lockedOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-mock-code&state=locked-login-state", nil)
+	lockedOAuthRequest.SetPathValue("provider", "google")
+	lockedOAuthResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleOAuthCallback(lockedOAuthResponseRecorder, lockedOAuthRequest)
+	if lockedOAuthResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked OAuth callback, got: %d", lockedOAuthResponseRecorder.Code)
+	}
+	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = NULL WHERE id = $1", firstSessionResponse.User.ID)
+
 	// 5. UserInfo GET returns user from database
 	userInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	userInfoRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)

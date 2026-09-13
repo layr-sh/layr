@@ -200,6 +200,15 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("challenge"),
 	)
+	core.DeleteRoute[core.Empty](router, "/api/v1/auth/mfa", service.baseHandler.handleMFADisable,
+		core.RouteTag("Multi-Factor Authentication"),
+		core.RouteSummary("Disable multi-factor authentication on user account"),
+		core.RouteDescription("Disables TOTP multi-factor authentication, clears the user's encrypted MFA secret, and emits auth.mfa.disabled."),
+		core.RouteNoContentResponse("MFA disabled on account"),
+		core.RouteOperationID("auth__mfa__disable"),
+		core.RouteSDKGroupName("auth", "mfa"),
+		core.RouteSDKMethodName("disable"),
+	)
 
 	// 7. OAuth & OpenID Connect
 	core.GetRoute[core.Empty](router, "/api/v1/auth/oauth/authorize", service.baseHandler.handleOIDCAuthorize,

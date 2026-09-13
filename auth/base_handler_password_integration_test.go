@@ -171,6 +171,29 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		t.Fatalf("expected new password to match stored hash in database")
 	}
 
+	// 6b. Locked user password reset confirm -> 423
+	lockedResetRequestPayload, _ := json.Marshal(PasswordResetRequest{Email: resetEmail})
+	lockedResetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(lockedResetRequestPayload))
+	lockedResetResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasswordResetRequest(lockedResetResponseRecorder, lockedResetRequest)
+	if lockedResetResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on password reset request, got: %d", lockedResetResponseRecorder.Code)
+	}
+
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", resetUserID)
+	lockedConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+		Email:    resetEmail,
+		Code:     dispatchedEmailCode,
+		Password: "YetAnotherPassword789!",
+	})
+	lockedConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(lockedConfirmPayload))
+	lockedConfirmResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasswordResetConfirm(lockedConfirmResponseRecorder, lockedConfirmRequest)
+	if lockedConfirmResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked user password reset confirm, got: %d", lockedConfirmResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", resetUserID)
+
 	// 7. Password Reset Request & Confirm via Phone
 	resetPhoneRequestPayload, _ := json.Marshal(PasswordResetRequest{Phone: resetPhone})
 	resetPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(resetPhoneRequestPayload))

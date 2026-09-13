@@ -204,6 +204,29 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		return
 	}
 
+	if userRecord.MFAEnabled {
+		mfaCode := request.FormValue("mfa_code")
+		if mfaCode == "" {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Two-factor authentication code is required")
+			return
+		}
+		if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
+			return
+		}
+		secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+		if err != nil {
+			log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, err)
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
+			return
+		}
+		if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
+			log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", userRecord.ID)
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
+			return
+		}
+	}
+
 	// Delete state payload to prevent replay / CSRF fixation
 	_ = handler.kvStore.Delete(ctx, "auth:oidc:state:"+stateID)
 
@@ -607,6 +630,23 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		return
 	}
 
+	var userRecord UserRecord
+	err = handler.db.QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until
+		FROM auth.users WHERE id = $1
+	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil)
+	if err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User not found", "invalid_grant")
+		return
+	}
+
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Warnf("failed OIDC token refresh for locked user %s", userRecord.ID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Account is temporarily locked", "invalid_grant")
+		return
+	}
+
 	// Rotate refresh token
 	newRefreshToken := jwt.GenerateRefreshToken()
 	newRefreshTokenHash := jwt.HashRefreshToken(newRefreshToken)
@@ -619,12 +659,6 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		SET refresh_token_hash = $1, expires_at = $2
 		WHERE id = $3
 	`, newRefreshTokenHash, newExpiresAt, sessionID)
-
-	var userRecord UserRecord
-	_ = handler.db.QueryRow(ctx, `
-		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at
-		FROM auth.users WHERE id = $1
-	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt)
 
 	accessExpiry := config.Sessions.AccessTokenExpirySeconds
 
@@ -1102,6 +1136,11 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <div class="field">
           <label for="signin-password">Password</label>
           <input id="signin-password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••••••" class="input-text">
+        </div>
+
+        <div class="field">
+          <label for="signin-mfa">Two-Factor Code (if enabled)</label>
+          <input id="signin-mfa" name="mfa_code" type="text" autocomplete="one-time-code" placeholder="6-digit authenticator code" class="input-text">
         </div>
 
         <button type="submit" class="submit-btn">Sign in</button>

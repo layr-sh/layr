@@ -302,6 +302,12 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
+	if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Warnf("failed OTP sign in for locked user %s", userRecord.ID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
+	}
+
 	channel := "sms"
 	if isEmail {
 		channel = "email"

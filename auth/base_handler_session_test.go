@@ -3,10 +3,12 @@ package auth
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
@@ -130,6 +132,33 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	baseHandler.handleTokenRefresh(validRefreshResponseRecorder, validRefreshRequest)
 	if validRefreshResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on refresh nil db pool, got: %d", validRefreshResponseRecorder.Code)
+	}
+
+	// Fast-path session cache hit with locked user -> 423
+	sessionKVStore := newInMemoryKVStore()
+	baseHandler.SetKVStore(sessionKVStore)
+	fastPathConfig := DefaultConfig()
+	fastPathConfig.Cache.FastPathSessionsEnabled = true
+	configManager.Set(fastPathConfig)
+
+	futureLockUntil := time.Now().UTC().Add(time.Hour)
+	lockedCachedSession := CachedSession{
+		User: UserRecord{
+			ID:          "user-locked-123",
+			Role:        "authenticated",
+			LockedUntil: &futureLockUntil,
+		},
+	}
+	lockedCachedBytes, _ := json.Marshal(lockedCachedSession)
+	lockedRefreshToken := "cached-locked-token"
+	lockedTokenHash := jwt.HashRefreshToken(lockedRefreshToken)
+	_ = sessionKVStore.Set(ctx, "auth:session:"+lockedTokenHash, string(lockedCachedBytes), time.Hour)
+
+	lockedCacheRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"cached-locked-token"}`))
+	lockedCacheRefreshResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleTokenRefresh(lockedCacheRefreshResponseRecorder, lockedCacheRefreshRequest)
+	if lockedCacheRefreshResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 on locked cached session refresh, got: %d", lockedCacheRefreshResponseRecorder.Code)
 	}
 
 	// 9. SignOut

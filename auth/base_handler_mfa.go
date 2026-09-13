@@ -64,6 +64,12 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Debugf("MFA setup rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
+	}
+
 	secretBase32, _ := handler.totpManager.GenerateSecret()
 	encryptedSecret, _ := handler.cryptoKeyManager.EncryptField([]byte(secretBase32))
 
@@ -294,4 +300,74 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 
 	log.Debugf("MFA challenge succeeded for user %s, issuing session", userRecord.ID)
 	handler.issueSessionResponse(responseWriter, request, userRecord, "mfa")
+}
+
+func (handler *BaseHandler) handleMFADisable(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling MFA disable request")
+	config := handler.configManager.Get()
+	if !config.MFA.Enabled {
+		log.Debug("MFA disable rejected: MFA is disabled in configuration")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "MFA is disabled", "LAYR_AUTH_001")
+		return
+	}
+
+	userID, err := handler.authenticateUser(request)
+	if err != nil || userID == "" {
+		log.Debugf("MFA disable rejected: unauthenticated caller: %v", err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		return
+	}
+
+	if handler.db == nil {
+		log.Debug("MFA disable rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		return
+	}
+
+	ctx := request.Context()
+	var userRecord UserRecord
+	var rawProperties []byte
+	err = handler.db.QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		FROM auth.users
+		WHERE id = $1
+	`, userID).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	if err != nil {
+		log.Debugf("MFA disable rejected: user %s not found: %v", userID, err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+		return
+	}
+
+	userRecord.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Debugf("MFA disable rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
+	}
+
+	userRecord.MFAEnabled = false
+	userRecord.EncryptedMFASecret = nil
+
+	_, _ = handler.db.Exec(ctx, `
+		UPDATE auth.users
+		SET mfa_enabled = false, encrypted_mfa_secret = NULL, last_updated_at = clock_timestamp()
+		WHERE id = $1
+	`, userRecord.ID)
+
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, NewMFADisabledEvent(userRecord.ID, MFADisabledEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+	}
+
+	log.Debugf("MFA successfully disabled for user %s", userRecord.ID)
+	responseWriter.WriteHeader(http.StatusNoContent)
 }

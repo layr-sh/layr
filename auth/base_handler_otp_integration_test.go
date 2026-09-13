@@ -269,6 +269,36 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected user email %s, got: %v", userEmail, sessionResponse.User.Email)
 	}
 
+	// 3b. Test existing locked user OTP verify -> 423 StatusLocked
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE email = $1", userEmail)
+	_ = databaseKVStore.Delete(ctx, fmt.Sprintf("auth:cooldown:signin:%s", userEmail))
+	lockedOTPSendPayload := map[string]any{
+		"recipient": userEmail,
+		"purpose":   "signin",
+	}
+	encodedLockedOTPSend, _ := json.Marshal(lockedOTPSendPayload)
+	lockedOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLockedOTPSend))
+	lockedOTPSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPSend(lockedOTPSendResponseRecorder, lockedOTPSendRequest)
+	if lockedOTPSendResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", lockedOTPSendResponseRecorder.Code, lockedOTPSendResponseRecorder.Body.String())
+	}
+	lockedOTPCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
+
+	lockedOTPVerifyPayload := map[string]any{
+		"recipient": userEmail,
+		"code":      lockedOTPCode,
+		"purpose":   "signin",
+	}
+	encodedLockedOTPVerify, _ := json.Marshal(lockedOTPVerifyPayload)
+	lockedOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedLockedOTPVerify))
+	lockedOTPVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPVerify(lockedOTPVerifyResponseRecorder, lockedOTPVerifyRequest)
+	if lockedOTPVerifyResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked user OTP verify, got: %d", lockedOTPVerifyResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE email = $1", userEmail)
+
 	// 4. Phone OTP flow
 	phoneRecipient := "+1234567890"
 	phoneOTPPayload := map[string]any{

@@ -137,6 +137,40 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	if emptyIssuerBaseHandler.GetTOTPManager() == nil {
 		t.Fatal("expected non-nil TOTP manager")
 	}
+
+	// 9. handleMFADisable unit checks
+	disabledConfig.MFA.Enabled = false
+	configManager.Set(disabledConfig)
+	disableMFAForbiddenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	disableMFAForbiddenResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(disableMFAForbiddenResponseRecorder, disableMFAForbiddenRequest)
+	if disableMFAForbiddenResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on MFA disable when disabled in config, got: %d", disableMFAForbiddenResponseRecorder.Code)
+	}
+	configManager.Set(enabledConfig)
+
+	missingBearerDisableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	missingBearerDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(missingBearerDisableResponseRecorder, missingBearerDisableRequest)
+	if missingBearerDisableResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on MFA disable without bearer, got: %d", missingBearerDisableResponseRecorder.Code)
+	}
+
+	invalidTokenDisableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	invalidTokenDisableRequest.Header.Set("Authorization", "Bearer invalid-token")
+	invalidTokenDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(invalidTokenDisableResponseRecorder, invalidTokenDisableRequest)
+	if invalidTokenDisableResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on invalid token MFA disable, got: %d", invalidTokenDisableResponseRecorder.Code)
+	}
+
+	validTokenDisableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	validTokenDisableRequest.Header.Set("Authorization", bearerHeader)
+	validTokenDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(validTokenDisableResponseRecorder, validTokenDisableRequest)
+	if validTokenDisableResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on valid token MFA disable with nil pool, got: %d", validTokenDisableResponseRecorder.Code)
+	}
 }
 
 func TestAuthMFAChallengeHandlerUnit(t *testing.T) {

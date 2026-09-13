@@ -5,13 +5,31 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"layr.sh/core"
 )
 
+func isSystemPropertyKey(key string) bool {
+	switch key {
+	case "encrypted_mfa_secret", "mfa_pending", "mfa_enabled", "password_hash",
+		"locked_until", "email_verified_at", "phone_verified_at", "role",
+		"is_anonymous", "id", "email", "phone", "created_at", "last_updated_at":
+		return true
+	}
+	if strings.HasPrefix(key, "encrypted_") || strings.HasSuffix(key, "_enc") {
+		return true
+	}
+	return false
+}
+
 func sanitizeUserProperties(properties map[string]any) map[string]any {
 	cleanedProperties := make(map[string]any, len(properties))
 	for propertyKey, propertyValue := range properties {
+		normalizedKey := strings.ToLower(strings.TrimSpace(propertyKey))
+		if isSystemPropertyKey(normalizedKey) {
+			continue
+		}
 		cleanedProperties[propertyKey] = propertyValue
 	}
 	return cleanedProperties
@@ -56,15 +74,6 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 	}
 
-	isMFAEnabled := userRecord.MFAEnabled
-	if !isMFAEnabled {
-		var hasPasskey bool
-		err = handler.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM auth.passkeys WHERE user_id = $1)", userID).Scan(&hasPasskey)
-		if err == nil && hasPasskey {
-			isMFAEnabled = true
-		}
-	}
-
 	userResponse := UserResponse{
 		ID:            userRecord.ID,
 		Email:         userRecord.Email,
@@ -73,7 +82,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 		IsAnonymous:   userRecord.IsAnonymous,
 		EmailVerified: userRecord.EmailVerifiedAt != nil,
 		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
-		MFAEnabled:    isMFAEnabled,
+		MFAEnabled:    userRecord.MFAEnabled,
 		Properties:    userRecord.Properties,
 		CreatedAt:     userRecord.CreatedAt,
 		LastUpdatedAt: userRecord.LastUpdatedAt,

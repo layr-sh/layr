@@ -495,6 +495,12 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		_ = json.Unmarshal(rawProps, &userRecord.Properties)
 	}
 
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Warnf("failed password reset completion for locked user %s", userRecord.ID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
+	}
+
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewPasswordResetEvent(userRecord.ID, PasswordResetEventData{
 			Recipient: recipient,
@@ -534,14 +540,21 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	var phone *string
 	var existingPasswordHash *string
 
+	var lockedUntil *time.Time
 	err = handler.db.QueryRow(ctx, `
-		SELECT is_anonymous, email, phone, password_hash
+		SELECT is_anonymous, email, phone, password_hash, locked_until
 		FROM auth.users
 		WHERE id = $1
-	`, userID).Scan(&isCallerAnonymous, &email, &phone, &existingPasswordHash)
+	`, userID).Scan(&isCallerAnonymous, &email, &phone, &existingPasswordHash, &lockedUntil)
 	if err != nil {
 		log.Debugf("update user password failed: user %s not found: %v", userID, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+		return
+	}
+
+	if lockedUntil != nil && time.Now().UTC().Before(*lockedUntil) {
+		log.Warnf("failed update user password for locked user %s", userID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
 	}
 
