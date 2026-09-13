@@ -1101,4 +1101,18 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	if validDBRefreshResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid DB token refresh, got: %d (%s)", validDBRefreshResponseRecorder.Code, validDBRefreshResponseRecorder.Body.String())
 	}
+
+	var rotatedSessionResponse SessionResponse
+	_ = json.NewDecoder(validDBRefreshResponseRecorder.Body).Decode(&rotatedSessionResponse)
+
+	// Locked user DB token refresh -> 423
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE email = $1", conflictEmail)
+	lockedDBRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: rotatedSessionResponse.RefreshToken})
+	lockedDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(lockedDBRefreshPayload))
+	lockedDBRefreshResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleTokenRefresh(lockedDBRefreshResponseRecorder, lockedDBRefreshRequest)
+	if lockedDBRefreshResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked DB token refresh, got: %d (%s)", lockedDBRefreshResponseRecorder.Code, lockedDBRefreshResponseRecorder.Body.String())
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE email = $1", conflictEmail)
 }

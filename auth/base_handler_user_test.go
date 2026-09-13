@@ -390,4 +390,32 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	if nilDBRecipientErr == nil || nilDBRecipientUserRecord.ID != "" {
 		t.Fatalf("expected error and empty user record with nil DB, got: %v, %v", nilDBRecipientUserRecord, nilDBRecipientErr)
 	}
+
+	// 7. Sanitization of user properties and system property key check
+	testProps := map[string]any{
+		"theme":                "dark",
+		"encrypted_secret":     "malicious_value",
+		"user_data_enc":        "malicious_value",
+		"role":                 "admin",
+		"locked_until":         "2099-01-01",
+		"is_anonymous":         true,
+		"email_verified_at":    "2025-01-01",
+		"phone_verified_at":    "2025-01-01",
+		"password_hash":        "hash",
+		"mfa_enabled":          true,
+		"mfa_pending":          true,
+		"encrypted_mfa_secret": "secret",
+		"id":                   "hacked-id",
+		"email":                "hacked@example.com",
+		"phone":                "+19999999999",
+		"created_at":           "timestamp",
+		"last_updated_at":      "timestamp",
+	}
+	cleaned := sanitizeUserProperties(testProps)
+	if len(cleaned) != 1 || cleaned["theme"] != "dark" {
+		t.Fatalf("expected only non-system properties to remain, got: %v", cleaned)
+	}
+	if !isSystemPropertyKey("encrypted_token") || !isSystemPropertyKey("data_enc") || !isSystemPropertyKey("role") || isSystemPropertyKey("displayName") {
+		t.Fatalf("unexpected isSystemPropertyKey behavior")
+	}
 }

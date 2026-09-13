@@ -161,6 +161,14 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
+	lockedSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", nil)
+	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
+	lockedSetupResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFASetup(lockedSetupResponseRecorder, lockedSetupRequest)
+	if lockedSetupResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked user setup, got: %d", lockedSetupResponseRecorder.Code)
+	}
+
 	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
@@ -256,6 +264,70 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	baseHandler.handleMFAVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on phone-only user MFA verify, got: %d", phoneVerifyResponseRecorder.Code)
+	}
+
+	// 9. Test handleMFADisable
+	phoneAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		Subject: phoneUserID,
+		Phone:   "+15554321098",
+		Role:    "authenticated",
+	}, 3600)
+	if err != nil {
+		t.Fatalf("failed to generate access token for phone user: %v", err)
+	}
+
+	// Non-existent user -> 404
+	nonExistentToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		Subject: "01918a24-9999-7000-8000-000000000099",
+		Role:    "authenticated",
+	}, 3600)
+	nonExistentDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	nonExistentDisableRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
+	nonExistentDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(nonExistentDisableResponseRecorder, nonExistentDisableRequest)
+	if nonExistentDisableResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on non-existent user MFA disable, got: %d", nonExistentDisableResponseRecorder.Code)
+	}
+
+	// Locked user -> 423
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", phoneUserID)
+	lockedDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	lockedDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
+	lockedDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(lockedDisableResponseRecorder, lockedDisableRequest)
+	if lockedDisableResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked user MFA disable, got: %d", lockedDisableResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", phoneUserID)
+
+	// Successful MFA disable -> 204
+	validDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	validDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
+	validDisableResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleMFADisable(validDisableResponseRecorder, validDisableRequest)
+	if validDisableResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 StatusNoContent on MFA disable, got: %d", validDisableResponseRecorder.Code)
+	}
+
+	// Assert DB mfa_enabled = false, encrypted_mfa_secret IS NULL
+	var phoneDBMFAEnabled bool
+	var phoneDBEncryptedSecret *string
+	_ = db.QueryRow(ctx, "SELECT mfa_enabled, encrypted_mfa_secret FROM auth.users WHERE id = $1", phoneUserID).Scan(&phoneDBMFAEnabled, &phoneDBEncryptedSecret)
+	if phoneDBMFAEnabled || phoneDBEncryptedSecret != nil {
+		t.Fatalf("expected MFA to be disabled in DB, got enabled=%t, secret=%v", phoneDBMFAEnabled, phoneDBEncryptedSecret)
+	}
+
+	// Verify events
+	eventsMutex.Lock()
+	var mfaDisabledFound bool
+	for _, event := range capturedEvents {
+		if event.Type == "auth.mfa.disabled" {
+			mfaDisabledFound = true
+		}
+	}
+	eventsMutex.Unlock()
+	if !mfaDisabledFound {
+		t.Fatal("expected auth.mfa.disabled event to be published")
 	}
 }
 

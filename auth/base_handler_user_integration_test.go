@@ -687,6 +687,21 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected new password to verify against stored hash")
 	}
 
+	// 5b. Locked user password update -> 423
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", userID)
+	lockedPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+		CurrentPassword: newValidPassword,
+		NewPassword:     "YetAnotherPass999!",
+	})
+	lockedPasswordRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(lockedPasswordPayload))
+	lockedPasswordRequest.Header.Set("Authorization", "Bearer "+accessToken)
+	lockedPasswordResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleUpdateUserPassword(lockedPasswordResponseRecorder, lockedPasswordRequest)
+	if lockedPasswordResponseRecorder.Code != http.StatusLocked {
+		t.Fatalf("expected 423 StatusLocked on locked user password update, got: %d", lockedPasswordResponseRecorder.Code)
+	}
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
+
 	// 6. Prohibit setting password on anonymous accounts
 	anonUserID := "01918a24-7777-7000-8000-000000000007"
 	_, _ = db.Exec(ctx, `
@@ -768,9 +783,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	verifyPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(verifyPasskeyResponseRecorder, verifyPasskeyRequest)
 	var finalPasskeyUserResponse UserResponse
-	_ = json.NewDecoder(verifyPasskeyResponseRecorder.Body).Decode(&finalPasskeyUserResponse)
-	if !finalPasskeyUserResponse.MFAEnabled {
-		t.Fatalf("expected passkey user to have MFAEnabled=true after passkey inserted")
+	// 8. User with passkey enrolled keeps MFAEnabled = false (passkeys are primary credentials, not 2FA)
+	if finalPasskeyUserResponse.MFAEnabled {
+		t.Fatalf("expected passkey user to have MFAEnabled=false after passkey inserted (passkeys are not MFA)")
 	}
 
 	// 9. Converted user without existing password can set initial password directly

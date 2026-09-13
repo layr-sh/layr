@@ -16,6 +16,7 @@ import (
 
 	"layr.sh/auth/jwt"
 	"layr.sh/core"
+	"uuid"
 )
 
 func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
@@ -208,6 +209,78 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	baseHandler.handleOIDCAuthorizeSubmit(wrongPassResponseRecorder, wrongPassRequest)
 	if !strings.Contains(wrongPassResponseRecorder.Body.String(), "Invalid email or password") {
 		t.Fatalf("expected Invalid email or password on wrong password, got: %s", wrongPassResponseRecorder.Body.String())
+	}
+
+	// MFA-enabled user tests
+	mfaUserStateID := "mfa-user-state-id"
+	mfaUserPayload, _ := json.Marshal(OIDCAuthorizationStatePayload{ClientID: "client-dashboard", RedirectURI: "https://dashboard.example.com/callback", Scope: "openid"})
+	_ = databaseKVStore.Set(ctx, "auth:oidc:state:"+mfaUserStateID, string(mfaUserPayload), 5*time.Minute)
+
+	mfaUserEmail := "mfa.user@example.com"
+	mfaSecret := "JBSWY3DPEHPK3PXP"
+	encryptedMFASecret, _ := cryptoKeyManager.EncryptField([]byte(mfaSecret))
+	mfaPassHash, _ := baseHandler.hasher.Hash("MfaPass123!")
+	var mfaUserID string
+	_ = db.QueryRow(ctx, `
+		INSERT INTO auth.users (email, password_hash, role, is_anonymous, mfa_enabled, encrypted_mfa_secret, created_at, last_updated_at)
+		VALUES ($1, $2, 'authenticated', false, true, $3, clock_timestamp(), clock_timestamp())
+		RETURNING id
+	`, mfaUserEmail, mfaPassHash, encryptedMFASecret).Scan(&mfaUserID)
+
+	// Missing MFA code -> "Two-factor authentication code is required"
+	missingMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}}
+	missingMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(missingMFACodeValues.Encode()))
+	missingMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	missingMFACodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(missingMFACodeResponseRecorder, missingMFACodeRequest)
+	if !strings.Contains(missingMFACodeResponseRecorder.Body.String(), "Two-factor authentication code is required") {
+		t.Fatalf("expected Two-factor authentication code is required, got: %s", missingMFACodeResponseRecorder.Body.String())
+	}
+
+	// Missing encrypted secret in DB -> "Multi-factor authentication configuration error"
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", mfaUserID)
+	noSecretMFAValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"123456"}}
+	noSecretMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(noSecretMFAValues.Encode()))
+	noSecretMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	noSecretMFAResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(noSecretMFAResponseRecorder, noSecretMFARequest)
+	if !strings.Contains(noSecretMFAResponseRecorder.Body.String(), "Multi-factor authentication configuration error") {
+		t.Fatalf("expected Multi-factor authentication configuration error, got: %s", noSecretMFAResponseRecorder.Body.String())
+	}
+
+	// Corrupted encrypted secret -> "Failed to verify multi-factor authentication"
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupted-secret' WHERE id = $1", mfaUserID)
+	corruptedMFAValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"123456"}}
+	corruptedMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(corruptedMFAValues.Encode()))
+	corruptedMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	corruptedMFAResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(corruptedMFAResponseRecorder, corruptedMFARequest)
+	if !strings.Contains(corruptedMFAResponseRecorder.Body.String(), "Failed to verify multi-factor authentication") {
+		t.Fatalf("expected Failed to verify multi-factor authentication, got: %s", corruptedMFAResponseRecorder.Body.String())
+	}
+
+	// Restore encrypted secret
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = $1 WHERE id = $2", encryptedMFASecret, mfaUserID)
+
+	// Invalid MFA code -> "Invalid two-factor authentication code"
+	invalidMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"000000"}}
+	invalidMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(invalidMFACodeValues.Encode()))
+	invalidMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invalidMFACodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(invalidMFACodeResponseRecorder, invalidMFACodeRequest)
+	if !strings.Contains(invalidMFACodeResponseRecorder.Body.String(), "Invalid two-factor authentication code") {
+		t.Fatalf("expected Invalid two-factor authentication code, got: %s", invalidMFACodeResponseRecorder.Body.String())
+	}
+
+	// Valid MFA code -> 302 Found
+	validTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSecret, time.Now())
+	validMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {validTOTPCode}}
+	validMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(validMFACodeValues.Encode()))
+	validMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	validMFACodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(validMFACodeResponseRecorder, validMFACodeRequest)
+	if validMFACodeResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 on valid MFA OIDC submit, got: %d", validMFACodeResponseRecorder.Code)
 	}
 
 	// Bad redirect URI in state payload
@@ -491,6 +564,66 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	if invalidRefreshResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid refresh token, got: %d", invalidRefreshResponseRecorder.Code)
 	}
+
+	// a1. Locked user during refresh token exchange -> 400 invalid_grant
+	lockedUserRefreshToken := jwt.GenerateRefreshToken()
+	lockedUserRefreshHash := jwt.HashRefreshToken(lockedUserRefreshToken)
+	var lockedUserID string
+	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = 'locked.user@example.com'").Scan(&lockedUserID)
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
+	`, uuid.NewV7().String(), lockedUserID, lockedUserRefreshHash)
+
+	lockedRefreshValues := url.Values{
+		"grant_type":    {"refresh_token"},
+		"client_id":     {"client-dashboard"},
+		"client_secret": {confidentialSecret},
+		"refresh_token": {lockedUserRefreshToken},
+	}
+	lockedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(lockedRefreshValues.Encode()))
+	lockedRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	lockedRefreshResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(lockedRefreshResponseRecorder, lockedRefreshRequest)
+	if lockedRefreshResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(lockedRefreshResponseRecorder.Body.String(), "Account is temporarily locked") {
+		t.Fatalf("expected 400 Account is temporarily locked on locked user token refresh, got: %d (%s)", lockedRefreshResponseRecorder.Code, lockedRefreshResponseRecorder.Body.String())
+	}
+
+	// a2. User not found during refresh token exchange -> 400 invalid_grant
+	_, err = db.Exec(ctx, `ALTER TABLE auth.sessions DROP CONSTRAINT IF EXISTS sessions_user_id_fkey`)
+	if err != nil {
+		t.Fatalf("failed to drop foreign key constraint: %v", err)
+	}
+
+	ghostRefreshToken := jwt.GenerateRefreshToken()
+	ghostRefreshHash := jwt.HashRefreshToken(ghostRefreshToken)
+	ghostUserID := uuid.NewV7().String()
+	_, err = db.Exec(ctx, `
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
+	`, uuid.NewV7().String(), ghostUserID, ghostRefreshHash)
+	if err != nil {
+		t.Fatalf("failed to insert ghost session: %v", err)
+	}
+
+	ghostRefreshValues := url.Values{
+		"grant_type":    {"refresh_token"},
+		"client_id":     {"client-dashboard"},
+		"client_secret": {confidentialSecret},
+		"refresh_token": {ghostRefreshToken},
+	}
+	ghostRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(ghostRefreshValues.Encode()))
+	ghostRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	ghostRefreshResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(ghostRefreshResponseRecorder, ghostRefreshRequest)
+	if ghostRefreshResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(ghostRefreshResponseRecorder.Body.String(), "User not found") {
+		t.Fatalf("expected 400 User not found on ghost user token refresh, got: %d (%s)", ghostRefreshResponseRecorder.Code, ghostRefreshResponseRecorder.Body.String())
+	}
+	_, _ = db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", ghostRefreshHash)
+	_, _ = db.Exec(ctx, `
+		ALTER TABLE auth.sessions 
+		ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+	`)
 
 	// b. Deleted/nonexistent user in authorization code exchange -> 500
 	orphanCode := baseHandler.issueOIDCAuthorizationCode(ctx, "client-dashboard", "https://dashboard.example.com/callback", "01918a24-9999-7000-8000-000000000099", "openid profile email", codeChallenge, "S256", "nonce-orphan")

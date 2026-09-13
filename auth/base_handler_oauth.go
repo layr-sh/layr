@@ -327,6 +327,11 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 		if len(rawProperties) > 0 {
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
+		if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+			log.Warnf("failed OAuth sign in for locked user %s", userRecord.ID)
+			core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+			return
+		}
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
 	} else {
 		log.Debugf("registering new federated user via %s", provider)

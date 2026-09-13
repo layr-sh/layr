@@ -275,6 +275,11 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 				if handler.db != nil {
 					_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				}
+				if cachedSession.User.LockedUntil != nil && time.Now().UTC().Before(*cachedSession.User.LockedUntil) {
+					log.Warnf("failed token refresh for locked user %s via fast-path cache", cachedSession.User.ID)
+					core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+					return
+				}
 				handler.issueSessionResponse(responseWriter, request, cachedSession.User, "session_refresh")
 				return
 			}
@@ -329,6 +334,13 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	userRecord.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
 		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	}
+
+	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		log.Warnf("failed token refresh for locked user %s", userRecord.ID)
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		return
 	}
 
 	// Rotate refresh token
