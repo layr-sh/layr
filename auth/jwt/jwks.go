@@ -74,7 +74,7 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 		EndSessionEndpoint:                baseURL + "/api/v1/auth/oauth/sign-out",
 		JwksURI:                           baseURL + "/.well-known/jwks.json",
 		ResponseTypesSupported:            []string{"code", "token", "id_token"},
-		GrantTypesSupported:               []string{"authorization_code", "refresh_token"},
+		GrantTypesSupported:               []string{"authorization_code", "refresh_token", "client_credentials"},
 		CodeChallengeMethodsSupported:     []string{"S256"},
 		SubjectTypesSupported:             []string{"public"},
 		IDTokenSigningAlgValuesSupported:  []string{"EdDSA"},

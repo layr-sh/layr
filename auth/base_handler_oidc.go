@@ -1147,7 +1147,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       </form>
 
       {{if .PasskeysEnabled}}
-        <button type="button" class="passkey-btn" onclick="alert('Passkey sign-in available via client application')">
+        <button type="button" class="passkey-btn" id="passkey-btn" onclick="handlePasskeySignIn()">
           Sign in with Passkey
         </button>
       {{end}}
@@ -1168,5 +1168,94 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       </div>
     </div>
   </div>
+  <script>
+    async function handlePasskeySignIn() {
+      if (!window.PublicKeyCredential) {
+        alert('Passkeys are not supported on this browser or device.');
+        return;
+      }
+      var btn = document.getElementById('passkey-btn');
+      if (btn) btn.disabled = true;
+      try {
+        var beginRes = await fetch('/api/v1/auth/passkeys/sign-in', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin'
+        });
+        if (!beginRes.ok) {
+          var errData = await beginRes.json().catch(function() { return {}; });
+          throw new Error(errData.message || 'Failed to initialize passkey sign-in');
+        }
+        var options = await beginRes.json();
+        var binaryString = atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/'));
+        var challengeBytes = new Uint8Array(binaryString.length);
+        for (var i = 0; i < binaryString.length; i++) {
+          challengeBytes[i] = binaryString.charCodeAt(i);
+        }
+        var assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge: challengeBytes,
+            rpId: options.rp_id,
+            userVerification: 'preferred'
+          }
+        });
+        if (!assertion) {
+          if (btn) btn.disabled = false;
+          return;
+        }
+
+        var rawIdBytes = new Uint8Array(assertion.rawId);
+        var rawIdStr = '';
+        for (var j = 0; j < rawIdBytes.length; j++) {
+          rawIdStr += String.fromCharCode(rawIdBytes[j]);
+        }
+        var credentialId = btoa(rawIdStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        var clientDataBytes = new Uint8Array(assertion.response.clientDataJSON);
+        var clientDataStr = '';
+        for (var k = 0; k < clientDataBytes.length; k++) {
+          clientDataStr += String.fromCharCode(clientDataBytes[k]);
+        }
+        var clientData = btoa(clientDataStr);
+
+        var authDataBytes = new Uint8Array(assertion.response.authenticatorData);
+        var authDataStr = '';
+        for (var l = 0; l < authDataBytes.length; l++) {
+          authDataStr += String.fromCharCode(authDataBytes[l]);
+        }
+        var authData = btoa(authDataStr);
+
+        var sigBytes = new Uint8Array(assertion.response.signature);
+        var sigStr = '';
+        for (var m = 0; m < sigBytes.length; m++) {
+          sigStr += String.fromCharCode(sigBytes[m]);
+        }
+        var signature = btoa(sigStr);
+
+        var verifyRes = await fetch('/api/v1/auth/passkeys/sign-in/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            challenge: options.challenge,
+            credential_id: credentialId,
+            client_data_json: clientData,
+            authenticator_data: authData,
+            signature: signature
+          })
+        });
+        if (!verifyRes.ok) {
+          var verifyErrData = await verifyRes.json().catch(function() { return {}; });
+          throw new Error(verifyErrData.message || 'Passkey verification failed');
+        }
+        window.location.reload();
+      } catch (err) {
+        if (err.name !== 'NotAllowedError') {
+          alert(err.message || 'Passkey sign-in failed');
+        }
+        if (btn) btn.disabled = false;
+      }
+    }
+  </script>
 </body>
 </html>`
