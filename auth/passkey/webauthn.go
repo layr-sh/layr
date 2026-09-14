@@ -57,7 +57,7 @@ type SignUpOptions struct {
 	UserName         string `json:"user_name"`
 }
 
-// SignInOptions is sent to the client to begin WebAuthn assertion/signin.
+// SignInOptions is sent to the client to begin WebAuthn assertion/sign-in.
 type SignInOptions struct {
 	Challenge      string `json:"challenge"`
 	RelyingPartyID string `json:"rp_id"`

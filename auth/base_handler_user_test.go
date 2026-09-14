@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -335,14 +336,23 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 500 on nil pool phone confirm, got: %d", validPhoneConfirmResponseRecorder.Code)
 	}
 
-	// 4. User Properties Clean Pass-through Test
+	// 4. User Properties Preservation Test
 	userProps := map[string]any{
 		"display_name": "Alice",
 		"theme":        "dark",
+		"role":         "editor",
+		"email":        "secondary@example.com",
 	}
-	cleanProps := sanitizeUserProperties(userProps)
-	if cleanProps["display_name"] != "Alice" || cleanProps["theme"] != "dark" {
-		t.Fatalf("expected display_name and theme preserved: %+v", cleanProps)
+	encodedProps, encodeErr := json.Marshal(UpdateUserPropertiesRequest{Properties: userProps})
+	if encodeErr != nil {
+		t.Fatalf("failed to marshal user properties: %v", encodeErr)
+	}
+	var decodedUpdateUserPropertiesRequest UpdateUserPropertiesRequest
+	if decodeErr := json.Unmarshal(encodedProps, &decodedUpdateUserPropertiesRequest); decodeErr != nil {
+		t.Fatalf("failed to unmarshal user properties request: %v", decodeErr)
+	}
+	if decodedUpdateUserPropertiesRequest.Properties["role"] != "editor" || decodedUpdateUserPropertiesRequest.Properties["email"] != "secondary@example.com" {
+		t.Fatalf("expected role and email preserved in properties: %+v", decodedUpdateUserPropertiesRequest.Properties)
 	}
 
 	// 5. Claims-based email and phone verification confirm
@@ -391,11 +401,11 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected error and empty user record with nil DB, got: %v, %v", nilDBRecipientUserRecord, nilDBRecipientErr)
 	}
 
-	// 7. Sanitization of user properties and system property key check
+	// 7. Verification that arbitrary developer properties are preserved without filtering
 	testProps := map[string]any{
 		"theme":                "dark",
-		"encrypted_secret":     "malicious_value",
-		"user_data_enc":        "malicious_value",
+		"encrypted_secret":     "custom_encrypted_val",
+		"user_data_enc":        "custom_enc_val",
 		"role":                 "admin",
 		"locked_until":         "2099-01-01",
 		"is_anonymous":         true,
@@ -405,17 +415,24 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		"mfa_enabled":          true,
 		"mfa_pending":          true,
 		"encrypted_mfa_secret": "secret",
-		"id":                   "hacked-id",
-		"email":                "hacked@example.com",
+		"id":                   "custom-id",
+		"email":                "custom@example.com",
 		"phone":                "+19999999999",
 		"created_at":           "timestamp",
 		"last_updated_at":      "timestamp",
 	}
-	cleaned := sanitizeUserProperties(testProps)
-	if len(cleaned) != 1 || cleaned["theme"] != "dark" {
-		t.Fatalf("expected only non-system properties to remain, got: %v", cleaned)
+	propsJSON, marshalErr := json.Marshal(testProps)
+	if marshalErr != nil {
+		t.Fatalf("failed to marshal testProps: %v", marshalErr)
 	}
-	if !isSystemPropertyKey("encrypted_token") || !isSystemPropertyKey("data_enc") || !isSystemPropertyKey("role") || isSystemPropertyKey("displayName") {
-		t.Fatalf("unexpected isSystemPropertyKey behavior")
+	var restoredProps map[string]any
+	if unmarshalErr := json.Unmarshal(propsJSON, &restoredProps); unmarshalErr != nil {
+		t.Fatalf("failed to unmarshal testProps: %v", unmarshalErr)
+	}
+	if len(restoredProps) != len(testProps) {
+		t.Fatalf("expected all %d properties preserved, got %d", len(testProps), len(restoredProps))
+	}
+	if restoredProps["role"] != "admin" || restoredProps["email"] != "custom@example.com" || restoredProps["encrypted_secret"] != "custom_encrypted_val" {
+		t.Fatalf("expected arbitrary developer properties preserved intact: %+v", restoredProps)
 	}
 }

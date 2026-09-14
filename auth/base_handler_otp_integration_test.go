@@ -70,7 +70,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	// 1. Send first OTP request -> 204 No Content
 	firstOTPPayload := map[string]any{
 		"recipient": targetEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedFirstOTP, _ := json.Marshal(firstOTPPayload)
 	firstOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedFirstOTP))
@@ -83,7 +83,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	// 2. Send second OTP request within cooldown to same email -> 429 Too Many Requests (LAYR_AUTH_COOLDOWN)
 	secondOTPPayload := map[string]any{
 		"recipient": targetEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedSecondOTP, _ := json.Marshal(secondOTPPayload)
 	secondOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedSecondOTP))
@@ -101,14 +101,14 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		UPDATE core.kv_store 
 		SET expires_at = clock_timestamp() - interval '1 second' 
 		WHERE key = $1
-	`, fmt.Sprintf("auth:cooldown:signin:%s", targetEmail))
+	`, fmt.Sprintf("auth:cooldown:sign_in:%s", targetEmail))
 	if err != nil {
 		t.Fatalf("failed to expire cooldown key: %v", err)
 	}
 
 	thirdOTPPayload := map[string]any{
 		"recipient": targetEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedThirdOTP, _ := json.Marshal(thirdOTPPayload)
 	thirdOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedThirdOTP))
@@ -123,7 +123,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	for counter := 1; counter <= 10; counter++ {
 		loopPayload := map[string]any{
 			"recipient": fmt.Sprintf("ip.user%d@example.com", counter),
-			"purpose":   "signin",
+			"purpose":   "sign_in",
 		}
 		encodedLoop, _ := json.Marshal(loopPayload)
 		loopRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLoop))
@@ -138,7 +138,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	// 11th request from limitedClientIP -> 429
 	eleventhPayload := map[string]any{
 		"recipient": "ip.user11@example.com",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedEleventh, _ := json.Marshal(eleventhPayload)
 	eleventhRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedEleventh))
@@ -218,7 +218,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	// 1. Send OTP for email
 	otpSendPayload := map[string]any{
 		"recipient": userEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
 	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
@@ -228,7 +228,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", otpSendResponseRecorder.Code, otpSendResponseRecorder.Body.String())
 	}
 
-	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
+	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", userEmail))
 	if err != nil || otpCode == "" {
 		t.Fatalf("failed to retrieve OTP code from kvstore: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	wrongCodePayload := map[string]any{
 		"recipient": userEmail,
 		"code":      "000000",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
 	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
@@ -251,7 +251,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	otpVerifyPayload := map[string]any{
 		"recipient": userEmail,
 		"code":      otpCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
 	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
@@ -271,10 +271,10 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 
 	// 3b. Test existing locked user OTP verify -> 423 StatusLocked
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE email = $1", userEmail)
-	_ = databaseKVStore.Delete(ctx, fmt.Sprintf("auth:cooldown:signin:%s", userEmail))
+	_ = databaseKVStore.Delete(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", userEmail))
 	lockedOTPSendPayload := map[string]any{
 		"recipient": userEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedLockedOTPSend, _ := json.Marshal(lockedOTPSendPayload)
 	lockedOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLockedOTPSend))
@@ -283,12 +283,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	if lockedOTPSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", lockedOTPSendResponseRecorder.Code, lockedOTPSendResponseRecorder.Body.String())
 	}
-	lockedOTPCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
+	lockedOTPCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", userEmail))
 
 	lockedOTPVerifyPayload := map[string]any{
 		"recipient": userEmail,
 		"code":      lockedOTPCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedLockedOTPVerify, _ := json.Marshal(lockedOTPVerifyPayload)
 	lockedOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedLockedOTPVerify))
@@ -303,7 +303,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	phoneRecipient := "+1234567890"
 	phoneOTPPayload := map[string]any{
 		"recipient": phoneRecipient,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
 	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
@@ -313,7 +313,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
 
-	phoneCode, phoneCodeErr := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", phoneRecipient))
+	phoneCode, phoneCodeErr := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", phoneRecipient))
 	if phoneCodeErr != nil || phoneCode == "" {
 		t.Fatalf("failed to retrieve phone OTP code: %v", phoneCodeErr)
 	}
@@ -345,7 +345,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	convertEmail := "converted.otp@example.com"
 	convertSendPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	convertSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertSendPayload))
 	convertSendResponseRecorder := httptest.NewRecorder()
@@ -354,12 +354,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on convert OTP send: %d", convertSendResponseRecorder.Code)
 	}
 
-	convertCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", convertEmail))
+	convertCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", convertEmail))
 
 	convertVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertEmail,
 		"code":      convertCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	convertVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
 	convertVerifyRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
@@ -382,7 +382,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	nonExistentVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": "never.requested@example.com",
 		"code":      "123456",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(nonExistentVerifyPayload))
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
@@ -413,7 +413,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	// Send OTP for conflicting email (existingConflictEmail already belongs to existing user)
 	conflictEmailSendPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	conflictEmailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictEmailSendPayload))
 	conflictEmailSendResponseRecorder := httptest.NewRecorder()
@@ -421,12 +421,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	if conflictEmailSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict email OTP send: %d", conflictEmailSendResponseRecorder.Code)
 	}
-	conflictEmailCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", existingConflictEmail))
+	conflictEmailCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", existingConflictEmail))
 
 	conflictEmailVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictEmail,
 		"code":      conflictEmailCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	conflictEmailVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
 	conflictEmailVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
@@ -439,7 +439,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	// Send OTP for conflicting phone (existingConflictPhone already belongs to existing user)
 	conflictPhoneSendPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictPhone,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	conflictPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictPhoneSendPayload))
 	conflictPhoneSendResponseRecorder := httptest.NewRecorder()
@@ -447,12 +447,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	if conflictPhoneSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict phone OTP send: %d", conflictPhoneSendResponseRecorder.Code)
 	}
-	conflictPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", existingConflictPhone))
+	conflictPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", existingConflictPhone))
 
 	conflictPhoneVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": existingConflictPhone,
 		"code":      conflictPhoneCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
 	conflictPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
@@ -477,17 +477,17 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	convertPhoneRecipient := "+15558765432"
 	convertPhoneSendPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertPhoneRecipient,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	convertPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertPhoneSendPayload))
 	convertPhoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPSend(convertPhoneSendResponseRecorder, convertPhoneSendRequest)
-	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", convertPhoneRecipient))
+	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", convertPhoneRecipient))
 
 	convertPhoneVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": convertPhoneRecipient,
 		"code":      convertPhoneCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	convertPhoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
 	convertPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+phoneAnonToken)
@@ -521,5 +521,139 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	}
 	if !otpSentFound || !otpVerifiedFound || !convertedFound {
 		t.Fatalf("missing expected events: sent=%t, verified=%t, converted=%t", otpSentFound, otpVerifiedFound, convertedFound)
+	}
+}
+
+func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	if err := configManager.Load(ctx); err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	driverWebhook := "webhook"
+	authConfig := configManager.Get()
+	authConfig.EmailOTP.Enabled = true
+	authConfig.SMSOTP.Enabled = true
+	authConfig.EmailDispatcher = EmailDispatcherConfig{
+		Driver:      &driverWebhook,
+		SenderEmail: "auth@layr.sh",
+		SenderName:  "Layr",
+		Webhook: EmailDispatcherWebhookConfig{
+			URL: "http://localhost:9999/webhook",
+		},
+	}
+	authConfig.SMSDispatcher = SMSDispatcherConfig{
+		Driver: &driverWebhook,
+		Webhook: SMSDispatcherWebhookConfig{
+			URL: "http://localhost:9999/webhook",
+		},
+	}
+	if err := configManager.Save(ctx, authConfig); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
+	defer func() { _ = databaseKVStore.Close() }()
+	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler.SetKVStore(databaseKVStore)
+
+	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
+		emailDispatcherConfig := configManager.Get().EmailDispatcher
+		return &emailDispatcherConfig
+	}, cryptoKeyManager)
+	baseHandler.SetEmailDispatcher(emailDispatcher)
+
+	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
+		smsDispatcherConfig := configManager.Get().SMSDispatcher
+		return &smsDispatcherConfig
+	}, cryptoKeyManager)
+	baseHandler.SetSMSDispatcher(smsDispatcher)
+
+	// 1. Email user with MFA enabled
+	emailMFAUser := "mfa.email@example.com"
+	mfaSecret := "JBSWY3DPEHPK3PXP"
+	encSecret, _ := cryptoKeyManager.EncryptField([]byte(mfaSecret))
+	_, err := db.Exec(ctx, `
+		INSERT INTO auth.users (email, role, mfa_enabled, encrypted_mfa_secret, created_at, last_updated_at)
+		VALUES ($1, 'authenticated', true, $2, clock_timestamp(), clock_timestamp())
+	`, emailMFAUser, encSecret)
+	if err != nil {
+		t.Fatalf("failed to insert email mfa user: %v", err)
+	}
+
+	sendPayload, _ := json.Marshal(map[string]any{"recipient": emailMFAUser})
+	sendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(sendPayload))
+	sendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPSend(sendResponseRecorder, sendRequest)
+	if sendResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from handleOTPSend, got: %d", sendResponseRecorder.Code)
+	}
+
+	code, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", emailMFAUser))
+	if err != nil || code == "" {
+		t.Fatalf("failed to read otp code: %v", err)
+	}
+
+	verifyPayload, _ := json.Marshal(map[string]any{
+		"recipient": emailMFAUser,
+		"code":      code,
+	})
+	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(verifyPayload))
+	verifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPVerify(verifyResponseRecorder, verifyRequest)
+	if verifyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleOTPVerify, got: %d (%s)", verifyResponseRecorder.Code, verifyResponseRecorder.Body.String())
+	}
+	var emailSignInResponse SignInResponse
+	if decodeErr := json.NewDecoder(verifyResponseRecorder.Body).Decode(&emailSignInResponse); decodeErr != nil {
+		t.Fatalf("failed to decode response: %v", decodeErr)
+	}
+	if !emailSignInResponse.MFARequired || emailSignInResponse.MFATicket == "" || emailSignInResponse.Factor != "totp" {
+		t.Fatalf("expected mfa_required with ticket and factor totp, got: %+v", emailSignInResponse)
+	}
+
+	// 2. Phone user with MFA enabled
+	phoneMFAUser := "+14155552671"
+	_, err = db.Exec(ctx, `
+		INSERT INTO auth.users (phone, role, mfa_enabled, encrypted_mfa_secret, created_at, last_updated_at)
+		VALUES ($1, 'authenticated', true, $2, clock_timestamp(), clock_timestamp())
+	`, phoneMFAUser, encSecret)
+	if err != nil {
+		t.Fatalf("failed to insert phone mfa user: %v", err)
+	}
+
+	phoneSendPayload, _ := json.Marshal(map[string]any{"recipient": phoneMFAUser})
+	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(phoneSendPayload))
+	phoneSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPSend(phoneSendResponseRecorder, phoneSendRequest)
+	if phoneSendResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 from handleOTPSend for phone, got: %d", phoneSendResponseRecorder.Code)
+	}
+
+	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", phoneMFAUser))
+	if err != nil || phoneCode == "" {
+		t.Fatalf("failed to read phone otp code: %v", err)
+	}
+
+	phoneVerifyPayload, _ := json.Marshal(map[string]any{
+		"recipient": phoneMFAUser,
+		"code":      phoneCode,
+	})
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(phoneVerifyPayload))
+	phoneVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	if phoneVerifyResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 from handleOTPVerify for phone, got: %d (%s)", phoneVerifyResponseRecorder.Code, phoneVerifyResponseRecorder.Body.String())
+	}
+	var phoneSignInResponse SignInResponse
+	if decodeErr := json.NewDecoder(phoneVerifyResponseRecorder.Body).Decode(&phoneSignInResponse); decodeErr != nil {
+		t.Fatalf("failed to decode response: %v", decodeErr)
+	}
+	if !phoneSignInResponse.MFARequired || phoneSignInResponse.MFATicket == "" || phoneSignInResponse.Factor != "totp" {
+		t.Fatalf("expected mfa_required for phone user, got: %+v", phoneSignInResponse)
 	}
 }

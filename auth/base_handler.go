@@ -51,10 +51,6 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoK
 	log.Debug("initializing auth base handler")
 	signer, _ := jwt.NewSigner(cryptoKeyManager)
 	config := configManager.Get()
-	issuer := config.MFA.Issuer
-	if issuer == "" {
-		issuer = "Layr"
-	}
 
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
 		emailDispatcherConfig := configManager.Get().EmailDispatcher
@@ -73,16 +69,16 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoK
 		signer:           signer,
 		hasher:           password.NewHasher(),
 		passkeyManager:   passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
-		totpManager:      core.NewTOTPManager(issuer),
+		totpManager:      core.NewTOTPManager(config.MFA.Issuer),
 		emailDispatcher:  emailDispatcher,
 		smsDispatcher:    smsDispatcher,
 	}
 }
 
-// Handler is an alias for BaseHandler for backwards compatibility.
+// Handler is an alias for BaseHandler.
 type Handler = BaseHandler
 
-// NewHandler creates a new Auth HTTP BaseHandler (alias for NewBaseHandler).
+// NewHandler creates a new Auth HTTP BaseHandler.
 func NewHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoKeyManager *core.CryptoKeyManager) *BaseHandler {
 	return NewBaseHandler(db, configManager, cryptoKeyManager)
 }

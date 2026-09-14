@@ -249,8 +249,12 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 	var phoneMFASetupResponse MFASetupResponse
 	_ = json.NewDecoder(phoneSetupResponseRecorder.Body).Decode(&phoneMFASetupResponse)
-	if phoneMFASetupResponse.Issuer != "Layr" {
-		t.Fatalf("expected default issuer Layr, got: %s", phoneMFASetupResponse.Issuer)
+	expectedIssuer := core.GetConfig().Project.Name
+	if expectedIssuer == "" {
+		expectedIssuer = "Layr Auth"
+	}
+	if phoneMFASetupResponse.Issuer != expectedIssuer {
+		t.Fatalf("expected default issuer %s, got: %s", expectedIssuer, phoneMFASetupResponse.Issuer)
 	}
 
 	phoneTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(phoneMFASetupResponse.Secret, time.Now())

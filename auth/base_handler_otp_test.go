@@ -28,7 +28,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	disabledConfig.SMSOTP.Enabled = false
 	configManager.Set(disabledConfig)
 
-	disabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"signin"}`))
+	disabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
 	disabledSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPSend(disabledSendResponseRecorder, disabledSendRequest)
 	if disabledSendResponseRecorder.Code != http.StatusForbidden {
@@ -144,14 +144,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	baseHandler.SetSMSDispatcher(nil)
 
 	unconfiguredEmailOTPResponseRecorder := httptest.NewRecorder()
-	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"signin"}`))
+	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
 	baseHandler.handleOTPSend(unconfiguredEmailOTPResponseRecorder, unconfiguredEmailOTPRequest)
 	if unconfiguredEmailOTPResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 on unconfigured email OTP, got: %d (%s)", unconfiguredEmailOTPResponseRecorder.Code, unconfiguredEmailOTPResponseRecorder.Body.String())
 	}
 
 	unconfiguredPhoneOTPResponseRecorder := httptest.NewRecorder()
-	unconfiguredPhoneOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222","purpose":"signin"}`))
+	unconfiguredPhoneOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222","purpose":"sign_in"}`))
 	baseHandler.handleOTPSend(unconfiguredPhoneOTPResponseRecorder, unconfiguredPhoneOTPRequest)
 	if unconfiguredPhoneOTPResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 on unconfigured phone OTP, got: %d (%s)", unconfiguredPhoneOTPResponseRecorder.Code, unconfiguredPhoneOTPResponseRecorder.Body.String())
@@ -169,8 +169,8 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}, nil))
 
 	// 6. Rate limits & Cooldown
-	_ = testKVStore.Set(context.Background(), "auth:cooldown:signin:cooldown_user@example.com", "1", 60*time.Second)
-	cooldownOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"cooldown_user@example.com","purpose":"signin"}`))
+	_ = testKVStore.Set(context.Background(), "auth:cooldown:sign_in:cooldown_user@example.com", "1", 60*time.Second)
+	cooldownOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"cooldown_user@example.com","purpose":"sign_in"}`))
 	cooldownOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPSend(cooldownOTPResponseRecorder, cooldownOTPRequest)
 	if cooldownOTPResponseRecorder.Code != http.StatusTooManyRequests {
@@ -178,7 +178,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	_ = testKVStore.Set(context.Background(), "auth:ratelimit:otp:ip:203.0.113.50", "10", time.Hour)
-	rateLimitedOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"fresh_user@example.com","purpose":"signin"}`))
+	rateLimitedOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"fresh_user@example.com","purpose":"sign_in"}`))
 	rateLimitedOTPRequest.RemoteAddr = "203.0.113.50:1234"
 	rateLimitedOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPSend(rateLimitedOTPResponseRecorder, rateLimitedOTPRequest)
@@ -187,18 +187,18 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	// 7. Nil database pool -> 500
-	otpSignupSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"signup"}`))
-	otpSignupSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(otpSignupSendResponseRecorder, otpSignupSendRequest)
-	if otpSignupSendResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on OTP signup send nil pool, got: %d", otpSignupSendResponseRecorder.Code)
+	otpSignUpSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"sign_up"}`))
+	otpSignUpSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPSend(otpSignUpSendResponseRecorder, otpSignUpSendRequest)
+	if otpSignUpSendResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on OTP sign up send nil pool, got: %d", otpSignUpSendResponseRecorder.Code)
 	}
 
-	otpSignupVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"signup"}`))
-	otpSignupVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpSignupVerifyResponseRecorder, otpSignupVerifyRequest)
-	if otpSignupVerifyResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on OTP signup verify nil pool, got: %d", otpSignupVerifyResponseRecorder.Code)
+	otpSignUpVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"sign_up"}`))
+	otpSignUpVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPVerify(otpSignUpVerifyResponseRecorder, otpSignUpVerifyRequest)
+	if otpSignUpVerifyResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on OTP sign up verify nil pool, got: %d", otpSignUpVerifyResponseRecorder.Code)
 	}
 
 	// 8. Event Bus on Nil database pool -> 500

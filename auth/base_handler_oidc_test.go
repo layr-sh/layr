@@ -60,7 +60,9 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// 4. Authorization Endpoint Validation (GET /api/v1/auth/oauth/authorize)
 	activeConfig := configManager.Get()
 	activeConfig.OIDC.Enabled = true
-	activeConfig.OIDC.SignInUI.CustomCSS = ".custom-class { color: red; }"
+	activeConfig.OIDC.UI.CustomCSS = ".custom-class { color: red; }"
+	activeConfig.OIDC.UI.TermsOfServiceURL = "https://demo.app/terms"
+	activeConfig.OIDC.UI.PrivacyPolicyURL = "https://demo.app/privacy"
 	activeConfig.OIDC.Clients = []OIDCClientConfig{
 		{
 			Name:         "Demo App",
@@ -148,8 +150,11 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	if !strings.Contains(htmlBody, "Demo App") {
 		t.Fatalf("expected client name Demo App in HTML, got: %s", htmlBody)
 	}
-	if !strings.Contains(htmlBody, "Secured by TestLayrApp") {
-		t.Fatalf("expected brand footer Secured by TestLayrApp in HTML, got: %s", htmlBody)
+	if strings.Contains(htmlBody, "Secured by") {
+		t.Fatalf("expected brand footer Secured by to be removed from HTML, got: %s", htmlBody)
+	}
+	if !strings.Contains(htmlBody, "https://demo.app/terms") || !strings.Contains(htmlBody, "https://demo.app/privacy") {
+		t.Fatalf("expected legal footer links in HTML, got: %s", htmlBody)
 	}
 	if !strings.Contains(htmlBody, ".custom-class { color: red; }") {
 		t.Fatalf("expected custom CSS injected into HTML, got: %s", htmlBody)
@@ -334,7 +339,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCSignOut(signOutResponseRecorder, submitRequest)
 	if signOutResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 when OIDC disabled on signout, got: %d", signOutResponseRecorder.Code)
+		t.Fatalf("expected 403 when OIDC disabled on sign-out, got: %d", signOutResponseRecorder.Code)
 	}
 
 	// Re-enable OIDC
@@ -592,5 +597,189 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	baseHandler.handleOAuthToken(delegatedResponseRecorder, delegatedRequest)
 	if delegatedResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from handleOAuthToken, got: %d", delegatedResponseRecorder.Code)
+	}
+}
+
+func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
+	configManager := NewConfigManager(nil, nil)
+	config := configManager.Get()
+	config.OIDC.Enabled = true
+	config.OIDC.UI.ShowSignUp = true
+	config.OIDC.UI.ShowEmailOTP = true
+	configManager.Set(config)
+
+	baseHandler := &Handler{configManager: configManager}
+
+	signUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.renderOIDCSignUpPage(signUpResponseRecorder, "st-1", &OIDCClientConfig{Name: "App"}, "sign up error")
+	if !strings.Contains(signUpResponseRecorder.Body.String(), "sign up error") {
+		t.Fatal("expected sign up error in html")
+	}
+
+	otpRequestResponseRecorder := httptest.NewRecorder()
+	baseHandler.renderOIDCOTPRequestPage(otpRequestResponseRecorder, "st-2", &OIDCClientConfig{Name: "App"}, "otp request error", "otp request notice")
+	if !strings.Contains(otpRequestResponseRecorder.Body.String(), "otp request error") || !strings.Contains(otpRequestResponseRecorder.Body.String(), "otp request notice") {
+		t.Fatal("expected otp error/notice in html")
+	}
+
+	otpVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.renderOIDCOTPVerifyPage(otpVerifyResponseRecorder, "st-3", &OIDCClientConfig{Name: "App"}, "otp verify error", "otp verify notice", "test@example.com")
+	if !strings.Contains(otpVerifyResponseRecorder.Body.String(), "otp verify error") || !strings.Contains(otpVerifyResponseRecorder.Body.String(), "test@example.com") {
+		t.Fatal("expected verify error/recipient in html")
+	}
+}
+
+func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
+	configManager := NewConfigManager(nil, nil)
+	config := configManager.Get()
+	config.OIDC.Enabled = true
+	config.OIDC.Clients = []OIDCClientConfig{
+		{ClientID: "client-1", Name: "Client One"},
+	}
+	configManager.Set(config)
+
+	kvStore := newInMemoryKVStore()
+	baseHandler := &Handler{
+		configManager: configManager,
+		kvStore:       kvStore,
+	}
+
+	statePayload, _ := json.Marshal(OIDCAuthorizationStatePayload{
+		ClientID: "client-1",
+	})
+	_ = kvStore.Set(context.Background(), "auth:oidc:state:state-mode-1", string(statePayload), 5*time.Minute)
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?state=state-mode-1&mode=sign_up", nil)
+	responseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorize(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK || !strings.Contains(responseRecorder.Body.String(), "Create account") {
+		t.Fatalf("expected 200 OK and Create account in body, got: %d", responseRecorder.Code)
+	}
+}
+
+func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
+	ctx := context.Background()
+	configManager := NewConfigManager(nil, nil)
+	config := configManager.Get()
+	config.OIDC.Enabled = true
+	config.OIDC.Clients = []OIDCClientConfig{
+		{ClientID: "client-sub-1", Name: "Submit Client"},
+	}
+	configManager.Set(config)
+
+	kvStore := newInMemoryKVStore()
+	baseHandler := &Handler{
+		configManager: configManager,
+		kvStore:       kvStore,
+	}
+
+	stateID := "sub-state-1"
+	statePayload, _ := json.Marshal(OIDCAuthorizationStatePayload{
+		ClientID:    "client-sub-1",
+		RedirectURI: "https://example.com/cb",
+	})
+	_ = kvStore.Set(ctx, "auth:oidc:state:"+stateID, string(statePayload), 5*time.Minute)
+
+	// 1. verify_mfa with empty mfa_token
+	emptyTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_mfa&mfa_token="))
+	emptyTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyTokenResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emptyTokenResponseRecorder, emptyTokenRequest)
+	if !strings.Contains(emptyTokenResponseRecorder.Body.String(), "MFA session expired") {
+		t.Fatalf("expected MFA session expired, got: %s", emptyTokenResponseRecorder.Body.String())
+	}
+
+	// 2. verify_mfa with unknown mfa_token in kvStore
+	unknownTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_mfa&mfa_token=unknown_tk"))
+	unknownTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	unknownTokenResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(unknownTokenResponseRecorder, unknownTokenRequest)
+	if !strings.Contains(unknownTokenResponseRecorder.Body.String(), "MFA session expired") {
+		t.Fatalf("expected MFA session expired, got: %s", unknownTokenResponseRecorder.Body.String())
+	}
+
+	// 3. send_otp with empty recipient
+	emptyRecipientRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient="))
+	emptyRecipientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyRecipientResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emptyRecipientResponseRecorder, emptyRecipientRequest)
+	if !strings.Contains(emptyRecipientResponseRecorder.Body.String(), "Please enter an email address or phone number") {
+		t.Fatalf("expected Please enter an email address or phone number, got: %s", emptyRecipientResponseRecorder.Body.String())
+	}
+
+	// 4. send_otp email with email OTP disabled
+	disabledEmailOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient=user@example.com"))
+	disabledEmailOTPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disabledEmailOTPResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(disabledEmailOTPResponseRecorder, disabledEmailOTPRequest)
+	if !strings.Contains(disabledEmailOTPResponseRecorder.Body.String(), "Email OTP sign-in is not available") {
+		t.Fatalf("expected Email OTP sign-in is not available, got: %s", disabledEmailOTPResponseRecorder.Body.String())
+	}
+
+	// 5. send_otp phone with SMS OTP disabled
+	disabledSMSOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient=+14155551234"))
+	disabledSMSOTPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disabledSMSOTPResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(disabledSMSOTPResponseRecorder, disabledSMSOTPRequest)
+	if !strings.Contains(disabledSMSOTPResponseRecorder.Body.String(), "SMS OTP sign-in is not available") {
+		t.Fatalf("expected SMS OTP sign-in is not available, got: %s", disabledSMSOTPResponseRecorder.Body.String())
+	}
+
+	// 6. verify_otp with empty code
+	emptyCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_otp&recipient=user@example.com&otp_code="))
+	emptyCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyCodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emptyCodeResponseRecorder, emptyCodeRequest)
+	if !strings.Contains(emptyCodeResponseRecorder.Body.String(), "Verification code is required") {
+		t.Fatalf("expected Verification code is required, got: %s", emptyCodeResponseRecorder.Body.String())
+	}
+
+	// 7. sign_up when sign-up disabled
+	disabledSignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=a@b.com&password=pass"))
+	disabledSignUpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disabledSignUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(disabledSignUpResponseRecorder, disabledSignUpRequest)
+	if !strings.Contains(disabledSignUpResponseRecorder.Body.String(), "Sign-up is disabled") {
+		t.Fatalf("expected Sign-up is disabled, got: %s", disabledSignUpResponseRecorder.Body.String())
+	}
+
+	// 8. sign_up validation: empty email, passwords mismatch, short password
+	config.OIDC.UI.ShowSignUp = true
+	configManager.Set(config)
+
+	emptyEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=&password=pass"))
+	emptyEmailRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyEmailResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emptyEmailResponseRecorder, emptyEmailRequest)
+	if !strings.Contains(emptyEmailResponseRecorder.Body.String(), "Email and password are required") {
+		t.Fatalf("expected Email and password are required, got: %s", emptyEmailResponseRecorder.Body.String())
+	}
+
+	mismatchPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=u@e.com&password=pass1&confirm_password=pass2"))
+	mismatchPasswordRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mismatchPasswordResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(mismatchPasswordResponseRecorder, mismatchPasswordRequest)
+	if !strings.Contains(mismatchPasswordResponseRecorder.Body.String(), "Passwords do not match") {
+		t.Fatalf("expected Passwords do not match, got: %s", mismatchPasswordResponseRecorder.Body.String())
+	}
+
+	shortPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=u@e.com&password=p&confirm_password=p"))
+	shortPasswordRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	shortPasswordResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(shortPasswordResponseRecorder, shortPasswordRequest)
+	if !strings.Contains(shortPasswordResponseRecorder.Body.String(), "Password must be at least") {
+		t.Fatalf("expected Password must be at least, got: %s", shortPasswordResponseRecorder.Body.String())
+	}
+
+	// 9. sign_in when ShowPassword disabled
+	config.OIDC.UI.ShowPassword = false
+	configManager.Set(config)
+
+	disabledSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_in&email=a@b.com&password=pass"))
+	disabledSignInRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	disabledSignInResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(disabledSignInResponseRecorder, disabledSignInRequest)
+	if !strings.Contains(disabledSignInResponseRecorder.Body.String(), "Password sign-in is disabled") {
+		t.Fatalf("expected Password sign-in is disabled, got: %s", disabledSignInResponseRecorder.Body.String())
 	}
 }

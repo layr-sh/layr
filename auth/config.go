@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,7 +22,7 @@ const (
 	defaultSessionTTLSeconds         = 900     // 15 minutes
 	defaultLockoutDurationSeconds    = 900     // 15 minutes
 	defaultWindowDurationSeconds     = 900     // 15 minutes
-	defaultMaxSigninAttempts         = 5
+	defaultMaxSignInAttempts         = 5
 	defaultPasswordMinLength         = 8
 	defaultTokenExpiryMinutes        = 15
 )
@@ -49,7 +50,7 @@ type Config struct {
 // RateLimitingConfig controls dynamic sign-in brute-force protection.
 type RateLimitingConfig struct {
 	Enabled                bool `json:"enabled"`
-	MaxSigninAttempts      int  `json:"max_signin_attempts"`
+	MaxSignInAttempts      int  `json:"max_sign_in_attempts"`
 	WindowDurationSeconds  int  `json:"window_duration_seconds"`
 	LockoutDurationSeconds int  `json:"lockout_duration_seconds"`
 }
@@ -127,9 +128,9 @@ type OAuthProviderConfig struct {
 
 // OIDCConfig defines configuration for Layr Auth as an OpenID Connect (OIDC) Identity Provider.
 type OIDCConfig struct {
-	Enabled  bool               `json:"enabled"`
-	Clients  []OIDCClientConfig `json:"clients,omitempty"`
-	SignInUI OIDCSignInUIConfig `json:"sign_in_ui"`
+	Enabled bool               `json:"enabled"`
+	Clients []OIDCClientConfig `json:"clients,omitempty"`
+	UI      OIDCUIConfig       `json:"ui"`
 }
 
 // OIDCClientConfig defines a registered third-party OpenID Connect client application.
@@ -144,16 +145,34 @@ type OIDCClientConfig struct {
 	Scopes                  []string `json:"scopes,omitempty"`
 }
 
-// OIDCSignInUIConfig defines dynamic styling and branding customization for the Universal Sign-In page.
-type OIDCSignInUIConfig struct {
-	CustomCSS string `json:"custom_css,omitempty"`
-	LogoURL   string `json:"logo_url,omitempty"`
+// OIDCUIConfig defines dynamic styling, branding, legal links, and authentication method enablement for the Universal Sign-In page.
+type OIDCUIConfig struct {
+	CustomCSS         string `json:"custom_css,omitempty"`
+	LogoURL           string `json:"logo_url,omitempty"`
+	PrivacyPolicyURL  string `json:"privacy_policy_url,omitempty"`
+	TermsOfServiceURL string `json:"terms_of_service_url,omitempty"`
+	ShowSignUp        bool   `json:"show_sign_up,omitempty"`
+	ShowPassword      bool   `json:"show_password,omitempty"`
+	ShowPasskeys      bool   `json:"show_passkeys,omitempty"`
+	ShowOAuth         bool   `json:"show_oauth,omitempty"`
+	ShowEmailOTP      bool   `json:"show_email_otp,omitempty"`
+	ShowSMSOTP        bool   `json:"show_sms_otp,omitempty"`
 }
 
 // DefaultConfig returns canonical defaults for layr/auth.
 func DefaultConfig() Config {
 	defaultEmailDispatcherConfig := EmailDispatcherDefaultConfig()
 	defaultSMSDispatcherConfig := SMSDispatcherDefaultConfig()
+
+	projectName := core.GetConfig().Project.Name
+	relyingPartyName := projectName
+	if relyingPartyName == "" {
+		relyingPartyName = "Layr Auth"
+	}
+	mfaIssuer := projectName
+	if mfaIssuer == "" {
+		mfaIssuer = "Layr Auth"
+	}
 
 	return Config{
 		Password: PasswordConfig{
@@ -165,7 +184,7 @@ func DefaultConfig() Config {
 		Passkeys: PasskeysConfig{
 			Enabled:          true,
 			RelyingPartyID:   "localhost",
-			RelyingPartyName: "Layr Application",
+			RelyingPartyName: relyingPartyName,
 		},
 		EmailOTP: EmailOTPConfig{
 			Enabled:            false,
@@ -177,7 +196,7 @@ func DefaultConfig() Config {
 		},
 		MFA: MFAConfig{
 			Enabled: true,
-			Issuer:  "Layr",
+			Issuer:  mfaIssuer,
 		},
 		Anonymous: AnonymousConfig{
 			Enabled: true,
@@ -195,15 +214,26 @@ func DefaultConfig() Config {
 			"discord": {Enabled: false, Preset: "discord"},
 		},
 		OIDC: OIDCConfig{
-			Enabled:  false,
-			Clients:  make([]OIDCClientConfig, 0),
-			SignInUI: OIDCSignInUIConfig{},
+			Enabled: false,
+			Clients: make([]OIDCClientConfig, 0),
+			UI: OIDCUIConfig{
+				CustomCSS:         "",
+				LogoURL:           "",
+				PrivacyPolicyURL:  "",
+				TermsOfServiceURL: "",
+				ShowSignUp:        false,
+				ShowPassword:      true,
+				ShowPasskeys:      true,
+				ShowOAuth:         false,
+				ShowEmailOTP:      false,
+				ShowSMSOTP:        false,
+			},
 		},
 		EmailDispatcher: defaultEmailDispatcherConfig,
 		SMSDispatcher:   defaultSMSDispatcherConfig,
 		RateLimiting: RateLimitingConfig{
 			Enabled:                true,
-			MaxSigninAttempts:      defaultMaxSigninAttempts,
+			MaxSignInAttempts:      defaultMaxSignInAttempts,
 			WindowDurationSeconds:  defaultWindowDurationSeconds,
 			LockoutDurationSeconds: defaultLockoutDurationSeconds,
 		},
@@ -297,17 +327,31 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 	if updatedConfig.SMSOTP.TokenExpiryMinutes <= 0 {
 		updatedConfig.SMSOTP.TokenExpiryMinutes = defaultTokenExpiryMinutes
 	}
+	if updatedConfig.Passkeys.RelyingPartyName == "" {
+		relyingPartyName := core.GetConfig().Project.Name
+		if relyingPartyName == "" {
+			relyingPartyName = "Layr Auth"
+		}
+		updatedConfig.Passkeys.RelyingPartyName = relyingPartyName
+	}
+	if updatedConfig.MFA.Issuer == "" {
+		mfaIssuer := core.GetConfig().Project.Name
+		if mfaIssuer == "" {
+			mfaIssuer = "Layr Auth"
+		}
+		updatedConfig.MFA.Issuer = mfaIssuer
+	}
 	if updatedConfig.OAuthProviders == nil {
 		updatedConfig.OAuthProviders = make(map[string]OAuthProviderConfig)
 	}
 	if updatedConfig.OIDC.Clients == nil {
 		updatedConfig.OIDC.Clients = make([]OIDCClientConfig, 0)
 	}
-	if !updatedConfig.RateLimiting.Enabled && updatedConfig.RateLimiting.MaxSigninAttempts == 0 {
+	if !updatedConfig.RateLimiting.Enabled && updatedConfig.RateLimiting.MaxSignInAttempts == 0 {
 		updatedConfig.RateLimiting.Enabled = true
 	}
-	if updatedConfig.RateLimiting.MaxSigninAttempts <= 0 {
-		updatedConfig.RateLimiting.MaxSigninAttempts = defaultMaxSigninAttempts
+	if updatedConfig.RateLimiting.MaxSignInAttempts <= 0 {
+		updatedConfig.RateLimiting.MaxSignInAttempts = defaultMaxSignInAttempts
 	}
 	if updatedConfig.RateLimiting.WindowDurationSeconds <= 0 {
 		updatedConfig.RateLimiting.WindowDurationSeconds = defaultWindowDurationSeconds
@@ -340,6 +384,54 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 		copiedClients := make([]OIDCClientConfig, len(updatedConfig.OIDC.Clients))
 		copy(copiedClients, updatedConfig.OIDC.Clients)
 		updatedConfig.OIDC.Clients = copiedClients
+	}
+
+	hasOAuthCurrent := false
+	for _, provider := range configManager.config.OAuthProviders {
+		if provider.Enabled {
+			hasOAuthCurrent = true
+			break
+		}
+	}
+	hasOAuthNew := false
+	for _, provider := range updatedConfig.OAuthProviders {
+		if provider.Enabled {
+			hasOAuthNew = true
+			break
+		}
+	}
+
+	if !configManager.config.Password.Enabled && updatedConfig.Password.Enabled {
+		updatedConfig.OIDC.UI.ShowPassword = true
+	}
+	if !configManager.config.Passkeys.Enabled && updatedConfig.Passkeys.Enabled {
+		updatedConfig.OIDC.UI.ShowPasskeys = true
+	}
+	if !configManager.config.EmailOTP.Enabled && updatedConfig.EmailOTP.Enabled {
+		updatedConfig.OIDC.UI.ShowEmailOTP = true
+	}
+	if !configManager.config.SMSOTP.Enabled && updatedConfig.SMSOTP.Enabled {
+		updatedConfig.OIDC.UI.ShowSMSOTP = true
+	}
+	if !hasOAuthCurrent && hasOAuthNew {
+		updatedConfig.OIDC.UI.ShowOAuth = true
+	}
+
+	if !updatedConfig.Password.Enabled {
+		updatedConfig.OIDC.UI.ShowPassword = false
+		updatedConfig.OIDC.UI.ShowSignUp = false
+	}
+	if !updatedConfig.Passkeys.Enabled {
+		updatedConfig.OIDC.UI.ShowPasskeys = false
+	}
+	if !updatedConfig.EmailOTP.Enabled {
+		updatedConfig.OIDC.UI.ShowEmailOTP = false
+	}
+	if !updatedConfig.SMSOTP.Enabled {
+		updatedConfig.OIDC.UI.ShowSMSOTP = false
+	}
+	if !hasOAuthNew {
+		updatedConfig.OIDC.UI.ShowOAuth = false
 	}
 
 	configManager.config = updatedConfig
@@ -503,14 +595,34 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 
 	currentConfig := configManager.Get()
 	inputConfig := configManager.Get()
-	if err := json.NewDecoder(request.Body).Decode(&inputConfig); err != nil {
-		log.Debugf("HandlePutConfig rejected: invalid JSON payload: %v", err)
+	bodyBytes, readErr := io.ReadAll(request.Body)
+	if readErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
 		return
 	}
 	defer func() {
 		_ = request.Body.Close()
 	}()
+
+	if err := json.Unmarshal(bodyBytes, &inputConfig); err != nil {
+		log.Debugf("HandlePutConfig rejected: invalid JSON payload: %v", err)
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		return
+	}
+
+	var rawPut struct {
+		OIDC struct {
+			UI struct {
+				ShowPassword *bool `json:"show_password"`
+				ShowSignUp   *bool `json:"show_sign_up"`
+				ShowPasskeys *bool `json:"show_passkeys"`
+				ShowEmailOTP *bool `json:"show_email_otp"`
+				ShowSMSOTP   *bool `json:"show_sms_otp"`
+				ShowOAuth    *bool `json:"show_oauth"`
+			} `json:"ui"`
+		} `json:"oidc"`
+	}
+	_ = json.Unmarshal(bodyBytes, &rawPut)
 
 	// Handle OAuth secrets: if new plaintext provided, envelope-encrypt; if omitted, preserve current
 	if inputConfig.OAuthProviders != nil {
@@ -614,6 +726,88 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 		log.Debugf("HandlePutConfig rejected: sms delivery unconfigured while SMSOTP is enabled")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "SMS delivery is unavailable because an SMS provider is not configured", "LAYR_AUTH_SMS_UNCONFIGURED")
 		return
+	}
+
+	hasOAuthInput := false
+	for _, provider := range inputConfig.OAuthProviders {
+		if provider.Enabled {
+			hasOAuthInput = true
+			break
+		}
+	}
+	hasOAuthCurrent := false
+	for _, provider := range currentConfig.OAuthProviders {
+		if provider.Enabled {
+			hasOAuthCurrent = true
+			break
+		}
+	}
+
+	// 1. Prevent user to update showXxx method to true when the method isn't enabled in the config
+	if rawPut.OIDC.UI.ShowPassword != nil && *rawPut.OIDC.UI.ShowPassword && !inputConfig.Password.Enabled {
+		log.Debugf("HandlePutConfig rejected: show_password cannot be enabled when password auth is disabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_password in UI config when password authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+	if rawPut.OIDC.UI.ShowSignUp != nil && *rawPut.OIDC.UI.ShowSignUp && !inputConfig.Password.Enabled {
+		log.Debugf("HandlePutConfig rejected: show_sign_up cannot be enabled when password auth is disabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sign_up in UI config when password authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+	if rawPut.OIDC.UI.ShowPasskeys != nil && *rawPut.OIDC.UI.ShowPasskeys && !inputConfig.Passkeys.Enabled {
+		log.Debugf("HandlePutConfig rejected: show_passkeys cannot be enabled when passkey auth is disabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_passkeys in UI config when passkey authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+	if rawPut.OIDC.UI.ShowEmailOTP != nil && *rawPut.OIDC.UI.ShowEmailOTP && !inputConfig.EmailOTP.Enabled {
+		log.Debugf("HandlePutConfig rejected: show_email_otp cannot be enabled when email OTP auth is disabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_email_otp in UI config when email OTP authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+	if rawPut.OIDC.UI.ShowSMSOTP != nil && *rawPut.OIDC.UI.ShowSMSOTP && !inputConfig.SMSOTP.Enabled {
+		log.Debugf("HandlePutConfig rejected: show_sms_otp cannot be enabled when SMS OTP auth is disabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sms_otp in UI config when SMS OTP authentication is disabled", "LAYR_AUTH_001")
+		return
+	}
+	if rawPut.OIDC.UI.ShowOAuth != nil && *rawPut.OIDC.UI.ShowOAuth && !hasOAuthInput {
+		log.Debugf("HandlePutConfig rejected: show_oauth cannot be enabled when no OAuth providers are enabled")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_oauth in UI config when no OAuth providers are enabled", "LAYR_AUTH_001")
+		return
+	}
+
+	// 2. Updating an auth method enabled to true, automatically set showXxx to true in ui config
+	if !currentConfig.Password.Enabled && inputConfig.Password.Enabled && rawPut.OIDC.UI.ShowPassword == nil {
+		inputConfig.OIDC.UI.ShowPassword = true
+	}
+	if !currentConfig.Passkeys.Enabled && inputConfig.Passkeys.Enabled && rawPut.OIDC.UI.ShowPasskeys == nil {
+		inputConfig.OIDC.UI.ShowPasskeys = true
+	}
+	if !currentConfig.EmailOTP.Enabled && inputConfig.EmailOTP.Enabled && rawPut.OIDC.UI.ShowEmailOTP == nil {
+		inputConfig.OIDC.UI.ShowEmailOTP = true
+	}
+	if !currentConfig.SMSOTP.Enabled && inputConfig.SMSOTP.Enabled && rawPut.OIDC.UI.ShowSMSOTP == nil {
+		inputConfig.OIDC.UI.ShowSMSOTP = true
+	}
+	if !hasOAuthCurrent && hasOAuthInput && rawPut.OIDC.UI.ShowOAuth == nil {
+		inputConfig.OIDC.UI.ShowOAuth = true
+	}
+
+	// 3. Setting config auth method to false, automatically make ui config showXxx to false
+	if !inputConfig.Password.Enabled {
+		inputConfig.OIDC.UI.ShowPassword = false
+		inputConfig.OIDC.UI.ShowSignUp = false
+	}
+	if !inputConfig.Passkeys.Enabled {
+		inputConfig.OIDC.UI.ShowPasskeys = false
+	}
+	if !inputConfig.EmailOTP.Enabled {
+		inputConfig.OIDC.UI.ShowEmailOTP = false
+	}
+	if !inputConfig.SMSOTP.Enabled {
+		inputConfig.OIDC.UI.ShowSMSOTP = false
+	}
+	if !hasOAuthInput {
+		inputConfig.OIDC.UI.ShowOAuth = false
 	}
 
 	if err := configManager.Save(request.Context(), inputConfig); err != nil {

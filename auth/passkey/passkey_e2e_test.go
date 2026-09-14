@@ -91,7 +91,7 @@ func (service *simulatedPasskeyService) handleRegisterVerify(responseWriter http
 func (service *simulatedPasskeyService) handleSignInOptions(responseWriter http.ResponseWriter, _ *http.Request) {
 	signInOptions, err := service.manager.BeginSignIn()
 	if err != nil {
-		http.Error(responseWriter, "failed to begin signin", http.StatusInternalServerError)
+		http.Error(responseWriter, "failed to begin sign-in", http.StatusInternalServerError)
 		return
 	}
 
@@ -177,8 +177,8 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/api/v1/auth/passkey/register/options", service.handleRegisterOptions)
 	serveMux.HandleFunc("/api/v1/auth/passkey/register/verify", service.handleRegisterVerify)
-	serveMux.HandleFunc("/api/v1/auth/passkey/signin/options", service.handleSignInOptions)
-	serveMux.HandleFunc("/api/v1/auth/passkey/signin/verify", service.handleSignInVerify)
+	serveMux.HandleFunc("/api/v1/auth/passkey/sign-in/options", service.handleSignInOptions)
+	serveMux.HandleFunc("/api/v1/auth/passkey/sign-in/verify", service.handleSignInVerify)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -230,12 +230,12 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 3. Begin Sign-In (Fetch Sign-In Options)
-	signInOptionsResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/signin/options", `{}`)
+	signInOptionsResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/sign-in/options", `{}`)
 	defer func() { _ = signInOptionsResponse.Body.Close() }()
 
 	var signInOptions SignInOptions
 	if decodeErr := json.NewDecoder(signInOptionsResponse.Body).Decode(&signInOptions); decodeErr != nil {
-		t.Fatalf("failed to decode signin options: %v", decodeErr)
+		t.Fatalf("failed to decode sign-in options: %v", decodeErr)
 	}
 
 	// 4. Client Assertion & Sign-In Verification (Simulate WebAuthn get)
@@ -253,14 +253,14 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 	}
 	encodedSignInVerify, marshalSignErr := json.Marshal(signInVerifyPayload)
 	if marshalSignErr != nil {
-		t.Fatalf("failed to marshal signin verify payload: %v", marshalSignErr)
+		t.Fatalf("failed to marshal sign-in verify payload: %v", marshalSignErr)
 	}
 
-	signInVerifyResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/signin/verify", string(encodedSignInVerify))
+	signInVerifyResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/sign-in/verify", string(encodedSignInVerify))
 	defer func() { _ = signInVerifyResponse.Body.Close() }()
 
 	if signInVerifyResponse.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK from signin verify, got: %d", signInVerifyResponse.StatusCode)
+		t.Fatalf("expected 200 OK from sign-in verify, got: %d", signInVerifyResponse.StatusCode)
 	}
 
 	var sessionResult struct {
@@ -277,7 +277,7 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 
 	// 5. Replay Attack Prevention (Replaying same counter or challenge)
 	// Replay challenge (already consumed)
-	replayChallengeResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/signin/verify", string(encodedSignInVerify))
+	replayChallengeResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/sign-in/verify", string(encodedSignInVerify))
 	defer func() { _ = replayChallengeResponse.Body.Close() }()
 
 	if replayChallengeResponse.StatusCode != http.StatusBadRequest {
@@ -286,7 +286,7 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 
 	// 6. Monotonic Counter Regression / Clone Detection
 	// Issue a fresh challenge, but client submits a stale/lower counter (counter = 1, current stored counter is 1)
-	freshSignInOptionsResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/signin/options", `{}`)
+	freshSignInOptionsResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/sign-in/options", `{}`)
 	defer func() { _ = freshSignInOptionsResponse.Body.Close() }()
 
 	var freshSignInOptions SignInOptions
@@ -305,7 +305,7 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 		t.Fatalf("failed to marshal stale counter payload: %v", marshalStaleErr)
 	}
 
-	staleCounterResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/signin/verify", string(encodedStaleCounter))
+	staleCounterResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/passkey/sign-in/verify", string(encodedStaleCounter))
 	defer func() { _ = staleCounterResponse.Body.Close() }()
 
 	if staleCounterResponse.StatusCode != http.StatusForbidden {

@@ -15,10 +15,12 @@ import (
 	"uuid"
 
 	"layr.sh/auth/jwt"
+	"layr.sh/auth/otp"
 	"layr.sh/core"
 )
 
 const defaultM2MTokenExpirySeconds = 3600
+const defaultOIDCMFATTL = 5 * time.Minute
 
 // 1. OIDC Discovery & JWKS
 
@@ -44,6 +46,20 @@ func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWrit
 	if !config.OIDC.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
 		return
+	}
+
+	stateIDParam := request.URL.Query().Get("state")
+	modeParam := request.URL.Query().Get("mode")
+	if stateIDParam != "" && modeParam != "" && handler.kvStore != nil {
+		stateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+stateIDParam)
+		if err == nil && stateJSON != "" {
+			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
+			if json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload) == nil {
+				oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
+				handler.renderOIDCPage(responseWriter, stateIDParam, oidcClientConfig, "", "", modeParam, "", "")
+				return
+			}
+		}
 	}
 
 	clientID := request.URL.Query().Get("client_id")
@@ -132,106 +148,32 @@ func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWrit
 	handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "")
 }
 
-// 3. Authorization Form Submission (POST /api/v1/auth/oauth/authorize)
-
-func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWriter, request *http.Request) {
-	config := handler.configManager.Get()
-	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
-		return
-	}
-
-	if err := request.ParseForm(); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid form data", "invalid_request")
-		return
-	}
-
-	stateID := request.FormValue("state")
-	if stateID == "" || handler.kvStore == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
-		return
-	}
-
-	stateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+stateID)
-	if err != nil || stateJSON == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
-		return
-	}
-
-	var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
-	if unmarshalErr := json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload); unmarshalErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to read authorization state", "invalid_request")
-		return
-	}
-
-	oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
-
-	email := strings.ToLower(strings.TrimSpace(request.FormValue("email")))
-	userPassword := request.FormValue("password")
-	if email == "" || userPassword == "" {
-		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Email and password are required")
-		return
-	}
-
-	// Verify user credentials
+func (handler *BaseHandler) completeOIDCAuthorization(
+	responseWriter http.ResponseWriter,
+	request *http.Request,
+	stateID string,
+	oidcAuthorizationStatePayload OIDCAuthorizationStatePayload,
+	userRecord UserRecord,
+) {
 	ctx := request.Context()
-	var userRecord UserRecord
-	var rawProperties []byte
-	query := `
-		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-		FROM auth.users
-		WHERE email = $1
-	`
-	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
-		&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
-		&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
-	)
-	if scanErr != nil || userRecord.PasswordHash == nil {
-		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
-		return
-	}
-
-	if userRecord.LockedUntil != nil && userRecord.LockedUntil.After(time.Now().UTC()) {
-		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Account temporarily locked. Please try again later.")
-		return
-	}
-
-	match, verifyErr := handler.hasher.Verify(userPassword, *userRecord.PasswordHash)
-	if verifyErr != nil || !match {
-		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
-		return
-	}
-
-	if userRecord.MFAEnabled {
-		mfaCode := request.FormValue("mfa_code")
-		if mfaCode == "" {
-			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Two-factor authentication code is required")
-			return
-		}
-		if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
-			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
-			return
-		}
-		secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
-		if err != nil {
-			log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, err)
-			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
-			return
-		}
-		if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
-			log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", userRecord.ID)
-			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
-			return
-		}
-	}
+	config := handler.configManager.Get()
 
 	// Delete state payload to prevent replay / CSRF fixation
-	_ = handler.kvStore.Delete(ctx, "auth:oidc:state:"+stateID)
+	if handler.kvStore != nil {
+		_ = handler.kvStore.Delete(ctx, "auth:oidc:state:"+stateID)
+	}
 
 	// Issue authorization code
-	code := handler.issueOIDCAuthorizationCode(ctx, oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, userRecord.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
+	code := handler.issueOIDCAuthorizationCode(
+		ctx,
+		oidcAuthorizationStatePayload.ClientID,
+		oidcAuthorizationStatePayload.RedirectURI,
+		userRecord.ID,
+		oidcAuthorizationStatePayload.Scope,
+		oidcAuthorizationStatePayload.CodeChallenge,
+		oidcAuthorizationStatePayload.CodeChallengeMethod,
+		oidcAuthorizationStatePayload.Nonce,
+	)
 
 	// Set browser session cookie for SSO
 	refreshToken := jwt.GenerateRefreshToken()
@@ -268,6 +210,437 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 	}
 	targetURL.RawQuery = queryValues.Encode()
 	http.Redirect(responseWriter, request, targetURL.String(), http.StatusFound)
+}
+
+// 3. Authorization Form Submission (POST /api/v1/auth/oauth/authorize)
+
+func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWriter, request *http.Request) {
+	config := handler.configManager.Get()
+	if !config.OIDC.Enabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		return
+	}
+
+	if err := request.ParseForm(); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid form data", "invalid_request")
+		return
+	}
+
+	stateID := request.FormValue("state")
+	if stateID == "" || handler.kvStore == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
+		return
+	}
+
+	ctx := request.Context()
+	stateJSON, err := handler.kvStore.Get(ctx, "auth:oidc:state:"+stateID)
+	if err != nil || stateJSON == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
+		return
+	}
+
+	var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
+	if unmarshalErr := json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload); unmarshalErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to read authorization state", "invalid_request")
+		return
+	}
+
+	oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
+	action := strings.TrimSpace(request.FormValue("action"))
+	switch action {
+	case "", "sign_in":
+		action = "sign_in"
+	case "sign_up":
+		action = "sign_up"
+	}
+
+	// 1. MFA Verification Challenge Form
+	if action == "verify_mfa" {
+		mfaToken := request.FormValue("mfa_token")
+		mfaCode := strings.TrimSpace(request.FormValue("mfa_code"))
+		if mfaToken == "" {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
+			return
+		}
+		var mfaUserID string
+		if handler.kvStore != nil {
+			mfaUserID, _ = handler.kvStore.Get(ctx, "auth:oidc:mfa:"+mfaToken)
+		}
+		if mfaUserID == "" {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
+			return
+		}
+		if mfaCode == "" {
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Two-factor authentication code is required", "", mfaToken)
+			return
+		}
+
+		var userRecord UserRecord
+		var rawProperties []byte
+		query := `
+			SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+			FROM auth.users
+			WHERE id = $1
+		`
+		scanErr := handler.db.QueryRow(ctx, query, mfaUserID).Scan(
+			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
+			&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
+			&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		)
+		if scanErr != nil {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "User account not found")
+			return
+		}
+
+		if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error", "", mfaToken)
+			return
+		}
+		secretBytes, decryptErr := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+		if decryptErr != nil {
+			log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, decryptErr)
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication", "", mfaToken)
+			return
+		}
+		if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
+			log.Debugf("invalid MFA code supplied during OIDC MFA challenge for user %s", userRecord.ID)
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code", "", mfaToken)
+			return
+		}
+
+		if handler.kvStore != nil {
+			_ = handler.kvStore.Delete(ctx, "auth:oidc:mfa:"+mfaToken)
+		}
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		return
+	}
+
+	// 2. OTP Request Action
+	if action == "send_otp" {
+		recipient := strings.TrimSpace(request.FormValue("recipient"))
+		if recipient == "" {
+			handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Please enter an email address or phone number", "")
+			return
+		}
+
+		isEmail := strings.Contains(recipient, "@")
+		var expiryMinutes int
+		if isEmail {
+			if !config.EmailOTP.Enabled || !config.OIDC.UI.ShowEmailOTP || handler.emailDispatcher == nil || !handler.emailDispatcher.IsConfigured() {
+				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Email OTP sign-in is not available", "")
+				return
+			}
+			recipient = strings.ToLower(recipient)
+			expiryMinutes = config.EmailOTP.TokenExpiryMinutes
+		} else {
+			if !config.SMSOTP.Enabled || !config.OIDC.UI.ShowSMSOTP || handler.smsDispatcher == nil || !handler.smsDispatcher.IsConfigured() {
+				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "SMS OTP sign-in is not available", "")
+				return
+			}
+			normalizedPhone, err := NormalizePhone(recipient)
+			if err != nil {
+				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Invalid phone number format: must be in E.164 format with country code", "")
+				return
+			}
+			recipient = normalizedPhone
+			expiryMinutes = config.SMSOTP.TokenExpiryMinutes
+		}
+
+		if handler.kvStore != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
+			if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
+				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Rate limit exceeded. Too many requests from this IP address.", recipient)
+				return
+			}
+
+			cooldownKey := fmt.Sprintf("auth:cooldown:sign_in:%s", recipient)
+			if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
+				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Please wait 60 seconds before requesting another code", recipient)
+				return
+			}
+		}
+
+		codeTTL := time.Duration(expiryMinutes) * time.Minute
+		code, _ := otp.GenerateCode(nil)
+		codeHash := otp.HashCode(code)
+
+		query := `
+			INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
+			VALUES ($1, $2, 'sign_in', 0, $3, clock_timestamp())
+		`
+		expiresAt := time.Now().UTC().Add(codeTTL)
+		_, _ = handler.db.Exec(ctx, query, recipient, codeHash, expiresAt)
+		if handler.kvStore != nil {
+			_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient), code, codeTTL)
+			_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", recipient), "1", defaultOTPCooldown)
+		}
+
+		channel := "sms"
+		if isEmail {
+			channel = "email"
+			_ = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
+		} else {
+			_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+		}
+
+		if handler.eventBus != nil {
+			var targetUserRecord *UserRecord
+			if fetchedUserRecord, fetchErr := fetchUserRecordByRecipient(ctx, handler.db, recipient); fetchErr == nil {
+				targetUserRecord = &fetchedUserRecord
+			}
+			handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
+				Recipient: recipient,
+				Purpose:   "sign_in",
+				Channel:   channel,
+				User:      targetUserRecord,
+			}))
+		}
+
+		handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "", "Verification code sent!", recipient)
+		return
+	}
+
+	// 3. OTP Verify Action
+	if action == "verify_otp" {
+		recipient := strings.TrimSpace(request.FormValue("recipient"))
+		otpCode := strings.TrimSpace(request.FormValue("otp_code"))
+		if recipient == "" || otpCode == "" {
+			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Verification code is required", "", recipient)
+			return
+		}
+
+		isEmail := strings.Contains(recipient, "@")
+		if !isEmail {
+			if norm, normErr := NormalizePhone(recipient); normErr == nil {
+				recipient = norm
+			}
+		} else {
+			recipient = strings.ToLower(recipient)
+		}
+
+		var otpID, storedHash string
+		var attempts int
+		var expiresAt time.Time
+		err := handler.db.QueryRow(ctx, `
+			SELECT id, code_hash, attempts, expires_at 
+			FROM auth.otps 
+			WHERE recipient = $1 AND purpose = 'sign_in' AND expires_at > clock_timestamp()
+			ORDER BY created_at DESC 
+			LIMIT 1
+		`, recipient).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+		if err != nil {
+			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
+			return
+		}
+
+		if !otp.VerifyCode(otpCode, storedHash) {
+			_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
+			return
+		}
+
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		if handler.kvStore != nil {
+			_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient))
+		}
+
+		var userRecord UserRecord
+		var rawProperties []byte
+		var isNewUser bool
+		if isEmail {
+			_ = handler.db.QueryRow(ctx, `
+				INSERT INTO auth.users (email, role, email_verified_at, created_at, last_updated_at)
+				VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
+				ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
+			`, recipient).Scan(
+				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+			)
+		} else {
+			_ = handler.db.QueryRow(ctx, `
+				INSERT INTO auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
+				VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
+				ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
+				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
+			`, recipient).Scan(
+				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+			)
+		}
+
+		if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Account temporarily locked. Please try again later.")
+			return
+		}
+
+		channel := "sms"
+		if isEmail {
+			channel = "email"
+		}
+		if handler.eventBus != nil {
+			if isNewUser {
+				handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+			}
+			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
+				Recipient: recipient,
+				Purpose:   "sign_in",
+				Channel:   channel,
+				User:      &userRecord,
+			}))
+		}
+
+		if userRecord.MFAEnabled {
+			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
+			if handler.kvStore != nil {
+				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, userRecord.ID, defaultOIDCMFATTL)
+			}
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
+			return
+		}
+
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		return
+	}
+
+	// 4. Sign-Up Action
+	if action == "sign_up" {
+		if !config.Password.Enabled || !config.OIDC.UI.ShowSignUp {
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Sign-up is disabled")
+			return
+		}
+
+		email := strings.ToLower(strings.TrimSpace(request.FormValue("email")))
+		password := request.FormValue("password")
+		confirmPassword := request.FormValue("confirm_password")
+
+		if email == "" || password == "" {
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "Email and password are required")
+			return
+		}
+		if password != confirmPassword {
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "Passwords do not match")
+			return
+		}
+		if len(password) < config.Password.MinLength {
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
+			return
+		}
+
+		var existingID string
+		err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", email).Scan(&existingID)
+		if err == nil {
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "An account with this email already exists")
+			return
+		}
+
+		passHash, _ := handler.hasher.Hash(password)
+		var userRecord UserRecord
+		var rawProperties []byte
+		userID := uuid.NewV7().String()
+		query := `
+			INSERT INTO auth.users (id, email, password_hash, role, is_anonymous, created_at, last_updated_at)
+			VALUES ($1, $2, $3, 'authenticated', false, clock_timestamp(), clock_timestamp())
+			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		`
+		err = handler.db.QueryRow(ctx, query, userID, email, passHash).Scan(
+			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
+			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
+			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		)
+		if err != nil {
+			log.Debugf("failed to create user in OIDC sign up: %v", err)
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "Failed to create account")
+			return
+		}
+
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+		}
+
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		return
+	}
+
+	// 5. Sign-In Action (Default)
+	if !config.Password.Enabled || !config.OIDC.UI.ShowPassword {
+		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Password sign-in is disabled")
+		return
+	}
+
+	email := strings.ToLower(strings.TrimSpace(request.FormValue("email")))
+	userPassword := request.FormValue("password")
+	if email == "" || userPassword == "" {
+		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Email and password are required")
+		return
+	}
+
+	// Verify user credentials
+	var userRecord UserRecord
+	var rawProperties []byte
+	query := `
+		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		FROM auth.users
+		WHERE email = $1
+	`
+	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
+		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
+		&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
+		&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
+		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+	)
+	if scanErr != nil || userRecord.PasswordHash == nil {
+		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
+		return
+	}
+
+	if userRecord.LockedUntil != nil && userRecord.LockedUntil.After(time.Now().UTC()) {
+		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Account temporarily locked. Please try again later.")
+		return
+	}
+
+	match, verifyErr := handler.hasher.Verify(userPassword, *userRecord.PasswordHash)
+	if verifyErr != nil || !match {
+		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
+		return
+	}
+
+	if userRecord.MFAEnabled {
+		mfaCode := strings.TrimSpace(request.FormValue("mfa_code"))
+		if mfaCode != "" {
+			if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
+				return
+			}
+			secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+			if err != nil {
+				log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, err)
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
+				return
+			}
+			if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
+				log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", userRecord.ID)
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
+				return
+			}
+		} else {
+			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
+			if handler.kvStore != nil {
+				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, userRecord.ID, defaultOIDCMFATTL)
+			}
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
+			return
+		}
+	}
+
+	handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
 }
 
 func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
@@ -332,7 +705,7 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
 func (handler *BaseHandler) handleOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
 	oauthTokenRequest := parseOAuthTokenRequest(request)
 
-	// If no grant_type or if provider parameter is present, delegate to handleOAuthCallback for compatibility
+	// If no grant_type or if provider parameter is present, delegate to handleOAuthCallback
 	if oauthTokenRequest.GrantType == "" || oauthTokenRequest.Provider != "" {
 		handler.HandleOAuthCallback(responseWriter, request)
 		return
@@ -819,14 +1192,28 @@ func redirectError(responseWriter http.ResponseWriter, request *http.Request, re
 }
 
 type signInPageData struct {
-	ProjectName     string
-	ClientName      string
-	LogoURL         string
-	StateID         string
-	ErrorMessage    string
-	CustomCSS       template.CSS
-	PasskeysEnabled bool
-	Providers       []providerButtonData
+	ProjectName       string
+	ClientName        string
+	LogoURL           string
+	PrivacyPolicyURL  string
+	TermsOfServiceURL string
+	StateID           string
+	ErrorMessage      string
+	NoticeMessage     string
+	CustomCSS         template.CSS
+	ShowPassword      bool
+	ShowSignUp        bool
+	ShowPasskeys      bool
+	ShowOAuth         bool
+	ShowEmailOTP      bool
+	ShowSMSOTP        bool
+	PasskeysEnabled   bool
+	Providers         []providerButtonData
+	RequiresMFA       bool
+	MFAToken          string
+	RequiresOTP       bool
+	OTPRecipient      string
+	AuthMode          string
 }
 
 type providerButtonData struct {
@@ -834,7 +1221,16 @@ type providerButtonData struct {
 	Name string
 }
 
-func (handler *BaseHandler) renderOIDCSignInPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string) {
+func (handler *BaseHandler) renderOIDCPage(
+	responseWriter http.ResponseWriter,
+	stateID string,
+	oidcClientConfig *OIDCClientConfig,
+	errorMessage string,
+	noticeMessage string,
+	authMode string,
+	mfaToken string,
+	otpRecipient string,
+) {
 	config := handler.configManager.Get()
 	projectName := core.GetConfig().Project.Name
 	if projectName == "" {
@@ -845,29 +1241,60 @@ func (handler *BaseHandler) renderOIDCSignInPage(responseWriter http.ResponseWri
 		clientName = oidcClientConfig.Name
 	}
 
-	logoURL := config.OIDC.SignInUI.LogoURL
-	customCSS := config.OIDC.SignInUI.CustomCSS
+	logoURL := config.OIDC.UI.LogoURL
+	customCSS := config.OIDC.UI.CustomCSS
+	privacyPolicyURL := config.OIDC.UI.PrivacyPolicyURL
+	termsOfServiceURL := config.OIDC.UI.TermsOfServiceURL
+
+	showPassword := config.Password.Enabled && config.OIDC.UI.ShowPassword
+	showSignUp := config.Password.Enabled && config.OIDC.UI.ShowSignUp
+	showPasskeys := config.Passkeys.Enabled && config.OIDC.UI.ShowPasskeys
+	showEmailOTP := config.EmailOTP.Enabled && config.OIDC.UI.ShowEmailOTP && (handler.emailDispatcher != nil && handler.emailDispatcher.IsConfigured())
+	showSMSOTP := config.SMSOTP.Enabled && config.OIDC.UI.ShowSMSOTP && (handler.smsDispatcher != nil && handler.smsDispatcher.IsConfigured())
 
 	var providers []providerButtonData
-	for providerKey, providerConfig := range config.OAuthProviders {
-		if providerConfig.Enabled {
-			name := strings.ToUpper(providerKey[:1]) + providerKey[1:]
-			providers = append(providers, providerButtonData{
-				ID:   providerKey,
-				Name: name,
-			})
+	if config.OIDC.UI.ShowOAuth {
+		for providerKey, providerConfig := range config.OAuthProviders {
+			if providerConfig.Enabled {
+				name := strings.ToUpper(providerKey[:1]) + providerKey[1:]
+				providers = append(providers, providerButtonData{
+					ID:   providerKey,
+					Name: name,
+				})
+			}
 		}
 	}
 
+	switch authMode {
+	case "", "sign_in":
+		authMode = "sign_in"
+	case "sign_up":
+		authMode = "sign_up"
+	}
+
 	data := signInPageData{
-		ProjectName:     projectName,
-		ClientName:      clientName,
-		LogoURL:         logoURL,
-		StateID:         stateID,
-		ErrorMessage:    errorMessage,
-		CustomCSS:       template.CSS(customCSS),
-		PasskeysEnabled: config.Passkeys.Enabled,
-		Providers:       providers,
+		ProjectName:       projectName,
+		ClientName:        clientName,
+		LogoURL:           logoURL,
+		PrivacyPolicyURL:  privacyPolicyURL,
+		TermsOfServiceURL: termsOfServiceURL,
+		StateID:           stateID,
+		ErrorMessage:      errorMessage,
+		NoticeMessage:     noticeMessage,
+		CustomCSS:         template.CSS(customCSS),
+		ShowPassword:      showPassword,
+		ShowSignUp:        showSignUp,
+		ShowPasskeys:      showPasskeys,
+		ShowOAuth:         config.OIDC.UI.ShowOAuth,
+		ShowEmailOTP:      showEmailOTP,
+		ShowSMSOTP:        showSMSOTP,
+		PasskeysEnabled:   showPasskeys,
+		Providers:         providers,
+		RequiresMFA:       authMode == "mfa",
+		MFAToken:          mfaToken,
+		RequiresOTP:       authMode == "otp_request" || authMode == "otp_verify",
+		OTPRecipient:      otpRecipient,
+		AuthMode:          authMode,
 	}
 
 	htmlTemplate := template.Must(template.New("signInPage").Parse(signInPageTemplateHTML))
@@ -876,12 +1303,32 @@ func (handler *BaseHandler) renderOIDCSignInPage(responseWriter http.ResponseWri
 	_ = htmlTemplate.Execute(responseWriter, data)
 }
 
+func (handler *BaseHandler) renderOIDCSignInPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string) {
+	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, "", "sign_in", "", "")
+}
+
+func (handler *BaseHandler) renderOIDCSignUpPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string) {
+	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, "", "sign_up", "", "")
+}
+
+func (handler *BaseHandler) renderOIDCMFAPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string, noticeMessage string, mfaToken string) {
+	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, noticeMessage, "mfa", mfaToken, "")
+}
+
+func (handler *BaseHandler) renderOIDCOTPRequestPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string, noticeMessage string) {
+	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, noticeMessage, "otp_request", "", "")
+}
+
+func (handler *BaseHandler) renderOIDCOTPVerifyPage(responseWriter http.ResponseWriter, stateID string, oidcClientConfig *OIDCClientConfig, errorMessage string, noticeMessage string, recipient string) {
+	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, noticeMessage, "otp_verify", "", recipient)
+}
+
 const signInPageTemplateHTML = `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in{{if .ClientName}} to {{.ClientName}}{{end}} · {{.ProjectName}}</title>
+  <title>{{if eq .AuthMode "sign_up"}}Sign up{{else if eq .AuthMode "mfa"}}Two-Factor Authentication{{else if or (eq .AuthMode "otp_request") (eq .AuthMode "otp_verify")}}Sign in with Code{{else}}Sign in{{end}}{{if .ClientName}} to {{.ClientName}}{{end}} · {{.ProjectName}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -898,6 +1345,9 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       --destructive: #ef4444;
       --destructive-bg: rgba(239, 68, 68, 0.12);
       --destructive-border: rgba(239, 68, 68, 0.3);
+      --info: #3b82f6;
+      --info-bg: rgba(59, 130, 246, 0.12);
+      --info-border: rgba(59, 130, 246, 0.3);
       --input-bg: #18181b;
       --input-border: #3f3f46;
     }
@@ -930,7 +1380,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       width: 100%;
       max-width: 400px;
     }
-    .signin-card {
+    .sign-in-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 1rem;
@@ -938,41 +1388,104 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
     }
     .brand-header {
-      margin-bottom: 1.75rem;
+      margin-bottom: 1.5rem;
       text-align: left;
     }
     .brand-logo-icon {
       width: 2.25rem;
       height: 2.25rem;
-      background: var(--primary);
-      color: var(--primary-fg);
-      border-radius: 0.625rem;
+      margin-bottom: 0.75rem;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 0.875rem;
-      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+      background: var(--brand-accent);
+      color: #000;
+      border-radius: 0.5rem;
     }
     .brand-logo-img {
-      max-height: 2.5rem;
-      margin-bottom: 0.875rem;
-      display: block;
+      max-height: 48px;
+      margin-bottom: 1rem;
+      object-fit: contain;
     }
-    h1 {
-      font-size: 1.5rem;
+    .brand-header h1 {
+      font-size: 1.35rem;
       font-weight: 700;
-      letter-spacing: -0.025em;
       color: var(--fg);
-      margin-bottom: 0.35rem;
+      margin: 0;
+      letter-spacing: -0.025em;
     }
-    p.subtitle {
+    .brand-header .subtitle {
       font-size: 0.875rem;
+      color: var(--fg-muted);
+      margin-top: 0.25rem;
+      margin-bottom: 0;
+    }
+    .alert {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+    .alert-notice {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+    }
+    .auth-tabs {
+      margin-bottom: 1.25rem;
+    }
+    .auth-tabs nav {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 0.5rem;
+      padding: 3px;
+      gap: 3px;
+    }
+    .auth-tab {
+      flex: 1;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0.625rem 0;
+      font-size: 0.875rem;
+      font-weight: 500;
       color: var(--muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+    }
+    .auth-tab:hover {
+      color: var(--fg);
+    }
+    .auth-tab.active {
+      color: var(--fg);
+      font-weight: 600;
+      border-bottom-color: var(--primary);
     }
     .alert-error {
       background: var(--destructive-bg);
       border: 1px solid var(--destructive-border);
       color: var(--destructive);
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .alert-notice {
+      background: var(--info-bg);
+      border: 1px solid var(--info-border);
+      color: var(--info);
       padding: 0.75rem 1rem;
       border-radius: 0.5rem;
       font-size: 0.875rem;
@@ -1023,7 +1536,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
     .submit-btn:hover {
       opacity: 0.92;
     }
-    .passkey-btn {
+    .secondary-btn {
       width: 100%;
       background: #27272a;
       color: var(--fg);
@@ -1034,10 +1547,27 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       font-weight: 500;
       cursor: pointer;
       margin-top: 0.625rem;
+      text-align: center;
       transition: background-color 0.15s ease;
+      display: block;
     }
-    .passkey-btn:hover {
+    .secondary-btn:hover {
       background: #3f3f46;
+    }
+    .back-link {
+      display: block;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      text-decoration: none;
+      margin-top: 1rem;
+      text-align: center;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+    }
+    .back-link:hover {
+      color: var(--fg);
     }
     .divider {
       display: flex;
@@ -1080,12 +1610,26 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
     .provider-btn:hover {
       background: #27272a;
     }
-    .brand-footer {
+    .legal-footer {
       margin-top: 1.5rem;
       text-align: center;
       font-size: 0.75rem;
       color: var(--muted);
-      letter-spacing: 0.025em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .legal-footer a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+    .legal-footer a:hover {
+      color: var(--fg);
+    }
+    .legal-footer .dot {
+      opacity: 0.5;
     }
   </style>
   {{if .CustomCSS}}
@@ -1097,7 +1641,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
 <body>
   <div class="bg-gradient"></div>
   <div class="card-container">
-    <div class="signin-card">
+    <div class="card sign-in-card">
       <div class="brand-header">
         {{if .LogoURL}}
           <img src="{{.LogoURL}}" alt="{{.ProjectName}} Logo" class="brand-logo-img">
@@ -1110,14 +1654,14 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
             </svg>
           </div>
         {{end}}
-        <h1>Sign in</h1>
+        <h1>{{if eq .AuthMode "sign_up"}}Create account{{else if eq .AuthMode "mfa"}}Two-factor challenge{{else if or (eq .AuthMode "otp_request") (eq .AuthMode "otp_verify")}}Sign in with code{{else}}Sign in{{end}}</h1>
         {{if .ClientName}}
         <p class="subtitle">Continue to {{.ClientName}}</p>
         {{end}}
       </div>
 
       {{if .ErrorMessage}}
-        <div class="alert-error">
+        <div class="alert alert-error" data-variant="destructive">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
@@ -1125,50 +1669,191 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         </div>
       {{end}}
 
-      <form action="/api/v1/auth/oauth/authorize" method="POST">
-        <input type="hidden" name="state" value="{{.StateID}}">
-
-        <div class="field">
-          <label for="signin-email">Email</label>
-          <input id="signin-email" name="email" type="email" autocomplete="email" required autofocus placeholder="name@example.com" class="input-text">
+      {{if .NoticeMessage}}
+        <div class="alert alert-notice" data-variant="secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="8"/>
+          </svg>
+          <span>{{.NoticeMessage}}</span>
         </div>
-
-        <div class="field">
-          <label for="signin-password">Password</label>
-          <input id="signin-password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••••••" class="input-text">
-        </div>
-
-        <div class="field">
-          <label for="signin-mfa">Two-Factor Code (if enabled)</label>
-          <input id="signin-mfa" name="mfa_code" type="text" autocomplete="one-time-code" placeholder="6-digit authenticator code" class="input-text">
-        </div>
-
-        <button type="submit" class="submit-btn">Sign in</button>
-      </form>
-
-      {{if .PasskeysEnabled}}
-        <button type="button" class="passkey-btn" id="passkey-btn" onclick="handlePasskeySignIn()">
-          Sign in with Passkey
-        </button>
       {{end}}
 
-      {{if .Providers}}
-        <div class="divider"><span>Or</span></div>
-        <div class="providers-grid">
-          {{range .Providers}}
-            <a href="/api/v1/auth/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="provider-btn">
-              Sign in with {{.Name}}
-            </a>
+      {{if eq .AuthMode "mfa"}}
+        <!-- MFA Challenge Form -->
+        <form action="/api/v1/auth/oauth/authorize" method="POST">
+          <input type="hidden" name="state" value="{{.StateID}}">
+          <input type="hidden" name="action" value="verify_mfa">
+          <input type="hidden" name="mfa_token" value="{{.MFAToken}}">
+
+          <div role="group" class="field">
+            <label for="mfa-code">Authenticator Code</label>
+            <input id="mfa-code" name="mfa_code" type="text" autocomplete="one-time-code" required autofocus placeholder="6-digit code" class="input input-text">
+          </div>
+
+          <button type="submit" class="btn submit-btn w-full">Verify Code</button>
+          <a href="/api/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+        </form>
+      {{else if eq .AuthMode "otp_verify"}}
+        <!-- OTP Code Verification Form -->
+        <form action="/api/v1/auth/oauth/authorize" method="POST">
+          <input type="hidden" name="state" value="{{.StateID}}">
+          <input type="hidden" name="action" value="verify_otp">
+          <input type="hidden" name="recipient" value="{{.OTPRecipient}}">
+
+          <div role="group" class="field">
+            <label for="otp-code">Verification Code</label>
+            <input id="otp-code" name="otp_code" type="text" autocomplete="one-time-code" required autofocus placeholder="6-digit code" class="input input-text">
+          </div>
+
+          <button type="submit" class="btn submit-btn w-full">Verify & Sign in</button>
+          <a href="/api/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+        </form>
+      {{else}}
+        <!-- Standard Sign-in / Sign-up / OTP-request container -->
+        {{if and .ShowSignUp .ShowPassword}}
+          <div class="tabs auth-tabs w-full">
+            <nav role="tablist">
+              <button type="button" role="tab" id="tab-sign-in" aria-selected="{{if eq .AuthMode "sign_up"}}false{{else}}true{{end}}" class="btn auth-tab {{if ne .AuthMode "sign_up"}}active{{end}}" onclick="showTab('sign_in')">Sign in</button>
+              <button type="button" role="tab" id="tab-sign-up" aria-selected="{{if eq .AuthMode "sign_up"}}true{{else}}false{{end}}" class="btn auth-tab {{if eq .AuthMode "sign_up"}}active{{end}}" onclick="showTab('sign_up')">Sign up</button>
+            </nav>
+          </div>
+        {{end}}
+
+        <!-- Sign-in form -->
+        <div id="sign-in-container" class="sign-in-container" style="{{if or (eq .AuthMode "sign_up") (eq .AuthMode "otp_request")}}display:none;{{end}}">
+          {{if .ShowPassword}}
+            <form action="/api/v1/auth/oauth/authorize" method="POST">
+              <input type="hidden" name="state" value="{{.StateID}}">
+              <input type="hidden" name="action" value="sign_in">
+
+              <div role="group" class="field">
+                <label for="sign-in-email">Email</label>
+                <input id="sign-in-email" name="email" type="email" autocomplete="email" required autofocus placeholder="name@example.com" class="input input-text">
+              </div>
+
+              <div role="group" class="field">
+                <label for="sign-in-password">Password</label>
+                <input id="sign-in-password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••••••" class="input input-text">
+              </div>
+
+              <button type="submit" class="btn submit-btn w-full">Sign in</button>
+            </form>
+          {{end}}
+
+          {{if .PasskeysEnabled}}
+            <button type="button" class="btn secondary-btn w-full" data-variant="outline" id="passkey-btn" onclick="handlePasskeySignIn()">
+              Sign in with Passkey
+            </button>
+          {{end}}
+
+          {{if or .ShowEmailOTP .ShowSMSOTP}}
+            <button type="button" class="btn secondary-btn w-full" data-variant="outline" onclick="showTab('otp')">
+              Sign in with One-Time Code
+            </button>
+          {{end}}
+
+          {{if .Providers}}
+            <div class="divider"><span>Or</span></div>
+            <div class="providers-grid">
+              {{range .Providers}}
+                <a href="/api/v1/auth/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="btn provider-btn w-full" data-variant="outline">
+                  Sign in with {{.Name}}
+                </a>
+              {{end}}
+            </div>
           {{end}}
         </div>
+
+        <!-- Sign-up form -->
+        {{if and .ShowSignUp .ShowPassword}}
+          <div id="sign-up-container" class="sign-up-container" style="{{if ne .AuthMode "sign_up"}}display:none;{{end}}">
+            <form action="/api/v1/auth/oauth/authorize" method="POST">
+              <input type="hidden" name="state" value="{{.StateID}}">
+              <input type="hidden" name="action" value="sign_up">
+
+              <div role="group" class="field">
+                <label for="sign-up-email">Email</label>
+                <input id="sign-up-email" name="email" type="email" autocomplete="email" required placeholder="name@example.com" class="input input-text">
+              </div>
+
+              <div role="group" class="field">
+                <label for="sign-up-password">Password</label>
+                <input id="sign-up-password" name="password" type="password" autocomplete="new-password" required placeholder="••••••••••••" class="input input-text">
+              </div>
+
+              <div role="group" class="field">
+                <label for="sign-up-confirm-password">Confirm Password</label>
+                <input id="sign-up-confirm-password" name="confirm_password" type="password" autocomplete="new-password" required placeholder="••••••••••••" class="input input-text">
+              </div>
+
+              <button type="submit" class="btn submit-btn w-full">Sign up</button>
+            </form>
+          </div>
+        {{end}}
+
+        <!-- OTP Request form -->
+        {{if or .ShowEmailOTP .ShowSMSOTP}}
+          <div id="otp-container" style="{{if ne .AuthMode "otp_request"}}display:none;{{end}}">
+            <form action="/api/v1/auth/oauth/authorize" method="POST">
+              <input type="hidden" name="state" value="{{.StateID}}">
+              <input type="hidden" name="action" value="send_otp">
+
+              <div role="group" class="field">
+                <label for="otp-recipient">{{if and .ShowEmailOTP .ShowSMSOTP}}Email or Phone Number{{else if .ShowEmailOTP}}Email{{else}}Phone Number{{end}}</label>
+                <input id="otp-recipient" name="recipient" type="text" required placeholder="{{if and .ShowEmailOTP .ShowSMSOTP}}name@example.com or +1234567890{{else if .ShowEmailOTP}}name@example.com{{else}}+1234567890{{end}}" class="input input-text">
+              </div>
+
+              <button type="submit" class="btn submit-btn w-full">Send verification code</button>
+              <button type="button" class="btn back-link" data-variant="link" onclick="showTab('sign_in')">Back to sign in</button>
+            </form>
+          </div>
+        {{end}}
       {{end}}
 
-      <div class="brand-footer">
-        Secured by {{.ProjectName}}
-      </div>
+      {{if or .PrivacyPolicyURL .TermsOfServiceURL}}
+        <div class="legal-footer">
+          {{if .TermsOfServiceURL}}<a href="{{.TermsOfServiceURL}}" target="_blank" rel="noopener noreferrer">Terms of Service</a>{{end}}
+          {{if and .PrivacyPolicyURL .TermsOfServiceURL}}<span class="dot">·</span>{{end}}
+          {{if .PrivacyPolicyURL}}<a href="{{.PrivacyPolicyURL}}" target="_blank" rel="noopener noreferrer">Privacy Policy</a>{{end}}
+        </div>
+      {{end}}
     </div>
   </div>
   <script>
+    function showTab(tab) {
+      var isSignIn = (tab === 'sign_in');
+      var isSignUp = (tab === 'sign_up');
+      var isOTP = (tab === 'otp');
+
+      var signIn = document.getElementById('sign-in-container');
+      var signUp = document.getElementById('sign-up-container');
+      var otp = document.getElementById('otp-container');
+      if (signIn) signIn.style.display = isSignIn ? 'block' : 'none';
+      if (signUp) signUp.style.display = isSignUp ? 'block' : 'none';
+      if (otp) otp.style.display = isOTP ? 'block' : 'none';
+
+      var tabSignIn = document.getElementById('tab-sign-in');
+      var tabSignUp = document.getElementById('tab-sign-up');
+      if (tabSignIn) {
+        if (isSignIn) {
+          tabSignIn.classList.add('active');
+          tabSignIn.setAttribute('aria-selected', 'true');
+        } else {
+          tabSignIn.classList.remove('active');
+          tabSignIn.setAttribute('aria-selected', 'false');
+        }
+      }
+      if (tabSignUp) {
+        if (isSignUp) {
+          tabSignUp.classList.add('active');
+          tabSignUp.setAttribute('aria-selected', 'true');
+        } else {
+          tabSignUp.classList.remove('active');
+          tabSignUp.setAttribute('aria-selected', 'false');
+        }
+      }
+    }
+
     async function handlePasskeySignIn() {
       if (!window.PublicKeyCredential) {
         alert('Passkeys are not supported on this browser or device.');

@@ -38,6 +38,6 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	anonymousNilDBResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAnonymousSignIn(anonymousNilDBResponseRecorder, anonymousNilDBRequest)
 	if anonymousNilDBResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on anonymous signin with nil db, got: %d", anonymousNilDBResponseRecorder.Code)
+		t.Fatalf("expected 500 on anonymous sign in with nil db, got: %d", anonymousNilDBResponseRecorder.Code)
 	}
 }

@@ -83,10 +83,10 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 
 	var signupSessionResponse SessionResponse
 	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupSessionResponse); err != nil {
-		t.Fatalf("failed to decode signup response: %v", err)
+		t.Fatalf("failed to decode sign up response: %v", err)
 	}
 	if signupSessionResponse.User.ID == "" || signupSessionResponse.AccessToken == "" {
-		t.Fatalf("invalid signup response: %+v", signupSessionResponse)
+		t.Fatalf("invalid sign up response: %+v", signupSessionResponse)
 	}
 
 	// 2. Sign In via POST /api/v1/auth/sign-in
@@ -127,7 +127,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	// 4. OTP Send & Verify (Email & Phone)
 	otpSendPayload := map[string]any{
 		"recipient": userEmail,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
 	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
@@ -138,7 +138,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 204 No Content from /otp send, got: %d", otpSendResponseRecorder.Code)
 	}
 
-	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", userEmail))
+	otpCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", userEmail))
 	if err != nil || otpCode == "" {
 		t.Fatalf("failed to get OTP code from kvstore: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	wrongCodePayload := map[string]any{
 		"recipient": userEmail,
 		"code":      "000000",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
 	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
@@ -161,7 +161,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	otpVerifyPayload := map[string]any{
 		"recipient": userEmail,
 		"code":      otpCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
 	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
@@ -175,7 +175,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	missingOTPPayload := map[string]any{
 		"recipient": "nonexistent@example.com",
 		"code":      "123456",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedMissingOTP, _ := json.Marshal(missingOTPPayload)
 	missingOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedMissingOTP))
@@ -188,7 +188,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	// OTP with Phone Number
 	phoneOTPPayload := map[string]any{
 		"recipient": "+1234567890",
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	}
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
 	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
@@ -198,7 +198,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 204 No Content on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
 
-	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:signin:%s", "+1234567890"))
+	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", "+1234567890"))
 	if err != nil || phoneCode == "" {
 		t.Fatalf("failed to get phone OTP code from kvstore: %v", err)
 	}
@@ -583,12 +583,12 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	baseHandler.handleSignUp(signupConversionResponseRecorder, signupConversionRequest)
 
 	if signupConversionResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on conversion signup, got: %d (%s)", signupConversionResponseRecorder.Code, signupConversionResponseRecorder.Body.String())
+		t.Fatalf("expected 200 on conversion sign up, got: %d (%s)", signupConversionResponseRecorder.Code, signupConversionResponseRecorder.Body.String())
 	}
 
 	var signupConversionSessionResponse SessionResponse
 	if err := json.NewDecoder(signupConversionResponseRecorder.Body).Decode(&signupConversionSessionResponse); err != nil {
-		t.Fatalf("failed to decode conversion signup response: %v", err)
+		t.Fatalf("failed to decode conversion sign up response: %v", err)
 	}
 
 	if signupConversionSessionResponse.User.ID != anonymousUserID {
@@ -646,12 +646,12 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	baseHandler.handleSignUp(brandNewResponseRecorder, brandNewRequest)
 
 	if brandNewResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on brand new signup, got: %d (%s)", brandNewResponseRecorder.Code, brandNewResponseRecorder.Body.String())
+		t.Fatalf("expected 200 on brand new sign up, got: %d (%s)", brandNewResponseRecorder.Code, brandNewResponseRecorder.Body.String())
 	}
 
 	var brandNewSessionResponse SessionResponse
 	if err := json.NewDecoder(brandNewResponseRecorder.Body).Decode(&brandNewSessionResponse); err != nil {
-		t.Fatalf("failed to decode brand new signup response: %v", err)
+		t.Fatalf("failed to decode brand new sign up response: %v", err)
 	}
 
 	if brandNewSessionResponse.User.ID == anonymousUserID {
@@ -685,7 +685,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	_, execErr := db.Exec(ctx, `
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
-		VALUES ($1, $2, 'signin', 0, $3, clock_timestamp())
+		VALUES ($1, $2, 'sign_in', 0, $3, clock_timestamp())
 	`, otpRecipient, otpHash, otpExpiresAt)
 	if execErr != nil {
 		t.Fatalf("failed to insert test OTP: %v", execErr)
@@ -694,7 +694,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	otpVerifyPayload, _ := json.Marshal(map[string]any{
 		"recipient": otpRecipient,
 		"code":      otpCode,
-		"purpose":   "signin",
+		"purpose":   "sign_in",
 	})
 	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload))
 	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousSessionResponse.AccessToken)
@@ -803,7 +803,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	authConfig := configManager.Get()
 	authConfig.RateLimiting.Enabled = true
-	authConfig.RateLimiting.MaxSigninAttempts = 2
+	authConfig.RateLimiting.MaxSignInAttempts = 2
 	authConfig.RateLimiting.WindowDurationSeconds = 60
 	if err := configManager.Save(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
