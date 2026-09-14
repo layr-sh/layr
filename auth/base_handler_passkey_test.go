@@ -127,7 +127,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	invalidPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignInVerify(invalidPasskeySignInResponseRecorder, invalidPasskeySignInRequest)
 	if invalidPasskeySignInResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on invalid challenge in passkey signin verify, got: %d", invalidPasskeySignInResponseRecorder.Code)
+		t.Fatalf("expected 400 on invalid challenge in passkey sign-in verify, got: %d", invalidPasskeySignInResponseRecorder.Code)
 	}
 
 	// 8. Passkey SignIn Verify Bad JSON -> 400
@@ -135,7 +135,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	badJSONPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignInVerify(badJSONPasskeySignInResponseRecorder, badJSONPasskeySignInRequest)
 	if badJSONPasskeySignInResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on bad JSON in passkey signin verify, got: %d", badJSONPasskeySignInResponseRecorder.Code)
+		t.Fatalf("expected 400 on bad JSON in passkey sign-in verify, got: %d", badJSONPasskeySignInResponseRecorder.Code)
 	}
 
 	// 9. Passkey SignIn Verify Valid Challenge on Nil Pool -> 500

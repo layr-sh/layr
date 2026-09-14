@@ -166,13 +166,13 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutResponseRecorder, signOutRequest)
 	if signOutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on signout, got: %d", signOutResponseRecorder.Code)
+		t.Fatalf("expected 200 OK on sign out, got: %d", signOutResponseRecorder.Code)
 	}
 
 	signOutWithBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", strings.NewReader(`{"refresh_token":"dummy-refresh-token"}`))
 	signOutWithBodyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutWithBodyResponseRecorder, signOutWithBodyRequest)
 	if signOutWithBodyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on signout with body, got: %d", signOutWithBodyResponseRecorder.Code)
+		t.Fatalf("expected 200 OK on sign out with body, got: %d", signOutWithBodyResponseRecorder.Code)
 	}
 }

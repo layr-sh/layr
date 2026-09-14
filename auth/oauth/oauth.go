@@ -26,14 +26,6 @@ const (
 	PresetCustom  = "custom"
 )
 
-// Legacy alias constants for backwards compatibility
-const (
-	ProviderGoogle  = PresetGoogle
-	ProviderGitHub  = PresetGitHub
-	ProviderApple   = PresetApple
-	ProviderDiscord = PresetDiscord
-)
-
 // ProviderPreset defines configuration defaults for known OAuth providers.
 type ProviderPreset struct {
 	AuthURL         string
@@ -93,37 +85,6 @@ var Presets = map[string]ProviderPreset{
 		EmailAttribute:  "email",
 		NameAttribute:   "username",
 		AvatarAttribute: "avatar",
-	},
-}
-
-// ProviderEndpoints defines standard OAuth URLs (legacy compatibility).
-type ProviderEndpoints struct {
-	AuthURL     string
-	TokenURL    string
-	UserInfoURL string
-}
-
-// Endpoints maps provider names to their endpoints for legacy compatibility.
-var Endpoints = map[string]ProviderEndpoints{
-	PresetGoogle: {
-		AuthURL:     Presets[PresetGoogle].AuthURL,
-		TokenURL:    Presets[PresetGoogle].TokenURL,
-		UserInfoURL: Presets[PresetGoogle].UserInfoURL,
-	},
-	PresetGitHub: {
-		AuthURL:     Presets[PresetGitHub].AuthURL,
-		TokenURL:    Presets[PresetGitHub].TokenURL,
-		UserInfoURL: Presets[PresetGitHub].UserInfoURL,
-	},
-	PresetApple: {
-		AuthURL:     Presets[PresetApple].AuthURL,
-		TokenURL:    Presets[PresetApple].TokenURL,
-		UserInfoURL: Presets[PresetApple].UserInfoURL,
-	},
-	PresetDiscord: {
-		AuthURL:     Presets[PresetDiscord].AuthURL,
-		TokenURL:    Presets[PresetDiscord].TokenURL,
-		UserInfoURL: Presets[PresetDiscord].UserInfoURL,
 	},
 }
 

@@ -90,15 +90,11 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	}
 
 	authURL := handler.totpManager.BuildAuthURL(accountName, secretBase32)
-	issuer := config.MFA.Issuer
-	if issuer == "" {
-		issuer = "Layr"
-	}
 
 	handler.writeJSON(responseWriter, MFASetupResponse{
 		Secret:        secretBase32,
 		AuthURL:       authURL,
-		Issuer:        issuer,
+		Issuer:        config.MFA.Issuer,
 		Digits:        6,
 		PeriodSeconds: 30,
 	})

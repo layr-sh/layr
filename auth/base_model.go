@@ -185,7 +185,7 @@ type RevokeOtherSessionsResponse struct {
 // OTPSendRequest defines parameters for dispatching a one-time passcode.
 type OTPSendRequest struct {
 	Recipient string `json:"recipient"`
-	Purpose   string `json:"purpose"` // 'signin' | 'signup' | 'mfa'
+	Purpose   string `json:"purpose"` // 'sign_in' | 'sign_up' | 'mfa'
 }
 
 // OTPVerifyRequest defines parameters for verifying a one-time passcode.

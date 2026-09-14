@@ -51,15 +51,15 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	coreServer.Mux().ServeHTTP(signupResponseRecorder, signupRequest)
 
 	if signupResponseRecorder.Code != http.StatusCreated && signupResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected signup 200/201, got %d (body: %s)", signupResponseRecorder.Code, signupResponseRecorder.Body.String())
+		t.Fatalf("expected sign up 200/201, got %d (body: %s)", signupResponseRecorder.Code, signupResponseRecorder.Body.String())
 	}
 
 	var signupSessionResponse SessionResponse
 	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupSessionResponse); err != nil {
-		t.Fatalf("failed to decode signup response: %v", err)
+		t.Fatalf("failed to decode sign up response: %v", err)
 	}
 	if signupSessionResponse.User.ID == "" || signupSessionResponse.AccessToken == "" {
-		t.Fatalf("invalid signup payload response: %+v", signupSessionResponse)
+		t.Fatalf("invalid sign up payload response: %+v", signupSessionResponse)
 	}
 
 	// 2. User Sign In
@@ -166,27 +166,27 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	signupResponseRecorder := httptest.NewRecorder()
 	coreServer.Mux().ServeHTTP(signupResponseRecorder, signupRequest)
 	if signupResponseRecorder.Code != http.StatusOK && signupResponseRecorder.Code != http.StatusCreated {
-		t.Fatalf("expected 200/201 on signup: %d", signupResponseRecorder.Code)
+		t.Fatalf("expected 200/201 on sign up: %d", signupResponseRecorder.Code)
 	}
 	var firstSessionResponse SessionResponse
 	_ = json.NewDecoder(signupResponseRecorder.Body).Decode(&firstSessionResponse)
 
 	// 2. Sign in from second device
-	signinPayload, _ := json.Marshal(map[string]any{
+	signInPayload, _ := json.Marshal(map[string]any{
 		"email":    userEmail,
 		"password": userPassword,
 	})
-	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signinPayload))
-	signinRequest.Header.Set("Content-Type", "application/json")
-	signinRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
-	signinRequest.Header.Set("User-Agent", "Secondary-Device-Tablet")
-	signinResponseRecorder := httptest.NewRecorder()
-	coreServer.Mux().ServeHTTP(signinResponseRecorder, signinRequest)
-	if signinResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on signin: %d", signinResponseRecorder.Code)
+	signInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	signInRequest.Header.Set("Content-Type", "application/json")
+	signInRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signInRequest.Header.Set("User-Agent", "Secondary-Device-Tablet")
+	signInResponseRecorder := httptest.NewRecorder()
+	coreServer.Mux().ServeHTTP(signInResponseRecorder, signInRequest)
+	if signInResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on sign in: %d", signInResponseRecorder.Code)
 	}
 	var secondSessionResponse SessionResponse
-	_ = json.NewDecoder(signinResponseRecorder.Body).Decode(&secondSessionResponse)
+	_ = json.NewDecoder(signInResponseRecorder.Body).Decode(&secondSessionResponse)
 
 	// 3. List active sessions via E2E server mux
 	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/sessions", nil)

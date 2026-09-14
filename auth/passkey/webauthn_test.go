@@ -90,7 +90,7 @@ func TestPasskeyManagerUnit(t *testing.T) {
 	// 4. BeginSignIn challenge generation
 	signInOptions, err := customPasskeyManager.BeginSignIn()
 	if err != nil {
-		t.Fatalf("failed to begin signin: %v", err)
+		t.Fatalf("failed to begin sign in: %v", err)
 	}
 	if signInOptions.Challenge == "" || signInOptions.RelyingPartyID != "myapp.internal" {
 		t.Fatalf("expected non-empty challenge with myapp.internal, got: %+v", signInOptions)
@@ -229,6 +229,6 @@ func TestPasskeyManagerUnit(t *testing.T) {
 		t.Fatal("expected error on entropy failure during sign up")
 	}
 	if _, signErr := customPasskeyManager.BeginSignIn(); signErr == nil {
-		t.Fatal("expected error on entropy failure during signin")
+		t.Fatal("expected error on entropy failure during sign in")
 	}
 }

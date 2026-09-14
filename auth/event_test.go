@@ -22,12 +22,13 @@ func TestAuthEventsUnit(t *testing.T) {
 		IsAnonymous:        false,
 		Properties: map[string]any{
 			"plan": "pro",
+			"role": "custom_role",
 		},
 		CreatedAt:     now,
 		LastUpdatedAt: now,
 	}
 
-	// Helper function to assert sanitized properties
+	// Helper function to assert user properties and omission of sensitive fields
 	assertSanitizedProps := func(data map[string]any, eventType string) {
 		t.Helper()
 		props, ok := data["properties"].(map[string]any)
@@ -37,11 +38,14 @@ func TestAuthEventsUnit(t *testing.T) {
 		if _, hasSecret := data["encrypted_mfa_secret"]; hasSecret {
 			t.Fatalf("[%s] expected encrypted_mfa_secret to be omitted from event data", eventType)
 		}
-		if _, hasSecret := props["encrypted_mfa_secret"]; hasSecret {
-			t.Fatalf("[%s] expected encrypted_mfa_secret not in properties", eventType)
+		if _, hasHash := data["password_hash"]; hasHash {
+			t.Fatalf("[%s] expected password_hash to be omitted from event data", eventType)
 		}
 		if props["plan"] != "pro" {
 			t.Fatalf("[%s] expected plan=pro preserved, got %v", eventType, props["plan"])
+		}
+		if props["role"] != "custom_role" {
+			t.Fatalf("[%s] expected role=custom_role preserved in properties, got %v", eventType, props["role"])
 		}
 	}
 
@@ -294,7 +298,7 @@ func TestAuthEventsUnit(t *testing.T) {
 
 	otpNilUserEvent := NewOTPSentEvent("test@example.com", OTPSentEventData{
 		Recipient: "test@example.com",
-		Purpose:   "signin",
+		Purpose:   "sign_in",
 		Channel:   "email",
 		User:      nil,
 	})
@@ -305,14 +309,14 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 16. OTPVerified (nested user when present, and with nil user)
 	otpVerifiedEvent := NewOTPVerifiedEvent("test@example.com", OTPVerifiedEventData{
 		Recipient: "test@example.com",
-		Purpose:   "signin",
+		Purpose:   "sign_in",
 		Channel:   "email",
 		User:      &userRecord,
 	})
 	if otpVerifiedEvent.Type != "auth.otp.verified" || otpVerifiedEvent.Action != "verified" {
 		t.Fatalf("unexpected otp verified event: %+v", otpVerifiedEvent)
 	}
-	if otpVerifiedEvent.Data["purpose"] != "signin" || otpVerifiedEvent.Data["channel"] != "email" {
+	if otpVerifiedEvent.Data["purpose"] != "sign_in" || otpVerifiedEvent.Data["channel"] != "email" {
 		t.Fatalf("unexpected data in otp verified event: %+v", otpVerifiedEvent.Data)
 	}
 	otpVerifiedUser, ok := otpVerifiedEvent.Data["user"].(map[string]any)
@@ -323,7 +327,7 @@ func TestAuthEventsUnit(t *testing.T) {
 
 	otpVerifiedNilUserEvent := NewOTPVerifiedEvent("test@example.com", OTPVerifiedEventData{
 		Recipient: "test@example.com",
-		Purpose:   "signin",
+		Purpose:   "sign_in",
 		Channel:   "email",
 		User:      nil,
 	})
@@ -366,10 +370,10 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 	assertSanitizedProps(userUnlockedEvent.Data, "UserUnlocked")
 
-	// 20. Edge case: sanitizeEventUserRecord with nil properties
+	// 20. Event with nil properties preserved
 	nilPropsUserRecord := UserRecord{ID: "nil_props", Properties: nil}
-	sanitizedNilUserRecord := sanitizeEventUserRecord(nilPropsUserRecord)
-	if sanitizedNilUserRecord.Properties != nil {
-		t.Fatalf("expected nil properties preserved, got %v", sanitizedNilUserRecord.Properties)
+	nilPropsEvent := NewUserUnlockedEvent("nil_props", UserUnlockedEventData(nilPropsUserRecord))
+	if nilPropsEvent.Data["properties"] != nil {
+		t.Fatalf("expected nil properties preserved in event, got %v", nilPropsEvent.Data["properties"])
 	}
 }

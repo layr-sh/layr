@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,9 +67,10 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 
 	authConfig := configManager.Get()
 	authConfig.OIDC.Enabled = true
-	authConfig.OIDC.SignInUI = OIDCSignInUIConfig{
-		CustomCSS: ".signin-card { border: 2px solid cyan; }",
-		LogoURL:   "https://example.com/assets/logo.svg",
+	authConfig.OIDC.UI = OIDCUIConfig{
+		CustomCSS:    ".sign-in-card { border: 2px solid cyan; }",
+		LogoURL:      "https://example.com/assets/logo.svg",
+		ShowPassword: true,
 	}
 	authConfig.OIDC.Clients = []OIDCClientConfig{
 		{
@@ -133,7 +135,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	htmlPage := authorizeResponseRecorder.Body.String()
-	if !strings.Contains(htmlPage, ".signin-card { border: 2px solid cyan; }") {
+	if !strings.Contains(htmlPage, ".sign-in-card { border: 2px solid cyan; }") {
 		t.Fatalf("expected injected custom CSS in HTML, got: %s", htmlPage)
 	}
 	if !strings.Contains(htmlPage, "Dashboard Portal") {
@@ -227,19 +229,45 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		RETURNING id
 	`, mfaUserEmail, mfaPassHash, encryptedMFASecret).Scan(&mfaUserID)
 
-	// Missing MFA code -> "Two-factor authentication code is required"
-	missingMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}}
-	missingMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(missingMFACodeValues.Encode()))
-	missingMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	missingMFACodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(missingMFACodeResponseRecorder, missingMFACodeRequest)
-	if !strings.Contains(missingMFACodeResponseRecorder.Body.String(), "Two-factor authentication code is required") {
-		t.Fatalf("expected Two-factor authentication code is required, got: %s", missingMFACodeResponseRecorder.Body.String())
+	// 1. Password submit with MFA enrolled -> Renders challenge page ("Two-factor authentication required")
+	challengePageValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}}
+	challengePageRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(challengePageValues.Encode()))
+	challengePageRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	challengePageResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(challengePageResponseRecorder, challengePageRequest)
+	challengeHTML := challengePageResponseRecorder.Body.String()
+	if !strings.Contains(challengeHTML, "Two-factor authentication required") {
+		t.Fatalf("expected Two-factor authentication required, got: %s", challengeHTML)
 	}
 
-	// Missing encrypted secret in DB -> "Multi-factor authentication configuration error"
+	// Extract mfa_token from challenge page
+	mfaTokenPrefix := `name="mfa_token" value="`
+	mfaTokenIdx := strings.Index(challengeHTML, mfaTokenPrefix)
+	if mfaTokenIdx == -1 {
+		t.Fatalf("mfa_token input not found in challenge page: %s", challengeHTML)
+	}
+	mfaTokenStart := mfaTokenIdx + len(mfaTokenPrefix)
+	mfaTokenEnd := strings.Index(challengeHTML[mfaTokenStart:], `"`)
+	extractedMFAToken := challengeHTML[mfaTokenStart : mfaTokenStart+mfaTokenEnd]
+
+	// 2. Submit challenge form with empty code -> "Two-factor authentication code is required"
+	emptyMFACodeValues := url.Values{
+		"state":     {mfaUserStateID},
+		"action":    {"verify_mfa"},
+		"mfa_token": {extractedMFAToken},
+		"mfa_code":  {""},
+	}
+	emptyMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(emptyMFACodeValues.Encode()))
+	emptyMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyMFACodeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emptyMFACodeResponseRecorder, emptyMFACodeRequest)
+	if !strings.Contains(emptyMFACodeResponseRecorder.Body.String(), "Two-factor authentication code is required") {
+		t.Fatalf("expected Two-factor authentication code is required, got: %s", emptyMFACodeResponseRecorder.Body.String())
+	}
+
+	// 3. Missing encrypted secret in DB -> "Multi-factor authentication configuration error"
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", mfaUserID)
-	noSecretMFAValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"123456"}}
+	noSecretMFAValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"123456"}}
 	noSecretMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(noSecretMFAValues.Encode()))
 	noSecretMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noSecretMFAResponseRecorder := httptest.NewRecorder()
@@ -248,9 +276,9 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("expected Multi-factor authentication configuration error, got: %s", noSecretMFAResponseRecorder.Body.String())
 	}
 
-	// Corrupted encrypted secret -> "Failed to verify multi-factor authentication"
+	// 4. Corrupted encrypted secret -> "Failed to verify multi-factor authentication"
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupted-secret' WHERE id = $1", mfaUserID)
-	corruptedMFAValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"123456"}}
+	corruptedMFAValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"123456"}}
 	corruptedMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(corruptedMFAValues.Encode()))
 	corruptedMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptedMFAResponseRecorder := httptest.NewRecorder()
@@ -262,8 +290,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	// Restore encrypted secret
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = $1 WHERE id = $2", encryptedMFASecret, mfaUserID)
 
-	// Invalid MFA code -> "Invalid two-factor authentication code"
-	invalidMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {"000000"}}
+	// 5. Invalid MFA code -> "Invalid two-factor authentication code"
+	invalidMFACodeValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"000000"}}
 	invalidMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(invalidMFACodeValues.Encode()))
 	invalidMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidMFACodeResponseRecorder := httptest.NewRecorder()
@@ -272,9 +300,9 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("expected Invalid two-factor authentication code, got: %s", invalidMFACodeResponseRecorder.Body.String())
 	}
 
-	// Valid MFA code -> 302 Found
+	// 6. Valid MFA code -> 302 Found redirect
 	validTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSecret, time.Now())
-	validMFACodeValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}, "mfa_code": {validTOTPCode}}
+	validMFACodeValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {validTOTPCode}}
 	validMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(validMFACodeValues.Encode()))
 	validMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	validMFACodeResponseRecorder := httptest.NewRecorder()
@@ -925,5 +953,379 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 
 	if uninitSignerResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on uninitialized signer token error, got %d", uninitSignerResponseRecorder.Code)
+	}
+}
+
+func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	if err := configManager.Load(ctx); err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	driverWebhook := "webhook"
+	authConfig := configManager.Get()
+	authConfig.OIDC.Enabled = true
+	authConfig.EmailOTP.Enabled = true
+	authConfig.SMSOTP.Enabled = true
+	authConfig.OIDC.UI.ShowSignUp = true
+	authConfig.OIDC.UI.ShowPassword = true
+	authConfig.OIDC.UI.ShowEmailOTP = true
+	authConfig.OIDC.UI.ShowSMSOTP = true
+	authConfig.EmailDispatcher = EmailDispatcherConfig{
+		Driver:      &driverWebhook,
+		SenderEmail: "auth@layr.sh",
+		SenderName:  "Layr",
+		Webhook: EmailDispatcherWebhookConfig{
+			URL: "http://localhost:9999/webhook",
+		},
+	}
+	authConfig.SMSDispatcher = SMSDispatcherConfig{
+		Driver: &driverWebhook,
+		Webhook: SMSDispatcherWebhookConfig{
+			URL: "http://localhost:9999/webhook",
+		},
+	}
+	authConfig.OIDC.Clients = []OIDCClientConfig{
+		{
+			Name:         "App Portal",
+			ClientID:     "client-app-portal",
+			RedirectURIs: []string{"https://portal.example.com/callback"},
+			Public:       true,
+			Scopes:       []string{"openid", "email"},
+		},
+	}
+	if err := configManager.Save(ctx, authConfig); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
+	defer func() { _ = databaseKVStore.Close() }()
+	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler.SetKVStore(databaseKVStore)
+
+	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
+		emailDispatcherConfig := configManager.Get().EmailDispatcher
+		return &emailDispatcherConfig
+	}, cryptoKeyManager)
+	baseHandler.SetEmailDispatcher(emailDispatcher)
+
+	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
+		smsDispatcherConfig := configManager.Get().SMSDispatcher
+		return &smsDispatcherConfig
+	}, cryptoKeyManager)
+	baseHandler.SetSMSDispatcher(smsDispatcher)
+
+	var capturedEvents []core.Event
+	var eventsMutex sync.Mutex
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	defer eventBus.Close()
+	eventBus.Subscribe("*", func(_ context.Context, event core.Event) error {
+		eventsMutex.Lock()
+		capturedEvents = append(capturedEvents, event)
+		eventsMutex.Unlock()
+		return nil
+	})
+	baseHandler.SetEventBus(eventBus)
+
+	// Helper to create valid OIDC state
+	createState := func(stateID string) {
+		payload, _ := json.Marshal(OIDCAuthorizationStatePayload{
+			ClientID:    "client-app-portal",
+			RedirectURI: "https://portal.example.com/callback",
+			Scope:       "openid email",
+		})
+		_ = databaseKVStore.Set(ctx, "auth:oidc:state:"+stateID, string(payload), 5*time.Minute)
+	}
+
+	// 1. OIDC Sign-Up duplicate email error
+	existingEmail := "existing.user@example.com"
+	passHash, _ := baseHandler.hasher.Hash("Pass12345!")
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.users (email, password_hash, role, created_at, last_updated_at)
+		VALUES ($1, $2, 'authenticated', clock_timestamp(), clock_timestamp())
+	`, existingEmail, passHash)
+
+	st1 := "st-sign-up-dup"
+	createState(st1)
+	dupValues := url.Values{
+		"state":            {st1},
+		"action":           {"sign_up"},
+		"email":            {existingEmail},
+		"password":         {"Pass12345!"},
+		"confirm_password": {"Pass12345!"},
+	}
+	dupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(dupValues.Encode()))
+	dupRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	dupResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(dupResponseRecorder, dupRequest)
+	if !strings.Contains(dupResponseRecorder.Body.String(), "An account with this email already exists") {
+		t.Fatalf("expected duplicate email error, got: %s", dupResponseRecorder.Body.String())
+	}
+
+	// 2. OIDC Sign-Up successful creation & redirect
+	st2 := "st-sign-up-ok"
+	createState(st2)
+	newEmail := "new.user.oidc@example.com"
+	okValues := url.Values{
+		"state":            {st2},
+		"action":           {"sign_up"},
+		"email":            {newEmail},
+		"password":         {"Pass12345!"},
+		"confirm_password": {"Pass12345!"},
+	}
+	okRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(okValues.Encode()))
+	okRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	okResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(okResponseRecorder, okRequest)
+	if okResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect from sign up, got: %d (%s)", okResponseRecorder.Code, okResponseRecorder.Body.String())
+	}
+	if !strings.Contains(okResponseRecorder.Header().Get("Location"), "code=") {
+		t.Fatalf("expected code parameter in location: %s", okResponseRecorder.Header().Get("Location"))
+	}
+
+	// 3. Password sign-in with direct MFA code error branches
+	mfaUserEmail := "direct.mfa@example.com"
+	mfaSecret := "JBSWY3DPEHPK3PXP"
+	encSecret, _ := cryptoKeyManager.EncryptField([]byte(mfaSecret))
+	var mfaUID string
+	_ = db.QueryRow(ctx, `
+		INSERT INTO auth.users (email, password_hash, role, mfa_enabled, encrypted_mfa_secret, created_at, last_updated_at)
+		VALUES ($1, $2, 'authenticated', true, $3, clock_timestamp(), clock_timestamp())
+		RETURNING id
+	`, mfaUserEmail, passHash, encSecret).Scan(&mfaUID)
+
+	// a. missing secret in DB
+	st3a := "st-mfa-nosecret"
+	createState(st3a)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", mfaUID)
+	noSecValues := url.Values{"state": {st3a}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"123456"}}
+	noSecRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(noSecValues.Encode()))
+	noSecRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	noSecResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(noSecResponseRecorder, noSecRequest)
+	if !strings.Contains(noSecResponseRecorder.Body.String(), "Multi-factor authentication configuration error") {
+		t.Fatalf("expected configuration error, got: %s", noSecResponseRecorder.Body.String())
+	}
+
+	// b. corrupted secret in DB
+	st3b := "st-mfa-corrupt"
+	createState(st3b)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupted' WHERE id = $1", mfaUID)
+	corruptValues := url.Values{"state": {st3b}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"123456"}}
+	corruptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(corruptValues.Encode()))
+	corruptRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	corruptResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(corruptResponseRecorder, corruptRequest)
+	if !strings.Contains(corruptResponseRecorder.Body.String(), "Failed to verify multi-factor authentication") {
+		t.Fatalf("expected failed verify error, got: %s", corruptResponseRecorder.Body.String())
+	}
+
+	// c. invalid mfa_code
+	st3c := "st-mfa-invalid"
+	createState(st3c)
+	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = $1 WHERE id = $2", encSecret, mfaUID)
+	invValues := url.Values{"state": {st3c}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"000000"}}
+	invRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(invValues.Encode()))
+	invRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(invResponseRecorder, invRequest)
+	if !strings.Contains(invResponseRecorder.Body.String(), "Invalid two-factor authentication code") {
+		t.Fatalf("expected invalid code error, got: %s", invResponseRecorder.Body.String())
+	}
+
+	// 4. verify_mfa with user not found in DB
+	st4 := "st-mfa-nouser"
+	createState(st4)
+	mfaTkNoUser := "mfa_oidc_nouser"
+	_ = databaseKVStore.Set(ctx, "auth:oidc:mfa:"+mfaTkNoUser, "01918a24-9999-7000-8000-000000000000", 5*time.Minute)
+	noUserValues := url.Values{"state": {st4}, "action": {"verify_mfa"}, "mfa_token": {mfaTkNoUser}, "mfa_code": {"123456"}}
+	noUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(noUserValues.Encode()))
+	noUserRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	noUserResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(noUserResponseRecorder, noUserRequest)
+	if !strings.Contains(noUserResponseRecorder.Body.String(), "User account not found") {
+		t.Fatalf("expected user account not found, got: %s", noUserResponseRecorder.Body.String())
+	}
+
+	// 5. Passwordless OTP in OIDC
+	// a. invalid phone number
+	st5a := "st-otp-phone-inv"
+	createState(st5a)
+	invPhoneValues := url.Values{"state": {st5a}, "action": {"send_otp"}, "recipient": {"not-a-phone"}}
+	invPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(invPhoneValues.Encode()))
+	invPhoneRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invPhoneResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(invPhoneResponseRecorder, invPhoneRequest)
+	if !strings.Contains(invPhoneResponseRecorder.Body.String(), "Invalid phone number format") {
+		t.Fatalf("expected invalid phone format error, got: %s", invPhoneResponseRecorder.Body.String())
+	}
+
+	// b. valid email send_otp -> renders otp_verify
+	st5b := "st-otp-email-ok"
+	createState(st5b)
+	otpEmail := "otp.oidc.user@example.com"
+	emailSendValues := url.Values{"state": {st5b}, "action": {"send_otp"}, "recipient": {otpEmail}}
+	emailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	emailSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emailSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(emailSendResponseRecorder, emailSendRequest)
+	if !strings.Contains(emailSendResponseRecorder.Body.String(), "Verification Code") {
+		t.Fatalf("expected Verification Code on otp_verify page, got: %s", emailSendResponseRecorder.Body.String())
+	}
+
+	// c. IP rate limit on send_otp
+	invIPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	invIPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invIPRequest.RemoteAddr = "10.0.0.99:1234"
+	_ = databaseKVStore.Set(ctx, "auth:ratelimit:otp:ip:10.0.0.99", "11", time.Hour)
+	invIPResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(invIPResponseRecorder, invIPRequest)
+	if !strings.Contains(invIPResponseRecorder.Body.String(), "Rate limit exceeded") {
+		t.Fatalf("expected rate limit error, got: %s", invIPResponseRecorder.Body.String())
+	}
+
+	// d. cooldown on send_otp
+	_ = databaseKVStore.Delete(ctx, "auth:ratelimit:otp:ip:10.0.0.99")
+	_ = databaseKVStore.Set(ctx, "auth:cooldown:sign_in:"+otpEmail, "1", time.Minute)
+	coolRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	coolRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	coolResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(coolResponseRecorder, coolRequest)
+	if !strings.Contains(coolResponseRecorder.Body.String(), "Please wait 60 seconds") {
+		t.Fatalf("expected cooldown error, got: %s", coolResponseRecorder.Body.String())
+	}
+	_ = databaseKVStore.Delete(ctx, "auth:cooldown:sign_in:"+otpEmail)
+
+	// e. verify_otp with invalid code
+	invVerifyValues := url.Values{"state": {st5b}, "action": {"verify_otp"}, "recipient": {otpEmail}, "otp_code": {"999999"}}
+	invVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(invVerifyValues.Encode()))
+	invVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	invVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(invVerifyResponseRecorder, invVerifyRequest)
+	if !strings.Contains(invVerifyResponseRecorder.Body.String(), "Invalid or expired verification code") {
+		t.Fatalf("expected invalid code error, got: %s", invVerifyResponseRecorder.Body.String())
+	}
+
+	// f. verify_otp with valid code -> 302 Found redirect
+	otpCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+otpEmail)
+	okVerifyValues := url.Values{"state": {st5b}, "action": {"verify_otp"}, "recipient": {otpEmail}, "otp_code": {otpCode}}
+	okVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(okVerifyValues.Encode()))
+	okVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	okResponseRecorder = httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(okResponseRecorder, okVerifyRequest)
+	if okResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 on valid OTP verify, got: %d (%s)", okResponseRecorder.Code, okResponseRecorder.Body.String())
+	}
+
+	// g. send_otp & verify_otp phone
+	st5g := "st-otp-phone-ok"
+	createState(st5g)
+	otpPhone := "+14155553333"
+	phoneSendValues := url.Values{"state": {st5g}, "action": {"send_otp"}, "recipient": {otpPhone}}
+	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(phoneSendValues.Encode()))
+	phoneSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	phoneSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(phoneSendResponseRecorder, phoneSendRequest)
+	if !strings.Contains(phoneSendResponseRecorder.Body.String(), "Verification Code") {
+		t.Fatalf("expected Verification Code for phone, got: %s", phoneSendResponseRecorder.Body.String())
+	}
+
+	phoneCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+otpPhone)
+	phoneVerifyValues := url.Values{"state": {st5g}, "action": {"verify_otp"}, "recipient": {otpPhone}, "otp_code": {phoneCode}}
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(phoneVerifyValues.Encode()))
+	phoneVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	phoneVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	if phoneVerifyResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 on valid phone OTP verify, got: %d", phoneVerifyResponseRecorder.Code)
+	}
+
+	// h. verify_otp when user has MFA enabled -> renders MFA challenge page
+	mfaOTPUser := "mfa.otp.user@example.com"
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.users (email, role, mfa_enabled, encrypted_mfa_secret, created_at, last_updated_at)
+		VALUES ($1, 'authenticated', true, $2, clock_timestamp(), clock_timestamp())
+	`, mfaOTPUser, encSecret)
+	st5h := "st-otp-mfa"
+	createState(st5h)
+	mfaOTPSendValues := url.Values{"state": {st5h}, "action": {"send_otp"}, "recipient": {mfaOTPUser}}
+	mfaOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(mfaOTPSendValues.Encode()))
+	mfaOTPSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mfaOTPSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(mfaOTPSendResponseRecorder, mfaOTPSendRequest)
+
+	mfaOTPCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+mfaOTPUser)
+	mfaOTPVerifyValues := url.Values{"state": {st5h}, "action": {"verify_otp"}, "recipient": {mfaOTPUser}, "otp_code": {mfaOTPCode}}
+	mfaOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(mfaOTPVerifyValues.Encode()))
+	mfaOTPVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mfaOTPVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(mfaOTPVerifyResponseRecorder, mfaOTPVerifyRequest)
+	if !strings.Contains(mfaOTPVerifyResponseRecorder.Body.String(), "Two-factor authentication required") {
+		t.Fatalf("expected Two-factor authentication required for OTP user with MFA, got: %s", mfaOTPVerifyResponseRecorder.Body.String())
+	}
+
+	// i. verify_otp when no OTP record exists in DB -> Invalid or expired verification code
+	st5i := "st-otp-no-record"
+	createState(st5i)
+	noOTPVerifyValues := url.Values{"state": {st5i}, "action": {"verify_otp"}, "recipient": {"no-otp@example.com"}, "otp_code": {"123456"}}
+	noOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(noOTPVerifyValues.Encode()))
+	noOTPVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	noOTPVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(noOTPVerifyResponseRecorder, noOTPVerifyRequest)
+	if !strings.Contains(noOTPVerifyResponseRecorder.Body.String(), "Invalid or expired verification code") {
+		t.Fatalf("expected invalid code error for non-existent OTP, got: %s", noOTPVerifyResponseRecorder.Body.String())
+	}
+
+	// j. verify_otp for existing locked user -> Account temporarily locked
+	lockedUser := "locked.otp.user@example.com"
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.users (email, role, locked_until, created_at, last_updated_at)
+		VALUES ($1, 'authenticated', clock_timestamp() + interval '1 hour', clock_timestamp(), clock_timestamp())
+	`, lockedUser)
+	stLocked := "st-otp-locked"
+	createState(stLocked)
+	lockedSendValues := url.Values{"state": {stLocked}, "action": {"send_otp"}, "recipient": {lockedUser}}
+	lockedSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(lockedSendValues.Encode()))
+	lockedSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	lockedSendResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(lockedSendResponseRecorder, lockedSendRequest)
+
+	lockedCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+lockedUser)
+	lockedVerifyValues := url.Values{"state": {stLocked}, "action": {"verify_otp"}, "recipient": {lockedUser}, "otp_code": {lockedCode}}
+	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(lockedVerifyValues.Encode()))
+	lockedVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	lockedVerifyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(lockedVerifyResponseRecorder, lockedVerifyRequest)
+	if !strings.Contains(lockedVerifyResponseRecorder.Body.String(), "Account temporarily locked. Please try again later.") {
+		t.Fatalf("expected locked error for locked OTP user, got: %s", lockedVerifyResponseRecorder.Body.String())
+	}
+
+	// k. sign_up DB insert failure (constraint violation) -> Failed to create account
+	_, constraintErr := db.Exec(ctx, "ALTER TABLE auth.users ADD CONSTRAINT test_oidc_sign_up_fail CHECK (email != 'fail.sign_up@example.com')")
+	if constraintErr != nil {
+		t.Fatalf("failed to add constraint: %v", constraintErr)
+	}
+	defer func() { _, _ = db.Exec(ctx, "ALTER TABLE auth.users DROP CONSTRAINT IF EXISTS test_oidc_sign_up_fail") }()
+
+	stFail := "st-sign-up-fail"
+	createState(stFail)
+	failSignUpValues := url.Values{
+		"state":            {stFail},
+		"action":           {"sign_up"},
+		"email":            {"fail.sign_up@example.com"},
+		"password":         {"SecurePass123!"},
+		"confirm_password": {"SecurePass123!"},
+	}
+	failSignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader(failSignUpValues.Encode()))
+	failSignUpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	failSignUpResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCAuthorizeSubmit(failSignUpResponseRecorder, failSignUpRequest)
+	if !strings.Contains(failSignUpResponseRecorder.Body.String(), "Failed to create account") {
+		t.Fatalf("expected Failed to create account error, got: %s", failSignUpResponseRecorder.Body.String())
 	}
 }

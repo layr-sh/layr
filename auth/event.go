@@ -6,18 +6,6 @@ import (
 	"layr.sh/core"
 )
 
-func sanitizeEventUserRecord(userRecord UserRecord) UserRecord {
-	if userRecord.Properties == nil {
-		return userRecord
-	}
-	cleanedProperties := make(map[string]any, len(userRecord.Properties))
-	for key, value := range userRecord.Properties {
-		cleanedProperties[key] = value
-	}
-	userRecord.Properties = cleanedProperties
-	return userRecord
-}
-
 // ConfigUpdatedEventData represents the payload for auth.config.updated.
 type ConfigUpdatedEventData Config
 
@@ -40,7 +28,6 @@ type SessionCreatedEventData struct {
 
 // NewSessionCreatedEvent creates a typed event for session creation.
 func NewSessionCreatedEvent(resourceID string, sessionCreatedEventData SessionCreatedEventData) core.Event {
-	sessionCreatedEventData.User = sanitizeEventUserRecord(sessionCreatedEventData.User)
 	return core.NewEvent("auth.session.created", sessionCreatedEventData).WithResourceID(resourceID)
 }
 
@@ -53,7 +40,6 @@ type SessionDeletedEventData struct {
 
 // NewSessionDeletedEvent creates a typed event for session deletion or revocation.
 func NewSessionDeletedEvent(resourceID string, sessionDeletedEventData SessionDeletedEventData) core.Event {
-	sessionDeletedEventData.User = sanitizeEventUserRecord(sessionDeletedEventData.User)
 	return core.NewEvent("auth.session.deleted", sessionDeletedEventData).WithResourceID(resourceID)
 }
 
@@ -67,7 +53,6 @@ type PasskeyCreatedEventData struct {
 
 // NewPasskeyCreatedEvent creates a typed event for passkey credential creation.
 func NewPasskeyCreatedEvent(resourceID string, passkeyCreatedEventData PasskeyCreatedEventData) core.Event {
-	passkeyCreatedEventData.User = sanitizeEventUserRecord(passkeyCreatedEventData.User)
 	return core.NewEvent("auth.passkey.created", passkeyCreatedEventData).WithResourceID(resourceID)
 }
 
@@ -79,7 +64,6 @@ type PasskeyDeletedEventData struct {
 
 // NewPasskeyDeletedEvent creates a typed event for passkey credential revocation.
 func NewPasskeyDeletedEvent(resourceID string, passkeyDeletedEventData PasskeyDeletedEventData) core.Event {
-	passkeyDeletedEventData.User = sanitizeEventUserRecord(passkeyDeletedEventData.User)
 	return core.NewEvent("auth.passkey.deleted", passkeyDeletedEventData).WithResourceID(resourceID)
 }
 
@@ -88,8 +72,7 @@ type UserSignedUpEventData UserRecord
 
 // NewUserSignedUpEvent creates a typed event for user sign up.
 func NewUserSignedUpEvent(resourceID string, userSignedUpEventData UserSignedUpEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userSignedUpEventData))
-	return core.NewEvent("auth.user.signed_up", UserSignedUpEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.signed_up", userSignedUpEventData).WithResourceID(resourceID)
 }
 
 // UserConvertedEventData represents the payload for auth.user.converted.
@@ -97,8 +80,7 @@ type UserConvertedEventData UserRecord
 
 // NewUserConvertedEvent creates a typed event for anonymous-to-authenticated user conversion.
 func NewUserConvertedEvent(resourceID string, userConvertedEventData UserConvertedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userConvertedEventData))
-	return core.NewEvent("auth.user.converted", UserConvertedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.converted", userConvertedEventData).WithResourceID(resourceID)
 }
 
 // UserEmailVerifiedEventData represents the payload for auth.user.email_verified.
@@ -106,8 +88,7 @@ type UserEmailVerifiedEventData UserRecord
 
 // NewUserEmailVerifiedEvent creates a typed event for user email verification.
 func NewUserEmailVerifiedEvent(resourceID string, userEmailVerifiedEventData UserEmailVerifiedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userEmailVerifiedEventData))
-	return core.NewEvent("auth.user.email_verified", UserEmailVerifiedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.email_verified", userEmailVerifiedEventData).WithResourceID(resourceID)
 }
 
 // UserPhoneVerifiedEventData represents the payload for auth.user.phone_verified.
@@ -115,8 +96,7 @@ type UserPhoneVerifiedEventData UserRecord
 
 // NewUserPhoneVerifiedEvent creates a typed event for user phone verification.
 func NewUserPhoneVerifiedEvent(resourceID string, userPhoneVerifiedEventData UserPhoneVerifiedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userPhoneVerifiedEventData))
-	return core.NewEvent("auth.user.phone_verified", UserPhoneVerifiedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.phone_verified", userPhoneVerifiedEventData).WithResourceID(resourceID)
 }
 
 // UserUpdatedEventData represents the payload for auth.user.updated.
@@ -124,8 +104,7 @@ type UserUpdatedEventData UserRecord
 
 // NewUserUpdatedEvent creates a typed event for user updates.
 func NewUserUpdatedEvent(resourceID string, userUpdatedEventData UserUpdatedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userUpdatedEventData))
-	return core.NewEvent("auth.user.updated", UserUpdatedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.updated", userUpdatedEventData).WithResourceID(resourceID)
 }
 
 // UserDeletedEventData represents the payload for auth.user.deleted.
@@ -133,8 +112,7 @@ type UserDeletedEventData UserRecord
 
 // NewUserDeletedEvent creates a typed event for user account deletion.
 func NewUserDeletedEvent(resourceID string, userDeletedEventData UserDeletedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userDeletedEventData))
-	return core.NewEvent("auth.user.deleted", UserDeletedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.deleted", userDeletedEventData).WithResourceID(resourceID)
 }
 
 // PasswordResetRequestedEventData represents the payload for auth.password.reset_requested.
@@ -145,7 +123,6 @@ type PasswordResetRequestedEventData struct {
 
 // NewPasswordResetRequestedEvent creates a typed event for password reset request.
 func NewPasswordResetRequestedEvent(resourceID string, passwordResetRequestedEventData PasswordResetRequestedEventData) core.Event {
-	passwordResetRequestedEventData.User = sanitizeEventUserRecord(passwordResetRequestedEventData.User)
 	return core.NewEvent("auth.password.reset_requested", passwordResetRequestedEventData).WithResourceID(resourceID)
 }
 
@@ -157,7 +134,6 @@ type PasswordResetEventData struct {
 
 // NewPasswordResetEvent creates a typed event for password reset completion.
 func NewPasswordResetEvent(resourceID string, passwordResetEventData PasswordResetEventData) core.Event {
-	passwordResetEventData.User = sanitizeEventUserRecord(passwordResetEventData.User)
 	return core.NewEvent("auth.password.reset", passwordResetEventData).WithResourceID(resourceID)
 }
 
@@ -166,8 +142,7 @@ type PasswordChangedEventData UserRecord
 
 // NewPasswordChangedEvent creates a typed event for password change.
 func NewPasswordChangedEvent(resourceID string, passwordChangedEventData PasswordChangedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(passwordChangedEventData))
-	return core.NewEvent("auth.password.changed", PasswordChangedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.password.changed", passwordChangedEventData).WithResourceID(resourceID)
 }
 
 // MFAEnabledEventData represents the payload for auth.mfa.enabled.
@@ -175,8 +150,7 @@ type MFAEnabledEventData UserRecord
 
 // NewMFAEnabledEvent creates a typed event for multi-factor authentication enablement.
 func NewMFAEnabledEvent(resourceID string, mfaEnabledEventData MFAEnabledEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(mfaEnabledEventData))
-	return core.NewEvent("auth.mfa.enabled", MFAEnabledEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.mfa.enabled", mfaEnabledEventData).WithResourceID(resourceID)
 }
 
 // MFADisabledEventData represents the payload for auth.mfa.disabled.
@@ -184,8 +158,7 @@ type MFADisabledEventData UserRecord
 
 // NewMFADisabledEvent creates a typed event for multi-factor authentication disablement.
 func NewMFADisabledEvent(resourceID string, mfaDisabledEventData MFADisabledEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(mfaDisabledEventData))
-	return core.NewEvent("auth.mfa.disabled", MFADisabledEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.mfa.disabled", mfaDisabledEventData).WithResourceID(resourceID)
 }
 
 // OTPSentEventData represents the payload for auth.otp.sent.
@@ -198,10 +171,6 @@ type OTPSentEventData struct {
 
 // NewOTPSentEvent creates a typed event for dispatched one-time passwords.
 func NewOTPSentEvent(resourceID string, otpSentEventData OTPSentEventData) core.Event {
-	if otpSentEventData.User != nil {
-		sanitizedUserRecord := sanitizeEventUserRecord(*otpSentEventData.User)
-		otpSentEventData.User = &sanitizedUserRecord
-	}
 	return core.NewEvent("auth.otp.sent", otpSentEventData).WithResourceID(resourceID)
 }
 
@@ -215,10 +184,6 @@ type OTPVerifiedEventData struct {
 
 // NewOTPVerifiedEvent creates a typed event for verified one-time passwords.
 func NewOTPVerifiedEvent(resourceID string, otpVerifiedEventData OTPVerifiedEventData) core.Event {
-	if otpVerifiedEventData.User != nil {
-		sanitizedUserRecord := sanitizeEventUserRecord(*otpVerifiedEventData.User)
-		otpVerifiedEventData.User = &sanitizedUserRecord
-	}
 	return core.NewEvent("auth.otp.verified", otpVerifiedEventData).WithResourceID(resourceID)
 }
 
@@ -227,8 +192,7 @@ type UserCreatedEventData UserRecord
 
 // NewUserCreatedEvent creates a typed event for user creation.
 func NewUserCreatedEvent(resourceID string, userCreatedEventData UserCreatedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userCreatedEventData))
-	return core.NewEvent("auth.user.created", UserCreatedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.created", userCreatedEventData).WithResourceID(resourceID)
 }
 
 // UserLockedEventData represents the payload for auth.user.locked.
@@ -239,7 +203,6 @@ type UserLockedEventData struct {
 
 // NewUserLockedEvent creates a typed event for user account lockout.
 func NewUserLockedEvent(resourceID string, userLockedEventData UserLockedEventData) core.Event {
-	userLockedEventData.User = sanitizeEventUserRecord(userLockedEventData.User)
 	return core.NewEvent("auth.user.locked", userLockedEventData).WithResourceID(resourceID)
 }
 
@@ -248,6 +211,5 @@ type UserUnlockedEventData UserRecord
 
 // NewUserUnlockedEvent creates a typed event for user account unlocking.
 func NewUserUnlockedEvent(resourceID string, userUnlockedEventData UserUnlockedEventData) core.Event {
-	sanitizedUserRecord := sanitizeEventUserRecord(UserRecord(userUnlockedEventData))
-	return core.NewEvent("auth.user.unlocked", UserUnlockedEventData(sanitizedUserRecord)).WithResourceID(resourceID)
+	return core.NewEvent("auth.user.unlocked", userUnlockedEventData).WithResourceID(resourceID)
 }

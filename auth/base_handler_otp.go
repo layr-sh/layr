@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
 	"layr.sh/auth/otp"
 	"layr.sh/core"
@@ -29,9 +30,9 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 	}
 
 	recipient := strings.TrimSpace(strings.ToLower(otpSendRequest.Recipient))
-	purpose := otpSendRequest.Purpose
+	purpose := strings.TrimSpace(otpSendRequest.Purpose)
 	if purpose == "" {
-		purpose = "signin"
+		purpose = "sign_in"
 	}
 
 	isEmail := strings.Contains(recipient, "@")
@@ -139,9 +140,9 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 	}
 
 	recipient := strings.TrimSpace(strings.ToLower(otpVerifyRequest.Recipient))
-	purpose := otpVerifyRequest.Purpose
+	purpose := strings.TrimSpace(otpVerifyRequest.Purpose)
 	if purpose == "" {
-		purpose = "signin"
+		purpose = "sign_in"
 	}
 
 	isEmail := strings.Contains(recipient, "@")
@@ -322,6 +323,19 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			Channel:   channel,
 			User:      &userRecord,
 		}))
+	}
+
+	if userRecord.MFAEnabled {
+		mfaTicket := "mfa_tk_" + uuid.NewV7().String()
+		if handler.kvStore != nil {
+			_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, userRecord.ID, mfaTicketTTL)
+		}
+		handler.writeJSON(responseWriter, SignInResponse{
+			MFARequired: true,
+			MFATicket:   mfaTicket,
+			Factor:      "totp",
+		})
+		return
 	}
 
 	handler.issueSessionResponse(responseWriter, request, userRecord, "otp")

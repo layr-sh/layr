@@ -193,9 +193,9 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	ctx := request.Context()
 	config := handler.configManager.Get()
 	if config.RateLimiting.Enabled && handler.kvStore != nil && identifier != "" {
-		rateKey := fmt.Sprintf("auth:ratelimit:signin:%s", identifier)
+		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
-		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSigninAttempts) {
+		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
 			log.Debugf("sign-in rejected: rate limit exceeded for identifier %s (count: %d)", identifier, count)
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.", "LAYR_AUTH_005")
 			return
@@ -249,7 +249,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 
 	// Reset rate limit on successful authentication
 	if handler.kvStore != nil && identifier != "" {
-		rateKey := fmt.Sprintf("auth:ratelimit:signin:%s", identifier)
+		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
 		_ = handler.kvStore.Delete(ctx, rateKey)
 	}
 
