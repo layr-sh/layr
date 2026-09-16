@@ -1,0 +1,153 @@
+package data
+
+import (
+	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"layr.sh/core"
+)
+
+func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(nil)
+	controlPlaneHandler := service.controlPlaneHandler
+
+	// 1. HandleGetConfig success
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	getResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleGetConfig(getResponseRecorder, getRequest)
+	if getResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", getResponseRecorder.Code)
+	}
+
+	// 2. HandleGetConfig with nil configManager
+	handlerNoConfigControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
+	nilConfigResponseRecorder := httptest.NewRecorder()
+	handlerNoConfigControlPlaneHandler.HandleGetConfig(nilConfigResponseRecorder, getRequest)
+	if nilConfigResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", nilConfigResponseRecorder.Code)
+	}
+
+	// 3. HandleUpdateConfig invalid JSON
+	invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte("{invalid")))
+	invalidJSONResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleUpdateConfig(invalidJSONResponseRecorder, invalidJSONRequest)
+	if invalidJSONResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid JSON, got %d", invalidJSONResponseRecorder.Code)
+	}
+
+	// 4. HandleUpdateConfig with nil configManager
+	validJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{"schemas":["public"]}`)))
+	nilConfigUpdateResponseRecorder := httptest.NewRecorder()
+	handlerNoConfigControlPlaneHandler.HandleUpdateConfig(nilConfigUpdateResponseRecorder, validJSONRequest)
+	if nilConfigUpdateResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when configManager is nil, got %d", nilConfigUpdateResponseRecorder.Code)
+	}
+}
+
+func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
+	ctx := context.Background()
+	serviceAccountManager := core.NewServiceAccountManager(nil)
+	service := NewService(nil)
+	service.SetServiceAccountManager(serviceAccountManager)
+	controlPlaneHandler := service.controlPlaneHandler
+
+	// Forbidden Get
+	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	forbiddenGetRequest.Header.Set("Authorization", "Bearer invalid_key")
+	forbiddenGetResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleGetConfig(forbiddenGetResponseRecorder, forbiddenGetRequest)
+	if forbiddenGetResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on unauthorized GET config, got %d", forbiddenGetResponseRecorder.Code)
+	}
+
+	// Forbidden Update
+	forbiddenUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{}`)))
+	forbiddenUpdateRequest.Header.Set("Authorization", "Bearer invalid_key")
+	forbiddenUpdateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleUpdateConfig(forbiddenUpdateResponseRecorder, forbiddenUpdateRequest)
+	if forbiddenUpdateResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on unauthorized PUT config, got %d", forbiddenUpdateResponseRecorder.Code)
+	}
+
+	// Forbidden Flush
+	forbiddenFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	forbiddenFlushRequest.Header.Set("Authorization", "Bearer invalid_key")
+	forbiddenFlushResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleFlushCache(forbiddenFlushResponseRecorder, forbiddenFlushRequest)
+	if forbiddenFlushResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on unauthorized POST cache flush, got %d", forbiddenFlushResponseRecorder.Code)
+	}
+
+	// Forbidden Invalidate
+	forbiddenInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", nil)
+	forbiddenInvalidateRequest.Header.Set("Authorization", "Bearer invalid_key")
+	forbiddenInvalidateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleInvalidateCache(forbiddenInvalidateResponseRecorder, forbiddenInvalidateRequest)
+	if forbiddenInvalidateResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on unauthorized POST cache invalidate, got %d", forbiddenInvalidateResponseRecorder.Code)
+	}
+}
+
+func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(nil)
+	controlPlaneHandler := service.controlPlaneHandler
+
+	// Flush Cache wrong method
+	invalidMethodFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/cache/flush", nil)
+	invalidMethodFlushResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleFlushCache(invalidMethodFlushResponseRecorder, invalidMethodFlushRequest)
+	if invalidMethodFlushResponseRecorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 on GET /cache/flush, got %d", invalidMethodFlushResponseRecorder.Code)
+	}
+
+	// Flush Cache success
+	validFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	validFlushResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleFlushCache(validFlushResponseRecorder, validFlushRequest)
+	if validFlushResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on POST /cache/flush, got %d", validFlushResponseRecorder.Code)
+	}
+
+	// Invalidate Cache wrong method
+	invalidMethodInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/cache/invalidate", nil)
+	invalidMethodInvalidateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleInvalidateCache(invalidMethodInvalidateResponseRecorder, invalidMethodInvalidateRequest)
+	if invalidMethodInvalidateResponseRecorder.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 on GET /cache/invalidate, got %d", invalidMethodInvalidateResponseRecorder.Code)
+	}
+
+	// Invalidate Cache success
+	validInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
+	validInvalidateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleInvalidateCache(validInvalidateResponseRecorder, validInvalidateRequest)
+	if validInvalidateResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on POST /cache/invalidate, got %d", validInvalidateResponseRecorder.Code)
+	}
+
+	// Invalidate Cache with pattern
+	patternInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"pattern":"items:*"}`)))
+	patternInvalidateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.HandleInvalidateCache(patternInvalidateResponseRecorder, patternInvalidateRequest)
+	if patternInvalidateResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on POST /cache/invalidate with pattern, got %d", patternInvalidateResponseRecorder.Code)
+	}
+
+	// Flush and Invalidate with nil service
+	handlerNoServiceControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
+	noServiceFlushResponseRecorder := httptest.NewRecorder()
+	handlerNoServiceControlPlaneHandler.HandleFlushCache(noServiceFlushResponseRecorder, validFlushRequest)
+	if noServiceFlushResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil service, got %d", noServiceFlushResponseRecorder.Code)
+	}
+
+	noServiceInvalidateResponseRecorder := httptest.NewRecorder()
+	handlerNoServiceControlPlaneHandler.HandleInvalidateCache(noServiceInvalidateResponseRecorder, validInvalidateRequest)
+	if noServiceInvalidateResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil service, got %d", noServiceInvalidateResponseRecorder.Code)
+	}
+}

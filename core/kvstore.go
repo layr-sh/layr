@@ -19,6 +19,7 @@ type KVStore interface {
 	SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error)
 	Delete(ctx context.Context, key string) error
 	Increment(ctx context.Context, key string, expiry time.Duration) (int64, error)
+	IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error)
 	Expire(ctx context.Context, key string, expiry time.Duration) error
 	Ping(ctx context.Context) error
 	Close() error
