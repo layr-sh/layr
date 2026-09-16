@@ -210,7 +210,12 @@ func (databaseKVStore *DatabaseKVStore) Delete(ctx context.Context, key string) 
 
 // Increment atomically increments an integer counter with the specified expiry.
 func (databaseKVStore *DatabaseKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
-	log.Tracef("DatabaseKVStore.Increment key %s (expiry: %v)", key, expiry)
+	return databaseKVStore.IncrementBy(ctx, key, 1, expiry)
+}
+
+// IncrementBy atomically increments or decrements an integer counter by delta with the specified expiry.
+func (databaseKVStore *DatabaseKVStore) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
+	log.Tracef("DatabaseKVStore.IncrementBy key %s delta %d (expiry: %v)", key, delta, expiry)
 	if expiry <= 0 {
 		expiry = defaultKeyExpiry
 	}
@@ -218,18 +223,18 @@ func (databaseKVStore *DatabaseKVStore) Increment(ctx context.Context, key strin
 	intervalLiteral := fmt.Sprintf("%d microseconds", expiry.Microseconds())
 	query := `
 		INSERT INTO core.kv_store (key, value, expires_at)
-		VALUES ($1, '1'::bytea, clock_timestamp() + $2::interval)
+		VALUES ($1, ($3::bigint)::text::bytea, clock_timestamp() + $2::interval)
 		ON CONFLICT (key) DO UPDATE SET
 			value = (CASE
 				WHEN core.kv_store.expires_at > clock_timestamp()
-				THEN (convert_from(core.kv_store.value, 'UTF8')::bigint + 1)::text::bytea
-				ELSE '1'::bytea
+				THEN (convert_from(core.kv_store.value, 'UTF8')::bigint + $3::bigint)::text::bytea
+				ELSE ($3::bigint)::text::bytea
 			END),
 			expires_at = clock_timestamp() + $2::interval
 		RETURNING convert_from(value, 'UTF8')::bigint
 	`
 	var count int64
-	err := databaseKVStore.db.QueryRow(ctx, query, key, intervalLiteral).Scan(&count)
+	err := databaseKVStore.db.QueryRow(ctx, query, key, intervalLiteral, delta).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to increment kv key '%s': %w", key, err)
 	}

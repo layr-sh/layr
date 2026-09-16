@@ -125,9 +125,14 @@ func (redisKVStore *RedisKVStore) Delete(ctx context.Context, key string) error 
 
 // Increment atomically increments an integer counter with the specified expiry.
 func (redisKVStore *RedisKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
-	log.Tracef("RedisKVStore.Increment key %s (expiry: %v)", key, expiry)
+	return redisKVStore.IncrementBy(ctx, key, 1, expiry)
+}
+
+// IncrementBy atomically increments or decrements an integer counter by delta with the specified expiry.
+func (redisKVStore *RedisKVStore) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
+	log.Tracef("RedisKVStore.IncrementBy key %s delta %d (expiry: %v)", key, delta, expiry)
 	pipeliner := redisKVStore.universalClient.Pipeline()
-	incrIntCmd := pipeliner.Incr(ctx, key)
+	incrIntCmd := pipeliner.IncrBy(ctx, key, delta)
 	if expiry > 0 {
 		pipeliner.Expire(ctx, key, expiry)
 	}

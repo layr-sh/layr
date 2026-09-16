@@ -96,10 +96,14 @@ func (store *inMemoryKVStore) Delete(ctx context.Context, key string) error {
 }
 
 func (store *inMemoryKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+	return store.IncrementBy(ctx, key, 1, expiry)
+}
+
+func (store *inMemoryKVStore) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	currentValue, _ := strconv.ParseInt(store.storage[key], 10, 64)
-	currentValue++
+	currentValue += delta
 	store.storage[key] = strconv.FormatInt(currentValue, 10)
 	return currentValue, nil
 }
