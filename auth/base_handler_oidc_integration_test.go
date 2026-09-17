@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1464,5 +1465,132 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 	baseHandler.handleOIDCAuthorizeSubmit(failSignUpResponseRecorder, failSignUpRequest)
 	if !strings.Contains(failSignUpResponseRecorder.Body.String(), "Failed to create account") {
 		t.Fatalf("expected Failed to create account error, got: %s", failSignUpResponseRecorder.Body.String())
+	}
+}
+
+func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
+	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
+	defer func() { _ = databaseKVStore.Close() }()
+	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	serviceAccountManager := core.NewServiceAccountManager(db)
+
+	var receivedTokenMutex sync.Mutex
+	var receivedSignOutToken string
+	mockRPServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		bodyBytes, readErr := io.ReadAll(request.Body)
+		if readErr != nil {
+			responseWriter.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		parsedValues, parseErr := url.ParseQuery(string(bodyBytes))
+		if parseErr != nil {
+			responseWriter.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receivedTokenMutex.Lock()
+		receivedSignOutToken = parsedValues.Get("logout_token")
+		receivedTokenMutex.Unlock()
+		responseWriter.WriteHeader(http.StatusOK)
+	}))
+	defer mockRPServer.Close()
+
+	configManager := NewConfigManager(db, cryptoKeyManager)
+	authConfig := configManager.Get()
+	authConfig.OIDC.Enabled = true
+	authConfig.OIDC.Clients = []OIDCClientConfig{
+		{
+			ClientID:                "client-other-rp",
+			Name:                    "Other RP",
+			PostSignOutRedirectURIs: []string{"https://other.example.com/signed-out"},
+		},
+		{
+			ClientID:                          "client-federated-rp",
+			Name:                              "Federated RP",
+			BackChannelSignOutURI:             mockRPServer.URL,
+			BackChannelSignOutSessionRequired: true,
+			PostSignOutRedirectURIs:           []string{"https://rp.example.com/signed-out"},
+		},
+	}
+	if saveErr := configManager.Save(ctx, authConfig); saveErr != nil {
+		t.Fatalf("failed to save config: %v", saveErr)
+	}
+
+	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler.SetKVStore(databaseKVStore)
+	baseHandler.SetEventBus(eventBus)
+	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	baseHandler.SetHTTPClient(mockRPServer.Client())
+
+	var testUserID string
+	err := db.QueryRow(ctx, `
+		INSERT INTO auth.users (email, role, is_anonymous, created_at, last_updated_at)
+		VALUES ('federated.user@example.com', 'authenticated', false, clock_timestamp(), clock_timestamp())
+		RETURNING id
+	`).Scan(&testUserID)
+	if err != nil {
+		t.Fatalf("failed to insert user: %v", err)
+	}
+
+	rawSessionToken := "federated-raw-session-token-abc"
+	hashedToken := baseHandler.jwtSigner.HashRefreshToken(rawSessionToken)
+	var sessionID string
+	err = db.QueryRow(ctx, `
+		INSERT INTO auth.sessions (user_id, client_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+		VALUES ($1, 'client-federated-rp', $2, '127.0.0.1', 'IntegrationTest', clock_timestamp() + interval '7 days', clock_timestamp())
+		RETURNING id
+	`, testUserID, hashedToken).Scan(&sessionID)
+	if err != nil {
+		t.Fatalf("failed to insert session: %v", err)
+	}
+
+	signOutRequestURL := "/api/v1/auth/oauth/sign-out?client_id=client-federated-rp&post_sign_out_redirect_uri=" + url.QueryEscape("https://rp.example.com/signed-out")
+	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, signOutRequestURL, nil)
+	signOutRequest.AddCookie(&http.Cookie{
+		Name:  core.SessionCookieNameInsecure,
+		Value: rawSessionToken,
+	})
+	signOutResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCSignOut(signOutResponseRecorder, signOutRequest)
+
+	if signOutResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 Found, got: %d (%s)", signOutResponseRecorder.Code, signOutResponseRecorder.Body.String())
+	}
+	if signOutResponseRecorder.Header().Get("Location") != "https://rp.example.com/signed-out" {
+		t.Fatalf("expected redirect to post sign out URI, got: %s", signOutResponseRecorder.Header().Get("Location"))
+	}
+
+	var activeSessionCount int
+	_ = db.QueryRow(ctx, "SELECT COUNT(*) FROM auth.sessions WHERE user_id = $1", testUserID).Scan(&activeSessionCount)
+	if activeSessionCount != 0 {
+		t.Fatalf("expected 0 active sessions after sign out, got: %d", activeSessionCount)
+	}
+
+	receivedTokenMutex.Lock()
+	capturedToken := receivedSignOutToken
+	receivedTokenMutex.Unlock()
+
+	if capturedToken == "" {
+		t.Fatal("expected mock RP to receive back-channel sign-out request with logout_token")
+	}
+
+	verifiedSignOutJWTClaims, verifyErr := baseHandler.jwtSigner.VerifySignOutToken(capturedToken)
+	if verifyErr != nil {
+		t.Fatalf("failed to verify received sign-out token: %v", verifyErr)
+	}
+	if verifiedSignOutJWTClaims.Subject != testUserID {
+		t.Fatalf("expected subject %s, got: %s", testUserID, verifiedSignOutJWTClaims.Subject)
+	}
+	if verifiedSignOutJWTClaims.Audience != "client-federated-rp" {
+		t.Fatalf("expected audience client-federated-rp, got: %s", verifiedSignOutJWTClaims.Audience)
+	}
+	if verifiedSignOutJWTClaims.SessionID != sessionID {
+		t.Fatalf("expected session ID %s, got: %s", sessionID, verifiedSignOutJWTClaims.SessionID)
+	}
+	if verifiedSignOutJWTClaims.Events[core.SignOutTokenEventURI] == nil {
+		t.Fatalf("missing backchannel logout event claim in verified token")
 	}
 }

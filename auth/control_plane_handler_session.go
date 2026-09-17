@@ -30,7 +30,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 
 	ctx := request.Context()
 	rows, err := controlPlaneHandler.db.Query(ctx, `
-		SELECT id, user_id, refresh_token_hash, ip_address::text, user_agent, expires_at, created_at
+		SELECT id, user_id, client_id, refresh_token_hash, ip_address::text, user_agent, expires_at, created_at
 		FROM auth.sessions
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -46,7 +46,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 	for rows.Next() {
 		var sessionRecord SessionRecord
 		_ = rows.Scan(
-			&sessionRecord.ID, &sessionRecord.UserID, &sessionRecord.RefreshTokenHash,
+			&sessionRecord.ID, &sessionRecord.UserID, &sessionRecord.ClientID, &sessionRecord.RefreshTokenHash,
 			&sessionRecord.IPAddress, &sessionRecord.UserAgent, &sessionRecord.ExpiresAt, &sessionRecord.CreatedAt,
 		)
 		sessionRecords = append(sessionRecords, sessionRecord)
@@ -82,21 +82,38 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	}
 
 	ctx := request.Context()
-	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING refresh_token_hash", userID)
+	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID)
 	if deleteErr != nil {
 		log.Debugf("HandleRevokeUserSessions delete failed: %v", deleteErr)
 		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to revoke sessions", "LAYR_AUTH_001")
 		return
 	}
+	targetSessions := make([]ClientSessionInfo, 0)
 	revokedCount := 0
 	for deletedSessionRows.Next() {
 		revokedCount++
+		var targetSessionID string
+		var targetClientID *string
 		var refreshTokenHash string
-		if scanErr := deletedSessionRows.Scan(&refreshTokenHash); scanErr == nil && controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
-			_ = controlPlaneHandler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
+		if scanErr := deletedSessionRows.Scan(&targetSessionID, &targetClientID, &refreshTokenHash); scanErr == nil {
+			if controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
+				_ = controlPlaneHandler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
+			}
+			if targetClientID != nil && *targetClientID != "" {
+				targetSessions = append(targetSessions, ClientSessionInfo{
+					ClientID:  *targetClientID,
+					SessionID: targetSessionID,
+					UserID:    userID,
+				})
+			}
 		}
 	}
 	deletedSessionRows.Close()
+
+	if len(targetSessions) > 0 && controlPlaneHandler.jwtSigner != nil {
+		config := controlPlaneHandler.configManager.Get()
+		dispatchBackChannelSignOut(ctx, controlPlaneHandler.httpClient, controlPlaneHandler.jwtSigner, config.OIDC.Clients, targetSessions)
+	}
 
 	if controlPlaneHandler.eventBus != nil {
 		userRecord, _ := fetchUserRecordByID(ctx, controlPlaneHandler.db, userID)

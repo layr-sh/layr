@@ -41,6 +41,7 @@ type JWTClaims struct {
 	Nonce         string         `json:"nonce,omitempty"`
 	JWTID         string         `json:"jti,omitempty"`
 	Scope         string         `json:"scope,omitempty"`
+	Events        map[string]any `json:"events,omitempty"`
 	Claims        map[string]any `json:"claims,omitempty"`
 }
 
@@ -92,6 +93,8 @@ func (jwtClaims *JWTClaims) Assert(key string, expected any) error {
 		actual = jwtClaims.Scope
 	case "scopes":
 		actual = jwtClaims.Scopes()
+	case "events":
+		actual = jwtClaims.Events
 	default:
 		if jwtClaims.Claims == nil {
 			return fmt.Errorf("jwt claim %q not found", key)
@@ -113,6 +116,13 @@ func (jwtClaims *JWTClaims) Assert(key string, expected any) error {
 func assertValueEqual(actual, expected any) bool {
 	if reflect.DeepEqual(actual, expected) {
 		return true
+	}
+
+	if actualMap, isMap := actual.(map[string]any); isMap {
+		if expectedKey, isKey := expected.(string); isKey {
+			_, exists := actualMap[expectedKey]
+			return exists
+		}
 	}
 
 	actualNum, actualValid := toFloat64(actual)
@@ -501,4 +511,121 @@ func (signer *JWTSigner) VerifyM2MToken(token string) (*JWTClaims, error) {
 
 	log.Debugf("verified M2M token for subject %s (kid: %s)", m2mJWTClaims.Subject, signer.keyID)
 	return &m2mJWTClaims, nil
+}
+
+// SignOutTokenEventURI is the required event claim URI for OIDC Back-Channel Sign-Out 1.0 (RFC 8693).
+const SignOutTokenEventURI = "http://schemas.openid.net/event/backchannel-logout"
+
+// GenerateSignOutToken signs a standard Ed25519 OIDC Back-Channel Sign-Out Token.
+// Conforms to OpenID Connect Back-Channel Logout 1.0 specification:
+// - Header: {"alg": "EdDSA", "typ": "logout+jwt", "kid": signer.keyID}
+// - Claims: iss, sub, aud, iat, exp, jti, sid, events
+// - Constraint: MUST NOT contain a nonce claim.
+func (signer *JWTSigner) GenerateSignOutToken(subject, sessionID, clientID string, expirySeconds ...int) (string, error) {
+	if subject == "" && sessionID == "" {
+		return "", errors.New("sign-out token requires at least subject or sessionID")
+	}
+	if clientID == "" {
+		return "", errors.New("sign-out token requires clientID audience")
+	}
+
+	issuer := GetConfig().ServerBaseURL()
+
+	now := time.Now().UTC()
+	effectiveExpirySeconds := 120 // 2 minutes standard short lifetime
+	if len(expirySeconds) > 0 && expirySeconds[0] > 0 {
+		effectiveExpirySeconds = expirySeconds[0]
+	}
+
+	jwtClaims := JWTClaims{
+		Subject:   subject,
+		SessionID: sessionID,
+		Issuer:    issuer,
+		Audience:  clientID,
+		IssuedAt:  now.Unix(),
+		ExpiresAt: now.Add(time.Duration(effectiveExpirySeconds) * time.Second).Unix(),
+		JWTID:     uuid.NewV7().String(),
+		Events: map[string]any{
+			SignOutTokenEventURI: map[string]any{},
+		},
+	}
+
+	header := map[string]string{
+		"alg": "EdDSA",
+		"typ": "logout+jwt",
+		"kid": signer.keyID,
+	}
+
+	headerJSON, _ := json.Marshal(header)
+	claimsJSON, _ := json.Marshal(jwtClaims)
+
+	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
+	signingInput := headerBase64 + "." + claimsBase64
+
+	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
+	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
+
+	return signingInput + "." + signatureBase64, nil
+}
+
+// VerifySignOutToken parses, validates signature, and asserts strict OpenID Connect Back-Channel Sign-Out rules.
+func (signer *JWTSigner) VerifySignOutToken(token string) (*JWTClaims, error) {
+	tokenSegments := strings.Split(token, ".")
+	if len(tokenSegments) != expectedTokenSegmentCount {
+		return nil, errors.New("invalid token format: must contain 3 segments")
+	}
+
+	headerBytes, headerDecodeErr := base64.RawURLEncoding.DecodeString(tokenSegments[0])
+	if headerDecodeErr != nil {
+		return nil, fmt.Errorf("invalid token header encoding: %w", headerDecodeErr)
+	}
+
+	var header map[string]any
+	if headerUnmarshalErr := json.Unmarshal(headerBytes, &header); headerUnmarshalErr != nil {
+		return nil, fmt.Errorf("invalid token header json: %w", headerUnmarshalErr)
+	}
+
+	if alg, ok := header["alg"].(string); !ok || alg != "EdDSA" {
+		return nil, errors.New("unsupported signing algorithm")
+	}
+
+	claimsBytes, claimsDecodeErr := base64.RawURLEncoding.DecodeString(tokenSegments[1])
+	if claimsDecodeErr != nil {
+		return nil, fmt.Errorf("invalid token claims encoding: %w", claimsDecodeErr)
+	}
+
+	var jwtClaims JWTClaims
+	if claimsUnmarshalErr := json.Unmarshal(claimsBytes, &jwtClaims); claimsUnmarshalErr != nil {
+		return nil, fmt.Errorf("invalid token claims json: %w", claimsUnmarshalErr)
+	}
+
+	signature, signatureDecodeErr := base64.RawURLEncoding.DecodeString(tokenSegments[2])
+	if signatureDecodeErr != nil {
+		return nil, fmt.Errorf("invalid token signature encoding: %w", signatureDecodeErr)
+	}
+
+	signingInput := tokenSegments[0] + "." + tokenSegments[1]
+	if !ed25519.Verify(signer.publicKey, []byte(signingInput), signature) {
+		return nil, errors.New("invalid token signature")
+	}
+
+	// Strict OIDC Back-Channel Sign-Out rules
+	if jwtClaims.Nonce != "" {
+		return nil, errors.New("sign-out token MUST NOT contain a nonce claim")
+	}
+	if jwtClaims.Subject == "" && jwtClaims.SessionID == "" {
+		return nil, errors.New("sign-out token must contain either sub or sid claim")
+	}
+	if jwtClaims.Events == nil {
+		return nil, errors.New("sign-out token missing events claim")
+	}
+	if _, hasSignOutEvent := jwtClaims.Events[SignOutTokenEventURI]; !hasSignOutEvent {
+		return nil, errors.New("sign-out token missing backchannel sign-out event")
+	}
+	if jwtClaims.ExpiresAt > 0 && time.Now().UTC().Unix() > jwtClaims.ExpiresAt {
+		return nil, errors.New("sign-out token has expired")
+	}
+
+	return &jwtClaims, nil
 }

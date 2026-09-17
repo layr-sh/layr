@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -883,5 +884,96 @@ func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
 	}
 	if configManager.Get().MFA.Issuer != "Layr Auth" {
 		t.Fatalf("expected Set() MFA issuer to fallback to 'Layr Auth', got: %s", configManager.Get().MFA.Issuer)
+	}
+}
+
+func TestAuthConfigOIDCClientSignOutFieldsUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+
+	// 1. JSON unmarshal using standard sign-out keys
+	signOutJSON := []byte(`{
+		"client_id": "client-signout",
+		"name": "Sign Out Client",
+		"backchannel_sign_out_uri": "https://example.com/api/sign-out",
+		"backchannel_sign_out_session_required": true,
+		"frontchannel_sign_out_uri": "https://example.com/front-sign-out",
+		"frontchannel_sign_out_session_required": true
+	}`)
+	var standardOIDCClientConfig OIDCClientConfig
+	if unmarshalErr := json.Unmarshal(signOutJSON, &standardOIDCClientConfig); unmarshalErr != nil {
+		t.Fatalf("failed to unmarshal standard sign-out JSON: %v", unmarshalErr)
+	}
+	if standardOIDCClientConfig.BackChannelSignOutURI != "https://example.com/api/sign-out" {
+		t.Fatalf("unexpected backchannel signout uri: %s", standardOIDCClientConfig.BackChannelSignOutURI)
+	}
+	if !standardOIDCClientConfig.BackChannelSignOutSessionRequired {
+		t.Fatal("expected backchannel signout session required to be true")
+	}
+	if standardOIDCClientConfig.FrontChannelSignOutURI != "https://example.com/front-sign-out" {
+		t.Fatalf("unexpected frontchannel signout uri: %s", standardOIDCClientConfig.FrontChannelSignOutURI)
+	}
+	if !standardOIDCClientConfig.FrontChannelSignOutSessionRequired {
+		t.Fatal("expected frontchannel signout session required to be true")
+	}
+
+	// 2. JSON unmarshal using OIDC wire aliases (logout_uri)
+	logoutAliasJSON := []byte(`{
+		"client_id": "client-logout-alias",
+		"name": "Logout Alias Client",
+		"backchannel_logout_uri": "https://example.com/api/logout-alias",
+		"backchannel_logout_session_required": true,
+		"frontchannel_logout_uri": "https://example.com/front-logout-alias",
+		"frontchannel_logout_session_required": true
+	}`)
+	var aliasOIDCClientConfig OIDCClientConfig
+	if unmarshalAliasErr := json.Unmarshal(logoutAliasJSON, &aliasOIDCClientConfig); unmarshalAliasErr != nil {
+		t.Fatalf("failed to unmarshal alias logout JSON: %v", unmarshalAliasErr)
+	}
+	if aliasOIDCClientConfig.BackChannelSignOutURI != "https://example.com/api/logout-alias" {
+		t.Fatalf("unexpected aliased backchannel signout uri: %s", aliasOIDCClientConfig.BackChannelSignOutURI)
+	}
+	if !aliasOIDCClientConfig.BackChannelSignOutSessionRequired {
+		t.Fatal("expected aliased backchannel session required to be true")
+	}
+	if aliasOIDCClientConfig.FrontChannelSignOutURI != "https://example.com/front-logout-alias" {
+		t.Fatalf("unexpected aliased frontchannel signout uri: %s", aliasOIDCClientConfig.FrontChannelSignOutURI)
+	}
+	if !aliasOIDCClientConfig.FrontChannelSignOutSessionRequired {
+		t.Fatal("expected aliased frontchannel session required to be true")
+	}
+
+	// 3. Invalid JSON error branch
+	var invalidOIDCClientConfig OIDCClientConfig
+	if badJSONErr := json.Unmarshal([]byte(`{"backchannel_logout_session_required": "not-a-boolean"}`), &invalidOIDCClientConfig); badJSONErr == nil {
+		t.Fatal("expected error on invalid JSON")
+	}
+
+	// 4. Set and Get preservation, and GetUnencrypted
+	initialConfig := DefaultConfig()
+	initialConfig.OIDC.Clients = []OIDCClientConfig{standardOIDCClientConfig}
+	configManager.Set(initialConfig)
+
+	retrievedConfig := configManager.Get()
+	if len(retrievedConfig.OIDC.Clients) != 1 {
+		t.Fatalf("expected 1 client in retrieved config, got: %d", len(retrievedConfig.OIDC.Clients))
+	}
+	if retrievedConfig.OIDC.Clients[0].BackChannelSignOutURI != "https://example.com/api/sign-out" {
+		t.Fatalf("unexpected backchannel uri after Get(): %s", retrievedConfig.OIDC.Clients[0].BackChannelSignOutURI)
+	}
+
+	unencryptedConfig := configManager.GetUnencrypted()
+	if len(unencryptedConfig.OIDC.Clients) != 1 {
+		t.Fatalf("expected 1 client in unencrypted config, got: %d", len(unencryptedConfig.OIDC.Clients))
+	}
+	if unencryptedConfig.OIDC.Clients[0].BackChannelSignOutURI != "https://example.com/api/sign-out" {
+		t.Fatalf("unexpected backchannel uri in unencrypted config: %s", unencryptedConfig.OIDC.Clients[0].BackChannelSignOutURI)
+	}
+	if unencryptedConfig.OIDC.Clients[0].FrontChannelSignOutURI != "https://example.com/front-sign-out" {
+		t.Fatalf("unexpected frontchannel uri in unencrypted config: %s", unencryptedConfig.OIDC.Clients[0].FrontChannelSignOutURI)
 	}
 }

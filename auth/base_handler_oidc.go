@@ -23,32 +23,40 @@ const defaultOIDCMFATTL = 5 * time.Minute
 
 // OIDCConfiguration represents OpenID Connect Core 1.0 discovery metadata (RFC 8414).
 type OIDCConfiguration struct {
-	Issuer                            string   `json:"issuer"`
-	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
-	TokenEndpoint                     string   `json:"token_endpoint"`
-	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
-	JwksURI                           string   `json:"jwks_uri"`
-	EndSessionEndpoint                string   `json:"end_session_endpoint"`
-	ResponseTypesSupported            []string `json:"response_types_supported"`
-	SubjectTypesSupported             []string `json:"subject_types_supported"`
-	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
-	ScopesSupported                   []string `json:"scopes_supported"`
-	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
-	ClaimsSupported                   []string `json:"claims_supported"`
-	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
-	GrantTypesSupported               []string `json:"grant_types_supported"`
+	Issuer                              string   `json:"issuer"`
+	AuthorizationEndpoint               string   `json:"authorization_endpoint"`
+	TokenEndpoint                       string   `json:"token_endpoint"`
+	UserinfoEndpoint                    string   `json:"userinfo_endpoint"`
+	JwksURI                             string   `json:"jwks_uri"`
+	EndSessionEndpoint                  string   `json:"end_session_endpoint"`
+	BackChannelSignOutSupported         bool     `json:"backchannel_logout_supported"`
+	BackChannelSignOutSessionSupported  bool     `json:"backchannel_logout_session_supported"`
+	FrontChannelSignOutSupported        bool     `json:"frontchannel_logout_supported"`
+	FrontChannelSignOutSessionSupported bool     `json:"frontchannel_logout_session_supported"`
+	ResponseTypesSupported              []string `json:"response_types_supported"`
+	SubjectTypesSupported               []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported    []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                     []string `json:"scopes_supported"`
+	TokenEndpointAuthMethodsSupported   []string `json:"token_endpoint_auth_methods_supported"`
+	ClaimsSupported                     []string `json:"claims_supported"`
+	CodeChallengeMethodsSupported       []string `json:"code_challenge_methods_supported"`
+	GrantTypesSupported                 []string `json:"grant_types_supported"`
 }
 
 // BuildOIDCDiscovery generates OpenID Connect Core 1.0 discovery metadata.
 func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 	normalizedBaseURL := strings.TrimRight(baseURL, "/")
 	return OIDCConfiguration{
-		Issuer:                normalizedBaseURL,
-		AuthorizationEndpoint: normalizedBaseURL + "/api/v1/auth/oauth/authorize",
-		TokenEndpoint:         normalizedBaseURL + "/api/v1/auth/oauth/token",
-		UserinfoEndpoint:      normalizedBaseURL + "/api/v1/auth/oauth/userinfo",
-		JwksURI:               normalizedBaseURL + "/.well-known/jwks.json",
-		EndSessionEndpoint:    normalizedBaseURL + "/api/v1/auth/oauth/sign-out",
+		Issuer:                              normalizedBaseURL,
+		AuthorizationEndpoint:               normalizedBaseURL + "/api/v1/auth/oauth/authorize",
+		TokenEndpoint:                       normalizedBaseURL + "/api/v1/auth/oauth/token",
+		UserinfoEndpoint:                    normalizedBaseURL + "/api/v1/auth/oauth/userinfo",
+		JwksURI:                             normalizedBaseURL + "/.well-known/jwks.json",
+		EndSessionEndpoint:                  normalizedBaseURL + "/api/v1/auth/oauth/sign-out",
+		BackChannelSignOutSupported:         true,
+		BackChannelSignOutSessionSupported:  true,
+		FrontChannelSignOutSupported:        true,
+		FrontChannelSignOutSessionSupported: true,
 		ResponseTypesSupported: []string{
 			"code",
 			"token",
@@ -1071,9 +1079,9 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	expiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
 	_, _ = handler.db.Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, clock_timestamp())
-	`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
+		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
+	`, sessionID, userRecord.ID, clientID, refreshTokenHash, expiresAt)
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
@@ -1300,19 +1308,201 @@ func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter
 		return
 	}
 
+	ctx := request.Context()
+	var callerUserID string
+	var callerSessionID string
+	var clientID string
+
+	// 1. Check id_token_hint if provided
+	idTokenHint := request.URL.Query().Get("id_token_hint")
+	if idTokenHint == "" {
+		_ = request.ParseForm()
+		idTokenHint = request.FormValue("id_token_hint")
+	}
+	if idTokenHint != "" && handler.jwtSigner != nil {
+		jwtClaims, err := handler.jwtSigner.VerifyAccessToken(idTokenHint)
+		if err == nil && jwtClaims != nil {
+			callerUserID = jwtClaims.Subject
+			callerSessionID = jwtClaims.SessionID
+			clientID = jwtClaims.Audience
+		}
+	}
+
+	// 2. Check active session cookie if user not yet resolved
+	sessionToken := core.ExtractRequestSessionToken(request)
+	if callerUserID == "" && sessionToken != "" && handler.jwtSigner != nil && handler.db != nil {
+		tokenHash := handler.jwtSigner.HashRefreshToken(sessionToken)
+		_ = handler.db.QueryRow(ctx, `
+			SELECT id, user_id FROM auth.sessions WHERE refresh_token_hash = $1
+		`, tokenHash).Scan(&callerSessionID, &callerUserID)
+	}
+
+	// 3. Extract client_id from query/form if not from id_token_hint
+	if clientID == "" {
+		clientID = request.URL.Query().Get("client_id")
+		if clientID == "" {
+			clientID = request.FormValue("client_id")
+		}
+	}
+
+	// 4. Query active downstream client sessions for this user
+	targetSessions := make([]ClientSessionInfo, 0)
+	if callerUserID != "" && handler.db != nil {
+		rows, err := handler.db.Query(ctx, `
+			SELECT id, client_id, refresh_token_hash
+			FROM auth.sessions
+			WHERE user_id = $1 AND client_id IS NOT NULL
+		`, callerUserID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var targetSessionID, targetClientID, tokenHash string
+				if scanErr := rows.Scan(&targetSessionID, &targetClientID, &tokenHash); scanErr == nil {
+					targetSessions = append(targetSessions, ClientSessionInfo{
+						ClientID:  targetClientID,
+						SessionID: targetSessionID,
+						UserID:    callerUserID,
+					})
+					if handler.kvStore != nil && tokenHash != "" {
+						_ = handler.kvStore.Delete(ctx, "auth:session:"+tokenHash)
+					}
+				}
+			}
+		}
+
+		// Delete all active sessions for this user
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE user_id = $1", callerUserID)
+	}
+
+	if clientID != "" && (callerUserID != "" || callerSessionID != "") {
+		alreadyPresent := false
+		for _, targetSession := range targetSessions {
+			if targetSession.ClientID == clientID {
+				alreadyPresent = true
+				break
+			}
+		}
+		if !alreadyPresent {
+			targetSessions = append(targetSessions, ClientSessionInfo{
+				ClientID:  clientID,
+				SessionID: callerSessionID,
+				UserID:    callerUserID,
+			})
+		}
+	}
+
+	// 5. Clear Layr SSO cookie
 	core.ClearSessionCookie(responseWriter, request)
 
+	// 6. Dispatch Back-Channel Sign-Out to active clients
+	if len(targetSessions) > 0 {
+		dispatchBackChannelSignOut(ctx, handler.httpClient, handler.jwtSigner, config.OIDC.Clients, targetSessions)
+	}
+
+	// 7. Validate post_sign_out_redirect_uri
 	postSignOutRedirectURI := request.URL.Query().Get("post_sign_out_redirect_uri")
 	if postSignOutRedirectURI == "" {
-		_ = request.ParseForm()
 		postSignOutRedirectURI = request.FormValue("post_sign_out_redirect_uri")
 	}
 
+	state := request.URL.Query().Get("state")
+	if state == "" {
+		state = request.FormValue("state")
+	}
+
+	validRedirect := false
 	if postSignOutRedirectURI != "" {
-		http.Redirect(responseWriter, request, postSignOutRedirectURI, http.StatusFound)
+		hasRegisteredClients := false
+		for _, registeredClient := range config.OIDC.Clients {
+			if len(registeredClient.PostSignOutRedirectURIs) > 0 {
+				hasRegisteredClients = true
+			}
+			if clientID != "" && registeredClient.ClientID != clientID {
+				continue
+			}
+			for _, allowedURI := range registeredClient.PostSignOutRedirectURIs {
+				if allowedURI == postSignOutRedirectURI {
+					validRedirect = true
+					break
+				}
+			}
+			if validRedirect {
+				break
+			}
+		}
+		if !hasRegisteredClients {
+			validRedirect = true
+		}
+	}
+
+	// 8. Build Front-Channel Sign-Out URLs
+	baseURL := core.GetConfig().ServerBaseURL()
+	frontChannelURLs := buildFrontChannelSignOutURLs(baseURL, config.OIDC.Clients, targetSessions)
+
+	// 9. If front-channel sign-out URLs exist, render hidden iframes
+	if len(frontChannelURLs) > 0 {
+		finalRedirectURI := ""
+		if validRedirect {
+			finalRedirectURI = postSignOutRedirectURI
+			if state != "" {
+				if parsedRedirectURL, err := url.Parse(postSignOutRedirectURI); err == nil {
+					queryValues := parsedRedirectURL.Query()
+					queryValues.Set("state", state)
+					parsedRedirectURL.RawQuery = queryValues.Encode()
+					finalRedirectURI = parsedRedirectURL.String()
+				}
+			}
+		}
+
+		responseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
+		responseWriter.WriteHeader(http.StatusOK)
+		frontChannelTemplate := template.Must(template.New("frontchannel_sign_out").Parse(`<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Signing Out...</title>
+	{{ if .RedirectURI }}
+	<meta http-equiv="refresh" content="2;url={{ .RedirectURI }}">
+	{{ end }}
+</head>
+<body style="background:#09090b;color:#f4f4f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+	<div style="text-align:center;">
+	<p>Signing out...</p>
+	{{ range .FrontChannelURLs }}
+	<iframe src="{{ . }}" style="display:none;width:0;height:0;border:0;"></iframe>
+	{{ end }}
+	</div>
+	{{ if .RedirectURI }}
+	<script>
+		setTimeout(function() { window.location.href = {{ .RedirectURI }}; }, 1500);
+	</script>
+	{{ end }}
+</body>
+</html>`))
+		_ = frontChannelTemplate.Execute(responseWriter, map[string]any{
+			"RedirectURI":      finalRedirectURI,
+			"FrontChannelURLs": frontChannelURLs,
+		})
 		return
 	}
 
+	// 10. If no front-channel URLs and valid redirect requested, redirect directly
+	if validRedirect {
+		redirectURL := postSignOutRedirectURI
+		if state != "" {
+			parsedRedirectURL, err := url.Parse(postSignOutRedirectURI)
+			if err == nil {
+				queryValues := parsedRedirectURL.Query()
+				queryValues.Set("state", state)
+				parsedRedirectURL.RawQuery = queryValues.Encode()
+				redirectURL = parsedRedirectURL.String()
+			}
+		}
+		http.Redirect(responseWriter, request, redirectURL, http.StatusFound)
+		return
+	}
+
+	// Default signed-out page
 	responseWriter.Header().Set("Content-Type", "text/html; charset=utf-8")
 	responseWriter.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(responseWriter, `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Signed Out</title></head><body style="background:#09090b;color:#f4f4f5;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;"><h2>You have been signed out</h2><p>You can now close this window.</p></div></body></html>`)

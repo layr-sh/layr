@@ -37,6 +37,11 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	controlPlaneHandler.SetKVStore(kvStore)
 	controlPlaneHandler.SetEventBus(eventBus)
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
+	jwtSigner, signerErr := core.NewJWTSigner(cryptoKeyManager)
+	if signerErr != nil {
+		t.Fatalf("failed to create jwt signer: %v", signerErr)
+	}
+	controlPlaneHandler.SetJWTSigner(jwtSigner)
 
 	authBearerHeader := "Bearer " + createdServiceAccount.SecretKey
 
@@ -125,8 +130,8 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	// 5. Lock and Unlock User
 	_ = kvStore.Set(ctx, "auth:session:lock_hash", "cached_session", time.Hour)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
-		VALUES ($1, 'lock_hash', '127.0.0.1', 'Mozilla/5.0', clock_timestamp() + interval '30 days', clock_timestamp())
+		INSERT INTO auth.sessions (user_id, client_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+		VALUES ($1, 'client-lock-test', 'lock_hash', '127.0.0.1', 'Mozilla/5.0', clock_timestamp() + interval '30 days', clock_timestamp())
 	`, createdUserRecord.ID)
 
 	futureLockTime := time.Now().Add(48 * time.Hour).UTC()

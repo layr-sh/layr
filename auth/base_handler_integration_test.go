@@ -445,6 +445,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 11. Sign Out via POST /api/v1/auth/sign-out with active refresh token to trigger SessionDeletedEvent
+	_, _ = db.Exec(ctx, "UPDATE auth.sessions SET client_id = 'client-signout-test'")
 	signOutPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: refreshSessionResponse.RefreshToken})
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", bytes.NewReader(signOutPayload))
 	signOutResponseRecorder := httptest.NewRecorder()

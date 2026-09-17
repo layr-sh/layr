@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"layr.sh/auth/password"
 	"layr.sh/core"
@@ -17,6 +18,8 @@ type ControlPlaneHandler struct {
 	kvStore               core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
+	jwtSigner             *core.JWTSigner
+	httpClient            HTTPClient
 }
 
 // NewControlPlaneHandler creates a control plane handler for auth endpoints.
@@ -25,7 +28,18 @@ func NewControlPlaneHandler(db *core.DatabasePool, configManager *ConfigManager)
 		db:            db,
 		configManager: configManager,
 		hasher:        password.NewHasher(),
+		httpClient:    &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+// SetJWTSigner sets the JWT signer for generating sign-out tokens.
+func (controlPlaneHandler *ControlPlaneHandler) SetJWTSigner(jwtSigner *core.JWTSigner) {
+	controlPlaneHandler.jwtSigner = jwtSigner
+}
+
+// SetHTTPClient sets the HTTP client for outbound federated sign-out notifications.
+func (controlPlaneHandler *ControlPlaneHandler) SetHTTPClient(httpClient HTTPClient) {
+	controlPlaneHandler.httpClient = httpClient
 }
 
 // SetKVStore sets the KV store for session cache invalidation.

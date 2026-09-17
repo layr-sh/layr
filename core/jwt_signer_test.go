@@ -749,3 +749,198 @@ func TestCoreJWTM2MTokenFailureUnit(t *testing.T) {
 		t.Errorf("expected token expired error, got %v", expiredErr)
 	}
 }
+
+func TestCoreJWTSignerSignOutTokenUnit(t *testing.T) {
+	UnloadConfig()
+	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create KeyManager: %v", err)
+	}
+
+	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
+	if err != nil {
+		t.Fatalf("failed to create Signer: %v", err)
+	}
+
+	userID := uuid.NewV7().String()
+	sessionID := uuid.NewV7().String()
+	clientID := "client-test-123"
+
+	// 1. Success: Generate and verify sign-out token with subject and sessionID
+	signOutToken, generateErr := jwtSigner.GenerateSignOutToken(userID, sessionID, clientID, 60)
+	if generateErr != nil {
+		t.Fatalf("failed to generate sign-out token: %v", generateErr)
+	}
+
+	jwtClaims, verifyErr := jwtSigner.VerifySignOutToken(signOutToken)
+	if verifyErr != nil {
+		t.Fatalf("failed to verify sign-out token: %v", verifyErr)
+	}
+
+	if jwtClaims.Subject != userID || jwtClaims.SessionID != sessionID || jwtClaims.Audience != clientID {
+		t.Fatalf("claims mismatch: %+v", jwtClaims)
+	}
+	if assertEventsErr := jwtClaims.Assert("events", SignOutTokenEventURI); assertEventsErr != nil {
+		t.Fatalf("assert events failed: %v", assertEventsErr)
+	}
+
+	// 2. Success: Generate with only subject (no session ID)
+	signOutTokenNoSession, generateNoSessionErr := jwtSigner.GenerateSignOutToken(userID, "", clientID)
+	if generateNoSessionErr != nil {
+		t.Fatalf("failed to generate sign-out token without session: %v", generateNoSessionErr)
+	}
+	noSessionJWTClaims, verifyNoSessionErr := jwtSigner.VerifySignOutToken(signOutTokenNoSession)
+	if verifyNoSessionErr != nil {
+		t.Fatalf("failed to verify sign-out token without session: %v", verifyNoSessionErr)
+	}
+	if noSessionJWTClaims.Subject != userID || noSessionJWTClaims.SessionID != "" {
+		t.Fatalf("unexpected claims without session: %+v", noSessionJWTClaims)
+	}
+
+	// 3. Success: Generate with only session ID (no subject)
+	signOutTokenNoSubject, generateNoSubjectErr := jwtSigner.GenerateSignOutToken("", sessionID, clientID)
+	if generateNoSubjectErr != nil {
+		t.Fatalf("failed to generate sign-out token without subject: %v", generateNoSubjectErr)
+	}
+	noSubjectJWTClaims, verifyNoSubjectErr := jwtSigner.VerifySignOutToken(signOutTokenNoSubject)
+	if verifyNoSubjectErr != nil {
+		t.Fatalf("failed to verify sign-out token without subject: %v", verifyNoSubjectErr)
+	}
+	if noSubjectJWTClaims.SessionID != sessionID || noSubjectJWTClaims.Subject != "" {
+		t.Fatalf("unexpected claims without subject: %+v", noSubjectJWTClaims)
+	}
+
+	// 4. Failure: missing both subject and sessionID
+	if _, missingSubjectAndSessionErr := jwtSigner.GenerateSignOutToken("", "", clientID); missingSubjectAndSessionErr == nil {
+		t.Errorf("expected error when both subject and sessionID are empty")
+	}
+
+	// 5. Failure: missing clientID
+	if _, missingClientErr := jwtSigner.GenerateSignOutToken(userID, sessionID, ""); missingClientErr == nil {
+		t.Errorf("expected error when clientID is empty")
+	}
+
+	// 6. Verification: Invalid segment count
+	if _, segmentErr := jwtSigner.VerifySignOutToken("invalid.token"); segmentErr == nil {
+		t.Errorf("expected error on invalid segment count")
+	}
+
+	// 7. Verification: Invalid header base64
+	if _, badHeaderBase64Err := jwtSigner.VerifySignOutToken("!!bad!!.eyJzdWIiOiIxIn0.c2ln"); badHeaderBase64Err == nil {
+		t.Errorf("expected error on invalid header base64")
+	}
+
+	// 8. Verification: Invalid header JSON
+	badHeaderJSON := base64.RawURLEncoding.EncodeToString([]byte("not-json"))
+	if _, badHeaderJSONErr := jwtSigner.VerifySignOutToken(badHeaderJSON + ".eyJzdWIiOiIxIn0.c2ln"); badHeaderJSONErr == nil {
+		t.Errorf("expected error on invalid header JSON")
+	}
+
+	// 9. Verification: Unsupported algorithm
+	unsupportedAlgHeader, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "logout+jwt"})
+	unsupportedAlgHeaderBase64 := base64.RawURLEncoding.EncodeToString(unsupportedAlgHeader)
+	if _, unsupportedAlgErr := jwtSigner.VerifySignOutToken(unsupportedAlgHeaderBase64 + ".eyJzdWIiOiIxIn0.c2ln"); unsupportedAlgErr == nil {
+		t.Errorf("expected error on unsupported algorithm")
+	}
+
+	// 10. Verification: Invalid claims base64
+	segments := strings.Split(signOutToken, ".")
+	if _, badClaimsBase64Err := jwtSigner.VerifySignOutToken(segments[0] + ".!!bad!!." + segments[2]); badClaimsBase64Err == nil {
+		t.Errorf("expected error on invalid claims base64")
+	}
+
+	// 11. Verification: Invalid claims JSON
+	badClaimsJSON := base64.RawURLEncoding.EncodeToString([]byte("not-json"))
+	badClaimsSigningInput := segments[0] + "." + badClaimsJSON
+	badClaimsSignature := ed25519.Sign(jwtSigner.privateKey, []byte(badClaimsSigningInput))
+	badClaimsToken := badClaimsSigningInput + "." + base64.RawURLEncoding.EncodeToString(badClaimsSignature)
+	if _, badClaimsJSONErr := jwtSigner.VerifySignOutToken(badClaimsToken); badClaimsJSONErr == nil {
+		t.Errorf("expected error on invalid claims JSON")
+	}
+
+	// 12. Verification: Invalid signature base64
+	if _, badSigBase64Err := jwtSigner.VerifySignOutToken(segments[0] + "." + segments[1] + ".!!bad!!"); badSigBase64Err == nil {
+		t.Errorf("expected error on invalid signature base64")
+	}
+
+	// 13. Verification: Signature mismatch
+	wrongSignature := base64.RawURLEncoding.EncodeToString([]byte("wrong-signature-data-of-length-64-bytes-needed-for-ed25519-validity!!"))
+	if _, sigMismatchErr := jwtSigner.VerifySignOutToken(segments[0] + "." + segments[1] + "." + wrongSignature); sigMismatchErr == nil {
+		t.Errorf("expected error on signature mismatch")
+	}
+
+	// 14. Verification: Nonce claim present (prohibited in logout/sign-out tokens)
+	nonceJWTClaims := JWTClaims{
+		Subject:  userID,
+		Audience: clientID,
+		Nonce:    "injected-nonce",
+		Events:   map[string]any{SignOutTokenEventURI: map[string]any{}},
+	}
+	nonceClaimsJSON, _ := json.Marshal(nonceJWTClaims)
+	nonceClaimsBase64 := base64.RawURLEncoding.EncodeToString(nonceClaimsJSON)
+	nonceSigningInput := segments[0] + "." + nonceClaimsBase64
+	nonceSignature := ed25519.Sign(jwtSigner.privateKey, []byte(nonceSigningInput))
+	nonceToken := nonceSigningInput + "." + base64.RawURLEncoding.EncodeToString(nonceSignature)
+	if _, nonceErr := jwtSigner.VerifySignOutToken(nonceToken); nonceErr == nil || !strings.Contains(nonceErr.Error(), "nonce") {
+		t.Errorf("expected error rejecting nonce claim, got %v", nonceErr)
+	}
+
+	// 15. Verification: Missing both subject and sessionID in claims
+	emptySubjectJWTClaims := JWTClaims{
+		Audience: clientID,
+		Events:   map[string]any{SignOutTokenEventURI: map[string]any{}},
+	}
+	emptySubjectJSON, _ := json.Marshal(emptySubjectJWTClaims)
+	emptySubjectBase64 := base64.RawURLEncoding.EncodeToString(emptySubjectJSON)
+	emptySubjectSigningInput := segments[0] + "." + emptySubjectBase64
+	emptySubjectSignature := ed25519.Sign(jwtSigner.privateKey, []byte(emptySubjectSigningInput))
+	emptySubjectToken := emptySubjectSigningInput + "." + base64.RawURLEncoding.EncodeToString(emptySubjectSignature)
+	if _, emptySubErr := jwtSigner.VerifySignOutToken(emptySubjectToken); emptySubErr == nil || !strings.Contains(emptySubErr.Error(), "sub or sid") {
+		t.Errorf("expected error on missing sub and sid, got %v", emptySubErr)
+	}
+
+	// 16. Verification: Missing events claim
+	noEventsJWTClaims := JWTClaims{
+		Subject:  userID,
+		Audience: clientID,
+	}
+	noEventsJSON, _ := json.Marshal(noEventsJWTClaims)
+	noEventsBase64 := base64.RawURLEncoding.EncodeToString(noEventsJSON)
+	noEventsSigningInput := segments[0] + "." + noEventsBase64
+	noEventsSignature := ed25519.Sign(jwtSigner.privateKey, []byte(noEventsSigningInput))
+	noEventsToken := noEventsSigningInput + "." + base64.RawURLEncoding.EncodeToString(noEventsSignature)
+	if _, noEventsErr := jwtSigner.VerifySignOutToken(noEventsToken); noEventsErr == nil || !strings.Contains(noEventsErr.Error(), "missing events") {
+		t.Errorf("expected error on missing events claim, got %v", noEventsErr)
+	}
+
+	// 17. Verification: Events claim missing backchannel sign-out URI
+	wrongEventJWTClaims := JWTClaims{
+		Subject:  userID,
+		Audience: clientID,
+		Events:   map[string]any{"http://schemas.openid.net/event/other": map[string]any{}},
+	}
+	wrongEventJSON, _ := json.Marshal(wrongEventJWTClaims)
+	wrongEventBase64 := base64.RawURLEncoding.EncodeToString(wrongEventJSON)
+	wrongEventSigningInput := segments[0] + "." + wrongEventBase64
+	wrongEventSignature := ed25519.Sign(jwtSigner.privateKey, []byte(wrongEventSigningInput))
+	wrongEventToken := wrongEventSigningInput + "." + base64.RawURLEncoding.EncodeToString(wrongEventSignature)
+	if _, wrongEventErr := jwtSigner.VerifySignOutToken(wrongEventToken); wrongEventErr == nil || !strings.Contains(wrongEventErr.Error(), "missing backchannel") {
+		t.Errorf("expected error on wrong event URI, got %v", wrongEventErr)
+	}
+
+	// 18. Verification: Expired sign-out token
+	expiredJWTClaims := JWTClaims{
+		Subject:   userID,
+		Audience:  clientID,
+		ExpiresAt: time.Now().UTC().Add(-1 * time.Minute).Unix(),
+		Events:    map[string]any{SignOutTokenEventURI: map[string]any{}},
+	}
+	expiredJSON, _ := json.Marshal(expiredJWTClaims)
+	expiredBase64 := base64.RawURLEncoding.EncodeToString(expiredJSON)
+	expiredSigningInput := segments[0] + "." + expiredBase64
+	expiredSignature := ed25519.Sign(jwtSigner.privateKey, []byte(expiredSigningInput))
+	expiredSignOutToken := expiredSigningInput + "." + base64.RawURLEncoding.EncodeToString(expiredSignature)
+	if _, expiredErr := jwtSigner.VerifySignOutToken(expiredSignOutToken); expiredErr == nil || !strings.Contains(expiredErr.Error(), "expired") {
+		t.Errorf("expected error on expired sign-out token, got %v", expiredErr)
+	}
+}

@@ -120,11 +120,12 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 
 	ctx := request.Context()
 	var deletedRefreshTokenHash string
+	var deletedClientID *string
 	err := handler.db.QueryRow(ctx, `
 		DELETE FROM auth.sessions
 		WHERE id = $1 AND user_id = $2
-		RETURNING refresh_token_hash
-	`, targetSessionID, userID).Scan(&deletedRefreshTokenHash)
+		RETURNING refresh_token_hash, client_id
+	`, targetSessionID, userID).Scan(&deletedRefreshTokenHash, &deletedClientID)
 
 	if err != nil {
 		log.Debugf("revoke session failed: session %s not found for user %s: %v", targetSessionID, userID, err)
@@ -134,6 +135,13 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 
 	if handler.kvStore != nil && deletedRefreshTokenHash != "" {
 		_ = handler.kvStore.Delete(ctx, "auth:session:"+deletedRefreshTokenHash)
+	}
+
+	if deletedClientID != nil && *deletedClientID != "" {
+		config := handler.configManager.Get()
+		dispatchBackChannelSignOut(ctx, handler.httpClient, handler.jwtSigner, config.OIDC.Clients, []ClientSessionInfo{
+			{ClientID: *deletedClientID, SessionID: targetSessionID, UserID: userID},
+		})
 	}
 
 	if handler.eventBus != nil {
@@ -210,7 +218,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 	rows, err := handler.db.Query(ctx, `
 		DELETE FROM auth.sessions
 		WHERE user_id = $1 AND id != $2
-		RETURNING refresh_token_hash
+		RETURNING id, client_id, refresh_token_hash
 	`, userID, resolvedCurrentSessionID)
 	if err != nil {
 		log.Debugf("failed to revoke other sessions for user %s: %v", userID, err)
@@ -220,10 +228,20 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 	defer rows.Close()
 
 	deletedHashes := make([]string, 0)
+	targetSessions := make([]ClientSessionInfo, 0)
 	for rows.Next() {
+		var deletedSessionID string
+		var deletedClientID *string
 		var hash string
-		if err := rows.Scan(&hash); err == nil {
+		if scanErr := rows.Scan(&deletedSessionID, &deletedClientID, &hash); scanErr == nil {
 			deletedHashes = append(deletedHashes, hash)
+			if deletedClientID != nil && *deletedClientID != "" {
+				targetSessions = append(targetSessions, ClientSessionInfo{
+					ClientID:  *deletedClientID,
+					SessionID: deletedSessionID,
+					UserID:    userID,
+				})
+			}
 		}
 	}
 
@@ -233,6 +251,11 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 				_ = handler.kvStore.Delete(ctx, "auth:session:"+hash)
 			}
 		}
+	}
+
+	if len(targetSessions) > 0 {
+		config := handler.configManager.Get()
+		dispatchBackChannelSignOut(ctx, handler.httpClient, handler.jwtSigner, config.OIDC.Clients, targetSessions)
 	}
 
 	if handler.eventBus != nil {
@@ -374,17 +397,26 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 		}
 		if handler.db != nil {
 			var sessionID, userID string
+			var clientID *string
 			err := handler.db.QueryRow(request.Context(), `
 				DELETE FROM auth.sessions 
 				WHERE refresh_token_hash = $1
-				RETURNING id, user_id
-			`, tokenHash).Scan(&sessionID, &userID)
-			if err == nil && handler.eventBus != nil {
-				userRecord, _ := fetchUserRecordByID(request.Context(), handler.db, userID)
-				handler.eventBus.Publish(request.Context(), NewSessionDeletedEvent(sessionID, SessionDeletedEventData{
-					User:      userRecord,
-					SessionID: &sessionID,
-				}))
+				RETURNING id, user_id, client_id
+			`, tokenHash).Scan(&sessionID, &userID, &clientID)
+			if err == nil {
+				if clientID != nil && *clientID != "" {
+					config := handler.configManager.Get()
+					dispatchBackChannelSignOut(request.Context(), handler.httpClient, handler.jwtSigner, config.OIDC.Clients, []ClientSessionInfo{
+						{ClientID: *clientID, SessionID: sessionID, UserID: userID},
+					})
+				}
+				if handler.eventBus != nil {
+					userRecord, _ := fetchUserRecordByID(request.Context(), handler.db, userID)
+					handler.eventBus.Publish(request.Context(), NewSessionDeletedEvent(sessionID, SessionDeletedEventData{
+						User:      userRecord,
+						SessionID: &sessionID,
+					}))
+				}
 			}
 		}
 	}
