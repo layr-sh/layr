@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -152,11 +151,12 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, '{"tier":"free"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
-	anonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 3600)
+	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	anonChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(anonUserID)
 	anonVerifyPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
@@ -167,7 +167,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		FriendlyName: "YubiKey 5C",
 		Transports:   []string{"usb", "nfc"},
 	})
-	anonVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(anonVerifyPayload))
+	anonVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(anonVerifyPayload))
 	anonVerifyRequest.Header.Set("Authorization", "Bearer "+anonToken)
 	anonVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignUpVerify(anonVerifyResponseRecorder, anonVerifyRequest)
@@ -304,7 +304,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
 
-	userToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	userToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Role:    "authenticated",
 	}, 3600)
@@ -312,12 +312,13 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
 	bearerHeader := "Bearer " + userToken
+	userAuthContext := core.AuthContext{UserID: userID, JWT: core.JWTClaims{Subject: userID, Role: "authenticated"}}
 
 	// 1. Authenticated caller registers passkey using session token (empty user_id in payload)
 	signUpPayload, _ := json.Marshal(PasskeySignUpRequest{
 		UserName: "Bob Session",
 	})
-	signUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(signUpPayload))
+	signUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(signUpPayload))
 	signUpRequest.Header.Set("Authorization", bearerHeader)
 	signUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignUp(signUpResponseRecorder, signUpRequest)
@@ -337,7 +338,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 		FriendlyName: "Work Laptop",
 		Transports:   []string{"internal"},
 	})
-	verifySignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verifySignUpPayload))
+	verifySignUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verifySignUpPayload))
 	verifySignUpRequest.Header.Set("Authorization", bearerHeader)
 	verifySignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignUpVerify(verifySignUpResponseRecorder, verifySignUpRequest)
@@ -364,7 +365,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	}
 
 	// 3. List passkeys -> 200 with 2 items
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	listRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
 	listRequest.Header.Set("Authorization", bearerHeader)
 	listResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListUserPasskeys(listResponseRecorder, listRequest)
@@ -432,7 +433,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 
 	// 6. Delete passkey -> 204 No Content
 	passkeyToDeleteID := passkeyItems[0].ID
-	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
+	deleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
 	deleteRequest.SetPathValue("id", passkeyToDeleteID)
 	deleteRequest.Header.Set("Authorization", bearerHeader)
 	deleteResponseRecorder := httptest.NewRecorder()
@@ -471,7 +472,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	}
 
 	// 7. Delete non-existent passkey -> 404
-	delete404Request := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
+	delete404Request := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil), userID, "authenticated", false)
 	delete404Request.SetPathValue("id", passkeyToDeleteID)
 	delete404Request.Header.Set("Authorization", bearerHeader)
 	delete404ResponseRecorder := httptest.NewRecorder()
@@ -493,7 +494,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	`)
 
 	passkeyToFailDeleteID := passkeyItems[1].ID
-	failDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil)
+	failDeleteRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil), userID, "authenticated", false)
 	failDeleteRequest.SetPathValue("id", passkeyToFailDeleteID)
 	failDeleteRequest.Header.Set("Authorization", bearerHeader)
 	failDeleteResponseRecorder := httptest.NewRecorder()
@@ -510,7 +511,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	// 9. List passkeys with canceled context -> 500
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	canceledListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	canceledListRequest := withUserAuth(httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/auth/user/passkeys", nil), userID, "authenticated", false)
 	canceledListRequest.Header.Set("Authorization", bearerHeader)
 	canceledListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListUserPasskeys(canceledListResponseRecorder, canceledListRequest)

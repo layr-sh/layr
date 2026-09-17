@@ -7,18 +7,21 @@ import (
 	"time"
 	"uuid"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
 func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling list active user sessions request")
-	userID, currentRefreshTokenHash, currentSessionID, err := handler.authenticateSessionRequest(request)
-	if err != nil {
-		log.Debugf("list user sessions rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("list user sessions rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+
+	userID := authContext.UserID
+	currentRefreshTokenHash := authContext.RefreshTokenHash
+	currentSessionID := authContext.JWT.SessionID
 
 	if handler.db == nil {
 		log.Debug("list user sessions rejected: database pool unavailable")
@@ -83,12 +86,14 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 
 func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling revoke session request")
-	userID, _, _, err := handler.authenticateSessionRequest(request)
-	if err != nil {
-		log.Debugf("revoke session rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("revoke session rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+
+	userID := authContext.UserID
 
 	targetSessionID := request.PathValue("session_id")
 	if targetSessionID == "" {
@@ -115,7 +120,7 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 
 	ctx := request.Context()
 	var deletedRefreshTokenHash string
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		DELETE FROM auth.sessions
 		WHERE id = $1 AND user_id = $2
 		RETURNING refresh_token_hash
@@ -145,9 +150,9 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 
 func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling revoke other sessions request")
-	userID, currentRefreshTokenHash, currentSessionID, err := handler.authenticateSessionRequest(request)
-	if err != nil {
-		log.Debugf("revoke other sessions rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("revoke other sessions rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
@@ -157,6 +162,10 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
 		return
 	}
+
+	userID := authContext.UserID
+	currentRefreshTokenHash := authContext.RefreshTokenHash
+	currentSessionID := authContext.JWT.SessionID
 
 	ctx := request.Context()
 
@@ -174,7 +183,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 
 	if resolvedCurrentSessionID == "" {
 		var activeSessionCount int
-		err = handler.db.QueryRow(ctx, `
+		err := handler.db.QueryRow(ctx, `
 			SELECT count(*) FROM auth.sessions WHERE user_id = $1 AND expires_at > clock_timestamp()
 		`, userID).Scan(&activeSessionCount)
 		if err != nil {
@@ -254,7 +263,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		}
 	}
 	if refreshTokenRequest.RefreshToken == "" {
-		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
+		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 	if refreshTokenRequest.RefreshToken == "" {
 		log.Debug("token refresh rejected: missing refresh token")
@@ -262,7 +271,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		return
 	}
 
-	tokenHash := jwt.HashRefreshToken(refreshTokenRequest.RefreshToken)
+	tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenRequest.RefreshToken)
 	ctx := request.Context()
 
 	config := handler.configManager.Get()
@@ -355,11 +364,11 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 		_ = json.NewDecoder(request.Body).Decode(&refreshTokenRequest)
 	}
 	if refreshTokenRequest.RefreshToken == "" {
-		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
+		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 
 	if refreshTokenRequest.RefreshToken != "" {
-		tokenHash := jwt.HashRefreshToken(refreshTokenRequest.RefreshToken)
+		tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenRequest.RefreshToken)
 		if handler.kvStore != nil {
 			_ = handler.kvStore.Delete(request.Context(), "auth:session:"+tokenHash)
 		}
@@ -380,8 +389,7 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 		}
 	}
 
-	isSecure := core.IsSecureRequest(request)
-	core.ClearSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, isSecure)
+	core.ClearSessionCookie(responseWriter, request)
 
 	handler.writeJSON(responseWriter, map[string]bool{"ok": true})
 }

@@ -32,8 +32,8 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 	}
 
 	if passkeySignUpRequest.UserID == "" {
-		if authUserID, err := handler.authenticateUser(request); err == nil && authUserID != "" {
-			passkeySignUpRequest.UserID = authUserID
+		if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
+			passkeySignUpRequest.UserID = authContext.UserID
 		}
 	}
 
@@ -81,8 +81,8 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 	}
 
 	if passkeySignUpVerifyRequest.UserID == "" {
-		if authUserID, authErr := handler.authenticateUser(request); authErr == nil && authUserID != "" {
-			passkeySignUpVerifyRequest.UserID = authUserID
+		if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
+			passkeySignUpVerifyRequest.UserID = authContext.UserID
 		}
 	}
 
@@ -301,12 +301,13 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 
 func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling list user passkeys request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("list user passkeys rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("list user passkeys rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	if handler.db == nil {
 		log.Debug("list user passkeys rejected: database pool unavailable")
@@ -346,12 +347,13 @@ func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseW
 
 func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling delete user passkey request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("delete user passkey rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("delete user passkey rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	passkeyID := strings.TrimSpace(request.PathValue("id"))
 	if passkeyID == "" {

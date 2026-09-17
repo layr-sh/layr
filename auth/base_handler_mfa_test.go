@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -78,7 +77,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 
 	// 4. Valid token on nil pool -> 500
 	testUserUUID := "018f2234-5678-789a-bcde-f0123456789a"
-	validToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Email:   "test@example.com",
 		Role:    "authenticated",
@@ -87,8 +86,9 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 		t.Fatalf("failed to sign access token: %v", err)
 	}
 	bearerHeader := "Bearer " + validToken
+	authContext := core.AuthContext{UserID: testUserUUID, JWT: core.JWTClaims{Subject: testUserUUID, Role: "authenticated"}}
 
-	validTokenMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/setup", nil)
+	validTokenMFASetupRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/mfa/setup", nil)
 	validTokenMFASetupRequest.Header.Set("Authorization", bearerHeader)
 	validTokenMFASetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFASetup(validTokenMFASetupResponseRecorder, validTokenMFASetupRequest)
@@ -97,7 +97,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	}
 
 	// 5. Valid token and missing code -> 400
-	missingCodeMFAVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/verify", strings.NewReader(`{}`))
+	missingCodeMFAVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/mfa/verify", strings.NewReader(`{}`))
 	missingCodeMFAVerifyRequest.Header.Set("Authorization", bearerHeader)
 	missingCodeMFAVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(missingCodeMFAVerifyResponseRecorder, missingCodeMFAVerifyRequest)
@@ -106,7 +106,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	}
 
 	// 6. Valid token and code on nil pool -> 500
-	validMFAVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/verify", strings.NewReader(`{"code":"123456"}`))
+	validMFAVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/mfa/verify", strings.NewReader(`{"code":"123456"}`))
 	validMFAVerifyRequest.Header.Set("Authorization", bearerHeader)
 	validMFAVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(validMFAVerifyResponseRecorder, validMFAVerifyRequest)
@@ -120,7 +120,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	customIssuerConfig.MFA.Issuer = "MyCustomIssuer"
 	configManager.Set(customIssuerConfig)
 
-	customIssuerMFARequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/mfa/setup", nil)
+	customIssuerMFARequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/mfa/setup", nil)
 	customIssuerMFARequest.Header.Set("Authorization", bearerHeader)
 	customIssuerMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFASetup(customIssuerMFAResponseRecorder, customIssuerMFARequest)
@@ -164,7 +164,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 401 on invalid token MFA disable, got: %d", invalidTokenDisableResponseRecorder.Code)
 	}
 
-	validTokenDisableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	validTokenDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	validTokenDisableRequest.Header.Set("Authorization", bearerHeader)
 	validTokenDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFADisable(validTokenDisableResponseRecorder, validTokenDisableRequest)

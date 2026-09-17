@@ -1,37 +1,35 @@
-package jwt
+package core
 
 import (
 	"bytes"
 	"testing"
 	"uuid"
-
-	"layr.sh/core"
 )
 
-func TestJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
+func TestCoreJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 	primaryMasterEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	primaryCryptoKeyManager, err := core.NewCryptoKeyManager(primaryMasterEncryptionKeyHex)
+	primaryCryptoKeyManager, err := NewCryptoKeyManager(primaryMasterEncryptionKeyHex)
 	if err != nil {
 		t.Fatalf("failed to create primary CryptoKeyManager: %v", err)
 	}
 
-	secondaryCryptoKeyManager, err := core.NewCryptoKeyManager(primaryMasterEncryptionKeyHex)
+	secondaryCryptoKeyManager, err := NewCryptoKeyManager(primaryMasterEncryptionKeyHex)
 	if err != nil {
 		t.Fatalf("failed to create secondary CryptoKeyManager: %v", err)
 	}
 
-	primarySigner, err := NewSigner(primaryCryptoKeyManager)
+	primaryJWTSigner, err := NewJWTSigner(primaryCryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create primary Signer: %v", err)
 	}
 
-	secondarySigner, err := NewSigner(secondaryCryptoKeyManager)
+	secondaryJWTSigner, err := NewJWTSigner(secondaryCryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create secondary Signer: %v", err)
 	}
 
 	// 1. Both signers derived from the same master key must have identical public keys
-	if !bytes.Equal(primarySigner.PublicKey(), secondarySigner.PublicKey()) {
+	if !bytes.Equal(primaryJWTSigner.PublicKey(), secondaryJWTSigner.PublicKey()) {
 		t.Fatal("expected identical public keys from identical master keys")
 	}
 
@@ -41,7 +39,7 @@ func TestJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 		"tier":        "enterprise",
 		"permissions": []any{"read:documents", "write:documents"},
 	}
-	signedToken, generateErr := primarySigner.GenerateAccessToken(Claims{
+	signedToken, generateErr := primaryJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "alice@example.com",
 		Phone:   "+10000000000",
@@ -51,51 +49,51 @@ func TestJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 		t.Fatalf("failed to generate access token: %v", generateErr)
 	}
 
-	claims, verifyErr := secondarySigner.VerifyAccessToken(signedToken)
+	jwtClaims, verifyErr := secondaryJWTSigner.VerifyAccessToken(signedToken)
 	if verifyErr != nil {
 		t.Fatalf("secondary signer failed to verify primary signer token: %v", verifyErr)
 	}
-	if claims.Subject != applicationUserID || claims.Email != "alice@example.com" {
-		t.Fatalf("claims subject mismatch: expected %s, got %s", applicationUserID, claims.Subject)
+	if jwtClaims.Subject != applicationUserID || jwtClaims.Email != "alice@example.com" {
+		t.Fatalf("claims subject mismatch: expected %s, got %s", applicationUserID, jwtClaims.Subject)
 	}
 
 	// 3. HMAC signature signed by primary signer must verify on secondary signer
 	verificationMessage := "verify-session-nonce-12345"
-	hmacSignature := primarySigner.SignHMAC(verificationMessage)
-	if !secondarySigner.VerifyHMAC(verificationMessage, hmacSignature) {
+	hmacSignature := primaryJWTSigner.SignHMAC(verificationMessage)
+	if !secondaryJWTSigner.VerifyHMAC(verificationMessage, hmacSignature) {
 		t.Fatal("secondary signer failed to verify primary signer HMAC signature")
 	}
 }
 
-func TestJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
-	tenantOneCryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+func TestCoreJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
+	tenantOneCryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create tenant 1 key manager: %v", err)
 	}
 
-	tenantTwoCryptoKeyManager, err := core.NewCryptoKeyManager("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210")
+	tenantTwoCryptoKeyManager, err := NewCryptoKeyManager("fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210")
 	if err != nil {
 		t.Fatalf("failed to create tenant 2 key manager: %v", err)
 	}
 
-	tenantOneSigner, err := NewSigner(tenantOneCryptoKeyManager)
+	tenantOneJWTSigner, err := NewJWTSigner(tenantOneCryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create tenant 1 signer: %v", err)
 	}
 
-	tenantTwoSigner, err := NewSigner(tenantTwoCryptoKeyManager)
+	tenantTwoJWTSigner, err := NewJWTSigner(tenantTwoCryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create tenant 2 signer: %v", err)
 	}
 
 	// 1. Different master keys produce distinct public keys
-	if bytes.Equal(tenantOneSigner.PublicKey(), tenantTwoSigner.PublicKey()) {
+	if bytes.Equal(tenantOneJWTSigner.PublicKey(), tenantTwoJWTSigner.PublicKey()) {
 		t.Fatal("expected distinct public keys for distinct master keys")
 	}
 
 	// 2. Token signed by tenant 1 must fail verification on tenant 2
 	applicationUserID := uuid.NewV7().String()
-	tokenTenantOne, generateErr := tenantOneSigner.GenerateAccessToken(Claims{
+	tokenTenantOne, generateErr := tenantOneJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "bob@example.com",
 	}, 600)
@@ -103,24 +101,24 @@ func TestJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
 		t.Fatalf("failed to generate token: %v", generateErr)
 	}
 
-	if _, verifyErr := tenantTwoSigner.VerifyAccessToken(tokenTenantOne); verifyErr == nil {
+	if _, verifyErr := tenantTwoJWTSigner.VerifyAccessToken(tokenTenantOne); verifyErr == nil {
 		t.Fatal("expected signature verification failure when tenant 2 verifies tenant 1 token")
 	}
 
 	// 3. HMAC signed by tenant 1 must fail verification on tenant 2
 	verificationPayload := "cross-tenant-message"
-	signatureTenantOne := tenantOneSigner.SignHMAC(verificationPayload)
-	if tenantTwoSigner.VerifyHMAC(verificationPayload, signatureTenantOne) {
+	signatureTenantOne := tenantOneJWTSigner.SignHMAC(verificationPayload)
+	if tenantTwoJWTSigner.VerifyHMAC(verificationPayload, signatureTenantOne) {
 		t.Fatal("expected HMAC verification failure when tenant 2 verifies tenant 1 HMAC signature")
 	}
 }
 
-func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+func TestCoreJWTSignerClaimsRoundtripIntegration(t *testing.T) {
+	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create CryptoKeyManager: %v", err)
 	}
-	signer, err := NewSigner(cryptoKeyManager)
+	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create Signer: %v", err)
 	}
@@ -133,7 +131,7 @@ func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 		},
 	}
 
-	token, generateErr := signer.GenerateAccessToken(Claims{
+	token, generateErr := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "charlie@example.com",
 		Phone:   "+19876543210",
@@ -144,38 +142,38 @@ func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 		t.Fatalf("failed to generate token: %v", generateErr)
 	}
 
-	claims, verifyErr := signer.VerifyAccessToken(token)
+	jwtClaims, verifyErr := jwtSigner.VerifyAccessToken(token)
 	if verifyErr != nil {
 		t.Fatalf("failed to verify token: %v", verifyErr)
 	}
 
-	if claims.Subject != applicationUserID {
-		t.Fatalf("subject mismatch: expected %s, got %s", applicationUserID, claims.Subject)
+	if jwtClaims.Subject != applicationUserID {
+		t.Fatalf("subject mismatch: expected %s, got %s", applicationUserID, jwtClaims.Subject)
 	}
-	if claims.Role != "developer" {
-		t.Fatalf("role mismatch: expected developer, got %s", claims.Role)
+	if jwtClaims.Role != "developer" {
+		t.Fatalf("role mismatch: expected developer, got %s", jwtClaims.Role)
 	}
-	if claims.Email != "charlie@example.com" {
-		t.Fatalf("email mismatch: expected charlie@example.com, got %s", claims.Email)
+	if jwtClaims.Email != "charlie@example.com" {
+		t.Fatalf("email mismatch: expected charlie@example.com, got %s", jwtClaims.Email)
 	}
-	if claims.Phone != "+19876543210" {
-		t.Fatalf("phone mismatch: expected +19876543210, got %s", claims.Phone)
+	if jwtClaims.Phone != "+19876543210" {
+		t.Fatalf("phone mismatch: expected +19876543210, got %s", jwtClaims.Phone)
 	}
-	if claims.Claims["is_active"] != true {
-		t.Fatalf("claims mismatch: expected is_active true, got %v", claims.Claims["is_active"])
+	if jwtClaims.Claims["is_active"] != true {
+		t.Fatalf("claims mismatch: expected is_active true, got %v", jwtClaims.Claims["is_active"])
 	}
 
 	// Refresh token uniqueness integration
 	seenTokens := make(map[string]bool)
 	seenHashes := make(map[string]bool)
 	for i := 0; i < 50; i++ {
-		refreshToken := GenerateRefreshToken()
+		refreshToken := jwtSigner.GenerateRefreshToken()
 		if seenTokens[refreshToken] {
 			t.Fatalf("duplicate refresh token generated: %s", refreshToken)
 		}
 		seenTokens[refreshToken] = true
 
-		tokenHash := HashRefreshToken(refreshToken)
+		tokenHash := jwtSigner.HashRefreshToken(refreshToken)
 		if seenHashes[tokenHash] {
 			t.Fatalf("duplicate refresh token hash produced: %s", tokenHash)
 		}
@@ -183,29 +181,29 @@ func TestJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 	}
 }
 
-func TestJWTProjectIsolationIntegration(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+func TestCoreJWTProjectIsolationIntegration(t *testing.T) {
+	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create CryptoKeyManager: %v", err)
 	}
 
-	appSigner, appSignerErr := NewSigner(cryptoKeyManager, "portal-key-v1")
+	appJWTSigner, appSignerErr := NewJWTSigner(cryptoKeyManager, "portal-key-v1")
 	if appSignerErr != nil {
 		t.Fatalf("failed to create app signer: %v", appSignerErr)
 	}
-	consoleUserSigner, consoleUserSignerErr := NewSigner(cryptoKeyManager, "admin-key-v1")
+	consoleUserJWTSigner, consoleUserSignerErr := NewJWTSigner(cryptoKeyManager, "admin-key-v1")
 	if consoleUserSignerErr != nil {
 		t.Fatalf("failed to create admin signer: %v", consoleUserSignerErr)
 	}
 
 	// 1. Both share the same underlying key derivation
-	if !bytes.Equal(appSigner.PublicKey(), consoleUserSigner.PublicKey()) {
+	if !bytes.Equal(appJWTSigner.PublicKey(), consoleUserJWTSigner.PublicKey()) {
 		t.Fatal("expected identical public keys for identical crypto key managers")
 	}
 
 	// 2. Generate token with appSigner for Customer Portal audience and issuer
 	userID := uuid.NewV7().String()
-	appToken, portalTokenErr := appSigner.GenerateAccessToken(Claims{
+	appToken, portalTokenErr := appJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject:  userID,
 		Email:    "user@portal.com",
 		Audience: "customer-portal:user",
@@ -216,66 +214,70 @@ func TestJWTProjectIsolationIntegration(t *testing.T) {
 	}
 
 	// 3. appSigner successfully verifies token with matching audience and issuer
-	verifiedClaims, verifyPortalTokenErr := appSigner.VerifyAccessToken(appToken)
+	verifiedJWTClaims, verifyPortalTokenErr := appJWTSigner.VerifyAccessToken(appToken)
 	if verifyPortalTokenErr != nil {
 		t.Fatalf("appSigner failed to verify own token: %v", verifyPortalTokenErr)
 	}
-	if assertErr := verifiedClaims.Assert("aud", "customer-portal:user"); assertErr != nil {
+	if assertErr := verifiedJWTClaims.Assert("aud", "customer-portal:user"); assertErr != nil {
 		t.Fatalf("failed to assert portal aud: %v", assertErr)
 	}
-	if assertErr := verifiedClaims.Assert("iss", "customer-portal"); assertErr != nil {
+	if assertErr := verifiedJWTClaims.Assert("iss", "customer-portal"); assertErr != nil {
 		t.Fatalf("failed to assert portal iss: %v", assertErr)
 	}
 
 	// 4. Verifier expecting Console audience fails assertion
-	consoleUserClaims, crossVerifyErr := consoleUserSigner.VerifyAccessToken(appToken)
+	consoleUserJWTClaims, crossVerifyErr := consoleUserJWTSigner.VerifyAccessToken(appToken)
 	if crossVerifyErr != nil {
 		t.Fatalf("unexpected signature verification failure: %v", crossVerifyErr)
 	}
-	if assertErr := consoleUserClaims.Assert("aud", "admin-console:user"); assertErr == nil {
+	if assertErr := consoleUserJWTClaims.Assert("aud", "admin-console:user"); assertErr == nil {
 		t.Fatal("expected audience assertion failure when verifying with different audience")
 	}
 }
 
-func TestJWTM2MTokenIntegration(t *testing.T) {
+func TestCoreJWTM2MTokenIntegration(t *testing.T) {
 	masterKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	cryptoKeyManager, err := core.NewCryptoKeyManager(masterKeyHex)
+	cryptoKeyManager, err := NewCryptoKeyManager(masterKeyHex)
 	if err != nil {
 		t.Fatalf("failed to create crypto key manager: %v", err)
 	}
 
-	signer, err := NewSigner(cryptoKeyManager, "layr-ed25519-v1")
+	jwtSigner, err := NewJWTSigner(cryptoKeyManager, "layr-ed25519-v1")
 	if err != nil {
 		t.Fatalf("failed to create signer: %v", err)
 	}
 
 	serviceAccountID := uuid.NewV7().String()
 	scopes := []string{"auth:read", "data:write"}
-	m2mToken, err := signer.GenerateM2MToken(serviceAccountID, scopes, 1800)
+	slugifier := NewSlugifier()
+	expectedHandle := slugifier.Slugify(GetConfig().Project.Name)
+	if expectedHandle == "" {
+		expectedHandle = "layr"
+	}
+	expectedAudience := expectedHandle + ":service_account"
+	m2mToken, err := jwtSigner.GenerateM2MToken(serviceAccountID, scopes, 1800, expectedAudience)
 	if err != nil {
 		t.Fatalf("failed to generate M2M token: %v", err)
 	}
 
-	m2mClaims, err := signer.VerifyM2MToken(m2mToken)
+	m2mJWTClaims, err := jwtSigner.VerifyM2MToken(m2mToken)
 	if err != nil {
 		t.Fatalf("failed to verify M2M token: %v", err)
 	}
 
-	if m2mClaims.Subject != serviceAccountID {
-		t.Errorf("expected subject %s, got %s", serviceAccountID, m2mClaims.Subject)
+	if m2mJWTClaims.Subject != serviceAccountID {
+		t.Errorf("expected subject %s, got %s", serviceAccountID, m2mJWTClaims.Subject)
 	}
-	slugifier := core.NewSlugifier()
-	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
-	if expectedHandle == "" {
-		expectedHandle = "layr"
+	if m2mJWTClaims.Issuer != expectedHandle {
+		t.Errorf("expected issuer %s, got %s", expectedHandle, m2mJWTClaims.Issuer)
 	}
-	if m2mClaims.Issuer != expectedHandle {
-		t.Errorf("expected issuer %s, got %s", expectedHandle, m2mClaims.Issuer)
+	if m2mJWTClaims.Audience != expectedAudience {
+		t.Errorf("expected audience %s, got %s", expectedAudience, m2mJWTClaims.Audience)
 	}
-	if m2mClaims.Audience != expectedHandle+":service_account" {
-		t.Errorf("expected audience %s:service_account, got %s", expectedHandle, m2mClaims.Audience)
+	if len(m2mJWTClaims.Scopes()) != 2 || m2mJWTClaims.Scopes()[0] != "auth:read" || m2mJWTClaims.Scopes()[1] != "data:write" {
+		t.Errorf("expected scopes %v, got %v", scopes, m2mJWTClaims.Scopes())
 	}
-	if len(m2mClaims.Scopes) != 2 || m2mClaims.Scopes[0] != "auth:read" || m2mClaims.Scopes[1] != "data:write" {
-		t.Errorf("expected scopes %v, got %v", scopes, m2mClaims.Scopes)
+	if m2mJWTClaims.Scope != "auth:read data:write" {
+		t.Errorf("expected scope 'auth:read data:write', got %q", m2mJWTClaims.Scope)
 	}
 }

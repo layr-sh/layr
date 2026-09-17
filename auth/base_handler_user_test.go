@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -53,7 +52,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		}
 
 		// Expired bearer token
-		expiredToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+		expiredToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 			Subject:     "user-expired",
 			Email:       "user@example.com",
 			Role:        "authenticated",
@@ -69,7 +68,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// 2. Valid token for profile tests
-	validToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     "user-unit-123",
 		Email:       "unit@example.com",
 		Role:        "user",
@@ -79,8 +78,18 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
 
+	authedCtx := core.WithAuthContext(context.Background(), core.AuthContext{
+		UserID: "user-unit-123",
+		JWT: core.JWTClaims{
+			Subject:     "user-unit-123",
+			Email:       "unit@example.com",
+			Role:        "user",
+			IsAnonymous: false,
+		},
+	})
+
 	// GET /api/v1/auth/user on nil pool -> 500
-	getUserRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil)
+	getUserRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/api/v1/auth/user", nil)
 	getUserRequest.Header.Set("Authorization", "Bearer "+validToken)
 	getUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(getUserResponseRecorder, getUserRequest)
@@ -89,7 +98,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/properties bad JSON -> 400
-	badJSONPatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/properties", strings.NewReader(`{invalid`))
+	badJSONPatchRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/properties", strings.NewReader(`{invalid`))
 	badJSONPatchRequest.Header.Set("Authorization", "Bearer "+validToken)
 	badJSONPatchResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserProperties(badJSONPatchResponseRecorder, badJSONPatchRequest)
@@ -98,7 +107,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/properties on nil pool -> 500
-	validPatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/properties", strings.NewReader(`{"properties":{"tier":"gold"}}`))
+	validPatchRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/properties", strings.NewReader(`{"properties":{"tier":"gold"}}`))
 	validPatchRequest.Header.Set("Authorization", "Bearer "+validToken)
 	validPatchResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserProperties(validPatchResponseRecorder, validPatchRequest)
@@ -107,7 +116,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/password bad JSON -> 400
-	badJSONPasswordRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", strings.NewReader(`{invalid`))
+	badJSONPasswordRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/password", strings.NewReader(`{invalid`))
 	badJSONPasswordRequest.Header.Set("Authorization", "Bearer "+validToken)
 	badJSONPasswordResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(badJSONPasswordResponseRecorder, badJSONPasswordRequest)
@@ -116,7 +125,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/password on nil pool -> 500
-	validPasswordRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", strings.NewReader(`{"new_password":"NewValidPassword123!"}`))
+	validPasswordRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/password", strings.NewReader(`{"new_password":"NewValidPassword123!"}`))
 	validPasswordRequest.Header.Set("Authorization", "Bearer "+validToken)
 	validPasswordResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(validPasswordResponseRecorder, validPasswordRequest)
@@ -125,7 +134,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// DELETE /api/v1/auth/user on nil pool -> 500
-	deleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user", nil)
+	deleteRequest := httptest.NewRequestWithContext(authedCtx, http.MethodDelete, "/api/v1/auth/user", nil)
 	deleteRequest.Header.Set("Authorization", "Bearer "+validToken)
 	deleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeleteUser(deleteResponseRecorder, deleteRequest)
@@ -134,7 +143,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/email bad JSON -> 400
-	badJSONEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{invalid`))
+	badJSONEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{invalid`))
 	badJSONEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	badJSONEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(badJSONEmailResponseRecorder, badJSONEmailRequest)
@@ -143,7 +152,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/email invalid email -> 400
-	invalidEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"not-an-email"}`))
+	invalidEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"not-an-email"}`))
 	invalidEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	invalidEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(invalidEmailResponseRecorder, invalidEmailRequest)
@@ -152,7 +161,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/email delivery not ready -> 422
-	deliveryNotReadyEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
+	deliveryNotReadyEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
 	deliveryNotReadyEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	deliveryNotReadyEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(deliveryNotReadyEmailResponseRecorder, deliveryNotReadyEmailRequest)
@@ -167,7 +176,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}, nil)
 	baseHandler.SetEmailDispatcher(mockEmailDispatcher)
 
-	nilDBEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
+	nilDBEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
 	nilDBEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	nilDBEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(nilDBEmailResponseRecorder, nilDBEmailRequest)
@@ -176,7 +185,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/phone bad JSON -> 400
-	badJSONPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{invalid`))
+	badJSONPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{invalid`))
 	badJSONPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	badJSONPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(badJSONPhoneResponseRecorder, badJSONPhoneRequest)
@@ -185,7 +194,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/phone empty phone -> 400
-	emptyPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":""}`))
+	emptyPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":""}`))
 	emptyPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	emptyPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(emptyPhoneResponseRecorder, emptyPhoneRequest)
@@ -194,7 +203,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/phone invalid phone format -> 400
-	invalidPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"invalid-format"}`))
+	invalidPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"invalid-format"}`))
 	invalidPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	invalidPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(invalidPhoneResponseRecorder, invalidPhoneRequest)
@@ -203,7 +212,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /api/v1/auth/user/phone delivery not ready -> 422
-	deliveryNotReadyPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
+	deliveryNotReadyPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
 	deliveryNotReadyPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	deliveryNotReadyPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(deliveryNotReadyPhoneResponseRecorder, deliveryNotReadyPhoneRequest)
@@ -217,7 +226,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}, nil)
 	baseHandler.SetSMSDispatcher(mockSMSDispatcher)
 
-	nilDBPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
+	nilDBPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
 	nilDBPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	nilDBPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(nilDBPhoneResponseRecorder, nilDBPhoneRequest)
@@ -235,7 +244,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 
 	// Reset email dispatcher to nil to test unconfigured
 	baseHandler.SetEmailDispatcher(nil)
-	unconfiguredEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"new@example.com"}`))
+	unconfiguredEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"new@example.com"}`))
 	unconfiguredEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationRequest(unconfiguredEmailResponseRecorder, unconfiguredEmailRequest)
@@ -251,7 +260,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on missing phone, got: %d", missingPhoneResponseRecorder.Code)
 	}
 
-	invalidPhoneVerificationRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"12345"}`))
+	invalidPhoneVerificationRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"12345"}`))
 	invalidPhoneVerificationRequest.Header.Set("Authorization", "Bearer "+validToken)
 	invalidPhoneVerificationResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationRequest(invalidPhoneVerificationResponseRecorder, invalidPhoneVerificationRequest)
@@ -260,7 +269,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	baseHandler.SetSMSDispatcher(nil)
-	unconfiguredPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15551234567"}`))
+	unconfiguredPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15551234567"}`))
 	unconfiguredPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationRequest(unconfiguredPhoneResponseRecorder, unconfiguredPhoneRequest)
@@ -356,34 +365,32 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// 5. Claims-based email and phone verification confirm
-	tokenWithEmail, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
-		Subject:     "user-claims-email",
-		Email:       "claims.email@example.com",
-		Role:        "authenticated",
-		IsAnonymous: false,
-	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to sign token with email: %v", err)
-	}
-	claimsEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"code":"123456"}`))
-	claimsEmailRequest.Header.Set("Authorization", "Bearer "+tokenWithEmail)
+	claimsEmailCtx := core.WithAuthContext(context.Background(), core.AuthContext{
+		UserID: "user-claims-email",
+		JWT: core.JWTClaims{
+			Subject:     "user-claims-email",
+			Email:       "claims.email@example.com",
+			Role:        "authenticated",
+			IsAnonymous: false,
+		},
+	})
+	claimsEmailRequest := httptest.NewRequestWithContext(claimsEmailCtx, http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"code":"123456"}`))
 	claimsEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationConfirm(claimsEmailResponseRecorder, claimsEmailRequest)
 	if claimsEmailResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool claims email confirm, got: %d", claimsEmailResponseRecorder.Code)
 	}
 
-	tokenWithPhone, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
-		Subject:     "user-claims-phone",
-		Phone:       "+15551234567",
-		Role:        "authenticated",
-		IsAnonymous: false,
-	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to sign token with phone: %v", err)
-	}
-	claimsPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"code":"123456"}`))
-	claimsPhoneRequest.Header.Set("Authorization", "Bearer "+tokenWithPhone)
+	claimsPhoneCtx := core.WithAuthContext(context.Background(), core.AuthContext{
+		UserID: "user-claims-phone",
+		JWT: core.JWTClaims{
+			Subject:     "user-claims-phone",
+			Phone:       "+15551234567",
+			Role:        "authenticated",
+			IsAnonymous: false,
+		},
+	})
+	claimsPhoneRequest := httptest.NewRequestWithContext(claimsPhoneCtx, http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"code":"123456"}`))
 	claimsPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationConfirm(claimsPhoneResponseRecorder, claimsPhoneRequest)
 	if claimsPhoneResponseRecorder.Code != http.StatusInternalServerError {

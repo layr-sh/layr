@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"layr.sh/core"
 )
 
 func TestKVExtractClientIPUnit(t *testing.T) {
@@ -126,9 +128,13 @@ func TestKVComputeVisitorHashUnit(t *testing.T) {
 func TestKVExtractAuthContextUnit(t *testing.T) {
 	ctx := context.Background()
 	// 1. Authenticated caller with role and subject
-	authenticatedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	authenticatedRequest.Header.Set("X-JWT-Sub", "usr_1001")
-	authenticatedRequest.Header.Set("X-JWT-Role", "editor")
+	authCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Subject: "usr_1001",
+			Role:    "editor",
+		},
+	})
+	authenticatedRequest := httptest.NewRequestWithContext(authCtx, http.MethodGet, "/", nil)
 	authenticatedRequest.Header.Set("User-Agent", "Mozilla/5.0")
 	authenticatedRequest.RemoteAddr = "10.0.0.1:8080"
 
@@ -138,24 +144,36 @@ func TestKVExtractAuthContextUnit(t *testing.T) {
 	}
 
 	// 2. Authenticated caller with empty role defaults to "authenticated"
-	emptyRoleRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	emptyRoleRequest.Header.Set("X-JWT-Sub", "usr_2002")
+	emptyRoleCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Subject: "usr_2002",
+		},
+	})
+	emptyRoleRequest := httptest.NewRequestWithContext(emptyRoleCtx, http.MethodGet, "/", nil)
 	emptyRoleAuthContext := ExtractAuthContext(emptyRoleRequest, "test-salt")
 	if emptyRoleAuthContext.Subject != "usr_2002" || emptyRoleAuthContext.Role != "authenticated" || emptyRoleAuthContext.VisitorHash != "" {
 		t.Fatalf("unexpected empty role context: %+v", emptyRoleAuthContext)
 	}
 
 	// 3. Authenticated caller with role and empty subject does not fall through to anon
-	serviceRoleRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	serviceRoleRequest.Header.Set("X-JWT-Role", "service_role")
+	serviceRoleCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Role: "service_role",
+		},
+	})
+	serviceRoleRequest := httptest.NewRequestWithContext(serviceRoleCtx, http.MethodGet, "/", nil)
 	serviceRoleAuthContext := ExtractAuthContext(serviceRoleRequest, "test-salt")
 	if serviceRoleAuthContext.Subject != "" || serviceRoleAuthContext.Role != "service_role" || serviceRoleAuthContext.VisitorHash != "" {
 		t.Fatalf("unexpected service_role context: %+v", serviceRoleAuthContext)
 	}
 
 	// 4. Anonymous caller with explicit 'anon' role generates visitor hash
-	anonymousExplicitRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	anonymousExplicitRequest.Header.Set("X-JWT-Role", "anon")
+	anonExplicitCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Role: "anon",
+		},
+	})
+	anonymousExplicitRequest := httptest.NewRequestWithContext(anonExplicitCtx, http.MethodGet, "/", nil)
 	anonymousExplicitRequest.Header.Set("User-Agent", "Mozilla/5.0")
 	anonymousExplicitRequest.RemoteAddr = "10.0.0.1:8080"
 	anonAuthContext := ExtractAuthContext(anonymousExplicitRequest, "test-salt")
@@ -235,6 +253,24 @@ func TestKVBuildInternalKeyUnit(t *testing.T) {
 	}
 	if emptyAnonKey := BuildInternalKey(emptyAnonAuthContext, "cart"); emptyAnonKey != "anon:anon123:cart" {
 		t.Fatalf("unexpected internal key for empty anon role: %s", emptyAnonKey)
+	}
+	if emptyAnonCacheKey := BuildInternalKey(emptyAnonAuthContext, "rest:cart"); emptyAnonCacheKey != "cache:anon:anon123:rest:cart" {
+		t.Fatalf("unexpected internal key for empty anon role cache: %s", emptyAnonCacheKey)
+	}
+
+	// 8. Authenticated with empty role and non-cache key
+	emptyRoleNonCacheKey := BuildInternalKey(emptyRoleAuthContext, "session_cart")
+	if emptyRoleNonCacheKey != "authenticated:usr_2002:session_cart" {
+		t.Fatalf("unexpected internal key for empty role non-cache: %s", emptyRoleNonCacheKey)
+	}
+
+	// 9. Authenticated with empty role and empty subject
+	emptyRoleNoSubjectAuthContext := AuthContext{}
+	if k := BuildInternalKey(emptyRoleNoSubjectAuthContext, "rest:data"); k != "cache:authenticated::rest:data" {
+		t.Fatalf("unexpected internal key: %s", k)
+	}
+	if k := BuildInternalKey(emptyRoleNoSubjectAuthContext, "data"); k != "authenticated::data" {
+		t.Fatalf("unexpected internal key: %s", k)
 	}
 }
 

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +10,6 @@ import (
 	"time"
 	"uuid"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -80,24 +80,28 @@ func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
 	responseRecorder := httptest.NewRecorder()
 	expiresAt := time.Now().Add(time.Hour)
 
+	secureRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://localhost/", nil)
+	secureRequest.TLS = &tls.ConnectionState{}
+	insecureRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
+
 	// SetSessionCookie HTTPS
-	core.SetSessionCookie(responseRecorder, AuthSessionCookieName, AuthSessionInsecureCookieName, "mock-refresh-token", expiresAt, true)
+	core.SetSessionCookie(responseRecorder, secureRequest, "mock-refresh-token", expiresAt)
 	cookies := responseRecorder.Result().Cookies()
-	if len(cookies) == 0 || cookies[0].Name != AuthSessionCookieName {
-		t.Fatalf("expected cookie %s, got: %+v", AuthSessionCookieName, cookies)
+	if len(cookies) == 0 || cookies[0].Name != core.SessionCookieNameSecure {
+		t.Fatalf("expected cookie %s, got: %+v", core.SessionCookieNameSecure, cookies)
 	}
 
 	// SetSessionCookie HTTP
 	insecureResponseRecorder := httptest.NewRecorder()
-	core.SetSessionCookie(insecureResponseRecorder, AuthSessionCookieName, AuthSessionInsecureCookieName, "mock-insecure-token", expiresAt, false)
+	core.SetSessionCookie(insecureResponseRecorder, insecureRequest, "mock-insecure-token", expiresAt)
 	insecureCookies := insecureResponseRecorder.Result().Cookies()
-	if len(insecureCookies) == 0 || insecureCookies[0].Name != AuthSessionInsecureCookieName {
-		t.Fatalf("expected cookie %s, got: %+v", AuthSessionInsecureCookieName, insecureCookies)
+	if len(insecureCookies) == 0 || insecureCookies[0].Name != core.SessionCookieNameInsecure {
+		t.Fatalf("expected cookie %s, got: %+v", core.SessionCookieNameInsecure, insecureCookies)
 	}
 
 	// ClearSessionCookie
 	clearResponseRecorder := httptest.NewRecorder()
-	core.ClearSessionCookie(clearResponseRecorder, AuthSessionCookieName, AuthSessionInsecureCookieName, true)
+	core.ClearSessionCookie(clearResponseRecorder, secureRequest)
 	clearedCookies := clearResponseRecorder.Result().Cookies()
 	if len(clearedCookies) < 2 {
 		t.Fatalf("expected cleared cookies, got: %+v", clearedCookies)
@@ -163,126 +167,12 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerAuthenticateUserAndSessionUnit(t *testing.T) {
+func TestAuthHandlerResolveCallerUnit(t *testing.T) {
 	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	configManager := NewConfigManager(nil, cryptoKeyManager)
 	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
 
-	// authenticateSessionRequest: no token
-	noTokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	if _, _, _, err := baseHandler.authenticateSessionRequest(noTokenRequest); err == nil {
-		t.Fatal("expected error on missing token")
-	}
-
-	// authenticateSessionRequest: invalid token
-	invalidTokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	invalidTokenRequest.Header.Set("Authorization", "Bearer invalid-jwt")
-	if _, _, _, err := baseHandler.authenticateSessionRequest(invalidTokenRequest); err == nil {
-		t.Fatal("expected error on invalid jwt")
-	}
-
-	// authenticateSessionRequest: valid token
 	testUserID := uuid.NewV7().String()
-	validAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
-		Subject: testUserID,
-		Email:   "test@example.com",
-		Role:    "authenticated",
-	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
-
-	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	validRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
-	validRequest.Header.Set("X-Refresh-Token", "refresh-token-xyz")
-	validRequest.Header.Set("X-Session-ID", "session-id-123")
-
-	subject, refreshHash, sessionID, err := baseHandler.authenticateSessionRequest(validRequest)
-	if err != nil || subject != testUserID || refreshHash == "" || sessionID != "session-id-123" {
-		t.Fatalf("unexpected authenticateSessionRequest result: %s, %s, %s, %v", subject, refreshHash, sessionID, err)
-	}
-
-	// authenticateUser: via valid access token
-	authedUser, err := baseHandler.authenticateUser(validRequest)
-	if err != nil || authedUser != testUserID {
-		t.Fatalf("expected authedUser %s, got %s (err: %v)", testUserID, authedUser, err)
-	}
-
-	// authenticateUser: no token, no refresh cookie -> unauthorized
-	emptyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	if _, authErr := baseHandler.authenticateUser(emptyRequest); authErr == nil {
-		t.Fatal("expected unauthorized error")
-	}
-
-	// authenticateSessionRequest: nil baseHandler
-	var nilBaseHandler *Handler
-	if _, _, _, nilErr := nilBaseHandler.authenticateSessionRequest(validRequest); nilErr == nil {
-		t.Fatal("expected error with nil baseHandler")
-	}
-
-	// authenticateUser: nil baseHandler
-	if _, nilErr := nilBaseHandler.authenticateUser(validRequest); nilErr == nil {
-		t.Fatal("expected error with nil baseHandler")
-	}
-
-	// authenticateSessionRequest with cookie
-	cookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	cookieRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
-	cookieRequest.AddCookie(&http.Cookie{Name: AuthSessionCookieName, Value: "cookie-refresh-token"})
-	cookieRequest.Header.Set("X-Session-ID", "sess-1")
-	if _, hash, _, cookieErr := baseHandler.authenticateSessionRequest(cookieRequest); cookieErr != nil || hash == "" {
-		t.Fatalf("expected session request via secure cookie: %v", cookieErr)
-	}
-
-	// authenticateSessionRequest with insecure cookie
-	insecureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	insecureCookieRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
-	insecureCookieRequest.AddCookie(&http.Cookie{Name: AuthSessionInsecureCookieName, Value: "insecure-refresh-token"})
-	if _, hash, _, insecureErr := baseHandler.authenticateSessionRequest(insecureCookieRequest); insecureErr != nil || hash == "" {
-		t.Fatalf("expected session request via insecure cookie: %v", insecureErr)
-	}
-
-	// authenticateSessionRequest with X-Session-Token
-	sessionHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	sessionHeaderRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
-	sessionHeaderRequest.Header.Set("X-Session-Token", "header-session-token")
-	if _, hash, _, headerErr := baseHandler.authenticateSessionRequest(sessionHeaderRequest); headerErr != nil || hash == "" {
-		t.Fatalf("expected session request via session header: %v", headerErr)
-	}
-
-	// authenticateUser with cookie (no access token)
-	authCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	authCookieRequest.AddCookie(&http.Cookie{Name: AuthSessionCookieName, Value: "refresh-cookie"})
-	_, _ = baseHandler.authenticateUser(authCookieRequest)
-
-	// authenticateUser with insecure cookie (no access token)
-	authInsecureRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	authInsecureRequest.AddCookie(&http.Cookie{Name: AuthSessionInsecureCookieName, Value: "insecure-refresh-cookie"})
-	_, _ = baseHandler.authenticateUser(authInsecureRequest)
-
-	// authenticateUser with X-Refresh-Token (no access token)
-	authRefreshRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	authRefreshRequest.Header.Set("X-Refresh-Token", "token-header")
-	_, _ = baseHandler.authenticateUser(authRefreshRequest)
-
-	// authenticateUser with X-Session-Token (no access token)
-	authSessionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	authSessionRequest.Header.Set("X-Session-Token", "session-header")
-	_, _ = baseHandler.authenticateUser(authSessionRequest)
-
-	// extractClaimsOptional
-	claims := baseHandler.extractClaimsOptional(validRequest)
-	if claims == nil || claims.Subject != testUserID {
-		t.Fatalf("expected claims subject %s, got: %+v", testUserID, claims)
-	}
-	if baseHandler.extractClaimsOptional(emptyRequest) != nil {
-		t.Fatal("expected nil claims on empty request")
-	}
-	invalidOptionalClaimsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	invalidOptionalClaimsRequest.Header.Set("Authorization", "Bearer invalid-token-string")
-	if baseHandler.extractClaimsOptional(invalidOptionalClaimsRequest) != nil {
-		t.Fatal("expected nil claims on invalid token")
-	}
 
 	// resolveCustomClaims with nil db
 	customClaims := baseHandler.resolveCustomClaims(context.Background(), testUserID)
@@ -291,6 +181,7 @@ func TestAuthHandlerAuthenticateUserAndSessionUnit(t *testing.T) {
 	}
 
 	// resolveAnonymousCaller with nil db
+	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	resolvedAnonymousUserRecord, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(validRequest)
 	if resolvedAnonymousUserRecord != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
 		t.Fatalf("expected ErrAnonymousSessionNotFound with nil db, got: %+v (err: %v)", resolvedAnonymousUserRecord, resolveAnonymousCallerErr)

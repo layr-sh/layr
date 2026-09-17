@@ -16,6 +16,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"layr.sh/core"
 	"layr.sh/data/common"
 	datakv "layr.sh/data/kv"
 	"layr.sh/data/rest"
@@ -29,7 +30,7 @@ const (
 
 // HandleListRecords handles GET /api/v1/data/{schema_name}/{table_name}.
 func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter, request *http.Request) {
-	schema, table, _, tableMetadata, authClaims, ok := handler.prepareTableContext(responseWriter, request)
+	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
 	}
@@ -96,7 +97,7 @@ func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, "data:query.read") {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
@@ -157,7 +158,7 @@ func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter
 
 // HandleGetRecord handles GET /api/v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, request *http.Request) {
-	schema, table, recordID, tableMetadata, authClaims, ok := handler.prepareTableContext(responseWriter, request)
+	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
 	}
@@ -175,7 +176,7 @@ func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, 
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, "data:query.read") {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
@@ -211,7 +212,7 @@ func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, 
 
 // HandleCreateRecords handles POST /api/v1/data/{schema_name}/{table_name}.
 func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWriter, request *http.Request) {
-	schema, table, _, tableMetadata, authClaims, ok := handler.prepareTableContext(responseWriter, request)
+	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
 	}
@@ -272,7 +273,7 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, "data:query.write") {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
@@ -350,7 +351,7 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 
 // HandleUpdateRecord handles PATCH/PUT /api/v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWriter, request *http.Request) {
-	schema, table, recordID, tableMetadata, authClaims, ok := handler.prepareTableContext(responseWriter, request)
+	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
 	}
@@ -388,7 +389,7 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, "data:query.write") {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
@@ -455,7 +456,7 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 
 // HandleDeleteRecord handles DELETE /api/v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWriter, request *http.Request) {
-	schema, table, recordID, tableMetadata, authClaims, ok := handler.prepareTableContext(responseWriter, request)
+	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
 	}
@@ -473,7 +474,7 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, "data:query.write") {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
@@ -590,9 +591,9 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 		requiredScope = "data:query.write"
 	}
 
-	authClaims := common.ExtractClaims(request)
+	jwtClaims := core.GetAuthContext(request.Context()).JWT
 	if !handler.isRLSBypassed(request, requiredScope) {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	var query string
@@ -649,22 +650,22 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 	})
 }
 
-func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWriter, request *http.Request) (string, string, string, rest.TableMetadata, common.AuthClaims, bool) {
+func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWriter, request *http.Request) (string, string, string, rest.TableMetadata, core.JWTClaims, bool) {
 	config := handler.configManager.Get()
 	if !config.REST.Enabled {
 		handler.writeError(responseWriter, request, http.StatusForbidden, "REST API is disabled", "LAYR_DATA_003")
-		return "", "", "", rest.TableMetadata{}, common.AuthClaims{}, false
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	schema, table, recordID, err := handler.extractSchemaTableAndRecordID(request)
 	if err != nil {
 		handler.writeError(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_DATA_001")
-		return "", "", "", rest.TableMetadata{}, common.AuthClaims{}, false
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	if !common.IsValidIdentifier(schema) || !common.IsValidIdentifier(table) {
 		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid schema or table name identifier", "LAYR_DATA_001")
-		return "", "", "", rest.TableMetadata{}, common.AuthClaims{}, false
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	isSchemaAllowed := false
@@ -676,13 +677,13 @@ func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWrit
 	}
 	if !isSchemaAllowed {
 		handler.writeError(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Schema %q is not exposed for REST operations", schema), "LAYR_DATA_003")
-		return "", "", "", rest.TableMetadata{}, common.AuthClaims{}, false
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	for _, excludedTable := range config.REST.ExcludedTables {
 		if excludedTable == table || excludedTable == fmt.Sprintf("%s.%s", schema, table) {
 			handler.writeError(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Table %q is excluded from REST operations", table), "LAYR_DATA_003")
-			return "", "", "", rest.TableMetadata{}, common.AuthClaims{}, false
+			return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 		}
 	}
 
@@ -700,8 +701,8 @@ func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWrit
 		}
 	}
 
-	authClaims := common.ExtractClaims(request)
-	return schema, table, recordID, tableMetadata, authClaims, true
+	jwtClaims := core.GetAuthContext(request.Context()).JWT
+	return schema, table, recordID, tableMetadata, jwtClaims, true
 }
 
 func (handler *BaseHandler) extractSchemaTableAndRecordID(request *http.Request) (string, string, string, error) {

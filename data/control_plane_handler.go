@@ -44,6 +44,10 @@ func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore core.KVStore)
 }
 
 func (controlPlaneHandler *ControlPlaneHandler) checkScope(request *http.Request, requiredScope string) bool {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() {
+		return authContext.HasScope(requiredScope)
+	}
 	if controlPlaneHandler.serviceAccountManager == nil {
 		if controlPlaneHandler.service != nil && controlPlaneHandler.service.serviceAccountManager != nil {
 			controlPlaneHandler.serviceAccountManager = controlPlaneHandler.service.serviceAccountManager

@@ -242,3 +242,24 @@ func createBrokenPool(t *testing.T) *core.DatabasePool {
 	cleanup()
 	return db
 }
+
+func withUserAuth(request *http.Request, userID, role string, isAnon bool) *http.Request {
+	jwtClaims := core.JWTClaims{
+		Subject:     userID,
+		Role:        role,
+		IsAnonymous: isAnon,
+	}
+	authContext := core.AuthContext{
+		UserID: userID,
+		JWT:    jwtClaims,
+	}
+	return request.WithContext(core.WithAuthContext(request.Context(), authContext))
+}
+
+func withUserAuthClaims(request *http.Request, jwtClaims core.JWTClaims) *http.Request {
+	authContext := core.AuthContext{
+		UserID: jwtClaims.Subject,
+		JWT:    jwtClaims,
+	}
+	return request.WithContext(core.WithAuthContext(request.Context(), authContext))
+}

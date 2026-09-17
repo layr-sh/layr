@@ -514,12 +514,13 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling update user password request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("update user password rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("update user password rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	var updateUserPasswordRequest UpdateUserPasswordRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPasswordRequest); decodeErr != nil {
@@ -541,7 +542,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	var existingPasswordHash *string
 
 	var lockedUntil *time.Time
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		SELECT is_anonymous, email, phone, password_hash, locked_until
 		FROM auth.users
 		WHERE id = $1

@@ -2,8 +2,6 @@ package common
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -96,15 +94,11 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 	}
 	defer appDB.Close()
 
-	// 3. User Journey 1: Alice sends HTTP request with JWT headers
-	aliceRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/documents", nil)
-	aliceRequest.Header.Set("X-JWT-Sub", "alice")
-	aliceRequest.Header.Set("X-JWT-Role", "authenticated")
-	aliceRequest.Header.Set("X-JWT-Claim-Tenant_Id", "tenant_alpha")
-
-	aliceAuthClaims := ExtractClaims(aliceRequest)
-	if aliceAuthClaims.Subject != "alice" || aliceAuthClaims.Claims["tenant_id"] != "tenant_alpha" {
-		t.Fatalf("unexpected alice claims: %+v", aliceAuthClaims)
+	// 3. User Journey 1: Alice sends HTTP request with JWT claims
+	aliceJWTClaims := core.JWTClaims{
+		Subject: "alice",
+		Role:    "authenticated",
+		Claims:  map[string]any{"tenant_id": "tenant_alpha"},
 	}
 
 	aliceTx, err := appDB.Begin(ctx)
@@ -113,7 +107,7 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 	}
 	defer func() { _ = aliceTx.Rollback(ctx) }()
 
-	ApplyRLS(ctx, aliceTx, aliceAuthClaims)
+	ApplyRLS(ctx, aliceTx, aliceJWTClaims)
 
 	aliceRows, err := aliceTx.Query(ctx, "SELECT title FROM public.documents")
 	if err != nil {
@@ -134,20 +128,19 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 		t.Fatalf("expected alice to see only Alice Confidential Alpha, got: %v", aliceTitles)
 	}
 
-	// 4. User Journey 2: Bob sends HTTP request with JWT headers
-	bobRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/documents", nil)
-	bobRequest.Header.Set("X-JWT-Sub", "bob")
-	bobRequest.Header.Set("X-JWT-Role", "authenticated")
-	bobRequest.Header.Set("X-JWT-Claim-Tenant_Id", "tenant_beta")
-
-	bobAuthClaims := ExtractClaims(bobRequest)
+	// 4. User Journey 2: Bob sends HTTP request with JWT claims
+	bobJWTClaims := core.JWTClaims{
+		Subject: "bob",
+		Role:    "authenticated",
+		Claims:  map[string]any{"tenant_id": "tenant_beta"},
+	}
 	bobTx, err := appDB.Begin(ctx)
 	if err != nil {
 		t.Fatalf("failed to begin bob transaction: %v", err)
 	}
 	defer func() { _ = bobTx.Rollback(ctx) }()
 
-	ApplyRLS(ctx, bobTx, bobAuthClaims)
+	ApplyRLS(ctx, bobTx, bobJWTClaims)
 
 	bobRows, err := bobTx.Query(ctx, "SELECT title FROM public.documents")
 	if err != nil {
@@ -169,19 +162,18 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 	}
 
 	// 5. User Journey 3: Charlie sends request for tenant_alpha but wrong subject
-	charlieRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/documents", nil)
-	charlieRequest.Header.Set("X-JWT-Sub", "charlie")
-	charlieRequest.Header.Set("X-JWT-Role", "authenticated")
-	charlieRequest.Header.Set("X-JWT-Claim-Tenant_Id", "tenant_alpha")
-
-	charlieAuthClaims := ExtractClaims(charlieRequest)
+	charlieJWTClaims := core.JWTClaims{
+		Subject: "charlie",
+		Role:    "authenticated",
+		Claims:  map[string]any{"tenant_id": "tenant_alpha"},
+	}
 	charlieTx, err := appDB.Begin(ctx)
 	if err != nil {
 		t.Fatalf("failed to begin charlie transaction: %v", err)
 	}
 	defer func() { _ = charlieTx.Rollback(ctx) }()
 
-	ApplyRLS(ctx, charlieTx, charlieAuthClaims)
+	ApplyRLS(ctx, charlieTx, charlieJWTClaims)
 
 	charlieRows, err := charlieTx.Query(ctx, "SELECT title FROM public.documents")
 	if err != nil {
@@ -203,11 +195,10 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 	}
 
 	// 6. Security Journey: Malicious header injection attempt
-	maliciousRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/documents", nil)
-	maliciousRequest.Header.Set("X-JWT-Sub", "alice")
-	maliciousRequest.Header.Set("X-JWT-Claim-Evil'; DROP TABLE public.documents; --", "malicious")
-
-	maliciousAuthClaims := ExtractClaims(maliciousRequest)
+	maliciousJWTClaims := core.JWTClaims{
+		Subject: "alice",
+		Claims:  map[string]any{"Evil'; DROP TABLE public.documents; --": "malicious"},
+	}
 	maliciousTx, err := appDB.Begin(ctx)
 	if err != nil {
 		t.Fatalf("failed to begin malicious transaction: %v", err)
@@ -215,7 +206,7 @@ func TestCommonRLSSecurityPolicyE2E(t *testing.T) {
 	defer func() { _ = maliciousTx.Rollback(ctx) }()
 
 	// ApplyRLS must safely ignore the malicious claim key without crashing or executing injected SQL
-	ApplyRLS(ctx, maliciousTx, maliciousAuthClaims)
+	ApplyRLS(ctx, maliciousTx, maliciousJWTClaims)
 
 	var tableCount int
 	if queryErr := db.QueryRow(ctx, "SELECT count(*) FROM public.documents").Scan(&tableCount); queryErr != nil {

@@ -94,6 +94,10 @@ func (service *Service) SetEventBus(eventBus *core.EventBus) {
 
 // CheckScope verifies if the request has the required scope permission.
 func (service *Service) CheckScope(request *http.Request, requiredScope string) bool {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() {
+		return authContext.HasScope(requiredScope)
+	}
 	if service.serviceAccountManager == nil {
 		return true
 	}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"layr.sh/core"
-	"layr.sh/data/common"
 )
 
 // DefaultSaltSecret is the fallback salt used for visitor hashing.
@@ -43,20 +42,16 @@ func ComputeVisitorHash(clientIP, userAgent string, now time.Time, saltSecret st
 
 // ExtractAuthContext inspects claims and headers to build the caller AuthContext.
 func ExtractAuthContext(request *http.Request, saltSecret string) AuthContext {
-	authClaims := common.ExtractClaims(request)
-	if authClaims.Subject != "" || (authClaims.Role != "" && authClaims.Role != "anon") {
-		role := authClaims.Role
-		if role == "" {
-			role = "authenticated"
-		}
+	jwtClaims := core.GetAuthContext(request.Context()).JWT
+	if jwtClaims.Subject != "" || (jwtClaims.Role != "" && jwtClaims.Role != "anon") {
 		return AuthContext{
-			Role:        role,
-			Subject:     authClaims.Subject,
+			Role:        jwtClaims.Role,
+			Subject:     jwtClaims.Subject,
 			VisitorHash: "",
 		}
 	}
 
-	role := authClaims.Role
+	role := jwtClaims.Role
 	if role == "" {
 		role = "anon"
 	}

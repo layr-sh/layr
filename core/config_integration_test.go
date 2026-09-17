@@ -8,6 +8,7 @@ import (
 )
 
 func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	validHexKey := strings.Repeat("0", 64)
 
 	// 1. Non-existent file returns default config with zero error
@@ -134,6 +135,7 @@ data:
 }
 
 func TestCoreConfigLoadWithEnvironmentOverlayIntegration(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	temporaryDirectory := t.TempDir()
 	yamlFile := filepath.Join(temporaryDirectory, "layr.yaml")
 	validHexKey := strings.Repeat("1", 64)

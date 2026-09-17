@@ -198,6 +198,10 @@ func (handler *BaseHandler) writeDBError(responseWriter http.ResponseWriter, req
 
 // isRLSBypassed returns true if the request caller has the necessary service account scope to bypass RLS.
 func (handler *BaseHandler) isRLSBypassed(request *http.Request, requiredScope string) bool {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() && authContext.HasScope(requiredScope) {
+		return true
+	}
 	if handler.serviceAccountManager == nil {
 		return false
 	}

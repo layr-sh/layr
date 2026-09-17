@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 	"uuid"
 )
@@ -347,7 +346,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 
 	var sessionCookie *http.Cookie
 	for _, cookie := range submitResponseRecorder.Result().Cookies() {
-		if cookie.Name == AuthSessionInsecureCookieName || cookie.Name == AuthSessionCookieName {
+		if cookie.Name == core.SessionCookieNameInsecure || cookie.Name == core.SessionCookieNameSecure {
 			sessionCookie = cookie
 			break
 		}
@@ -459,7 +458,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// 8. UserInfo Endpoint (GET /api/v1/auth/oauth/userinfo)
-	userinfoRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	tokenJWTClaims, _ := baseHandler.jwtSigner.VerifyAccessToken(tokenResponse.AccessToken)
+	userinfoRequest := withUserAuthClaims(httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil), *tokenJWTClaims)
 	userinfoRequest.Header.Set("Authorization", "Bearer "+tokenResponse.AccessToken)
 	userinfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCUserInfo(userinfoResponseRecorder, userinfoRequest)
@@ -496,7 +496,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		url.QueryEscape("mobile-client-state-789"),
 		url.QueryEscape(mobileChallenge),
 	)
-	ssoAuthorizeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, ssoAuthorizeURL, nil)
+	ssoAuthorizeRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodGet, ssoAuthorizeURL, nil), testUserID, "authenticated", false)
 	ssoAuthorizeRequest.AddCookie(sessionCookie)
 	ssoAuthorizeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCAuthorize(ssoAuthorizeResponseRecorder, ssoAuthorizeRequest)
@@ -568,7 +568,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	// Assert session cookie is cleared
 	var clearedSessionCookie *http.Cookie
 	for _, cookie := range signOutResponseRecorder.Result().Cookies() {
-		if cookie.Name == AuthSessionInsecureCookieName || cookie.Name == AuthSessionCookieName {
+		if cookie.Name == core.SessionCookieNameInsecure || cookie.Name == core.SessionCookieNameSecure {
 			clearedSessionCookie = cookie
 			break
 		}
@@ -594,8 +594,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// a1. Locked user during refresh token exchange -> 400 invalid_grant
-	lockedUserRefreshToken := jwt.GenerateRefreshToken()
-	lockedUserRefreshHash := jwt.HashRefreshToken(lockedUserRefreshToken)
+	lockedUserRefreshToken := baseHandler.jwtSigner.GenerateRefreshToken()
+	lockedUserRefreshHash := baseHandler.jwtSigner.HashRefreshToken(lockedUserRefreshToken)
 	var lockedUserID string
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = 'locked.user@example.com'").Scan(&lockedUserID)
 	_, _ = db.Exec(ctx, `
@@ -623,8 +623,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("failed to drop foreign key constraint: %v", err)
 	}
 
-	ghostRefreshToken := jwt.GenerateRefreshToken()
-	ghostRefreshHash := jwt.HashRefreshToken(ghostRefreshToken)
+	ghostRefreshToken := baseHandler.jwtSigner.GenerateRefreshToken()
+	ghostRefreshHash := baseHandler.jwtSigner.HashRefreshToken(ghostRefreshToken)
 	ghostUserID := uuid.NewV7().String()
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
@@ -672,12 +672,20 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// c. Deleted/nonexistent user in userinfo -> 404
-	ghostToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	ghostToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: "01918a24-8888-7000-8000-000000000088",
 		Email:   "ghost@example.com",
 		Role:    "authenticated",
 	}, 900)
-	ghostRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	ghostCtx := core.WithAuthContext(ctx, core.AuthContext{
+		UserID: "01918a24-8888-7000-8000-000000000088",
+		JWT: core.JWTClaims{
+			Subject: "01918a24-8888-7000-8000-000000000088",
+			Email:   "ghost@example.com",
+			Role:    "authenticated",
+		},
+	})
+	ghostRequest := httptest.NewRequestWithContext(ghostCtx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	ghostRequest.Header.Set("Authorization", "Bearer "+ghostToken)
 	ghostResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCUserInfo(ghostResponseRecorder, ghostRequest)
@@ -737,9 +745,17 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Fatalf("failed to create active service account: %v", err)
 	}
 
+	slugifier := core.NewSlugifier()
+	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if expectedHandle == "" {
+		expectedHandle = "layr"
+	}
+	layrAudience := expectedHandle + ":service_account"
+
 	// 1. Basic Auth credentials flow (inherits all scopes)
 	basicAuthValues := url.Values{
 		"grant_type": {"client_credentials"},
+		"audience":   {layrAudience},
 	}
 	basicAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(basicAuthValues.Encode()))
 	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -765,23 +781,18 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Errorf("expected no refresh token or id token in M2M response, got %+v", basicOIDCTokenResponse)
 	}
 
-	m2MClaims, verifyErr := baseHandler.signer.VerifyM2MToken(basicOIDCTokenResponse.AccessToken)
+	m2mJWTClaims, verifyErr := baseHandler.jwtSigner.VerifyM2MToken(basicOIDCTokenResponse.AccessToken)
 	if verifyErr != nil {
 		t.Fatalf("failed to verify M2M token: %v", verifyErr)
 	}
-	if m2MClaims.Subject != activeServiceAccount.ID {
-		t.Errorf("expected subject %s, got %s", activeServiceAccount.ID, m2MClaims.Subject)
+	if m2mJWTClaims.Subject != activeServiceAccount.ID {
+		t.Errorf("expected subject %s, got %s", activeServiceAccount.ID, m2mJWTClaims.Subject)
 	}
-	slugifier := core.NewSlugifier()
-	expectedHandle := slugifier.Slugify(core.GetConfig().Project.Name)
-	if expectedHandle == "" {
-		expectedHandle = "layr"
+	if m2mJWTClaims.Audience != layrAudience {
+		t.Errorf("expected audience %s, got %s", layrAudience, m2mJWTClaims.Audience)
 	}
-	if m2MClaims.Audience != expectedHandle+":service_account" {
-		t.Errorf("expected audience %s:service_account, got %s", expectedHandle, m2MClaims.Audience)
-	}
-	if len(m2MClaims.Scopes) != 2 {
-		t.Errorf("expected 2 scopes, got %v", m2MClaims.Scopes)
+	if len(m2mJWTClaims.Scopes()) != 2 {
+		t.Errorf("expected 2 scopes, got %v", m2mJWTClaims.Scopes())
 	}
 
 	// 2. Form body credentials with scope down-scoping
@@ -790,6 +801,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_id":     {activeServiceAccount.KeyPrefix},
 		"client_secret": {activeServiceAccount.SecretKey},
 		"scope":         {"data:schema.read"},
+		"audience":      {layrAudience},
 	}
 	formRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(formValues.Encode()))
 	formRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -811,6 +823,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_id":     activeServiceAccount.ID,
 		"client_secret": activeServiceAccount.SecretKey,
 		"scope":         "auth:read",
+		"audience":      layrAudience,
 	}
 	jsonBytes, _ := json.Marshal(jsonBodyMap)
 	jsonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", bytes.NewReader(jsonBytes))
@@ -828,6 +841,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_id":     {activeServiceAccount.ID},
 		"client_secret": {activeServiceAccount.SecretKey},
 		"scope":         {"admin:super"},
+		"audience":      {layrAudience},
 	}
 	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(invalidScopeValues.Encode()))
 	invalidScopeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -836,6 +850,125 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 
 	if invalidScopeResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(invalidScopeResponseRecorder.Body.String(), "invalid_scope") {
 		t.Fatalf("expected 400 invalid_scope, got %d (%s)", invalidScopeResponseRecorder.Code, invalidScopeResponseRecorder.Body.String())
+	}
+
+	// 4b. Missing audience -> 400 Bad Request (invalid_request)
+	missingAudienceValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+	}
+	missingAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(missingAudienceValues.Encode()))
+	missingAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	missingAudienceResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(missingAudienceResponseRecorder, missingAudienceRequest)
+	if missingAudienceResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(missingAudienceResponseRecorder.Body.String(), "audience parameter is required") {
+		t.Fatalf("expected 400 invalid_request on missing audience, got %d (%s)", missingAudienceResponseRecorder.Code, missingAudienceResponseRecorder.Body.String())
+	}
+
+	// 4c. Unregistered audience -> 400 Bad Request (invalid_target)
+	unregisteredAudienceValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {"https://unregistered.api.com"},
+	}
+	unregisteredAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(unregisteredAudienceValues.Encode()))
+	unregisteredAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	unregisteredAudienceResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(unregisteredAudienceResponseRecorder, unregisteredAudienceRequest)
+	if unregisteredAudienceResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(unregisteredAudienceResponseRecorder.Body.String(), "invalid_target") {
+		t.Fatalf("expected 400 invalid_target on unregistered audience, got %d (%s)", unregisteredAudienceResponseRecorder.Code, unregisteredAudienceResponseRecorder.Body.String())
+	}
+
+	// 4d. Registered external Resource Server with valid external scope
+	rsConfig := configManager.Get()
+	rsConfig.OIDC.ResourceServers = []ResourceServerConfig{
+		{
+			Identifier: "https://billing.example.com",
+			Scopes:     []string{"invoices:read", "invoices:write", "payments:read"},
+		},
+	}
+	configManager.Set(rsConfig)
+
+	rsValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {"https://billing.example.com"},
+		"scope":         {"invoices:read"},
+	}
+	rsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(rsValues.Encode()))
+	rsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rsResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(rsResponseRecorder, rsRequest)
+	if rsResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid RS client_credentials, got %d (%s)", rsResponseRecorder.Code, rsResponseRecorder.Body.String())
+	}
+	var rsOIDCTokenResponse OIDCTokenResponse
+	_ = json.Unmarshal(rsResponseRecorder.Body.Bytes(), &rsOIDCTokenResponse)
+	if rsOIDCTokenResponse.Scope != "invoices:read" {
+		t.Fatalf("expected scope invoices:read, got %s", rsOIDCTokenResponse.Scope)
+	}
+	rsJWTClaims, rsVerifyErr := baseHandler.jwtSigner.VerifyM2MToken(rsOIDCTokenResponse.AccessToken)
+	if rsVerifyErr != nil || rsJWTClaims.Audience != "https://billing.example.com" || !rsJWTClaims.HasScope("invoices:read") {
+		t.Fatalf("unexpected RS token claims: %+v, err: %v", rsJWTClaims, rsVerifyErr)
+	}
+
+	// 4e. Registered external Resource Server with all scopes inherited when scope omitted
+	rsAllValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {"https://billing.example.com"},
+	}
+	rsAllRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(rsAllValues.Encode()))
+	rsAllRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rsAllResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(rsAllResponseRecorder, rsAllRequest)
+	if rsAllResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on RS all scopes, got %d (%s)", rsAllResponseRecorder.Code, rsAllResponseRecorder.Body.String())
+	}
+	var rsAllOIDCTokenResponse OIDCTokenResponse
+	_ = json.Unmarshal(rsAllResponseRecorder.Body.Bytes(), &rsAllOIDCTokenResponse)
+	rsAllJWTClaims, _ := baseHandler.jwtSigner.VerifyM2MToken(rsAllOIDCTokenResponse.AccessToken)
+	if len(rsAllJWTClaims.Scopes()) != 3 {
+		t.Fatalf("expected 3 RS scopes inherited, got: %v", rsAllJWTClaims.Scopes())
+	}
+
+	// 4f. Registered external Resource Server with undefined external scope -> 400 Bad Request (invalid_scope)
+	rsInvalidScopeValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {"https://billing.example.com"},
+		"scope":         {"invoices:delete"},
+	}
+	rsInvalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(rsInvalidScopeValues.Encode()))
+	rsInvalidScopeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rsInvalidScopeResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(rsInvalidScopeResponseRecorder, rsInvalidScopeRequest)
+	if rsInvalidScopeResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(rsInvalidScopeResponseRecorder.Body.String(), "invalid_scope") {
+		t.Fatalf("expected 400 invalid_scope on undefined RS scope, got %d (%s)", rsInvalidScopeResponseRecorder.Code, rsInvalidScopeResponseRecorder.Body.String())
+	}
+
+	// 4g. Empty project name fallback audience "layr:service_account"
+	serverConfig := core.DefaultConfig()
+	serverConfig.Project.Name = ""
+	core.SetLoadedConfig(serverConfig)
+	emptyProjectAudienceValues := url.Values{
+		"grant_type":    {"client_credentials"},
+		"client_id":     {activeServiceAccount.ID},
+		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {"layr:service_account"},
+	}
+	emptyProjectAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(emptyProjectAudienceValues.Encode()))
+	emptyProjectAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	emptyProjectAudienceResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCToken(emptyProjectAudienceResponseRecorder, emptyProjectAudienceRequest)
+	core.UnloadConfig()
+	if emptyProjectAudienceResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on empty project name fallback audience, got %d (%s)", emptyProjectAudienceResponseRecorder.Code, emptyProjectAudienceResponseRecorder.Body.String())
 	}
 
 	// 5. Client ID mismatch -> 401 Unauthorized
@@ -922,11 +1055,13 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	// 9. Handler with nil signer -> 500
 	nilSignerBaseHandler := &Handler{
 		serviceAccountManager: serviceAccountManager,
-		signer:                nil,
+		configManager:         configManager,
+		jwtSigner:             nil,
 	}
 	nilSignerValues := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {layrAudience},
 	}
 	nilSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(nilSignerValues.Encode()))
 	nilSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -940,11 +1075,13 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	// 10. Handler with uninitialized signer -> 500
 	uninitSignerBaseHandler := &Handler{
 		serviceAccountManager: serviceAccountManager,
-		signer:                &jwt.Signer{},
+		configManager:         configManager,
+		jwtSigner:             &core.JWTSigner{},
 	}
 	uninitSignerValues := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_secret": {activeServiceAccount.SecretKey},
+		"audience":      {layrAudience},
 	}
 	uninitSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(uninitSignerValues.Encode()))
 	uninitSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")

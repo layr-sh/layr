@@ -8,6 +8,7 @@ import (
 )
 
 func TestCoreConfigQuickstartE2E(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	temporaryDirectory := t.TempDir()
 	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
 	validHexKey := strings.Repeat("2", 64)

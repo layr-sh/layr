@@ -1,4 +1,4 @@
-package jwt
+package core
 
 import (
 	"context"
@@ -12,28 +12,21 @@ import (
 	"strings"
 	"testing"
 	"uuid"
-
-	"layr.sh/core"
 )
 
-func TestJWTJWKSHTTPIntegration(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+func TestCoreJWTJWKSHTTPIntegration(t *testing.T) {
+	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	signer, err := NewSigner(cryptoKeyManager)
+	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
 	if err != nil {
 		t.Fatalf("failed to create Signer: %v", err)
 	}
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/.well-known/jwks.json", signer.HandleJWKS)
-	serveMux.HandleFunc("/.well-known/openid-configuration", func(responseWriter http.ResponseWriter, request *http.Request) {
-		responseWriter.Header().Set("Content-Type", "application/json")
-		oidcConfiguration := BuildOIDCDiscovery("http://" + request.Host)
-		_ = json.NewEncoder(responseWriter).Encode(oidcConfiguration)
-	})
+	serveMux.HandleFunc("/.well-known/jwks.json", jwtSigner.HandleJWKS)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -71,7 +64,7 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 	}
 
 	jwk := jwks.Keys[0]
-	if jwk.KeyID != signer.KeyID() || jwk.Algorithm != "EdDSA" || jwk.Curve != tls.Ed25519.String() || jwk.KeyType != "OKP" {
+	if jwk.KeyID != jwtSigner.KeyID() || jwk.Algorithm != "EdDSA" || jwk.Curve != tls.Ed25519.String() || jwk.KeyType != "OKP" {
 		t.Fatalf("unexpected JWK parameters: %+v", jwk)
 	}
 
@@ -83,7 +76,7 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 	discoveredPublicKey := ed25519.PublicKey(publicKeyBytes)
 
 	userID := uuid.NewV7().String()
-	token, tokenGenerateErr := signer.GenerateAccessToken(Claims{
+	token, tokenGenerateErr := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: userID,
 		Email:   "user@example.com",
 		Claims:  map[string]any{"premium": true},
@@ -107,30 +100,12 @@ func TestJWTJWKSHTTPIntegration(t *testing.T) {
 		t.Fatal("token verification failed using discovered public key from JWKS HTTP endpoint")
 	}
 
-	// 3. Fetch OIDC Discovery from HTTP server
-	oidcRequest, oidcRequestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, testServer.URL+"/.well-known/openid-configuration", nil)
-	if oidcRequestErr != nil {
-		t.Fatalf("failed to create oidc request: %v", oidcRequestErr)
+	// 3. Verify using JWKS.VerifyJWT
+	verifiedJWTClaims, err := jwks.VerifyJWT(token)
+	if err != nil {
+		t.Fatalf("jwks.VerifyJWT failed: %v", err)
 	}
-	oidcResponse, oidcFetchErr := testServer.Client().Do(oidcRequest)
-	if oidcFetchErr != nil {
-		t.Fatalf("failed to GET OIDC discovery: %v", oidcFetchErr)
-	}
-	defer func() { _ = oidcResponse.Body.Close() }()
-
-	if oidcResponse.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK from OIDC discovery, got: %d", oidcResponse.StatusCode)
-	}
-
-	var oidcConfiguration OIDCConfiguration
-	if oidcDecodeErr := json.NewDecoder(oidcResponse.Body).Decode(&oidcConfiguration); oidcDecodeErr != nil {
-		t.Fatalf("failed to decode OIDC discovery JSON: %v", oidcDecodeErr)
-	}
-
-	if oidcConfiguration.Issuer != testServer.URL {
-		t.Fatalf("expected issuer %s, got: %s", testServer.URL, oidcConfiguration.Issuer)
-	}
-	if oidcConfiguration.JwksURI != testServer.URL+"/.well-known/jwks.json" {
-		t.Fatalf("expected jwks_uri %s, got: %s", testServer.URL+"/.well-known/jwks.json", oidcConfiguration.JwksURI)
+	if verifiedJWTClaims.Subject != userID {
+		t.Fatalf("expected subject %s, got: %s", userID, verifiedJWTClaims.Subject)
 	}
 }

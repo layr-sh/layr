@@ -5,57 +5,56 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"layr.sh/auth/jwt"
+	"layr.sh/core"
 )
 
-// AuthClaims is an alias for jwt.Claims to avoid duplicate claim definitions across layr.
-type AuthClaims = jwt.Claims
-
 // BuildClaimsMap constructs a unified map of all standard RFC 7519 and custom claims.
-func BuildClaimsMap(authClaims jwt.Claims) map[string]any {
+func BuildClaimsMap(jwtClaims core.JWTClaims) map[string]any {
 	claimsMap := make(map[string]any)
-	if authClaims.Subject != "" {
-		claimsMap["sub"] = authClaims.Subject
+	if jwtClaims.Subject != "" {
+		claimsMap["sub"] = jwtClaims.Subject
 	}
-	if authClaims.Role != "" {
-		claimsMap["role"] = authClaims.Role
+	if jwtClaims.SessionID != "" {
+		claimsMap["sid"] = jwtClaims.SessionID
 	}
-	if authClaims.Issuer != "" {
-		claimsMap["iss"] = authClaims.Issuer
+	if jwtClaims.Role != "" {
+		claimsMap["role"] = jwtClaims.Role
 	}
-	if authClaims.Audience != "" {
-		claimsMap["aud"] = authClaims.Audience
+	if jwtClaims.Issuer != "" {
+		claimsMap["iss"] = jwtClaims.Issuer
 	}
-	if authClaims.ExpiresAt != 0 {
-		claimsMap["exp"] = authClaims.ExpiresAt
+	if jwtClaims.Audience != "" {
+		claimsMap["aud"] = jwtClaims.Audience
 	}
-	if authClaims.NotBefore != 0 {
-		claimsMap["nbf"] = authClaims.NotBefore
+	if jwtClaims.ExpiresAt != 0 {
+		claimsMap["exp"] = jwtClaims.ExpiresAt
 	}
-	if authClaims.IssuedAt != 0 {
-		claimsMap["iat"] = authClaims.IssuedAt
+	if jwtClaims.NotBefore != 0 {
+		claimsMap["nbf"] = jwtClaims.NotBefore
 	}
-	if authClaims.JWTID != "" {
-		claimsMap["jti"] = authClaims.JWTID
+	if jwtClaims.IssuedAt != 0 {
+		claimsMap["iat"] = jwtClaims.IssuedAt
 	}
-	if authClaims.Email != "" {
-		claimsMap["email"] = authClaims.Email
+	if jwtClaims.JWTID != "" {
+		claimsMap["jti"] = jwtClaims.JWTID
 	}
-	if authClaims.Phone != "" {
-		claimsMap["phone"] = authClaims.Phone
+	if jwtClaims.Email != "" {
+		claimsMap["email"] = jwtClaims.Email
 	}
-	if authClaims.IsAnonymous {
+	if jwtClaims.Phone != "" {
+		claimsMap["phone"] = jwtClaims.Phone
+	}
+	if jwtClaims.IsAnonymous {
 		claimsMap["is_anonymous"] = true
 	}
-	if len(authClaims.Scopes) > 0 {
-		claimsMap["scopes"] = authClaims.Scopes
+	if jwtClaims.Scope != "" {
+		claimsMap["scope"] = jwtClaims.Scope
 	}
-	for claimKey, claimValue := range authClaims.Claims {
+	for claimKey, claimValue := range jwtClaims.Claims {
 		if IsSafeClaimKey(claimKey) {
 			claimsMap[claimKey] = claimValue
 		}
@@ -64,8 +63,8 @@ func BuildClaimsMap(authClaims jwt.Claims) map[string]any {
 }
 
 // ApplyRLS configures PostgreSQL session variables within a transaction for RLS evaluation.
-func ApplyRLS(ctx context.Context, tx pgx.Tx, authClaims jwt.Claims) {
-	claimsMap := BuildClaimsMap(authClaims)
+func ApplyRLS(ctx context.Context, tx pgx.Tx, jwtClaims core.JWTClaims) {
+	claimsMap := BuildClaimsMap(jwtClaims)
 	if len(claimsMap) == 0 {
 		return
 	}
@@ -116,118 +115,4 @@ func IsSafeClaimKey(claimKey string) bool {
 		return false
 	}
 	return true
-}
-
-// ExtractClaims reads JWT identity headers injected by upstream auth middleware.
-func ExtractClaims(request *http.Request) jwt.Claims {
-	authClaims := jwt.Claims{
-		Claims: make(map[string]any),
-	}
-
-	if sub := request.Header.Get("X-JWT-Sub"); sub != "" {
-		authClaims.Subject = sub
-	}
-	if role := request.Header.Get("X-JWT-Role"); role != "" {
-		authClaims.Role = role
-	}
-	if iss := request.Header.Get("X-JWT-Iss"); iss != "" {
-		authClaims.Issuer = iss
-	}
-	if aud := request.Header.Get("X-JWT-Aud"); aud != "" {
-		authClaims.Audience = aud
-	}
-	if exp := request.Header.Get("X-JWT-Exp"); exp != "" {
-		if parsed, err := strconv.ParseInt(exp, 10, 64); err == nil {
-			authClaims.ExpiresAt = parsed
-		}
-	}
-	if nbf := request.Header.Get("X-JWT-Nbf"); nbf != "" {
-		if parsed, err := strconv.ParseInt(nbf, 10, 64); err == nil {
-			authClaims.NotBefore = parsed
-		}
-	}
-	if iat := request.Header.Get("X-JWT-Iat"); iat != "" {
-		if parsed, err := strconv.ParseInt(iat, 10, 64); err == nil {
-			authClaims.IssuedAt = parsed
-		}
-	}
-	if jti := request.Header.Get("X-JWT-Jti"); jti != "" {
-		authClaims.JWTID = jti
-	}
-	if email := request.Header.Get("X-JWT-Email"); email != "" {
-		authClaims.Email = email
-	}
-	if phone := request.Header.Get("X-JWT-Phone"); phone != "" {
-		authClaims.Phone = phone
-	}
-	if isAnon := request.Header.Get("X-JWT-Is-Anonymous"); isAnon == "true" {
-		authClaims.IsAnonymous = true
-	}
-	if scopes := request.Header.Get("X-JWT-Scopes"); scopes != "" {
-		authClaims.Scopes = strings.Split(scopes, " ")
-	}
-
-	for headerKey, headerValues := range request.Header {
-		lowerHeaderKey := strings.ToLower(headerKey)
-		if strings.HasPrefix(lowerHeaderKey, "x-jwt-claim-") && len(headerValues) > 0 {
-			claimKey := strings.TrimPrefix(lowerHeaderKey, "x-jwt-claim-")
-			headerValue := headerValues[0]
-			switch claimKey {
-			case "sub":
-				if authClaims.Subject == "" {
-					authClaims.Subject = headerValue
-				}
-			case "role":
-				if authClaims.Role == "" {
-					authClaims.Role = headerValue
-				}
-			case "iss":
-				if authClaims.Issuer == "" {
-					authClaims.Issuer = headerValue
-				}
-			case "aud":
-				if authClaims.Audience == "" {
-					authClaims.Audience = headerValue
-				}
-			case "exp":
-				if authClaims.ExpiresAt == 0 {
-					if parsed, err := strconv.ParseInt(headerValue, 10, 64); err == nil {
-						authClaims.ExpiresAt = parsed
-					}
-				}
-			case "nbf":
-				if authClaims.NotBefore == 0 {
-					if parsed, err := strconv.ParseInt(headerValue, 10, 64); err == nil {
-						authClaims.NotBefore = parsed
-					}
-				}
-			case "iat":
-				if authClaims.IssuedAt == 0 {
-					if parsed, err := strconv.ParseInt(headerValue, 10, 64); err == nil {
-						authClaims.IssuedAt = parsed
-					}
-				}
-			case "jti":
-				if authClaims.JWTID == "" {
-					authClaims.JWTID = headerValue
-				}
-			case "email":
-				if authClaims.Email == "" {
-					authClaims.Email = headerValue
-				}
-			case "phone":
-				if authClaims.Phone == "" {
-					authClaims.Phone = headerValue
-				}
-			case "is_anonymous":
-				authClaims.IsAnonymous = (headerValue == "true")
-			case "scopes":
-				authClaims.Scopes = strings.Split(headerValue, " ")
-			default:
-				authClaims.Claims[claimKey] = headerValue
-			}
-		}
-	}
-
-	return authClaims
 }

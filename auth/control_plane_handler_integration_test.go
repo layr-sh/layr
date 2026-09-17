@@ -43,4 +43,21 @@ func TestAuthControlPlaneHandlerIntegration(t *testing.T) {
 	if controlPlaneHandler.checkScope(validRequest, "auth:user.write") {
 		t.Fatal("expected checkScope to fail when required scope is not granted")
 	}
+
+	// M2M AuthContext scope checks
+	m2mAuthedCtx := core.WithAuthContext(ctx, core.AuthContext{
+		ServiceAccountID: createdServiceAccount.ID,
+		JWT: core.JWTClaims{
+			Subject: createdServiceAccount.ID,
+			Role:    "service_role",
+			Scope:   "auth:user.read",
+		},
+	})
+	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	if !controlPlaneHandler.checkScope(m2mValidRequest, "auth:user.read") {
+		t.Fatal("expected checkScope to pass with M2M AuthContext containing auth:user.read")
+	}
+	if controlPlaneHandler.checkScope(m2mValidRequest, "auth:user.write") {
+		t.Fatal("expected checkScope to fail with M2M AuthContext missing auth:user.write")
+	}
 }

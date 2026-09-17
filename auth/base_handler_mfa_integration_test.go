@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -56,7 +55,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
 
-	validAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Email:   userEmail,
 		Role:    "authenticated",
@@ -125,7 +124,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code": currentTOTPCode,
 	}
 	encodedValidVerify, _ := json.Marshal(validVerifyPayload)
-	validVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
+	validVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	validVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	validVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(validVerifyResponseRecorder, validVerifyRequest)
@@ -161,7 +160,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
-	lockedSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", nil)
+	lockedSetupRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", nil), userID, "authenticated", false)
 	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFASetup(lockedSetupResponseRecorder, lockedSetupRequest)
@@ -169,7 +168,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 423 StatusLocked on locked user setup, got: %d", lockedSetupResponseRecorder.Code)
 	}
 
-	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
+	lockedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(lockedVerifyResponseRecorder, lockedVerifyRequest)
@@ -180,7 +179,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 5. Test corrupted encrypted secret -> 500
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'invalid-secret' WHERE id = $1", userID)
-	corruptedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
+	corruptedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(corruptedVerifyResponseRecorder, corruptedVerifyRequest)
@@ -190,7 +189,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 6. Test missing MFA secret in DB -> 400
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL, mfa_enabled = false WHERE id = $1", userID)
-	noSecretVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify))
+	noSecretVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(noSecretVerifyResponseRecorder, noSecretVerifyRequest)
@@ -271,7 +270,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 
 	// 9. Test handleMFADisable
-	phoneAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	phoneAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: phoneUserID,
 		Phone:   "+15554321098",
 		Role:    "authenticated",
@@ -281,11 +280,11 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 
 	// Non-existent user -> 404
-	nonExistentToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	nonExistentToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: "01918a24-9999-7000-8000-000000000099",
 		Role:    "authenticated",
 	}, 3600)
-	nonExistentDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	nonExistentDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: "01918a24-9999-7000-8000-000000000099"}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	nonExistentDisableRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFADisable(nonExistentDisableResponseRecorder, nonExistentDisableRequest)
@@ -295,7 +294,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// Locked user -> 423
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", phoneUserID)
-	lockedDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	lockedDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	lockedDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	lockedDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFADisable(lockedDisableResponseRecorder, lockedDisableRequest)
@@ -305,7 +304,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", phoneUserID)
 
 	// Successful MFA disable -> 204
-	validDisableRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/mfa", nil)
+	validDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	validDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	validDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFADisable(validDisableResponseRecorder, validDisableRequest)
@@ -395,13 +394,13 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 2. Setup and enable MFA on user
-	validAccessToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validAccessToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Email:   userEmail,
 		Role:    "authenticated",
 	}, 900)
 
-	setupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
+	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
 	setupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	setupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFASetup(setupResponseRecorder, setupRequest)
@@ -414,7 +413,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
 	verifyPayload, _ := json.Marshal(map[string]any{"code": totpCode})
-	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
+	verifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
 	verifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	verifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleMFAVerify(verifyResponseRecorder, verifyRequest)

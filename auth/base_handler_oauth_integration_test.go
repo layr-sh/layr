@@ -13,7 +13,6 @@ import (
 	"time"
 	"uuid"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/oauth"
 	"layr.sh/core"
 )
@@ -125,7 +124,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = NULL WHERE id = $1", firstSessionResponse.User.ID)
 
 	// 5. UserInfo GET returns user from database
-	userInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	userInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, Role: "authenticated"}}), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	userInfoRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
 	userInfoResponseResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleOAuthUserInfo(userInfoResponseResponseRecorder, userInfoRequest)
@@ -135,14 +134,14 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 
 	// 5b. UserInfo 404 for non-existent user
 	nonExistentUserID := uuid.NewV7().String()
-	nonExistentToken, nonExistentTokenErr := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	nonExistentToken, nonExistentTokenErr := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: nonExistentUserID,
 		Role:    "authenticated",
 	}, 900)
 	if nonExistentTokenErr != nil {
 		t.Fatalf("failed to generate access token for non-existent user: %v", nonExistentTokenErr)
 	}
-	nonExistentUserInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	nonExistentUserInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: nonExistentUserID, JWT: core.JWTClaims{Subject: nonExistentUserID, Role: "authenticated"}}), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	nonExistentUserInfoRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentUserInfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleOAuthUserInfo(nonExistentUserInfoResponseRecorder, nonExistentUserInfoRequest)
@@ -161,7 +160,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert anonymous user: %v", insertErr)
 	}
 
-	anonAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -169,9 +168,10 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate access token for anonymous user: %v", err)
 	}
+	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	// Test HandleOAuthAuthorize with active anonymous caller
-	anonAuthorizeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/authorize", nil)
+	anonAuthorizeRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/authorize", nil)
 	anonAuthorizeRequest.SetPathValue("provider", "google")
 	anonAuthorizeRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	anonAuthorizeResponseRecorder := httptest.NewRecorder()
@@ -197,7 +197,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	})
 
 	_ = testKVStore.Set(context.Background(), "auth:pkce:anon-conversion-state", "anon-conversion-state", 10*time.Minute)
-	conversionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=anon-conversion-state", nil)
+	conversionRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=anon-conversion-state", nil)
 	conversionRequest.SetPathValue("provider", "google")
 	conversionRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	conversionResponseResponseRecorder := httptest.NewRecorder()
@@ -224,14 +224,15 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID2)
-	anonAccessToken2, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonAccessToken2, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID2,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
+	secondAnonAuthContext := core.AuthContext{UserID: anonUserID2, JWT: core.JWTClaims{Subject: anonUserID2, Role: "authenticated", IsAnonymous: true}}
 
 	_ = testKVStore.Set(context.Background(), "auth:pkce:identity-conflict-state", "identity-conflict-state", 10*time.Minute)
-	conflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-code&state=identity-conflict-state", nil)
+	conflictRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), secondAnonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-code&state=identity-conflict-state", nil)
 	conflictRequest.SetPathValue("provider", "google")
 	conflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
 	conflictResponseResponseRecorder := httptest.NewRecorder()
@@ -257,7 +258,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	})
 
 	_ = testKVStore.Set(context.Background(), "auth:pkce:email-conflict-state", "email-conflict-state", 10*time.Minute)
-	emailConflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-email-code&state=email-conflict-state", nil)
+	emailConflictRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), secondAnonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=conflict-email-code&state=email-conflict-state", nil)
 	emailConflictRequest.SetPathValue("provider", "google")
 	emailConflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
 	emailConflictResponseResponseRecorder := httptest.NewRecorder()
@@ -313,7 +314,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on broken pool, got: %d", brokenResponseRecorder.Code)
 	}
 
-	brokenUserInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	brokenUserInfoRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil), secondSessionResponse.User.ID, "authenticated", false)
 	brokenUserInfoRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
 	brokenUserInfoResponseRecorder := httptest.NewRecorder()
 	brokenBaseHandler.HandleOAuthUserInfo(brokenUserInfoResponseRecorder, brokenUserInfoRequest)
@@ -364,29 +365,37 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected nil claims when procedure returns invalid json for map, got: %+v", claims)
 	}
 
-	// 13. Authenticate user via database session
+	// 13. Hash refresh token
 	refreshTokenRaw := "db-test-refresh-token-xyz"
-	refreshHash := jwt.HashRefreshToken(refreshTokenRaw)
+	refreshHash := baseHandler.jwtSigner.HashRefreshToken(refreshTokenRaw)
 	_, _ = db.Exec(context.Background(), `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, $2, '127.0.0.1', 'test-agent', clock_timestamp() + interval '1 day', clock_timestamp())
 	`, firstSessionResponse.User.ID, refreshHash)
 
-	dbSessionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	dbSessionRequest.Header.Set("X-Refresh-Token", refreshTokenRaw)
-	authedUserID, authErr := baseHandler.authenticateUser(dbSessionRequest)
-	if authErr != nil || authedUserID != firstSessionResponse.User.ID {
-		t.Fatalf("expected authenticated user %s, got %s (err: %v)", firstSessionResponse.User.ID, authedUserID, authErr)
+	var foundSessionUserID string
+	_ = db.QueryRow(context.Background(), "SELECT user_id FROM auth.sessions WHERE refresh_token_hash = $1", refreshHash).Scan(&foundSessionUserID)
+	if foundSessionUserID != firstSessionResponse.User.ID {
+		t.Fatalf("expected session user %s, got %s", firstSessionResponse.User.ID, foundSessionUserID)
 	}
 
 	// 14. resolveAnonymousCaller branches
-	regularAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	regularAuthContext := core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, IsAnonymous: false}}
+	regularAuthRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), regularAuthContext), http.MethodGet, "/", nil)
 	regularAuthRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
 	if anonUserRecord, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(regularAuthRequest); anonUserRecord != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
 		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for regular user in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveAnonymousCallerErr)
 	}
 
-	if anonUserRecord, resolveAnonymousCallerErr := brokenBaseHandler.resolveAnonymousCaller(regularAuthRequest); anonUserRecord != nil || resolveAnonymousCallerErr == nil || errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
+	convertedAuthContext := core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, IsAnonymous: true}}
+	convertedAuthRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), convertedAuthContext), http.MethodGet, "/", nil)
+	if anonUserRecord, resolveErr := baseHandler.resolveAnonymousCaller(convertedAuthRequest); anonUserRecord != nil || !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for converted user in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveErr)
+	}
+
+	brokenAnonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, IsAnonymous: true}}
+	brokenAnonRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), brokenAnonAuthContext), http.MethodGet, "/", nil)
+	if anonUserRecord, resolveAnonymousCallerErr := brokenBaseHandler.resolveAnonymousCaller(brokenAnonRequest); anonUserRecord != nil || resolveAnonymousCallerErr == nil || errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
 		t.Fatalf("expected nil, DB error for broken db in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveAnonymousCallerErr)
 	}
 
@@ -397,11 +406,12 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, failAnonUserID)
 
-	failAnonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	failAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     failAnonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
+	failAnonAuthContext := core.AuthContext{UserID: failAnonUserID, JWT: core.JWTClaims{Subject: failAnonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	_, _ = db.Exec(context.Background(), `
 		CREATE OR REPLACE FUNCTION public.test_fail_update() RETURNS trigger AS $$
@@ -428,7 +438,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	})
 
 	_ = testKVStore.Set(context.Background(), "auth:pkce:fail-update-state", "fail-update-state", 10*time.Minute)
-	failUpdateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=fail-update-state", nil)
+	failUpdateRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), failAnonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=anon-code&state=fail-update-state", nil)
 	failUpdateRequest.SetPathValue("provider", "google")
 	failUpdateRequest.Header.Set("Authorization", "Bearer "+failAnonToken)
 	failUpdateResponseResponseRecorder := httptest.NewRecorder()

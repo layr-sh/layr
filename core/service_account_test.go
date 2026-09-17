@@ -88,6 +88,13 @@ func TestCoreServiceAccountExtractRequestKeyUnit(t *testing.T) {
 		t.Fatalf("expected sec_key_12345, got %s", key)
 	}
 
+	// ExtractRequestServiceAccountKey from X-Service-Account-Key header
+	shortKeyHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	shortKeyHeaderRequest.Header.Set("X-Service-Account-Key", "sec_key_short")
+	if key := ExtractRequestServiceAccountKey(shortKeyHeaderRequest); key != "sec_key_short" {
+		t.Fatalf("expected sec_key_short, got %s", key)
+	}
+
 	// ExtractRequestServiceAccountKey from Authorization: Bearer
 	bearerHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	bearerHeaderRequest.Header.Set("Authorization", "Bearer sec_key_67890")

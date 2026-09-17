@@ -11,12 +11,13 @@ import (
 
 func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling get user profile request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("get user profile rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("get user profile rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	if handler.db == nil {
 		log.Debug("get user profile rejected: database pool unavailable")
@@ -27,7 +28,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 	ctx := request.Context()
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -68,12 +69,13 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 
 func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling update user properties request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("update user properties rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("update user properties rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	var updateUpdateUserPropertiesRequest UpdateUserPropertiesRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUpdateUserPropertiesRequest); decodeErr != nil {
@@ -93,7 +95,7 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 	ctx := request.Context()
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		UPDATE auth.users
 		SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
 		    last_updated_at = clock_timestamp()
@@ -128,12 +130,13 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 
 func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling delete user account request")
-	userID, err := handler.authenticateUser(request)
-	if err != nil {
-		log.Debugf("delete user account rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("delete user account rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	if handler.db == nil {
 		log.Debug("delete user account rejected: database pool unavailable")
@@ -184,8 +187,7 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *userRecord.Phone)
 	}
 
-	isSecure := core.IsSecureRequest(request)
-	core.ClearSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, isSecure)
+	core.ClearSessionCookie(responseWriter, request)
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewUserDeletedEvent(userRecord.ID, UserDeletedEventData(userRecord)))

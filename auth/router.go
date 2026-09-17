@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
@@ -22,7 +21,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	}
 
 	// 1. OIDC Discovery & JWKS
-	core.GetRoute[jwt.OIDCConfiguration](router, "/.well-known/openid-configuration", service.baseHandler.handleOIDCDiscovery,
+	core.GetRoute[OIDCConfiguration](router, "/.well-known/openid-configuration", service.baseHandler.handleOIDCDiscovery,
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("OpenID Connect discovery document"),
 		core.RouteDescription("Public OpenID Connect discovery metadata document defining issuer, authorization, token, and JWKS endpoints."),
@@ -30,7 +29,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth"),
 		core.RouteSDKMethodName("openidConfiguration"),
 	)
-	core.GetRoute[jwt.JWKS](router, "/.well-known/jwks.json", service.baseHandler.handleJWKS,
+	core.GetRoute[core.JWKS](router, "/.well-known/jwks.json", service.baseHandler.handleJWKS,
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("JSON Web Key Set (JWKS) public verification keys"),
 		core.RouteDescription("Public JSON Web Key Set (JWKS) containing active Ed25519 public verification keys."),

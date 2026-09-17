@@ -55,7 +55,7 @@ func TestCommonClaimsApplyRLSIntegration(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	authClaims := AuthClaims{
+	jwtClaims := core.JWTClaims{
 		Subject:  "usr_integration_001",
 		Role:     "editor",
 		Email:    "editor@example.com",
@@ -68,7 +68,7 @@ func TestCommonClaimsApplyRLSIntegration(t *testing.T) {
 		},
 	}
 
-	ApplyRLS(ctx, tx, authClaims)
+	ApplyRLS(ctx, tx, jwtClaims)
 
 	// 3. Verify PostgreSQL current_setting values within transaction
 	var currentSubject, currentRole, currentEmail, currentIssuer, currentAudience, currentTenant, currentPlan, currentUnsafe, currentFullJSON string

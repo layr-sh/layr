@@ -50,6 +50,10 @@ func (controlPlaneHandler *ControlPlaneHandler) SetHasher(hasher *password.Hashe
 
 // checkScope verifies if the incoming request satisfies the required permission scope.
 func (controlPlaneHandler *ControlPlaneHandler) checkScope(request *http.Request, requiredScope string) bool {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() {
+		return authContext.HasScope(requiredScope)
+	}
 	if controlPlaneHandler.serviceAccountManager == nil {
 		return true
 	}

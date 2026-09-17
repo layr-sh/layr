@@ -18,12 +18,12 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	_ = json.NewDecoder(request.Body).Decode(&userEmailVerificationRequest)
 
 	recipientEmail := strings.TrimSpace(strings.ToLower(userEmailVerificationRequest.Email))
-	authUserID, authErr := handler.authenticateUser(request)
+	authContext := core.GetAuthContext(request.Context())
+	authUserID := authContext.UserID
 
 	if recipientEmail == "" {
-		claims := handler.extractClaimsOptional(request)
-		if claims != nil && claims.Email != "" {
-			recipientEmail = strings.TrimSpace(strings.ToLower(claims.Email))
+		if authContext.JWT.Email != "" {
+			recipientEmail = strings.TrimSpace(strings.ToLower(authContext.JWT.Email))
 		}
 	}
 
@@ -47,9 +47,8 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	var existingUserID string
 	var emailVerifiedAt *time.Time
 	err := handler.db.QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
-
 	targetUserID := existingUserID
-	if authErr == nil && authUserID != "" {
+	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
 			log.Debugf("email verification conflict: email %s already in use by user %s (caller: %s)", recipientEmail, existingUserID, authUserID)
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use", "LAYR_AUTH_001")
@@ -64,7 +63,7 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 		}
 	}
 
-	if emailVerifiedAt != nil && (authErr != nil || authUserID == existingUserID) {
+	if emailVerifiedAt != nil && (authUserID == "" || authUserID == existingUserID) {
 		log.Debugf("email %s is already verified for user %s", recipientEmail, targetUserID)
 		responseWriter.Header().Set("Content-Type", "application/json")
 		responseWriter.WriteHeader(http.StatusOK)
@@ -91,15 +90,24 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	}
 
 	log.Tracef("dispatching email verification code to %s", recipientEmail)
-	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, targetUserID)
+	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
 	if handler.eventBus != nil {
-		userRecord, _ := fetchUserRecordByID(ctx, handler.db, targetUserID)
+		var userRecord *UserRecord
+		if authUserID != "" {
+			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, authUserID); fetchErr == nil {
+				userRecord = &fetchedUserRecord
+			}
+		} else if existingUserID != "" {
+			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, existingUserID); fetchErr == nil {
+				userRecord = &fetchedUserRecord
+			}
+		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
 			Recipient: recipientEmail,
 			Purpose:   "email_verification",
 			Channel:   "email",
-			User:      &userRecord,
+			User:      userRecord,
 		}))
 	}
 
@@ -116,10 +124,10 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 	}
 
 	recipientEmail := strings.TrimSpace(strings.ToLower(userEmailVerificationConfirmRequest.Email))
+	authContext := core.GetAuthContext(request.Context())
 	if recipientEmail == "" {
-		claims := handler.extractClaimsOptional(request)
-		if claims != nil && claims.Email != "" {
-			recipientEmail = strings.TrimSpace(strings.ToLower(claims.Email))
+		if authContext.JWT.Email != "" {
+			recipientEmail = strings.TrimSpace(strings.ToLower(authContext.JWT.Email))
 		}
 	}
 
@@ -182,8 +190,8 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail))
 	}
 
-	authUserID, authErr := handler.authenticateUser(request)
-	if authErr == nil && authUserID != "" {
+	authUserID := authContext.UserID
+	if authUserID != "" {
 		isCallerAnonymous := false
 		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
@@ -267,12 +275,12 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	_ = json.NewDecoder(request.Body).Decode(&userPhoneVerificationRequest)
 
 	recipientPhone := strings.TrimSpace(userPhoneVerificationRequest.Phone)
-	authUserID, authErr := handler.authenticateUser(request)
+	authContext := core.GetAuthContext(request.Context())
+	authUserID := authContext.UserID
 
 	if recipientPhone == "" {
-		claims := handler.extractClaimsOptional(request)
-		if claims != nil && claims.Phone != "" {
-			recipientPhone = strings.TrimSpace(claims.Phone)
+		if authContext.JWT.Phone != "" {
+			recipientPhone = strings.TrimSpace(authContext.JWT.Phone)
 		}
 	}
 
@@ -306,7 +314,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	err = handler.db.QueryRow(ctx, "SELECT id, phone_verified_at FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID, &phoneVerifiedAt)
 
 	targetUserID := existingUserID
-	if authErr == nil && authUserID != "" {
+	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
 			log.Debugf("phone verification conflict: phone %s already in use by user %s (caller: %s)", recipientPhone, existingUserID, authUserID)
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use", "LAYR_AUTH_001")
@@ -321,7 +329,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 		}
 	}
 
-	if phoneVerifiedAt != nil && (authErr != nil || authUserID == existingUserID) {
+	if phoneVerifiedAt != nil && (authUserID == "" || authUserID == existingUserID) {
 		log.Debugf("phone %s is already verified for user %s", recipientPhone, targetUserID)
 		responseWriter.Header().Set("Content-Type", "application/json")
 		responseWriter.WriteHeader(http.StatusOK)
@@ -351,12 +359,21 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
 	if handler.eventBus != nil {
-		userRecord, _ := fetchUserRecordByID(ctx, handler.db, targetUserID)
+		var userRecord *UserRecord
+		if authUserID != "" {
+			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, authUserID); fetchErr == nil {
+				userRecord = &fetchedUserRecord
+			}
+		} else if existingUserID != "" {
+			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, existingUserID); fetchErr == nil {
+				userRecord = &fetchedUserRecord
+			}
+		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
 			Recipient: recipientPhone,
 			Purpose:   "phone_verification",
 			Channel:   "sms",
-			User:      &userRecord,
+			User:      userRecord,
 		}))
 	}
 
@@ -364,7 +381,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 }
 
 func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling user phone verification confirmation")
+	log.Debug("handling phone verification confirmation request")
 	var userPhoneVerificationConfirmRequest UserPhoneVerificationConfirmRequest
 	if err := json.NewDecoder(request.Body).Decode(&userPhoneVerificationConfirmRequest); err != nil {
 		log.Debugf("phone verification confirmation rejected: invalid JSON body: %v", err)
@@ -373,10 +390,10 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 	}
 
 	recipientPhone := strings.TrimSpace(userPhoneVerificationConfirmRequest.Phone)
+	authContext := core.GetAuthContext(request.Context())
 	if recipientPhone == "" {
-		claims := handler.extractClaimsOptional(request)
-		if claims != nil && claims.Phone != "" {
-			recipientPhone = strings.TrimSpace(claims.Phone)
+		if authContext.JWT.Phone != "" {
+			recipientPhone = strings.TrimSpace(authContext.JWT.Phone)
 		}
 	}
 
@@ -447,8 +464,8 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone))
 	}
 
-	authUserID, authErr := handler.authenticateUser(request)
-	if authErr == nil && authUserID != "" {
+	authUserID := authContext.UserID
+	if authUserID != "" {
 		isCallerAnonymous := false
 		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
@@ -528,12 +545,13 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 
 func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling update user email request")
-	authUserID, authErr := handler.authenticateUser(request)
-	if authErr != nil || authUserID == "" {
-		log.Debugf("update user email rejected: unauthenticated caller: %v", authErr)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("update user email rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	authUserID := authContext.UserID
 
 	var updateUpdateUserEmailRequest UpdateUserEmailRequest
 	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserEmailRequest); err != nil {
@@ -632,12 +650,13 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 
 func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling update user phone request")
-	authUserID, authErr := handler.authenticateUser(request)
-	if authErr != nil || authUserID == "" {
-		log.Debugf("update user phone rejected: unauthenticated caller: %v", authErr)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("update user phone rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	authUserID := authContext.UserID
 
 	var updateUpdateUserPhoneRequest UpdateUserPhoneRequest
 	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserPhoneRequest); err != nil {

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
@@ -186,11 +185,12 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	testUserUUID := "01918a24-5678-789a-bcde-f0123456789a"
-	validToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Role:    "authenticated",
 	}, 3600)
 	bearerHeader := "Bearer " + validToken
+	authContext := core.AuthContext{UserID: testUserUUID, JWT: core.JWTClaims{Subject: testUserUUID, Role: "authenticated"}}
 
 	// 1. List user passkeys - unauthenticated -> 401
 	unauthListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
@@ -201,7 +201,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 2. List user passkeys - authenticated on nil DB -> 500
-	authListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	authListRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
 	authListRequest.Header.Set("Authorization", bearerHeader)
 	authListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListUserPasskeys(authListResponseRecorder, authListRequest)
@@ -218,7 +218,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 4. Delete user passkey - authenticated with empty ID -> 400
-	emptyIDDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/", nil)
+	emptyIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/api/v1/auth/user/passkeys/", nil)
 	emptyIDDeleteRequest.Header.Set("Authorization", bearerHeader)
 	emptyIDDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeleteUserPasskey(emptyIDDeleteResponseRecorder, emptyIDDeleteRequest)
@@ -227,7 +227,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 5. Delete user passkey - authenticated with valid ID on nil DB -> 500
-	validIDDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
+	validIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
 	validIDDeleteRequest.SetPathValue("id", "pk-1")
 	validIDDeleteRequest.Header.Set("Authorization", bearerHeader)
 	validIDDeleteResponseRecorder := httptest.NewRecorder()
@@ -237,7 +237,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 6. Passkey SignUp with Bearer Token and empty user_id -> 200
-	authSignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
+	authSignUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
 	authSignUpRequest.Header.Set("Authorization", bearerHeader)
 	authSignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignUp(authSignUpResponseRecorder, authSignUpRequest)
@@ -248,7 +248,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	// 7. Passkey SignUpVerify with Bearer Token and empty user_id on nil DB -> 500
 	challenge, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge, testUserUUID, 0)
-	authVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
+	authVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
 	authVerifyRequest.Header.Set("Authorization", bearerHeader)
 	authVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasskeySignUpVerify(authVerifyResponseRecorder, authVerifyRequest)

@@ -257,6 +257,15 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected 200 OK from HandlePutConfig with null oidc.clients, got: %d", nullOIDCResponseRecorder.Code)
 	}
 
+	// Test HandlePutConfig with null oidc.resource_servers preserving current
+	nullResourceServersBody := `{"oidc":{"resource_servers":null}}`
+	nullResourceServersRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
+	nullResourceServersResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(nullResourceServersResponseRecorder, nullResourceServersRequest)
+	if nullResourceServersResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from HandlePutConfig with null oidc.resource_servers, got: %d", nullResourceServersResponseRecorder.Code)
+	}
+
 	// Test HandlePutConfig with Email and SMS plaintext secrets
 	emailSMSPutBody := `{
 		"email_dispatcher": {
