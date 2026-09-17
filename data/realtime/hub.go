@@ -38,7 +38,7 @@ type Subscription struct {
 // Hub manages WebSocket clients, subscriptions, and PostgreSQL CDC notifications.
 type Hub struct {
 	db              *core.DatabasePool
-	kvStore         core.KVStore
+	kvStore         *core.KVStore
 	clients         map[*Client]bool
 	clientsRWMutex  sync.RWMutex
 	installedTables map[string]bool // "schema.table" -> bool
@@ -75,8 +75,8 @@ func (hub *Hub) SetEventHandler(handler func(CDCEvent)) {
 }
 
 // SetKVStore attaches the pluggable KVStore instance for presence tracking.
-func (hub *Hub) SetKVStore(databaseKVStore core.KVStore) {
-	hub.kvStore = databaseKVStore
+func (hub *Hub) SetKVStore(kvStore *core.KVStore) {
+	hub.kvStore = kvStore
 }
 
 // SetPresenceTTL configures the TTL for presence keys in KVStore.

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"layr.sh/core"
 )
 
 type unitMockKV struct {
@@ -83,7 +85,7 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 
 	// attach mock KV store
 	mockKV := &unitMockKV{data: make(map[string]string)}
-	hub.SetKVStore(mockKV)
+	hub.SetKVStore(core.NewKVStoreFromDriver(mockKV))
 
 	// empty inputs early return
 	hub.SetPresence(ctx, "", "client_1")

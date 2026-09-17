@@ -202,7 +202,8 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 	configManager.rwMutex.Unlock()
 
 	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
+	testKVDriver := newInMemoryKVDriver()
+	testKVStore := core.NewKVStoreFromDriver(testKVDriver)
 	baseHandler.SetKVStore(testKVStore)
 
 	testPhone := "+1234567890"
@@ -223,11 +224,11 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 	}
 
 	// KVStore Set error branch
-	testKVStore.setErr = errors.New("simulated kv store set error")
+	testKVDriver.setErr = errors.New("simulated kv store set error")
 	kvErrResponseRecorder := httptest.NewRecorder()
 	baseHandler.issueSessionResponse(kvErrResponseRecorder, request, userRecord)
 	if kvErrResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 even if fast path cache fails, got: %d", kvErrResponseRecorder.Code)
 	}
-	testKVStore.setErr = nil
+	testKVDriver.setErr = nil
 }

@@ -2,7 +2,9 @@ package core
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 )
 
 func TestCoreKVStoreFactoryValidationUnit(t *testing.T) {
@@ -65,5 +67,318 @@ func TestCoreKVStoreFactoryValidationUnit(t *testing.T) {
 	SetLoadedConfig(config)
 	if _, err := NewKVStore(ctx, nil); err == nil {
 		t.Fatal("expected connection error on unreachable redis cluster")
+	}
+}
+
+type mockUnitTestKVDriver struct {
+	storage map[string]string
+	err     error
+}
+
+func (driver *mockUnitTestKVDriver) Get(ctx context.Context, key string) (string, error) {
+	if driver.err != nil {
+		return "", driver.err
+	}
+	entryValue, exists := driver.storage[key]
+	if !exists {
+		return "", ErrKVStoreKeyNotFound
+	}
+	return entryValue, nil
+}
+
+func (driver *mockUnitTestKVDriver) MGet(ctx context.Context, keys []string) (map[string]string, error) {
+	if driver.err != nil {
+		return nil, driver.err
+	}
+	result := make(map[string]string)
+	for _, key := range keys {
+		if entryValue, exists := driver.storage[key]; exists {
+			result[key] = entryValue
+		}
+	}
+	return result, nil
+}
+
+func (driver *mockUnitTestKVDriver) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+	if driver.err != nil {
+		return driver.err
+	}
+	driver.storage[key] = value
+	return nil
+}
+
+func (driver *mockUnitTestKVDriver) MSet(ctx context.Context, entries map[string]string, expiry time.Duration) error {
+	if driver.err != nil {
+		return driver.err
+	}
+	for key, value := range entries {
+		driver.storage[key] = value
+	}
+	return nil
+}
+
+func (driver *mockUnitTestKVDriver) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
+	if driver.err != nil {
+		return false, driver.err
+	}
+	if _, exists := driver.storage[key]; exists {
+		return false, nil
+	}
+	driver.storage[key] = value
+	return true, nil
+}
+
+func (driver *mockUnitTestKVDriver) Delete(ctx context.Context, key string) error {
+	if driver.err != nil {
+		return driver.err
+	}
+	delete(driver.storage, key)
+	return nil
+}
+
+func (driver *mockUnitTestKVDriver) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+	return driver.IncrementBy(ctx, key, 1, expiry)
+}
+
+func (driver *mockUnitTestKVDriver) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
+	if driver.err != nil {
+		return 0, driver.err
+	}
+	driver.storage[key] = "1"
+	return delta, nil
+}
+
+func (driver *mockUnitTestKVDriver) Expire(ctx context.Context, key string, expiry time.Duration) error {
+	if driver.err != nil {
+		return driver.err
+	}
+	return nil
+}
+
+func (driver *mockUnitTestKVDriver) Ping(ctx context.Context) error {
+	if driver.err != nil {
+		return driver.err
+	}
+	return nil
+}
+
+func (driver *mockUnitTestKVDriver) Close() error {
+	if driver.err != nil {
+		return driver.err
+	}
+	return nil
+}
+
+type mockUnitTestSweeperDriver struct {
+	mockUnitTestKVDriver
+}
+
+func (driver *mockUnitTestSweeperDriver) Sweep(ctx context.Context) (int64, error) {
+	if driver.err != nil {
+		return 0, driver.err
+	}
+	return 42, nil
+}
+
+func TestCoreKVStoreWrapperUnit(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. NewKVStoreFromDriver with nil driver
+	if nilKVStore := NewKVStoreFromDriver(nil); nilKVStore != nil {
+		t.Fatal("expected nil KVStore when driver is nil")
+	}
+
+	// 2. Methods on nil *KVStore receiver
+	var nilReceiverKVStore *KVStore
+	if nilReceiverKVStore.Driver() != nil {
+		t.Fatal("expected nil driver from nil KVStore receiver")
+	}
+	if _, err := nilReceiverKVStore.Get(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilReceiverKVStore.MGet(ctx, []string{"k"}); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.Set(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.MSet(ctx, map[string]string{"k": "v"}, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilReceiverKVStore.SetNX(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.Delete(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilReceiverKVStore.Increment(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilReceiverKVStore.IncrementBy(ctx, "k", 5, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.Expire(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.Ping(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilReceiverKVStore.Close(); err != nil {
+		t.Fatalf("expected nil error on Close on nil receiver, got %v", err)
+	}
+	if _, err := nilReceiverKVStore.Sweep(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+
+	// 3. Methods on *KVStore with nil driver field
+	nilDriverKVStore := &KVStore{kvDriver: nil}
+	if nilDriverKVStore.Driver() != nil {
+		t.Fatal("expected nil driver")
+	}
+	if _, err := nilDriverKVStore.Get(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilDriverKVStore.MGet(ctx, []string{"k"}); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.Set(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.MSet(ctx, map[string]string{"k": "v"}, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilDriverKVStore.SetNX(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.Delete(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilDriverKVStore.Increment(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if _, err := nilDriverKVStore.IncrementBy(ctx, "k", 5, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.Expire(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.Ping(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+	if err := nilDriverKVStore.Close(); err != nil {
+		t.Fatalf("expected nil error on Close with nil driver, got %v", err)
+	}
+	if _, err := nilDriverKVStore.Sweep(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
+		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
+	}
+
+	// 4. Valid driver without Sweeper
+	mockDriver := &mockUnitTestKVDriver{storage: make(map[string]string)}
+	kvStore := NewKVStoreFromDriver(mockDriver)
+	if kvStore == nil || kvStore.Driver() != mockDriver {
+		t.Fatal("expected store with mock driver")
+	}
+	if err := kvStore.Set(ctx, "key1", "val1", 0); err != nil {
+		t.Fatalf("Set failed: %v", err)
+	}
+	if retrievedValue, err := kvStore.Get(ctx, "key1"); err != nil || retrievedValue != "val1" {
+		t.Fatalf("Get failed: %v, retrievedValue=%s", err, retrievedValue)
+	}
+	if err := kvStore.MSet(ctx, map[string]string{"key2": "val2"}, 0); err != nil {
+		t.Fatalf("MSet failed: %v", err)
+	}
+	if multiGetEntries, err := kvStore.MGet(ctx, []string{"key1", "key2"}); err != nil || len(multiGetEntries) != 2 {
+		t.Fatalf("MGet failed: %v", err)
+	}
+	if ok, err := kvStore.SetNX(ctx, "key1", "val1", 0); err != nil || ok {
+		t.Fatalf("SetNX expected false for existing key, got %v, err=%v", ok, err)
+	}
+	if ok, err := kvStore.SetNX(ctx, "key3", "val3", 0); err != nil || !ok {
+		t.Fatalf("SetNX expected true for new key, got %v, err=%v", ok, err)
+	}
+	if incrementResult, err := kvStore.Increment(ctx, "counter", 0); err != nil || incrementResult != 1 {
+		t.Fatalf("Increment failed: %v, val=%d", err, incrementResult)
+	}
+	if incrementByResult, err := kvStore.IncrementBy(ctx, "counter", 10, 0); err != nil || incrementByResult != 10 {
+		t.Fatalf("IncrementBy failed: %v, val=%d", err, incrementByResult)
+	}
+	if err := kvStore.Expire(ctx, "key1", 10*time.Second); err != nil {
+		t.Fatalf("Expire failed: %v", err)
+	}
+	if err := kvStore.Ping(ctx); err != nil {
+		t.Fatalf("Ping failed: %v", err)
+	}
+	if swept, err := kvStore.Sweep(ctx); err != nil || swept != 0 {
+		t.Fatalf("expected (0, nil) for driver not implementing Sweeper, got (%d, %v)", swept, err)
+	}
+	if err := kvStore.Delete(ctx, "key1"); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if err := kvStore.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// 5. Driver implementing Sweeper
+	sweeperDriver := &mockUnitTestSweeperDriver{mockUnitTestKVDriver: mockUnitTestKVDriver{storage: make(map[string]string)}}
+	sweeperKVStore := NewKVStoreFromDriver(sweeperDriver)
+	if swept, err := sweeperKVStore.Sweep(ctx); err != nil || swept != 42 {
+		t.Fatalf("expected (42, nil) from sweeper driver, got (%d, %v)", swept, err)
+	}
+
+	// 6. DatabaseKVStore.KVStore() and RedisKVStore.KVStore() helper methods
+	databaseKVStore := &DatabaseKVStore{}
+	if dbKVStore := databaseKVStore.KVStore(); dbKVStore == nil || dbKVStore.Driver() != databaseKVStore {
+		t.Fatal("expected DatabaseKVStore.KVStore() to wrap databaseKVStore")
+	}
+
+	redisKVStore := &RedisKVStore{}
+	if rKVStore := redisKVStore.KVStore(); rKVStore == nil || rKVStore.Driver() != redisKVStore {
+		t.Fatal("expected RedisKVStore.KVStore() to wrap redisKVStore")
+	}
+	if kvStore.KVStore() != kvStore {
+		t.Fatal("expected KVStore.KVStore() to return self")
+	}
+
+	// 7. Driver error propagation
+	failingMockUnitTestKVDriver := &mockUnitTestKVDriver{err: errors.New("driver error")}
+	failingKVStore := NewKVStoreFromDriver(failingMockUnitTestKVDriver)
+	if _, err := failingKVStore.Get(ctx, "k"); err == nil {
+		t.Fatal("expected error on Get")
+	}
+	if _, err := failingKVStore.MGet(ctx, []string{"k"}); err == nil {
+		t.Fatal("expected error on MGet")
+	}
+	if err := failingKVStore.Set(ctx, "k", "v", 0); err == nil {
+		t.Fatal("expected error on Set")
+	}
+	if err := failingKVStore.MSet(ctx, map[string]string{"k": "v"}, 0); err == nil {
+		t.Fatal("expected error on MSet")
+	}
+	if _, err := failingKVStore.SetNX(ctx, "k", "v", 0); err == nil {
+		t.Fatal("expected error on SetNX")
+	}
+	if err := failingKVStore.Delete(ctx, "k"); err == nil {
+		t.Fatal("expected error on Delete")
+	}
+	if _, err := failingKVStore.Increment(ctx, "k", 0); err == nil {
+		t.Fatal("expected error on Increment")
+	}
+	if _, err := failingKVStore.IncrementBy(ctx, "k", 5, 0); err == nil {
+		t.Fatal("expected error on IncrementBy")
+	}
+	if err := failingKVStore.Expire(ctx, "k", 0); err == nil {
+		t.Fatal("expected error on Expire")
+	}
+	if err := failingKVStore.Ping(ctx); err == nil {
+		t.Fatal("expected error on Ping")
+	}
+	if err := failingKVStore.Close(); err == nil {
+		t.Fatal("expected error on Close")
+	}
+
+	failingMockUnitTestSweeperDriver := &mockUnitTestSweeperDriver{mockUnitTestKVDriver: mockUnitTestKVDriver{err: errors.New("sweep failure")}}
+	failingSweeperKVStore := NewKVStoreFromDriver(failingMockUnitTestSweeperDriver)
+	if _, err := failingSweeperKVStore.Sweep(ctx); err == nil {
+		t.Fatal("expected error on Sweep")
 	}
 }

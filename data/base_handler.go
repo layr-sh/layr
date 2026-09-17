@@ -21,7 +21,7 @@ import (
 type BaseHandler struct {
 	db                    *core.DatabasePool
 	configManager         *ConfigManager
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 	eventBus              *core.EventBus
 	realtimeHub           *realtime.Hub
 	graphqlCompiler       *graphql.Compiler
@@ -62,7 +62,7 @@ func NewHandler(db *core.DatabasePool, configManager *ConfigManager) *BaseHandle
 }
 
 // SetKVStore attaches the key-value store for caching and ephemeral KV operations.
-func (handler *BaseHandler) SetKVStore(kvStore core.KVStore) {
+func (handler *BaseHandler) SetKVStore(kvStore *core.KVStore) {
 	handler.kvStore = kvStore
 	if handler.schemaIntrospector != nil {
 		handler.schemaIntrospector.SetKVStore(kvStore)

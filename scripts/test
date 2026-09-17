@@ -8,6 +8,7 @@ mkdir -p "${CACHE_DIR}"
 
 COVERAGE_FILE="${CACHE_DIR}/coverage.out"
 HTML_REPORT="${CACHE_DIR}/coverage.html"
+rm -f "${COVERAGE_FILE}" "${HTML_REPORT}"
 
 SHOW_HTML=false
 VERBOSE=false

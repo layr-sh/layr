@@ -174,3 +174,8 @@ func (redisKVStore *RedisKVStore) Close() error {
 	}
 	return nil
 }
+
+// KVStore returns a *KVStore struct wrapping this RedisKVStore.
+func (redisKVStore *RedisKVStore) KVStore() *KVStore {
+	return NewKVStoreFromDriver(redisKVStore)
+}

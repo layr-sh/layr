@@ -187,8 +187,10 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	if _, closedIncrErr := kvStore.Increment(ctx, "k", 0); closedIncrErr == nil {
 		t.Fatal("expected error on Increment with closed db connection pool")
 	}
-	otherDatabaseKVStore := kvStore.(*DatabaseKVStore)
-	if _, closedSweepErr := otherDatabaseKVStore.Sweep(ctx); closedSweepErr == nil {
+	if _, ok := kvStore.Driver().(*DatabaseKVStore); !ok {
+		t.Fatal("expected DatabaseKVStore driver")
+	}
+	if _, closedSweepErr := kvStore.Sweep(ctx); closedSweepErr == nil {
 		t.Fatal("expected error on Sweep with closed db connection pool")
 	}
 

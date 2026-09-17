@@ -103,7 +103,7 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	tableConfig := service.GetConfigManager().Get()
 	tableConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(tableConfig)
-	inMemoryKVStore.storage["cache:query_count"] = "5"
+	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
 	capListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items?limit=2", nil)
 	capListRequest.SetPathValue("schema_name", "public")
 	capListRequest.SetPathValue("table_name", "items")

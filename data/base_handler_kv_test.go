@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
 	datakv "layr.sh/data/kv"
 )
 
-type failingKVStore struct {
-	inMemoryKVStore
+type failingKVDriver struct {
+	inMemoryKVDriver
 	setErr    error
 	setNXErr  error
 	msetErr   error
@@ -25,50 +26,60 @@ type failingKVStore struct {
 	getErr    error
 }
 
-func (f *failingKVStore) Get(ctx context.Context, key string) (string, error) {
+func newFailingKVDriver() *failingKVDriver {
+	return &failingKVDriver{
+		inMemoryKVDriver: *newInMemoryKVDriver(),
+	}
+}
+
+func (f *failingKVDriver) KVStore() *core.KVStore {
+	return core.NewKVStoreFromDriver(f)
+}
+
+func (f *failingKVDriver) Get(ctx context.Context, key string) (string, error) {
 	if f.getErr != nil {
 		return "", f.getErr
 	}
-	return f.inMemoryKVStore.Get(ctx, key)
+	return f.inMemoryKVDriver.Get(ctx, key)
 }
 
-func (f *failingKVStore) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+func (f *failingKVDriver) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
 	if f.setErr != nil {
 		return f.setErr
 	}
-	return f.inMemoryKVStore.Set(ctx, key, value, expiry)
+	return f.inMemoryKVDriver.Set(ctx, key, value, expiry)
 }
 
-func (f *failingKVStore) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
+func (f *failingKVDriver) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
 	if f.setNXErr != nil {
 		return false, f.setNXErr
 	}
-	return f.inMemoryKVStore.SetNX(ctx, key, value, expiry)
+	return f.inMemoryKVDriver.SetNX(ctx, key, value, expiry)
 }
 
-func (f *failingKVStore) MSet(ctx context.Context, entries map[string]string, expiry time.Duration) error {
+func (f *failingKVDriver) MSet(ctx context.Context, entries map[string]string, expiry time.Duration) error {
 	if f.msetErr != nil {
 		return f.msetErr
 	}
-	return f.inMemoryKVStore.MSet(ctx, entries, expiry)
+	return f.inMemoryKVDriver.MSet(ctx, entries, expiry)
 }
 
-func (f *failingKVStore) Expire(ctx context.Context, key string, expiry time.Duration) error {
+func (f *failingKVDriver) Expire(ctx context.Context, key string, expiry time.Duration) error {
 	if f.expireErr != nil {
 		return f.expireErr
 	}
-	return f.inMemoryKVStore.Expire(ctx, key, expiry)
+	return f.inMemoryKVDriver.Expire(ctx, key, expiry)
 }
 
-func (f *failingKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+func (f *failingKVDriver) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
 	return f.IncrementBy(ctx, key, 1, expiry)
 }
 
-func (f *failingKVStore) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
+func (f *failingKVDriver) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
 	if f.incErr != nil {
 		return 0, f.incErr
 	}
-	return f.inMemoryKVStore.IncrementBy(ctx, key, delta, expiry)
+	return f.inMemoryKVDriver.IncrementBy(ctx, key, delta, expiry)
 }
 
 type failingBodyReader struct{}
@@ -289,9 +300,10 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 	})
 
 	t.Run("SetFailureInternalServerError", func(t *testing.T) {
-		failStore := &failingKVStore{inMemoryKVStore: *newInMemoryKVStore(), setErr: errors.New("write failure")}
+		failingKVDriver := newFailingKVDriver()
+		failingKVDriver.setErr = errors.New("write failure")
 		failBaseHandler := NewBaseHandler(nil, configManager)
-		failBaseHandler.SetKVStore(failStore)
+		failBaseHandler.SetKVStore(failingKVDriver.KVStore())
 
 		bodyReader := bytes.NewReader([]byte(`{"value":"test"}`))
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/failkey", bodyReader)
@@ -301,9 +313,10 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 		// Get failure
-		failGetStore := &failingKVStore{inMemoryKVStore: *newInMemoryKVStore(), getErr: errors.New("read failure")}
+		failGetDriver := newFailingKVDriver()
+		failGetDriver.getErr = errors.New("read failure")
 		failGetBaseHandler := NewBaseHandler(nil, configManager)
-		failGetBaseHandler.SetKVStore(failGetStore)
+		failGetBaseHandler.SetKVStore(failGetDriver.KVStore())
 		getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/failkey", nil)
 		getRequest.SetPathValue("key", "failkey")
 		responseRecorder = httptest.NewRecorder()
@@ -342,13 +355,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// Post SetNX error
-		failStore.setNXErr = errors.New("post setnx fail")
+		failingKVDriver.setNXErr = errors.New("post setnx fail")
 		postNXFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/post_nx?nx=true", bytes.NewReader([]byte(`{"value":"v"}`)))
 		postNXFailRequest.SetPathValue("key", "post_nx")
 		responseRecorder = httptest.NewRecorder()
 		failBaseHandler.HandlePostKV(responseRecorder, postNXFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		failStore.setNXErr = nil
+		failingKVDriver.setNXErr = nil
 
 		// PUT payload size exceeded
 		putLargeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/large_put", bytes.NewReader(bytes.Repeat([]byte("a"), 2*1024*1024+10)))
@@ -380,13 +393,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// PUT SetNX error
-		failStore.setNXErr = errors.New("put setnx fail")
+		failingKVDriver.setNXErr = errors.New("put setnx fail")
 		putNXFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_nx_fail?nx=true", bytes.NewReader([]byte("raw_val")))
 		putNXFailRequest.SetPathValue("key", "put_nx_fail")
 		responseRecorder = httptest.NewRecorder()
 		failBaseHandler.HandlePutKV(responseRecorder, putNXFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		failStore.setNXErr = nil
+		failingKVDriver.setNXErr = nil
 
 		// PUT SetNX conflict
 		firstPutNXConflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_nx_conf?nx=true", bytes.NewReader([]byte("v1")))
@@ -402,13 +415,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, responseRecorder.Code)
 
 		// PUT Set error
-		failStore.setErr = errors.New("put set fail")
+		failingKVDriver.setErr = errors.New("put set fail")
 		putSetFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_set_fail", bytes.NewReader([]byte("raw_val")))
 		putSetFailRequest.SetPathValue("key", "put_set_fail")
 		responseRecorder = httptest.NewRecorder()
 		failBaseHandler.HandlePutKV(responseRecorder, putSetFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		failStore.setErr = nil
+		failingKVDriver.setErr = nil
 	})
 
 	t.Run("SetNX", func(t *testing.T) {
@@ -464,9 +477,10 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
 
 		// Touch expire error -> 500
-		failTouchStore := &failingKVStore{inMemoryKVStore: *newInMemoryKVStore(), expireErr: errors.New("expire fail")}
+		failTouchDriver := newFailingKVDriver()
+		failTouchDriver.expireErr = errors.New("expire fail")
 		failTouchBaseHandler := NewBaseHandler(nil, configManager)
-		failTouchBaseHandler.SetKVStore(failTouchStore)
+		failTouchBaseHandler.SetKVStore(failTouchDriver.KVStore())
 		failExpirePatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/kv/any_key", bytes.NewReader([]byte(`{"ttl":60}`)))
 		failExpirePatchRequest.SetPathValue("key", "any_key")
 		responseRecorder = httptest.NewRecorder()
@@ -501,9 +515,10 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Contains(t, responseRecorder.Body.String(), `"count":2`)
 
 		// MSet store error -> 500
-		failMSetStore := &failingKVStore{inMemoryKVStore: *newInMemoryKVStore(), msetErr: errors.New("mset fail")}
+		failMSetDriver := newFailingKVDriver()
+		failMSetDriver.msetErr = errors.New("mset fail")
 		failMSetBaseHandler := NewBaseHandler(nil, configManager)
-		failMSetBaseHandler.SetKVStore(failMSetStore)
+		failMSetBaseHandler.SetKVStore(failMSetDriver.KVStore())
 		failMSetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`{"entries":{"a":"1"}}`)))
 		responseRecorder = httptest.NewRecorder()
 		failMSetBaseHandler.HandleMSetKV(responseRecorder, failMSetRequest)
@@ -591,9 +606,10 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		assert.Contains(t, responseRecorder.Body.String(), `"value":4`)
 
 		// Increment failure
-		failStore := &failingKVStore{inMemoryKVStore: *newInMemoryKVStore(), incErr: errors.New("inc failure")}
+		failDriver := newFailingKVDriver()
+		failDriver.incErr = errors.New("inc failure")
 		failBaseHandler := NewBaseHandler(nil, configManager)
-		failBaseHandler.SetKVStore(failStore)
+		failBaseHandler.SetKVStore(failDriver.KVStore())
 
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"fail"}`)))
 		responseRecorder = httptest.NewRecorder()

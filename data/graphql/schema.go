@@ -43,7 +43,7 @@ type RelationInfo struct {
 type SchemaIntrospector struct {
 	db         *core.DatabasePool
 	tables     map[string]*TableInfo // key: "schema.table"
-	kvStore    core.KVStore
+	kvStore    *core.KVStore
 	catalogTTL time.Duration
 	rwMutex    sync.RWMutex
 }
@@ -58,7 +58,7 @@ func NewSchemaIntrospector(db *core.DatabasePool) *SchemaIntrospector {
 }
 
 // SetKVStore attaches the pluggable KVStore instance for schema caching.
-func (schemaInspector *SchemaIntrospector) SetKVStore(kvStore core.KVStore) {
+func (schemaInspector *SchemaIntrospector) SetKVStore(kvStore *core.KVStore) {
 	schemaInspector.kvStore = kvStore
 }
 
