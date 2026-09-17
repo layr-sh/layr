@@ -783,3 +783,149 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 		t.Fatalf("expected Password sign-in is disabled, got: %s", disabledSignInResponseRecorder.Body.String())
 	}
 }
+
+func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+
+	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/openid-configuration", nil)
+	discoveryResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCDiscovery(discoveryResponseRecorder, discoveryRequest)
+
+	if discoveryResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from discovery, got: %d", discoveryResponseRecorder.Code)
+	}
+
+	var discoveryResponse map[string]any
+	if unmarshalErr := json.Unmarshal(discoveryResponseRecorder.Body.Bytes(), &discoveryResponse); unmarshalErr != nil {
+		t.Fatalf("failed to parse discovery JSON: %v", unmarshalErr)
+	}
+
+	if discoveryResponse["backchannel_logout_supported"] != true {
+		t.Fatalf("expected backchannel_logout_supported to be true, got: %v", discoveryResponse["backchannel_logout_supported"])
+	}
+	if discoveryResponse["backchannel_logout_session_supported"] != true {
+		t.Fatalf("expected backchannel_logout_session_supported to be true, got: %v", discoveryResponse["backchannel_logout_session_supported"])
+	}
+	if discoveryResponse["frontchannel_logout_supported"] != true {
+		t.Fatalf("expected frontchannel_logout_supported to be true, got: %v", discoveryResponse["frontchannel_logout_supported"])
+	}
+	if discoveryResponse["frontchannel_logout_session_supported"] != true {
+		t.Fatalf("expected frontchannel_logout_session_supported to be true, got: %v", discoveryResponse["frontchannel_logout_session_supported"])
+	}
+}
+
+func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+	jwtSigner, err := core.NewJWTSigner(cryptoKeyManager)
+	if err != nil {
+		t.Fatalf("failed to create jwt signer: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	config := DefaultConfig()
+	config.OIDC.Enabled = true
+	config.OIDC.Clients = []OIDCClientConfig{
+		{
+			ClientID:                           "client-front-channel",
+			Name:                               "Front Channel Client",
+			FrontChannelSignOutURI:             "https://rp.example.com/front-sign-out",
+			FrontChannelSignOutSessionRequired: true,
+			PostSignOutRedirectURIs:            []string{"https://rp.example.com/signed-out"},
+		},
+	}
+	configManager.Set(config)
+
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+
+	// Create valid ID token hint for user and session
+	idTokenHint, generateErr := jwtSigner.GenerateIDToken(core.JWTClaims{
+		Subject:   "user-front-123",
+		SessionID: "sess-front-456",
+		Audience:  "client-front-channel",
+	})
+	if generateErr != nil {
+		t.Fatalf("failed to generate id token hint: %v", generateErr)
+	}
+
+	// Sign out request with front-channel client and post_sign_out_redirect_uri
+	signOutURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://rp.example.com/signed-out&state=state123"
+	signOutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, signOutURL, nil)
+	signOutResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCSignOut(signOutResponseRecorder, signOutRequest)
+
+	if signOutResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from sign-out with front channel, got: %d", signOutResponseRecorder.Code)
+	}
+	responseBody := signOutResponseRecorder.Body.String()
+	if !strings.Contains(responseBody, "<iframe src=\"https://rp.example.com/front-sign-out") {
+		t.Fatalf("expected hidden iframe in body, got: %s", responseBody)
+	}
+	if !strings.Contains(responseBody, "https://rp.example.com/signed-out") {
+		t.Fatalf("expected redirect URL in iframe page, got: %s", responseBody)
+	}
+}
+
+func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
+	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+	jwtSigner, err := core.NewJWTSigner(cryptoKeyManager)
+	if err != nil {
+		t.Fatalf("failed to create jwt signer: %v", err)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	config := DefaultConfig()
+	config.OIDC.Enabled = true
+	config.OIDC.Clients = []OIDCClientConfig{
+		{
+			ClientID:                "trusted-client",
+			PostSignOutRedirectURIs: []string{"https://trusted.example.com/logout-done"},
+		},
+	}
+	configManager.Set(config)
+
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+
+	idTokenHint, _ := jwtSigner.GenerateIDToken(core.JWTClaims{
+		Subject:  "user-trusted",
+		Audience: "trusted-client",
+	})
+
+	// 1. Valid post_sign_out_redirect_uri -> redirects 302 to registered URI
+	validURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://trusted.example.com/logout-done&state=abc"
+	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, validURL, nil)
+	validResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCSignOut(validResponseRecorder, validRequest)
+
+	if validResponseRecorder.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect for valid URI, got: %d", validResponseRecorder.Code)
+	}
+	redirectLocation := validResponseRecorder.Header().Get("Location")
+	if !strings.Contains(redirectLocation, "https://trusted.example.com/logout-done") || !strings.Contains(redirectLocation, "state=abc") {
+		t.Fatalf("unexpected redirect location: %s", redirectLocation)
+	}
+
+	// 2. Untrusted post_sign_out_redirect_uri -> renders default signed out HTML page instead of redirecting
+	untrustedURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://attacker.example.com/evil"
+	untrustedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, untrustedURL, nil)
+	untrustedResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOIDCSignOut(untrustedResponseRecorder, untrustedRequest)
+
+	if untrustedResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for untrusted redirect URI, got: %d", untrustedResponseRecorder.Code)
+	}
+	if !strings.Contains(untrustedResponseRecorder.Body.String(), "You have been signed out") {
+		t.Fatalf("expected default signed-out confirmation page, got: %s", untrustedResponseRecorder.Body.String())
+	}
+}

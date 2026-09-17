@@ -67,6 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_layr_identities_user_id ON auth.identities(user_i
 CREATE TABLE IF NOT EXISTS auth.sessions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    client_id VARCHAR(255),
     refresh_token_hash VARCHAR(255) NOT NULL,
     ip_address INET,
     user_agent TEXT,
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS auth.sessions (
 
 CREATE INDEX IF NOT EXISTS idx_layr_sessions_user ON auth.sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_layr_sessions_hash ON auth.sessions(refresh_token_hash);
+CREATE INDEX IF NOT EXISTS idx_layr_sessions_client_id ON auth.sessions(client_id);
 
 -- 5. WebAuthn Passkey Credentials
 CREATE TABLE IF NOT EXISTS auth.passkeys (

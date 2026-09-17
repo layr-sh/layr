@@ -26,6 +26,7 @@ type UserRecord struct {
 type SessionRecord struct {
 	ID               string    `json:"id"`
 	UserID           string    `json:"user_id"`
+	ClientID         *string   `json:"client_id,omitempty"`
 	RefreshTokenHash string    `json:"refresh_token_hash"`
 	IPAddress        *string   `json:"ip_address,omitempty"`
 	UserAgent        *string   `json:"user_agent,omitempty"`

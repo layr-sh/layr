@@ -54,11 +54,11 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	device3UA := "Firefox Linux"
 
 	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, user_agent, expires_at, created_at)
+		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, user_agent, expires_at, created_at)
 		VALUES 
-			($1, $4, $5, $8, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '20 minutes'),
-			($2, $4, $6, $9, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '10 minutes'),
-			($3, $4, $7, $10, clock_timestamp() + interval '1 hour', clock_timestamp());
+			($1, $4, 'client-session-test', $5, $8, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '20 minutes'),
+			($2, $4, 'client-session-test', $6, $9, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '10 minutes'),
+			($3, $4, NULL, $7, $10, clock_timestamp() + interval '1 hour', clock_timestamp());
 	`, session1ID, session2ID, session3ID, userID, session1Hash, session2Hash, session3Hash, device1UA, device2UA, device3UA)
 
 	_ = testKVStore.Set(ctx, "auth:session:"+session1Hash, "active1", time.Hour)

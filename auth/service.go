@@ -43,6 +43,8 @@ func NewService(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) 
 	var baseHandler *BaseHandler
 	if cryptoKeyManager != nil {
 		baseHandler = NewBaseHandler(db, configManager, cryptoKeyManager)
+		jwtSigner, _ := core.NewJWTSigner(cryptoKeyManager)
+		controlPlaneHandler.SetJWTSigner(jwtSigner)
 	}
 	return &Service{
 		db:                  db,

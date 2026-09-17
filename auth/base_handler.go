@@ -38,6 +38,7 @@ type BaseHandler struct {
 	kvStore               core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
+	httpClient            HTTPClient
 }
 
 // NewBaseHandler creates a new Auth HTTP BaseHandler.
@@ -66,6 +67,7 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoK
 		totpManager:      core.NewTOTPManager(config.MFA.Issuer),
 		emailDispatcher:  emailDispatcher,
 		smsDispatcher:    smsDispatcher,
+		httpClient:       &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
@@ -111,6 +113,12 @@ func (handler *BaseHandler) SetServiceAccountManager(serviceAccountManager *core
 func (handler *BaseHandler) SetEventBus(eventBus *core.EventBus) {
 	log.Debug("configuring event bus on auth handler")
 	handler.eventBus = eventBus
+}
+
+// SetHTTPClient configures the outbound HTTP client for federated sign-out notifications.
+func (handler *BaseHandler) SetHTTPClient(httpClient HTTPClient) {
+	log.Debug("configuring HTTP client on auth handler")
+	handler.httpClient = httpClient
 }
 
 // GetTOTPManager returns the active TOTP manager.

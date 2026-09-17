@@ -144,14 +144,47 @@ type OIDCConfig struct {
 
 // OIDCClientConfig defines a registered third-party OpenID Connect client application.
 type OIDCClientConfig struct {
-	Name                    string   `json:"name"`
-	ClientID                string   `json:"client_id"`
-	ClientSecret            string   `json:"client_secret,omitempty"`
-	ClientSecretConfigured  bool     `json:"client_secret_configured,omitempty"`
-	RedirectURIs            []string `json:"redirect_uris"`
-	PostSignOutRedirectURIs []string `json:"post_sign_out_redirect_uris,omitempty"`
-	Public                  bool     `json:"public"` // True for PKCE-only public clients (SPA/mobile); false for confidential clients
-	Scopes                  []string `json:"scopes,omitempty"`
+	Name                               string   `json:"name"`
+	ClientID                           string   `json:"client_id"`
+	ClientSecret                       string   `json:"client_secret,omitempty"`
+	ClientSecretConfigured             bool     `json:"client_secret_configured,omitempty"`
+	RedirectURIs                       []string `json:"redirect_uris"`
+	PostSignOutRedirectURIs            []string `json:"post_sign_out_redirect_uris,omitempty"`
+	Public                             bool     `json:"public"` // True for PKCE-only public clients (SPA/mobile); false for confidential clients
+	Scopes                             []string `json:"scopes,omitempty"`
+	BackChannelSignOutURI              string   `json:"backchannel_sign_out_uri,omitempty"`
+	BackChannelSignOutSessionRequired  bool     `json:"backchannel_sign_out_session_required,omitempty"`
+	FrontChannelSignOutURI             string   `json:"frontchannel_sign_out_uri,omitempty"`
+	FrontChannelSignOutSessionRequired bool     `json:"frontchannel_sign_out_session_required,omitempty"`
+}
+
+// UnmarshalJSON supports both standard Layr sign-out JSON keys and standard OIDC logout wire aliases.
+func (clientConfig *OIDCClientConfig) UnmarshalJSON(data []byte) error {
+	type Alias OIDCClientConfig
+	var raw struct {
+		Alias
+		BackChannelLogoutURI              string `json:"backchannel_logout_uri"`
+		BackChannelLogoutSessionRequired  *bool  `json:"backchannel_logout_session_required"`
+		FrontChannelLogoutURI             string `json:"frontchannel_logout_uri"`
+		FrontChannelLogoutSessionRequired *bool  `json:"frontchannel_logout_session_required"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*clientConfig = OIDCClientConfig(raw.Alias)
+	if clientConfig.BackChannelSignOutURI == "" && raw.BackChannelLogoutURI != "" {
+		clientConfig.BackChannelSignOutURI = raw.BackChannelLogoutURI
+	}
+	if !clientConfig.BackChannelSignOutSessionRequired && raw.BackChannelLogoutSessionRequired != nil {
+		clientConfig.BackChannelSignOutSessionRequired = *raw.BackChannelLogoutSessionRequired
+	}
+	if clientConfig.FrontChannelSignOutURI == "" && raw.FrontChannelLogoutURI != "" {
+		clientConfig.FrontChannelSignOutURI = raw.FrontChannelLogoutURI
+	}
+	if !clientConfig.FrontChannelSignOutSessionRequired && raw.FrontChannelLogoutSessionRequired != nil {
+		clientConfig.FrontChannelSignOutSessionRequired = *raw.FrontChannelLogoutSessionRequired
+	}
+	return nil
 }
 
 // OIDCUIConfig defines dynamic styling, branding, legal links, and authentication method enablement for the Universal Sign-In page.
@@ -561,13 +594,17 @@ func (configManager *ConfigManager) GetUnencrypted() Config {
 		for index, client := range config.OIDC.Clients {
 			isConfigured := client.ClientSecret != ""
 			configClients[index] = OIDCClientConfig{
-				Name:                    client.Name,
-				ClientID:                client.ClientID,
-				ClientSecretConfigured:  isConfigured,
-				RedirectURIs:            client.RedirectURIs,
-				PostSignOutRedirectURIs: client.PostSignOutRedirectURIs,
-				Public:                  client.Public,
-				Scopes:                  client.Scopes,
+				Name:                               client.Name,
+				ClientID:                           client.ClientID,
+				ClientSecretConfigured:             isConfigured,
+				RedirectURIs:                       client.RedirectURIs,
+				PostSignOutRedirectURIs:            client.PostSignOutRedirectURIs,
+				Public:                             client.Public,
+				Scopes:                             client.Scopes,
+				BackChannelSignOutURI:              client.BackChannelSignOutURI,
+				BackChannelSignOutSessionRequired:  client.BackChannelSignOutSessionRequired,
+				FrontChannelSignOutURI:             client.FrontChannelSignOutURI,
+				FrontChannelSignOutSessionRequired: client.FrontChannelSignOutSessionRequired,
 			}
 		}
 		config.OIDC.Clients = configClients
