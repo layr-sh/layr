@@ -25,7 +25,7 @@ func init() {
 // Service encapsulates all layr/data engines (REST, GraphQL, Realtime CDC, Dynamic Config, Schema DDL).
 type Service struct {
 	db                    *core.DatabasePool
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 	configManager         *ConfigManager
 	baseHandler           *BaseHandler
 	controlPlaneHandler   *ControlPlaneHandler
@@ -81,7 +81,7 @@ func (service *Service) CheckScope(request *http.Request, requiredScope string) 
 }
 
 // SetKVStore attaches the pluggable KVStore instance across all data engines.
-func (service *Service) SetKVStore(kvStore core.KVStore) {
+func (service *Service) SetKVStore(kvStore *core.KVStore) {
 	service.kvStore = kvStore
 	if service.baseHandler != nil {
 		service.baseHandler.SetKVStore(kvStore)

@@ -74,24 +74,25 @@ func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	ctx := context.Background()
 	dataService := NewService(nil)
-	mockKVStore := newInMemoryKVStore()
-	mockKVStore.storage["cache:catalog"] = "catalog_data"
-	mockKVStore.storage["cache:schema:catalog"] = "schema_catalog"
-	mockKVStore.storage["cache:public.users"] = "user_cache"
+	mockDriver := newInMemoryKVDriver()
+	mockKVStore := core.NewKVStoreFromDriver(mockDriver)
+	mockDriver.storage["cache:catalog"] = "catalog_data"
+	mockDriver.storage["cache:schema:catalog"] = "schema_catalog"
+	mockDriver.storage["cache:public.users"] = "user_cache"
 	dataService.SetKVStore(mockKVStore)
 
 	// 1. Invalidate single table cache
 	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Schema: "public", Table: "users"})
-	if _, ok := mockKVStore.storage["cache:public.users"]; ok {
+	if _, ok := mockDriver.storage["cache:public.users"]; ok {
 		t.Fatal("expected table cache to be deleted")
 	}
-	if _, ok := mockKVStore.storage["cache:catalog"]; !ok {
+	if _, ok := mockDriver.storage["cache:catalog"]; !ok {
 		t.Fatal("expected catalog cache to remain")
 	}
 
 	// 2. Invalidate Catalog via InvalidateCache
 	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Catalog: true})
-	if _, ok := mockKVStore.storage["cache:catalog"]; ok {
+	if _, ok := mockDriver.storage["cache:catalog"]; ok {
 		t.Fatal("expected catalog cache to be deleted")
 	}
 
@@ -130,9 +131,9 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	}
 
 	// 8. Invalidate by pattern
-	mockKVStore.storage["cache:prefix:item"] = "cached"
+	mockDriver.storage["cache:prefix:item"] = "cached"
 	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Pattern: "prefix:*"})
-	assert.NotContains(t, mockKVStore.storage, "cache:prefix:item")
+	assert.NotContains(t, mockDriver.storage, "cache:prefix:item")
 }
 
 func TestDataServiceScopeCheckUnit(t *testing.T) {

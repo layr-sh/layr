@@ -35,7 +35,7 @@ type BaseHandler struct {
 	totpManager           *core.TOTPManager
 	emailDispatcher       *EmailDispatcher
 	smsDispatcher         *SMSDispatcher
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
 	httpClient            HTTPClient
@@ -98,7 +98,7 @@ func (handler *BaseHandler) SetPasskeyManager(passkeyManager *passkey.Manager) {
 }
 
 // SetKVStore configures the pluggable KVStore for distributed rate-limiting and caching.
-func (handler *BaseHandler) SetKVStore(kvStore core.KVStore) {
+func (handler *BaseHandler) SetKVStore(kvStore *core.KVStore) {
 	log.Debug("configuring KV store on auth handler")
 	handler.kvStore = kvStore
 }

@@ -98,7 +98,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	appConfig := service.GetConfigManager().Get()
 	appConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(appConfig)
-	inMemoryKVStore.storage["cache:query_count"] = "5"
+	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
 	capQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	capQueryRequest.Header.Set("Content-Type", "application/json")
 	capQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")

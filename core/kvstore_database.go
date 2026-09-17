@@ -27,7 +27,7 @@ const (
 )
 
 // NewDatabaseKVStore creates and starts a PostgreSQL-backed KVStore.
-func NewDatabaseKVStore(ctx context.Context, db *DatabasePool, sweepInterval time.Duration) *DatabaseKVStore {
+func NewDatabaseKVStore(ctx context.Context, db *DatabasePool, sweepInterval time.Duration) *KVStore {
 	if sweepInterval <= 0 {
 		sweepInterval = defaultSweepInterval
 	}
@@ -42,7 +42,7 @@ func NewDatabaseKVStore(ctx context.Context, db *DatabasePool, sweepInterval tim
 	databaseKVStore.waitGroup.Add(1)
 	go databaseKVStore.sweepLoop(ctx)
 
-	return databaseKVStore
+	return NewKVStoreFromDriver(databaseKVStore)
 }
 
 func (databaseKVStore *DatabaseKVStore) sweepLoop(ctx context.Context) {
@@ -286,4 +286,9 @@ func (databaseKVStore *DatabaseKVStore) Close() error {
 
 	databaseKVStore.waitGroup.Wait()
 	return nil
+}
+
+// KVStore returns a *KVStore struct wrapping this DatabaseKVStore.
+func (databaseKVStore *DatabaseKVStore) KVStore() *KVStore {
+	return NewKVStoreFromDriver(databaseKVStore)
 }

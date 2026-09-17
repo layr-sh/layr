@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
 	"layr.sh/data/rest"
 )
 
@@ -223,14 +224,15 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidateTableCache", func(t *testing.T) {
-		inMemoryKVStore := newInMemoryKVStore()
+		inMemoryKVDriver := newInMemoryKVDriver()
+		inMemoryKVStore := core.NewKVStoreFromDriver(inMemoryKVDriver)
 		baseHandler.SetKVStore(inMemoryKVStore)
 
 		// getTableCacheVersion coverage
 		assert.Equal(t, int64(0), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
-		inMemoryKVStore.storage["cache:v:public:users"] = "bad_num"
+		inMemoryKVDriver.storage["cache:v:public:users"] = "bad_num"
 		assert.Equal(t, int64(0), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
-		inMemoryKVStore.storage["cache:v:public:users"] = "42"
+		inMemoryKVDriver.storage["cache:v:public:users"] = "42"
 		assert.Equal(t, int64(42), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
 
 		// invalidateTableCache
@@ -277,7 +279,8 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 	})
 
 	t.Run("CompositeAndResetTableCacheVersion", func(t *testing.T) {
-		inMemoryKVStore := newInMemoryKVStore()
+		inMemoryKVDriver := newInMemoryKVDriver()
+		inMemoryKVStore := core.NewKVStoreFromDriver(inMemoryKVDriver)
 		baseHandler.SetKVStore(inMemoryKVStore)
 
 		// 1. collectEmbeddedRelations with children
@@ -293,9 +296,9 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 		assert.Equal(t, []string{"orders", "items"}, relations)
 
 		// 2. getCompositeTableCacheVersion with relations
-		inMemoryKVStore.storage["cache:v:public:users"] = "1"
-		inMemoryKVStore.storage["cache:v:public:orders"] = "2"
-		inMemoryKVStore.storage["cache:v:public:items"] = "3"
+		inMemoryKVDriver.storage["cache:v:public:users"] = "1"
+		inMemoryKVDriver.storage["cache:v:public:orders"] = "2"
+		inMemoryKVDriver.storage["cache:v:public:items"] = "3"
 		compositeVersion := baseHandler.getCompositeTableCacheVersion(context.Background(), "public", "users", relations)
 		assert.NotZero(t, compositeVersion)
 
@@ -304,13 +307,13 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 		assert.Equal(t, int64(1), singleVersion)
 
 		// 4. Invalidate rollover guard
-		inMemoryKVStore.storage["cache:v:public:rollover"] = "9000000000000000"
+		inMemoryKVDriver.storage["cache:v:public:rollover"] = "9000000000000000"
 		baseHandler.InvalidateTableCache(context.Background(), "public", "rollover")
-		assert.Equal(t, "1", inMemoryKVStore.storage["cache:v:public:rollover"])
+		assert.Equal(t, "1", inMemoryKVDriver.storage["cache:v:public:rollover"])
 
 		// 5. ResetTableCacheVersion
 		baseHandler.ResetTableCacheVersion(context.Background(), "public", "users")
-		assert.NotContains(t, inMemoryKVStore.storage, "cache:v:public:users")
+		assert.NotContains(t, inMemoryKVDriver.storage, "cache:v:public:users")
 
 		// 6. ResetTableCacheVersion with nil kvStore
 		baseHandler.SetKVStore(nil)

@@ -15,7 +15,7 @@ type ControlPlaneHandler struct {
 	db                    *core.DatabasePool
 	configManager         *ConfigManager
 	hasher                *password.Hasher
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
 	jwtSigner             *core.JWTSigner
@@ -43,7 +43,7 @@ func (controlPlaneHandler *ControlPlaneHandler) SetHTTPClient(httpClient HTTPCli
 }
 
 // SetKVStore sets the KV store for session cache invalidation.
-func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore core.KVStore) {
+func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore *core.KVStore) {
 	controlPlaneHandler.kvStore = kvStore
 }
 

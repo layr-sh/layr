@@ -25,19 +25,23 @@ const (
 	testMasterEncryptionKeyHex    = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 )
 
-type inMemoryKVStore struct {
+type inMemoryKVDriver struct {
 	rwMutex sync.RWMutex
 	storage map[string]string
 	setErr  error
 }
 
-func newInMemoryKVStore() *inMemoryKVStore {
-	return &inMemoryKVStore{
+func newInMemoryKVDriver() *inMemoryKVDriver {
+	return &inMemoryKVDriver{
 		storage: make(map[string]string),
 	}
 }
 
-func (store *inMemoryKVStore) Get(ctx context.Context, key string) (string, error) {
+func newInMemoryKVStore() *core.KVStore {
+	return core.NewKVStoreFromDriver(newInMemoryKVDriver())
+}
+
+func (store *inMemoryKVDriver) Get(ctx context.Context, key string) (string, error) {
 	store.rwMutex.RLock()
 	defer store.rwMutex.RUnlock()
 	value, exists := store.storage[key]
@@ -47,7 +51,7 @@ func (store *inMemoryKVStore) Get(ctx context.Context, key string) (string, erro
 	return value, nil
 }
 
-func (store *inMemoryKVStore) MGet(ctx context.Context, keys []string) (map[string]string, error) {
+func (store *inMemoryKVDriver) MGet(ctx context.Context, keys []string) (map[string]string, error) {
 	store.rwMutex.RLock()
 	defer store.rwMutex.RUnlock()
 	results := make(map[string]string, len(keys))
@@ -59,7 +63,7 @@ func (store *inMemoryKVStore) MGet(ctx context.Context, keys []string) (map[stri
 	return results, nil
 }
 
-func (store *inMemoryKVStore) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+func (store *inMemoryKVDriver) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	if store.setErr != nil {
@@ -69,7 +73,7 @@ func (store *inMemoryKVStore) Set(ctx context.Context, key string, value string,
 	return nil
 }
 
-func (store *inMemoryKVStore) MSet(ctx context.Context, entries map[string]string, expiry time.Duration) error {
+func (store *inMemoryKVDriver) MSet(ctx context.Context, entries map[string]string, expiry time.Duration) error {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	for key, value := range entries {
@@ -78,7 +82,7 @@ func (store *inMemoryKVStore) MSet(ctx context.Context, entries map[string]strin
 	return nil
 }
 
-func (store *inMemoryKVStore) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
+func (store *inMemoryKVDriver) SetNX(ctx context.Context, key string, value string, expiry time.Duration) (bool, error) {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	if _, exists := store.storage[key]; exists {
@@ -88,18 +92,18 @@ func (store *inMemoryKVStore) SetNX(ctx context.Context, key string, value strin
 	return true, nil
 }
 
-func (store *inMemoryKVStore) Delete(ctx context.Context, key string) error {
+func (store *inMemoryKVDriver) Delete(ctx context.Context, key string) error {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	delete(store.storage, key)
 	return nil
 }
 
-func (store *inMemoryKVStore) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
+func (store *inMemoryKVDriver) Increment(ctx context.Context, key string, expiry time.Duration) (int64, error) {
 	return store.IncrementBy(ctx, key, 1, expiry)
 }
 
-func (store *inMemoryKVStore) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
+func (store *inMemoryKVDriver) IncrementBy(ctx context.Context, key string, delta int64, expiry time.Duration) (int64, error) {
 	store.rwMutex.Lock()
 	defer store.rwMutex.Unlock()
 	currentValue, _ := strconv.ParseInt(store.storage[key], 10, 64)
@@ -108,15 +112,15 @@ func (store *inMemoryKVStore) IncrementBy(ctx context.Context, key string, delta
 	return currentValue, nil
 }
 
-func (store *inMemoryKVStore) Expire(ctx context.Context, key string, expiry time.Duration) error {
+func (store *inMemoryKVDriver) Expire(ctx context.Context, key string, expiry time.Duration) error {
 	return nil
 }
 
-func (store *inMemoryKVStore) Ping(ctx context.Context) error {
+func (store *inMemoryKVDriver) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (store *inMemoryKVStore) Close() error {
+func (store *inMemoryKVDriver) Close() error {
 	return nil
 }
 

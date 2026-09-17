@@ -31,7 +31,7 @@ type Service struct {
 	configManager         *ConfigManager
 	baseHandler           *BaseHandler
 	controlPlaneHandler   *ControlPlaneHandler
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
 }
@@ -56,7 +56,7 @@ func NewService(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) 
 }
 
 // SetKVStore configures the pluggable KVStore for the auth service.
-func (service *Service) SetKVStore(kvStore core.KVStore) {
+func (service *Service) SetKVStore(kvStore *core.KVStore) {
 	service.kvStore = kvStore
 	if service.controlPlaneHandler != nil {
 		service.controlPlaneHandler.SetKVStore(kvStore)

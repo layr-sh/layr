@@ -16,7 +16,7 @@ type ControlPlaneHandler struct {
 	configManager         *ConfigManager
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
-	kvStore               core.KVStore
+	kvStore               *core.KVStore
 }
 
 // NewControlPlaneHandler creates an HTTP handler for data control plane management.
@@ -39,7 +39,7 @@ func (controlPlaneHandler *ControlPlaneHandler) SetEventBus(eventBus *core.Event
 }
 
 // SetKVStore attaches the KV store reference.
-func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore core.KVStore) {
+func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore *core.KVStore) {
 	controlPlaneHandler.kvStore = kvStore
 }
 

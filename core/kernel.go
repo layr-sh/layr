@@ -58,7 +58,7 @@ type Kernel struct {
 	embeddedDB            *EmbeddedDatabase //nolint:namingclarity
 	db                    *DatabasePool
 	nodeRegistry          *NodeRegistry
-	kvStore               KVStore
+	kvStore               *KVStore
 	cryptoKeyManager      *CryptoKeyManager
 	eventBus              *EventBus
 	eventManager          *EventManager
@@ -238,7 +238,7 @@ func (kernel *Kernel) CryptoKeyManager() *CryptoKeyManager {
 }
 
 // KVStore returns the pluggable key-value store.
-func (kernel *Kernel) KVStore() KVStore {
+func (kernel *Kernel) KVStore() *KVStore {
 	if kernel == nil {
 		return nil
 	}
@@ -285,7 +285,7 @@ func (kernel *Kernel) SetDB(db *DatabasePool) {
 }
 
 // SetKVStore sets the KV store on the kernel.
-func (kernel *Kernel) SetKVStore(kvStore KVStore) {
+func (kernel *Kernel) SetKVStore(kvStore *KVStore) {
 	if kernel != nil {
 		kernel.kvStore = kvStore
 	}
