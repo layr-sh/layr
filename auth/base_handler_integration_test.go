@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/oauth"
 	"layr.sh/auth/otp"
 	"layr.sh/core"
@@ -404,7 +403,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test identity for export: %v", err)
 	}
 
-	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupSessionResponse.User.ID+"/export", nil)
+	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupSessionResponse.User.ID+"/export", nil), signupSessionResponse.User.ID, "authenticated", false)
 	exportRequest.SetPathValue("user_id", signupSessionResponse.User.ID)
 	exportRequest.Header.Set("Authorization", "Bearer "+loginSessionResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
@@ -422,14 +421,21 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 
 	// Test non-existent user export -> 404 Not Found
 	nonExistentUserID := "018f2234-5678-789a-bcde-f0123456789a"
-	nonExistentToken, tokenErr := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	nonExistentToken, tokenErr := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: nonExistentUserID,
 		Role:    "authenticated",
 	}, 900)
 	if tokenErr != nil {
 		t.Fatalf("failed to generate non-existent user access token: %v", tokenErr)
 	}
-	nonExistentExportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+nonExistentUserID+"/export", nil)
+	nonExistentCtx := core.WithAuthContext(ctx, core.AuthContext{
+		UserID: nonExistentUserID,
+		JWT: core.JWTClaims{
+			Subject: nonExistentUserID,
+			Role:    "authenticated",
+		},
+	})
+	nonExistentExportRequest := httptest.NewRequestWithContext(nonExistentCtx, http.MethodPost, "/api/v1/auth/users/"+nonExistentUserID+"/export", nil)
 	nonExistentExportRequest.SetPathValue("user_id", nonExistentUserID)
 	nonExistentExportRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentExportResponseRecorder := httptest.NewRecorder()
@@ -539,15 +545,15 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 
 	// Verify Ed25519 JWT claims
-	anonymousClaims, claimErr := baseHandler.signer.VerifyAccessToken(anonymousSessionResponse.AccessToken)
+	anonymousJWTClaims, claimErr := baseHandler.jwtSigner.VerifyAccessToken(anonymousSessionResponse.AccessToken)
 	if claimErr != nil {
 		t.Fatalf("failed to verify anonymous access token: %v", claimErr)
 	}
-	if !anonymousClaims.IsAnonymous {
+	if !anonymousJWTClaims.IsAnonymous {
 		t.Fatal("expected JWT claims is_anonymous to be true")
 	}
-	if anonymousClaims.Subject != anonymousUserID {
-		t.Fatalf("expected JWT subject %s, got: %s", anonymousUserID, anonymousClaims.Subject)
+	if anonymousJWTClaims.Subject != anonymousUserID {
+		t.Fatalf("expected JWT subject %s, got: %s", anonymousUserID, anonymousJWTClaims.Subject)
 	}
 
 	// Verify auth.user.signed_up event emitted with is_anonymous: true
@@ -577,7 +583,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 			"subscribed": true,
 		},
 	})
-	signupConversionRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupConversionPayload))
+	signupConversionRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
 	signupConversionRequest.Header.Set("Authorization", "Bearer "+anonymousSessionResponse.AccessToken)
 	signupConversionResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupConversionResponseRecorder, signupConversionRequest)
@@ -606,15 +612,15 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("expected merged properties containing both theme and subscribed, got: %+v", signupConversionSessionResponse.User.Properties)
 	}
 
-	convertedClaims, tokenErr := baseHandler.signer.VerifyAccessToken(signupConversionSessionResponse.AccessToken)
+	convertedJWTClaims, tokenErr := baseHandler.jwtSigner.VerifyAccessToken(signupConversionSessionResponse.AccessToken)
 	if tokenErr != nil {
 		t.Fatalf("failed to verify converted access token: %v", tokenErr)
 	}
-	if convertedClaims.IsAnonymous {
+	if convertedJWTClaims.IsAnonymous {
 		t.Fatal("expected converted JWT claims is_anonymous to be false")
 	}
-	if convertedClaims.Subject != anonymousUserID {
-		t.Fatalf("expected converted JWT subject %s, got: %s", anonymousUserID, convertedClaims.Subject)
+	if convertedJWTClaims.Subject != anonymousUserID {
+		t.Fatalf("expected converted JWT subject %s, got: %s", anonymousUserID, convertedJWTClaims.Subject)
 	}
 
 	// Verify auth.user.converted event emitted
@@ -696,7 +702,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		"code":      otpCode,
 		"purpose":   "sign_in",
 	})
-	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload))
+	otpVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
 	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousSessionResponse.AccessToken)
 	otpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPVerify(otpVerifyResponseRecorder, otpVerifyRequest)
@@ -736,7 +742,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updateEmail := fmt.Sprintf("update_email_%d@example.com", time.Now().UnixNano())
 	patchEmailPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: updateEmail})
-	patchEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(patchEmailPayload))
+	patchEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
 	patchEmailRequest.Header.Set("Authorization", "Bearer "+thirdAnonymousSessionResponse.AccessToken)
 	patchEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(patchEmailResponseRecorder, patchEmailRequest)
@@ -768,7 +774,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updatePhone := fmt.Sprintf("+1415%07d", time.Now().UnixNano()%10000000)
 	patchPhonePayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: updatePhone})
-	patchPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(patchPhonePayload))
+	patchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
 	patchPhoneRequest.Header.Set("Authorization", "Bearer "+fourthAnonymousSessionResponse.AccessToken)
 	patchPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(patchPhoneResponseRecorder, patchPhoneRequest)
@@ -938,7 +944,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    conflictEmail,
 		Password: "NewPassword123!",
 	})
-	conflictEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload))
+	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonSessionResponse.User.ID, "anon", true)
 	conflictEmailRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
 	conflictEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictEmailResponseRecorder, conflictEmailRequest)
@@ -951,7 +957,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: "NewPassword123!",
 	})
-	conflictPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload))
+	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonSessionResponse.User.ID, "anon", true)
 	conflictPhoneRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
 	conflictPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictPhoneResponseRecorder, conflictPhoneRequest)
@@ -972,7 +978,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    "block_convert@example.com",
 		Password: "Password123!",
 	})
-	blockConvertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(blockConvertPayload))
+	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonSessionResponse.User.ID, "anon", true)
 	blockConvertRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
 	blockConvertResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(blockConvertResponseRecorder, blockConvertRequest)
@@ -1023,7 +1029,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", conflictEmail).Scan(&conflictUserID)
 
 	expiredToken := "expired-token-val"
-	expiredHash := jwt.HashRefreshToken(expiredToken)
+	expiredHash := baseHandler.jwtSigner.HashRefreshToken(expiredToken)
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() - interval '10 minutes', clock_timestamp() - interval '1 hour')
@@ -1053,7 +1059,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}()
 
 	deletedUserToken := "deleted-user-refresh-token"
-	deletedUserHash := jwt.HashRefreshToken(deletedUserToken)
+	deletedUserHash := baseHandler.jwtSigner.HashRefreshToken(deletedUserToken)
 	nonExistentUserID := "018f2234-5678-789a-bcde-f0123456789b"
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/oauth"
 	"layr.sh/core"
 )
@@ -218,7 +217,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	testUserUUID := "018f2234-5678-789a-bcde-f0123456789a"
-	validToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Email:   "test@example.com",
 		Role:    "authenticated",
@@ -228,7 +227,15 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 	bearerHeader := "Bearer " + validToken
 
-	validTokenUserInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	validTokenUserInfoCtx := core.WithAuthContext(context.Background(), core.AuthContext{
+		UserID: testUserUUID,
+		JWT: core.JWTClaims{
+			Subject: testUserUUID,
+			Email:   "test@example.com",
+			Role:    "authenticated",
+		},
+	})
+	validTokenUserInfoRequest := httptest.NewRequestWithContext(validTokenUserInfoCtx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	validTokenUserInfoRequest.Header.Set("Authorization", bearerHeader)
 	validTokenUserInfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleOAuthUserInfo(validTokenUserInfoResponseRecorder, validTokenUserInfoRequest)
@@ -262,7 +269,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 12. Authorize with anonymous user linking
-	anonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     "018f2234-5678-789a-bcde-f0123456789b",
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -355,7 +362,7 @@ func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 	}
 	configManager.Set(authConfig)
 
-	anonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     "018f2234-5678-789a-bcde-f0123456789a",
 		Role:        "authenticated",
 		IsAnonymous: true,

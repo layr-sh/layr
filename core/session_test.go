@@ -98,49 +98,169 @@ func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 	UnloadConfig()
 
 	// 3. SetSessionCookie and ClearSessionCookie tests
-	cookieResponseRecorder := httptest.NewRecorder()
 	expirationTime := time.Now().Add(time.Hour)
+	secureRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com/", nil)
+	secureRequest.TLS = &tls.ConnectionState{}
+	insecureRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/", nil)
 
-	// Set secure cookie
-	SetSessionCookie(cookieResponseRecorder, "__Host-test", "test", "token_value_secure", expirationTime, true)
-	// Set plain cookie
-	SetSessionCookie(cookieResponseRecorder, "__Host-test", "test", "token_value_plain", expirationTime, false)
+	secureResponseRecorder := httptest.NewRecorder()
+	SetSessionCookie(secureResponseRecorder, secureRequest, "token_value_secure", expirationTime)
+	secCookies := secureResponseRecorder.Result().Cookies()
+	var foundSecure bool
+	for _, cookie := range secCookies {
+		if cookie.Name == SessionCookieNameSecure && cookie.Value == "token_value_secure" && cookie.Secure {
+			foundSecure = true
+		}
+	}
+	if !foundSecure {
+		t.Fatal("expected secure session cookie to be set")
+	}
 
-	// Clear cookies
-	ClearSessionCookie(cookieResponseRecorder, "__Host-test", "test", true)
-	ClearSessionCookie(cookieResponseRecorder, "__Host-test", "test", false)
+	insecureResponseRecorder := httptest.NewRecorder()
+	SetSessionCookie(insecureResponseRecorder, insecureRequest, "token_value_plain", expirationTime)
+	insecCookies := insecureResponseRecorder.Result().Cookies()
+	var foundInsecure bool
+	for _, cookie := range insecCookies {
+		if cookie.Name == SessionCookieNameInsecure && cookie.Value == "token_value_plain" && !cookie.Secure {
+			foundInsecure = true
+		}
+	}
+	if !foundInsecure {
+		t.Fatal("expected insecure session cookie to be set")
+	}
+
+	clearResponseRecorder := httptest.NewRecorder()
+	ClearSessionCookie(clearResponseRecorder, secureRequest)
+	ClearSessionCookie(clearResponseRecorder, insecureRequest)
 
 	// 4. ExtractRequestSessionToken tests
-	if token := ExtractRequestSessionToken(nil, "__Host-test", "test"); token != "" {
+	if token := ExtractRequestSessionToken(nil); token != "" {
 		t.Fatalf("expected empty token for nil request, got %s", token)
 	}
 
 	bearerRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	bearerRequest.Header.Set("Authorization", "Bearer bearer_token_123")
-	if token := ExtractRequestSessionToken(bearerRequest, "__Host-test", "test"); token != "bearer_token_123" {
+	if token := ExtractRequestSessionToken(bearerRequest); token != "bearer_token_123" {
 		t.Fatalf("expected bearer_token_123, got %s", token)
 	}
 
 	bearerLowerRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	bearerLowerRequest.Header.Set("Authorization", "bearer bearer_token_lower")
-	if token := ExtractRequestSessionToken(bearerLowerRequest, "__Host-test", "test"); token != "bearer_token_lower" {
+	if token := ExtractRequestSessionToken(bearerLowerRequest); token != "bearer_token_lower" {
 		t.Fatalf("expected bearer_token_lower, got %s", token)
 	}
 
 	secureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	secureCookieRequest.AddCookie(&http.Cookie{Name: "__Host-test", Value: "secure_cookie_value"})
-	if token := ExtractRequestSessionToken(secureCookieRequest, "__Host-test", "test"); token != "secure_cookie_value" {
+	secureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameSecure, Value: "secure_cookie_value"})
+	if token := ExtractRequestSessionToken(secureCookieRequest); token != "secure_cookie_value" {
 		t.Fatalf("expected secure_cookie_value, got %s", token)
 	}
 
 	plainCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	plainCookieRequest.AddCookie(&http.Cookie{Name: "test", Value: "plain_cookie_value"})
-	if token := ExtractRequestSessionToken(plainCookieRequest, "__Host-test", "test"); token != "plain_cookie_value" {
+	plainCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameInsecure, Value: "plain_cookie_value"})
+	if token := ExtractRequestSessionToken(plainCookieRequest); token != "plain_cookie_value" {
 		t.Fatalf("expected plain_cookie_value, got %s", token)
 	}
 
 	emptyTokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	if token := ExtractRequestSessionToken(emptyTokenRequest, "__Host-test", "test"); token != "" {
+	if token := ExtractRequestSessionToken(emptyTokenRequest); token != "" {
 		t.Fatalf("expected empty token, got %s", token)
+	}
+
+	// 5. AuthContext WithAuthContext and GetAuthContext tests
+	ctx := context.Background()
+	emptyAuthContext := GetAuthContext(ctx)
+	if emptyAuthContext.UserID != "" || emptyAuthContext.ServiceAccountID != "" || emptyAuthContext.IsAuthenticated() || emptyAuthContext.IsUser() || emptyAuthContext.IsServiceAccount() {
+		t.Fatalf("expected empty unauthenticated state on empty context: %+v", emptyAuthContext)
+	}
+	var nilCtx context.Context //nolint:staticcheck
+	if nilCtxAuthContext := GetAuthContext(nilCtx); nilCtxAuthContext.UserID != "" || nilCtxAuthContext.IsAuthenticated() {
+		t.Fatal("expected empty UserID on nil context")
+	}
+
+	expectedAuthContext := AuthContext{
+		JWT: JWTClaims{
+			Subject:   "usr_abc",
+			SessionID: "sess_xyz",
+			Role:      "authenticated",
+		},
+		RefreshTokenHash: "hash123",
+	}
+	authCtx := WithAuthContext(ctx, expectedAuthContext)
+	retrievedAuthContext := GetAuthContext(authCtx)
+	if retrievedAuthContext.UserID != "usr_abc" || retrievedAuthContext.ServiceAccountID != "" || retrievedAuthContext.Role() != "authenticated" || retrievedAuthContext.JWT.Subject != "usr_abc" || retrievedAuthContext.JWT.SessionID != "sess_xyz" || retrievedAuthContext.RefreshTokenHash != "hash123" {
+		t.Fatalf("unexpected retrieved auth context: %+v", retrievedAuthContext)
+	}
+	if !retrievedAuthContext.IsAuthenticated() || !retrievedAuthContext.IsUser() || retrievedAuthContext.IsServiceAccount() {
+		t.Fatalf("expected user auth context flags: %+v", retrievedAuthContext)
+	}
+
+	// Direct user context without JWT
+	directUserCtx := WithAuthContext(ctx, AuthContext{UserID: "usr_direct"})
+	retrievedDirectUserAuthContext := GetAuthContext(directUserCtx)
+	if retrievedDirectUserAuthContext.UserID != "usr_direct" || retrievedDirectUserAuthContext.ServiceAccountID != "" || !retrievedDirectUserAuthContext.IsAuthenticated() || !retrievedDirectUserAuthContext.IsUser() || retrievedDirectUserAuthContext.IsServiceAccount() || retrievedDirectUserAuthContext.Role() != "authenticated" {
+		t.Fatalf("unexpected direct user context: %+v", retrievedDirectUserAuthContext)
+	}
+
+	// Service account isolation test: service account must NEVER have UserID populated!
+	serviceAccountAuthContext := AuthContext{
+		ServiceAccountID: "sa_xyz",
+		JWT: JWTClaims{
+			Subject:  "sa_xyz",
+			Role:     "service_role",
+			Audience: "app:service_account",
+			Scope:    "data:read auth:write",
+		},
+	}
+	serviceAccountCtx := WithAuthContext(ctx, serviceAccountAuthContext)
+	retrievedServiceAccountAuthContext := GetAuthContext(serviceAccountCtx)
+	if retrievedServiceAccountAuthContext.UserID != "" {
+		t.Fatalf("service account must never have UserID populated: got %q", retrievedServiceAccountAuthContext.UserID)
+	}
+	if retrievedServiceAccountAuthContext.ServiceAccountID != "sa_xyz" || retrievedServiceAccountAuthContext.Role() != "service_role" {
+		t.Fatalf("unexpected service account context: %+v", retrievedServiceAccountAuthContext)
+	}
+	if !retrievedServiceAccountAuthContext.HasScope("data:read") || retrievedServiceAccountAuthContext.HasScope("data:delete") {
+		t.Fatalf("unexpected scope evaluation on service account auth context: %+v", retrievedServiceAccountAuthContext)
+	}
+	if !retrievedServiceAccountAuthContext.IsAuthenticated() || retrievedServiceAccountAuthContext.IsUser() || !retrievedServiceAccountAuthContext.IsServiceAccount() {
+		t.Fatalf("expected service account auth flags: %+v", retrievedServiceAccountAuthContext)
+	}
+
+	// Service account by role with empty ServiceAccountID and accidental UserID should clear UserID and populate ServiceAccountID
+	serviceAccountByRoleAuthContext := AuthContext{
+		UserID: "accidental_user_id",
+		JWT: JWTClaims{
+			Subject: "sa_from_subject",
+			Role:    "service_role",
+		},
+	}
+	serviceAccountRoleCtx := WithAuthContext(ctx, serviceAccountByRoleAuthContext)
+	retrievedServiceAccountRoleAuthContext := GetAuthContext(serviceAccountRoleCtx)
+	if retrievedServiceAccountRoleAuthContext.UserID != "" {
+		t.Fatalf("service account must have UserID cleared: got %q", retrievedServiceAccountRoleAuthContext.UserID)
+	}
+	if retrievedServiceAccountRoleAuthContext.ServiceAccountID != "sa_from_subject" {
+		t.Fatalf("expected ServiceAccountID sa_from_subject, got %q", retrievedServiceAccountRoleAuthContext.ServiceAccountID)
+	}
+
+	// Service account with empty JWT.Role defaults to "service_role"
+	serviceAccountEmptyRoleCtx := WithAuthContext(ctx, AuthContext{
+		ServiceAccountID: "sa_empty_role",
+	})
+	retrievedServiceAccountEmptyRoleAuthContext := GetAuthContext(serviceAccountEmptyRoleCtx)
+	if retrievedServiceAccountEmptyRoleAuthContext.Role() != "service_role" || retrievedServiceAccountEmptyRoleAuthContext.JWT.Role != "service_role" {
+		t.Fatalf("expected role service_role, got: %+v", retrievedServiceAccountEmptyRoleAuthContext)
+	}
+
+	// User with empty JWT.Role defaults to "authenticated"
+	userEmptyRoleCtx := WithAuthContext(ctx, AuthContext{
+		JWT: JWTClaims{
+			Subject: "usr_empty_role",
+		},
+	})
+	retrievedUserEmptyRoleAuthContext := GetAuthContext(userEmptyRoleCtx)
+	if retrievedUserEmptyRoleAuthContext.Role() != "authenticated" || retrievedUserEmptyRoleAuthContext.JWT.Role != "authenticated" {
+		t.Fatalf("expected role authenticated, got: %+v", retrievedUserEmptyRoleAuthContext)
 	}
 }

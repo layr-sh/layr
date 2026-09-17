@@ -53,14 +53,16 @@ type TopologyResponse struct {
 
 // Server coordinates the Layr HTTP gateway, probes, and API dispatch.
 type Server struct {
-	db                 *DatabasePool
-	cryptoKeyManager   *CryptoKeyManager
-	baseRouter         *Router
-	controlPlaneRouter *Router
-	serveMux           *http.ServeMux
-	server             *http.Server
-	uptime             time.Time     //nolint:namingclarity
-	requestCount       atomic.Uint64 //nolint:namingclarity
+	db                    *DatabasePool
+	cryptoKeyManager      *CryptoKeyManager
+	jwtSigner             *JWTSigner
+	serviceAccountManager *ServiceAccountManager
+	baseRouter            *Router
+	controlPlaneRouter    *Router
+	serveMux              *http.ServeMux
+	server                *http.Server
+	uptime                time.Time     //nolint:namingclarity
+	requestCount          atomic.Uint64 //nolint:namingclarity
 }
 
 // NewServer initializes the HTTP gateway with type-safe OpenAPI route controllers.
@@ -98,14 +100,26 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		),
 	))
 
+	var jwtSigner *JWTSigner
+	if cryptoKeyManager != nil {
+		jwtSigner, _ = NewJWTSigner(cryptoKeyManager)
+	}
+
+	var serviceAccountManager *ServiceAccountManager
+	if db != nil {
+		serviceAccountManager = NewServiceAccountManager(db)
+	}
+
 	log.Debugf("initializing Server gateway")
 	server := &Server{
-		db:                 db,
-		cryptoKeyManager:   cryptoKeyManager,
-		baseRouter:         baseRouter,
-		controlPlaneRouter: controlPlaneRouter,
-		serveMux:           serveMux,
-		uptime:             time.Now(),
+		db:                    db,
+		cryptoKeyManager:      cryptoKeyManager,
+		jwtSigner:             jwtSigner,
+		serviceAccountManager: serviceAccountManager,
+		baseRouter:            baseRouter,
+		controlPlaneRouter:    controlPlaneRouter,
+		serveMux:              serveMux,
+		uptime:                time.Now(),
 	}
 
 	// Register Core Routes on Public Router
@@ -188,6 +202,11 @@ func (server *Server) Mux() *http.ServeMux {
 	return server.serveMux
 }
 
+// Handler returns the root HTTP handler wrapped with core middleware (panic recovery, correlation ID, metrics, authentication).
+func (server *Server) Handler() http.Handler {
+	return server.server.Handler
+}
+
 // BaseRouter returns the base OpenAPI server router.
 func (server *Server) BaseRouter() *Router {
 	return server.baseRouter
@@ -217,6 +236,26 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// JWTSigner returns the server's Ed25519 JWT signer instance.
+func (server *Server) JWTSigner() *JWTSigner {
+	return server.jwtSigner
+}
+
+// SetJWTSigner assigns an explicit JWT signer to the server gateway.
+func (server *Server) SetJWTSigner(jwtSigner *JWTSigner) {
+	server.jwtSigner = jwtSigner
+}
+
+// ServiceAccountManager returns the server's service account manager.
+func (server *Server) ServiceAccountManager() *ServiceAccountManager {
+	return server.serviceAccountManager
+}
+
+// SetServiceAccountManager assigns a service account manager to the server gateway.
+func (server *Server) SetServiceAccountManager(serviceAccountManager *ServiceAccountManager) {
+	server.serviceAccountManager = serviceAccountManager
+}
+
 func (server *Server) middleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		defer func() {
@@ -240,6 +279,144 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 			UserAgent: &userAgent,
 			RequestID: &requestID,
 		})
+
+		var authenticated bool
+
+		// 1. M2M / Service Account Request Verification
+		serviceAccountKey := ExtractRequestServiceAccountKey(request)
+		if serviceAccountKey != "" && server.serviceAccountManager != nil {
+			if serviceAccount, err := server.serviceAccountManager.Authenticate(ctx, serviceAccountKey, clientIP); err == nil && serviceAccount != nil {
+				serviceAccountUUID, _ := uuid.Parse(serviceAccount.ID)
+				role := "service_role"
+				ctx = WithAuthContext(ctx, AuthContext{
+					ServiceAccountID: serviceAccount.ID,
+					JWT: JWTClaims{
+						Subject: serviceAccount.ID,
+						Role:    role,
+						Scope:   strings.Join(serviceAccount.Scopes, " "),
+					},
+				})
+				ctx = WithEventActor(ctx, EventActor{
+					Type: "service_account",
+					ID:   &serviceAccountUUID,
+					Role: &role,
+				})
+				authenticated = true
+			}
+		}
+
+		// 2. JWT Request Verification (M2M JWT or User Access Token)
+		if !authenticated && server.jwtSigner != nil {
+			token := ExtractRequestSessionToken(request)
+			if token != "" {
+				if jwtClaims, err := server.jwtSigner.VerifyAccessToken(token); err == nil && jwtClaims != nil && jwtClaims.Subject != "" {
+					slugifier := NewSlugifier()
+					handle := slugifier.Slugify(GetConfig().Project.Name)
+					if handle == "" {
+						handle = "layr"
+					}
+					layrAudience := handle + ":service_account"
+
+					if jwtClaims.Role == "service_role" || strings.HasSuffix(jwtClaims.Audience, ":service_account") {
+						if jwtClaims.Audience != layrAudience {
+							log.Debugf("m2m token rejected: audience mismatch %q != expected %q", jwtClaims.Audience, layrAudience)
+						} else {
+							serviceAccountUUID, _ := uuid.Parse(jwtClaims.Subject)
+							role := "service_role"
+							jwtClaims.Role = role
+							ctx = WithAuthContext(ctx, AuthContext{
+								ServiceAccountID: jwtClaims.Subject,
+								JWT:              *jwtClaims,
+							})
+							ctx = WithEventActor(ctx, EventActor{
+								Type: "service_account",
+								ID:   &serviceAccountUUID,
+								Role: &role,
+							})
+							authenticated = true
+						}
+					} else {
+						var currentRefreshTokenHash string
+						if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
+							currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(cookie.Value)
+						} else if cookie, err := request.Cookie(SessionCookieNameInsecure); err == nil && cookie.Value != "" {
+							currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(cookie.Value)
+						}
+						if currentRefreshTokenHash == "" {
+							if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
+								currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(refreshTokenHeader)
+							}
+						}
+
+						ctx = WithAuthContext(ctx, AuthContext{
+							UserID:           jwtClaims.Subject,
+							JWT:              *jwtClaims,
+							RefreshTokenHash: currentRefreshTokenHash,
+						})
+
+						if parsedUserUUID, parseErr := uuid.Parse(jwtClaims.Subject); parseErr == nil {
+							role := jwtClaims.Role
+							ctx = WithEventActor(ctx, EventActor{
+								Type: "user",
+								ID:   &parsedUserUUID,
+								Role: &role,
+							})
+						}
+						authenticated = true
+					}
+				}
+			}
+		}
+
+		// 3. Database Session Lookup (Cookie or X-Refresh-Token fallback)
+		if !authenticated && server.db != nil && server.jwtSigner != nil {
+			var sessionRefreshToken string
+			if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
+				sessionRefreshToken = cookie.Value
+			} else if cookie, err := request.Cookie(SessionCookieNameInsecure); err == nil && cookie.Value != "" {
+				sessionRefreshToken = cookie.Value
+			}
+			if sessionRefreshToken == "" {
+				if tokenHeader := request.Header.Get("X-Refresh-Token"); tokenHeader != "" {
+					sessionRefreshToken = tokenHeader
+				}
+			}
+
+			if sessionRefreshToken != "" {
+				refreshTokenHash := server.jwtSigner.HashRefreshToken(sessionRefreshToken)
+				var sessionID, sessionUserID, email, phone, role string
+				var isAnonymous bool
+				queryErr := server.db.QueryRow(ctx, `
+					SELECT s.id, s.user_id, COALESCE(u.email, ''), COALESCE(u.phone, ''), COALESCE(u.role, 'authenticated'), COALESCE(u.is_anonymous, false)
+					FROM auth.sessions s
+					JOIN auth.users u ON u.id = s.user_id
+					WHERE s.refresh_token_hash = $1 AND s.expires_at > clock_timestamp()
+				`, refreshTokenHash).Scan(&sessionID, &sessionUserID, &email, &phone, &role, &isAnonymous)
+				if queryErr == nil && sessionUserID != "" {
+					jwtClaims := JWTClaims{
+						Subject:     sessionUserID,
+						SessionID:   sessionID,
+						Email:       email,
+						Phone:       phone,
+						Role:        role,
+						IsAnonymous: isAnonymous,
+					}
+					ctx = WithAuthContext(ctx, AuthContext{
+						UserID:           sessionUserID,
+						JWT:              jwtClaims,
+						RefreshTokenHash: refreshTokenHash,
+					})
+					if parsedUserUUID, parseErr := uuid.Parse(sessionUserID); parseErr == nil {
+						ctx = WithEventActor(ctx, EventActor{
+							Type: "user",
+							ID:   &parsedUserUUID,
+							Role: &role,
+						})
+					}
+				}
+			}
+		}
+
 		handler.ServeHTTP(responseWriter, request.WithContext(ctx))
 	})
 }

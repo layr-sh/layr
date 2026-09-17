@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"layr.sh/core"
 	"layr.sh/data/common"
 	"layr.sh/data/graphql"
 	datakv "layr.sh/data/kv"
@@ -128,7 +129,7 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 	}
 
 	ctx := request.Context()
-	authClaims := common.ExtractClaims(request)
+	jwtClaims := core.GetAuthContext(request.Context()).JWT
 
 	var userVisibleKey string
 	var internalCacheKey string
@@ -179,7 +180,7 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 		requiredScope = "data:query.write"
 	}
 	if !handler.isRLSBypassed(request, requiredScope) {
-		common.ApplyRLS(ctx, tx, authClaims)
+		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	var rawJSON []byte

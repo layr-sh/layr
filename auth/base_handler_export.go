@@ -17,16 +17,14 @@ func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter,
 		return
 	}
 
-	token := core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
-	if token == "" {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
 		log.Debug("user export rejected: missing bearer token")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
 		return
 	}
-
-	claims, err := handler.signer.VerifyAccessToken(token)
-	if err != nil || claims == nil || claims.Subject != targetUserID {
-		log.Debugf("user export rejected: unauthorized caller (err: %v, claims: %+v)", err, claims)
+	if authContext.UserID != targetUserID {
+		log.Debugf("user export rejected: unauthorized caller (authUserID: %q, targetUserID: %q)", authContext.UserID, targetUserID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Unauthorized user export", "LAYR_AUTH_002")
 		return
 	}
@@ -40,7 +38,7 @@ func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter,
 	ctx := request.Context()
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, targetUserID).Scan(

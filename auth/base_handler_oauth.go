@@ -11,7 +11,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/oauth"
 	"layr.sh/core"
 )
@@ -378,23 +377,23 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 				log.Tracef("resolving linked OIDC state %s for client %s", parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload.ClientID)
 				_ = handler.kvStore.Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, userRecord.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
-				refreshToken := jwt.GenerateRefreshToken()
-				refreshTokenHash := jwt.HashRefreshToken(refreshToken)
+				refreshToken := handler.jwtSigner.GenerateRefreshToken()
+				refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 				config := handler.configManager.Get()
 				refreshTokenExpirySeconds := config.Sessions.RefreshTokenExpirySeconds
 				if refreshTokenExpirySeconds <= 0 {
 					refreshTokenExpirySeconds = defaultRefreshTokenExpirySeconds
 				}
 				expiresAt := time.Now().Add(time.Duration(refreshTokenExpirySeconds) * time.Second)
+				sessionID := uuid.New().String()
 				if handler.db != nil {
 					log.Tracef("saving session for OIDC flow for user %s", userRecord.ID)
 					_, _ = handler.db.Exec(request.Context(), `
-						INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
-						VALUES ($1, $2, $3, clock_timestamp())
-					`, userRecord.ID, refreshTokenHash, expiresAt)
+						INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+						VALUES ($1, $2, $3, $4, clock_timestamp())
+					`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
 				}
-				isSecure := core.IsSecureRequest(request)
-				core.SetSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, refreshToken, expiresAt, isSecure)
+				core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
 				targetURL, parseErr := url.Parse(oidcAuthorizationStatePayload.RedirectURI)
 				if parseErr == nil {
@@ -419,18 +418,10 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 // HandleOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
 func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling OAuth user info request")
-	authHeader := request.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		log.Debug("OAuth userinfo rejected: missing Bearer prefix in Authorization header")
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("OAuth userinfo rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
-		return
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	claims, err := handler.signer.VerifyAccessToken(token)
-	if err != nil {
-		log.Debugf("OAuth userinfo rejected: invalid access token: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired access token", "LAYR_AUTH_002")
 		return
 	}
 
@@ -442,10 +433,10 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(request.Context(), `
+	err := handler.db.QueryRow(request.Context(), `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
-	`, claims.Subject).Scan(
+	`, authContext.UserID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
 		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
@@ -453,11 +444,11 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("OAuth userinfo user not found for ID %s: %v", claims.Subject, err)
+			log.Debugf("OAuth userinfo user not found for ID %s: %v", authContext.UserID, err)
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
 			return
 		}
-		log.Debugf("OAuth userinfo database query error for ID %s: %v", claims.Subject, err)
+		log.Debugf("OAuth userinfo database query error for ID %s: %v", authContext.UserID, err)
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database error", "LAYR_AUTH_001")
 		return
 	}

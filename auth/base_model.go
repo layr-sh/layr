@@ -318,6 +318,7 @@ type OAuthTokenRequest struct {
 	CodeVerifier string `json:"code_verifier"`
 	RefreshToken string `json:"refresh_token"`
 	Scope        string `json:"scope"`
+	Audience     string `json:"audience,omitempty"`
 	Provider     string `json:"provider"`
 }
 

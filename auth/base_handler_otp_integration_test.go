@@ -13,7 +13,6 @@ import (
 	"time"
 	"uuid"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -336,11 +335,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
-	anonAccessToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	anonAccessToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
+	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	convertEmail := "converted.otp@example.com"
 	convertSendPayload, _ := json.Marshal(map[string]any{
@@ -361,7 +361,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      convertCode,
 		"purpose":   "sign_in",
 	})
-	convertVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
+	convertVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, anonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
 	convertVerifyRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	convertVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPVerify(convertVerifyResponseRecorder, convertVerifyRequest)
@@ -404,11 +404,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, conflictAnonID)
-	conflictAnonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	conflictAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     conflictAnonID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
+	conflictAnonAuthContext := core.AuthContext{UserID: conflictAnonID, JWT: core.JWTClaims{Subject: conflictAnonID, Role: "authenticated", IsAnonymous: true}}
 
 	// Send OTP for conflicting email (existingConflictEmail already belongs to existing user)
 	conflictEmailSendPayload, _ := json.Marshal(map[string]any{
@@ -428,7 +429,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      conflictEmailCode,
 		"purpose":   "sign_in",
 	})
-	conflictEmailVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
+	conflictEmailVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
 	conflictEmailVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictEmailVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPVerify(conflictEmailVerifyResponseRecorder, conflictEmailVerifyRequest)
@@ -454,7 +455,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      conflictPhoneCode,
 		"purpose":   "sign_in",
 	})
-	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
+	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
 	conflictPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictPhoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPVerify(conflictPhoneVerifyResponseRecorder, conflictPhoneVerifyRequest)
@@ -468,11 +469,12 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, phoneAnonID)
-	phoneAnonToken, _ := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	phoneAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     phoneAnonID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
+	phoneAnonAuthContext := core.AuthContext{UserID: phoneAnonID, JWT: core.JWTClaims{Subject: phoneAnonID, Role: "authenticated", IsAnonymous: true}}
 
 	convertPhoneRecipient := "+15558765432"
 	convertPhoneSendPayload, _ := json.Marshal(map[string]any{
@@ -489,7 +491,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      convertPhoneCode,
 		"purpose":   "sign_in",
 	})
-	convertPhoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
+	convertPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, phoneAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
 	convertPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+phoneAnonToken)
 	convertPhoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOTPVerify(convertPhoneVerifyResponseRecorder, convertPhoneVerifyRequest)

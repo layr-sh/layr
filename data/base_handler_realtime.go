@@ -8,7 +8,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"layr.sh/core"
-	"layr.sh/data/common"
 	"layr.sh/data/realtime"
 )
 
@@ -34,8 +33,8 @@ func (handler *BaseHandler) HandleRealtime(responseWriter http.ResponseWriter, r
 		return
 	}
 
-	authClaims := common.ExtractClaims(request)
-	_ = authClaims
+	jwtClaims := core.GetAuthContext(request.Context()).JWT
+	_ = jwtClaims
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,

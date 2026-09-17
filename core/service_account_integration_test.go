@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -215,6 +217,44 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	_, err = serviceAccountManager.Authenticate(ctx, expiredServiceAccount.SecretKey, "127.0.0.1")
 	if !errors.Is(err, ErrServiceAccountDisabled) {
 		t.Fatalf("expected ErrServiceAccountDisabled, got: %v", err)
+	}
+
+	// 16b. Server Middleware Service Account Authentication
+	serverCryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatalf("failed to create crypto key manager: %v", err)
+	}
+	server := NewServer(db, serverCryptoKeyManager)
+	if server.ServiceAccountManager() == nil {
+		t.Fatal("expected non-nil ServiceAccountManager on server")
+	}
+
+	authTestServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+		Name:   "Auth Test Account",
+		Scopes: []string{"data:query.read"},
+	})
+	if err != nil {
+		t.Fatalf("failed to create auth test account: %v", err)
+	}
+
+	var capturedAuthContext AuthContext
+	testHandler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		capturedAuthContext = GetAuthContext(request.Context())
+		responseWriter.WriteHeader(http.StatusOK)
+	})
+
+	serverMiddlewareHandler := server.middleware(testHandler)
+
+	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", authTestServiceAccount.SecretKey)
+	serverMiddlewareHandler.ServeHTTP(httptest.NewRecorder(), serviceAccountRequest)
+
+	if capturedAuthContext.JWT.Subject != authTestServiceAccount.ID || capturedAuthContext.JWT.Role != "service_role" {
+		t.Fatalf("expected service_role auth context for auth test account, got: %+v", capturedAuthContext)
+	}
+
+	if deleteAuthTestErr := serviceAccountManager.Delete(ctx, authTestServiceAccount.ID); deleteAuthTestErr != nil {
+		t.Fatalf("failed to delete auth test account: %v", deleteAuthTestErr)
 	}
 
 	// 17. Nil db connection pool checks

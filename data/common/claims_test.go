@@ -3,14 +3,12 @@ package common
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"layr.sh/auth/jwt"
+	"layr.sh/core"
 )
 
 type recordedExecution struct {
@@ -31,7 +29,7 @@ func (s *stubTransaction) Exec(ctx context.Context, query string, arguments ...a
 	return pgconn.CommandTag{}, nil
 }
 
-func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
+func TestCommonClaimsValidationAndMappingUnit(t *testing.T) {
 	// 1. IsSafeClaimKey validation
 	if IsSafeClaimKey("") {
 		t.Fatal("expected empty claim key to be unsafe")
@@ -79,143 +77,85 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 		}
 	}
 
-	// 2. ExtractClaims with full X-JWT-* standard headers
+	// 2. BuildClaimsMap with all standard and custom claims (including SessionID -> sid)
+	fullJWTClaims := core.JWTClaims{
+		Subject:     "usr_12345",
+		SessionID:   "session_uuid_123",
+		Role:        "editor",
+		Issuer:      "layr-app",
+		Audience:    "layr-app:user",
+		ExpiresAt:   1750000000,
+		NotBefore:   1700000000,
+		IssuedAt:    1700000001,
+		JWTID:       "token_uuid_001",
+		Email:       "alice@example.com",
+		Phone:       "+1234567890",
+		IsAnonymous: true,
+		Scope:       "read write admin",
+		Claims: map[string]any{
+			"org":       "org_acme",
+			"tenant-id": "tenant_001",
+			"bad!claim": "should_be_ignored",
+		},
+	}
+
+	claimsMap := BuildClaimsMap(fullJWTClaims)
+	if claimsMap["sub"] != "usr_12345" {
+		t.Fatalf("expected sub usr_12345, got %v", claimsMap["sub"])
+	}
+	if claimsMap["sid"] != "session_uuid_123" {
+		t.Fatalf("expected sid session_uuid_123, got %v", claimsMap["sid"])
+	}
+	if claimsMap["role"] != "editor" {
+		t.Fatalf("expected role editor, got %v", claimsMap["role"])
+	}
+	if claimsMap["iss"] != "layr-app" {
+		t.Fatalf("expected iss layr-app, got %v", claimsMap["iss"])
+	}
+	if claimsMap["aud"] != "layr-app:user" {
+		t.Fatalf("expected aud layr-app:user, got %v", claimsMap["aud"])
+	}
+	if claimsMap["exp"] != int64(1750000000) {
+		t.Fatalf("expected exp 1750000000, got %v", claimsMap["exp"])
+	}
+	if claimsMap["nbf"] != int64(1700000000) {
+		t.Fatalf("expected nbf 1700000000, got %v", claimsMap["nbf"])
+	}
+	if claimsMap["iat"] != int64(1700000001) {
+		t.Fatalf("expected iat 1700000001, got %v", claimsMap["iat"])
+	}
+	if claimsMap["jti"] != "token_uuid_001" {
+		t.Fatalf("expected jti token_uuid_001, got %v", claimsMap["jti"])
+	}
+	if claimsMap["email"] != "alice@example.com" {
+		t.Fatalf("expected email alice@example.com, got %v", claimsMap["email"])
+	}
+	if claimsMap["phone"] != "+1234567890" {
+		t.Fatalf("expected phone +1234567890, got %v", claimsMap["phone"])
+	}
+	if claimsMap["is_anonymous"] != true {
+		t.Fatalf("expected is_anonymous true, got %v", claimsMap["is_anonymous"])
+	}
+	if claimsMap["scope"] != "read write admin" {
+		t.Fatalf("expected scope 'read write admin', got %v", claimsMap["scope"])
+	}
+	if claimsMap["org"] != "org_acme" {
+		t.Fatalf("expected org org_acme, got %v", claimsMap["org"])
+	}
+	if claimsMap["tenant-id"] != "tenant_001" {
+		t.Fatalf("expected tenant-id tenant_001, got %v", claimsMap["tenant-id"])
+	}
+	if _, exists := claimsMap["bad!claim"]; exists {
+		t.Fatal("expected unsafe claim bad!claim to be excluded from BuildClaimsMap")
+	}
+
+	// 3. ApplyRLS with stub transaction in isolation covering various claim types
 	ctx := context.Background()
-	fullRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/data/query", nil)
-	fullRequest.Header.Set("X-JWT-Sub", "usr_12345")
-	fullRequest.Header.Set("X-JWT-Role", "editor")
-	fullRequest.Header.Set("X-JWT-Iss", "layr-app")
-	fullRequest.Header.Set("X-JWT-Aud", "layr-app:user")
-	fullRequest.Header.Set("X-JWT-Exp", "1750000000")
-	fullRequest.Header.Set("X-JWT-Nbf", "1700000000")
-	fullRequest.Header.Set("X-JWT-Iat", "1700000001")
-	fullRequest.Header.Set("X-JWT-Jti", "token_uuid_001")
-	fullRequest.Header.Set("X-JWT-Email", "alice@example.com")
-	fullRequest.Header.Set("X-JWT-Phone", "+1234567890")
-	fullRequest.Header.Set("X-JWT-Is-Anonymous", "true")
-	fullRequest.Header.Set("X-JWT-Scopes", "read write admin")
-	fullRequest.Header.Set("X-JWT-Claim-Org", "org_acme")
-	fullRequest.Header.Set("X-JWT-Claim-Tenant-Id", "tenant_001")
-	fullRequest.Header.Set("Authorization", "Bearer token")
-	fullRequest.Header.Set("Content-Type", "application/json")
-
-	fullAuthClaims := ExtractClaims(fullRequest)
-	if fullAuthClaims.Subject != "usr_12345" {
-		t.Fatalf("expected subject usr_12345, got %q", fullAuthClaims.Subject)
-	}
-	if fullAuthClaims.Role != "editor" {
-		t.Fatalf("expected role editor, got %q", fullAuthClaims.Role)
-	}
-	if fullAuthClaims.Issuer != "layr-app" {
-		t.Fatalf("expected issuer layr-app, got %q", fullAuthClaims.Issuer)
-	}
-	if fullAuthClaims.Audience != "layr-app:user" {
-		t.Fatalf("expected audience layr-app:user, got %q", fullAuthClaims.Audience)
-	}
-	if fullAuthClaims.ExpiresAt != 1750000000 {
-		t.Fatalf("expected exp 1750000000, got %d", fullAuthClaims.ExpiresAt)
-	}
-	if fullAuthClaims.NotBefore != 1700000000 {
-		t.Fatalf("expected nbf 1700000000, got %d", fullAuthClaims.NotBefore)
-	}
-	if fullAuthClaims.IssuedAt != 1700000001 {
-		t.Fatalf("expected iat 1700000001, got %d", fullAuthClaims.IssuedAt)
-	}
-	if fullAuthClaims.JWTID != "token_uuid_001" {
-		t.Fatalf("expected jti token_uuid_001, got %q", fullAuthClaims.JWTID)
-	}
-	if fullAuthClaims.Email != "alice@example.com" {
-		t.Fatalf("expected email alice@example.com, got %q", fullAuthClaims.Email)
-	}
-	if fullAuthClaims.Phone != "+1234567890" {
-		t.Fatalf("expected phone +1234567890, got %q", fullAuthClaims.Phone)
-	}
-	if !fullAuthClaims.IsAnonymous {
-		t.Fatal("expected is_anonymous to be true")
-	}
-	if len(fullAuthClaims.Scopes) != 3 || fullAuthClaims.Scopes[0] != "read" {
-		t.Fatalf("expected 3 scopes, got %v", fullAuthClaims.Scopes)
-	}
-	if fullAuthClaims.Claims["org"] != "org_acme" {
-		t.Fatalf("expected org claim org_acme, got %v", fullAuthClaims.Claims["org"])
-	}
-	if fullAuthClaims.Claims["tenant-id"] != "tenant_001" {
-		t.Fatalf("expected tenant-id claim tenant_001, got %v", fullAuthClaims.Claims["tenant-id"])
-	}
-
-	// 3. ExtractClaims via X-JWT-Claim-* headers when standard headers are empty
-	claimPrefixedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/data/query", nil)
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Sub", "usr_from_prefix")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Role", "viewer")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Iss", "prefix-issuer")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Aud", "prefix-audience")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Exp", "1800000000")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Nbf", "1700000002")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Iat", "1700000003")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Jti", "jti_from_prefix")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Email", "prefix@example.com")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Phone", "+987654321")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Is_Anonymous", "true")
-	claimPrefixedRequest.Header.Set("X-JWT-Claim-Scopes", "scope1 scope2")
-
-	prefixedAuthClaims := ExtractClaims(claimPrefixedRequest)
-	if prefixedAuthClaims.Subject != "usr_from_prefix" {
-		t.Fatalf("expected subject usr_from_prefix, got %q", prefixedAuthClaims.Subject)
-	}
-	if prefixedAuthClaims.Role != "viewer" {
-		t.Fatalf("expected role viewer, got %q", prefixedAuthClaims.Role)
-	}
-	if prefixedAuthClaims.Issuer != "prefix-issuer" {
-		t.Fatalf("expected issuer prefix-issuer, got %q", prefixedAuthClaims.Issuer)
-	}
-	if prefixedAuthClaims.Audience != "prefix-audience" {
-		t.Fatalf("expected audience prefix-audience, got %q", prefixedAuthClaims.Audience)
-	}
-	if prefixedAuthClaims.ExpiresAt != 1800000000 {
-		t.Fatalf("expected exp 1800000000, got %d", prefixedAuthClaims.ExpiresAt)
-	}
-	if prefixedAuthClaims.NotBefore != 1700000002 {
-		t.Fatalf("expected nbf 1700000002, got %d", prefixedAuthClaims.NotBefore)
-	}
-	if prefixedAuthClaims.IssuedAt != 1700000003 {
-		t.Fatalf("expected iat 1700000003, got %d", prefixedAuthClaims.IssuedAt)
-	}
-	if prefixedAuthClaims.JWTID != "jti_from_prefix" {
-		t.Fatalf("expected jti jti_from_prefix, got %q", prefixedAuthClaims.JWTID)
-	}
-	if prefixedAuthClaims.Email != "prefix@example.com" {
-		t.Fatalf("expected email prefix@example.com, got %q", prefixedAuthClaims.Email)
-	}
-	if prefixedAuthClaims.Phone != "+987654321" {
-		t.Fatalf("expected phone +987654321, got %q", prefixedAuthClaims.Phone)
-	}
-	if !prefixedAuthClaims.IsAnonymous {
-		t.Fatal("expected is_anonymous true from prefix")
-	}
-	if len(prefixedAuthClaims.Scopes) != 2 {
-		t.Fatalf("expected 2 scopes from prefix, got %v", prefixedAuthClaims.Scopes)
-	}
-
-	// 4. ExtractClaims with empty and partial headers
-	emptyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	emptyAuthClaims := ExtractClaims(emptyRequest)
-	if emptyAuthClaims.Subject != "" || emptyAuthClaims.Role != "" || len(emptyAuthClaims.Claims) != 0 {
-		t.Fatalf("expected empty claims, got %+v", emptyAuthClaims)
-	}
-
-	// Header with empty value list
-	emptyValueRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	emptyValueRequest.Header["X-JWT-Claim-Empty"] = []string{}
-	emptyValueAuthClaims := ExtractClaims(emptyValueRequest)
-	if len(emptyValueAuthClaims.Claims) != 0 {
-		t.Fatalf("expected no claims for empty value list, got %+v", emptyValueAuthClaims.Claims)
-	}
-
-	// 5. ApplyRLS with stub transaction in isolation covering various claim types
 	mockStubTransaction := &stubTransaction{}
 
-	populatedAuthClaims := jwt.Claims{
+	populatedJWTClaims := core.JWTClaims{
 		Subject:     "usr_999",
+		SessionID:   "sess_999",
 		Role:        "viewer",
 		Issuer:      "layr-corp",
 		Audience:    "layr-corp:viewer",
@@ -226,7 +166,7 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 		Email:       "viewer@layr.sh",
 		Phone:       "+1000000000",
 		IsAnonymous: true,
-		Scopes:      []string{"read:data", "write:data"},
+		Scope:       "read:data write:data",
 		Claims: map[string]any{
 			"team_id":      "team_alpha",
 			"score_int":    42,
@@ -239,7 +179,7 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 		},
 	}
 
-	ApplyRLS(ctx, mockStubTransaction, populatedAuthClaims)
+	ApplyRLS(ctx, mockStubTransaction, populatedJWTClaims)
 
 	appliedSettings := make(map[string]string)
 	foundFullJSON := false
@@ -260,6 +200,7 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 
 	expectedSettings := map[string]string{
 		"request.jwt.sub":          "usr_999",
+		"request.jwt.sid":          "sess_999",
 		"request.jwt.role":         "viewer",
 		"request.jwt.iss":          "layr-corp",
 		"request.jwt.aud":          "layr-corp:viewer",
@@ -270,7 +211,7 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 		"request.jwt.email":        "viewer@layr.sh",
 		"request.jwt.phone":        "+1000000000",
 		"request.jwt.is_anonymous": "true",
-		"request.jwt.scopes":       "read:data write:data",
+		"request.jwt.scope":        "read:data write:data",
 		"request.jwt.team_id":      "team_alpha",
 		"request.jwt.score_int":    "42",
 		"request.jwt.score_int64":  "9999999999",
@@ -293,21 +234,21 @@ func TestCommonClaimsExtractionAndValidationUnit(t *testing.T) {
 		t.Fatal("expected request.jwt full JSON setting to be recorded")
 	}
 
-	// 6. Test unmarshalable claim fallback to fmt.Sprintf
+	// 4. Test unmarshalable claim fallback to fmt.Sprintf
 	unmarshalableTransaction := &stubTransaction{}
-	unmarshalableClaims := jwt.Claims{
+	unmarshalableJWTClaims := core.JWTClaims{
 		Claims: map[string]any{
 			"chan_key": make(chan int),
 		},
 	}
-	ApplyRLS(ctx, unmarshalableTransaction, unmarshalableClaims)
+	ApplyRLS(ctx, unmarshalableTransaction, unmarshalableJWTClaims)
 	if len(unmarshalableTransaction.executions) == 0 {
 		t.Fatal("expected execution for unmarshalable claim")
 	}
 
-	// 7. Empty claims invoke zero executions
+	// 5. Empty claims invoke zero executions
 	emptyStubTransaction := &stubTransaction{}
-	ApplyRLS(ctx, emptyStubTransaction, jwt.Claims{})
+	ApplyRLS(ctx, emptyStubTransaction, core.JWTClaims{})
 	if len(emptyStubTransaction.executions) != 0 {
 		t.Fatalf("expected zero executions for empty claims, got %d", len(emptyStubTransaction.executions))
 	}

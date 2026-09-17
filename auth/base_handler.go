@@ -4,25 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/passkey"
 	"layr.sh/auth/password"
 	"layr.sh/core"
 )
 
 const (
-	// AuthSessionCookieName is the standard isolated __Host cookie for application users over HTTPS.
-	AuthSessionCookieName = "__Host-session"
-	// AuthSessionInsecureCookieName is the fallback cookie used over non-HTTPS/plain HTTP connections.
-	AuthSessionInsecureCookieName = "session"
-	defaultOIDCAuthCodeCacheTTL   = 5 * time.Minute
+	defaultOIDCAuthCodeCacheTTL = 5 * time.Minute
 )
 
 var (
@@ -35,7 +29,7 @@ type BaseHandler struct {
 	db                    *core.DatabasePool
 	configManager         *ConfigManager
 	cryptoKeyManager      *core.CryptoKeyManager
-	signer                *jwt.Signer
+	jwtSigner             *core.JWTSigner
 	hasher                *password.Hasher
 	passkeyManager        *passkey.Manager
 	totpManager           *core.TOTPManager
@@ -49,7 +43,7 @@ type BaseHandler struct {
 // NewBaseHandler creates a new Auth HTTP BaseHandler.
 func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoKeyManager *core.CryptoKeyManager) *BaseHandler {
 	log.Debug("initializing auth base handler")
-	signer, _ := jwt.NewSigner(cryptoKeyManager)
+	jwtSigner, _ := core.NewJWTSigner(cryptoKeyManager)
 	config := configManager.Get()
 
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
@@ -66,7 +60,7 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoK
 		db:               db,
 		configManager:    configManager,
 		cryptoKeyManager: cryptoKeyManager,
-		signer:           signer,
+		jwtSigner:        jwtSigner,
 		hasher:           password.NewHasher(),
 		passkeyManager:   passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
 		totpManager:      core.NewTOTPManager(config.MFA.Issuer),
@@ -166,18 +160,8 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		phone = *userRecord.Phone
 	}
 
-	customClaims := handler.resolveCustomClaims(request.Context(), userRecord.ID)
-	userClaims := jwt.Claims{
-		Subject:     userRecord.ID,
-		Email:       email,
-		Phone:       phone,
-		Role:        userRecord.Role,
-		IsAnonymous: userRecord.IsAnonymous,
-		Claims:      customClaims,
-	}
-	accessToken, _ := handler.signer.GenerateAccessToken(userClaims, config.Sessions.AccessTokenExpirySeconds)
-	refreshToken := jwt.GenerateRefreshToken()
-	refreshHash := jwt.HashRefreshToken(refreshToken)
+	refreshToken := handler.jwtSigner.GenerateRefreshToken()
+	refreshHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 
 	refreshTokenExpirySeconds := config.Sessions.RefreshTokenExpirySeconds
 	if refreshTokenExpirySeconds <= 0 {
@@ -205,6 +189,18 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		sessionID = uuid.NewV7().String()
 		sessionCreatedAt = time.Now().UTC()
 	}
+
+	customClaims := handler.resolveCustomClaims(request.Context(), userRecord.ID)
+	userJWTClaims := core.JWTClaims{
+		Subject:     userRecord.ID,
+		SessionID:   sessionID,
+		Email:       email,
+		Phone:       phone,
+		Role:        userRecord.Role,
+		IsAnonymous: userRecord.IsAnonymous,
+		Claims:      customClaims,
+	}
+	accessToken, _ := handler.jwtSigner.GenerateAccessToken(userJWTClaims, config.Sessions.AccessTokenExpirySeconds)
 
 	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
 		sessionKey := "auth:session:" + refreshHash
@@ -249,9 +245,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		}))
 	}
 
-	isSecure := core.IsSecureRequest(request)
-	log.Tracef("setting session cookie for user %s (secure: %t, clientIP: %s)", userRecord.ID, isSecure, clientIP)
-	core.SetSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, refreshToken, refreshTokenExpiredAt, isSecure)
+	core.SetSessionCookie(responseWriter, request, refreshToken, refreshTokenExpiredAt)
 
 	sessionResponse := SessionResponse{
 		User:         userRecord,
@@ -329,146 +323,6 @@ func (handler *BaseHandler) resolveCustomClaims(ctx context.Context, userID stri
 	return customClaims
 }
 
-func (handler *BaseHandler) authenticateSessionRequest(request *http.Request) (string, string, string, error) {
-	log.Trace("authenticating session request")
-	if handler == nil || handler.signer == nil {
-		log.Debug("session authentication rejected: auth signer unavailable")
-		return "", "", "", fmt.Errorf("auth signer unavailable")
-	}
-
-	token := core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
-	if token == "" {
-		log.Debug("session authentication rejected: missing authentication token in headers and cookies")
-		return "", "", "", fmt.Errorf("missing authentication token")
-	}
-
-	claims, err := handler.signer.VerifyAccessToken(token)
-	if err != nil || claims == nil || claims.Subject == "" {
-		log.Debugf("session authentication rejected: access token validation failed: %v", err)
-		return "", "", "", fmt.Errorf("invalid access token: %w", err)
-	}
-
-	var currentRefreshTokenHash string
-	var tokenSource string
-	if cookie, err := request.Cookie(AuthSessionCookieName); err == nil && cookie.Value != "" {
-		currentRefreshTokenHash = jwt.HashRefreshToken(cookie.Value)
-		tokenSource = "cookie:" + AuthSessionCookieName
-	} else if cookie, err := request.Cookie(AuthSessionInsecureCookieName); err == nil && cookie.Value != "" {
-		currentRefreshTokenHash = jwt.HashRefreshToken(cookie.Value)
-		tokenSource = "cookie:" + AuthSessionInsecureCookieName
-	}
-	if currentRefreshTokenHash == "" {
-		if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
-			currentRefreshTokenHash = jwt.HashRefreshToken(refreshTokenHeader)
-			tokenSource = "header:X-Refresh-Token"
-		} else if sessionTokenHeader := request.Header.Get("X-Session-Token"); sessionTokenHeader != "" {
-			currentRefreshTokenHash = jwt.HashRefreshToken(sessionTokenHeader)
-			tokenSource = "header:X-Session-Token"
-		}
-	}
-
-	currentSessionID := request.Header.Get("X-Session-ID")
-	log.Tracef("session request authenticated for subject %s (source: %s, sessionID: %s)", claims.Subject, tokenSource, currentSessionID)
-	if parsedUserUUID, parseErr := uuid.Parse(claims.Subject); parseErr == nil {
-		role := claims.Role
-		*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
-			Type: "user",
-			ID:   &parsedUserUUID,
-			Role: &role,
-		}))
-	}
-	return claims.Subject, currentRefreshTokenHash, currentSessionID, nil
-}
-
-func (handler *BaseHandler) extractClaimsOptional(request *http.Request) *jwt.Claims {
-	log.Trace("extracting optional claims from request")
-	authHeader := request.Header.Get("Authorization")
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if handler.signer != nil {
-			claims, err := handler.signer.VerifyAccessToken(token)
-			if err == nil {
-				log.Tracef("successfully extracted optional claims for subject %s", claims.Subject)
-				return claims
-			}
-			log.Debugf("optional bearer token verification failed: %v", err)
-		}
-	}
-	return nil
-}
-
-func (handler *BaseHandler) authenticateUser(request *http.Request) (string, error) {
-	log.Trace("authenticating user from request")
-	if handler == nil || handler.signer == nil {
-		log.Debug("user authentication rejected: auth signer unavailable")
-		return "", fmt.Errorf("auth signer unavailable")
-	}
-
-	token := core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
-	if token != "" {
-		claims, err := handler.signer.VerifyAccessToken(token)
-		if err == nil && claims != nil && claims.Subject != "" {
-			log.Tracef("user authenticated via access token: %s", claims.Subject)
-			if parsedUserUUID, parseErr := uuid.Parse(claims.Subject); parseErr == nil {
-				role := claims.Role
-				*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
-					Type: "user",
-					ID:   &parsedUserUUID,
-					Role: &role,
-				}))
-			}
-			return claims.Subject, nil
-		}
-		log.Debugf("access token verification failed during user authentication: %v", err)
-	}
-
-	var refreshToken string
-	var tokenSource string
-	if cookie, err := request.Cookie(AuthSessionCookieName); err == nil && cookie.Value != "" {
-		refreshToken = cookie.Value
-		tokenSource = "cookie:" + AuthSessionCookieName
-	} else if cookie, err := request.Cookie(AuthSessionInsecureCookieName); err == nil && cookie.Value != "" {
-		refreshToken = cookie.Value
-		tokenSource = "cookie:" + AuthSessionInsecureCookieName
-	}
-
-	if refreshToken == "" {
-		if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
-			refreshToken = refreshTokenHeader
-			tokenSource = "header:X-Refresh-Token"
-		} else if sessionTokenHeader := request.Header.Get("X-Session-Token"); sessionTokenHeader != "" {
-			refreshToken = sessionTokenHeader
-			tokenSource = "header:X-Session-Token"
-		}
-	}
-
-	if refreshToken != "" && handler.db != nil {
-		refreshTokenHash := jwt.HashRefreshToken(refreshToken)
-		log.Tracef("looking up active session in database via %s", tokenSource)
-		var userID string
-		err := handler.db.QueryRow(request.Context(), `
-			SELECT user_id FROM auth.sessions
-			WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
-		`, refreshTokenHash).Scan(&userID)
-		if err == nil && userID != "" {
-			log.Tracef("user authenticated via session refresh token: %s", userID)
-			if parsedUserUUID, parseErr := uuid.Parse(userID); parseErr == nil {
-				role := "authenticated"
-				*request = *request.WithContext(core.WithEventActor(request.Context(), core.EventActor{
-					Type: "user",
-					ID:   &parsedUserUUID,
-					Role: &role,
-				}))
-			}
-			return userID, nil
-		}
-		log.Debugf("session lookup via refresh token failed (source: %s): %v", tokenSource, err)
-	}
-
-	log.Debug("user authentication failed: unauthorized (no valid token or active session found)")
-	return "", fmt.Errorf("unauthorized")
-}
-
 // resolveAnonymousCaller checks if the caller provided an active anonymous session
 // strictly defined as email IS NULL AND phone IS NULL AND is_anonymous = true.
 // Returns ErrAnonymousSessionNotFound if the caller is unauthenticated or not an anonymous user.
@@ -479,16 +333,17 @@ func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User
 		return nil, ErrAnonymousSessionNotFound
 	}
 
-	userID, err := handler.authenticateUser(request)
-	if err != nil || userID == "" {
-		log.Debugf("anonymous caller resolution rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("anonymous caller resolution rejected: unauthenticated caller")
 		return nil, ErrAnonymousSessionNotFound
 	}
+	userID := authContext.UserID
 
 	ctx := request.Context()
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1

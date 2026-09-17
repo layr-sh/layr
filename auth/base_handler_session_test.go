@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/core"
 )
 
@@ -24,7 +23,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	ctx := context.Background()
 
-	validAccessToken, err := baseHandler.signer.GenerateAccessToken(jwt.Claims{
+	validAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: "user-123",
 		Email:   "user@example.com",
 		Role:    "authenticated",
@@ -33,10 +32,19 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 		t.Fatalf("failed to generate access token: %v", err)
 	}
 
+	authedCtx := core.WithAuthContext(ctx, core.AuthContext{
+		UserID: "user-123",
+		JWT: core.JWTClaims{
+			Subject: "user-123",
+			Email:   "user@example.com",
+			Role:    "authenticated",
+		},
+	})
+
 	// 1. handleListSessions on nil pool -> 500
-	cookieRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	cookieRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
 	cookieRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
-	cookieRequest.AddCookie(&http.Cookie{Name: AuthSessionCookieName, Value: "cookie_refresh_token"})
+	cookieRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameSecure, Value: "cookie_refresh_token"})
 	listRequestResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(listRequestResponseRecorder, cookieRequest)
 	if listRequestResponseRecorder.Code != http.StatusInternalServerError {
@@ -52,7 +60,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	}
 
 	// 3. handleRevokeSession on nil pool -> 500
-	revokeRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/sessions/01918a3f-1234-7000-8000-000000000001", nil)
+	revokeRequest := httptest.NewRequestWithContext(authedCtx, http.MethodDelete, "/api/v1/auth/user/sessions/01918a3f-1234-7000-8000-000000000001", nil)
 	revokeRequestResponseRecorder := httptest.NewRecorder()
 	revokeRequest.SetPathValue("session_id", "01918a3f-1234-7000-8000-000000000001")
 	revokeRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
@@ -70,7 +78,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	}
 
 	// 5. handleRevokeSession empty or bad path -> 400
-	badPathRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/sessions/", nil)
+	badPathRequest := httptest.NewRequestWithContext(authedCtx, http.MethodDelete, "/api/v1/auth/user/sessions/", nil)
 	badPathRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	badPathRequestResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRevokeSession(badPathRequestResponseRecorder, badPathRequest)
@@ -78,7 +86,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on empty session id, got: %d", badPathRequestResponseRecorder.Code)
 	}
 
-	slashPathRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/sessions/abc/def", nil)
+	slashPathRequest := httptest.NewRequestWithContext(authedCtx, http.MethodDelete, "/api/v1/auth/user/sessions/abc/def", nil)
 	slashPathRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	slashPathRequestResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRevokeSession(slashPathRequestResponseRecorder, slashPathRequest)
@@ -86,7 +94,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on nested path, got: %d", slashPathRequestResponseRecorder.Code)
 	}
 
-	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/sessions/not-a-valid-uuid", nil)
+	invalidUUIDRequest := httptest.NewRequestWithContext(authedCtx, http.MethodDelete, "/api/v1/auth/user/sessions/not-a-valid-uuid", nil)
 	invalidUUIDRequest.SetPathValue("session_id", "not-a-valid-uuid")
 	invalidUUIDRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	invalidUUIDRequestResponseRecorder := httptest.NewRecorder()
@@ -96,7 +104,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	}
 
 	// 6. handleRevokeOtherSessions on nil pool -> 500
-	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+	revokeOthersRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
 	revokeOthersRequestResponseRecorder := httptest.NewRecorder()
 	revokeOthersRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	baseHandler.handleRevokeOtherSessions(revokeOthersRequestResponseRecorder, revokeOthersRequest)
@@ -151,7 +159,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	}
 	lockedCachedBytes, _ := json.Marshal(lockedCachedSession)
 	lockedRefreshToken := "cached-locked-token"
-	lockedTokenHash := jwt.HashRefreshToken(lockedRefreshToken)
+	lockedTokenHash := baseHandler.jwtSigner.HashRefreshToken(lockedRefreshToken)
 	_ = sessionKVStore.Set(ctx, "auth:session:"+lockedTokenHash, string(lockedCachedBytes), time.Hour)
 
 	lockedCacheRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"cached-locked-token"}`))

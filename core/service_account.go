@@ -445,6 +445,9 @@ func ExtractRequestServiceAccountKey(request *http.Request) string {
 	if key := request.Header.Get("X-Layr-Service-Account-Key"); key != "" {
 		return strings.TrimSpace(key)
 	}
+	if key := request.Header.Get("X-Service-Account-Key"); key != "" {
+		return strings.TrimSpace(key)
+	}
 	authHeader := request.Header.Get("Authorization")
 	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
 		return strings.TrimSpace(authHeader[7:])
@@ -509,14 +512,25 @@ func RequireScopeMiddleware(requiredScope string) func(http.Handler) http.Handle
 	return func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 			serviceAccount := GetServiceAccount(request.Context())
-			if serviceAccount == nil {
+			authContext := GetAuthContext(request.Context())
+
+			if serviceAccount == nil && !authContext.IsServiceAccount() {
 				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
 				return
 			}
-			if !HasScope(serviceAccount.Scopes, requiredScope) {
-				WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
-				return
+
+			if serviceAccount != nil {
+				if !HasScope(serviceAccount.Scopes, requiredScope) {
+					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
+					return
+				}
+			} else {
+				if !authContext.HasScope(requiredScope) {
+					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
+					return
+				}
 			}
+
 			handler.ServeHTTP(responseWriter, request)
 		})
 	}

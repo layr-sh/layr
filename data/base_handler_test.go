@@ -120,6 +120,22 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 		assert.False(t, baseHandler.isRLSBypassed(request, "data:query.read"))
 
+		jwtRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{
+			JWT: core.JWTClaims{
+				Role:  "service_role",
+				Scope: "data:query.read",
+			},
+		}), http.MethodGet, "/test", nil)
+		assert.True(t, baseHandler.isRLSBypassed(jwtRequest, "data:query.read"))
+
+		noScopeRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{
+			JWT: core.JWTClaims{
+				Role:  "service_role",
+				Scope: "other:scope",
+			},
+		}), http.MethodGet, "/test", nil)
+		assert.False(t, baseHandler.isRLSBypassed(noScopeRequest, "data:query.read"))
+
 		baseHandler.SetServiceAccountManager(nil)
 		assert.False(t, baseHandler.isRLSBypassed(request, "data:query.read"))
 	})

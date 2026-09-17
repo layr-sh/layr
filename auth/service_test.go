@@ -60,6 +60,23 @@ func TestAuthServiceUnit(t *testing.T) {
 	emptyService.SetEventBus(eventBus)
 
 	// 6. Test CheckScope branches
+	// Branch A0: AuthContext is a service account -> evaluates HasScope directly
+	m2mAuthedCtx := core.WithAuthContext(ctx, core.AuthContext{
+		ServiceAccountID: "sa_worker_123",
+		JWT: core.JWTClaims{
+			Subject: "sa_worker_123",
+			Role:    "service_role",
+			Scope:   "auth:user.read",
+		},
+	})
+	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/api/v1/test", nil)
+	if !service.CheckScope(m2mValidRequest, "auth:user.read") {
+		t.Fatal("expected CheckScope to return true when M2M AuthContext has required scope")
+	}
+	if service.CheckScope(m2mValidRequest, "auth:user.write") {
+		t.Fatal("expected CheckScope to return false when M2M AuthContext lacks required scope")
+	}
+
 	// Branch A: serviceAccountManager is nil -> returns true
 	noManagerService := &Service{}
 	noManagerRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/test", nil)

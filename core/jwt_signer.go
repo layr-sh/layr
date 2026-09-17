@@ -1,4 +1,4 @@
-package jwt
+package core
 
 import (
 	"crypto/ed25519"
@@ -11,9 +11,8 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"uuid"
 
-	"layr.sh/core"
+	"uuid"
 )
 
 const (
@@ -23,21 +22,36 @@ const (
 	defaultM2MTokenExpirySeconds    = 3600
 )
 
-// Claims represents standard RFC 7519 JWT claims for layr/auth end-users.
-type Claims struct {
-	Subject     string         `json:"sub"`
-	Email       string         `json:"email,omitempty"`
-	Phone       string         `json:"phone,omitempty"`
-	Role        string         `json:"role"`
-	IsAnonymous bool           `json:"is_anonymous"`
-	Issuer      string         `json:"iss"`
-	Audience    string         `json:"aud"`
-	ExpiresAt   int64          `json:"exp"`
-	IssuedAt    int64          `json:"iat"`
-	NotBefore   int64          `json:"nbf"`
-	JWTID       string         `json:"jti"`
-	Scopes      []string       `json:"scopes,omitempty"`
-	Claims      map[string]any `json:"claims,omitempty"`
+// JWTClaims represents standard RFC 7519 and OIDC Core 1.0 JWT claims for platform users, service accounts, and tokens.
+type JWTClaims struct {
+	Subject       string         `json:"sub"`
+	SessionID     string         `json:"sid,omitempty"`
+	Email         string         `json:"email,omitempty"`
+	EmailVerified bool           `json:"email_verified,omitempty"`
+	Phone         string         `json:"phone,omitempty"`
+	PhoneVerified bool           `json:"phone_verified,omitempty"`
+	Role          string         `json:"role,omitempty"`
+	IsAnonymous   bool           `json:"is_anonymous,omitempty"`
+	Issuer        string         `json:"iss,omitempty"`
+	Audience      string         `json:"aud,omitempty"`
+	ExpiresAt     int64          `json:"exp,omitempty"`
+	IssuedAt      int64          `json:"iat,omitempty"`
+	NotBefore     int64          `json:"nbf,omitempty"`
+	AuthTime      int64          `json:"auth_time,omitempty"`
+	Nonce         string         `json:"nonce,omitempty"`
+	JWTID         string         `json:"jti,omitempty"`
+	Scope         string         `json:"scope,omitempty"`
+	Claims        map[string]any `json:"claims,omitempty"`
+}
+
+// Scopes parses the space-separated scope claim into a slice of individual scopes.
+func (jwtClaims JWTClaims) Scopes() []string {
+	return strings.Fields(jwtClaims.Scope)
+}
+
+// HasScope checks if the JWT scope claim satisfies the required scope.
+func (jwtClaims JWTClaims) HasScope(requiredScope string) bool {
+	return HasScope(jwtClaims.Scopes(), requiredScope)
 }
 
 // Assert checks a single standard or custom claim against the expected value.
@@ -45,6 +59,7 @@ type Claims struct {
 // - "aud", "audience" -> claims.Audience
 // - "iss", "issuer" -> claims.Issuer
 // - "sub", "subject" -> claims.Subject
+// - "sid", "session_id" -> claims.SessionID
 // - "role" -> claims.Role
 // - "email" -> claims.Email
 // - "phone" -> claims.Phone
@@ -52,32 +67,36 @@ type Claims struct {
 // - "jti" -> claims.JWTID
 // - "scopes" -> claims.Scopes
 // All other keys are verified against custom claims.Claims.
-func (claims *Claims) Assert(key string, expected any) error {
+func (jwtClaims *JWTClaims) Assert(key string, expected any) error {
 	var actual any
 	switch key {
 	case "aud", "audience":
-		actual = claims.Audience
+		actual = jwtClaims.Audience
 	case "iss", "issuer":
-		actual = claims.Issuer
+		actual = jwtClaims.Issuer
 	case "sub", "subject":
-		actual = claims.Subject
+		actual = jwtClaims.Subject
+	case "sid", "session_id":
+		actual = jwtClaims.SessionID
 	case "role":
-		actual = claims.Role
+		actual = jwtClaims.Role
 	case "email":
-		actual = claims.Email
+		actual = jwtClaims.Email
 	case "phone":
-		actual = claims.Phone
+		actual = jwtClaims.Phone
 	case "is_anonymous":
-		actual = claims.IsAnonymous
+		actual = jwtClaims.IsAnonymous
 	case "jti":
-		actual = claims.JWTID
+		actual = jwtClaims.JWTID
+	case "scope":
+		actual = jwtClaims.Scope
 	case "scopes":
-		actual = claims.Scopes
+		actual = jwtClaims.Scopes()
 	default:
-		if claims.Claims == nil {
+		if jwtClaims.Claims == nil {
 			return fmt.Errorf("jwt claim %q not found", key)
 		}
-		value, exists := claims.Claims[key]
+		value, exists := jwtClaims.Claims[key]
 		if !exists {
 			return fmt.Errorf("jwt claim %q not found", key)
 		}
@@ -126,23 +145,23 @@ type TokenPair struct {
 	TokenType    string `json:"token_type"`
 }
 
-// Signer handles Ed25519 token issuance and verification using subkey KEY_JWT_SIGNING.
-type Signer struct {
+// JWTSigner handles Ed25519 token issuance and verification using subkey KEY_JWT_SIGNING.
+type JWTSigner struct {
 	privateKey ed25519.PrivateKey
 	publicKey  ed25519.PublicKey
 	seed       []byte
 	keyID      string
 }
 
-// NewSigner derives an Ed25519 keypair from KEY_JWT_SIGNING subkey.
+// NewJWTSigner derives an Ed25519 keypair from KEY_JWT_SIGNING subkey.
 // If customKeyID is provided, it uses it; otherwise it defaults to "<handle>-ed25519-v1".
-func NewSigner(cryptoKeyManager *core.CryptoKeyManager, customKeyID ...string) (*Signer, error) {
-	seed, _ := cryptoKeyManager.DeriveSubkey(core.CryptoContextAuthJWTSigning)
+func NewJWTSigner(cryptoKeyManager *CryptoKeyManager, customKeyID ...string) (*JWTSigner, error) {
+	seed, _ := cryptoKeyManager.DeriveSubkey(CryptoContextAuthJWTSigning)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	slugifier := core.NewSlugifier()
-	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	slugifier := NewSlugifier()
+	handle := slugifier.Slugify(GetConfig().Project.Name)
 	if handle == "" {
 		handle = "layr-app"
 	}
@@ -153,7 +172,7 @@ func NewSigner(cryptoKeyManager *core.CryptoKeyManager, customKeyID ...string) (
 	}
 
 	log.Debugf("derived Ed25519 signer keypair with keyID %s", resolvedKeyID)
-	return &Signer{
+	return &JWTSigner{
 		privateKey: privateKey,
 		publicKey:  publicKey,
 		seed:       seed,
@@ -162,12 +181,12 @@ func NewSigner(cryptoKeyManager *core.CryptoKeyManager, customKeyID ...string) (
 }
 
 // KeyID returns the configured Ed25519 key ID.
-func (signer *Signer) KeyID() string {
+func (signer *JWTSigner) KeyID() string {
 	return signer.keyID
 }
 
 // PublicKey returns the Ed25519 public key.
-func (signer *Signer) PublicKey() ed25519.PublicKey {
+func (signer *JWTSigner) PublicKey() ed25519.PublicKey {
 	return signer.publicKey
 }
 
@@ -179,63 +198,68 @@ func (signer *Signer) PublicKey() ed25519.PublicKey {
 // - IssuedAt / NotBefore: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 900s)
 // - JWTID: UUIDv7 string
-func (signer *Signer) GenerateAccessToken(claims Claims, expirySeconds ...int) (string, error) {
-	if claims.Role == "" {
-		claims.Role = "authenticated"
+func (signer *JWTSigner) GenerateAccessToken(jwtClaims JWTClaims, expirySeconds ...int) (string, error) {
+	if jwtClaims.Role == "" {
+		jwtClaims.Role = "authenticated"
 	}
-	slugifier := core.NewSlugifier()
-	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	slugifier := NewSlugifier()
+	handle := slugifier.Slugify(GetConfig().Project.Name)
 	if handle == "" {
 		handle = "layr-app"
 	}
-	if claims.Issuer == "" {
-		claims.Issuer = handle
+	if jwtClaims.Issuer == "" {
+		jwtClaims.Issuer = handle
 	}
-	if claims.Audience == "" {
-		claims.Audience = handle + ":user"
+	if jwtClaims.Audience == "" {
+		jwtClaims.Audience = handle + ":user"
 	}
 
 	now := time.Now().UTC()
-	if claims.IssuedAt == 0 {
-		claims.IssuedAt = now.Unix()
+	if jwtClaims.IssuedAt == 0 {
+		jwtClaims.IssuedAt = now.Unix()
 	}
-	if claims.NotBefore == 0 {
-		claims.NotBefore = now.Unix()
+	if jwtClaims.NotBefore == 0 {
+		jwtClaims.NotBefore = now.Unix()
 	}
-	if claims.ExpiresAt == 0 {
-		expiry := defaultAccessTokenExpirySeconds
-		if len(expirySeconds) > 0 && expirySeconds[0] != 0 {
-			expiry = expirySeconds[0]
+	if jwtClaims.ExpiresAt == 0 {
+		effectiveExpirySeconds := defaultAccessTokenExpirySeconds
+		if len(expirySeconds) > 0 && expirySeconds[0] > 0 {
+			effectiveExpirySeconds = expirySeconds[0]
 		}
-		claims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
+		jwtClaims.ExpiresAt = now.Add(time.Duration(effectiveExpirySeconds) * time.Second).Unix()
 	}
-	if claims.JWTID == "" {
-		claims.JWTID = uuid.NewV7().String()
+	if jwtClaims.JWTID == "" {
+		jwtClaims.JWTID = uuid.NewV7().String()
+	}
+
+	keyID := signer.keyID
+	if keyID == "" {
+		keyID = "layr-ed25519-v1"
 	}
 
 	header := map[string]string{
 		"alg": "EdDSA",
 		"typ": "JWT",
-		"kid": signer.keyID,
+		"kid": keyID,
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(claims)
+	claimsJSON, _ := json.Marshal(jwtClaims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
 	signingInput := headerBase64 + "." + claimsBase64
-	log.Tracef("signing access token for subject %s with keyID %s", claims.Subject, signer.keyID)
+	log.Tracef("signing access token for subject %s with keyID %s", jwtClaims.Subject, signer.keyID)
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
-	log.Debugf("issued access token for subject %s (kid: %s)", claims.Subject, signer.keyID)
+	log.Debugf("issued access token for subject %s (kid: %s)", jwtClaims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
 }
 
 // VerifyAccessToken validates an Ed25519 JWT, asserting signature and expiration/nbf timestamps.
-func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
+func (signer *JWTSigner) VerifyAccessToken(token string) (*JWTClaims, error) {
 	log.Tracef("verifying access token with keyID %s", signer.keyID)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != expectedTokenSegmentCount {
@@ -263,40 +287,40 @@ func (signer *Signer) VerifyAccessToken(token string) (*Claims, error) {
 		return nil, fmt.Errorf("invalid claims base64: %w", err)
 	}
 
-	var claims Claims
-	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
+	var jwtClaims JWTClaims
+	if err := json.Unmarshal(claimsJSON, &jwtClaims); err != nil {
 		log.Debugf("jwt verification failed: invalid claims json: %v", err)
 		return nil, fmt.Errorf("invalid claims json: %w", err)
 	}
 
 	now := time.Now().UTC().Unix()
-	if claims.ExpiresAt < now {
-		log.Debugf("jwt verification failed: token expired at %d (current: %d)", claims.ExpiresAt, now)
+	if jwtClaims.ExpiresAt < now {
+		log.Debugf("jwt verification failed: token expired at %d (current: %d)", jwtClaims.ExpiresAt, now)
 		return nil, errors.New("jwt token expired")
 	}
-	if claims.NotBefore > now {
-		log.Debugf("jwt verification failed: token not valid until %d (current: %d)", claims.NotBefore, now)
+	if jwtClaims.NotBefore > now {
+		log.Debugf("jwt verification failed: token not valid until %d (current: %d)", jwtClaims.NotBefore, now)
 		return nil, errors.New("jwt token not valid yet")
 	}
 
-	log.Debugf("verified access token for subject %s (kid: %s)", claims.Subject, signer.keyID)
-	return &claims, nil
+	log.Debugf("verified access token for subject %s (kid: %s)", jwtClaims.Subject, signer.keyID)
+	return &jwtClaims, nil
 }
 
 // GenerateRefreshToken generates an opaque random 32-byte hex refresh token.
-func GenerateRefreshToken() string {
+func (signer *JWTSigner) GenerateRefreshToken() string {
 	rawUUIDs := uuid.NewV7().String() + uuid.NewV7().String()
 	return strings.ReplaceAll(rawUUIDs, "-", "")
 }
 
 // HashRefreshToken produces SHA-256 hex string for database storage and index lookup.
-func HashRefreshToken(token string) string {
+func (signer *JWTSigner) HashRefreshToken(token string) string {
 	digest := sha256.Sum256([]byte(token))
 	return fmt.Sprintf("%x", digest)
 }
 
 // SignHMAC signs input string with seed using HMAC-SHA256 for one-time verification tokens.
-func (signer *Signer) SignHMAC(message string) string {
+func (signer *JWTSigner) SignHMAC(message string) string {
 	log.Tracef("signing message with HMAC-SHA256")
 	mac := hmac.New(sha256.New, signer.seed) //nolint:namingclarity
 	mac.Write([]byte(message))
@@ -304,27 +328,10 @@ func (signer *Signer) SignHMAC(message string) string {
 }
 
 // VerifyHMAC verifies HMAC-SHA256 signature in constant time.
-func (signer *Signer) VerifyHMAC(message, expectedSignature string) bool {
+func (signer *JWTSigner) VerifyHMAC(message, expectedSignature string) bool {
 	log.Tracef("verifying HMAC-SHA256 signature")
 	actualSignature := signer.SignHMAC(message)
 	return hmac.Equal([]byte(actualSignature), []byte(expectedSignature))
-}
-
-// OIDCIDTokenClaims represents standard OpenID Connect Core 1.0 ID token claims.
-type OIDCIDTokenClaims struct {
-	Issuer              string `json:"iss"`
-	Subject             string `json:"sub"`
-	Audience            string `json:"aud"`
-	ExpiresAt           int64  `json:"exp"`
-	IssuedAt            int64  `json:"iat"`
-	AuthTime            int64  `json:"auth_time,omitempty"`
-	Nonce               string `json:"nonce,omitempty"`
-	Email               string `json:"email,omitempty"`
-	EmailVerified       bool   `json:"email_verified,omitempty"`
-	PhoneNumber         string `json:"phone_number,omitempty"`
-	PhoneNumberVerified bool   `json:"phone_number_verified,omitempty"`
-	Role                string `json:"role,omitempty"`
-	IsAnonymous         bool   `json:"is_anonymous,omitempty"`
 }
 
 // GenerateIDToken signs an OpenID Connect Core 1.0 ID token using Ed25519.
@@ -333,32 +340,32 @@ type OIDCIDTokenClaims struct {
 // - Issuer: handle (slugified project name)
 // - IssuedAt / AuthTime: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 3600s)
-func (signer *Signer) GenerateIDToken(oidcIDTokenClaims OIDCIDTokenClaims, expirySeconds ...int) (string, error) {
-	if oidcIDTokenClaims.Role == "" {
-		oidcIDTokenClaims.Role = "authenticated"
+func (signer *JWTSigner) GenerateIDToken(jwtClaims JWTClaims, expirySeconds ...int) (string, error) {
+	if jwtClaims.Role == "" {
+		jwtClaims.Role = "authenticated"
 	}
-	if oidcIDTokenClaims.Issuer == "" {
-		slugifier := core.NewSlugifier()
-		handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if jwtClaims.Issuer == "" {
+		slugifier := NewSlugifier()
+		handle := slugifier.Slugify(GetConfig().Project.Name)
 		if handle == "" {
 			handle = "layr-app"
 		}
-		oidcIDTokenClaims.Issuer = handle
+		jwtClaims.Issuer = handle
 	}
 
 	now := time.Now().UTC()
-	if oidcIDTokenClaims.IssuedAt == 0 {
-		oidcIDTokenClaims.IssuedAt = now.Unix()
+	if jwtClaims.IssuedAt == 0 {
+		jwtClaims.IssuedAt = now.Unix()
 	}
-	if oidcIDTokenClaims.AuthTime == 0 {
-		oidcIDTokenClaims.AuthTime = now.Unix()
+	if jwtClaims.AuthTime == 0 {
+		jwtClaims.AuthTime = now.Unix()
 	}
-	if oidcIDTokenClaims.ExpiresAt == 0 {
+	if jwtClaims.ExpiresAt == 0 {
 		expiry := defaultIDTokenExpirySeconds
 		if len(expirySeconds) > 0 && expirySeconds[0] != 0 {
 			expiry = expirySeconds[0]
 		}
-		oidcIDTokenClaims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
+		jwtClaims.ExpiresAt = now.Add(time.Duration(expiry) * time.Second).Unix()
 	}
 
 	header := map[string]string{
@@ -368,42 +375,32 @@ func (signer *Signer) GenerateIDToken(oidcIDTokenClaims OIDCIDTokenClaims, expir
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(oidcIDTokenClaims)
+	claimsJSON, _ := json.Marshal(jwtClaims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
 	signingInput := headerBase64 + "." + claimsBase64
-	log.Tracef("signing ID token for subject %s with keyID %s", oidcIDTokenClaims.Subject, signer.keyID)
+	log.Tracef("signing ID token for subject %s with keyID %s", jwtClaims.Subject, signer.keyID)
 	signature := ed25519.Sign(signer.privateKey, []byte(signingInput))
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
-	log.Debugf("issued ID token for subject %s (kid: %s)", oidcIDTokenClaims.Subject, signer.keyID)
+	log.Debugf("issued ID token for subject %s (kid: %s)", jwtClaims.Subject, signer.keyID)
 	return signingInput + "." + signatureBase64, nil
-}
-
-// M2MClaims represents JWT claims for machine-to-machine tokens.
-type M2MClaims struct {
-	Subject   string   `json:"sub"`
-	Issuer    string   `json:"iss"`
-	Audience  string   `json:"aud"`
-	Scopes    []string `json:"scopes"`
-	ExpiresAt int64    `json:"exp"`
-	IssuedAt  int64    `json:"iat"`
-	JWTID     string   `json:"jti"`
 }
 
 // GenerateM2MToken signs a machine-to-machine OAuth 2.0 Client Credentials token.
 // Headers: {"alg": "EdDSA", "typ": "JWT", "kid": <keyID>}
 // Claims:
 // - sub: serviceAccountID
+// - role: "service_role"
 // - iss: handle (slugified project name)
-// - aud: <handle>:service_account
-// - scopes: granted scopes
+// - aud: audience
+// - scope: space-separated granted scopes
 // - exp: current UTC timestamp + expirySeconds (default 3600s)
 // - iat: current UTC timestamp
 // - jti: UUIDv7 string
-func (signer *Signer) GenerateM2MToken(serviceAccountID string, scopes []string, expirySeconds int) (string, error) {
+func (signer *JWTSigner) GenerateM2MToken(serviceAccountID string, scopes []string, expirySeconds int, audience string) (string, error) {
 	if serviceAccountID == "" {
 		return "", errors.New("service account ID is required")
 	}
@@ -417,18 +414,19 @@ func (signer *Signer) GenerateM2MToken(serviceAccountID string, scopes []string,
 		expirySeconds = defaultM2MTokenExpirySeconds
 	}
 
-	slugifier := core.NewSlugifier()
-	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	slugifier := NewSlugifier()
+	handle := slugifier.Slugify(GetConfig().Project.Name)
 	if handle == "" {
 		handle = "layr"
 	}
 
 	now := time.Now().UTC()
-	m2mClaims := M2MClaims{
+	m2mJWTClaims := JWTClaims{
 		Subject:   serviceAccountID,
+		Role:      "service_role",
 		Issuer:    handle,
-		Audience:  handle + ":service_account",
-		Scopes:    scopes,
+		Audience:  audience,
+		Scope:     strings.Join(scopes, " "),
 		ExpiresAt: now.Add(time.Duration(expirySeconds) * time.Second).Unix(),
 		IssuedAt:  now.Unix(),
 		JWTID:     uuid.NewV7().String(),
@@ -446,7 +444,7 @@ func (signer *Signer) GenerateM2MToken(serviceAccountID string, scopes []string,
 	}
 
 	headerJSON, _ := json.Marshal(header)
-	claimsJSON, _ := json.Marshal(m2mClaims)
+	claimsJSON, _ := json.Marshal(m2mJWTClaims)
 
 	headerBase64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 	claimsBase64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
@@ -461,7 +459,7 @@ func (signer *Signer) GenerateM2MToken(serviceAccountID string, scopes []string,
 }
 
 // VerifyM2MToken validates an Ed25519 M2M JWT, asserting signature and expiration timestamps.
-func (signer *Signer) VerifyM2MToken(token string) (*M2MClaims, error) {
+func (signer *JWTSigner) VerifyM2MToken(token string) (*JWTClaims, error) {
 	log.Tracef("verifying M2M token with keyID %s", signer.keyID)
 	tokenSegments := strings.Split(token, ".")
 	if len(tokenSegments) != expectedTokenSegmentCount {
@@ -489,18 +487,18 @@ func (signer *Signer) VerifyM2MToken(token string) (*M2MClaims, error) {
 		return nil, fmt.Errorf("invalid claims base64: %w", claimsDecodeErr)
 	}
 
-	var m2mClaims M2MClaims
-	if claimsUnmarshalErr := json.Unmarshal(claimsJSON, &m2mClaims); claimsUnmarshalErr != nil {
+	var m2mJWTClaims JWTClaims
+	if claimsUnmarshalErr := json.Unmarshal(claimsJSON, &m2mJWTClaims); claimsUnmarshalErr != nil {
 		log.Debugf("m2m jwt verification failed: invalid claims json: %v", claimsUnmarshalErr)
 		return nil, fmt.Errorf("invalid claims json: %w", claimsUnmarshalErr)
 	}
 
 	now := time.Now().UTC().Unix()
-	if m2mClaims.ExpiresAt < now {
-		log.Debugf("m2m jwt verification failed: token expired at %d (current: %d)", m2mClaims.ExpiresAt, now)
+	if m2mJWTClaims.ExpiresAt < now {
+		log.Debugf("m2m jwt verification failed: token expired at %d (current: %d)", m2mJWTClaims.ExpiresAt, now)
 		return nil, errors.New("jwt token expired")
 	}
 
-	log.Debugf("verified M2M token for subject %s (kid: %s)", m2mClaims.Subject, signer.keyID)
-	return &m2mClaims, nil
+	log.Debugf("verified M2M token for subject %s (kid: %s)", m2mJWTClaims.Subject, signer.keyID)
+	return &m2mJWTClaims, nil
 }

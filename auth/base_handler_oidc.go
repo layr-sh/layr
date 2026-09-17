@@ -14,7 +14,6 @@ import (
 	"time"
 	"uuid"
 
-	"layr.sh/auth/jwt"
 	"layr.sh/auth/otp"
 	"layr.sh/core"
 )
@@ -22,18 +21,99 @@ import (
 const defaultM2MTokenExpirySeconds = 3600
 const defaultOIDCMFATTL = 5 * time.Minute
 
+// OIDCConfiguration represents OpenID Connect Core 1.0 discovery metadata (RFC 8414).
+type OIDCConfiguration struct {
+	Issuer                            string   `json:"issuer"`
+	AuthorizationEndpoint             string   `json:"authorization_endpoint"`
+	TokenEndpoint                     string   `json:"token_endpoint"`
+	UserinfoEndpoint                  string   `json:"userinfo_endpoint"`
+	JwksURI                           string   `json:"jwks_uri"`
+	EndSessionEndpoint                string   `json:"end_session_endpoint"`
+	ResponseTypesSupported            []string `json:"response_types_supported"`
+	SubjectTypesSupported             []string `json:"subject_types_supported"`
+	IDTokenSigningAlgValuesSupported  []string `json:"id_token_signing_alg_values_supported"`
+	ScopesSupported                   []string `json:"scopes_supported"`
+	TokenEndpointAuthMethodsSupported []string `json:"token_endpoint_auth_methods_supported"`
+	ClaimsSupported                   []string `json:"claims_supported"`
+	CodeChallengeMethodsSupported     []string `json:"code_challenge_methods_supported"`
+	GrantTypesSupported               []string `json:"grant_types_supported"`
+}
+
+// BuildOIDCDiscovery generates OpenID Connect Core 1.0 discovery metadata.
+func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
+	normalizedBaseURL := strings.TrimRight(baseURL, "/")
+	return OIDCConfiguration{
+		Issuer:                normalizedBaseURL,
+		AuthorizationEndpoint: normalizedBaseURL + "/api/v1/auth/oauth/authorize",
+		TokenEndpoint:         normalizedBaseURL + "/api/v1/auth/oauth/token",
+		UserinfoEndpoint:      normalizedBaseURL + "/api/v1/auth/oauth/userinfo",
+		JwksURI:               normalizedBaseURL + "/.well-known/jwks.json",
+		EndSessionEndpoint:    normalizedBaseURL + "/api/v1/auth/oauth/sign-out",
+		ResponseTypesSupported: []string{
+			"code",
+			"token",
+			"id_token",
+			"code token",
+			"code id_token",
+			"token id_token",
+			"code token id_token",
+		},
+		SubjectTypesSupported: []string{
+			"public",
+		},
+		IDTokenSigningAlgValuesSupported: []string{
+			"EdDSA",
+		},
+		ScopesSupported: []string{
+			"openid",
+			"profile",
+			"email",
+			"phone",
+			"offline_access",
+		},
+		TokenEndpointAuthMethodsSupported: []string{
+			"client_secret_post",
+			"client_secret_basic",
+			"none",
+		},
+		ClaimsSupported: []string{
+			"sub",
+			"iss",
+			"aud",
+			"exp",
+			"iat",
+			"auth_time",
+			"nonce",
+			"email",
+			"email_verified",
+			"phone_number",
+			"phone_number_verified",
+			"role",
+		},
+		CodeChallengeMethodsSupported: []string{
+			"S256",
+			"plain",
+		},
+		GrantTypesSupported: []string{
+			"authorization_code",
+			"refresh_token",
+			"client_credentials",
+		},
+	}
+}
+
 // 1. OIDC Discovery & JWKS
 
 func (handler *BaseHandler) handleOIDCDiscovery(responseWriter http.ResponseWriter, request *http.Request) {
 	baseURL := core.GetConfig().ServerBaseURL()
-	oidcConfiguration := jwt.BuildOIDCDiscovery(baseURL)
+	oidcConfiguration := BuildOIDCDiscovery(baseURL)
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(oidcConfiguration)
 }
 
 func (handler *BaseHandler) handleJWKS(responseWriter http.ResponseWriter, request *http.Request) {
-	jwks := handler.signer.BuildJWKS()
+	jwks := handler.jwtSigner.BuildJWKS()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(jwks)
@@ -110,8 +190,8 @@ func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWrit
 	}
 
 	// Active session bypass (Single Sign-On)
-	activeUserID, err := handler.authenticateUser(request)
-	if err == nil && activeUserID != "" {
+	if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
+		activeUserID := authContext.UserID
 		code := handler.issueOIDCAuthorizationCode(request.Context(), clientID, redirectURI, activeUserID, scope, codeChallenge, codeChallengeMethod, nonce)
 		targetURL, parseErr := url.Parse(redirectURI)
 		if parseErr == nil {
@@ -176,8 +256,8 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	)
 
 	// Set browser session cookie for SSO
-	refreshToken := jwt.GenerateRefreshToken()
-	refreshTokenHash := jwt.HashRefreshToken(refreshToken)
+	refreshToken := handler.jwtSigner.GenerateRefreshToken()
+	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Sessions.RefreshTokenExpirySeconds) * time.Second)
 	sessionID := uuid.NewV7().String()
 	_, _ = handler.db.Exec(ctx, `
@@ -185,8 +265,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 		VALUES ($1, $2, $3, $4, clock_timestamp())
 	`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
 
-	isSecure := core.IsSecureRequest(request)
-	core.SetSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, refreshToken, expiresAt, isSecure)
+	core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
@@ -687,6 +766,9 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
 	if oauthTokenRequest.Scope == "" {
 		oauthTokenRequest.Scope = request.FormValue("scope")
 	}
+	if oauthTokenRequest.Audience == "" {
+		oauthTokenRequest.Audience = request.FormValue("audience")
+	}
 	if oauthTokenRequest.Provider == "" {
 		oauthTokenRequest.Provider = request.FormValue("provider")
 	}
@@ -761,27 +843,88 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 		return
 	}
 
-	var grantedScopes []string
-	trimmedScope := strings.TrimSpace(oauthTokenRequest.Scope)
-	if trimmedScope != "" {
-		requestedScopes := strings.Fields(trimmedScope)
-		for _, requestedScope := range requestedScopes {
-			if !core.HasScope(serviceAccount.Scopes, requestedScope) {
-				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope exceeds permissions granted to the client", "invalid_scope")
-				return
-			}
-		}
-		grantedScopes = requestedScopes
-	} else {
-		grantedScopes = serviceAccount.Scopes
+	targetAudience := strings.TrimSpace(oauthTokenRequest.Audience)
+	if targetAudience == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "audience parameter is required", "invalid_request")
+		return
 	}
 
-	if handler.signer == nil {
+	slugifier := core.NewSlugifier()
+	handle := slugifier.Slugify(core.GetConfig().Project.Name)
+	if handle == "" {
+		handle = "layr"
+	}
+	layrAudience := handle + ":service_account"
+
+	var matchingResourceServerConfig *ResourceServerConfig
+	if handler.configManager != nil {
+		config := handler.configManager.Get()
+		for _, rs := range config.OIDC.ResourceServers {
+			if rs.Identifier == targetAudience {
+				resourceServerConfig := rs
+				matchingResourceServerConfig = &resourceServerConfig
+				break
+			}
+		}
+	}
+
+	if targetAudience != layrAudience && matchingResourceServerConfig == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested audience is not a registered resource server", "invalid_target")
+		return
+	}
+
+	var grantedScopes []string
+	trimmedScope := strings.TrimSpace(oauthTokenRequest.Scope)
+	if targetAudience == layrAudience {
+		if trimmedScope != "" {
+			requestedScopes := strings.Fields(trimmedScope)
+			var deduplicatedRequestedScopes []string
+			seenScopes := make(map[string]bool)
+			for _, s := range requestedScopes {
+				if !seenScopes[s] {
+					seenScopes[s] = true
+					deduplicatedRequestedScopes = append(deduplicatedRequestedScopes, s)
+				}
+			}
+			for _, requestedScope := range deduplicatedRequestedScopes {
+				if !core.HasScope(serviceAccount.Scopes, requestedScope) {
+					core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope exceeds permissions granted to the client", "invalid_scope")
+					return
+				}
+			}
+			grantedScopes = deduplicatedRequestedScopes
+		} else {
+			grantedScopes = serviceAccount.Scopes
+		}
+	} else {
+		if trimmedScope != "" {
+			requestedScopes := strings.Fields(trimmedScope)
+			var deduplicatedRequestedScopes []string
+			seenScopes := make(map[string]bool)
+			for _, s := range requestedScopes {
+				if !seenScopes[s] {
+					seenScopes[s] = true
+					deduplicatedRequestedScopes = append(deduplicatedRequestedScopes, s)
+				}
+			}
+			for _, requestedScope := range deduplicatedRequestedScopes {
+				if !core.HasScope(matchingResourceServerConfig.Scopes, requestedScope) {
+					core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope is not defined for the target resource server", "invalid_scope")
+					return
+				}
+			}
+			grantedScopes = deduplicatedRequestedScopes
+		} else {
+			grantedScopes = matchingResourceServerConfig.Scopes
+		}
+	}
+
+	if handler.jwtSigner == nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Token signer not available", "server_error")
 		return
 	}
 
-	accessToken, tokenErr := handler.signer.GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds)
+	accessToken, tokenErr := handler.jwtSigner.GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds, targetAudience)
 	if tokenErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to generate M2M access token", "server_error")
 		return
@@ -911,19 +1054,22 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 		userPhone = *userRecord.Phone
 	}
 
-	accessToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
+	sessionID := uuid.NewV7().String()
+	customClaims := handler.resolveCustomClaims(ctx, userRecord.ID)
+	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     userRecord.ID,
+		SessionID:   sessionID,
 		Email:       userEmail,
 		Phone:       userPhone,
 		Role:        userRecord.Role,
 		IsAnonymous: userRecord.IsAnonymous,
+		Claims:      customClaims,
 	}, accessExpiry)
 
-	refreshToken := jwt.GenerateRefreshToken()
-	refreshTokenHash := jwt.HashRefreshToken(refreshToken)
+	refreshToken := handler.jwtSigner.GenerateRefreshToken()
+	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	expiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
-	sessionID := uuid.NewV7().String()
 	_, _ = handler.db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, clock_timestamp())
@@ -939,17 +1085,19 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	}
 
 	baseURL := core.GetConfig().ServerBaseURL()
-	idToken, _ := handler.signer.GenerateIDToken(jwt.OIDCIDTokenClaims{
-		Issuer:              baseURL,
-		Subject:             userRecord.ID,
-		Audience:            clientID,
-		Nonce:               oidcAuthorizationCodePayload.Nonce,
-		Email:               userEmail,
-		EmailVerified:       userRecord.EmailVerifiedAt != nil,
-		PhoneNumber:         userPhone,
-		PhoneNumberVerified: userRecord.PhoneVerifiedAt != nil,
-		Role:                userRecord.Role,
-		IsAnonymous:         userRecord.IsAnonymous,
+	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
+		Issuer:        baseURL,
+		Subject:       userRecord.ID,
+		SessionID:     sessionID,
+		Audience:      clientID,
+		Nonce:         oidcAuthorizationCodePayload.Nonce,
+		Email:         userEmail,
+		EmailVerified: userRecord.EmailVerifiedAt != nil,
+		Phone:         userPhone,
+		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
+		Role:          userRecord.Role,
+		IsAnonymous:   userRecord.IsAnonymous,
+		Claims:        customClaims,
 	}, accessExpiry)
 
 	oidcTokenResponse := OIDCTokenResponse{
@@ -991,7 +1139,7 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 	}
 
 	ctx := request.Context()
-	refreshTokenHash := jwt.HashRefreshToken(refreshToken)
+	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 
 	var sessionID, userID string
 	err := handler.db.QueryRow(ctx, `
@@ -1021,8 +1169,8 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 	}
 
 	// Rotate refresh token
-	newRefreshToken := jwt.GenerateRefreshToken()
-	newRefreshTokenHash := jwt.HashRefreshToken(newRefreshToken)
+	newRefreshToken := handler.jwtSigner.GenerateRefreshToken()
+	newRefreshTokenHash := handler.jwtSigner.HashRefreshToken(newRefreshToken)
 	config := handler.configManager.Get()
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	newExpiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
@@ -1044,25 +1192,30 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		userPhone = *userRecord.Phone
 	}
 
-	accessToken, _ := handler.signer.GenerateAccessToken(jwt.Claims{
+	customClaims := handler.resolveCustomClaims(ctx, userRecord.ID)
+	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     userRecord.ID,
+		SessionID:   sessionID,
 		Email:       userEmail,
 		Phone:       userPhone,
 		Role:        userRecord.Role,
 		IsAnonymous: userRecord.IsAnonymous,
+		Claims:      customClaims,
 	}, accessExpiry)
 
 	baseURL := core.GetConfig().ServerBaseURL()
-	idToken, _ := handler.signer.GenerateIDToken(jwt.OIDCIDTokenClaims{
-		Issuer:              baseURL,
-		Subject:             userRecord.ID,
-		Audience:            clientID,
-		Email:               userEmail,
-		EmailVerified:       userRecord.EmailVerifiedAt != nil,
-		PhoneNumber:         userPhone,
-		PhoneNumberVerified: userRecord.PhoneVerifiedAt != nil,
-		Role:                userRecord.Role,
-		IsAnonymous:         userRecord.IsAnonymous,
+	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
+		Issuer:        baseURL,
+		Subject:       userRecord.ID,
+		SessionID:     sessionID,
+		Audience:      clientID,
+		Email:         userEmail,
+		EmailVerified: userRecord.EmailVerifiedAt != nil,
+		Phone:         userPhone,
+		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
+		Role:          userRecord.Role,
+		IsAnonymous:   userRecord.IsAnonymous,
+		Claims:        customClaims,
 	}, accessExpiry)
 
 	oidcTokenResponse := OIDCTokenResponse{
@@ -1087,16 +1240,9 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 		return
 	}
 
-	authHeader := request.Header.Get("Authorization")
-	if !strings.HasPrefix(authHeader, "Bearer ") {
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
-		return
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	claims, err := handler.signer.VerifyAccessToken(token)
-	if err != nil || claims == nil || claims.Subject == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid token", "LAYR_AUTH_002")
 		return
 	}
 
@@ -1107,7 +1253,7 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`
-	scanErr := handler.db.QueryRow(ctx, query, claims.Subject).Scan(
+	scanErr := handler.db.QueryRow(ctx, query, authContext.UserID).Scan(
 		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
 		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties,
 		&userRecord.CreatedAt, &userRecord.LastUpdatedAt,
@@ -1145,7 +1291,7 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 	_ = json.NewEncoder(responseWriter).Encode(oidcUserInfoResponse)
 }
 
-// 6. Sign-Out / End Session Endpoint (GET & POST /api/v1/auth/oauth/sign-out)
+// 6. Sign-Out Endpoint (GET/POST /api/v1/auth/oauth/sign-out)
 
 func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
@@ -1154,8 +1300,7 @@ func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter
 		return
 	}
 
-	isSecure := core.IsSecureRequest(request)
-	core.ClearSessionCookie(responseWriter, AuthSessionCookieName, AuthSessionInsecureCookieName, isSecure)
+	core.ClearSessionCookie(responseWriter, request)
 
 	postSignOutRedirectURI := request.URL.Query().Get("post_sign_out_redirect_uri")
 	if postSignOutRedirectURI == "" {

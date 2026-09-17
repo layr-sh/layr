@@ -23,17 +23,12 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 
 	userID := strings.TrimSpace(mfaSetupRequest.UserID)
 	if userID == "" {
-		token := core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
-		if token == "" {
+		authContext := core.GetAuthContext(request.Context())
+		if authContext.UserID == "" {
 			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
 			return
 		}
-		claims, err := handler.signer.VerifyAccessToken(token)
-		if err != nil || claims == nil || claims.Subject == "" {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid token", "LAYR_AUTH_002")
-			return
-		}
-		userID = claims.Subject
+		userID = authContext.UserID
 	}
 
 	if handler.db == nil {
@@ -114,17 +109,12 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 
 	userID := strings.TrimSpace(mfaVerifyRequest.UserID)
 	if userID == "" {
-		token := core.ExtractRequestSessionToken(request, AuthSessionCookieName, AuthSessionInsecureCookieName)
-		if token == "" {
+		authContext := core.GetAuthContext(request.Context())
+		if authContext.UserID == "" {
 			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
 			return
 		}
-		claims, err := handler.signer.VerifyAccessToken(token)
-		if err != nil || claims == nil || claims.Subject == "" {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid token", "LAYR_AUTH_002")
-			return
-		}
-		userID = claims.Subject
+		userID = authContext.UserID
 	}
 
 	if mfaVerifyRequest.Code == "" {
@@ -307,12 +297,13 @@ func (handler *BaseHandler) handleMFADisable(responseWriter http.ResponseWriter,
 		return
 	}
 
-	userID, err := handler.authenticateUser(request)
-	if err != nil || userID == "" {
-		log.Debugf("MFA disable rejected: unauthenticated caller: %v", err)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		log.Debug("MFA disable rejected: unauthenticated caller")
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
 		return
 	}
+	userID := authContext.UserID
 
 	if handler.db == nil {
 		log.Debug("MFA disable rejected: database pool unavailable")
@@ -323,7 +314,7 @@ func (handler *BaseHandler) handleMFADisable(responseWriter http.ResponseWriter,
 	ctx := request.Context()
 	var userRecord UserRecord
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1

@@ -1350,6 +1350,38 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 200 with root service account, got %d", rootResponseRecorder.Code)
 	}
 
+	// With M2M AuthContext holding required scope -> 200
+	m2mValidCtx := WithAuthContext(ctx, AuthContext{
+		ServiceAccountID: "sa_m2m",
+		JWT: JWTClaims{
+			Subject: "sa_m2m",
+			Role:    "service_role",
+			Scope:   "core:service-account.read",
+		},
+	})
+	m2mValidRequest := httptest.NewRequestWithContext(m2mValidCtx, http.MethodGet, "/test", nil)
+	m2mValidResponseRecorder := httptest.NewRecorder()
+	scopeGuardedHandler.ServeHTTP(m2mValidResponseRecorder, m2mValidRequest)
+	if m2mValidResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with valid M2M AuthContext, got %d", m2mValidResponseRecorder.Code)
+	}
+
+	// With M2M AuthContext lacking required scope -> 403
+	m2mInvalidCtx := WithAuthContext(ctx, AuthContext{
+		ServiceAccountID: "sa_m2m",
+		JWT: JWTClaims{
+			Subject: "sa_m2m",
+			Role:    "service_role",
+			Scope:   "data:query.read",
+		},
+	})
+	m2mInvalidRequest := httptest.NewRequestWithContext(m2mInvalidCtx, http.MethodGet, "/test", nil)
+	m2mInvalidResponseRecorder := httptest.NewRecorder()
+	scopeGuardedHandler.ServeHTTP(m2mInvalidResponseRecorder, m2mInvalidRequest)
+	if m2mInvalidResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 with M2M AuthContext lacking scope, got %d", m2mInvalidResponseRecorder.Code)
+	}
+
 	// 7. Test RequireServiceAccountMiddleware
 	nilRequireServiceAccountHandler := RequireServiceAccountMiddleware(nil)(testHandler)
 	nilRequireRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)

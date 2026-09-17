@@ -102,9 +102,13 @@ func TestKVLifecycleE2E(t *testing.T) {
 	}
 
 	// 4. Journey 3: Authenticated User Alice querying personal data
-	aliceOrdersRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
-	aliceOrdersRequest.Header.Set("X-JWT-Sub", "usr_alice")
-	aliceOrdersRequest.Header.Set("X-JWT-Role", "customer")
+	aliceCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Subject: "usr_alice",
+			Role:    "customer",
+		},
+	})
+	aliceOrdersRequest := httptest.NewRequestWithContext(aliceCtx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
 
 	aliceAuthContext := ExtractAuthContext(aliceOrdersRequest, saltSecret)
 	ordersQueryKey := BuildRESTQueryKey("public", "orders", []string{"id", "total"}, nil, []string{"customer_id.eq.alice"}, nil, 10, 0, false, "")
@@ -128,9 +132,13 @@ func TestKVLifecycleE2E(t *testing.T) {
 	}
 
 	// 5. Journey 4: User Bob querying orders cannot access Alice's cached orders
-	bobOrdersRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
-	bobOrdersRequest.Header.Set("X-JWT-Sub", "usr_bob")
-	bobOrdersRequest.Header.Set("X-JWT-Role", "customer")
+	bobCtx := core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Subject: "usr_bob",
+			Role:    "customer",
+		},
+	})
+	bobOrdersRequest := httptest.NewRequestWithContext(bobCtx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
 
 	bobAuthContext := ExtractAuthContext(bobOrdersRequest, saltSecret)
 	bobInternalOrdersKey := BuildInternalKey(bobAuthContext, ordersQueryKey)

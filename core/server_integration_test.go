@@ -175,6 +175,92 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	if serviceAccountResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 with service account header fallback, got %d", serviceAccountResponseRecorder.Code)
 	}
+
+	// 5. Database Session Lookup via session cookie and X-Refresh-Token
+	_, _ = db.Exec(ctx, `
+		CREATE SCHEMA IF NOT EXISTS auth;
+		CREATE TABLE IF NOT EXISTS auth.users (
+			id UUID PRIMARY KEY,
+			email VARCHAR(255),
+			phone VARCHAR(32),
+			role VARCHAR(64) NOT NULL DEFAULT 'authenticated',
+			is_anonymous BOOLEAN NOT NULL DEFAULT false
+		);
+		CREATE TABLE IF NOT EXISTS auth.sessions (
+			id UUID PRIMARY KEY,
+			user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+			refresh_token_hash VARCHAR(128) NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+		);
+	`)
+
+	testUserID := "01918a24-7777-7000-8000-000000000001"
+	testEmail := "session.user@example.com"
+	liveRefreshToken := "live_test_refresh_token_1234567890"
+	liveRefreshHash := server.jwtSigner.HashRefreshToken(liveRefreshToken)
+
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.users (id, email, role, is_anonymous)
+		VALUES ($1, $2, 'authenticated', false)
+		ON CONFLICT (id) DO NOTHING
+	`, testUserID, testEmail)
+
+	sessionUUID := "01918a24-8888-7000-8000-000000000001"
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at)
+		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour')
+		ON CONFLICT (id) DO NOTHING
+	`, sessionUUID, testUserID, liveRefreshHash)
+
+	var capturedAuthContext AuthContext
+	GetRoute[string](server.BaseRouter(), "/api/v1/auth-check", func(responseWriter http.ResponseWriter, request *http.Request) {
+		capturedAuthContext = GetAuthContext(request.Context())
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write([]byte("auth-ok"))
+	})
+
+	// 5a. With secure session cookie
+	secureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	secureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	secureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameSecure, Value: liveRefreshToken})
+	secureCookieResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(secureCookieResponseRecorder, secureCookieRequest)
+
+	if secureCookieResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with secure session cookie, got %d", secureCookieResponseRecorder.Code)
+	}
+	if capturedAuthContext.UserID != testUserID || capturedAuthContext.JWT.Email != testEmail {
+		t.Fatalf("expected authenticated session context, got: %+v", capturedAuthContext)
+	}
+
+	// 5b. With insecure session cookie
+	insecureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	insecureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	insecureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameInsecure, Value: liveRefreshToken})
+	insecureCookieResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(insecureCookieResponseRecorder, insecureCookieRequest)
+
+	if insecureCookieResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with insecure session cookie, got %d", insecureCookieResponseRecorder.Code)
+	}
+	if capturedAuthContext.UserID != testUserID {
+		t.Fatalf("expected authenticated session context with insecure cookie, got: %+v", capturedAuthContext)
+	}
+
+	// 5c. With X-Refresh-Token header
+	refreshHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	refreshHeaderRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	refreshHeaderRequest.Header.Set("X-Refresh-Token", liveRefreshToken)
+	refreshHeaderResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(refreshHeaderResponseRecorder, refreshHeaderRequest)
+
+	if refreshHeaderResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with X-Refresh-Token header, got %d", refreshHeaderResponseRecorder.Code)
+	}
+	if capturedAuthContext.UserID != testUserID {
+		t.Fatalf("expected authenticated session context with X-Refresh-Token, got: %+v", capturedAuthContext)
+	}
 }
 
 func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {

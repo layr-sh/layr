@@ -126,11 +126,20 @@ type OAuthProviderConfig struct {
 	AvatarAttribute        string `json:"avatar_attribute,omitempty"`
 }
 
+// ResourceServerConfig defines a registered external Resource Server (API) target for M2M tokens.
+type ResourceServerConfig struct {
+	Name        string   `json:"name"`                  // e.g. "Billing API"
+	Identifier  string   `json:"identifier"`            // e.g. "https://billing.example.com"
+	Description string   `json:"description,omitempty"` // Optional description
+	Scopes      []string `json:"scopes,omitempty"`      // Scopes exposed by this backend, e.g. ["invoices:read", "invoices:write"]
+}
+
 // OIDCConfig defines configuration for Layr Auth as an OpenID Connect (OIDC) Identity Provider.
 type OIDCConfig struct {
-	Enabled bool               `json:"enabled"`
-	Clients []OIDCClientConfig `json:"clients,omitempty"`
-	UI      OIDCUIConfig       `json:"ui"`
+	Enabled         bool                   `json:"enabled"`
+	Clients         []OIDCClientConfig     `json:"clients,omitempty"`
+	ResourceServers []ResourceServerConfig `json:"resource_servers,omitempty"`
+	UI              OIDCUIConfig           `json:"ui"`
 }
 
 // OIDCClientConfig defines a registered third-party OpenID Connect client application.
@@ -214,8 +223,9 @@ func DefaultConfig() Config {
 			"discord": {Enabled: false, Preset: "discord"},
 		},
 		OIDC: OIDCConfig{
-			Enabled: false,
-			Clients: make([]OIDCClientConfig, 0),
+			Enabled:         false,
+			Clients:         make([]OIDCClientConfig, 0),
+			ResourceServers: make([]ResourceServerConfig, 0),
 			UI: OIDCUIConfig{
 				CustomCSS:         "",
 				LogoURL:           "",
@@ -304,6 +314,17 @@ func (configManager *ConfigManager) Get() Config {
 		copiedConfig.OIDC.Clients = make([]OIDCClientConfig, len(configManager.config.OIDC.Clients))
 		copy(copiedConfig.OIDC.Clients, configManager.config.OIDC.Clients)
 	}
+	if configManager.config.OIDC.ResourceServers != nil {
+		copiedConfig.OIDC.ResourceServers = make([]ResourceServerConfig, len(configManager.config.OIDC.ResourceServers))
+		for index, resourceServer := range configManager.config.OIDC.ResourceServers {
+			resourceServerConfig := resourceServer
+			if resourceServer.Scopes != nil {
+				resourceServerConfig.Scopes = make([]string, len(resourceServer.Scopes))
+				copy(resourceServerConfig.Scopes, resourceServer.Scopes)
+			}
+			copiedConfig.OIDC.ResourceServers[index] = resourceServerConfig
+		}
+	}
 	return copiedConfig
 }
 
@@ -347,6 +368,9 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 	if updatedConfig.OIDC.Clients == nil {
 		updatedConfig.OIDC.Clients = make([]OIDCClientConfig, 0)
 	}
+	if updatedConfig.OIDC.ResourceServers == nil {
+		updatedConfig.OIDC.ResourceServers = make([]ResourceServerConfig, 0)
+	}
 	if !updatedConfig.RateLimiting.Enabled && updatedConfig.RateLimiting.MaxSignInAttempts == 0 {
 		updatedConfig.RateLimiting.Enabled = true
 	}
@@ -384,6 +408,18 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 		copiedClients := make([]OIDCClientConfig, len(updatedConfig.OIDC.Clients))
 		copy(copiedClients, updatedConfig.OIDC.Clients)
 		updatedConfig.OIDC.Clients = copiedClients
+	}
+	if updatedConfig.OIDC.ResourceServers != nil {
+		copiedResourceServers := make([]ResourceServerConfig, len(updatedConfig.OIDC.ResourceServers))
+		for index, resourceServer := range updatedConfig.OIDC.ResourceServers {
+			resourceServerConfig := resourceServer
+			if resourceServer.Scopes != nil {
+				resourceServerConfig.Scopes = make([]string, len(resourceServer.Scopes))
+				copy(resourceServerConfig.Scopes, resourceServer.Scopes)
+			}
+			copiedResourceServers[index] = resourceServerConfig
+		}
+		updatedConfig.OIDC.ResourceServers = copiedResourceServers
 	}
 
 	hasOAuthCurrent := false
@@ -667,6 +703,10 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 		}
 	} else {
 		inputConfig.OIDC.Clients = currentConfig.OIDC.Clients
+	}
+
+	if inputConfig.OIDC.ResourceServers == nil {
+		inputConfig.OIDC.ResourceServers = currentConfig.OIDC.ResourceServers
 	}
 
 	// Handle Email secrets: if new plaintext provided, envelope-encrypt; if omitted, preserve current

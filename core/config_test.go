@@ -796,6 +796,7 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 }
 
 func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "sub", "config.yaml")
 
@@ -824,6 +825,7 @@ func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
 }
 
 func TestCoreConfigWriteConfigFileCustomUnit(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "custom.yaml")
 
@@ -868,6 +870,7 @@ func TestCoreConfigWriteConfigFileCustomUnit(t *testing.T) {
 }
 
 func TestCoreConfigWriteConfigFileEnvSecurityKeyUnit(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "env_security.yaml")
 
@@ -889,6 +892,7 @@ func TestCoreConfigWriteConfigFileEnvSecurityKeyUnit(t *testing.T) {
 }
 
 func TestCoreConfigCreateConfigFileAliasUnit(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "alias.yaml")
 
@@ -937,6 +941,7 @@ func TestCoreConfigWriteConfigFileErrorsUnit(t *testing.T) {
 }
 
 func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
+	t.Cleanup(UnloadConfig)
 	var buffer bytes.Buffer
 	log.SetOutput(&buffer)
 	defer log.SetOutput(nil)

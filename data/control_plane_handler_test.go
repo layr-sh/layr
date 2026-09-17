@@ -168,6 +168,28 @@ func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
 	if handlerWithManagerControlPlaneHandler.checkScope(invalidKeyRequest, "data:config.read") {
 		t.Fatal("expected false on invalid service account key")
 	}
+
+	// Service role JWT with scope returns true
+	allowedJWTRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Role:  "service_role",
+			Scope: "data:config.read",
+		},
+	}), http.MethodGet, "/api/v1/_/data/config", nil)
+	if !handlerWithManagerControlPlaneHandler.checkScope(allowedJWTRequest, "data:config.read") {
+		t.Fatal("expected true on service_role JWT with required scope")
+	}
+
+	// Service role JWT without scope returns false
+	deniedJWTRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{
+		JWT: core.JWTClaims{
+			Role:  "service_role",
+			Scope: "other:scope",
+		},
+	}), http.MethodGet, "/api/v1/_/data/config", nil)
+	if handlerWithManagerControlPlaneHandler.checkScope(deniedJWTRequest, "data:config.read") {
+		t.Fatal("expected false on service_role JWT without required scope")
+	}
 }
 
 func TestDataControlPlaneHandlerBaseInvalidateCacheUnit(t *testing.T) {
