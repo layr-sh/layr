@@ -224,6 +224,11 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 				Subject: "Verify email",
 				Text:    "Your verification code: {{.Code}}",
 			},
+			SuspiciousActivity: EmailDispatcherTemplateConfig{
+				Subject: "Suspicious login on {{.AppName}} for {{.Recipient}}",
+				HTML:    "<p>Alert IP: {{.IP}} Device: {{.Device}}</p>",
+				Text:    "Alert IP: {{.IP}} Device: {{.Device}}",
+			},
 		},
 	}
 
@@ -231,7 +236,7 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Password Reset custom template
-	resolvedSubject, html, text := emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
+	resolvedSubject, html, text := emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
 	if resolvedSubject != "Reset for alice@example.com on layr-app" || html != "<p>Code: 999888</p>" || text != "Code: 999888" {
 		t.Fatalf("unexpected template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
 	}
@@ -243,44 +248,50 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 	core.SetLoadedConfig(testConfig)
 	defer core.SetLoadedConfig(nil)
 
-	resolvedSubject, _, _ = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
+	resolvedSubject, _, _ = emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
 	if resolvedSubject != "Reset for alice@example.com on CustomProject" {
 		t.Fatalf("expected AppName to interpolate CustomProject, got: %s", resolvedSubject)
 	}
 	core.SetLoadedConfig(nil)
 
 	// 2. Sign In OTP custom template
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindSignInOTP, "bob@example.com", "111222", "user-2", emailDispatcherConfig)
+	resolvedSubject, html, text = emailDispatcher.resolveSignInOTPTemplate(ctx, "bob@example.com", "111222", "user-2", emailDispatcherConfig)
 	if resolvedSubject != "OTP for bob@example.com" || html != "<p>Your code: 111222</p>" {
 		t.Fatalf("unexpected template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
 	}
 
 	// 3. Email verification custom template
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindEmailVerification, "charlie@example.com", "333444", "user-3", emailDispatcherConfig)
+	resolvedSubject, html, text = emailDispatcher.resolveEmailVerificationTemplate(ctx, "charlie@example.com", "333444", "user-3", emailDispatcherConfig)
 	if resolvedSubject != "Verify email" || text != "Your verification code: 333444" {
 		t.Fatalf("unexpected template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
 	}
 
-	// 4. Default fallback when template is empty
+	// 4. Suspicious activity custom template
+	resolvedSubject, html, text = emailDispatcher.resolveSuspiciousActivityTemplate(ctx, "david@example.com", "user-4", "192.168.1.1", "Mozilla/5.0", emailDispatcherConfig)
+	if resolvedSubject != "Suspicious login on layr-app for david@example.com" || !strings.Contains(html, "192.168.1.1") || !strings.Contains(text, "Mozilla/5.0") {
+		t.Fatalf("unexpected suspicious activity template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
+	}
+
+	// 5. Default fallback when template is empty
 	emptyEmailDispatcherConfig := &EmailDispatcherConfig{}
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
+	resolvedSubject, html, text = emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
 	if resolvedSubject != "Reset your password" || !strings.Contains(html, "999888") || !strings.Contains(text, "999888") {
 		t.Fatalf("unexpected default password reset: %s, %s, %s", resolvedSubject, html, text)
 	}
 
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindSignInOTP, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
+	resolvedSubject, html, text = emailDispatcher.resolveSignInOTPTemplate(ctx, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
 	if resolvedSubject != "Your sign in code" || !strings.Contains(html, "999888") || !strings.Contains(text, "999888") {
 		t.Fatalf("unexpected default sign in OTP: %s, %s, %s", resolvedSubject, html, text)
 	}
 
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindEmailVerification, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
+	resolvedSubject, html, text = emailDispatcher.resolveEmailVerificationTemplate(ctx, "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
 	if resolvedSubject != "Verify your email address" || !strings.Contains(html, "999888") || !strings.Contains(text, "999888") {
 		t.Fatalf("unexpected default email verification: %s, %s, %s", resolvedSubject, html, text)
 	}
 
-	resolvedSubject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKind("custom_other"), "alice@example.com", "999888", "", emptyEmailDispatcherConfig)
-	if resolvedSubject != "Notification" || html != "<p>999888</p>" || text != "999888" {
-		t.Fatalf("unexpected default fallback: %s, %s, %s", resolvedSubject, html, text)
+	resolvedSubject, html, text = emailDispatcher.resolveSuspiciousActivityTemplate(ctx, "alice@example.com", "", "192.168.1.1", "Mozilla/5.0", emptyEmailDispatcherConfig)
+	if resolvedSubject != "New sign-in detected on your account" || !strings.Contains(html, "192.168.1.1") || !strings.Contains(text, "Mozilla/5.0") {
+		t.Fatalf("unexpected default suspicious activity: %s, %s, %s", resolvedSubject, html, text)
 	}
 }
 
@@ -1124,9 +1135,114 @@ func TestAuthDefaultEmailConfigUnit(t *testing.T) {
 	if defaultEmailDispatcherConfig.Templates.SignInOTP.Subject == "" || defaultEmailDispatcherConfig.Templates.SignInOTP.HTML == "" || defaultEmailDispatcherConfig.Templates.SignInOTP.Text == "" {
 		t.Fatalf("expected non-empty SignInOTP templates, got: %+v", defaultEmailDispatcherConfig.Templates.SignInOTP)
 	}
+	if defaultEmailDispatcherConfig.Templates.SuspiciousActivity.Subject == "" || defaultEmailDispatcherConfig.Templates.SuspiciousActivity.HTML == "" || defaultEmailDispatcherConfig.Templates.SuspiciousActivity.Text == "" {
+		t.Fatalf("expected non-empty SuspiciousActivity templates, got: %+v", defaultEmailDispatcherConfig.Templates.SuspiciousActivity)
+	}
 
 	aliasEmailDispatcherConfig := EmailDispatcherDefaultConfig()
 	if aliasEmailDispatcherConfig.Templates.EmailVerification.Subject != defaultEmailDispatcherConfig.Templates.EmailVerification.Subject {
 		t.Fatal("expected EmailDispatcherDefaultConfig alias to match DefaultEmailConfig")
+	}
+}
+
+func TestAuthEmailSuspiciousActivityUnit(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Unconfigured dispatcher returns ErrEmailDispatcherNotConfigured
+	unconfiguredEmailDispatcher := NewEmailDispatcher(nil, nil, nil)
+	unconfErr := unconfiguredEmailDispatcher.SendSuspiciousActivity(ctx, "user@example.com", "usr_1", "127.0.0.1", "curl")
+	if !errors.Is(unconfErr, ErrEmailDispatcherNotConfigured) {
+		t.Fatalf("expected ErrEmailDispatcherNotConfigured, got: %v", unconfErr)
+	}
+
+	// 2. Webhook delivery with default template and default app name
+	var receivedPayload map[string]any
+	webhookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		_ = json.NewDecoder(request.Body).Decode(&receivedPayload)
+		responseWriter.WriteHeader(http.StatusOK)
+	}))
+	defer webhookServer.Close()
+
+	emailDispatcherConfig := &EmailDispatcherConfig{
+		Driver:      stringPointer("webhook"),
+		SenderEmail: "",
+		SenderName:  "Security Bot",
+		Webhook: EmailDispatcherWebhookConfig{
+			URL: webhookServer.URL,
+		},
+	}
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+
+	// App name is empty -> defaults to "layr-app"
+	core.SetLoadedConfig(&core.Config{Project: core.ProjectConfig{Name: ""}})
+	defer core.SetLoadedConfig(nil)
+
+	err := emailDispatcher.SendSuspiciousActivity(ctx, "victim@example.com", "usr_123", "203.0.113.195", "Firefox on Linux")
+	if err != nil {
+		t.Fatalf("expected successful send, got: %v", err)
+	}
+	if receivedPayload["message_kind"] != "suspicious_activity" {
+		t.Fatalf("unexpected message_kind: %v", receivedPayload["message_kind"])
+	}
+	if receivedPayload["to"] != "victim@example.com" {
+		t.Fatalf("unexpected to: %v", receivedPayload["to"])
+	}
+	if receivedPayload["user_id"] != "usr_123" {
+		t.Fatalf("unexpected user_id: %v", receivedPayload["user_id"])
+	}
+	if receivedPayload["sender_email"] != "no-reply@layr.sh" {
+		t.Fatalf("expected default sender email no-reply@layr.sh, got: %v", receivedPayload["sender_email"])
+	}
+	if !strings.Contains(receivedPayload["text"].(string), "layr-app") {
+		t.Fatalf("expected text to contain default app name layr-app, got: %v", receivedPayload["text"])
+	}
+	if !strings.Contains(receivedPayload["text"].(string), "203.0.113.195") || !strings.Contains(receivedPayload["text"].(string), "Firefox on Linux") {
+		t.Fatalf("expected text body to contain IP and device info, got: %v", receivedPayload["text"])
+	}
+
+	// 3. Webhook delivery with custom app name and configured sender email
+	core.SetLoadedConfig(&core.Config{Project: core.ProjectConfig{Name: "AcmeAuth"}})
+	emailDispatcherConfig.SenderEmail = "alerts@example.com"
+
+	err = emailDispatcher.SendSuspiciousActivity(ctx, "victim@example.com", "usr_123", "198.51.100.5", "Safari on iOS")
+	if err != nil {
+		t.Fatalf("expected successful send, got: %v", err)
+	}
+	if receivedPayload["sender_email"] != "alerts@example.com" {
+		t.Fatalf("expected sender_email alerts@example.com, got: %v", receivedPayload["sender_email"])
+	}
+	if !strings.Contains(receivedPayload["text"].(string), "AcmeAuth") {
+		t.Fatalf("expected text to contain AcmeAuth, got: %v", receivedPayload["text"])
+	}
+
+	// 4. Custom templates
+	emailDispatcherConfig.Templates.SuspiciousActivity = EmailDispatcherTemplateConfig{
+		Subject: "Alert: {{.AppName}} login from {{.IP}}",
+		HTML:    "<p>Device: {{.Device}} for {{.Recipient}} / {{.To}}</p>",
+		Text:    "Device: {{.Device}} for {{.Recipient}} / {{.To}}",
+	}
+	err = emailDispatcher.SendSuspiciousActivity(ctx, "custom@example.com", "usr_456", "1.2.3.4", "CustomDevice")
+	if err != nil {
+		t.Fatalf("expected successful send with custom templates: %v", err)
+	}
+	if receivedPayload["subject"] != "Alert: AcmeAuth login from 1.2.3.4" {
+		t.Fatalf("unexpected custom subject: %v", receivedPayload["subject"])
+	}
+	if receivedPayload["text"] != "Device: CustomDevice for custom@example.com / custom@example.com" {
+		t.Fatalf("unexpected custom text: %v", receivedPayload["text"])
+	}
+
+	// 5. Incomplete custom template (subject provided, but empty html and text) falls back to default
+	emailDispatcherConfig.Templates.SuspiciousActivity = EmailDispatcherTemplateConfig{
+		Subject: "Custom Subject Only",
+		HTML:    "",
+		Text:    "",
+	}
+	err = emailDispatcher.SendSuspiciousActivity(ctx, "custom@example.com", "usr_456", "1.2.3.4", "CustomDevice")
+	if err != nil {
+		t.Fatalf("expected successful send with fallback template: %v", err)
+	}
+	if !strings.Contains(receivedPayload["text"].(string), "A new sign-in was detected") {
+		t.Fatalf("expected default text template fallback, got: %v", receivedPayload["text"])
 	}
 }

@@ -114,6 +114,14 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected fallback rate limiting and cache, got: %+v", fallbackConfig)
 	}
 
+	var adaptiveConfig Config
+	adaptiveConfig.MFA.Policy = "adaptive"
+	configManager.Set(adaptiveConfig)
+	adaptiveSavedConfig := configManager.Get()
+	if len(adaptiveSavedConfig.MFA.RiskTriggers) != 3 {
+		t.Fatalf("expected 3 default risk triggers for adaptive MFA, got: %+v", adaptiveSavedConfig.MFA.RiskTriggers)
+	}
+
 	// Test GetUnencrypted sanitized secrets
 	secretPassword := "super-secret-smtp-password"
 	encryptedPassword, err := cryptoKeyManager.EncryptField([]byte(secretPassword))
@@ -975,5 +983,142 @@ func TestAuthConfigOIDCClientSignOutFieldsUnit(t *testing.T) {
 	}
 	if unencryptedConfig.OIDC.Clients[0].FrontChannelSignOutURI != "https://example.com/front-sign-out" {
 		t.Fatalf("unexpected frontchannel uri in unencrypted config: %s", unencryptedConfig.OIDC.Clients[0].FrontChannelSignOutURI)
+	}
+}
+
+func TestAuthConfigThreatUnit(t *testing.T) {
+	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if cryptoErr != nil {
+		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
+	}
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+
+	// 1. Default config assertions
+	defaultConfig := DefaultConfig()
+	if defaultConfig.Threat.BotProtection.Enabled {
+		t.Fatal("expected BotProtection to be disabled by default")
+	}
+	if defaultConfig.Threat.BotProtection.Provider != "turnstile" {
+		t.Fatalf("expected turnstile provider by default, got: %s", defaultConfig.Threat.BotProtection.Provider)
+	}
+	if defaultConfig.Threat.BotProtection.Mode != "adaptive" {
+		t.Fatalf("expected adaptive mode by default, got: %s", defaultConfig.Threat.BotProtection.Mode)
+	}
+	if defaultConfig.Threat.BotProtection.AdaptiveFailedAttempts != 5 {
+		t.Fatalf("expected 5 adaptive failed attempts by default, got: %d", defaultConfig.Threat.BotProtection.AdaptiveFailedAttempts)
+	}
+	if defaultConfig.Password.BreachCheck.Enabled {
+		t.Fatal("expected password breach check disabled by default")
+	}
+	if !defaultConfig.Password.BreachCheck.FailOpen {
+		t.Fatal("expected password breach check fail-open to be true by default")
+	}
+	if defaultConfig.MFA.Policy != "always" {
+		t.Fatalf("expected default MFA policy always, got: %s", defaultConfig.MFA.Policy)
+	}
+	if len(defaultConfig.MFA.RiskTriggers) != 3 {
+		t.Fatalf("expected 3 default MFA risk triggers, got: %d", len(defaultConfig.MFA.RiskTriggers))
+	}
+
+	// 2. Set with empty mode and non-positive failed attempts falls back to defaults
+	customConfig := defaultConfig
+	customConfig.Threat.BotProtection.Mode = ""
+	customConfig.Threat.BotProtection.AdaptiveFailedAttempts = 0
+	configManager.Set(customConfig)
+
+	activeConfig := configManager.Get()
+	if activeConfig.Threat.BotProtection.Mode != "adaptive" {
+		t.Fatalf("expected fallback to adaptive mode, got: %s", activeConfig.Threat.BotProtection.Mode)
+	}
+	if activeConfig.Threat.BotProtection.AdaptiveFailedAttempts != 5 {
+		t.Fatalf("expected fallback to 5 failed attempts, got: %d", activeConfig.Threat.BotProtection.AdaptiveFailedAttempts)
+	}
+
+	// 3. GetUnencrypted secret masking
+	emptyUnencryptedConfig := configManager.GetUnencrypted()
+	if emptyUnencryptedConfig.Threat.BotProtection.SecretKeyConfigured {
+		t.Fatal("expected SecretKeyConfigured to be false when secret is empty")
+	}
+	if emptyUnencryptedConfig.Threat.BotProtection.SecretKey != "" {
+		t.Fatalf("expected empty secret key in unencrypted config, got: %s", emptyUnencryptedConfig.Threat.BotProtection.SecretKey)
+	}
+
+	customConfig.Threat.BotProtection.SecretKey = "enc:v1:test-secret"
+	configManager.Set(customConfig)
+
+	setUnencryptedConfig := configManager.GetUnencrypted()
+	if !setUnencryptedConfig.Threat.BotProtection.SecretKeyConfigured {
+		t.Fatal("expected SecretKeyConfigured to be true when secret is set")
+	}
+	if setUnencryptedConfig.Threat.BotProtection.SecretKey != "" {
+		t.Fatalf("expected masked secret key in unencrypted config, got: %s", setUnencryptedConfig.Threat.BotProtection.SecretKey)
+	}
+}
+
+func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
+	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if cryptoErr != nil {
+		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
+	}
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	ctx := context.Background()
+
+	// 1. Unsupported provider -> 400
+	unsupportedProviderBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"unknown_captcha","secret_key":"secret123"}}}`
+	unsupportedRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unsupportedProviderBody))
+	unsupportedResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(unsupportedResponseRecorder, unsupportedRequest)
+	if unsupportedResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on unsupported provider, got: %d", unsupportedResponseRecorder.Code)
+	}
+
+	// 2. Enabled but missing secret key -> 400
+	missingSecretBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":""}}}`
+	missingSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(missingSecretBody))
+	missingSecretResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(missingSecretResponseRecorder, missingSecretRequest)
+	if missingSecretResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on missing secret key, got: %d", missingSecretResponseRecorder.Code)
+	}
+
+	// 3. Invalid mode -> 400
+	invalidModeBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"secret123","mode":"invalid_mode"}}}`
+	invalidModeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(invalidModeBody))
+	invalidModeResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(invalidModeResponseRecorder, invalidModeRequest)
+	if invalidModeResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid mode, got: %d", invalidModeResponseRecorder.Code)
+	}
+
+	// 4. Valid update -> 200, secret is envelope encrypted
+	validBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"my-turnstile-secret","mode":"adaptive","adaptive_failed_attempts":7}}}`
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validBody))
+	validResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(validResponseRecorder, validRequest)
+	if validResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on valid threat config update, got: %d (%s)", validResponseRecorder.Code, validResponseRecorder.Body.String())
+	}
+	savedConfig := configManager.Get()
+	if !strings.HasPrefix(savedConfig.Threat.BotProtection.SecretKey, "enc:v1:") {
+		t.Fatalf("expected encrypted secret key, got: %s", savedConfig.Threat.BotProtection.SecretKey)
+	}
+	if savedConfig.Threat.BotProtection.AdaptiveFailedAttempts != 7 {
+		t.Fatalf("expected 7 adaptive failed attempts, got: %d", savedConfig.Threat.BotProtection.AdaptiveFailedAttempts)
+	}
+
+	// 5. Preserving existing secret when empty secret key sent
+	preserveBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"","mode":"always"}}}`
+	preserveRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveBody))
+	preserveResponseRecorder := httptest.NewRecorder()
+	configManager.HandlePutConfig(preserveResponseRecorder, preserveRequest)
+	if preserveResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on preserving threat secret, got: %d", preserveResponseRecorder.Code)
+	}
+	preservedConfig := configManager.Get()
+	if preservedConfig.Threat.BotProtection.SecretKey != savedConfig.Threat.BotProtection.SecretKey {
+		t.Fatalf("expected preserved encrypted secret, got: %s", preservedConfig.Threat.BotProtection.SecretKey)
+	}
+	if preservedConfig.Threat.BotProtection.Mode != "always" {
+		t.Fatalf("expected mode updated to always, got: %s", preservedConfig.Threat.BotProtection.Mode)
 	}
 }

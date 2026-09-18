@@ -25,6 +25,8 @@ const (
 	defaultMaxSignInAttempts         = 5
 	defaultPasswordMinLength         = 8
 	defaultTokenExpiryMinutes        = 15
+	defaultAdaptiveFailedAttempts    = 5
+	defaultKnownDevicesMaxDays       = 30
 )
 
 // ConfigKey is the primary key in auth.config table.
@@ -45,6 +47,31 @@ type Config struct {
 	SMSDispatcher   SMSDispatcherConfig            `json:"sms_dispatcher"`
 	RateLimiting    RateLimitingConfig             `json:"rate_limiting"`
 	Cache           CacheConfig                    `json:"cache"`
+	Threat          ThreatConfig                   `json:"threat"`
+}
+
+// ThreatConfig controls automated attack defense, bot challenges, and fraud mitigation.
+type ThreatConfig struct {
+	BotProtection       BotProtectionConfig `json:"bot_protection"`
+	NotifyOnNewDevice   bool                `json:"notify_on_new_device"`
+	KnownDevicesMaxDays int                 `json:"known_devices_max_days"`
+}
+
+// BotProtectionConfig configures CAPTCHA challenge requirements.
+type BotProtectionConfig struct {
+	Enabled                bool   `json:"enabled"`
+	Provider               string `json:"provider"` // "turnstile", "recaptcha", "hcaptcha"
+	SecretKey              string `json:"secret_key,omitempty"`
+	SecretKeyConfigured    bool   `json:"secret_key_configured,omitempty"`
+	SiteKey                string `json:"site_key,omitempty"`
+	Mode                   string `json:"mode"` // "always" or "adaptive"
+	AdaptiveFailedAttempts int    `json:"adaptive_failed_attempts"`
+}
+
+// PasswordBreachConfig defines HaveIBeenPwned breach checking settings.
+type PasswordBreachConfig struct {
+	Enabled  bool `json:"enabled"`
+	FailOpen bool `json:"fail_open"`
 }
 
 // RateLimitingConfig controls dynamic sign-in brute-force protection.
@@ -63,10 +90,11 @@ type CacheConfig struct {
 
 // PasswordConfig defines password authentication policy.
 type PasswordConfig struct {
-	Enabled        bool `json:"enabled"`
-	MinLength      int  `json:"min_length"`
-	RequireNumbers bool `json:"require_numbers"`
-	RequireSymbols bool `json:"require_symbols"`
+	Enabled        bool                 `json:"enabled"`
+	MinLength      int                  `json:"min_length"`
+	RequireNumbers bool                 `json:"require_numbers"`
+	RequireSymbols bool                 `json:"require_symbols"`
+	BreachCheck    PasswordBreachConfig `json:"breach_check"`
 }
 
 // PasskeysConfig defines WebAuthn passkey authentication config.
@@ -90,8 +118,10 @@ type SMSOTPConfig struct {
 
 // MFAConfig defines multi-factor authentication config.
 type MFAConfig struct {
-	Enabled bool   `json:"enabled"`
-	Issuer  string `json:"issuer"`
+	Enabled      bool     `json:"enabled"`
+	Policy       string   `json:"policy"`        // "always" or "adaptive"
+	RiskTriggers []string `json:"risk_triggers"` // e.g. ["new_device", "new_ip", "excessive_failed_attempts"]
+	Issuer       string   `json:"issuer"`
 }
 
 // AnonymousConfig defines guest or anonymous session config.
@@ -222,6 +252,10 @@ func DefaultConfig() Config {
 			MinLength:      defaultPasswordMinLength,
 			RequireNumbers: true,
 			RequireSymbols: false,
+			BreachCheck: PasswordBreachConfig{
+				Enabled:  false,
+				FailOpen: true,
+			},
 		},
 		Passkeys: PasskeysConfig{
 			Enabled:          true,
@@ -237,8 +271,10 @@ func DefaultConfig() Config {
 			TokenExpiryMinutes: defaultTokenExpiryMinutes,
 		},
 		MFA: MFAConfig{
-			Enabled: true,
-			Issuer:  mfaIssuer,
+			Enabled:      true,
+			Policy:       "always",
+			RiskTriggers: []string{"new_device", "new_ip", "excessive_failed_attempts"},
+			Issuer:       mfaIssuer,
 		},
 		Anonymous: AnonymousConfig{
 			Enabled: true,
@@ -283,6 +319,16 @@ func DefaultConfig() Config {
 		Cache: CacheConfig{
 			FastPathSessionsEnabled: true,
 			SessionTTLSeconds:       defaultSessionTTLSeconds,
+		},
+		Threat: ThreatConfig{
+			BotProtection: BotProtectionConfig{
+				Enabled:                false,
+				Provider:               "turnstile",
+				Mode:                   "adaptive",
+				AdaptiveFailedAttempts: defaultAdaptiveFailedAttempts,
+			},
+			NotifyOnNewDevice:   true,
+			KnownDevicesMaxDays: defaultKnownDevicesMaxDays,
 		},
 	}
 }
@@ -358,6 +404,10 @@ func (configManager *ConfigManager) Get() Config {
 			copiedConfig.OIDC.ResourceServers[index] = resourceServerConfig
 		}
 	}
+	if configManager.config.MFA.RiskTriggers != nil {
+		copiedConfig.MFA.RiskTriggers = make([]string, len(configManager.config.MFA.RiskTriggers))
+		copy(copiedConfig.MFA.RiskTriggers, configManager.config.MFA.RiskTriggers)
+	}
 	return copiedConfig
 }
 
@@ -394,6 +444,26 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 			mfaIssuer = "Layr Auth"
 		}
 		updatedConfig.MFA.Issuer = mfaIssuer
+	}
+	if updatedConfig.MFA.Policy == "" {
+		updatedConfig.MFA.Policy = "always"
+	}
+	if updatedConfig.MFA.Policy == "adaptive" && len(updatedConfig.MFA.RiskTriggers) == 0 {
+		updatedConfig.MFA.RiskTriggers = []string{"new_device", "new_ip", "excessive_failed_attempts"}
+	}
+	if updatedConfig.Threat.KnownDevicesMaxDays <= 0 {
+		updatedConfig.Threat.KnownDevicesMaxDays = defaultKnownDevicesMaxDays
+	}
+	if updatedConfig.Threat.BotProtection.Mode == "" {
+		updatedConfig.Threat.BotProtection.Mode = "adaptive"
+	}
+	if updatedConfig.Threat.BotProtection.AdaptiveFailedAttempts <= 0 {
+		updatedConfig.Threat.BotProtection.AdaptiveFailedAttempts = defaultAdaptiveFailedAttempts
+	}
+	if updatedConfig.MFA.RiskTriggers != nil {
+		copiedRiskTriggers := make([]string, len(updatedConfig.MFA.RiskTriggers))
+		copy(copiedRiskTriggers, updatedConfig.MFA.RiskTriggers)
+		updatedConfig.MFA.RiskTriggers = copiedRiskTriggers
 	}
 	if updatedConfig.OAuthProviders == nil {
 		updatedConfig.OAuthProviders = make(map[string]OAuthProviderConfig)
@@ -639,6 +709,16 @@ func (configManager *ConfigManager) GetUnencrypted() Config {
 		TimeoutSeconds:          config.SMSDispatcher.Webhook.TimeoutSeconds,
 	}
 
+	isCaptchaSecretConfigured := config.Threat.BotProtection.SecretKey != ""
+	config.Threat.BotProtection = BotProtectionConfig{
+		Enabled:                config.Threat.BotProtection.Enabled,
+		Provider:               config.Threat.BotProtection.Provider,
+		SecretKeyConfigured:    isCaptchaSecretConfigured,
+		SiteKey:                config.Threat.BotProtection.SiteKey,
+		Mode:                   config.Threat.BotProtection.Mode,
+		AdaptiveFailedAttempts: config.Threat.BotProtection.AdaptiveFailedAttempts,
+	}
+
 	return config
 }
 
@@ -651,12 +731,14 @@ func (configManager *ConfigManager) HandleGetConfig(responseWriter http.Response
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.read required", "LAYR_AUTH_001")
 		return
 	}
+
+	sanitizedConfig := configManager.GetUnencrypted()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(configManager.GetUnencrypted())
+	_ = json.NewEncoder(responseWriter).Encode(sanitizedConfig)
 }
 
-// HandlePutConfig handles PUT /api/v1/_/auth/config with write-only secret updates.
+// HandlePutConfig handles PUT /api/v1/_/auth/config updating runtime config with envelope encryption.
 func (configManager *ConfigManager) HandlePutConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("HandlePutConfig invoked")
 
@@ -792,6 +874,39 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 		}
 	} else if smsWebhookSigningSecret == "" {
 		inputConfig.SMSDispatcher.Webhook.SigningSecret = currentConfig.SMSDispatcher.Webhook.SigningSecret
+	}
+
+	// Handle CAPTCHA secrets: if new plaintext provided, envelope-encrypt; if omitted, preserve current
+	captchaSecret := strings.TrimSpace(inputConfig.Threat.BotProtection.SecretKey)
+	if captchaSecret != "" && !strings.HasPrefix(captchaSecret, "enc:v1:") {
+		if configManager.cryptoKeyManager != nil {
+			encryptedSecret, _ := configManager.cryptoKeyManager.EncryptField([]byte(captchaSecret))
+			inputConfig.Threat.BotProtection.SecretKey = encryptedSecret
+		}
+	} else if captchaSecret == "" {
+		inputConfig.Threat.BotProtection.SecretKey = currentConfig.Threat.BotProtection.SecretKey
+	}
+
+	if inputConfig.Threat.BotProtection.Enabled {
+		providerName := strings.ToLower(strings.TrimSpace(inputConfig.Threat.BotProtection.Provider))
+		switch providerName {
+		case "turnstile", "cloudflare", "recaptcha", "google", "hcaptcha":
+			// valid
+		default:
+			log.Debugf("HandlePutConfig rejected: unsupported captcha provider %s", inputConfig.Threat.BotProtection.Provider)
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Unsupported CAPTCHA provider", "LAYR_AUTH_001")
+			return
+		}
+		if inputConfig.Threat.BotProtection.SecretKey == "" {
+			log.Debugf("HandlePutConfig rejected: captcha secret key required when bot protection is enabled")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA secret key is required when bot protection is enabled", "LAYR_AUTH_001")
+			return
+		}
+		if inputConfig.Threat.BotProtection.Mode != "" && inputConfig.Threat.BotProtection.Mode != "always" && inputConfig.Threat.BotProtection.Mode != "adaptive" {
+			log.Debugf("HandlePutConfig rejected: invalid captcha mode %s", inputConfig.Threat.BotProtection.Mode)
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid bot protection mode; must be always or adaptive", "LAYR_AUTH_001")
+			return
+		}
 	}
 
 	if inputConfig.EmailOTP.Enabled && !IsEmailDeliveryReady(inputConfig.EmailDispatcher) {

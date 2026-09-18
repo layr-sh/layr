@@ -28,7 +28,7 @@ func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
 					'text', 'Custom DB SMS Sign In OTP for ' || recipient || ': ' || code
 				)::jsonb;
 			END IF;
-			IF kind = 'phone_verification' THEN
+			IF kind = 'phone_verification' AND code != '000000' THEN
 				RETURN to_jsonb('Custom Plain Text Phone Verification: ' || code);
 			END IF;
 			RETURN NULL;
@@ -60,26 +60,26 @@ func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
 	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
 
 	// 1. Test template resolution using JSON object result with user_id (SQL hook takes priority over runtime config)
-	text := smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPasswordReset, "+15551234567", "321654", "01918a24-1234-7000-8000-000000000001", smsDispatcherConfig)
+	text := smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "321654", "01918a24-1234-7000-8000-000000000001", smsDispatcherConfig)
 	if text != "Custom DB SMS Password Reset for +15551234567: 321654" {
 		t.Fatalf("expected custom hook text to override runtime config for password reset, got: %s", text)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "654321", "01918a24-1234-7000-8000-000000000001", smsDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "654321", "01918a24-1234-7000-8000-000000000001", smsDispatcherConfig)
 	if text != "Custom DB SMS Sign In OTP for +15551234567: 654321" {
 		t.Fatalf("expected custom hook text to override runtime config, got: %s", text)
 	}
 
 	// Test template resolution using plain string jsonb without user_id (SQL hook takes priority over runtime config)
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPhoneVerification, "+15559876543", "789123", "", smsDispatcherConfig)
+	text = smsDispatcher.resolvePhoneVerificationTemplate(ctx, "+15559876543", "789123", "", smsDispatcherConfig)
 	if text != "Custom Plain Text Phone Verification: 789123" {
 		t.Fatalf("expected plain string hook text to override runtime config, got: %s", text)
 	}
 
-	// 2. Test hook returning NULL -> falls back to code for unhandled kind
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKind("unhandled_kind"), "+15550001111", "999888", "", smsDispatcherConfig)
-	if text != "999888" {
-		t.Fatalf("expected fallback code for unhandled kind in hook, got: %s", text)
+	// 2. Test hook returning NULL -> falls back to runtime config template
+	text = smsDispatcher.resolvePhoneVerificationTemplate(ctx, "+15550001111", "000000", "", smsDispatcherConfig)
+	if text != "Runtime Config SMS Phone Verification: 000000" {
+		t.Fatalf("expected fallback to runtime config when hook returns null, got: %s", text)
 	}
 
 	// 3. Drop hook and test fallback to runtime config
@@ -87,24 +87,24 @@ func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
 		t.Fatalf("failed to drop hook function: %v", err)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPasswordReset, "+15551234567", "321654", "", smsDispatcherConfig)
+	text = smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "321654", "", smsDispatcherConfig)
 	if text != "Runtime Config SMS Password Reset: 321654" {
 		t.Fatalf("expected runtime config text after hook dropped for password reset, got: %s", text)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "654321", "", smsDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "654321", "", smsDispatcherConfig)
 	if text != "Runtime Config SMS OTP: 654321" {
 		t.Fatalf("expected runtime config text after hook dropped, got: %s", text)
 	}
 
 	// 4. Test built-in defaults when runtime config templates are empty
 	emptyTemplateSMSDispatcherConfig := &SMSDispatcherConfig{Driver: &driverWebhook}
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPasswordReset, "+15551234567", "321654", "", emptyTemplateSMSDispatcherConfig)
+	text = smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "321654", "", emptyTemplateSMSDispatcherConfig)
 	if text != "Your layr-app password reset code is: 321654" {
 		t.Fatalf("expected default text for password reset when runtime config empty, got: %s", text)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "654321", "", emptyTemplateSMSDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "654321", "", emptyTemplateSMSDispatcherConfig)
 	if text != "Your layr-app sign in verification code is: 654321" {
 		t.Fatalf("expected default text when runtime config empty, got: %s", text)
 	}

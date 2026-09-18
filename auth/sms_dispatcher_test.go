@@ -195,13 +195,13 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Password reset custom template
-	text := smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPasswordReset, "+15551234567", "333444", "user-0", smsDispatcherConfig)
+	text := smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "333444", "user-0", smsDispatcherConfig)
 	if text != "Reset password for +15551234567 with code 333444 on layr-app" {
 		t.Fatalf("unexpected custom password reset text: %s", text)
 	}
 
 	// 2. Sign in OTP custom template
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "888999", "user-1", smsDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "888999", "user-1", smsDispatcherConfig)
 	if text != "Sign in code for +15551234567 is 888999 on layr-app" {
 		t.Fatalf("unexpected custom sign in OTP text: %s", text)
 	}
@@ -212,7 +212,7 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 	}
 	core.SetLoadedConfig(testConfig)
 	defer core.SetLoadedConfig(nil)
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "888999", "user-1", smsDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "888999", "user-1", smsDispatcherConfig)
 	if text != "Sign in code for +15551234567 is 888999 on CustomSMSApp" {
 		t.Fatalf("expected custom AppName in template, got: %s", text)
 	}
@@ -223,38 +223,41 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 		Project: core.ProjectConfig{Name: ""},
 	}
 	core.SetLoadedConfig(testEmptyConfig)
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "888999", "user-1", smsDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "888999", "user-1", smsDispatcherConfig)
 	if text != "Sign in code for +15551234567 is 888999 on Layr" {
 		t.Fatalf("expected Layr fallback in template, got: %s", text)
+	}
+	text = smsDispatcher.resolvePhoneVerificationTemplate(ctx, "+15551234567", "111222", "user-2", smsDispatcherConfig)
+	if text != "Verify +15551234567 with code 111222" {
+		t.Fatalf("unexpected custom phone verification text: %s", text)
+	}
+	text = smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "888999", "user-1", smsDispatcherConfig)
+	if text != "Reset password for +15551234567 with code 888999 on Layr" {
+		t.Fatalf("expected Layr fallback in password reset template, got: %s", text)
 	}
 	core.SetLoadedConfig(nil)
 
 	// 3. Phone verification custom template
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPhoneVerification, "+15551234567", "111222", "user-2", smsDispatcherConfig)
+	text = smsDispatcher.resolvePhoneVerificationTemplate(ctx, "+15551234567", "111222", "user-2", smsDispatcherConfig)
 	if text != "Verify +15551234567 with code 111222" {
 		t.Fatalf("unexpected custom phone verification text: %s", text)
 	}
 
 	// 4. Defaults when templates are empty
 	emptySMSDispatcherConfig := &SMSDispatcherConfig{}
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPasswordReset, "+15551234567", "888999", "", emptySMSDispatcherConfig)
+	text = smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "888999", "", emptySMSDispatcherConfig)
 	if !strings.Contains(text, "888999") || !strings.Contains(text, "password reset code") {
 		t.Fatalf("unexpected default password reset text: %s", text)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindSignInOTP, "+15551234567", "888999", "", emptySMSDispatcherConfig)
+	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "888999", "", emptySMSDispatcherConfig)
 	if !strings.Contains(text, "888999") || !strings.Contains(text, "sign in verification code") {
 		t.Fatalf("unexpected default sign in OTP text: %s", text)
 	}
 
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKindPhoneVerification, "+15551234567", "888999", "", emptySMSDispatcherConfig)
+	text = smsDispatcher.resolvePhoneVerificationTemplate(ctx, "+15551234567", "888999", "", emptySMSDispatcherConfig)
 	if !strings.Contains(text, "888999") || !strings.Contains(text, "phone verification code") {
 		t.Fatalf("unexpected default phone verification text: %s", text)
-	}
-
-	text = smsDispatcher.resolveTemplate(ctx, SMSDispatcherMessageKind("other_kind"), "+15551234567", "888999", "", emptySMSDispatcherConfig)
-	if text != "888999" {
-		t.Fatalf("unexpected fallback code text: %s", text)
 	}
 }
 

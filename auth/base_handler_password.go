@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"uuid"
 
 	"layr.sh/auth/otp"
+	"layr.sh/auth/threat"
 	"layr.sh/core"
 )
 
@@ -54,6 +54,14 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	if len(signUpRequest.Password) < config.Password.MinLength {
 		log.Debugf("sign-up rejected: password length %d below minimum %d", len(signUpRequest.Password), config.Password.MinLength)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		return
+	}
+
+	clientIP := core.ExtractRequestClientIP(request)
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signUpRequest.CaptchaToken, "/api/v1/auth/sign-up") {
+		return
+	}
+	if !handler.checkPasswordBreach(responseWriter, request, signUpRequest.Password, signUpRequest.Email) {
 		return
 	}
 
@@ -192,6 +200,12 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 
 	ctx := request.Context()
 	config := handler.configManager.Get()
+	clientIP := core.ExtractRequestClientIP(request)
+
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signInRequest.CaptchaToken, "/api/v1/auth/sign-in") {
+		return
+	}
+
 	if config.RateLimiting.Enabled && handler.kvStore != nil && identifier != "" {
 		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
@@ -225,12 +239,19 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	)
 	if err != nil {
 		log.Debugf("sign-in rejected: user not found for identifier %s: %v", identifier, err)
+		if handler.kvStore != nil {
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
 		return
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
 		log.Debugf("sign-in rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		if handler.kvStore != nil {
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
 	}
@@ -238,6 +259,10 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	ok, err := handler.hasher.Verify(signInRequest.Password, passHash)
 	if err != nil || !ok {
 		log.Debugf("sign-in rejected: password mismatch for user %s: %v", userRecord.ID, err)
+		if handler.kvStore != nil {
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
 		return
 	}
@@ -253,20 +278,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		_ = handler.kvStore.Delete(ctx, rateKey)
 	}
 
-	if userRecord.MFAEnabled {
-		mfaTicket := "mfa_tk_" + uuid.NewV7().String()
-		if handler.kvStore != nil {
-			_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, userRecord.ID, mfaTicketTTL)
-		}
-		handler.writeJSON(responseWriter, SignInResponse{
-			MFARequired: true,
-			MFATicket:   mfaTicket,
-			Factor:      "totp",
-		})
-		return
-	}
-
-	handler.issueSessionResponse(responseWriter, request, userRecord, "password")
+	handler.completeSignInFlow(responseWriter, request, userRecord, "password")
 }
 
 func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.ResponseWriter, request *http.Request) {
@@ -295,6 +307,11 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	if recipient == "" {
 		log.Debug("password reset request rejected: missing recipient")
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required", "LAYR_AUTH_001")
+		return
+	}
+
+	clientIP := core.ExtractRequestClientIP(request)
+	if !handler.checkCaptcha(responseWriter, request, clientIP, passwordResetRequest.CaptchaToken, "/api/v1/auth/password/reset") {
 		return
 	}
 
@@ -422,6 +439,10 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 	if len(passwordResetConfirmRequest.Password) < config.Password.MinLength {
 		log.Debugf("password reset confirmation rejected: password shorter than min length (%d)", config.Password.MinLength)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		return
+	}
+
+	if !handler.checkPasswordBreach(responseWriter, request, passwordResetConfirmRequest.Password, recipient) {
 		return
 	}
 
@@ -583,6 +604,14 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	if len(updateUserPasswordRequest.NewPassword) < config.Password.MinLength {
 		log.Debugf("update user password rejected: password shorter than min length (%d)", config.Password.MinLength)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		return
+	}
+
+	var userEmail string
+	if email != nil {
+		userEmail = *email
+	}
+	if !handler.checkPasswordBreach(responseWriter, request, updateUserPasswordRequest.NewPassword, userEmail) {
 		return
 	}
 

@@ -376,4 +376,56 @@ func TestAuthEventsUnit(t *testing.T) {
 	if nilPropsEvent.Data["properties"] != nil {
 		t.Fatalf("expected nil properties preserved in event, got %v", nilPropsEvent.Data["properties"])
 	}
+
+	// 21. PasswordBreachBlocked
+	passwordBreachBlockedEvent := NewPasswordBreachBlockedEvent("user@example.com", PasswordBreachBlockedEventData{
+		Email: "user@example.com",
+		Count: 42,
+	})
+	if passwordBreachBlockedEvent.Type != "auth.threat.password_breach_blocked" {
+		t.Fatalf("unexpected password breach event type: %s", passwordBreachBlockedEvent.Type)
+	}
+	if passwordBreachBlockedEvent.ResourceID == nil || *passwordBreachBlockedEvent.ResourceID != "user@example.com" {
+		t.Fatalf("unexpected resource ID in breach event: %v", passwordBreachBlockedEvent.ResourceID)
+	}
+	if passwordBreachBlockedEvent.Data["count"] != float64(42) {
+		t.Fatalf("unexpected breach count in event: %v", passwordBreachBlockedEvent.Data["count"])
+	}
+
+	// 22. BotChallengeFailed
+	botChallengeFailedEvent := NewBotChallengeFailedEvent("192.168.1.1", BotChallengeFailedEventData{
+		IPAddress: "192.168.1.1",
+		Provider:  "turnstile",
+		Endpoint:  "/api/v1/auth/sign-in",
+	})
+	if botChallengeFailedEvent.Type != "auth.threat.bot_challenge_failed" {
+		t.Fatalf("unexpected bot challenge event type: %s", botChallengeFailedEvent.Type)
+	}
+	if botChallengeFailedEvent.ResourceID == nil || *botChallengeFailedEvent.ResourceID != "192.168.1.1" {
+		t.Fatalf("unexpected resource ID in bot challenge event: %v", botChallengeFailedEvent.ResourceID)
+	}
+	if botChallengeFailedEvent.Data["provider"] != "turnstile" {
+		t.Fatalf("unexpected provider in bot event: %v", botChallengeFailedEvent.Data["provider"])
+	}
+
+	// 23. SuspiciousSignIn
+	suspiciousSignInEvent := NewSuspiciousSignInEvent("usr_123", SuspiciousSignInEventData{
+		User:      userRecord,
+		IPAddress: "203.0.113.195",
+		UserAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
+		RiskScore: 75,
+		RiskLevel: "high",
+		Reasons:   []string{"new_device", "new_ip"},
+	})
+	if suspiciousSignInEvent.Type != "auth.user.suspicious_sign_in" {
+		t.Fatalf("unexpected suspicious sign in event type: %s", suspiciousSignInEvent.Type)
+	}
+	if suspiciousSignInEvent.ResourceID == nil || *suspiciousSignInEvent.ResourceID != "usr_123" {
+		t.Fatalf("unexpected resource ID in suspicious sign in event: %v", suspiciousSignInEvent.ResourceID)
+	}
+	suspiciousData, ok := suspiciousSignInEvent.Data["user"].(map[string]any)
+	if !ok || suspiciousData["id"] != "usr_123" {
+		t.Fatalf("expected sanitized user in suspicious sign-in event, got: %v", suspiciousSignInEvent.Data["user"])
+	}
+	assertSanitizedProps(suspiciousData, "SuspiciousSignIn")
 }

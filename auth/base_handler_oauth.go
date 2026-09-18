@@ -412,7 +412,7 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 	}
 
 	provider := request.PathValue("provider")
-	handler.issueSessionResponse(responseWriter, request, userRecord, "oauth", provider)
+	handler.completeSignInFlow(responseWriter, request, userRecord, "oauth", provider)
 }
 
 // HandleOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.

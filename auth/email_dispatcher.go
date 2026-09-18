@@ -52,6 +52,8 @@ const (
 	EmailDispatcherMessageKindSignInOTP EmailDispatcherMessageKind = "sign_in_otp" //nolint:namingclarity
 	// EmailDispatcherMessageKindEmailVerification identifies email address verification emails.
 	EmailDispatcherMessageKindEmailVerification EmailDispatcherMessageKind = "email_verification" //nolint:namingclarity
+	// EmailDispatcherMessageKindSuspiciousActivity identifies suspicious sign-in alert emails.
+	EmailDispatcherMessageKindSuspiciousActivity EmailDispatcherMessageKind = "suspicious_activity" //nolint:namingclarity
 )
 
 // EmailDispatcherConfig contains configuration for email delivery.
@@ -92,9 +94,10 @@ type EmailDispatcherTemplateConfig struct {
 
 // EmailDispatcherTemplatesConfig defines message-kind-specific templates.
 type EmailDispatcherTemplatesConfig struct {
-	PasswordReset     EmailDispatcherTemplateConfig `json:"password_reset"`
-	SignInOTP         EmailDispatcherTemplateConfig `json:"sign_in_otp"`
-	EmailVerification EmailDispatcherTemplateConfig `json:"email_verification"`
+	PasswordReset      EmailDispatcherTemplateConfig `json:"password_reset"`
+	SignInOTP          EmailDispatcherTemplateConfig `json:"sign_in_otp"`
+	EmailVerification  EmailDispatcherTemplateConfig `json:"email_verification"`
+	SuspiciousActivity EmailDispatcherTemplateConfig `json:"suspicious_activity"`
 }
 
 // EmailDispatcherDefaultConfig returns canonical default configuration for outbound email delivery with default templates.
@@ -116,6 +119,11 @@ func EmailDispatcherDefaultConfig() EmailDispatcherConfig {
 				Subject: "Your sign in code",
 				HTML:    "<p>Your sign in verification code for {{.AppName}} is: <strong>{{.Code}}</strong></p>",
 				Text:    "Your sign in verification code for {{.AppName}} is: {{.Code}}",
+			},
+			SuspiciousActivity: EmailDispatcherTemplateConfig{
+				Subject: "New sign-in detected on your account",
+				HTML:    "<p>A new sign-in was detected on your {{.AppName}} account from <strong>{{.Device}}</strong> (IP: {{.IP}}).</p><p>If this was not you, please secure your account immediately.</p>",
+				Text:    "A new sign-in was detected on your {{.AppName}} account from {{.Device}} (IP: {{.IP}}). If this was not you, please secure your account immediately.",
 			},
 		},
 	}
@@ -190,21 +198,7 @@ func (dispatcher *EmailDispatcher) IsConfigured() bool {
 
 // SendPasswordReset dispatches a password reset email.
 func (dispatcher *EmailDispatcher) SendPasswordReset(ctx context.Context, toEmail, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, EmailDispatcherMessageKindPasswordReset, toEmail, code, userID)
-}
-
-// SendSignInOTP dispatches a sign-in one-time-password email.
-func (dispatcher *EmailDispatcher) SendSignInOTP(ctx context.Context, toEmail, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, EmailDispatcherMessageKindSignInOTP, toEmail, code, userID)
-}
-
-// SendEmailVerification dispatches an email verification email.
-func (dispatcher *EmailDispatcher) SendEmailVerification(ctx context.Context, toEmail, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, EmailDispatcherMessageKindEmailVerification, toEmail, code, userID)
-}
-
-func (dispatcher *EmailDispatcher) sendWithTemplate(ctx context.Context, emailDispatcherMessageKind EmailDispatcherMessageKind, toEmail, code, userID string) error {
-	log.Tracef("dispatching templated email kind=%s to=%s userID=%s", emailDispatcherMessageKind, toEmail, userID)
+	log.Tracef("dispatching password reset email to=%s userID=%s", toEmail, userID)
 
 	if !dispatcher.IsConfigured() {
 		log.Debugf("email dispatch rejected: email dispatcher is not configured")
@@ -212,7 +206,7 @@ func (dispatcher *EmailDispatcher) sendWithTemplate(ctx context.Context, emailDi
 	}
 	emailDispatcherConfig := dispatcher.resolveConfig()
 
-	subject, htmlBody, textBody := dispatcher.resolveTemplate(ctx, emailDispatcherMessageKind, toEmail, code, userID, emailDispatcherConfig)
+	subject, htmlBody, textBody := dispatcher.resolvePasswordResetTemplate(ctx, toEmail, code, userID, emailDispatcherConfig)
 
 	senderEmail := emailDispatcherConfig.SenderEmail
 	if senderEmail == "" {
@@ -220,7 +214,7 @@ func (dispatcher *EmailDispatcher) sendWithTemplate(ctx context.Context, emailDi
 	}
 
 	return dispatcher.Send(ctx, EmailDispatcherMessage{
-		Kind:        emailDispatcherMessageKind,
+		Kind:        EmailDispatcherMessageKindPasswordReset,
 		To:          toEmail,
 		UserID:      userID,
 		Code:        code,
@@ -232,47 +226,135 @@ func (dispatcher *EmailDispatcher) sendWithTemplate(ctx context.Context, emailDi
 	})
 }
 
-func (dispatcher *EmailDispatcher) resolveTemplate(ctx context.Context, emailDispatcherMessageKind EmailDispatcherMessageKind, recipient, code, userID string, emailDispatcherConfig *EmailDispatcherConfig) (string, string, string) {
-	log.Tracef("resolving email template for kind=%s recipient=%s", emailDispatcherMessageKind, recipient)
+// SendSignInOTP dispatches a sign-in one-time-password email.
+func (dispatcher *EmailDispatcher) SendSignInOTP(ctx context.Context, toEmail, code, userID string) error {
+	log.Tracef("dispatching sign in otp email to=%s userID=%s", toEmail, userID)
 
-	// 1. PostgreSQL dynamic hook: public.auth_email_template(kind, recipient, code, user_id)
-	if dispatcher.db != nil {
-		var procedureName *string
-		_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_email_template(text,text,text,uuid)')::text").Scan(&procedureName)
-		if procedureName != nil && *procedureName != "" {
-			var userIDParam any
-			if userID != "" {
-				userIDParam = userID
-			}
-			var templateJSON []byte
-			err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_email_template($1, $2, $3, $4::uuid)", string(emailDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
-			if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
-				var hookResult struct {
-					Subject string `json:"subject"`
-					HTML    string `json:"html"`
-					Text    string `json:"text"`
-				}
-				if json.Unmarshal(templateJSON, &hookResult) == nil {
-					if hookResult.Subject != "" && (hookResult.HTML != "" || hookResult.Text != "") {
-						log.Debugf("email template resolved via PostgreSQL dynamic hook for kind=%s", emailDispatcherMessageKind)
-						return hookResult.Subject, hookResult.HTML, hookResult.Text
-					}
-				}
+	if !dispatcher.IsConfigured() {
+		log.Debugf("email dispatch rejected: email dispatcher is not configured")
+		return ErrEmailDispatcherNotConfigured
+	}
+	emailDispatcherConfig := dispatcher.resolveConfig()
+
+	subject, htmlBody, textBody := dispatcher.resolveSignInOTPTemplate(ctx, toEmail, code, userID, emailDispatcherConfig)
+
+	senderEmail := emailDispatcherConfig.SenderEmail
+	if senderEmail == "" {
+		senderEmail = "no-reply@layr.sh"
+	}
+
+	return dispatcher.Send(ctx, EmailDispatcherMessage{
+		Kind:        EmailDispatcherMessageKindSignInOTP,
+		To:          toEmail,
+		UserID:      userID,
+		Code:        code,
+		Subject:     subject,
+		HTML:        htmlBody,
+		Text:        textBody,
+		SenderEmail: senderEmail,
+		SenderName:  emailDispatcherConfig.SenderName,
+	})
+}
+
+// SendEmailVerification dispatches an email verification email.
+func (dispatcher *EmailDispatcher) SendEmailVerification(ctx context.Context, toEmail, code, userID string) error {
+	log.Tracef("dispatching email verification email to=%s userID=%s", toEmail, userID)
+
+	if !dispatcher.IsConfigured() {
+		log.Debugf("email dispatch rejected: email dispatcher is not configured")
+		return ErrEmailDispatcherNotConfigured
+	}
+	emailDispatcherConfig := dispatcher.resolveConfig()
+
+	subject, htmlBody, textBody := dispatcher.resolveEmailVerificationTemplate(ctx, toEmail, code, userID, emailDispatcherConfig)
+
+	senderEmail := emailDispatcherConfig.SenderEmail
+	if senderEmail == "" {
+		senderEmail = "no-reply@layr.sh"
+	}
+
+	return dispatcher.Send(ctx, EmailDispatcherMessage{
+		Kind:        EmailDispatcherMessageKindEmailVerification,
+		To:          toEmail,
+		UserID:      userID,
+		Code:        code,
+		Subject:     subject,
+		HTML:        htmlBody,
+		Text:        textBody,
+		SenderEmail: senderEmail,
+		SenderName:  emailDispatcherConfig.SenderName,
+	})
+}
+
+// SendSuspiciousActivity dispatches a security alert email when a sign-in from a new device/IP is detected.
+func (dispatcher *EmailDispatcher) SendSuspiciousActivity(ctx context.Context, toEmail, userID string, clientIP, userAgent string) error {
+	log.Tracef("dispatching suspicious activity alert to=%s userID=%s ip=%s", toEmail, userID, clientIP)
+
+	if !dispatcher.IsConfigured() {
+		log.Debugf("email dispatch rejected: email dispatcher is not configured")
+		return ErrEmailDispatcherNotConfigured
+	}
+	emailDispatcherConfig := dispatcher.resolveConfig()
+
+	subject, htmlBody, textBody := dispatcher.resolveSuspiciousActivityTemplate(ctx, toEmail, userID, clientIP, userAgent, emailDispatcherConfig)
+
+	senderEmail := emailDispatcherConfig.SenderEmail
+	if senderEmail == "" {
+		senderEmail = "no-reply@layr.sh"
+	}
+
+	return dispatcher.Send(ctx, EmailDispatcherMessage{
+		Kind:        EmailDispatcherMessageKindSuspiciousActivity,
+		To:          toEmail,
+		UserID:      userID,
+		Subject:     subject,
+		HTML:        htmlBody,
+		Text:        textBody,
+		SenderEmail: senderEmail,
+		SenderName:  emailDispatcherConfig.SenderName,
+	})
+}
+
+func (dispatcher *EmailDispatcher) queryDBEmailTemplate(ctx context.Context, emailDispatcherMessageKind EmailDispatcherMessageKind, recipient, code, userID string) (string, string, string, bool) {
+	if dispatcher.db == nil {
+		return "", "", "", false
+	}
+	var procedureName *string
+	_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_email_template(text,text,text,uuid)')::text").Scan(&procedureName)
+	if procedureName == nil || *procedureName == "" {
+		return "", "", "", false
+	}
+	var userIDParam any
+	if userID != "" {
+		userIDParam = userID
+	}
+	var templateJSON []byte
+	err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_email_template($1, $2, $3, $4::uuid)", string(emailDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
+	if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
+		var hookResult struct {
+			Subject string `json:"subject"`
+			HTML    string `json:"html"`
+			Text    string `json:"text"`
+		}
+		if json.Unmarshal(templateJSON, &hookResult) == nil {
+			if hookResult.Subject != "" && (hookResult.HTML != "" || hookResult.Text != "") {
+				log.Debugf("email template resolved via PostgreSQL dynamic hook for kind=%s", emailDispatcherMessageKind)
+				return hookResult.Subject, hookResult.HTML, hookResult.Text, true
 			}
 		}
 	}
+	return "", "", "", false
+}
 
-	// 2. Layr Console / Configured template
-	var emailDispatcherTemplateConfig EmailDispatcherTemplateConfig
-	switch emailDispatcherMessageKind {
-	case EmailDispatcherMessageKindPasswordReset:
-		emailDispatcherTemplateConfig = emailDispatcherConfig.Templates.PasswordReset
-	case EmailDispatcherMessageKindSignInOTP:
-		emailDispatcherTemplateConfig = emailDispatcherConfig.Templates.SignInOTP
-	case EmailDispatcherMessageKindEmailVerification:
-		emailDispatcherTemplateConfig = emailDispatcherConfig.Templates.EmailVerification
+func (dispatcher *EmailDispatcher) resolvePasswordResetTemplate(ctx context.Context, recipient, code, userID string, emailDispatcherConfig *EmailDispatcherConfig) (string, string, string) {
+	log.Tracef("resolving email template for kind=%s recipient=%s", EmailDispatcherMessageKindPasswordReset, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_email_template(kind, recipient, code, user_id)
+	if subject, htmlBody, textBody, ok := dispatcher.queryDBEmailTemplate(ctx, EmailDispatcherMessageKindPasswordReset, recipient, code, userID); ok {
+		return subject, htmlBody, textBody
 	}
 
+	// 2. Layr Console / Configured template
 	appName := core.GetConfig().Project.Name
 	if appName == "" {
 		appName = "layr-app"
@@ -286,33 +368,138 @@ func (dispatcher *EmailDispatcher) resolveTemplate(ctx context.Context, emailDis
 		return templateText
 	}
 
+	emailDispatcherTemplateConfig := emailDispatcherConfig.Templates.PasswordReset
 	subject := interpolate(emailDispatcherTemplateConfig.Subject)
 	htmlBody := interpolate(emailDispatcherTemplateConfig.HTML)
 	textBody := interpolate(emailDispatcherTemplateConfig.Text)
 
 	if subject != "" && (htmlBody != "" || textBody != "") {
-		log.Debugf("email template resolved via configured runtime templates for kind=%s", emailDispatcherMessageKind)
+		log.Debugf("email template resolved via configured runtime templates for kind=%s", EmailDispatcherMessageKindPasswordReset)
 		return subject, htmlBody, textBody
 	}
 
 	// 3. Built-in defaults
-	log.Debugf("email template resolved via built-in default templates for kind=%s", emailDispatcherMessageKind)
-	switch emailDispatcherMessageKind {
-	case EmailDispatcherMessageKindPasswordReset:
-		return "Reset your password",
-			fmt.Sprintf("<p>Your password reset code is: <strong>%s</strong></p>", code),
-			fmt.Sprintf("Your password reset code is: %s", code)
-	case EmailDispatcherMessageKindSignInOTP:
-		return "Your sign in code",
-			fmt.Sprintf("<p>Your sign in verification code is: <strong>%s</strong></p>", code),
-			fmt.Sprintf("Your sign in verification code is: %s", code)
-	case EmailDispatcherMessageKindEmailVerification:
-		return "Verify your email address",
-			fmt.Sprintf("<p>Your email verification code is: <strong>%s</strong></p>", code),
-			fmt.Sprintf("Your email verification code is: %s", code)
+	log.Debugf("email template resolved via built-in default templates for kind=%s", EmailDispatcherMessageKindPasswordReset)
+	return "Reset your password",
+		fmt.Sprintf("<p>Your password reset code is: <strong>%s</strong></p>", code),
+		fmt.Sprintf("Your password reset code is: %s", code)
+}
+
+func (dispatcher *EmailDispatcher) resolveSignInOTPTemplate(ctx context.Context, recipient, code, userID string, emailDispatcherConfig *EmailDispatcherConfig) (string, string, string) {
+	log.Tracef("resolving email template for kind=%s recipient=%s", EmailDispatcherMessageKindSignInOTP, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_email_template(kind, recipient, code, user_id)
+	if subject, htmlBody, textBody, ok := dispatcher.queryDBEmailTemplate(ctx, EmailDispatcherMessageKindSignInOTP, recipient, code, userID); ok {
+		return subject, htmlBody, textBody
 	}
 
-	return "Notification", fmt.Sprintf("<p>%s</p>", code), code
+	// 2. Layr Console / Configured template
+	appName := core.GetConfig().Project.Name
+	if appName == "" {
+		appName = "layr-app"
+	}
+
+	interpolate := func(templateText string) string {
+		templateText = strings.ReplaceAll(templateText, "{{.Code}}", code)
+		templateText = strings.ReplaceAll(templateText, "{{.Recipient}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.To}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.AppName}}", appName)
+		return templateText
+	}
+
+	emailDispatcherTemplateConfig := emailDispatcherConfig.Templates.SignInOTP
+	subject := interpolate(emailDispatcherTemplateConfig.Subject)
+	htmlBody := interpolate(emailDispatcherTemplateConfig.HTML)
+	textBody := interpolate(emailDispatcherTemplateConfig.Text)
+
+	if subject != "" && (htmlBody != "" || textBody != "") {
+		log.Debugf("email template resolved via configured runtime templates for kind=%s", EmailDispatcherMessageKindSignInOTP)
+		return subject, htmlBody, textBody
+	}
+
+	// 3. Built-in defaults
+	log.Debugf("email template resolved via built-in default templates for kind=%s", EmailDispatcherMessageKindSignInOTP)
+	return "Your sign in code",
+		fmt.Sprintf("<p>Your sign in verification code is: <strong>%s</strong></p>", code),
+		fmt.Sprintf("Your sign in verification code is: %s", code)
+}
+
+func (dispatcher *EmailDispatcher) resolveEmailVerificationTemplate(ctx context.Context, recipient, code, userID string, emailDispatcherConfig *EmailDispatcherConfig) (string, string, string) {
+	log.Tracef("resolving email template for kind=%s recipient=%s", EmailDispatcherMessageKindEmailVerification, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_email_template(kind, recipient, code, user_id)
+	if subject, htmlBody, textBody, ok := dispatcher.queryDBEmailTemplate(ctx, EmailDispatcherMessageKindEmailVerification, recipient, code, userID); ok {
+		return subject, htmlBody, textBody
+	}
+
+	// 2. Layr Console / Configured template
+	appName := core.GetConfig().Project.Name
+	if appName == "" {
+		appName = "layr-app"
+	}
+
+	interpolate := func(templateText string) string {
+		templateText = strings.ReplaceAll(templateText, "{{.Code}}", code)
+		templateText = strings.ReplaceAll(templateText, "{{.Recipient}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.To}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.AppName}}", appName)
+		return templateText
+	}
+
+	emailDispatcherTemplateConfig := emailDispatcherConfig.Templates.EmailVerification
+	subject := interpolate(emailDispatcherTemplateConfig.Subject)
+	htmlBody := interpolate(emailDispatcherTemplateConfig.HTML)
+	textBody := interpolate(emailDispatcherTemplateConfig.Text)
+
+	if subject != "" && (htmlBody != "" || textBody != "") {
+		log.Debugf("email template resolved via configured runtime templates for kind=%s", EmailDispatcherMessageKindEmailVerification)
+		return subject, htmlBody, textBody
+	}
+
+	// 3. Built-in defaults
+	log.Debugf("email template resolved via built-in default templates for kind=%s", EmailDispatcherMessageKindEmailVerification)
+	return "Verify your email address",
+		fmt.Sprintf("<p>Your email verification code is: <strong>%s</strong></p>", code),
+		fmt.Sprintf("Your email verification code is: %s", code)
+}
+
+func (dispatcher *EmailDispatcher) resolveSuspiciousActivityTemplate(ctx context.Context, recipient, userID, clientIP, userAgent string, emailDispatcherConfig *EmailDispatcherConfig) (string, string, string) {
+	log.Tracef("resolving email template for kind=%s recipient=%s", EmailDispatcherMessageKindSuspiciousActivity, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_email_template(kind, recipient, code, user_id)
+	if subject, htmlBody, textBody, ok := dispatcher.queryDBEmailTemplate(ctx, EmailDispatcherMessageKindSuspiciousActivity, recipient, clientIP, userID); ok {
+		return subject, htmlBody, textBody
+	}
+
+	// 2. Layr Console / Configured template
+	appName := core.GetConfig().Project.Name
+	if appName == "" {
+		appName = "layr-app"
+	}
+
+	emailDispatcherTemplateConfig := emailDispatcherConfig.Templates.SuspiciousActivity
+	interpolate := func(templateText string) string {
+		templateText = strings.ReplaceAll(templateText, "{{.Recipient}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.To}}", recipient)
+		templateText = strings.ReplaceAll(templateText, "{{.AppName}}", appName)
+		templateText = strings.ReplaceAll(templateText, "{{.IP}}", clientIP)
+		templateText = strings.ReplaceAll(templateText, "{{.Device}}", userAgent)
+		return templateText
+	}
+
+	subject := interpolate(emailDispatcherTemplateConfig.Subject)
+	htmlBody := interpolate(emailDispatcherTemplateConfig.HTML)
+	textBody := interpolate(emailDispatcherTemplateConfig.Text)
+
+	if subject != "" && (htmlBody != "" || textBody != "") {
+		log.Debugf("email template resolved via configured runtime templates for kind=%s", EmailDispatcherMessageKindSuspiciousActivity)
+		return subject, htmlBody, textBody
+	}
+
+	// 3. Built-in defaults
+	log.Debugf("email template resolved via built-in default templates for kind=%s", EmailDispatcherMessageKindSuspiciousActivity)
+	defaultEmailDispatcherTemplateConfig := EmailDispatcherDefaultConfig().Templates.SuspiciousActivity
+	return interpolate(defaultEmailDispatcherTemplateConfig.Subject), interpolate(defaultEmailDispatcherTemplateConfig.HTML), interpolate(defaultEmailDispatcherTemplateConfig.Text)
 }
 
 // Send dispatches an outbound email message according to the configured driver.

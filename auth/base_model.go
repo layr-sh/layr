@@ -80,17 +80,19 @@ type AnonymousSignInRequest struct {
 
 // SignUpRequest defines registration parameters with password.
 type SignUpRequest struct {
-	Email      string         `json:"email"`
-	Phone      string         `json:"phone"`
-	Password   string         `json:"password"`
-	Properties map[string]any `json:"properties"`
+	Email        string         `json:"email"`
+	Phone        string         `json:"phone"`
+	Password     string         `json:"password"`
+	CaptchaToken string         `json:"captcha_token,omitempty"`
+	Properties   map[string]any `json:"properties"`
 }
 
 // SignInRequest defines login credentials.
 type SignInRequest struct {
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
+	Email        string `json:"email"`
+	Phone        string `json:"phone"`
+	Password     string `json:"password"`
+	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
 // RefreshTokenRequest defines token refresh input.
@@ -100,9 +102,10 @@ type RefreshTokenRequest struct {
 
 // PasswordResetRequest defines password reset request input.
 type PasswordResetRequest struct {
-	Recipient string `json:"recipient"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
+	Recipient    string `json:"recipient"`
+	Email        string `json:"email"`
+	Phone        string `json:"phone"`
+	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
 // PasswordResetConfirmRequest defines password reset confirmation input.
@@ -185,15 +188,17 @@ type RevokeOtherSessionsResponse struct {
 
 // OTPSendRequest defines parameters for dispatching a one-time passcode.
 type OTPSendRequest struct {
-	Recipient string `json:"recipient"`
-	Purpose   string `json:"purpose"` // 'sign_in' | 'sign_up' | 'mfa'
+	Recipient    string `json:"recipient"`
+	Purpose      string `json:"purpose"` // 'sign_in' | 'sign_up' | 'mfa'
+	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
 // OTPVerifyRequest defines parameters for verifying a one-time passcode.
 type OTPVerifyRequest struct {
-	Recipient string `json:"recipient"`
-	Code      string `json:"code"`
-	Purpose   string `json:"purpose"`
+	Recipient    string `json:"recipient"`
+	Code         string `json:"code"`
+	Purpose      string `json:"purpose"`
+	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
 // MFASetupRequest defines input for TOTP MFA setup.
