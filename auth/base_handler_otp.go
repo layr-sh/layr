@@ -156,6 +156,10 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 	}
 
 	isEmail := strings.Contains(recipient, "@")
+	channel := "sms"
+	if isEmail {
+		channel = "email"
+	}
 	if isEmail {
 		if !config.EmailOTP.Enabled {
 			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
@@ -192,6 +196,16 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		LIMIT 1
 	`, recipient, purpose).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
+				Recipient: recipient,
+				Purpose:   purpose,
+				Channel:   channel,
+				Reason:    "invalid_or_expired_code",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired OTP code", "LAYR_AUTH_001")
 		return
 	}
@@ -201,6 +215,16 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, recipient, 0)
+		}
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
+				Recipient: recipient,
+				Purpose:   purpose,
+				Channel:   channel,
+				Reason:    "invalid_code",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code", "LAYR_AUTH_001")
 		return
@@ -264,10 +288,6 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 
-		channel := "sms"
-		if isEmail {
-			channel = "email"
-		}
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
 			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
@@ -319,14 +339,20 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 
 	if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
 		log.Warnf("failed OTP sign in for locked user %s", userRecord.ID)
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
+				Recipient: recipient,
+				Purpose:   purpose,
+				Channel:   channel,
+				Reason:    "account_locked",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
 	}
 
-	channel := "sms"
-	if isEmail {
-		channel = "email"
-	}
 	if handler.eventBus != nil {
 		if isNewUser {
 			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))

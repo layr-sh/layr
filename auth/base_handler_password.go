@@ -211,6 +211,15 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
 		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
 			log.Debugf("sign-in rejected: rate limit exceeded for identifier %s (count: %d)", identifier, count)
+			if handler.eventBus != nil {
+				handler.eventBus.Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
+					Identifier:   identifier,
+					Endpoint:     "/api/v1/auth/sign-in",
+					AttemptCount: count,
+					IPAddress:    clientIP,
+					UserAgent:    request.UserAgent(),
+				}))
+			}
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.", "LAYR_AUTH_005")
 			return
 		}
@@ -242,6 +251,15 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 		}
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(identifier, UserSignInFailedEventData{
+				Identifier: identifier,
+				AuthMethod: "password",
+				Reason:     "user_not_found",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
 		return
 	}
@@ -251,6 +269,16 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+		}
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
+				Identifier: identifier,
+				AuthMethod: "password",
+				Reason:     "account_locked",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+				User:       &userRecord,
+			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
@@ -262,6 +290,16 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+		}
+		if handler.eventBus != nil {
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
+				Identifier: identifier,
+				AuthMethod: "password",
+				Reason:     "invalid_credentials",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+				User:       &userRecord,
+			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
 		return
