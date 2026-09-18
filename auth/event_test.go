@@ -428,4 +428,78 @@ func TestAuthEventsUnit(t *testing.T) {
 		t.Fatalf("expected sanitized user in suspicious sign-in event, got: %v", suspiciousSignInEvent.Data["user"])
 	}
 	assertSanitizedProps(suspiciousData, "SuspiciousSignIn")
+
+	// 24. UserSignInFailed
+	userSignInFailedEvent := NewUserSignInFailedEvent("usr_123", UserSignInFailedEventData{
+		Identifier: "test@example.com",
+		AuthMethod: "password",
+		Reason:     "invalid_credentials",
+		IPAddress:  "192.168.1.50",
+		UserAgent:  "Mozilla/5.0",
+		User:       &userRecord,
+	})
+	if userSignInFailedEvent.Type != "auth.user.sign_in_failed" {
+		t.Fatalf("unexpected sign in failed event type: %s", userSignInFailedEvent.Type)
+	}
+	if userSignInFailedEvent.ResourceID == nil || *userSignInFailedEvent.ResourceID != "usr_123" {
+		t.Fatalf("unexpected resource ID in sign in failed event: %v", userSignInFailedEvent.ResourceID)
+	}
+	if userSignInFailedEvent.Data["reason"] != "invalid_credentials" {
+		t.Fatalf("unexpected reason in sign in failed event: %v", userSignInFailedEvent.Data["reason"])
+	}
+
+	// 25. MFAChallengeFailed
+	mfaChallengeFailedEvent := NewMFAChallengeFailedEvent("usr_123", MFAChallengeFailedEventData{
+		UserID:    "usr_123",
+		Reason:    "invalid_code",
+		IPAddress: "192.168.1.50",
+		UserAgent: "Mozilla/5.0",
+		User:      &userRecord,
+	})
+	if mfaChallengeFailedEvent.Type != "auth.mfa.challenge_failed" {
+		t.Fatalf("unexpected MFA challenge failed event type: %s", mfaChallengeFailedEvent.Type)
+	}
+	if mfaChallengeFailedEvent.ResourceID == nil || *mfaChallengeFailedEvent.ResourceID != "usr_123" {
+		t.Fatalf("unexpected resource ID in MFA challenge failed event: %v", mfaChallengeFailedEvent.ResourceID)
+	}
+
+	// 26. OTPVerificationFailed
+	otpVerificationFailedEvent := NewOTPVerificationFailedEvent("+15551234567", OTPVerificationFailedEventData{
+		Recipient: "+15551234567",
+		Purpose:   "sign_in",
+		Channel:   "sms",
+		Reason:    "invalid_code",
+		IPAddress: "192.168.1.50",
+		UserAgent: "Mozilla/5.0",
+	})
+	if otpVerificationFailedEvent.Type != "auth.otp.verification_failed" {
+		t.Fatalf("unexpected OTP verification failed event type: %s", otpVerificationFailedEvent.Type)
+	}
+	if otpVerificationFailedEvent.ResourceID == nil || *otpVerificationFailedEvent.ResourceID != "+15551234567" {
+		t.Fatalf("unexpected resource ID in OTP verification failed event: %v", otpVerificationFailedEvent.ResourceID)
+	}
+
+	// 27. RateLimitExceeded
+	rateLimitExceededEvent := NewRateLimitExceededEvent("test@example.com", RateLimitExceededEventData{
+		Identifier:   "test@example.com",
+		Endpoint:     "/api/v1/auth/sign-in",
+		AttemptCount: 6,
+		IPAddress:    "192.168.1.50",
+		UserAgent:    "Mozilla/5.0",
+	})
+	if rateLimitExceededEvent.Type != "auth.threat.rate_limit_exceeded" {
+		t.Fatalf("unexpected rate limit exceeded event type: %s", rateLimitExceededEvent.Type)
+	}
+	if rateLimitExceededEvent.ResourceID == nil || *rateLimitExceededEvent.ResourceID != "test@example.com" {
+		t.Fatalf("unexpected resource ID in rate limit exceeded event: %v", rateLimitExceededEvent.ResourceID)
+	}
+
+	// 28. UserExported
+	userExportedEvent := NewUserExportedEvent("usr_123", UserExportedEventData(userRecord))
+	if userExportedEvent.Type != "auth.user.exported" {
+		t.Fatalf("unexpected user exported event type: %s", userExportedEvent.Type)
+	}
+	if userExportedEvent.ResourceID == nil || *userExportedEvent.ResourceID != "usr_123" {
+		t.Fatalf("unexpected resource ID in user exported event: %v", userExportedEvent.ResourceID)
+	}
 }

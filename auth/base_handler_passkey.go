@@ -251,6 +251,16 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 	err := handler.db.QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
 	if err != nil {
 		log.Debugf("passkey sign-in verify rejected: credential not found: %v", err)
+		if handler.eventBus != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(string(credentialIDBytes), UserSignInFailedEventData{
+				Identifier: string(credentialIDBytes),
+				AuthMethod: "passkey",
+				Reason:     "credential_not_found",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found", "LAYR_AUTH_006")
 		return
 	}
@@ -261,6 +271,16 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		signatureBytes := []byte(passkeySignInVerifyRequest.Signature)
 		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
 			log.Debug("passkey sign-in verify rejected: invalid assertion signature")
+			if handler.eventBus != nil {
+				clientIP := core.ExtractRequestClientIP(request)
+				handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userID, UserSignInFailedEventData{
+					Identifier: userID,
+					AuthMethod: "passkey",
+					Reason:     "invalid_signature",
+					IPAddress:  clientIP,
+					UserAgent:  request.UserAgent(),
+				}))
+			}
 			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid passkey signature", "LAYR_AUTH_006")
 			return
 		}
@@ -285,6 +305,17 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
 		log.Debugf("passkey sign-in rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		if handler.eventBus != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
+				Identifier: userRecord.ID,
+				AuthMethod: "passkey",
+				Reason:     "account_locked",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+				User:       &userRecord,
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
 	}

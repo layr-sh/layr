@@ -224,6 +224,14 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 	userID, err := handler.kvStore.Get(ctx, ticketKey)
 	if err != nil || userID == "" {
 		log.Debugf("MFA challenge rejected: invalid or expired ticket %s: %v", ticket, err)
+		if handler.eventBus != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(ticket, MFAChallengeFailedEventData{
+				Reason:    "invalid_ticket",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket", "LAYR_AUTH_001")
 		return
 	}
@@ -261,6 +269,16 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
 		log.Debugf("MFA challenge rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
+		if handler.eventBus != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(userRecord.ID, MFAChallengeFailedEventData{
+				UserID:    userRecord.ID,
+				Reason:    "account_locked",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+				User:      &userRecord,
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
 		return
 	}
@@ -280,6 +298,16 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 
 	if !handler.totpManager.ValidateCode(string(secretBytes), code, time.Now().UTC(), 1) {
 		log.Debugf("MFA challenge rejected: invalid code for user %s", userRecord.ID)
+		if handler.eventBus != nil {
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(userRecord.ID, MFAChallengeFailedEventData{
+				UserID:    userRecord.ID,
+				Reason:    "invalid_code",
+				IPAddress: clientIP,
+				UserAgent: request.UserAgent(),
+				User:      &userRecord,
+			}))
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code", "LAYR_AUTH_001")
 		return
 	}

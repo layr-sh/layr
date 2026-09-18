@@ -251,3 +251,69 @@ type SuspiciousSignInEventData struct {
 func NewSuspiciousSignInEvent(resourceID string, suspiciousSignInEventData SuspiciousSignInEventData) core.Event {
 	return core.NewEvent("auth.user.suspicious_sign_in", suspiciousSignInEventData).WithResourceID(resourceID)
 }
+
+// UserSignInFailedEventData represents the payload for auth.user.sign_in_failed.
+type UserSignInFailedEventData struct {
+	Identifier string      `json:"identifier"`
+	AuthMethod string      `json:"auth_method"`
+	Reason     string      `json:"reason"`
+	IPAddress  string      `json:"ip_address"`
+	UserAgent  string      `json:"user_agent"`
+	User       *UserRecord `json:"user,omitempty"`
+}
+
+// NewUserSignInFailedEvent creates a typed event for failed authentication attempts.
+func NewUserSignInFailedEvent(resourceID string, userSignInFailedEventData UserSignInFailedEventData) core.Event {
+	return core.NewEvent("auth.user.sign_in_failed", userSignInFailedEventData).WithResourceID(resourceID)
+}
+
+// MFAChallengeFailedEventData represents the payload for auth.mfa.challenge_failed.
+type MFAChallengeFailedEventData struct {
+	UserID    string      `json:"user_id,omitempty"`
+	Reason    string      `json:"reason"`
+	IPAddress string      `json:"ip_address"`
+	UserAgent string      `json:"user_agent"`
+	User      *UserRecord `json:"user,omitempty"`
+}
+
+// NewMFAChallengeFailedEvent creates a typed event for failed multi-factor authentication challenges.
+func NewMFAChallengeFailedEvent(resourceID string, mfaChallengeFailedEventData MFAChallengeFailedEventData) core.Event {
+	return core.NewEvent("auth.mfa.challenge_failed", mfaChallengeFailedEventData).WithResourceID(resourceID)
+}
+
+// OTPVerificationFailedEventData represents the payload for auth.otp.verification_failed.
+type OTPVerificationFailedEventData struct {
+	Recipient string `json:"recipient"`
+	Purpose   string `json:"purpose"`
+	Channel   string `json:"channel"`
+	Reason    string `json:"reason"`
+	IPAddress string `json:"ip_address"`
+	UserAgent string `json:"user_agent"`
+}
+
+// NewOTPVerificationFailedEvent creates a typed event for failed one-time password verifications.
+func NewOTPVerificationFailedEvent(resourceID string, otpVerificationFailedEventData OTPVerificationFailedEventData) core.Event {
+	return core.NewEvent("auth.otp.verification_failed", otpVerificationFailedEventData).WithResourceID(resourceID)
+}
+
+// RateLimitExceededEventData represents the payload for auth.threat.rate_limit_exceeded.
+type RateLimitExceededEventData struct {
+	Identifier   string `json:"identifier"`
+	Endpoint     string `json:"endpoint"`
+	AttemptCount int64  `json:"attempt_count"`
+	IPAddress    string `json:"ip_address"`
+	UserAgent    string `json:"user_agent"`
+}
+
+// NewRateLimitExceededEvent creates a typed event for rate limit threshold exhaustion.
+func NewRateLimitExceededEvent(resourceID string, rateLimitExceededEventData RateLimitExceededEventData) core.Event {
+	return core.NewEvent("auth.threat.rate_limit_exceeded", rateLimitExceededEventData).WithResourceID(resourceID)
+}
+
+// UserExportedEventData represents the payload for auth.user.exported.
+type UserExportedEventData UserRecord
+
+// NewUserExportedEvent creates a typed event for user account data export under GDPR.
+func NewUserExportedEvent(resourceID string, userExportedEventData UserExportedEventData) core.Event {
+	return core.NewEvent("auth.user.exported", userExportedEventData).WithResourceID(resourceID)
+}

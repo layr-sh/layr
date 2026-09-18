@@ -84,5 +84,9 @@ func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter,
 		ExportDate: time.Now().UTC().Format(time.RFC3339),
 	}
 
+	if handler.eventBus != nil {
+		handler.eventBus.Publish(ctx, NewUserExportedEvent(userRecord.ID, UserExportedEventData(userRecord)))
+	}
+
 	handler.writeJSON(responseWriter, exportUserDataResponse)
 }
