@@ -25,6 +25,27 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 					'text', 'Your custom code is ' || code
 				)::jsonb;
 			END IF;
+			IF kind = 'sign_in_otp' AND code != 'null_fallback' THEN
+				RETURN json_build_object(
+					'subject', 'Custom DB Sign In OTP for ' || recipient,
+					'html', '<h1>Your custom OTP is ' || code || '</h1>',
+					'text', 'Your custom OTP is ' || code
+				)::jsonb;
+			END IF;
+			IF kind = 'email_verification' THEN
+				RETURN json_build_object(
+					'subject', 'Custom DB Email Verification for ' || recipient,
+					'html', '<h1>Your verification code is ' || code || '</h1>',
+					'text', 'Your verification code is ' || code
+				)::jsonb;
+			END IF;
+			IF kind = 'suspicious_activity' THEN
+				RETURN json_build_object(
+					'subject', 'Custom DB Security Alert for ' || recipient,
+					'html', '<p>Suspicious login from IP: ' || code || '</p>',
+					'text', 'Suspicious login from IP: ' || code
+				)::jsonb;
+			END IF;
 			RETURN NULL;
 		END;
 		$$;
@@ -55,7 +76,7 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
 
 	// 1. Test template resolution using the hook with user_id (SQL hook takes priority over runtime config)
-	subject, html, text := emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "456789", "01918a24-1234-7000-8000-000000000001", emailDispatcherConfig)
+	subject, html, text := emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "456789", "01918a24-1234-7000-8000-000000000001", emailDispatcherConfig)
 	if subject != "Custom DB Reset for alice@example.com" {
 		t.Fatalf("expected custom hook subject to override runtime config, got: %s", subject)
 	}
@@ -67,17 +88,41 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 	}
 
 	// Test template resolution using the hook with empty user_id (NULL passed to Postgres)
-	subject, _, _ = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "bob@example.com", "123123", "", emailDispatcherConfig)
+	subject, _, _ = emailDispatcher.resolvePasswordResetTemplate(ctx, "bob@example.com", "123123", "", emailDispatcherConfig)
 	if subject != "Custom DB Reset for bob@example.com" {
 		t.Fatalf("expected custom hook subject without userID, got: %s", subject)
 	}
 
+	// Test sign in otp template resolution using the hook
+	subject, html, text = emailDispatcher.resolveSignInOTPTemplate(ctx, "bob@example.com", "456789", "01918a24-1234-7000-8000-000000000001", emailDispatcherConfig)
+	if subject != "Custom DB Sign In OTP for bob@example.com" || html != "<h1>Your custom OTP is 456789</h1>" || text != "Your custom OTP is 456789" {
+		t.Fatalf("expected custom hook for sign in otp, got: %s, %s, %s", subject, html, text)
+	}
+
+	// Test email verification template resolution using the hook
+	subject, html, text = emailDispatcher.resolveEmailVerificationTemplate(ctx, "charlie@example.com", "987654", "01918a24-1234-7000-8000-000000000001", emailDispatcherConfig)
+	if subject != "Custom DB Email Verification for charlie@example.com" || html != "<h1>Your verification code is 987654</h1>" || text != "Your verification code is 987654" {
+		t.Fatalf("expected custom hook for email verification, got: %s, %s, %s", subject, html, text)
+	}
+
+	// Test suspicious activity template resolution using the hook
+	subject, html, text = emailDispatcher.resolveSuspiciousActivityTemplate(ctx, "charlie@example.com", "01918a24-1234-7000-8000-000000000001", "10.0.0.1", "curl/7.68.0", emailDispatcherConfig)
+	if subject != "Custom DB Security Alert for charlie@example.com" {
+		t.Fatalf("expected custom hook subject for suspicious activity, got: %s", subject)
+	}
+	if html != "<p>Suspicious login from IP: 10.0.0.1</p>" {
+		t.Fatalf("expected custom hook html for suspicious activity, got: %s", html)
+	}
+	if text != "Suspicious login from IP: 10.0.0.1" {
+		t.Fatalf("expected custom hook text for suspicious activity, got: %s", text)
+	}
+
 	// 2. Test hook returning NULL -> falls back to runtime config templates
-	subject, _, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindSignInOTP, "bob@example.com", "123123", "", emailDispatcherConfig)
+	subject, _, text = emailDispatcher.resolveSignInOTPTemplate(ctx, "bob@example.com", "null_fallback", "", emailDispatcherConfig)
 	if subject != "Runtime Config Sign In OTP: layr-app" {
 		t.Fatalf("expected runtime config template subject when hook returns NULL, got: %s", subject)
 	}
-	if text != "Runtime OTP Text: 123123" {
+	if text != "Runtime OTP Text: null_fallback" {
 		t.Fatalf("expected runtime config template text when hook returns NULL, got: %s", text)
 	}
 
@@ -86,14 +131,14 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 		t.Fatalf("failed to drop hook function: %v", err)
 	}
 
-	subject, _, _ = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "456789", "", emailDispatcherConfig)
+	subject, _, _ = emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "456789", "", emailDispatcherConfig)
 	if subject != "Runtime Config Reset: layr-app" {
 		t.Fatalf("expected runtime config subject after hook dropped, got: %s", subject)
 	}
 
 	// 4. Test built-in defaults when runtime config templates are empty
 	emptyTemplateEmailDispatcherConfig := &EmailDispatcherConfig{Driver: &driverWebhook}
-	subject, html, text = emailDispatcher.resolveTemplate(ctx, EmailDispatcherMessageKindPasswordReset, "alice@example.com", "456789", "", emptyTemplateEmailDispatcherConfig)
+	subject, html, text = emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "456789", "", emptyTemplateEmailDispatcherConfig)
 	if subject != "Reset your password" {
 		t.Fatalf("expected built-in default subject, got: %s", subject)
 	}

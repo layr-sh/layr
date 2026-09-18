@@ -163,21 +163,7 @@ func (dispatcher *SMSDispatcher) IsConfigured() bool {
 
 // SendSignInOTP dispatches a sign-in one-time-password SMS.
 func (dispatcher *SMSDispatcher) SendSignInOTP(ctx context.Context, toPhone, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, SMSDispatcherMessageKindSignInOTP, toPhone, code, userID)
-}
-
-// SendPhoneVerification dispatches a phone number verification SMS.
-func (dispatcher *SMSDispatcher) SendPhoneVerification(ctx context.Context, toPhone, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, SMSDispatcherMessageKindPhoneVerification, toPhone, code, userID)
-}
-
-// SendPasswordReset dispatches a password reset SMS.
-func (dispatcher *SMSDispatcher) SendPasswordReset(ctx context.Context, toPhone, code, userID string) error {
-	return dispatcher.sendWithTemplate(ctx, SMSDispatcherMessageKindPasswordReset, toPhone, code, userID)
-}
-
-func (dispatcher *SMSDispatcher) sendWithTemplate(ctx context.Context, smsDispatcherMessageKind SMSDispatcherMessageKind, toPhone, code, userID string) error {
-	log.Tracef("dispatching templated sms kind=%s to=%s userID=%s", smsDispatcherMessageKind, toPhone, userID)
+	log.Tracef("dispatching sign in otp sms to=%s userID=%s", toPhone, userID)
 
 	if !dispatcher.IsConfigured() {
 		log.Debugf("sms dispatch rejected: sms dispatcher is not configured")
@@ -185,10 +171,10 @@ func (dispatcher *SMSDispatcher) sendWithTemplate(ctx context.Context, smsDispat
 	}
 	smsDispatcherConfig := dispatcher.resolveConfig()
 
-	text := dispatcher.resolveTemplate(ctx, smsDispatcherMessageKind, toPhone, code, userID, smsDispatcherConfig)
+	text := dispatcher.resolveSignInOTPTemplate(ctx, toPhone, code, userID, smsDispatcherConfig)
 
 	return dispatcher.Send(ctx, SMSDispatcherMessage{
-		Kind:   smsDispatcherMessageKind,
+		Kind:   SMSDispatcherMessageKindSignInOTP,
 		To:     toPhone,
 		UserID: userID,
 		Code:   code,
@@ -196,75 +182,168 @@ func (dispatcher *SMSDispatcher) sendWithTemplate(ctx context.Context, smsDispat
 	})
 }
 
-func (dispatcher *SMSDispatcher) resolveTemplate(ctx context.Context, smsDispatcherMessageKind SMSDispatcherMessageKind, recipient, code, userID string, smsDispatcherConfig *SMSDispatcherConfig) string {
-	log.Tracef("resolving sms template for kind=%s recipient=%s", smsDispatcherMessageKind, recipient)
+// SendPhoneVerification dispatches a phone number verification SMS.
+func (dispatcher *SMSDispatcher) SendPhoneVerification(ctx context.Context, toPhone, code, userID string) error {
+	log.Tracef("dispatching phone verification sms to=%s userID=%s", toPhone, userID)
+
+	if !dispatcher.IsConfigured() {
+		log.Debugf("sms dispatch rejected: sms dispatcher is not configured")
+		return ErrSMSDispatcherNotConfigured
+	}
+	smsDispatcherConfig := dispatcher.resolveConfig()
+
+	text := dispatcher.resolvePhoneVerificationTemplate(ctx, toPhone, code, userID, smsDispatcherConfig)
+
+	return dispatcher.Send(ctx, SMSDispatcherMessage{
+		Kind:   SMSDispatcherMessageKindPhoneVerification,
+		To:     toPhone,
+		UserID: userID,
+		Code:   code,
+		Text:   text,
+	})
+}
+
+// SendPasswordReset dispatches a password reset SMS.
+func (dispatcher *SMSDispatcher) SendPasswordReset(ctx context.Context, toPhone, code, userID string) error {
+	log.Tracef("dispatching password reset sms to=%s userID=%s", toPhone, userID)
+
+	if !dispatcher.IsConfigured() {
+		log.Debugf("sms dispatch rejected: sms dispatcher is not configured")
+		return ErrSMSDispatcherNotConfigured
+	}
+	smsDispatcherConfig := dispatcher.resolveConfig()
+
+	text := dispatcher.resolvePasswordResetTemplate(ctx, toPhone, code, userID, smsDispatcherConfig)
+
+	return dispatcher.Send(ctx, SMSDispatcherMessage{
+		Kind:   SMSDispatcherMessageKindPasswordReset,
+		To:     toPhone,
+		UserID: userID,
+		Code:   code,
+		Text:   text,
+	})
+}
+
+func (dispatcher *SMSDispatcher) queryDBSMSTemplate(ctx context.Context, smsDispatcherMessageKind SMSDispatcherMessageKind, recipient, code, userID string) (string, bool) {
+	if dispatcher.db == nil {
+		return "", false
+	}
+	var procedureName *string
+	_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_sms_template(text,text,text,uuid)')::text").Scan(&procedureName)
+	if procedureName == nil || *procedureName == "" {
+		return "", false
+	}
+	var userIDParam any
+	if userID != "" {
+		userIDParam = userID
+	}
+	var templateJSON []byte
+	err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_sms_template($1, $2, $3, $4::uuid)", string(smsDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
+	if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
+		var hookResult struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(templateJSON, &hookResult) == nil && hookResult.Text != "" {
+			log.Debugf("sms template resolved via PostgreSQL dynamic hook struct for kind=%s", smsDispatcherMessageKind)
+			return hookResult.Text, true
+		}
+		var hookString string
+		if json.Unmarshal(templateJSON, &hookString) == nil && hookString != "" {
+			log.Debugf("sms template resolved via PostgreSQL dynamic hook string for kind=%s", smsDispatcherMessageKind)
+			return hookString, true
+		}
+	}
+	return "", false
+}
+
+func (dispatcher *SMSDispatcher) resolveSignInOTPTemplate(ctx context.Context, recipient, code, userID string, smsDispatcherConfig *SMSDispatcherConfig) string {
+	log.Tracef("resolving sms template for kind=%s recipient=%s", SMSDispatcherMessageKindSignInOTP, recipient)
 
 	// 1. PostgreSQL dynamic hook: public.auth_sms_template(kind, recipient, code, user_id)
-	if dispatcher.db != nil {
-		var procedureName *string
-		_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_sms_template(text,text,text,uuid)')::text").Scan(&procedureName)
-		if procedureName != nil && *procedureName != "" {
-			var userIDParam any
-			if userID != "" {
-				userIDParam = userID
-			}
-			var templateJSON []byte
-			err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_sms_template($1, $2, $3, $4::uuid)", string(smsDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
-			if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
-				var hookResult struct {
-					Text string `json:"text"`
-				}
-				if json.Unmarshal(templateJSON, &hookResult) == nil && hookResult.Text != "" {
-					log.Debugf("sms template resolved via PostgreSQL dynamic hook struct for kind=%s", smsDispatcherMessageKind)
-					return hookResult.Text
-				}
-				var hookString string
-				if json.Unmarshal(templateJSON, &hookString) == nil && hookString != "" {
-					log.Debugf("sms template resolved via PostgreSQL dynamic hook string for kind=%s", smsDispatcherMessageKind)
-					return hookString
-				}
-			}
-		}
+	if text, ok := dispatcher.queryDBSMSTemplate(ctx, SMSDispatcherMessageKindSignInOTP, recipient, code, userID); ok {
+		return text
 	}
 
 	// 2. Layr Console / Configured template
-	var smsDispatcherTemplateConfig SMSDispatcherTemplateConfig
-	switch smsDispatcherMessageKind {
-	case SMSDispatcherMessageKindPasswordReset:
-		smsDispatcherTemplateConfig = smsDispatcherConfig.Templates.PasswordReset
-	case SMSDispatcherMessageKindSignInOTP:
-		smsDispatcherTemplateConfig = smsDispatcherConfig.Templates.SignInOTP
-	case SMSDispatcherMessageKindPhoneVerification:
-		smsDispatcherTemplateConfig = smsDispatcherConfig.Templates.PhoneVerification
-	}
-
 	appName := core.GetConfig().Project.Name
 	if appName == "" {
 		appName = "Layr"
 	}
 
+	smsDispatcherTemplateConfig := smsDispatcherConfig.Templates.SignInOTP
 	if smsDispatcherTemplateConfig.Text != "" {
 		text := smsDispatcherTemplateConfig.Text
 		text = strings.ReplaceAll(text, "{{.Code}}", code)
 		text = strings.ReplaceAll(text, "{{.Recipient}}", recipient)
 		text = strings.ReplaceAll(text, "{{.To}}", recipient)
 		text = strings.ReplaceAll(text, "{{.AppName}}", appName)
-		log.Debugf("sms template resolved via configured runtime templates for kind=%s", smsDispatcherMessageKind)
+		log.Debugf("sms template resolved via configured runtime templates for kind=%s", SMSDispatcherMessageKindSignInOTP)
 		return text
 	}
 
 	// 3. Built-in defaults
-	log.Debugf("sms template resolved via built-in default templates for kind=%s", smsDispatcherMessageKind)
-	switch smsDispatcherMessageKind {
-	case SMSDispatcherMessageKindPasswordReset:
-		return fmt.Sprintf("Your %s password reset code is: %s", appName, code)
-	case SMSDispatcherMessageKindSignInOTP:
-		return fmt.Sprintf("Your %s sign in verification code is: %s", appName, code)
-	case SMSDispatcherMessageKindPhoneVerification:
-		return fmt.Sprintf("Your %s phone verification code is: %s", appName, code)
+	log.Debugf("sms template resolved via built-in default templates for kind=%s", SMSDispatcherMessageKindSignInOTP)
+	return fmt.Sprintf("Your %s sign in verification code is: %s", appName, code)
+}
+
+func (dispatcher *SMSDispatcher) resolvePhoneVerificationTemplate(ctx context.Context, recipient, code, userID string, smsDispatcherConfig *SMSDispatcherConfig) string {
+	log.Tracef("resolving sms template for kind=%s recipient=%s", SMSDispatcherMessageKindPhoneVerification, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_sms_template(kind, recipient, code, user_id)
+	if text, ok := dispatcher.queryDBSMSTemplate(ctx, SMSDispatcherMessageKindPhoneVerification, recipient, code, userID); ok {
+		return text
 	}
 
-	return code
+	// 2. Layr Console / Configured template
+	appName := core.GetConfig().Project.Name
+	if appName == "" {
+		appName = "Layr"
+	}
+
+	smsDispatcherTemplateConfig := smsDispatcherConfig.Templates.PhoneVerification
+	if smsDispatcherTemplateConfig.Text != "" {
+		text := smsDispatcherTemplateConfig.Text
+		text = strings.ReplaceAll(text, "{{.Code}}", code)
+		text = strings.ReplaceAll(text, "{{.Recipient}}", recipient)
+		text = strings.ReplaceAll(text, "{{.To}}", recipient)
+		text = strings.ReplaceAll(text, "{{.AppName}}", appName)
+		log.Debugf("sms template resolved via configured runtime templates for kind=%s", SMSDispatcherMessageKindPhoneVerification)
+		return text
+	}
+
+	// 3. Built-in defaults
+	log.Debugf("sms template resolved via built-in default templates for kind=%s", SMSDispatcherMessageKindPhoneVerification)
+	return fmt.Sprintf("Your %s phone verification code is: %s", appName, code)
+}
+
+func (dispatcher *SMSDispatcher) resolvePasswordResetTemplate(ctx context.Context, recipient, code, userID string, smsDispatcherConfig *SMSDispatcherConfig) string {
+	log.Tracef("resolving sms template for kind=%s recipient=%s", SMSDispatcherMessageKindPasswordReset, recipient)
+
+	// 1. PostgreSQL dynamic hook: public.auth_sms_template(kind, recipient, code, user_id)
+	if text, ok := dispatcher.queryDBSMSTemplate(ctx, SMSDispatcherMessageKindPasswordReset, recipient, code, userID); ok {
+		return text
+	}
+
+	// 2. Layr Console / Configured template
+	appName := core.GetConfig().Project.Name
+	if appName == "" {
+		appName = "Layr"
+	}
+
+	smsDispatcherTemplateConfig := smsDispatcherConfig.Templates.PasswordReset
+	if smsDispatcherTemplateConfig.Text != "" {
+		text := smsDispatcherTemplateConfig.Text
+		text = strings.ReplaceAll(text, "{{.Code}}", code)
+		text = strings.ReplaceAll(text, "{{.Recipient}}", recipient)
+		text = strings.ReplaceAll(text, "{{.To}}", recipient)
+		text = strings.ReplaceAll(text, "{{.AppName}}", appName)
+		log.Debugf("sms template resolved via configured runtime templates for kind=%s", SMSDispatcherMessageKindPasswordReset)
+		return text
+	}
+
+	// 3. Built-in defaults
+	log.Debugf("sms template resolved via built-in default templates for kind=%s", SMSDispatcherMessageKindPasswordReset)
+	return fmt.Sprintf("Your %s password reset code is: %s", appName, code)
 }
 
 // Send dispatches an outbound SMS message according to the configured driver.

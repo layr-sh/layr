@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"uuid"
 
 	"layr.sh/auth/otp"
+	"layr.sh/auth/threat"
 	"layr.sh/core"
 )
 
@@ -26,6 +26,11 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 	var otpSendRequest OTPSendRequest
 	if err := json.NewDecoder(request.Body).Decode(&otpSendRequest); err != nil || otpSendRequest.Recipient == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required", "LAYR_AUTH_001")
+		return
+	}
+
+	clientIP := core.ExtractRequestClientIP(request)
+	if !handler.checkCaptcha(responseWriter, request, clientIP, otpSendRequest.CaptchaToken, "/api/v1/auth/otp/send") {
 		return
 	}
 
@@ -139,6 +144,11 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		return
 	}
 
+	clientIP := core.ExtractRequestClientIP(request)
+	if !handler.checkCaptcha(responseWriter, request, clientIP, otpVerifyRequest.CaptchaToken, "/api/v1/auth/otp/verify") {
+		return
+	}
+
 	recipient := strings.TrimSpace(strings.ToLower(otpVerifyRequest.Recipient))
 	purpose := strings.TrimSpace(otpVerifyRequest.Purpose)
 	if purpose == "" {
@@ -188,6 +198,10 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 
 	if !otp.VerifyCode(otpVerifyRequest.Code, storedHash) {
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		if handler.kvStore != nil {
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, recipient, 0)
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code", "LAYR_AUTH_001")
 		return
 	}
@@ -325,18 +339,5 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		}))
 	}
 
-	if userRecord.MFAEnabled {
-		mfaTicket := "mfa_tk_" + uuid.NewV7().String()
-		if handler.kvStore != nil {
-			_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, userRecord.ID, mfaTicketTTL)
-		}
-		handler.writeJSON(responseWriter, SignInResponse{
-			MFARequired: true,
-			MFATicket:   mfaTicket,
-			Factor:      "totp",
-		})
-		return
-	}
-
-	handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
+	handler.completeSignInFlow(responseWriter, request, userRecord, "otp")
 }

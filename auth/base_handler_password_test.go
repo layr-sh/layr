@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -228,5 +229,80 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	baseHandler.handlePasswordResetConfirm(validConfirmResponseRecorder, validConfirmRequest)
 	if validConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool confirm, got: %d", validConfirmResponseRecorder.Code)
+	}
+}
+
+func TestAuthPasswordThreatValidationUnit(t *testing.T) {
+	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if cryptoErr != nil {
+		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	mockClient := &threatMockHTTPClient{}
+	baseHandler.SetHTTPClient(mockClient)
+	testKVStore := newInMemoryKVStore()
+	baseHandler.SetKVStore(testKVStore)
+
+	ctx := context.Background()
+
+	// 1. Bot protection enabled in "always" mode -> missing CAPTCHA token returns 400
+	botProtectionConfig := DefaultConfig()
+	botProtectionConfig.Threat.BotProtection.Enabled = true
+	botProtectionConfig.Threat.BotProtection.Mode = "always"
+	configManager.Set(botProtectionConfig)
+
+	// SignUp captcha check
+	signupNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", strings.NewReader(`{"email":"test@example.com","password":"Password123!"}`))
+	signupNoCaptchaResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignUp(signupNoCaptchaResponseRecorder, signupNoCaptchaRequest)
+	if signupNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on sign up without captcha, got: %d", signupNoCaptchaResponseRecorder.Code)
+	}
+
+	// SignIn captcha check
+	signinNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", strings.NewReader(`{"email":"test@example.com","password":"Password123!"}`))
+	signinNoCaptchaResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(signinNoCaptchaResponseRecorder, signinNoCaptchaRequest)
+	if signinNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on sign in without captcha, got: %d", signinNoCaptchaResponseRecorder.Code)
+	}
+
+	// PasswordResetRequest captcha check
+	resetNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"test@example.com"}`))
+	resetNoCaptchaResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasswordResetRequest(resetNoCaptchaResponseRecorder, resetNoCaptchaRequest)
+	if resetNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on password reset request without captcha, got: %d", resetNoCaptchaResponseRecorder.Code)
+	}
+
+	// 2. Password breach detection enabled -> breached password returns 400
+	passwordBreachConfig := DefaultConfig()
+	passwordBreachConfig.Password.BreachCheck.Enabled = true
+	passwordBreachConfig.Password.BreachCheck.FailOpen = false
+	configManager.Set(passwordBreachConfig)
+
+	// SHA-1 for "password" has prefix 5BAA6 and suffix 1E4C9B93F3F0682250B6CF8331B7EE68FD8
+	mockClient.doFunc = func(_ *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("1E4C9B93F3F0682250B6CF8331B7EE68FD8:3861493\r\n")),
+			Header:     make(http.Header),
+		}, nil
+	}
+
+	signupBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", strings.NewReader(`{"email":"test@example.com","password":"password"}`))
+	signupBreachedResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignUp(signupBreachedResponseRecorder, signupBreachedRequest)
+	if signupBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(signupBreachedResponseRecorder.Body.String(), "LAYR_AUTH_PASSWORD_BREACHED") {
+		t.Fatalf("expected 400 LAYR_AUTH_PASSWORD_BREACHED on breached password sign up, got: %d (%s)", signupBreachedResponseRecorder.Code, signupBreachedResponseRecorder.Body.String())
+	}
+
+	confirmBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"password"}`))
+	confirmBreachedResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePasswordResetConfirm(confirmBreachedResponseRecorder, confirmBreachedRequest)
+	if confirmBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(confirmBreachedResponseRecorder.Body.String(), "LAYR_AUTH_PASSWORD_BREACHED") {
+		t.Fatalf("expected 400 LAYR_AUTH_PASSWORD_BREACHED on breached password reset confirm, got: %d (%s)", confirmBreachedResponseRecorder.Code, confirmBreachedResponseRecorder.Body.String())
 	}
 }

@@ -213,3 +213,41 @@ type UserUnlockedEventData UserRecord
 func NewUserUnlockedEvent(resourceID string, userUnlockedEventData UserUnlockedEventData) core.Event {
 	return core.NewEvent("auth.user.unlocked", userUnlockedEventData).WithResourceID(resourceID)
 }
+
+// PasswordBreachBlockedEventData represents the payload for auth.threat.password_breach_blocked.
+type PasswordBreachBlockedEventData struct {
+	Email string `json:"email,omitempty"`
+	Count int64  `json:"count"`
+}
+
+// NewPasswordBreachBlockedEvent creates a typed event for blocked breached password attempts.
+func NewPasswordBreachBlockedEvent(resourceID string, passwordBreachBlockedEventData PasswordBreachBlockedEventData) core.Event {
+	return core.NewEvent("auth.threat.password_breach_blocked", passwordBreachBlockedEventData).WithResourceID(resourceID)
+}
+
+// BotChallengeFailedEventData represents the payload for auth.threat.bot_challenge_failed.
+type BotChallengeFailedEventData struct {
+	IPAddress string `json:"ip_address"`
+	Provider  string `json:"provider"`
+	Endpoint  string `json:"endpoint"`
+}
+
+// NewBotChallengeFailedEvent creates a typed event for failed bot/CAPTCHA verification challenges.
+func NewBotChallengeFailedEvent(resourceID string, botChallengeFailedEventData BotChallengeFailedEventData) core.Event {
+	return core.NewEvent("auth.threat.bot_challenge_failed", botChallengeFailedEventData).WithResourceID(resourceID)
+}
+
+// SuspiciousSignInEventData represents the payload for auth.user.suspicious_sign_in.
+type SuspiciousSignInEventData struct {
+	User      UserRecord `json:"user"`
+	IPAddress string     `json:"ip_address"`
+	UserAgent string     `json:"user_agent"`
+	RiskScore int        `json:"risk_score"`
+	RiskLevel string     `json:"risk_level"`
+	Reasons   []string   `json:"reasons"`
+}
+
+// NewSuspiciousSignInEvent creates a typed event for anomalous or new-device sign-in detections.
+func NewSuspiciousSignInEvent(resourceID string, suspiciousSignInEventData SuspiciousSignInEventData) core.Event {
+	return core.NewEvent("auth.user.suspicious_sign_in", suspiciousSignInEventData).WithResourceID(resourceID)
+}

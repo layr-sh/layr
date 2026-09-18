@@ -211,3 +211,40 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 500 on event OTP send nil pool, got: %d", eventOTPSendResponseRecorder.Code)
 	}
 }
+
+func TestAuthOTPThreatValidationUnit(t *testing.T) {
+	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	if cryptoErr != nil {
+		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
+	}
+
+	configManager := NewConfigManager(nil, cryptoKeyManager)
+	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	testKVStore := newInMemoryKVStore()
+	baseHandler.SetKVStore(testKVStore)
+
+	ctx := context.Background()
+
+	// 1. Bot protection enabled in "always" mode -> missing CAPTCHA token returns 400
+	botProtectionConfig := DefaultConfig()
+	botProtectionConfig.EmailOTP.Enabled = true
+	botProtectionConfig.Threat.BotProtection.Enabled = true
+	botProtectionConfig.Threat.BotProtection.Mode = "always"
+	configManager.Set(botProtectionConfig)
+
+	// OTP Send captcha check
+	otpSendNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
+	otpSendNoCaptchaResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPSend(otpSendNoCaptchaResponseRecorder, otpSendNoCaptchaRequest)
+	if otpSendNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on OTP send without captcha, got: %d", otpSendNoCaptchaResponseRecorder.Code)
+	}
+
+	// OTP Verify captcha check
+	otpVerifyNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com","code":"123456"}`))
+	otpVerifyNoCaptchaResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleOTPVerify(otpVerifyNoCaptchaResponseRecorder, otpVerifyNoCaptchaRequest)
+	if otpVerifyNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on OTP verify without captcha, got: %d", otpVerifyNoCaptchaResponseRecorder.Code)
+	}
+}
