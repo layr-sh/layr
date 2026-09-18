@@ -113,9 +113,9 @@ func TestThreatCaptchaErrorsUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Request creation failure (nil context)
+	var nilCtx context.Context
 	turnstileCaptchaVerifier, _ := NewCaptchaVerifier("turnstile", "secret", &mockHTTPClient{})
-	//nolint:staticcheck
-	if _, err := turnstileCaptchaVerifier.Verify(nil, "token", "1.2.3.4"); err == nil {
+	if _, err := turnstileCaptchaVerifier.Verify(nilCtx, "token", "1.2.3.4"); err == nil {
 		t.Fatal("expected error with nil context")
 	}
 
