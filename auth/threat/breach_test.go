@@ -110,8 +110,8 @@ func TestThreatBreachErrorsAndFailOpenUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Request creation failure (nil context)
-	//nolint:staticcheck
-	if _, _, err := CheckPwnedPassword(nil, nil, nil, "password", false); err == nil {
+	var nilCtx context.Context
+	if _, _, err := CheckPwnedPassword(nilCtx, nil, nil, "password", false); err == nil {
 		t.Fatal("expected error with nil context")
 	}
 
