@@ -14,7 +14,7 @@ import (
 	"layr.sh/data/rest"
 )
 
-func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
+func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	db, cleanup := setupTestDataDatabase(t)
 	if db == nil {
 		return
@@ -187,29 +187,6 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	baseHandler.HandleDeleteRecord(deleteBadResponseRecorder, deleteRequest)
 	assert.Equal(t, http.StatusNotFound, deleteBadResponseRecorder.Code)
 
-	// 8. Execute RPC function
-	// Create a test function in postgres
-	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.echo_test(msg text) RETURNS text LANGUAGE sql AS $$ SELECT msg $$;`)
-	rpcBodyReader := bytes.NewReader([]byte(`{"args":{"msg":"hello world"}}`))
-	rpcRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/echo_test", rpcBodyReader)
-	rpcRequest.Header.Set("X-Layr-Invalidate-Tables", "users, public.products")
-	rpcRequest.SetPathValue("schema_name", "public")
-	rpcRequest.SetPathValue("function_name", "echo_test")
-	rpcResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleExecuteFunction(rpcResponseRecorder, rpcRequest)
-	assert.Equal(t, http.StatusOK, rpcResponseRecorder.Code)
-	assert.Contains(t, rpcResponseRecorder.Body.String(), "hello world")
-
-	// 9. Zero-arg RPC function with invalidate_tables query parameter
-	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.zero_args_test() RETURNS text LANGUAGE sql AS $$ SELECT 'zero_ok' $$;`)
-	rpcZeroRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/zero_args_test?invalidate_tables=items", nil)
-	rpcZeroRequest.SetPathValue("schema_name", "public")
-	rpcZeroRequest.SetPathValue("function_name", "zero_args_test")
-	rpcZeroResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleExecuteFunction(rpcZeroResponseRecorder, rpcZeroRequest)
-	assert.Equal(t, http.StatusOK, rpcZeroResponseRecorder.Code)
-	assert.Contains(t, rpcZeroResponseRecorder.Body.String(), "zero_ok")
-
 	// 10. Bulk insert with return=representation (covers line 315)
 	bulkRepPayload := []map[string]any{
 		{"name": "Bulk Rep 1", "status": "active"},
@@ -340,13 +317,6 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	baseHandler.HandleDeleteRecord(canceledDeleteResponseRecorder, canceledDeleteRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledDeleteResponseRecorder.Code)
 
-	canceledRPCRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/data/public/rpc/zero_args_test", nil)
-	canceledRPCRequest.SetPathValue("schema_name", "public")
-	canceledRPCRequest.SetPathValue("function_name", "zero_args_test")
-	canceledRPCResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleExecuteFunction(canceledRPCResponseRecorder, canceledRPCRequest)
-	assert.Equal(t, http.StatusInternalServerError, canceledRPCResponseRecorder.Code)
-
 	// 17. Empty primary key fallback ("" -> "id") in table metadata
 	_, _ = db.Exec(ctx, `CREATE TABLE public.no_pk_items (id uuid primary key default uuidv7(), name text);`)
 	baseHandler.SetTableMetadata(rest.TableMetadata{
@@ -421,13 +391,6 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	badUpdateColumnResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleUpdateRecord(badUpdateColumnResponseRecorder, badUpdateColumnRequest)
 	assert.Equal(t, http.StatusBadRequest, badUpdateColumnResponseRecorder.Code)
-
-	badRPCFunctionRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/non_existent_func", nil)
-	badRPCFunctionRequest.SetPathValue("schema_name", "public")
-	badRPCFunctionRequest.SetPathValue("function_name", "non_existent_func")
-	badRPCFunctionResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleExecuteFunction(badRPCFunctionResponseRecorder, badRPCFunctionRequest)
-	assert.Equal(t, http.StatusNotFound, badRPCFunctionResponseRecorder.Code)
 
 	// 19. Builder errors: invalid column identifier in update & insert payloads
 	builderBadInsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader([]byte(`{"bad-identifier!":"dummy"}`)))
@@ -544,25 +507,7 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	baseHandler.HandleCreateRecords(invUpsertResponseRecorder, invUpsertRequest)
 	assert.Equal(t, http.StatusCreated, invUpsertResponseRecorder.Code)
 
-	// 24. RPC with mutation flag and table invalidation
-	_, err = db.Exec(ctx, `
-		CREATE OR REPLACE FUNCTION public.rpc_update_status(item_name text) RETURNS void LANGUAGE plpgsql AS $$
-		BEGIN
-			UPDATE public.items SET status = 'updated_by_rpc' WHERE name = item_name;
-		END;
-		$$;
-	`)
-	assert.NoError(t, err)
-	rpcMutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/rpc_update_status", bytes.NewReader([]byte(`{"args":{"item_name":"Item 1"}}`)))
-	rpcMutationRequest.SetPathValue("schema_name", "public")
-	rpcMutationRequest.SetPathValue("function_name", "rpc_update_status")
-	rpcMutationRequest.Header.Set("X-Layr-Mutation", "true")
-	rpcMutationRequest.Header.Set("X-Layr-Invalidate-Tables", "items")
-	rpcMutationResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleExecuteFunction(rpcMutationResponseRecorder, rpcMutationRequest)
-	assert.Equal(t, http.StatusOK, rpcMutationResponseRecorder.Code)
-
-	// 25. Deferred constraint commit failures in Create, Update, Delete, RPC
+	// 24. Deferred constraint commit failures in Create, Update, Delete
 	_, err = db.Exec(ctx, `
 		CREATE TABLE public.defer_items (
 			id uuid primary key default uuidv7(),
@@ -574,11 +519,6 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 			id uuid primary key default uuidv7(),
 			parent_id uuid references public.defer_parent(id) deferrable initially deferred
 		);
-		CREATE OR REPLACE FUNCTION public.rpc_fail_defer() RETURNS void LANGUAGE plpgsql AS $$
-		BEGIN
-			INSERT INTO public.defer_items (code) VALUES ('DUP_CODE'), ('DUP_CODE');
-		END;
-		$$;
 	`)
 	assert.NoError(t, err)
 
@@ -625,8 +565,133 @@ func TestDataBaseHandlerTableLifecycleIntegration(t *testing.T) {
 	deferDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleDeleteRecord(deferDeleteResponseRecorder, deferDeleteRequest)
 	assert.Equal(t, http.StatusConflict, deferDeleteResponseRecorder.Code)
+}
 
-	// 25d. ExecuteFunction deferred constraint failure fails at commit
+func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
+	db, cleanup := setupTestDataDatabase(t)
+	if db == nil {
+		return
+	}
+	defer cleanup()
+
+	ctx := context.Background()
+	serviceAccountManager := core.NewServiceAccountManager(db)
+	eventBus := core.NewEventBus(db, nil)
+	defer eventBus.Close()
+
+	service := NewService(db)
+	inMemoryKVStore := newInMemoryKVStore()
+	service.SetKVStore(inMemoryKVStore)
+	service.SetServiceAccountManager(serviceAccountManager)
+	service.SetEventBus(eventBus)
+	_ = service.Start(ctx)
+	defer func() { _ = service.Stop() }()
+
+	baseHandler := service.BaseHandler()
+
+	// 1. Scalar echo function via POST (flat JSON payload)
+	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.echo_test(msg text) RETURNS text LANGUAGE sql AS $$ SELECT msg $$;`)
+	rpcBodyReader := bytes.NewReader([]byte(`{"msg":"hello world"}`))
+	rpcRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/echo_test", rpcBodyReader)
+	rpcRequest.Header.Set("X-Layr-Invalidate-Tables", "users, public.products")
+	rpcRequest.SetPathValue("schema_name", "public")
+	rpcRequest.SetPathValue("function_name", "echo_test")
+	rpcResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcResponseRecorder, rpcRequest)
+	assert.Equal(t, http.StatusOK, rpcResponseRecorder.Code)
+	assert.Equal(t, "\"hello world\"\n", rpcResponseRecorder.Body.String())
+
+	// 2. Scalar echo function via GET (query parameter)
+	rpcGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/echo_test?msg=hello+get", nil)
+	rpcGetRequest.SetPathValue("schema_name", "public")
+	rpcGetRequest.SetPathValue("function_name", "echo_test")
+	rpcGetResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcGetResponseRecorder, rpcGetRequest)
+	assert.Equal(t, http.StatusOK, rpcGetResponseRecorder.Code)
+	assert.Equal(t, "\"hello get\"\n", rpcGetResponseRecorder.Body.String())
+
+	// 3. Table-valued RPC returning array of objects
+	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.test_table_rpc() RETURNS TABLE(id int, name text) LANGUAGE sql AS $$ SELECT 1, 'first' UNION ALL SELECT 2, 'second' $$;`)
+	rpcTableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/test_table_rpc", nil)
+	rpcTableRequest.SetPathValue("schema_name", "public")
+	rpcTableRequest.SetPathValue("function_name", "test_table_rpc")
+	rpcTableResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcTableResponseRecorder, rpcTableRequest)
+	assert.Equal(t, http.StatusOK, rpcTableResponseRecorder.Code)
+	assert.Contains(t, rpcTableResponseRecorder.Body.String(), `"id":1`)
+	assert.Contains(t, rpcTableResponseRecorder.Body.String(), `"name":"first"`)
+
+	// 4. Multi-row scalar function returning array of scalars
+	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.test_scalar_series() RETURNS SETOF int LANGUAGE sql AS $$ SELECT generate_series(1, 2) $$;`)
+	rpcSeriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/test_scalar_series", nil)
+	rpcSeriesRequest.SetPathValue("schema_name", "public")
+	rpcSeriesRequest.SetPathValue("function_name", "test_scalar_series")
+	rpcSeriesResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcSeriesResponseRecorder, rpcSeriesRequest)
+	assert.Equal(t, http.StatusOK, rpcSeriesResponseRecorder.Code)
+	assert.Equal(t, "[1,2]\n", rpcSeriesResponseRecorder.Body.String())
+
+	// 5. Zero-arg RPC function with invalidate_tables query parameter
+	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.zero_args_test() RETURNS text LANGUAGE sql AS $$ SELECT 'zero_ok' $$;`)
+	rpcZeroRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/zero_args_test?invalidate_tables=items", nil)
+	rpcZeroRequest.SetPathValue("schema_name", "public")
+	rpcZeroRequest.SetPathValue("function_name", "zero_args_test")
+	rpcZeroResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcZeroResponseRecorder, rpcZeroRequest)
+	assert.Equal(t, http.StatusOK, rpcZeroResponseRecorder.Code)
+	assert.Equal(t, "\"zero_ok\"\n", rpcZeroResponseRecorder.Body.String())
+
+	// 6. Void procedure returning 204 No Content
+	_, err := db.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS public.rpc_demo_items (id serial primary key, status text);
+		CREATE OR REPLACE FUNCTION public.rpc_update_status(item_status text) RETURNS void LANGUAGE plpgsql AS $$
+		BEGIN
+			UPDATE public.rpc_demo_items SET status = item_status;
+		END;
+		$$;
+	`)
+	assert.NoError(t, err)
+	rpcMutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/rpc_update_status", bytes.NewReader([]byte(`{"item_status":"updated"}`)))
+	rpcMutationRequest.SetPathValue("schema_name", "public")
+	rpcMutationRequest.SetPathValue("function_name", "rpc_update_status")
+	rpcMutationRequest.Header.Set("X-Layr-Invalidate-Tables", "rpc_demo_items")
+	rpcMutationResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(rpcMutationResponseRecorder, rpcMutationRequest)
+	assert.Equal(t, http.StatusNoContent, rpcMutationResponseRecorder.Code)
+
+	// 7. Context canceled -> 500 error
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	canceledRPCRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/data/public/rpc/zero_args_test", nil)
+	canceledRPCRequest.SetPathValue("schema_name", "public")
+	canceledRPCRequest.SetPathValue("function_name", "zero_args_test")
+	canceledRPCResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(canceledRPCResponseRecorder, canceledRPCRequest)
+	assert.Equal(t, http.StatusInternalServerError, canceledRPCResponseRecorder.Code)
+
+	// 8. Non-existent function -> 404 error
+	badRPCFunctionRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/non_existent_func", nil)
+	badRPCFunctionRequest.SetPathValue("schema_name", "public")
+	badRPCFunctionRequest.SetPathValue("function_name", "non_existent_func")
+	badRPCFunctionResponseRecorder := httptest.NewRecorder()
+	baseHandler.HandleExecuteFunction(badRPCFunctionResponseRecorder, badRPCFunctionRequest)
+	assert.Equal(t, http.StatusNotFound, badRPCFunctionResponseRecorder.Code)
+
+	// 9. Deferred constraint commit failure -> 409 Conflict
+	_, err = db.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS public.rpc_defer_items (
+			id uuid primary key default uuidv7(),
+			code text,
+			constraint rpc_defer_code_uniq unique (code) deferrable initially deferred
+		);
+		CREATE OR REPLACE FUNCTION public.rpc_fail_defer() RETURNS void LANGUAGE plpgsql AS $$
+		BEGIN
+			INSERT INTO public.rpc_defer_items (code) VALUES ('DEFER_COLLIDE');
+			INSERT INTO public.rpc_defer_items (code) VALUES ('DEFER_COLLIDE');
+		END;
+		$$;
+	`)
+	assert.NoError(t, err)
 	deferRPCRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/rpc_fail_defer", nil)
 	deferRPCRequest.SetPathValue("schema_name", "public")
 	deferRPCRequest.SetPathValue("function_name", "rpc_fail_defer")

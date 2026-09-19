@@ -67,13 +67,21 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("delete"),
 	)
+	core.GetRoute[ExecuteFunctionResponse](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.HandleExecuteFunction,
+		core.RouteTag("Data REST Gateway"),
+		core.RouteSummary("Execute database stored function or procedure (read-only)"),
+		core.RouteDescription("Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims using query parameters."),
+		core.RouteOperationID("data__rpc__query"),
+		core.RouteSDKGroupName("data", "rpc"),
+		core.RouteSDKMethodName("query"),
+	)
 	core.PostRoute[ExecuteFunctionResponse, ExecuteFunctionRequest](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.HandleExecuteFunction,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Execute database stored function or procedure"),
 		core.RouteDescription("Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims."),
-		core.RouteOperationID("data__rpc__execute"),
+		core.RouteOperationID("data__rpc__mutation"),
 		core.RouteSDKGroupName("data", "rpc"),
-		core.RouteSDKMethodName("execute"),
+		core.RouteSDKMethodName("mutation"),
 	)
 
 	// 2. Developer Ephemeral KV Endpoints

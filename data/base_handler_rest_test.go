@@ -15,7 +15,7 @@ import (
 	"layr.sh/data/rest"
 )
 
-func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
+func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	configManager := NewConfigManager(nil)
 	baseHandler := NewBaseHandler(nil, configManager)
 
@@ -133,13 +133,6 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
-	t.Run("ExecuteFunctionMissingNames", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/", nil)
-		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
-		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-	})
-
 	t.Run("BuildSelectColumns", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users?select=id,name,email", nil)
 		selectedColumns := baseHandler.buildSelectColumns(request, rest.TableMetadata{})
@@ -174,10 +167,6 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 
 		responseRecorder = httptest.NewRecorder()
 		baseHandler.HandleDeleteRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/users/1", nil))
-		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
-
-		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/test", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
@@ -321,40 +310,6 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 		baseHandler.SetKVStore(inMemoryKVStore)
 	})
 
-	t.Run("ExecuteFunctionValidation", func(t *testing.T) {
-		// Invalid identifier
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/bad-fn;drop", nil)
-		request.SetPathValue("schema_name", "public")
-		request.SetPathValue("function_name", "bad-fn;drop")
-		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
-		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-
-		// Unexposed schema
-		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/private/rpc/my_func", nil)
-		request.SetPathValue("schema_name", "private")
-		request.SetPathValue("function_name", "my_func")
-		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
-		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
-
-		// Invalid JSON
-		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{invalid`)))
-		request.SetPathValue("schema_name", "public")
-		request.SetPathValue("function_name", "my_func")
-		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
-		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-
-		// Invalid argument name
-		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"args":{"bad;name":1}}`)))
-		request.SetPathValue("schema_name", "public")
-		request.SetPathValue("function_name", "my_func")
-		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
-		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-	})
-
 	t.Run("CreateRecordInvalidOnConflict", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users?on_conflict=bad-id", bytes.NewReader([]byte(`[{"name":"Alice"}]`)))
 		request.SetPathValue("schema_name", "public")
@@ -380,6 +335,115 @@ func TestDataBaseHandlerTableValidationUnit(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Contains(t, string(marshaled), `"json_col":{"key":"val1"}`)
 		assert.Contains(t, string(marshaled), `"jsonb_col":{"key":"val2"}`)
+	})
+}
+
+func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
+	configManager := NewConfigManager(nil)
+	baseHandler := NewBaseHandler(nil, configManager)
+
+	t.Run("MethodNotAllowed", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/rpc/test", nil)
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "test")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusMethodNotAllowed, responseRecorder.Code)
+	})
+
+	t.Run("DisabledREST", func(t *testing.T) {
+		config := configManager.Get()
+		config.REST.Enabled = false
+		configManager.SetMemoryConfig(config)
+		defer func() {
+			config.REST.Enabled = true
+			configManager.SetMemoryConfig(config)
+		}()
+
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/test", nil)
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "test")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
+	})
+
+	t.Run("MissingNames", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/", nil)
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	})
+
+	t.Run("InvalidIdentifier", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/bad-fn;drop", nil)
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "bad-fn;drop")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	})
+
+	t.Run("UnexposedSchema", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/private/rpc/my_func", nil)
+		request.SetPathValue("schema_name", "private")
+		request.SetPathValue("function_name", "my_func")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
+	})
+
+	t.Run("InvalidJSON", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{invalid`)))
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "my_func")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	})
+
+	t.Run("InvalidArgumentNamePOST", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"bad-name":1}`)))
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "my_func")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	})
+
+	t.Run("InvalidArgumentNameGET", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/rpc/my_func?bad-name=1", nil)
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "my_func")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+	})
+
+	t.Run("DatabaseNil", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"a":1}`)))
+		request.SetPathValue("schema_name", "public")
+		request.SetPathValue("function_name", "my_func")
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+	})
+
+	t.Run("PathFallback", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/rpc/my_func", nil)
+		responseRecorder := httptest.NewRecorder()
+		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+	})
+
+	t.Run("ParseQueryArgValueTypes", func(t *testing.T) {
+		assert.Equal(t, int64(123), parseQueryArgValue("123"))
+		assert.Equal(t, 123.45, parseQueryArgValue("123.45"))
+		assert.Equal(t, true, parseQueryArgValue("true"))
+		assert.Equal(t, false, parseQueryArgValue("false"))
+		assert.Equal(t, map[string]any{"x": float64(1)}, parseQueryArgValue(`{"x":1}`))
+		assert.Equal(t, []any{float64(1), float64(2)}, parseQueryArgValue(`[1,2]`))
+		assert.Equal(t, "hello", parseQueryArgValue("hello"))
 	})
 }
 

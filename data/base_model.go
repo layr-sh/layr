@@ -43,14 +43,10 @@ type UpdateRowPayload struct {
 }
 
 // ExecuteFunctionRequest represents stored function invocation parameters.
-type ExecuteFunctionRequest struct {
-	Args map[string]any `json:"args,omitempty"`
-}
+type ExecuteFunctionRequest map[string]any
 
 // ExecuteFunctionResponse represents stored function invocation results.
-type ExecuteFunctionResponse struct {
-	Result any `json:"result"`
-}
+type ExecuteFunctionResponse any
 
 // KVGetResponse represents an ephemeral KV retrieval response.
 type KVGetResponse struct {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ const (
 	maxRequestBodyBytes int64  = 10 * 1024 * 1024
 	pgTypeOIDJSON       uint32 = 114
 	pgTypeOIDJSONB      uint32 = 3802
+	pgTypeOIDVoid       uint32 = 2278
 )
 
 // HandleListRecords handles GET /api/v1/data/{schema_name}/{table_name}.
@@ -522,11 +524,21 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-// HandleExecuteFunction handles POST /api/v1/data/{schema_name}/rpc/{function_name}.
+// HandleExecuteFunction handles GET and POST /api/v1/data/{schema_name}/rpc/{function_name}.
+// It invokes PostgreSQL stored functions/procedures with the caller's RLS session claims.
+// - GET: Read operation with arguments provided via URL query params.
+// - POST: Mutation operation with arguments provided via flat JSON body.
+// Note: End users execute under Postgres RLS. Service accounts can bypass RLS if granted data:query.read (for GET) or data:query.write (for POST).
+// Responses are unwrapped: raw scalar, array of objects, array of scalars, or 204 No Content for void/empty.
 func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet && request.Method != http.MethodPost {
+		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
 	config := handler.configManager.Get()
 	if !config.REST.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "RPC function call rejected: REST API is disabled in configuration")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "execute function rejected: REST API is disabled in configuration")
 		return
 	}
 
@@ -563,20 +575,48 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 		return
 	}
 
-	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
-	var executeFunctionRequest ExecuteFunctionRequest
-	if request.Body != nil {
-		if decodeErr := json.NewDecoder(request.Body).Decode(&executeFunctionRequest); decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
-			return
+	// Service accounts can bypass RLS if granted data:query.read (on GET) or data:query.write (on POST).
+	// Regular end-users do not have service account scopes and are always evaluated under PostgreSQL RLS.
+	rlsBypassScope := "data:query.read"
+	if request.Method == http.MethodPost {
+		rlsBypassScope = "data:query.write"
+	}
+
+	args := make(map[string]any)
+	if request.Method == http.MethodGet {
+		for k, values := range request.URL.Query() {
+			if k == "invalidate_tables" {
+				continue
+			}
+			if len(values) > 0 {
+				args[k] = parseQueryArgValue(values[0])
+			}
+		}
+	} else if request.Method == http.MethodPost {
+		if request.Body != nil {
+			request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
+			var rawPayload map[string]any
+			decodeErr := json.NewDecoder(request.Body).Decode(&rawPayload)
+			if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
+				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
+				return
+			}
+			if rawPayload != nil {
+				args = rawPayload
+			}
 		}
 	}
 
-	for k := range executeFunctionRequest.Args {
+	for k := range args {
 		if !common.IsValidIdentifier(k) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid argument")
 			return
 		}
+	}
+
+	if handler.db == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "execute function rejected: database pool unavailable")
+		return
 	}
 
 	ctx := request.Context()
@@ -587,37 +627,39 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	isMutation := request.Header.Get("X-Layr-Mutation") == "true" || request.URL.Query().Get("mutation") == "true"
-	requiredScope := "data:query.read"
-	if isMutation {
-		requiredScope = "data:query.write"
-	}
-
 	jwtClaims := core.GetAuthContext(request.Context()).JWT
-	if !handler.isRLSBypassed(request, requiredScope) {
+	if !handler.isRLSBypassed(request, rlsBypassScope) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
 	var query string
-	var args []any
-	if len(executeFunctionRequest.Args) > 0 {
-		argPlaceholders := make([]string, 0, len(executeFunctionRequest.Args))
-		paramIndex := 1
-		for k, v := range executeFunctionRequest.Args {
-			argPlaceholders = append(argPlaceholders, fmt.Sprintf(`"%s" := $%d`, k, paramIndex))
-			args = append(args, v)
-			paramIndex++
+	var queryArgs []any
+	if len(args) > 0 {
+		keys := make([]string, 0, len(args))
+		for k := range args {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		argPlaceholders := make([]string, 0, len(keys))
+		queryArgs = make([]any, 0, len(keys))
+		for i, k := range keys {
+			argPlaceholders = append(argPlaceholders, fmt.Sprintf(`"%s" := $%d`, k, i+1))
+			queryArgs = append(queryArgs, args[k])
 		}
 		query = fmt.Sprintf(`SELECT * FROM "%s"."%s"(%s)`, schema, functionName, strings.Join(argPlaceholders, ", "))
 	} else {
 		query = fmt.Sprintf(`SELECT * FROM "%s"."%s"()`, schema, functionName)
 	}
-	rows, err := tx.Query(ctx, query, args...)
+
+	rows, err := tx.Query(ctx, query, queryArgs...)
 	if err != nil {
 		handler.writeDBError(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
+
+	fieldDescriptions := rows.FieldDescriptions()
+	isVoid := len(fieldDescriptions) == 1 && fieldDescriptions[0].DataTypeOID == pgTypeOIDVoid
 
 	results := handler.scanRowsToJSONMaps(rows)
 
@@ -647,9 +689,52 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 		}
 	}
 
-	handler.writeJSON(responseWriter, http.StatusOK, ExecuteFunctionResponse{
-		Result: results,
-	})
+	if isVoid || len(results) == 0 {
+		responseWriter.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	responseWriter.Header().Set("Content-Type", "application/json")
+
+	// Scalar function check: single column whose name matches functionName
+	if len(fieldDescriptions) == 1 && fieldDescriptions[0].Name == functionName {
+		if len(results) == 1 {
+			responseWriter.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(responseWriter).Encode(results[0][functionName])
+			return
+		}
+		scalars := make([]any, len(results))
+		for i, r := range results {
+			scalars[i] = r[functionName]
+		}
+		responseWriter.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(responseWriter).Encode(scalars)
+		return
+	}
+
+	// Table-valued or multiple columns: return raw array of objects
+	responseWriter.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(responseWriter).Encode(results)
+}
+
+// parseQueryArgValue parses URL query parameter strings into typed primitives (int, float, bool, JSON) or fallback string.
+func parseQueryArgValue(rawText string) any {
+	if integerResult, err := strconv.ParseInt(rawText, 10, 64); err == nil {
+		return integerResult
+	}
+	if floatResult, err := strconv.ParseFloat(rawText, 64); err == nil {
+		return floatResult
+	}
+	if booleanResult, err := strconv.ParseBool(rawText); err == nil {
+		return booleanResult
+	}
+	if strings.HasPrefix(rawText, "{") || strings.HasPrefix(rawText, "[") {
+		var decodedJSON any
+		if err := json.Unmarshal([]byte(rawText), &decodedJSON); err == nil {
+			return decodedJSON
+		}
+	}
+	return rawText
 }
 
 func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWriter, request *http.Request) (string, string, string, rest.TableMetadata, core.JWTClaims, bool) {
