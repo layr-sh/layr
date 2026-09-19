@@ -238,7 +238,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 
 	// 3. GET with invalid key fails with 403
 	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
-	invalidKeyRequest.Header.Set("Authorization", "Bearer sec_live_invalid_key_value")
+	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
 	configManager.HandleGetConfig(invalidKeyResponseRecorder, invalidKeyRequest)
 	if invalidKeyResponseRecorder.Code != http.StatusForbidden {

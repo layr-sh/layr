@@ -562,7 +562,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	}
 
 	// 4. JSON body parsing with Content-Type application/json
-	jsonRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"sec_123","scope":"data:read"}`
+	jsonRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"invalid_client_secret","scope":"data:read"}`
 	jsonRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(jsonRequestBody))
 	jsonRequest.Header.Set("Content-Type", "application/json")
 	jsonResponseRecorder := httptest.NewRecorder()
@@ -572,7 +572,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	}
 
 	// 5. JSON body parsing without Content-Type header
-	untypedJSONRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"sec_123"}`
+	untypedJSONRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"invalid_client_secret"}`
 	untypedJSONRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(untypedJSONRequestBody))
 	untypedJSONResponseRecorder := httptest.NewRecorder()
 	managerBaseHandler.handleOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)

@@ -38,7 +38,7 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 
 	// 3. checkScope with invalid secret key
 	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
-	invalidKeyRequest.Header.Set("Authorization", "Bearer sec_live_invalid_key")
+	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key")
 	if controlPlaneHandler.checkScope(invalidKeyRequest, "auth:user.read") {
 		t.Fatal("expected checkScope to return false for invalid secret key")
 	}

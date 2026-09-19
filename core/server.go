@@ -400,14 +400,10 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 
 		if server.cryptoKeyManager != nil {
 			publishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
-			serviceAccountKey := request.Header.Get("X-Layr-Service-Account-Key")
-			authHeader := request.Header.Get("Authorization")
-
 			isValid := server.cryptoKeyManager.VerifyPublishableKey(publishableKey)
 			if !isValid {
-				hasValidServiceKey := strings.HasPrefix(serviceAccountKey, "sec_")
-				hasValidAuthHeader := strings.HasPrefix(authHeader, "Bearer ") || strings.HasPrefix(authHeader, "Basic ")
-				if hasValidServiceKey || hasValidAuthHeader {
+				authContext := GetAuthContext(request.Context())
+				if authContext.IsAuthenticated() {
 					isValid = true
 				}
 			}

@@ -109,6 +109,10 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 	defer db.Close()
 
+	if migrationErr := db.RunMigrations(ctx, SystemDatabaseMigrations); migrationErr != nil {
+		t.Fatalf("failed to run migrations: %v", migrationErr)
+	}
+
 	config := DefaultConfig()
 	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -125,8 +129,8 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	// Register a public endpoint that queries the live PostgreSQL database
 	GetRoute[string](server.BaseRouter(), "/api/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var postgresVersion string
-		if err := db.QueryRow(request.Context(), "SELECT version()").Scan(&postgresVersion); err != nil {
-			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", err.Error())
+		if scanErr := db.QueryRow(request.Context(), "SELECT version()").Scan(&postgresVersion); scanErr != nil {
+			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", scanErr.Error())
 			return
 		}
 		responseWriter.WriteHeader(http.StatusOK)
@@ -167,8 +171,14 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	// 4. With Service Account key fallback -> 200 OK
+	createdServiceAccount, createErr := server.ServiceAccountManager().Create(ctx, CreateServiceAccountInput{
+		Name: "test-server-integration-sa",
+	})
+	if createErr != nil {
+		t.Fatalf("failed to create test service account: %v", createErr)
+	}
 	serviceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
-	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "sec_live_integration_key")
+	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", createdServiceAccount.SecretKey)
 	serviceAccountResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(serviceAccountResponseRecorder, serviceAccountRequest)
 
