@@ -32,7 +32,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetKVStore(testKVStore)
 
@@ -281,7 +281,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	defer eventBus.Close()
 	testKVStore := newInMemoryKVStore()
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetKVStore(testKVStore)
 

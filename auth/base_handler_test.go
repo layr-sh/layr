@@ -20,7 +20,7 @@ func TestAuthHandlerInitializationUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	if baseHandler == nil {
 		t.Fatal("expected non-nil baseHandler")
 	}
@@ -65,12 +65,12 @@ func TestAuthHandlerInitializationUnit(t *testing.T) {
 		t.Fatal("expected non-nil TOTPManager")
 	}
 
-	// Test NewHandler fallback when MFA.Issuer is empty
+	// Test NewBaseHandler fallback when MFA.Issuer is empty
 	emptyIssuerConfigManager := NewConfigManager(nil, cryptoKeyManager)
 	emptyIssuerConfigManager.rwMutex.Lock()
 	emptyIssuerConfigManager.config.MFA.Issuer = ""
 	emptyIssuerConfigManager.rwMutex.Unlock()
-	emptyBaseHandler := NewHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
+	emptyBaseHandler := NewBaseHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
 	if emptyBaseHandler == nil {
 		t.Fatal("expected non-nil baseHandler with empty issuer")
 	}
@@ -121,7 +121,7 @@ func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
 func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 
 	responseRecorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
@@ -172,7 +172,7 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 func TestAuthHandlerResolveCallerUnit(t *testing.T) {
 	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 
 	testUserID := uuid.NewV7().String()
 
@@ -203,7 +203,7 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 	configManager.config.Cache.SessionTTLSeconds = -1
 	configManager.rwMutex.Unlock()
 
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVDriver := newInMemoryKVDriver()
 	testKVStore := core.NewKVStoreFromDriver(testKVDriver)
 	baseHandler.SetKVStore(testKVStore)

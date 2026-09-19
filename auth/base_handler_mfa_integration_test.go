@@ -40,7 +40,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		return nil
 	})
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetEventBus(eventBus)
 
 	// Create test user
@@ -355,7 +355,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	eventBus := core.NewEventBus(db, cryptoKeyManager)
 	defer eventBus.Close()
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetKVStore(testKVStore)
 

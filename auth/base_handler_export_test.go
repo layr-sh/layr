@@ -16,7 +16,7 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	ctx := context.Background()
 
 	// 1. Missing user_id path parameter -> 400

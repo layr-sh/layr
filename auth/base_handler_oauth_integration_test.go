@@ -22,7 +22,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	defer teardown()
 
 	configManager := NewConfigManager(db, cryptoKeyManager)
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -302,7 +302,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 
 	// 10. Broken pool coverage
 	brokenDB := createBrokenPool(t)
-	brokenBaseHandler := NewHandler(brokenDB, configManager, cryptoKeyManager)
+	brokenBaseHandler := NewBaseHandler(brokenDB, configManager, cryptoKeyManager)
 	brokenBaseHandler.SetKVStore(testKVStore)
 
 	_ = testKVStore.Set(context.Background(), "auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)

@@ -50,7 +50,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 
 	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
 	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
@@ -198,7 +198,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		return nil
 	})
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
@@ -560,7 +560,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 
 	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
 	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
