@@ -18,7 +18,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -219,7 +219,7 @@ func TestAuthOTPThreatValidationUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 

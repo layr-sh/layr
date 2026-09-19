@@ -36,7 +36,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	serviceAccountManager := core.NewServiceAccountManager(db)
 
 	baseURL := core.GetConfig().ServerBaseURL()
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetServiceAccountManager(serviceAccountManager)
@@ -735,7 +735,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	}
 
 	serviceAccountManager := core.NewServiceAccountManager(db)
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetServiceAccountManager(serviceAccountManager)
 
 	activeServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
@@ -1053,8 +1053,8 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Fatalf("expected 401 on blocked IP, got %d", ipResponseRecorder.Code)
 	}
 
-	// 9. Handler with nil signer -> 500
-	nilSignerBaseHandler := &Handler{
+	// 9. BaseHandler with nil signer -> 500
+	nilSignerBaseHandler := &BaseHandler{
 		serviceAccountManager: serviceAccountManager,
 		configManager:         configManager,
 		jwtSigner:             nil,
@@ -1073,8 +1073,8 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on nil signer, got %d", nilSignerResponseRecorder.Code)
 	}
 
-	// 10. Handler with uninitialized signer -> 500
-	uninitSignerBaseHandler := &Handler{
+	// 10. BaseHandler with uninitialized signer -> 500
+	uninitSignerBaseHandler := &BaseHandler{
 		serviceAccountManager: serviceAccountManager,
 		configManager:         configManager,
 		jwtSigner:             &core.JWTSigner{},
@@ -1142,7 +1142,7 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 
 	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
 	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 
 	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
@@ -1519,7 +1519,7 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", saveErr)
 	}
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetServiceAccountManager(serviceAccountManager)

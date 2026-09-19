@@ -80,14 +80,6 @@ func (handler *BaseHandler) verifyDummyPassword(plainPassword string) {
 	_, _ = handler.hasher.Verify(plainPassword, handler.dummyPasswordHash)
 }
 
-// Handler is an alias for BaseHandler.
-type Handler = BaseHandler
-
-// NewHandler creates a new Auth HTTP BaseHandler.
-func NewHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoKeyManager *core.CryptoKeyManager) *BaseHandler {
-	return NewBaseHandler(db, configManager, cryptoKeyManager)
-}
-
 // SetEmailDispatcher sets the email dispatcher for the handler.
 func (handler *BaseHandler) SetEmailDispatcher(emailDispatcher *EmailDispatcher) {
 	log.Debug("configuring custom email dispatcher on auth handler")

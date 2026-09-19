@@ -26,7 +26,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -312,7 +312,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 	configManager.Set(baseConfig)
 
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -532,7 +532,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	testCtx := context.Background()
 
 	// 1. Missing secret
-	baseHandler := &Handler{}
+	baseHandler := &BaseHandler{}
 	missingSecretRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
 	missingSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingSecretResponseRecorder := httptest.NewRecorder()
@@ -552,7 +552,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 
 	// 3. ServiceAccountManager Authenticate error (e.g. nil database pool)
 	serviceAccountManager := core.NewServiceAccountManager(nil)
-	managerBaseHandler := &Handler{serviceAccountManager: serviceAccountManager}
+	managerBaseHandler := &BaseHandler{serviceAccountManager: serviceAccountManager}
 	authErrorRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
 	authErrorRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	authErrorResponseRecorder := httptest.NewRecorder()
@@ -608,7 +608,7 @@ func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
 	config.OIDC.UI.ShowEmailOTP = true
 	configManager.Set(config)
 
-	baseHandler := &Handler{configManager: configManager}
+	baseHandler := &BaseHandler{configManager: configManager}
 
 	signUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.renderOIDCSignUpPage(signUpResponseRecorder, "st-1", &OIDCClientConfig{Name: "App"}, "sign up error")
@@ -639,7 +639,7 @@ func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
 	configManager.Set(config)
 
 	kvStore := newInMemoryKVStore()
-	baseHandler := &Handler{
+	baseHandler := &BaseHandler{
 		configManager: configManager,
 		kvStore:       kvStore,
 	}
@@ -668,7 +668,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	configManager.Set(config)
 
 	kvStore := newInMemoryKVStore()
-	baseHandler := &Handler{
+	baseHandler := &BaseHandler{
 		configManager: configManager,
 		kvStore:       kvStore,
 	}

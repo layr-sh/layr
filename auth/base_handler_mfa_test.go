@@ -17,7 +17,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()
@@ -133,7 +133,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	emptyIssuerConfig.MFA.Issuer = ""
 	emptyIssuerConfigManager := NewConfigManager(nil, cryptoKeyManager)
 	emptyIssuerConfigManager.Set(emptyIssuerConfig)
-	emptyIssuerBaseHandler := NewHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
+	emptyIssuerBaseHandler := NewBaseHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
 	if emptyIssuerBaseHandler.GetTOTPManager() == nil {
 		t.Fatal("expected non-nil TOTP manager")
 	}
@@ -180,7 +180,7 @@ func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()

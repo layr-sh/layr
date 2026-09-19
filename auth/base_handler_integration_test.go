@@ -55,7 +55,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	eventBus := core.NewEventBus(db, cryptoKeyManager)
 	serviceAccountManager := core.NewServiceAccountManager(db)
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 	baseHandler.SetServiceAccountManager(serviceAccountManager)
@@ -501,7 +501,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		return nil
 	})
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 
@@ -820,7 +820,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	defer func() { _ = databaseKVStore.Close() }()
 	eventBus := core.NewEventBus(db, cryptoKeyManager)
 
-	baseHandler := NewHandler(db, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 

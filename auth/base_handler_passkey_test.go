@@ -20,7 +20,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -180,7 +180,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 

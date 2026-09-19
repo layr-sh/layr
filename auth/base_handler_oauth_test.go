@@ -21,7 +21,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
@@ -86,7 +86,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 	brokenOAuthConfigManager := NewConfigManager(nil, cryptoKeyManager)
 	brokenOAuthConfigManager.Set(brokenOAuthConfig)
-	brokenOAuthBaseHandler := NewHandler(nil, brokenOAuthConfigManager, cryptoKeyManager)
+	brokenOAuthBaseHandler := NewBaseHandler(nil, brokenOAuthConfigManager, cryptoKeyManager)
 	brokenOAuthBaseHandler.SetKVStore(testKVStore)
 
 	brokenOAuthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/broken/authorize", nil)
@@ -377,7 +377,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 

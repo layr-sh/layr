@@ -17,7 +17,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
 
 	// 1. Unauthenticated / Invalid / Expired Tokens on Guarded User Endpoints
 	userEndpoints := []struct {

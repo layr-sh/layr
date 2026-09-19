@@ -21,9 +21,6 @@ func TestDataBaseHandlerInitializationUnit(t *testing.T) {
 	assert.NotNil(t, baseHandler.RealtimeHub())
 	assert.NotNil(t, baseHandler.GraphQLSchema())
 
-	aliasBaseHandler := NewHandler(nil, configManager)
-	assert.NotNil(t, aliasBaseHandler)
-
 	inMemoryKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(inMemoryKVStore)
 	assert.Equal(t, inMemoryKVStore, baseHandler.kvStore)

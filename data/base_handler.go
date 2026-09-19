@@ -32,9 +32,6 @@ type BaseHandler struct {
 	saltSecret            string
 }
 
-// Handler is an alias for BaseHandler, following layr.sh/auth conventions.
-type Handler = BaseHandler
-
 // NewBaseHandler initializes the BaseHandler with database pool and configuration manager.
 func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager) *BaseHandler {
 	log.Debug("initializing data base handler")
@@ -54,11 +51,6 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager) *BaseHa
 	}
 
 	return baseHandler
-}
-
-// NewHandler creates a new Data HTTP BaseHandler.
-func NewHandler(db *core.DatabasePool, configManager *ConfigManager) *BaseHandler {
-	return NewBaseHandler(db, configManager)
 }
 
 // SetKVStore attaches the key-value store for caching and ephemeral KV operations.
