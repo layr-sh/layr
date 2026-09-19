@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -359,15 +358,12 @@ func (kernel *Kernel) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Empty represents an empty JSON object.
-type Empty struct{}
-
 func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	serveMux := server.Mux()
 	controlPlaneRouter := server.ControlPlaneRouter()
 
 	// Register Core Routes on Control Plane Router
-	GetRoute[[]ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleListServiceAccountsRequest,
+	GetRoute[[]ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleListServiceAccounts,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List all service accounts"),
 		RouteDescription("Lists all machine service accounts with status, name, and permission scopes."),
@@ -375,7 +371,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[ServiceAccountWithSecretKey, CreateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleCreateServiceAccountRequest,
+	PostRoute[ServiceAccountWithSecretKey, CreateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleCreateServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Create a new machine service account"),
 		RouteDescription("Creates a machine service account, generates a 32-byte hex secret key, and hashes it."),
@@ -384,7 +380,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleGetServiceAccountRequest,
+	GetRoute[ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleGetServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get service account by ID"),
 		RouteDescription("Retrieves a service account by UUID."),
@@ -392,7 +388,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleUpdateServiceAccountRequest,
+	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleUpdateServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Update service account"),
 		RouteDescription("Updates service account scopes, name, or enabled status while protecting root accounts."),
@@ -400,7 +396,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("update"),
 	)
-	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleDeleteServiceAccountRequest,
+	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleDeleteServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Delete service account"),
 		RouteDescription("Deletes a machine service account, enforcing invariant that at least one root account remains."),
@@ -411,7 +407,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	)
 
 	// Event Hooks Routes
-	GetRoute[[]EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleListEventHooksRequest,
+	GetRoute[[]EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleListEventHooks,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List all event hooks"),
 		RouteDescription("Lists all active event hooks with driver, target URLs/functions, events, and retry policies."),
@@ -419,7 +415,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleCreateEventHookRequest,
+	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleCreateEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Create a new event hook"),
 		RouteDescription("Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching."),
@@ -428,7 +424,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleGetEventHookRequest,
+	GetRoute[EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleGetEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get event hook by ID"),
 		RouteDescription("Retrieves an event hook by UUID."),
@@ -436,7 +432,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleUpdateEventHookRequest,
+	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleUpdateEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Update event hook"),
 		RouteDescription("Updates event hook driver, targets, subscribed events, secret, or enabled status."),
@@ -444,7 +440,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("update"),
 	)
-	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleDeleteEventHookRequest,
+	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleDeleteEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Delete event hook"),
 		RouteDescription("Deletes an event hook."),
@@ -453,7 +449,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("delete"),
 	)
-	GetRoute[[]EventHookDelivery](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries", kernel.handleListEventHookDeliveriesRequest,
+	GetRoute[[]EventHookDelivery](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries", kernel.handleListEventHookDeliveries,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List event hook deliveries"),
 		RouteDescription("Queries recent dispatch attempts, response status, and latency for an event hook."),
@@ -461,7 +457,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks", "deliveries"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", kernel.handleRetryEventHookDeliveryRequest,
+	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", kernel.handleRetryEventHookDelivery,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Retry event hook delivery"),
 		RouteDescription("Manually redrives a past event hook delivery attempt."),
@@ -471,7 +467,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	)
 
 	// Events Routes
-	GetRoute[[]Event](controlPlaneRouter, "/api/v1/_/core/events", kernel.handleListEventsRequest,
+	GetRoute[[]Event](controlPlaneRouter, "/api/v1/_/core/events", kernel.handleListEvents,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List events"),
 		RouteDescription("Queries immutable system and domain events with multi-field filtering and pagination."),
@@ -479,7 +475,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "events"),
 		RouteSDKMethodName("list"),
 	)
-	GetRoute[Event](controlPlaneRouter, "/api/v1/_/core/events/{event_id}", kernel.handleGetEventRequest,
+	GetRoute[Event](controlPlaneRouter, "/api/v1/_/core/events/{event_id}", kernel.handleGetEvent,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get event by ID"),
 		RouteDescription("Retrieves an individual event entry by UUID."),
@@ -500,264 +496,6 @@ func (kernel *Kernel) writeJSONWithStatus(responseWriter http.ResponseWriter, st
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(statusCode)
 	_ = json.NewEncoder(responseWriter).Encode(data)
-}
-
-func (kernel *Kernel) handleListServiceAccountsRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	accounts, err := kernel.serviceAccountManager.List(request.Context())
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, accounts)
-}
-
-func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var createServiceAccountInput CreateServiceAccountInput
-	if err := json.NewDecoder(request.Body).Decode(&createServiceAccountInput); err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	serviceAccount, err := kernel.serviceAccountManager.Create(request.Context(), createServiceAccountInput)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), NewServiceAccountCreatedEvent(serviceAccount.ID, ServiceAccountCreatedEventData(serviceAccount.ServiceAccount)))
-	}
-	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, serviceAccount)
-}
-
-func (kernel *Kernel) handleGetServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	serviceAccountID := request.PathValue("service_account_id")
-	serviceAccount, err := kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, serviceAccount)
-}
-
-func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	serviceAccountID := request.PathValue("service_account_id")
-	var updateServiceAccountInput UpdateServiceAccountInput
-	if err := json.NewDecoder(request.Body).Decode(&updateServiceAccountInput); err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	serviceAccount, err := kernel.serviceAccountManager.Update(request.Context(), serviceAccountID, updateServiceAccountInput)
-	if err != nil {
-		if errors.Is(err, ErrServiceAccountNotFound) {
-			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-			return
-		}
-		WriteErrorResponse(responseWriter, request, http.StatusForbidden, err.Error())
-		return
-	}
-	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), NewServiceAccountUpdatedEvent(serviceAccount.ID, ServiceAccountUpdatedEventData(*serviceAccount)))
-	}
-	kernel.writeJSON(responseWriter, serviceAccount)
-}
-
-func (kernel *Kernel) handleDeleteServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	serviceAccountID := request.PathValue("service_account_id")
-	serviceAccount, err := kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-		return
-	}
-	err = kernel.serviceAccountManager.Delete(request.Context(), serviceAccountID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusForbidden, err.Error())
-		return
-	}
-	if kernel.eventBus != nil {
-		kernel.eventBus.Publish(request.Context(), NewServiceAccountDeletedEvent(serviceAccountID, ServiceAccountDeletedEventData(*serviceAccount)))
-	}
-	responseWriter.WriteHeader(http.StatusNoContent)
-}
-
-func (kernel *Kernel) handleListEventHooksRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	queryValues := request.URL.Query()
-	eventHookFilter := EventHookFilter{}
-	if driverQueryParam := queryValues.Get("driver"); driverQueryParam != "" {
-		eventHookFilter.Driver = &driverQueryParam
-	}
-	if isEnabledQueryParam := queryValues.Get("is_enabled"); isEnabledQueryParam != "" {
-		parsedIsEnabled := isEnabledQueryParam == "true" || isEnabledQueryParam == "1"
-		eventHookFilter.IsEnabled = &parsedIsEnabled
-	}
-
-	eventHooks, err := kernel.eventHookManager.List(request.Context(), eventHookFilter)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, eventHooks)
-}
-
-func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var createEventHookInput CreateEventHookInput
-	if err := json.NewDecoder(request.Body).Decode(&createEventHookInput); err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	eventHook, err := kernel.eventHookManager.Create(request.Context(), createEventHookInput)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	if kernel.eventBus != nil {
-		hookResourceID := eventHook.ID.String()
-		kernel.eventBus.Publish(request.Context(), NewEventHookCreatedEvent(hookResourceID, EventHookCreatedEventData(*eventHook)))
-	}
-	kernel.writeJSONWithStatus(responseWriter, http.StatusCreated, eventHook)
-}
-
-func (kernel *Kernel) handleGetEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, eventHook)
-}
-
-func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	var updateEventHookInput UpdateEventHookInput
-	if decodeErr := json.NewDecoder(request.Body).Decode(&updateEventHookInput); decodeErr != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, decodeErr.Error())
-		return
-	}
-	eventHook, err := kernel.eventHookManager.Update(request.Context(), hookID, updateEventHookInput)
-	if err != nil {
-		if errors.Is(err, ErrEventHookNotFound) {
-			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-			return
-		}
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	if kernel.eventBus != nil {
-		hookResourceID := eventHook.ID.String()
-		kernel.eventBus.Publish(request.Context(), NewEventHookUpdatedEvent(hookResourceID, EventHookUpdatedEventData(*eventHook)))
-	}
-	kernel.writeJSON(responseWriter, eventHook)
-}
-
-func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-		return
-	}
-	_ = kernel.eventHookManager.Delete(request.Context(), hookID)
-	if kernel.eventBus != nil {
-		hookResourceID := hookID.String()
-		kernel.eventBus.Publish(request.Context(), NewEventHookDeletedEvent(hookResourceID, EventHookDeletedEventData(*eventHook)))
-	}
-	responseWriter.WriteHeader(http.StatusNoContent)
-}
-
-func (kernel *Kernel) handleListEventHookDeliveriesRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	deliveries, err := kernel.eventHookManager.ListDeliveries(request.Context(), hookID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, deliveries)
-}
-
-func (kernel *Kernel) handleRetryEventHookDeliveryRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	deliveryID, err := uuid.Parse(request.PathValue("delivery_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	eventHookDelivery, err := kernel.eventHookManager.RetryDelivery(request.Context(), deliveryID)
-	if err != nil {
-		if errors.Is(err, ErrEventHookNotFound) || errors.Is(err, ErrEventHookDeliveryNotFound) {
-			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-			return
-		}
-		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, eventHookDelivery)
-}
-
-func (kernel *Kernel) handleListEventsRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	queryValues := request.URL.Query()
-	eventFilter := EventFilter{}
-	if typeQueryParam := queryValues.Get("type"); typeQueryParam != "" {
-		eventFilter.Type = &typeQueryParam
-	}
-	if actorTypeQueryParam := queryValues.Get("actor_type"); actorTypeQueryParam != "" {
-		eventFilter.ActorType = &actorTypeQueryParam
-	}
-	if actorIDQueryParam := queryValues.Get("actor_id"); actorIDQueryParam != "" {
-		if parsedActorID, parseErr := uuid.Parse(actorIDQueryParam); parseErr == nil {
-			eventFilter.ActorID = &parsedActorID
-		}
-	}
-	if resourceTypeQueryParam := queryValues.Get("resource_type"); resourceTypeQueryParam != "" {
-		eventFilter.ResourceType = &resourceTypeQueryParam
-	}
-	if resourceIDQueryParam := queryValues.Get("resource_id"); resourceIDQueryParam != "" {
-		eventFilter.ResourceID = &resourceIDQueryParam
-	}
-	if limitQueryParam := queryValues.Get("limit"); limitQueryParam != "" {
-		if parsedLimit, parseErr := strconv.Atoi(limitQueryParam); parseErr == nil {
-			eventFilter.Limit = parsedLimit
-		}
-	}
-	if offsetQueryParam := queryValues.Get("offset"); offsetQueryParam != "" {
-		if parsedOffset, parseErr := strconv.Atoi(offsetQueryParam); parseErr == nil {
-			eventFilter.Offset = parsedOffset
-		}
-	}
-
-	events, err := kernel.eventManager.List(request.Context(), eventFilter)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, events)
-}
-
-func (kernel *Kernel) handleGetEventRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	eventID, err := uuid.Parse(request.PathValue("event_id"))
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
-		return
-	}
-	event, err := kernel.eventManager.Get(request.Context(), eventID)
-	if err != nil {
-		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
-		return
-	}
-	kernel.writeJSON(responseWriter, event)
 }
 
 var defaultPasswordHasher = password.NewHasher()

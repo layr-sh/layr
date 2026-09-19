@@ -84,19 +84,6 @@ func (event Event) WithMetadata(metadata map[string]interface{}) Event {
 	return event
 }
 
-// EventFilter provides multi-field filtering and pagination options for querying events.
-type EventFilter struct {
-	Type         *string    `json:"type,omitempty"`
-	ActorType    *string    `json:"actor_type,omitempty"`
-	ActorID      *uuid.UUID `json:"actor_id,omitempty"`
-	ResourceType *string    `json:"resource_type,omitempty"`
-	ResourceID   *string    `json:"resource_id,omitempty"`
-	StartDate    *time.Time `json:"start_date,omitempty"`
-	EndDate      *time.Time `json:"end_date,omitempty"`
-	Limit        int        `json:"limit,omitempty"`
-	Offset       int        `json:"offset,omitempty"`
-}
-
 // EventHandler handles in-process event subscriptions.
 type EventHandler func(ctx context.Context, event Event) error
 

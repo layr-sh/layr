@@ -82,12 +82,12 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("metrics body missing expected prometheus metrics: %s", metricsBody)
 	}
 
-	// Test /api/v1/topology without publishable key -> 200 (System Discovery is public & unauthenticated)
-	noKeyTopologyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
-	noKeyTopologyResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(noKeyTopologyResponseRecorder, noKeyTopologyRequest)
-	if noKeyTopologyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected topology 200 without key, got %d", noKeyTopologyResponseRecorder.Code)
+	// Test /api/v1/manifest without publishable key -> 200 (System Discovery is public & unauthenticated)
+	noKeyManifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
+	noKeyManifestResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(noKeyManifestResponseRecorder, noKeyManifestRequest)
+	if noKeyManifestResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected manifest 200 without key, got %d", noKeyManifestResponseRecorder.Code)
 	}
 
 	// Register a base client test endpoint on router
@@ -161,11 +161,11 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 
 	// Test PublishableKeyMiddleware with nil CryptoKeyManager -> passes through
 	nilCryptoKeyManagerHttpServer := NewServer(nil, nil)
-	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
+	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
 	nilCryptoKeyManagerClientResponseRecorder := httptest.NewRecorder()
 	nilCryptoKeyManagerHttpServer.server.Handler.ServeHTTP(nilCryptoKeyManagerClientResponseRecorder, nilCryptoKeyManagerClientRequest)
 	if nilCryptoKeyManagerClientResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected topology 200 with nil key manager, got %d", nilCryptoKeyManagerClientResponseRecorder.Code)
+		t.Fatalf("expected manifest 200 with nil key manager, got %d", nilCryptoKeyManagerClientResponseRecorder.Code)
 	}
 
 	// Test Public OpenAPI /api/v1/spec.json
