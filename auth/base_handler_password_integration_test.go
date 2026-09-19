@@ -127,13 +127,13 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 	_ = testKVStore.Delete(ctx, ipRateKey)
 
-	// 4. Request for Non-Existent Recipient -> 404
+	// 4. Request for Non-Existent Recipient -> 204 No Content (prevents user enumeration)
 	ghostResetPayload, _ := json.Marshal(PasswordResetRequest{Email: "nonexistent@example.com"})
 	ghostResetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(ghostResetPayload))
 	ghostResetResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasswordResetRequest(ghostResetResponseRecorder, ghostResetRequest)
-	if ghostResetResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on non-existent recipient reset request, got: %d", ghostResetResponseRecorder.Code)
+	if ghostResetResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content on non-existent recipient reset request, got: %d", ghostResetResponseRecorder.Code)
 	}
 
 	// 5. Confirm with Wrong Code increments attempts -> 400
@@ -250,7 +250,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 400 on non-existent OTP confirm, got: %d (%s)", ghostConfirmResponseRecorder.Code, ghostConfirmResponseRecorder.Body.String())
 	}
 
-	// 10. Confirm with Orphan OTP (user row was deleted) -> 404
+	// 10. Confirm with Orphan OTP (user row was deleted) -> 400 (prevents identity leakage)
 	orphanRecipient := "orphan.reset@example.com"
 	orphanCode := "333222"
 	orphanHash := otp.HashCode(orphanCode)
@@ -266,7 +266,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	orphanConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(orphanConfirmPayload))
 	orphanConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasswordResetConfirm(orphanConfirmResponseRecorder, orphanConfirmRequest)
-	if orphanConfirmResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on orphan reset confirm, got: %d (%s)", orphanConfirmResponseRecorder.Code, orphanConfirmResponseRecorder.Body.String())
+	if orphanConfirmResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on orphan reset confirm, got: %d (%s)", orphanConfirmResponseRecorder.Code, orphanConfirmResponseRecorder.Body.String())
 	}
 }

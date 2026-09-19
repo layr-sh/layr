@@ -245,7 +245,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 				UserAgent:  request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -264,7 +264,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 					UserAgent:  request.UserAgent(),
 				}))
 			}
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid passkey signature")
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 	}

@@ -45,31 +45,29 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	var existingUserID string
 	var emailVerifiedAt *time.Time
 	err := handler.db.QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
-	targetUserID := existingUserID
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use")
 			return
 		}
-		targetUserID = authUserID
-	} else {
-		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		if emailVerifiedAt != nil && authUserID == existingUserID {
+			log.Debugf("email %s is already verified for user %s", recipientEmail, authUserID)
+			responseWriter.Header().Set("Content-Type", "application/json")
+			responseWriter.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(responseWriter).Encode(map[string]any{
+				"ok":        true,
+				"status":    "already_verified",
+				"message":   "Email is already verified",
+				"recipient": recipientEmail,
+			})
 			return
 		}
-	}
-
-	if emailVerifiedAt != nil && (authUserID == "" || authUserID == existingUserID) {
-		log.Debugf("email %s is already verified for user %s", recipientEmail, targetUserID)
-		responseWriter.Header().Set("Content-Type", "application/json")
-		responseWriter.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(responseWriter).Encode(map[string]any{
-			"ok":        true,
-			"status":    "already_verified",
-			"message":   "Email is already verified",
-			"recipient": recipientEmail,
-		})
-		return
+	} else {
+		if err != nil || emailVerifiedAt != nil {
+			log.Debugf("unauthenticated email verification requested for non-existent or already-verified recipient %s", recipientEmail)
+			responseWriter.WriteHeader(http.StatusNoContent)
+			return
+		}
 	}
 
 	code, _ := otp.GenerateCode(nil)
@@ -303,24 +301,24 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 			return
 		}
 		targetUserID = authUserID
-	} else {
-		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		if phoneVerifiedAt != nil && authUserID == existingUserID {
+			log.Debugf("phone %s is already verified for user %s", recipientPhone, targetUserID)
+			responseWriter.Header().Set("Content-Type", "application/json")
+			responseWriter.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(responseWriter).Encode(map[string]any{
+				"ok":        true,
+				"status":    "already_verified",
+				"message":   "Phone number is already verified",
+				"recipient": recipientPhone,
+			})
 			return
 		}
-	}
-
-	if phoneVerifiedAt != nil && (authUserID == "" || authUserID == existingUserID) {
-		log.Debugf("phone %s is already verified for user %s", recipientPhone, targetUserID)
-		responseWriter.Header().Set("Content-Type", "application/json")
-		responseWriter.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(responseWriter).Encode(map[string]any{
-			"ok":        true,
-			"status":    "already_verified",
-			"message":   "Phone number is already verified",
-			"recipient": recipientPhone,
-		})
-		return
+	} else {
+		if err != nil || phoneVerifiedAt != nil {
+			log.Debugf("unauthenticated phone verification requested for non-existent or already-verified recipient %s", recipientPhone)
+			responseWriter.WriteHeader(http.StatusNoContent)
+			return
+		}
 	}
 
 	code, _ := otp.GenerateCode(nil)
