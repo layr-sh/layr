@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"strings"
 	"testing"
 
 	"github.com/golangci/plugin-module-register/register"
@@ -556,6 +557,20 @@ func TestNamingclarityDirectFunctionsUnit(t *testing.T) {
 	if name, ok := concreteTypeName(regexpType); !ok || name != "regexp.Regexp" {
 		t.Errorf("got (%q, %v), want (regexp.Regexp, true)", name, ok)
 	}
+
+	// checkTestFunctionName edge cases
+	checkTestFunctionName(nil, nil)
+	checkTestFunctionName(nil, &ast.FuncDecl{Name: nil})
+	checkTestFunctionName(nil, &ast.FuncDecl{Name: ast.NewIdent("TestSomething"), Type: nil})
+	checkTestFunctionName(nil, &ast.FuncDecl{Name: ast.NewIdent("NotATest")})
+
+	dummyPass := &analysis.Pass{Fset: token.NewFileSet()}
+	checkTestFunctionName(dummyPass, &ast.FuncDecl{Name: ast.NewIdent("TestSomething"), Type: &ast.FuncType{Func: token.Pos(1)}})
+
+	// allowedPrefixesForFolder edge case (all uppercase folder name)
+	if prefixes := allowedPrefixesForFolder("ABC"); len(prefixes) != 1 || prefixes[0] != "TestABC" {
+		t.Errorf("got %v, want [TestABC]", prefixes)
+	}
 }
 
 func TestNamingclarityASTHelpersUnit(t *testing.T) {
@@ -1009,5 +1024,211 @@ func RunChecks(ctx context.Context) {
 
 	if len(diagnosticReports) == 0 {
 		t.Fatal("expected diagnostic reports, got none")
+	}
+}
+
+func TestNamingclarityToPascalCaseUnit(t *testing.T) {
+	testCases := []struct {
+		input string
+		want  string
+	}{
+		{"core", "Core"},
+		{"sms_dispatcher", "SmsDispatcher"},
+		{"my-package", "MyPackage"},
+		{"dot.dir", "DotDir"},
+		{"path/to/pkg", "PathToPkg"},
+		{"", ""},
+		{"_", ""},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			got := toPascalCase(tc.input)
+			if got != tc.want {
+				t.Errorf("toPascalCase(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNamingclarityAllowedPrefixesForFolderUnit(t *testing.T) {
+	testCases := []struct {
+		folder string
+		want   []string
+	}{
+		{"core", []string{"TestCORE", "TestCore"}},
+		{"kv", []string{"TestKV", "TestKv"}},
+		{"Namingclarity", []string{"TestNAMINGCLARITY", "TestNamingclarity"}},
+		{"data", []string{"TestDATA", "TestData"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.folder, func(t *testing.T) {
+			got := allowedPrefixesForFolder(tc.folder)
+			if len(got) != len(tc.want) {
+				t.Fatalf("allowedPrefixesForFolder(%q) returned %v, want %v", tc.folder, got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("allowedPrefixesForFolder(%q)[%d] = %q, want %q", tc.folder, i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestNamingclarityTestNameChecksUnit(t *testing.T) {
+	tests := []struct {
+		name        string
+		filePath    string
+		sourceCode  string
+		wantReports []string
+	}{
+		{
+			name:     "valid unit test in core folder",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+func TestCoreConfigDefaultsUnit() {}
+func helperFunction() {}
+`,
+			wantReports: nil,
+		},
+		{
+			name:     "valid integration test in data folder",
+			filePath: "/workspace/data/kv_integration_test.go",
+			sourceCode: `package data
+func TestDataKVStoreIntegration() {}
+`,
+			wantReports: nil,
+		},
+		{
+			name:     "valid uppercase prefix in kv folder",
+			filePath: "/workspace/kv/client_test.go",
+			sourceCode: `package kv
+func TestKVClientConnectUnit() {}
+`,
+			wantReports: nil,
+		},
+		{
+			name:     "valid e2e test in auth folder",
+			filePath: "/workspace/auth/login_e2e_test.go",
+			sourceCode: `package auth
+func TestAuthLoginFlowE2E() {}
+`,
+			wantReports: nil,
+		},
+		{
+			name:     "invalid regex pattern",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+func TestCoreConfig() {}
+`,
+			wantReports: []string{"violates convention 'Test<Subject><Scenario><Unit|Integration|E2E>'"},
+		},
+		{
+			name:     "invalid folder prefix",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+func TestAuthConfigDefaultsUnit() {}
+`,
+			wantReports: []string{"test function name in folder 'core' must start with 'TestCORE' or 'TestCore'"},
+		},
+		{
+			name:     "wrong tier in unit test file",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+func TestCoreConfigDefaultsIntegration() {}
+`,
+			wantReports: []string{"test in unit test file must end with 'Unit'"},
+		},
+		{
+			name:     "wrong tier in integration test file",
+			filePath: "/workspace/core/config_integration_test.go",
+			sourceCode: `package core
+func TestCoreConfigDefaultsUnit() {}
+`,
+			wantReports: []string{"test in integration file must end with 'Integration'"},
+		},
+		{
+			name:     "wrong tier in e2e test file",
+			filePath: "/workspace/core/config_e2e_test.go",
+			sourceCode: `package core
+func TestCoreConfigDefaultsIntegration() {}
+`,
+			wantReports: []string{"test in e2e file must end with 'E2E'"},
+		},
+		{
+			name:     "ignored non-test file",
+			filePath: "/workspace/core/config.go",
+			sourceCode: `package core
+func TestSomething() {}
+`,
+			wantReports: nil,
+		},
+		{
+			name:     "ignored skipped directory",
+			filePath: "/workspace/.cache/foo_test.go",
+			sourceCode: `package cache
+func TestInvalid() {}
+`,
+			wantReports: nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fileSet := token.NewFileSet()
+			parsedFile, err := parser.ParseFile(fileSet, tc.filePath, tc.sourceCode, 0)
+			if err != nil {
+				t.Fatalf("parser.ParseFile failed: %v", err)
+			}
+
+			typeCheckerConfig := types.Config{
+				Importer: importer.Default(),
+			}
+			typeInformation := &types.Info{
+				Types: make(map[ast.Expr]types.TypeAndValue),
+				Defs:  make(map[*ast.Ident]types.Object),
+				Uses:  make(map[*ast.Ident]types.Object),
+			}
+			typePackage, err := typeCheckerConfig.Check("testpkg", fileSet, []*ast.File{parsedFile}, typeInformation)
+			if err != nil {
+				t.Fatalf("typecheck failed: %v", err)
+			}
+
+			var diagnosticReports []string
+			pass := &analysis.Pass{
+				Analyzer:  Analyzer,
+				Fset:      fileSet,
+				Files:     []*ast.File{parsedFile},
+				Pkg:       typePackage,
+				TypesInfo: typeInformation,
+				Report: func(diagnostic analysis.Diagnostic) {
+					diagnosticReports = append(diagnosticReports, diagnostic.Message)
+				},
+			}
+
+			_, err = run(pass)
+			if err != nil {
+				t.Fatalf("run failed: %v", err)
+			}
+
+			if len(tc.wantReports) == 0 {
+				if len(diagnosticReports) > 0 {
+					t.Fatalf("expected 0 reports, got %d: %v", len(diagnosticReports), diagnosticReports)
+				}
+				return
+			}
+
+			if len(diagnosticReports) != len(tc.wantReports) {
+				t.Fatalf("got %d reports %v, want %d %v", len(diagnosticReports), diagnosticReports, len(tc.wantReports), tc.wantReports)
+			}
+
+			for i, want := range tc.wantReports {
+				if !strings.Contains(diagnosticReports[i], want) {
+					t.Errorf("report[%d] = %q, want it to contain %q", i, diagnosticReports[i], want)
+				}
+			}
+		})
 	}
 }

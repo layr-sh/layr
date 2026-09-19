@@ -6,14 +6,10 @@ cd "${REPO_ROOT}"
 
 # Collect staged Go files
 STAGED_GO_FILES=()
-STAGED_TEST_FILES=()
 
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   STAGED_GO_FILES+=("$file")
-  if [[ "$file" =~ _test\.go$ ]]; then
-    STAGED_TEST_FILES+=("$file")
-  fi
 done < <(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
 
 # If no Go files are staged, allow commit immediately
@@ -28,16 +24,7 @@ if [ -x "${REPO_ROOT}/scripts/fmt" ]; then
   fi
 fi
 
-# 2. Test naming conventions check (Test<Subject><Scenario><Tier>)
-if [ ${#STAGED_TEST_FILES[@]} -gt 0 ]; then
-  if [ -x "${REPO_ROOT}/scripts/check-test-names" ]; then
-    if ! "${REPO_ROOT}/scripts/check-test-names" -q "${STAGED_TEST_FILES[@]}"; then
-      exit 1
-    fi
-  fi
-fi
-
-# 3. Lint check
+# 2. Lint check (includes namingclarity which enforces variable and test naming conventions)
 if [ -x "${REPO_ROOT}/scripts/lint" ]; then
   if ! "${REPO_ROOT}/scripts/lint" -q; then
     exit 1
