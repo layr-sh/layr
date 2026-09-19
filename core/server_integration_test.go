@@ -350,7 +350,7 @@ func TestCoreServerMiddlewareMetricsAndProbesIntegration(t *testing.T) {
 			case 1:
 				targetPath = "/readyz"
 			default:
-				targetPath = "/api/v1/topology"
+				targetPath = "/api/v1/manifest"
 			}
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, targetPath, nil)
 			responseResponseRecorder := httptest.NewRecorder()

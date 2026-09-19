@@ -50,49 +50,6 @@ func GetServiceAccount(ctx context.Context) *ServiceAccount {
 	return nil
 }
 
-// ServiceAccount represents a machine identity stored in core.service_accounts.
-type ServiceAccount struct {
-	ID            string     `json:"id"`
-	ConsoleUserID *string    `json:"console_user_id,omitempty"`
-	Name          string     `json:"name"`
-	Description   *string    `json:"description,omitempty"`
-	KeyPrefix     string     `json:"key_prefix"`
-	KeyHash       string     `json:"-"`
-	Scopes        []string   `json:"scopes"`
-	IsEnabled     bool       `json:"is_enabled"`
-	AllowedIPs    []string   `json:"allowed_ips,omitempty"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastUpdatedAt time.Time  `json:"last_updated_at"`
-}
-
-// CreateServiceAccountInput holds the input parameters for creating a new Service Account.
-type CreateServiceAccountInput struct {
-	ConsoleUserID *string    `json:"console_user_id,omitempty"`
-	Name          string     `json:"name"`
-	Description   *string    `json:"description,omitempty"`
-	Scopes        []string   `json:"scopes"`
-	AllowedIPs    []string   `json:"allowed_ips,omitempty"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-}
-
-// UpdateServiceAccountInput holds the update payload for a Service Account.
-type UpdateServiceAccountInput struct {
-	Name        *string    `json:"name,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	Scopes      []string   `json:"scopes,omitempty"`
-	IsEnabled   *bool      `json:"is_enabled,omitempty"`
-	AllowedIPs  []string   `json:"allowed_ips,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-}
-
-// ServiceAccountWithSecretKey returned when creating a new Service Account, containing the plaintext secret.
-type ServiceAccountWithSecretKey struct {
-	ServiceAccount
-	SecretKey string `json:"secret_key"`
-}
-
 // ServiceAccountManager handles Service Account database lifecycle and authentication.
 type ServiceAccountManager struct {
 	db *DatabasePool

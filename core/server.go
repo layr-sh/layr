@@ -2,11 +2,9 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -14,42 +12,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-fuego/fuego"
-	"gopkg.in/yaml.v3"
 )
-
-// HealthResponse represents the /healthz probe response model.
-type HealthResponse struct {
-	Status        string  `json:"status"`
-	UptimeSeconds float64 `json:"uptime_seconds"`
-	Timestamp     string  `json:"timestamp"`
-}
-
-// ReadyResponse represents the /readyz probe response model.
-type ReadyResponse struct {
-	Status          string   `json:"status"`
-	Database        string   `json:"database"`
-	EnabledServices []string `json:"enabled_services,omitempty"`
-}
-
-// TopologyProjectInfo represents project metadata in topology discovery.
-type TopologyProjectInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-// TopologyServerInfo represents host and port in topology discovery.
-type TopologyServerInfo struct {
-	ListenAddr string `json:"listen_addr"`
-	BaseURL    string `json:"base_url"`
-}
-
-// TopologyResponse represents the dynamic topology discovery model.
-type TopologyResponse struct {
-	Project         TopologyProjectInfo `json:"project"`
-	EnabledServices []string            `json:"enabled_services"`
-	Server          TopologyServerInfo  `json:"server"`
-	PublishableKey  string              `json:"publishable_key,omitempty"`
-}
 
 // Server coordinates the Layr HTTP gateway, probes, and API dispatch.
 type Server struct {
@@ -123,7 +86,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	}
 
 	// Register Core Routes on Public Router
-	GetRoute[HealthResponse](baseRouter, "/healthz", server.handleHealthzRequest,
+	GetRoute[HealthResponse](baseRouter, "/healthz", server.handleHealthz,
 		RouteTag("Probes"),
 		RouteSummary("Liveness probe"),
 		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
@@ -131,7 +94,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("healthz"),
 	)
-	GetRoute[ReadyResponse](baseRouter, "/readyz", server.handleReadyzRequest,
+	GetRoute[ReadyResponse](baseRouter, "/readyz", server.handleReadyz,
 		RouteTag("Probes"),
 		RouteSummary("Readiness probe"),
 		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
@@ -139,7 +102,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("readyz"),
 	)
-	GetRoute[string](baseRouter, "/metrics", server.handleMetricsRequest,
+	GetRoute[string](baseRouter, "/metrics", server.handleMetrics,
 		RouteTag("Observability"),
 		RouteSummary("Prometheus metrics exposition"),
 		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
@@ -147,13 +110,13 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("metrics"),
 	)
-	GetRoute[TopologyResponse](baseRouter, "/api/v1/topology", server.handleTopologyRequest,
+	GetRoute[ManifestResponse](baseRouter, "/api/v1/manifest", server.handleManifest,
 		RouteTag("Discovery"),
-		RouteSummary("Get dynamic cluster topology and enabled services"),
-		RouteDescription("Returns dynamic cluster topology, enabled service flags, project metadata, and publishable key for SDK initialization."),
-		RouteOperationID("core__topology"),
+		RouteSummary("Get dynamic cluster manifest and enabled services"),
+		RouteDescription("Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization."),
+		RouteOperationID("core__manifest"),
 		RouteSDKGroupName("core"),
-		RouteSDKMethodName("topology"),
+		RouteSDKMethodName("manifest"),
 	)
 
 	// Mount Public Probe Routes directly on root mux (No publishable key required)
@@ -172,12 +135,12 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	serveMux.Handle("/console/", baseRouter.Mux())
 
 	// Public OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/spec.json", server.handleBaseSpecJSONRequest)
-	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleBaseSpecYAMLRequest)
+	serveMux.HandleFunc("/api/v1/spec.json", server.handleBaseSpecJSON)
+	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleBaseSpecYAML)
 
 	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSONRequest)
-	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleControlPlaneSpecYAMLRequest)
+	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSON)
+	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleControlPlaneSpecYAML)
 
 	// Mount Control Plane API Router
 	serveMux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
@@ -420,66 +383,12 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 	})
 }
 
-// /healthz - Liveness probe
-func (server *Server) handleHealthzRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(HealthResponse{
-		Status:        "healthy",
-		UptimeSeconds: time.Since(server.uptime).Seconds(),
-		Timestamp:     time.Now().UTC().Format(time.RFC3339),
-	})
-}
-
-// /readyz - Readiness probe
-func (server *Server) handleReadyzRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
-	defer cancel()
-
-	databaseStatus := "ok"
-	statusCode := http.StatusOK
-	if server.db != nil {
-		if err := server.db.Ping(ctx); err != nil {
-			databaseStatus = fmt.Sprintf("error: %v", err)
-			statusCode = http.StatusServiceUnavailable
-		}
-	}
-
-	statusText := "ready"
-	if statusCode != http.StatusOK {
-		statusText = "unready"
-	}
-
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(statusCode)
-	_ = json.NewEncoder(responseWriter).Encode(ReadyResponse{
-		Status:          statusText,
-		Database:        databaseStatus,
-		EnabledServices: GetConfig().GetEnabledServices(),
-	})
-}
-
-// /metrics - Minimal Prometheus exposition
-func (server *Server) handleMetricsRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	var memStats runtime.MemStats
-	runtime.ReadMemStats(&memStats)
-
-	responseWriter.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	responseWriter.WriteHeader(http.StatusOK)
-	output := fmt.Sprintf("# HELP uptime_seconds Process uptime\n# TYPE uptime_seconds gauge\nuptime_seconds %f\n# HELP http_requests_total Total HTTP requests handled\n# TYPE http_requests_total counter\nhttp_requests_total %d\n# HELP memory_alloc_bytes Allocated heap bytes\n# TYPE memory_alloc_bytes gauge\nmemory_alloc_bytes %d\n",
-		time.Since(server.uptime).Seconds(),
-		server.requestCount.Load(),
-		memStats.Alloc,
-	)
-	_, _ = responseWriter.Write([]byte(output))
-}
-
 // PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /api/v1/* routes.
 func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
 		log.Tracef("evaluating publishable key middleware for path %s", path)
-		if path == "/api/v1/topology" ||
+		if path == "/api/v1/manifest" ||
 			strings.HasPrefix(path, "/api/v1/_/") ||
 			path == "/api/v1/_" ||
 			path == "/api/v1/spec.json" ||
@@ -511,59 +420,4 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 
 		handler.ServeHTTP(responseWriter, request)
 	})
-}
-
-// /api/v1/topology - Dynamic cluster & topology discovery
-func (server *Server) handleTopologyRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	publishableKey := ""
-	if server.cryptoKeyManager != nil {
-		publishableKey = server.cryptoKeyManager.DerivePublishableKey()
-	}
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	config := GetConfig()
-	_ = json.NewEncoder(responseWriter).Encode(TopologyResponse{
-		Project: TopologyProjectInfo{
-			Name:        config.Project.Name,
-			Description: config.Project.Description,
-		},
-		EnabledServices: config.GetEnabledServices(),
-		Server: TopologyServerInfo{
-			ListenAddr: config.Server.ListenAddr,
-			BaseURL:    config.Server.BaseURL,
-		},
-		PublishableKey: publishableKey,
-	})
-}
-
-// /api/v1/spec.json - Client OpenAPI 3.1 JSON
-func (server *Server) handleBaseSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.baseRouter.OutputOpenAPISpec()
-	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
-}
-
-// /api/v1/spec.yaml - Client OpenAPI 3.1 YAML
-func (server *Server) handleBaseSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/yaml")
-	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.baseRouter.OutputOpenAPISpec()
-	_ = yaml.NewEncoder(responseWriter).Encode(openAPISpec)
-}
-
-// /api/v1/_/spec.json - Protected Control Plane OpenAPI 3.1 JSON
-func (server *Server) handleControlPlaneSpecJSONRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()
-	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
-}
-
-// /api/v1/_/spec.yaml - Protected Control Plane OpenAPI 3.1 YAML
-func (server *Server) handleControlPlaneSpecYAMLRequest(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/yaml")
-	responseWriter.WriteHeader(http.StatusOK)
-	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()
-	_ = yaml.NewEncoder(responseWriter).Encode(openAPISpec)
 }

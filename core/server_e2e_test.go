@@ -50,13 +50,13 @@ func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
 		t.Fatalf("ready probe expected 200, got %d", readyResponseRecorder.Code)
 	}
 
-	// 3. Topology Discovery Flow
-	topologyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/topology", nil)
-	topologyResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(topologyResponseRecorder, topologyRequest)
+	// 3. Manifest Discovery Flow
+	manifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
+	manifestResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(manifestResponseRecorder, manifestRequest)
 
-	if topologyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("topology expected 200, got %d", topologyResponseRecorder.Code)
+	if manifestResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("manifest expected 200, got %d", manifestResponseRecorder.Code)
 	}
 
 	// 4. Metrics Probe Flow
