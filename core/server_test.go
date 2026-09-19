@@ -53,8 +53,8 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 
 	var healthResponse map[string]any
-	if err := json.Unmarshal(healthResponseRecorder.Body.Bytes(), &healthResponse); err != nil {
-		t.Fatalf("failed to decode health response: %v", err)
+	if unmarshalErr := json.Unmarshal(healthResponseRecorder.Body.Bytes(), &healthResponse); unmarshalErr != nil {
+		t.Fatalf("failed to decode health response: %v", unmarshalErr)
 	}
 	if healthResponse["status"] != "healthy" {
 		t.Fatalf("expected healthy status, got %v", healthResponse["status"])
@@ -114,49 +114,49 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with valid key, got %d", clientResponseRecorder.Code)
 	}
 
-	// Test base client endpoint with Service Account Key fallback -> 200
-	clientServiceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientServiceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "sec_test_key_123456789")
-	clientServiceAccountResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(clientServiceAccountResponseRecorder, clientServiceAccountRequest)
-	if clientServiceAccountResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected client endpoint 200 with service account key fallback, got %d", clientServiceAccountResponseRecorder.Code)
+	// Test base client endpoint with valid authenticated JWT in Authorization header -> 200
+	validJWTToken, err := server.JWTSigner().GenerateAccessToken(JWTClaims{
+		Subject: "01918a24-7777-7000-8000-000000000001",
+		Role:    "authenticated",
+	})
+	if err != nil {
+		t.Fatalf("failed to sign access token: %v", err)
 	}
-
-	// Test base client endpoint with Authorization header fallback -> 200
 	clientAuthHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer test_token")
+	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer "+validJWTToken)
 	clientAuthHeaderResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientAuthHeaderResponseRecorder, clientAuthHeaderRequest)
 	if clientAuthHeaderResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected client endpoint 200 with Authorization header fallback, got %d", clientAuthHeaderResponseRecorder.Code)
+		t.Fatalf("expected client endpoint 200 with valid JWT authorization, got %d", clientAuthHeaderResponseRecorder.Code)
 	}
 
-	// Test base client endpoint with Basic Authorization header fallback -> 200
-	clientBasicAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientBasicAuthRequest.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
-	clientBasicAuthResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(clientBasicAuthResponseRecorder, clientBasicAuthRequest)
-	if clientBasicAuthResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected client endpoint 200 with Basic Authorization header fallback, got %d", clientBasicAuthResponseRecorder.Code)
+	// Test base client endpoint with authenticated context (e.g. verified session or service account) -> 200
+	authenticatedCtx := WithAuthContext(context.Background(), AuthContext{
+		ServiceAccountID: "01918a24-7777-7000-8000-000000000002",
+	})
+	clientAuthContextRequest := httptest.NewRequestWithContext(authenticatedCtx, http.MethodGet, "/api/v1/client-test", nil)
+	clientAuthContextResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientAuthContextResponseRecorder, clientAuthContextRequest)
+	if clientAuthContextResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected client endpoint 200 with authenticated context, got %d", clientAuthContextResponseRecorder.Code)
 	}
 
-	// Test base client endpoint with dummy Authorization header -> 401 Unauthorized
-	clientDummyAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientDummyAuthRequest.Header.Set("Authorization", "dummy")
-	clientDummyAuthResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(clientDummyAuthResponseRecorder, clientDummyAuthRequest)
-	if clientDummyAuthResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected client endpoint 401 with dummy auth header, got %d", clientDummyAuthResponseRecorder.Code)
+	// Test base client endpoint with invalid Authorization header -> 401 Unauthorized
+	clientInvalidAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientInvalidAuthRequest.Header.Set("Authorization", "Bearer invalid_signature_token")
+	clientInvalidAuthResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientInvalidAuthResponseRecorder, clientInvalidAuthRequest)
+	if clientInvalidAuthResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected client endpoint 401 with invalid auth header, got %d", clientInvalidAuthResponseRecorder.Code)
 	}
 
-	// Test base client endpoint with dummy service account key -> 401 Unauthorized
-	clientDummyKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
-	clientDummyKeyRequest.Header.Set("X-Layr-Service-Account-Key", "dummy")
-	clientDummyKeyResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(clientDummyKeyResponseRecorder, clientDummyKeyRequest)
-	if clientDummyKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected client endpoint 401 with dummy service account key, got %d", clientDummyKeyResponseRecorder.Code)
+	// Test base client endpoint with unauthenticated service account key -> 401 Unauthorized
+	clientUnauthKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientUnauthKeyRequest.Header.Set("X-Layr-Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	clientUnauthKeyResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(clientUnauthKeyResponseRecorder, clientUnauthKeyRequest)
+	if clientUnauthKeyResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected client endpoint 401 with unauthenticated service account key, got %d", clientUnauthKeyResponseRecorder.Code)
 	}
 
 	// Test PublishableKeyMiddleware with nil CryptoKeyManager -> passes through

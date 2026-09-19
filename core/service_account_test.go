@@ -83,23 +83,23 @@ func TestCoreServiceAccountGenerateSecretKeyUnit(t *testing.T) {
 func TestCoreServiceAccountExtractRequestKeyUnit(t *testing.T) {
 	// ExtractRequestServiceAccountKey from X-Layr-Service-Account-Key header
 	keyHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	keyHeaderRequest.Header.Set("X-Layr-Service-Account-Key", "sec_key_12345")
-	if key := ExtractRequestServiceAccountKey(keyHeaderRequest); key != "sec_key_12345" {
-		t.Fatalf("expected sec_key_12345, got %s", key)
+	keyHeaderRequest.Header.Set("X-Layr-Service-Account-Key", "a1b2c3d4e5f6789012345678abcdef01")
+	if key := ExtractRequestServiceAccountKey(keyHeaderRequest); key != "a1b2c3d4e5f6789012345678abcdef01" {
+		t.Fatalf("expected a1b2c3d4e5f6789012345678abcdef01, got %s", key)
 	}
 
 	// ExtractRequestServiceAccountKey from X-Service-Account-Key header
 	shortKeyHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	shortKeyHeaderRequest.Header.Set("X-Service-Account-Key", "sec_key_short")
-	if key := ExtractRequestServiceAccountKey(shortKeyHeaderRequest); key != "sec_key_short" {
-		t.Fatalf("expected sec_key_short, got %s", key)
+	shortKeyHeaderRequest.Header.Set("X-Service-Account-Key", "fedcba9876543210")
+	if key := ExtractRequestServiceAccountKey(shortKeyHeaderRequest); key != "fedcba9876543210" {
+		t.Fatalf("expected fedcba9876543210, got %s", key)
 	}
 
 	// ExtractRequestServiceAccountKey from Authorization: Bearer
 	bearerHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	bearerHeaderRequest.Header.Set("Authorization", "Bearer sec_key_67890")
-	if key := ExtractRequestServiceAccountKey(bearerHeaderRequest); key != "sec_key_67890" {
-		t.Fatalf("expected sec_key_67890, got %s", key)
+	bearerHeaderRequest.Header.Set("Authorization", "Bearer 0123456789abcdef0123456789abcdef")
+	if key := ExtractRequestServiceAccountKey(bearerHeaderRequest); key != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("expected 0123456789abcdef0123456789abcdef, got %s", key)
 	}
 
 	// ExtractRequestServiceAccountKey with no headers
