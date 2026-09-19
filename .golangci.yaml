@@ -150,7 +150,7 @@ linters:
     custom:
       namingclarity:
         type: module
-        description: Enforces clear variable names based on concrete types
+        description: Enforces clear variable, argument, and test function naming conventions
 
 issues:
   max-issues-per-linter: 0

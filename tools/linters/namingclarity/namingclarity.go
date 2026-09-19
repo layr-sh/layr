@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -31,7 +33,7 @@ func (p *plugin) GetLoadMode() string {
 
 const (
 	analyzerName   = "namingclarity"
-	defaultMessage = "variable and argument naming must be clear, include concrete type, and avoid meaningless representation suffixes"
+	defaultMessage = "variable, argument, and test function naming must be clear and comply with repository conventions"
 )
 
 var Analyzer = &analysis.Analyzer{
@@ -40,10 +42,33 @@ var Analyzer = &analysis.Analyzer{
 	Run:  run,
 }
 
+var (
+	// testNamePatterns enforces Test<Subject><Scenario><Tier> where Tier is Unit, Integration, or E2E.
+	testNamePatterns = regexp.MustCompile(`^Test[A-Z][a-zA-Z0-9]+(Unit|Integration|E2E)$`)
+
+	// skippedDirectories are directory names ignored during repository traversal.
+	skippedDirectories = map[string]bool{
+		".cache":       true,
+		".git":         true,
+		".githooks":    true,
+		".vscode":      true,
+		".agents":      true,
+		".gemini":      true,
+		".local":       true,
+		"vendor":       true,
+		"node_modules": true,
+		"bin":          true,
+		"dist":         true,
+	}
+)
+
 func run(pass *analysis.Pass) (any, error) {
 	for _, file := range pass.Files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch n := node.(type) {
+			case *ast.FuncDecl:
+				checkTestFunctionName(pass, n)
+
 			case *ast.AssignStmt:
 				checkAssignment(pass, n)
 
@@ -73,6 +98,119 @@ func run(pass *analysis.Pass) (any, error) {
 	}
 
 	return nil, nil
+}
+
+func toPascalCase(input string) string {
+	parts := strings.FieldsFunc(input, func(character rune) bool {
+		return character == '_' || character == '-' || character == '.' || character == ' ' || character == '/'
+	})
+	var builder strings.Builder
+	for _, part := range parts {
+		builder.WriteString(strings.ToUpper(part[:1]))
+		builder.WriteString(part[1:])
+	}
+	return builder.String()
+}
+
+func allowedPrefixesForFolder(folderName string) []string {
+	folderPascal := toPascalCase(folderName)
+	standardPrefix := "Test" + folderPascal
+	uppercasePrefix := "Test" + strings.ToUpper(folderPascal)
+	if standardPrefix == uppercasePrefix {
+		return []string{standardPrefix}
+	}
+	return []string{uppercasePrefix, standardPrefix}
+}
+
+func checkTestFunctionName(pass *analysis.Pass, funcDecl *ast.FuncDecl) {
+	if funcDecl == nil || funcDecl.Name == nil || funcDecl.Type == nil {
+		return
+	}
+
+	functionName := funcDecl.Name.Name
+	if !strings.HasPrefix(functionName, "Test") {
+		return
+	}
+
+	tokenFile := pass.Fset.File(funcDecl.Pos())
+	if tokenFile == nil {
+		return
+	}
+
+	filePath := tokenFile.Name()
+	if !strings.HasSuffix(filePath, "_test.go") {
+		return
+	}
+
+	// Skip ignored directories
+	normalizedPath := filepath.ToSlash(filePath)
+	for _, part := range strings.Split(normalizedPath, "/") {
+		if skippedDirectories[part] {
+			return
+		}
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err == nil {
+		filePath = absPath
+	}
+
+	folderName := filepath.Base(filepath.Dir(filePath))
+	expectedPrefixes := allowedPrefixesForFolder(folderName)
+
+	if !testNamePatterns.MatchString(functionName) {
+		pass.Reportf(
+			funcDecl.Name.Pos(),
+			"violates convention 'Test<Subject><Scenario><Unit|Integration|E2E>'",
+		)
+		return
+	}
+
+	hasValidPrefix := false
+	for _, expectedPrefix := range expectedPrefixes {
+		if strings.HasPrefix(functionName, expectedPrefix) {
+			hasValidPrefix = true
+			break
+		}
+	}
+
+	if !hasValidPrefix {
+		prefixLabel := expectedPrefixes[0]
+		if len(expectedPrefixes) > 1 {
+			prefixLabel = strings.Join(expectedPrefixes, "' or '")
+		}
+		pass.Reportf(
+			funcDecl.Name.Pos(),
+			"test function name in folder '%s' must start with '%s'",
+			folderName,
+			prefixLabel,
+		)
+		return
+	}
+
+	switch {
+	case strings.HasSuffix(filePath, "_e2e_test.go"):
+		if !strings.HasSuffix(functionName, "E2E") {
+			pass.Reportf(
+				funcDecl.Name.Pos(),
+				"test in e2e file must end with 'E2E'",
+			)
+		}
+	case strings.HasSuffix(filePath, "_integration_test.go"):
+		if !strings.HasSuffix(functionName, "Integration") {
+			pass.Reportf(
+				funcDecl.Name.Pos(),
+				"test in integration file must end with 'Integration'",
+			)
+		}
+	default:
+		if !strings.HasSuffix(functionName, "Unit") {
+			pass.Reportf(
+				funcDecl.Name.Pos(),
+				"test in unit test file must end with 'Unit'",
+			)
+		}
+	}
 }
 
 func inspectIdentifier(pass *analysis.Pass, identifier *ast.Ident, concreteName string) bool {
