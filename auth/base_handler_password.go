@@ -233,6 +233,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
+		handler.verifyDummyPassword(signInRequest.Password)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 		}
@@ -374,7 +375,8 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 
 	userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		log.Debugf("password reset requested for unregistered recipient %s", recipient)
+		responseWriter.WriteHeader(http.StatusNoContent)
 		return
 	}
 	userID := userRecord.ID
@@ -510,7 +512,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		&rawProps, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired reset code")
 		return
 	}
 

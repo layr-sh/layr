@@ -376,7 +376,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if scanErr != nil {
-			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "User account not found")
+			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
 		}
 
@@ -684,6 +684,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if scanErr != nil || userRecord.PasswordHash == nil {
+		handler.verifyDummyPassword(userPassword)
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
 		return
 	}
@@ -1165,7 +1166,7 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil)
 	if err != nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "User not found")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid or expired refresh token")
 		return
 	}
 

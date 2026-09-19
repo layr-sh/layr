@@ -39,6 +39,7 @@ type BaseHandler struct {
 	serviceAccountManager *core.ServiceAccountManager
 	eventBus              *core.EventBus
 	httpClient            HTTPClient
+	dummyPasswordHash     string
 }
 
 // NewBaseHandler creates a new Auth HTTP BaseHandler.
@@ -57,18 +58,26 @@ func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoK
 		return &smsDispatcherConfig
 	}, cryptoKeyManager)
 
+	hasher := password.NewHasher()
+	dummyHash, _ := hasher.Hash("antigravity_timing_dummy_password")
+
 	return &BaseHandler{
-		db:               db,
-		configManager:    configManager,
-		cryptoKeyManager: cryptoKeyManager,
-		jwtSigner:        jwtSigner,
-		hasher:           password.NewHasher(),
-		passkeyManager:   passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
-		totpManager:      core.NewTOTPManager(config.MFA.Issuer),
-		emailDispatcher:  emailDispatcher,
-		smsDispatcher:    smsDispatcher,
-		httpClient:       &http.Client{Timeout: 5 * time.Second},
+		db:                db,
+		configManager:     configManager,
+		cryptoKeyManager:  cryptoKeyManager,
+		jwtSigner:         jwtSigner,
+		hasher:            hasher,
+		passkeyManager:    passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
+		totpManager:       core.NewTOTPManager(config.MFA.Issuer),
+		emailDispatcher:   emailDispatcher,
+		smsDispatcher:     smsDispatcher,
+		httpClient:        &http.Client{Timeout: 5 * time.Second},
+		dummyPasswordHash: dummyHash,
 	}
+}
+
+func (handler *BaseHandler) verifyDummyPassword(plainPassword string) {
+	_, _ = handler.hasher.Verify(plainPassword, handler.dummyPasswordHash)
 }
 
 // Handler is an alias for BaseHandler.

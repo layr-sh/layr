@@ -340,7 +340,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token revoked or invalid")
 		return
 	}
 

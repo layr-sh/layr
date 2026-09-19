@@ -645,8 +645,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	ghostRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	ghostRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCToken(ghostRefreshResponseRecorder, ghostRefreshRequest)
-	if ghostRefreshResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(ghostRefreshResponseRecorder.Body.String(), "User not found") {
-		t.Fatalf("expected 400 User not found on ghost user token refresh, got: %d (%s)", ghostRefreshResponseRecorder.Code, ghostRefreshResponseRecorder.Body.String())
+	if ghostRefreshResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(ghostRefreshResponseRecorder.Body.String(), "Invalid or expired refresh token") {
+		t.Fatalf("expected 400 Invalid or expired refresh token on ghost user token refresh, got: %d (%s)", ghostRefreshResponseRecorder.Code, ghostRefreshResponseRecorder.Body.String())
 	}
 	_, _ = db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", ghostRefreshHash)
 	_, _ = db.Exec(ctx, `
@@ -1286,8 +1286,8 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 	noUserRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCAuthorizeSubmit(noUserResponseRecorder, noUserRequest)
-	if !strings.Contains(noUserResponseRecorder.Body.String(), "User account not found") {
-		t.Fatalf("expected user account not found, got: %s", noUserResponseRecorder.Body.String())
+	if !strings.Contains(noUserResponseRecorder.Body.String(), "MFA session expired. Please sign in again.") {
+		t.Fatalf("expected MFA session expired, got: %s", noUserResponseRecorder.Body.String())
 	}
 
 	// 5. Passwordless OTP in OIDC

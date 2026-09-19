@@ -251,7 +251,7 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
 		return
 	}
 

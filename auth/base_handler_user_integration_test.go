@@ -181,25 +181,19 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("expected user phone_verified_at to be populated in database: %v", err)
 	}
 
-	// 7. Requesting verification when already verified returns 200 already_verified
+	// 7. Requesting verification when already verified: unauthenticated returns 204 No Content (prevents enumeration)
 	request = httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(requestBodyBytes))
 	responseRecorder = httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationRequest(responseRecorder, request)
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK when email already verified, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	if !strings.Contains(responseRecorder.Body.String(), "already_verified") {
-		t.Fatalf("expected status already_verified in response, got: %s", responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content when email already verified unauthenticated, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
 
 	phoneRequest = httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/phone/verification/request", bytes.NewReader(phoneBodyBytes))
 	responseRecorder = httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, phoneRequest)
-	if responseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK when phone already verified, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
-	}
-	if !strings.Contains(responseRecorder.Body.String(), "already_verified") {
-		t.Fatalf("expected status already_verified in response, got: %s", responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content when phone already verified unauthenticated, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
 
 	// 8. Authenticated Caller omitting explicit email/phone (uses Claims)
@@ -343,8 +337,8 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	nonExistentPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15550001111"}`))
 	responseRecorder = httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, nonExistentPhoneRequest)
-	if responseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on unauthenticated non-existent phone request, got: %d", responseRecorder.Code)
+	if responseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content on unauthenticated non-existent phone request, got: %d", responseRecorder.Code)
 	}
 
 	// 11. Non-existent OTP code verification -> 400
@@ -431,12 +425,12 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("expected attempts to increment to 2, got: %d", attemptsAfter)
 	}
 
-	// 15. Unauthenticated non-existent email verification request -> 404
+	// 15. Unauthenticated non-existent email verification request -> 204 No Content (prevents enumeration)
 	nonExistentEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"nonexistent.user@example.com"}`))
 	nonExistentEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationRequest(nonExistentEmailResponseRecorder, nonExistentEmailRequest)
-	if nonExistentEmailResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on unauthenticated non-existent email request, got: %d", nonExistentEmailResponseRecorder.Code)
+	if nonExistentEmailResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content on unauthenticated non-existent email request, got: %d", nonExistentEmailResponseRecorder.Code)
 	}
 
 	// 16. Wrong code for email verification increments attempts and returns 400

@@ -74,6 +74,8 @@ func TestAuthHandlerInitializationUnit(t *testing.T) {
 	if emptyBaseHandler == nil {
 		t.Fatal("expected non-nil baseHandler with empty issuer")
 	}
+
+	baseHandler.verifyDummyPassword("any-pass")
 }
 
 func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
