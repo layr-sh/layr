@@ -160,13 +160,13 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on invalid email PATCH user email, got: %d", invalidEmailResponseRecorder.Code)
 	}
 
-	// PATCH /api/v1/auth/user/email delivery not ready -> 422
+	// PATCH /api/v1/auth/user/email delivery not ready -> 500
 	deliveryNotReadyEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
 	deliveryNotReadyEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	deliveryNotReadyEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(deliveryNotReadyEmailResponseRecorder, deliveryNotReadyEmailRequest)
-	if deliveryNotReadyEmailResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on email delivery not ready, got: %d", deliveryNotReadyEmailResponseRecorder.Code)
+	if deliveryNotReadyEmailResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on email delivery not ready, got: %d", deliveryNotReadyEmailResponseRecorder.Code)
 	}
 
 	// PATCH /api/v1/auth/user/email delivery ready on nil pool -> 500
@@ -211,13 +211,13 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on invalid format PATCH user phone, got: %d", invalidPhoneResponseRecorder.Code)
 	}
 
-	// PATCH /api/v1/auth/user/phone delivery not ready -> 422
+	// PATCH /api/v1/auth/user/phone delivery not ready -> 500
 	deliveryNotReadyPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/api/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
 	deliveryNotReadyPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	deliveryNotReadyPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(deliveryNotReadyPhoneResponseRecorder, deliveryNotReadyPhoneRequest)
-	if deliveryNotReadyPhoneResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on phone delivery not ready, got: %d", deliveryNotReadyPhoneResponseRecorder.Code)
+	if deliveryNotReadyPhoneResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on phone delivery not ready, got: %d", deliveryNotReadyPhoneResponseRecorder.Code)
 	}
 
 	// PATCH /api/v1/auth/user/phone delivery ready on nil pool -> 500
@@ -248,8 +248,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	unconfiguredEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationRequest(unconfiguredEmailResponseRecorder, unconfiguredEmailRequest)
-	if unconfiguredEmailResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured email delivery, got: %d", unconfiguredEmailResponseRecorder.Code)
+	if unconfiguredEmailResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured email delivery, got: %d", unconfiguredEmailResponseRecorder.Code)
 	}
 
 	missingPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{}`))
@@ -273,8 +273,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	unconfiguredPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserPhoneVerificationRequest(unconfiguredPhoneResponseRecorder, unconfiguredPhoneRequest)
-	if unconfiguredPhoneResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured SMS delivery, got: %d", unconfiguredPhoneResponseRecorder.Code)
+	if unconfiguredPhoneResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured SMS delivery, got: %d", unconfiguredPhoneResponseRecorder.Code)
 	}
 
 	// Restore dispatchers for nil pool verification tests

@@ -132,7 +132,7 @@ func (handler *BaseHandler) handleJWKS(responseWriter http.ResponseWriter, reque
 func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize request rejected: OIDC identity provider is disabled in configuration")
 		return
 	}
 
@@ -160,18 +160,18 @@ func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWrit
 	nonce := request.URL.Query().Get("nonce")
 
 	if clientID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing client_id parameter", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_client", "Missing client_id parameter")
 		return
 	}
 
 	oidcClientConfig, ok := handler.configManager.GetOIDCClient(clientID)
 	if !ok {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Unknown client_id '%s'", clientID), "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_client", fmt.Sprintf("Unknown client_id '%s'", clientID))
 		return
 	}
 
 	if redirectURI == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing redirect_uri parameter", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Missing redirect_uri parameter")
 		return
 	}
 
@@ -183,7 +183,7 @@ func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWrit
 		}
 	}
 	if !validRedirect {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Unauthorized redirect_uri", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Unauthorized redirect_uri")
 		return
 	}
 
@@ -287,7 +287,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	// 302 Found redirect back to client redirect_uri
 	targetURL, parseErr := url.Parse(oidcAuthorizationStatePayload.RedirectURI)
 	if parseErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid redirect_uri", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Invalid redirect_uri")
 		return
 	}
 	queryValues := targetURL.Query()
@@ -304,31 +304,31 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize submit rejected: OIDC identity provider is disabled in configuration")
 		return
 	}
 
 	if err := request.ParseForm(); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid form data", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Invalid form data")
 		return
 	}
 
 	stateID := request.FormValue("state")
 	if stateID == "" || handler.kvStore == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Authorization session expired or invalid")
 		return
 	}
 
 	ctx := request.Context()
 	stateJSON, err := handler.kvStore.Get(ctx, "auth:oidc:state:"+stateID)
 	if err != nil || stateJSON == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization session expired or invalid", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Authorization session expired or invalid")
 		return
 	}
 
 	var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 	if unmarshalErr := json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload); unmarshalErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to read authorization state", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Authorization session expired or invalid")
 		return
 	}
 
@@ -808,7 +808,7 @@ func (handler *BaseHandler) handleOIDCToken(responseWriter http.ResponseWriter, 
 
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC token request rejected: OIDC identity provider is disabled in configuration")
 		return
 	}
 
@@ -822,7 +822,7 @@ func (handler *BaseHandler) handleOIDCToken(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Unsupported grant_type '%s'", oauthTokenRequest.GrantType), "unsupported_grant_type")
+	core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "unsupported_grant_type", fmt.Sprintf("Unsupported grant_type '%s'", oauthTokenRequest.GrantType))
 }
 
 func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.ResponseWriter, request *http.Request, oauthTokenRequest OAuthTokenRequest) {
@@ -830,30 +830,30 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	clientSecret := oauthTokenRequest.ClientSecret
 
 	if clientSecret == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 
 	if handler.serviceAccountManager == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
 	serviceAccount, authErr := handler.serviceAccountManager.Authenticate(request.Context(), clientSecret, clientIP)
 	if authErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 
 	if clientID != "" && serviceAccount.ID != clientID && serviceAccount.KeyPrefix != clientID {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 
 	targetAudience := strings.TrimSpace(oauthTokenRequest.Audience)
 	if targetAudience == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "audience parameter is required", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "audience parameter is required")
 		return
 	}
 
@@ -877,7 +877,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	}
 
 	if targetAudience != layrAudience && matchingResourceServerConfig == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested audience is not a registered resource server", "invalid_target")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_target", "The requested audience is not a registered resource server", fmt.Sprintf("OIDC token request rejected: audience %q is not a registered resource server", targetAudience))
 		return
 	}
 
@@ -896,7 +896,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 			}
 			for _, requestedScope := range deduplicatedRequestedScopes {
 				if !core.HasScope(serviceAccount.Scopes, requestedScope) {
-					core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope exceeds permissions granted to the client", "invalid_scope")
+					core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_scope", "The requested scope exceeds permissions granted to the client", fmt.Sprintf("OIDC token request rejected: scope %q exceeds service account scopes %v", requestedScope, serviceAccount.Scopes))
 					return
 				}
 			}
@@ -917,7 +917,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 			}
 			for _, requestedScope := range deduplicatedRequestedScopes {
 				if !core.HasScope(matchingResourceServerConfig.Scopes, requestedScope) {
-					core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "The requested scope is not defined for the target resource server", "invalid_scope")
+					core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_scope", "The requested scope is not defined for the target resource server", fmt.Sprintf("OIDC token request rejected: scope %q not defined for resource server %q", requestedScope, targetAudience))
 					return
 				}
 			}
@@ -928,13 +928,13 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	}
 
 	if handler.jwtSigner == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Token signer not available", "server_error")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OIDC token generation failed: JWT signer unavailable")
 		return
 	}
 
 	accessToken, tokenErr := handler.jwtSigner.GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds, targetAudience)
 	if tokenErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to generate M2M access token", "server_error")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("Failed to generate M2M access token: %v", tokenErr))
 		return
 	}
 
@@ -965,13 +965,13 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	}
 
 	if clientID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Missing client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Missing client credentials")
 		return
 	}
 
 	oidcClientConfig, ok := handler.configManager.GetOIDCClient(clientID)
 	if !ok {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client credentials", "invalid_client")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
 	}
 
@@ -979,7 +979,7 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	if !oidcClientConfig.Public {
 		decryptedSecret, _ := handler.configManager.DecryptSecret(oidcClientConfig.ClientSecret)
 		if clientSecret == "" || clientSecret != decryptedSecret {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client secret", "invalid_client")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client secret")
 			return
 		}
 	}
@@ -989,13 +989,13 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	codeVerifier := request.FormValue("code_verifier")
 
 	if code == "" || handler.kvStore == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization code invalid or expired", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authorization code invalid or expired")
 		return
 	}
 
 	codeJSON, err := handler.kvStore.Get(request.Context(), "auth:code:"+code)
 	if err != nil || codeJSON == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Authorization code invalid or expired", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authorization code invalid or expired")
 		return
 	}
 
@@ -1004,17 +1004,17 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 
 	var oidcAuthorizationCodePayload OIDCAuthorizationCodePayload
 	if unmarshalErr := json.Unmarshal([]byte(codeJSON), &oidcAuthorizationCodePayload); unmarshalErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to read authorization code", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authorization code invalid or expired")
 		return
 	}
 
 	if oidcAuthorizationCodePayload.ClientID != clientID {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Client mismatch", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Client mismatch")
 		return
 	}
 
 	if redirectURI != "" && oidcAuthorizationCodePayload.RedirectURI != redirectURI {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "redirect_uri mismatch", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "redirect_uri mismatch")
 		return
 	}
 
@@ -1022,7 +1022,7 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	sha256Digest := sha256.Sum256([]byte(codeVerifier))
 	calculatedChallenge := base64.RawURLEncoding.EncodeToString(sha256Digest[:])
 	if oidcAuthorizationCodePayload.CodeChallenge == "" || oidcAuthorizationCodePayload.CodeChallenge != calculatedChallenge {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid code_verifier for PKCE challenge", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid code_verifier for PKCE challenge")
 		return
 	}
 
@@ -1041,7 +1041,7 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 		&userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if scanErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to query user", "server_error")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("Failed to query user: %v", scanErr))
 		return
 	}
 
@@ -1134,7 +1134,7 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		if ok && !oidcClientConfig.Public {
 			decryptedSecret, _ := handler.configManager.DecryptSecret(oidcClientConfig.ClientSecret)
 			if clientSecret == "" || clientSecret != decryptedSecret {
-				core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid client secret", "invalid_client")
+				core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client secret")
 				return
 			}
 		}
@@ -1142,7 +1142,7 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 
 	refreshToken := request.FormValue("refresh_token")
 	if refreshToken == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing refresh_token parameter", "invalid_request")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Missing refresh_token parameter")
 		return
 	}
 
@@ -1155,7 +1155,7 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
 	`, refreshTokenHash).Scan(&sessionID, &userID)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired refresh token", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid or expired refresh token")
 		return
 	}
 
@@ -1165,14 +1165,13 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User not found", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "User not found")
 		return
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Warnf("failed OIDC token refresh for locked user %s", userRecord.ID)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Account is temporarily locked", "invalid_grant")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Account is temporarily locked")
 		return
 	}
 
@@ -1244,13 +1243,13 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC userinfo rejected: OIDC identity provider is disabled in configuration")
 		return
 	}
 
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "Bearer token required")
 		return
 	}
 
@@ -1267,7 +1266,7 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 		&userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if scanErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "The access token is invalid")
 		return
 	}
 
@@ -1304,7 +1303,7 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OIDC Identity Provider is disabled by the console user", "oidc_disabled")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC sign-out rejected: OIDC identity provider is disabled in configuration")
 		return
 	}
 
@@ -1513,7 +1512,7 @@ func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter
 func redirectError(responseWriter http.ResponseWriter, request *http.Request, redirectURI, errSlug, errDescription, clientState string) {
 	targetURL, err := url.Parse(redirectURI)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errDescription, errSlug)
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", errDescription)
 		return
 	}
 	queryValues := targetURL.Query()

@@ -4,22 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"layr.sh/core"
 )
 
 // HandleListIndexes lists all indexes on a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
 		return
 	}
 	indexes, err := controlPlaneHandler.ddlEngine.ListIndexes(request.Context(), schema, table)
 	if err != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, err.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListIndexesResponse{
@@ -31,21 +33,21 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListIndexes(responseWriter
 // HandleCreateIndex creates a new index on a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
 		return
 	}
 	var createIndexRequest CreateIndexRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&createIndexRequest); decodeErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	if createErr := controlPlaneHandler.ddlEngine.CreateIndex(request.Context(), schema, table, createIndexRequest); createErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, createErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
@@ -70,17 +72,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateIndex(responseWriter
 // HandleDropIndex drops an index from a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleDropIndex(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	indexName := controlPlaneHandler.extractIndexName(request)
 	if schema == "" || indexName == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes/{index}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes/{index}")
 		return
 	}
 	if dropErr := controlPlaneHandler.ddlEngine.DropIndex(request.Context(), schema, indexName); dropErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, dropErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())

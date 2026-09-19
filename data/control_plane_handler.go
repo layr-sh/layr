@@ -85,14 +85,6 @@ func (controlPlaneHandler *ControlPlaneHandler) writeJSON(responseWriter http.Re
 	_ = json.NewEncoder(responseWriter).Encode(data)
 }
 
-func (controlPlaneHandler *ControlPlaneHandler) writeError(responseWriter http.ResponseWriter, request *http.Request, status int, detail string) {
-	core.WriteErrorResponse(responseWriter, request, status, detail, "LAYR_DATA_001")
-}
-
-func (controlPlaneHandler *ControlPlaneHandler) writeForbidden(responseWriter http.ResponseWriter, request *http.Request) {
-	core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation", "LAYR_DATA_003")
-}
-
 func (controlPlaneHandler *ControlPlaneHandler) extractSchemaAndTable(request *http.Request) (string, string) {
 	schema := request.PathValue("schema_name")
 	table := request.PathValue("table_name")

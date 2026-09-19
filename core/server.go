@@ -260,8 +260,7 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				log.Errorf("panic recovered in HTTP handler: %v", recovered)
-				WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "internal server error", "LAYR_CORE_500")
+				WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("panic recovered in HTTP handler: %v", recovered))
 			}
 		}()
 		log.Tracef("incoming HTTP request %s %s", request.Method, request.URL.Path)
@@ -505,7 +504,7 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			}
 
 			if !isValid {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing publishable key", "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing publishable key")
 				return
 			}
 		}

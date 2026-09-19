@@ -79,7 +79,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on first OTP send, got: %d (body: %s)", firstOTPResponseRecorder.Code, firstOTPResponseRecorder.Body.String())
 	}
 
-	// 2. Send second OTP request within cooldown to same email -> 429 Too Many Requests (LAYR_AUTH_COOLDOWN)
+	// 2. Send second OTP request within cooldown to same email -> 429 Too Many Requests
 	secondOTPPayload := map[string]any{
 		"recipient": targetEmail,
 		"purpose":   "sign_in",
@@ -91,8 +91,8 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	if secondOTPResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on second OTP send within cooldown, got: %d", secondOTPResponseRecorder.Code)
 	}
-	if !strings.Contains(secondOTPResponseRecorder.Body.String(), "LAYR_AUTH_COOLDOWN") || !strings.Contains(secondOTPResponseRecorder.Body.String(), "Please wait 60 seconds before requesting another code") {
-		t.Fatalf("expected LAYR_AUTH_COOLDOWN and cooldown message, got: %s", secondOTPResponseRecorder.Body.String())
+	if !strings.Contains(secondOTPResponseRecorder.Body.String(), "Please wait 60 seconds before requesting another code") {
+		t.Fatalf("expected cooldown message, got: %s", secondOTPResponseRecorder.Body.String())
 	}
 
 	// 3. Fast-forward cooldown key expiration in database to simulate 60s passing -> request succeeds
@@ -117,7 +117,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		t.Fatalf("expected 204 on OTP send after cooldown expired, got: %d (body: %s)", thirdOTPResponseRecorder.Code, thirdOTPResponseRecorder.Body.String())
 	}
 
-	// 4. IP Rate Limit: 10 requests allowed per hour, 11th blocked with 429 LAYR_AUTH_RATE_LIMIT_EXCEEDED
+	// 4. IP Rate Limit: 10 requests allowed per hour, 11th blocked with 429 Too Many Requests
 	limitedClientIP := "198.51.100.77:12345"
 	for counter := 1; counter <= 10; counter++ {
 		loopPayload := map[string]any{
@@ -147,8 +147,8 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	if eleventhResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on 11th request from same IP, got: %d", eleventhResponseRecorder.Code)
 	}
-	if !strings.Contains(eleventhResponseRecorder.Body.String(), "LAYR_AUTH_RATE_LIMIT_EXCEEDED") {
-		t.Fatalf("expected LAYR_AUTH_RATE_LIMIT_EXCEEDED in error response, got: %s", eleventhResponseRecorder.Body.String())
+	if !strings.Contains(eleventhResponseRecorder.Body.String(), "Rate limit exceeded") {
+		t.Fatalf("expected rate limit message in error response, got: %s", eleventhResponseRecorder.Body.String())
 	}
 }
 

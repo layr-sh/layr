@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -17,16 +18,14 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 	log.Trace("handling passkey sign up initiation request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
-		log.Debug("passkey sign up rejected: passkey authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Passkey authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "passkey sign up rejected: passkey authentication is disabled in configuration")
 		return
 	}
 
 	var passkeySignUpRequest PasskeySignUpRequest
 	if request.Body != nil && request.ContentLength != 0 {
 		if err := json.NewDecoder(request.Body).Decode(&passkeySignUpRequest); err != nil {
-			log.Debugf("passkey sign up rejected: invalid JSON body: %v", err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 			return
 		}
 	}
@@ -38,8 +37,7 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 	}
 
 	if passkeySignUpRequest.UserID == "" {
-		log.Debug("passkey sign up rejected: empty user_id")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID required")
 		return
 	}
 
@@ -49,8 +47,7 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 
 	signUpOptions, err := handler.passkeyManager.BeginSignUp(passkeySignUpRequest.UserID, passkeySignUpRequest.UserName)
 	if err != nil {
-		log.Debugf("passkey sign up challenge generation failed: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to begin passkey sign up", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("passkey sign up challenge generation failed: %v", err))
 		return
 	}
 
@@ -68,15 +65,13 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 	log.Trace("handling passkey sign up verification request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
-		log.Debug("passkey sign up verify rejected: passkey authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Passkey authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "passkey sign up verify rejected: passkey authentication is disabled in configuration")
 		return
 	}
 
 	var passkeySignUpVerifyRequest PasskeySignUpVerifyRequest
 	if err := json.NewDecoder(request.Body).Decode(&passkeySignUpVerifyRequest); err != nil {
-		log.Debugf("passkey sign up verify rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_006")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -91,8 +86,7 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+passkeySignUpVerifyRequest.Challenge)
 	}
 	if err != nil || (expectedUserID != "" && expectedUserID != passkeySignUpVerifyRequest.UserID) {
-		log.Debugf("passkey challenge consumption failed (expected: %q, got: %q): %v", expectedUserID, passkeySignUpVerifyRequest.UserID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge", "LAYR_AUTH_006")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
 
@@ -103,8 +97,7 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 	}
 
 	if handler.db == nil {
-		log.Debug("passkey sign up verify rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "passkey sign up verify rejected: database pool unavailable")
 		return
 	}
 
@@ -146,8 +139,7 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		)
 	}
 	if err != nil {
-		log.Debugf("failed to query or upsert user for passkey: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to persist user for passkey", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to query or upsert user for passkey: %v", err))
 		return
 	}
 
@@ -164,8 +156,7 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
 	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, passkeySignUpVerifyRequest.Transports, passkeySignUpVerifyRequest.FriendlyName)
 	if execErr != nil {
-		log.Debugf("failed to insert passkey credential for user %s: %v", targetUserID, execErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to store passkey credential", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to insert passkey credential for user %s: %v", targetUserID, execErr))
 		return
 	}
 
@@ -191,15 +182,13 @@ func (handler *BaseHandler) handlePasskeySignIn(responseWriter http.ResponseWrit
 	log.Trace("handling passkey sign-in initiation request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
-		log.Debug("passkey sign-in rejected: passkey authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Passkey authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "passkey sign-in rejected: passkey authentication is disabled in configuration")
 		return
 	}
 
 	signInOptions, err := handler.passkeyManager.BeginSignIn()
 	if err != nil {
-		log.Debugf("passkey sign-in challenge generation failed: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to begin passkey sign-in", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("passkey sign-in challenge generation failed: %v", err))
 		return
 	}
 
@@ -217,21 +206,18 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 	log.Trace("handling passkey sign-in assertion verification request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
-		log.Debug("passkey sign-in verify rejected: passkey authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Passkey authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "passkey sign-in verify rejected: passkey authentication is disabled in configuration")
 		return
 	}
 
 	var passkeySignInVerifyRequest PasskeySignInVerifyRequest
 	if err := json.NewDecoder(request.Body).Decode(&passkeySignInVerifyRequest); err != nil {
-		log.Debugf("passkey sign-in verify rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_006")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
 	if _, err := handler.passkeyManager.ConsumeChallenge(passkeySignInVerifyRequest.Challenge); err != nil {
-		log.Debugf("passkey sign-in verify rejected: challenge consumption failed: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge", "LAYR_AUTH_006")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
 	if handler.kvStore != nil {
@@ -240,8 +226,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 
 	credentialIDBytes := []byte(passkeySignInVerifyRequest.CredentialID)
 	if handler.db == nil {
-		log.Debug("passkey sign-in verify rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "passkey sign-in verify rejected: database pool unavailable")
 		return
 	}
 
@@ -250,7 +235,6 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 	var publicKey []byte
 	err := handler.db.QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
 	if err != nil {
-		log.Debugf("passkey sign-in verify rejected: credential not found: %v", err)
 		if handler.eventBus != nil {
 			clientIP := core.ExtractRequestClientIP(request)
 			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(string(credentialIDBytes), UserSignInFailedEventData{
@@ -261,7 +245,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 				UserAgent:  request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found", "LAYR_AUTH_006")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Passkey credential not found")
 		return
 	}
 
@@ -270,7 +254,6 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		authenticatorDataBytes := []byte(passkeySignInVerifyRequest.AuthenticatorData)
 		signatureBytes := []byte(passkeySignInVerifyRequest.Signature)
 		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
-			log.Debug("passkey sign-in verify rejected: invalid assertion signature")
 			if handler.eventBus != nil {
 				clientIP := core.ExtractRequestClientIP(request)
 				handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userID, UserSignInFailedEventData{
@@ -281,7 +264,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 					UserAgent:  request.UserAgent(),
 				}))
 			}
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid passkey signature", "LAYR_AUTH_006")
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid passkey signature")
 			return
 		}
 	}
@@ -298,13 +281,11 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("passkey sign-in verify user lookup failed (userID: %s): %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "User lookup failed", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("passkey sign-in verify user lookup failed (userID: %s): %v", userID, err))
 		return
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Debugf("passkey sign-in rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
 		if handler.eventBus != nil {
 			clientIP := core.ExtractRequestClientIP(request)
 			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
@@ -316,7 +297,7 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 				User:       &userRecord,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
@@ -331,18 +312,15 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 }
 
 func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling list user passkeys request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("list user passkeys rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	if handler.db == nil {
-		log.Debug("list user passkeys rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "list user passkeys rejected: database pool unavailable")
 		return
 	}
 
@@ -354,8 +332,7 @@ func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseW
 		ORDER BY created_at DESC
 	`, userID)
 	if err != nil {
-		log.Debugf("list user passkeys failed for user %s: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to list passkeys", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("list user passkeys failed for user %s: %v", userID, err))
 		return
 	}
 	defer rows.Close()
@@ -377,25 +354,21 @@ func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseW
 }
 
 func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling delete user passkey request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("delete user passkey rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	passkeyID := strings.TrimSpace(request.PathValue("id"))
 	if passkeyID == "" {
-		log.Debug("delete user passkey rejected: passkey id is empty")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID required")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("delete user passkey rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "delete user passkey rejected: database pool unavailable")
 		return
 	}
 
@@ -405,14 +378,12 @@ func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.Response
 		WHERE id = $1 AND user_id = $2
 	`, passkeyID, userID)
 	if err != nil {
-		log.Debugf("delete user passkey %s failed for user %s: %v", passkeyID, userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete passkey", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("delete user passkey %s failed for user %s: %v", passkeyID, userID, err))
 		return
 	}
 
 	if result.RowsAffected() == 0 {
-		log.Debugf("passkey %s not found for user %s", passkeyID, userID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Passkey not found", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Passkey not found")
 		return
 	}
 

@@ -292,12 +292,12 @@ func (configManager *ConfigManager) HandleGetConfig(responseWriter http.Response
 func (configManager *ConfigManager) HandlePutConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	var config Config
 	if decodeErr := json.NewDecoder(request.Body).Decode(&config); decodeErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	if setErr := configManager.Set(request.Context(), config); setErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
 		return
 	}
 

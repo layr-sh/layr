@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"uuid"
@@ -42,21 +43,19 @@ func (handler *BaseHandler) checkCaptcha(responseWriter http.ResponseWriter, req
 				Endpoint:  endpoint,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification required", "LAYR_AUTH_CAPTCHA_REQUIRED")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification required")
 		return false
 	}
 
 	secretKey, decryptErr := handler.configManager.DecryptSecret(botProtectionConfig.SecretKey)
 	if decryptErr != nil || secretKey == "" {
-		log.Warnf("failed to decrypt bot protection secret key: %v", decryptErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Bot protection is temporarily unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to decrypt bot protection secret key: %v", decryptErr))
 		return false
 	}
 
 	captchaVerifier, verifierErr := threat.NewCaptchaVerifier(botProtectionConfig.Provider, secretKey, handler.httpClient)
 	if verifierErr != nil {
-		log.Warnf("failed to initialize captcha verifier: %v", verifierErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Bot protection is temporarily unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to initialize captcha verifier: %v", verifierErr))
 		return false
 	}
 
@@ -69,7 +68,7 @@ func (handler *BaseHandler) checkCaptcha(responseWriter http.ResponseWriter, req
 				Endpoint:  endpoint,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification failed", "LAYR_AUTH_BOT_CHALLENGE_FAILED")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification failed")
 		return false
 	}
 
@@ -87,8 +86,7 @@ func (handler *BaseHandler) checkPasswordBreach(responseWriter http.ResponseWrit
 	ctx := request.Context()
 	isBreached, breachCount, breachErr := threat.CheckPwnedPassword(ctx, handler.httpClient, handler.kvStore, prospectivePassword, passwordBreachConfig.FailOpen)
 	if breachErr != nil {
-		log.Warnf("password breach check failed: %v", breachErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Password breach verification unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", fmt.Sprintf("password breach check failed: %v", breachErr))
 		return false
 	}
 
@@ -99,7 +97,7 @@ func (handler *BaseHandler) checkPasswordBreach(responseWriter http.ResponseWrit
 				Count: breachCount,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "This password has appeared in a known data breach. Please choose a different, more secure password.", "LAYR_AUTH_PASSWORD_BREACHED")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "This password has appeared in a known data breach. Please choose a different, more secure password.")
 		return false
 	}
 

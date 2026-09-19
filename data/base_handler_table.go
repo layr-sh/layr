@@ -38,7 +38,7 @@ func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter
 	config := handler.configManager.Get()
 	queryParams, err := rest.ParseQueryParams(request.URL.Query(), config.REST.DefaultLimit, config.REST.MaxLimit)
 	if err != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid query parameters", fmt.Sprintf("query records rejected for table %s.%s: %v", schema, table, err))
 		return
 	}
 
@@ -163,7 +163,7 @@ func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, 
 		return
 	}
 	if recordID == "" {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Missing record ID in path", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
 
@@ -196,7 +196,7 @@ func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, 
 
 	results := handler.scanRowsToJSONMaps(rows)
 	if len(results) == 0 {
-		handler.writeError(responseWriter, request, http.StatusNotFound, "Record not found", "LAYR_DATA_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Record not found")
 		return
 	}
 
@@ -220,14 +220,14 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
 	if err != nil || len(bodyBytes) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 
 	var rawRows []map[string]any
 	if bodyBytes[0] == '[' {
 		if decodeErr := json.Unmarshal(bodyBytes, &rawRows); decodeErr != nil {
-			handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON array", "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 			return
 		}
 	} else {
@@ -246,7 +246,7 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 		} else {
 			var singleRow map[string]any
 			if decodeErr := json.Unmarshal(bodyBytes, &singleRow); decodeErr != nil {
-				handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON object", "LAYR_DATA_001")
+				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 				return
 			}
 			rawRows = append(rawRows, singleRow)
@@ -254,13 +254,13 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 	}
 
 	if len(rawRows) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "No rows to insert", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "No records to insert")
 		return
 	}
 
 	onConflict := request.URL.Query().Get("on_conflict")
 	if onConflict != "" && !common.IsValidIdentifier(onConflict) {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("invalid on_conflict identifier: %s", onConflict), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid query parameter")
 		return
 	}
 
@@ -284,7 +284,7 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 
 	sqlStatement, buildErr := queryBuilder.BuildInsert(rawRows, onConflict)
 	if buildErr != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, buildErr.Error(), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request data", buildErr.Error())
 		return
 	}
 
@@ -356,14 +356,14 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 		return
 	}
 	if recordID == "" {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Missing record ID in path", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
 	if err != nil || len(bodyBytes) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 
@@ -374,10 +374,12 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 			rowMap[k] = v
 		}
 	} else {
-		if decodeErr := json.Unmarshal(bodyBytes, &rowMap); decodeErr != nil {
-			handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON object", "LAYR_DATA_001")
+		var rowData map[string]any
+		if decodeErr := json.Unmarshal(bodyBytes, &rowData); decodeErr != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 			return
 		}
+		rowMap = rowData
 	}
 
 	ctx := request.Context()
@@ -401,7 +403,7 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 	filters := []rest.FilterOp{{Column: primaryKey, Op: "eq", Value: recordID}}
 	sqlStatement, err := queryBuilder.BuildUpdate(rowMap, filters)
 	if err != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request data", err.Error())
 		return
 	}
 
@@ -414,7 +416,7 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 
 	updatedRows := handler.scanRowsToJSONMaps(rows)
 	if len(updatedRows) == 0 {
-		handler.writeError(responseWriter, request, http.StatusNotFound, "Record not found", "LAYR_DATA_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Record not found")
 		return
 	}
 
@@ -461,7 +463,7 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 		return
 	}
 	if recordID == "" {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Missing record ID in path", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
 
@@ -486,7 +488,7 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 	filters := []rest.FilterOp{{Column: primaryKey, Op: "eq", Value: recordID}}
 	sqlStatement, err := queryBuilder.BuildDelete(filters)
 	if err != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request data", err.Error())
 		return
 	}
 
@@ -496,7 +498,7 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 		return
 	}
 	if result.RowsAffected() == 0 {
-		handler.writeError(responseWriter, request, http.StatusNotFound, "Record not found", "LAYR_DATA_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Record not found")
 		return
 	}
 
@@ -524,7 +526,7 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.REST.Enabled {
-		handler.writeError(responseWriter, request, http.StatusForbidden, "REST API is disabled", "LAYR_DATA_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "RPC function call rejected: REST API is disabled in configuration")
 		return
 	}
 
@@ -540,12 +542,12 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 	}
 
 	if schema == "" || functionName == "" {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Schema and function name are required", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Function name is required")
 		return
 	}
 
 	if !common.IsValidIdentifier(schema) || !common.IsValidIdentifier(functionName) {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid schema or function name identifier", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request")
 		return
 	}
 
@@ -557,7 +559,7 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 		}
 	}
 	if !isSchemaAllowed {
-		handler.writeError(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Schema %q is not exposed for REST operations", schema), "LAYR_DATA_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", fmt.Sprintf("Schema %q is not exposed for REST operations", schema))
 		return
 	}
 
@@ -565,14 +567,14 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 	var executeFunctionRequest ExecuteFunctionRequest
 	if request.Body != nil {
 		if decodeErr := json.NewDecoder(request.Body).Decode(&executeFunctionRequest); decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
-			handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload in request body", "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 			return
 		}
 	}
 
 	for k := range executeFunctionRequest.Args {
 		if !common.IsValidIdentifier(k) {
-			handler.writeError(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("invalid argument name: %s", k), "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid argument")
 			return
 		}
 	}
@@ -653,18 +655,18 @@ func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWr
 func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWriter, request *http.Request) (string, string, string, rest.TableMetadata, core.JWTClaims, bool) {
 	config := handler.configManager.Get()
 	if !config.REST.Enabled {
-		handler.writeError(responseWriter, request, http.StatusForbidden, "REST API is disabled", "LAYR_DATA_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "table request rejected: REST API is disabled in configuration")
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	schema, table, recordID, err := handler.extractSchemaTableAndRecordID(request)
 	if err != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request path")
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	if !common.IsValidIdentifier(schema) || !common.IsValidIdentifier(table) {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid schema or table name identifier", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request path")
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
@@ -676,13 +678,13 @@ func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWrit
 		}
 	}
 	if !isSchemaAllowed {
-		handler.writeError(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Schema %q is not exposed for REST operations", schema), "LAYR_DATA_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", fmt.Sprintf("Schema %q is not exposed for REST operations", schema))
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	for _, excludedTable := range config.REST.ExcludedTables {
 		if excludedTable == table || excludedTable == fmt.Sprintf("%s.%s", schema, table) {
-			handler.writeError(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Table %q is excluded from REST operations", table), "LAYR_DATA_003")
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", fmt.Sprintf("Table %q is excluded from REST operations", table))
 			return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 		}
 	}

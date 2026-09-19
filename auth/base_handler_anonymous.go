@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"layr.sh/core"
@@ -11,8 +12,7 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 	log.Trace("handling anonymous sign-in request")
 	config := handler.configManager.Get()
 	if !config.Anonymous.Enabled {
-		log.Debug("anonymous sign-in rejected: anonymous authentication disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Anonymous authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "anonymous sign-in rejected: anonymous authentication disabled in configuration")
 		return
 	}
 
@@ -28,8 +28,7 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 	propertiesJSON, _ := json.Marshal(inputProperties)
 
 	if handler.db == nil {
-		log.Debug("anonymous sign-in rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "anonymous sign-in rejected: database pool unavailable")
 		return
 	}
 
@@ -48,8 +47,7 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("failed to create anonymous user: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to create anonymous user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to create anonymous user: %v", err))
 		return
 	}
 

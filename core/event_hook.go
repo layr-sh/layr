@@ -180,9 +180,9 @@ func (eventHookManager *EventHookManager) Create(ctx context.Context, createEven
 			if eventHookManager.cryptoKeyManager == nil {
 				return nil, fmt.Errorf("cryptographic key manager is not configured")
 			}
-			encrypted, encErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(createEventHookInput.SigningSecret))
-			if encErr != nil {
-				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encErr)
+			encrypted, encryptFieldErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(createEventHookInput.SigningSecret))
+			if encryptFieldErr != nil {
+				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encryptFieldErr)
 			}
 			encryptedSecret = &encrypted
 		}
@@ -393,9 +393,9 @@ func (eventHookManager *EventHookManager) Update(ctx context.Context, eventHookU
 			if eventHookManager.cryptoKeyManager == nil {
 				return nil, fmt.Errorf("cryptographic key manager is not configured")
 			}
-			encrypted, encErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(secretText))
-			if encErr != nil {
-				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encErr)
+			encrypted, encryptFieldErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(secretText))
+			if encryptFieldErr != nil {
+				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encryptFieldErr)
 			}
 			encryptedSecret = &encrypted
 		} else {
@@ -812,8 +812,8 @@ func (eventHookManager *EventHookManager) executeHTTPAttempt(ctx context.Context
 
 	secret := ""
 	if eventHook.HTTPEncryptedSigningSecret != nil && *eventHook.HTTPEncryptedSigningSecret != "" && eventHookManager.cryptoKeyManager != nil {
-		decrypted, decErr := eventHookManager.cryptoKeyManager.DecryptField(*eventHook.HTTPEncryptedSigningSecret)
-		if decErr == nil {
+		decrypted, decryptFieldErr := eventHookManager.cryptoKeyManager.DecryptField(*eventHook.HTTPEncryptedSigningSecret)
+		if decryptFieldErr == nil {
 			secret = string(decrypted)
 		}
 	}

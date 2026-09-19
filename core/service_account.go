@@ -473,7 +473,7 @@ func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) 
 			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
 			if err != nil {
 				// Invalid service account key
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error())
 				return
 			}
 			ctx := WithServiceAccount(request.Context(), serviceAccount)
@@ -492,13 +492,13 @@ func RequireServiceAccountMiddleware(serviceAccountManager *ServiceAccountManage
 			}
 			secretKey := ExtractRequestServiceAccountKey(request)
 			if secretKey == "" {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required")
 				return
 			}
 			clientIP := ExtractRequestClientIP(request)
 			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
 			if err != nil {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error(), "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error())
 				return
 			}
 			ctx := WithServiceAccount(request.Context(), serviceAccount)
@@ -515,18 +515,18 @@ func RequireScopeMiddleware(requiredScope string) func(http.Handler) http.Handle
 			authContext := GetAuthContext(request.Context())
 
 			if serviceAccount == nil && !authContext.IsServiceAccount() {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required", "LAYR_CORE_006")
+				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required")
 				return
 			}
 
 			if serviceAccount != nil {
 				if !HasScope(serviceAccount.Scopes, requiredScope) {
-					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
+					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error())
 					return
 				}
 			} else {
 				if !authContext.HasScope(requiredScope) {
-					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error(), "LAYR_CORE_007")
+					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error())
 					return
 				}
 			}

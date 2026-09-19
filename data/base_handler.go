@@ -156,44 +156,34 @@ func (handler *BaseHandler) writeJSON(responseWriter http.ResponseWriter, status
 	_ = json.NewEncoder(responseWriter).Encode(payload)
 }
 
-// writeError writes an RFC 7807 problem details error response.
-func (handler *BaseHandler) writeError(responseWriter http.ResponseWriter, request *http.Request, statusCode int, message string, errorCode string) {
-	core.WriteErrorResponse(responseWriter, request, statusCode, message, errorCode)
-}
-
-// writeDBError maps PostgreSQL errors to appropriate RFC 7807 HTTP responses.
+// writeDBError maps PostgreSQL errors to appropriate RFC 9457 HTTP responses.
 func (handler *BaseHandler) writeDBError(responseWriter http.ResponseWriter, request *http.Request, err error) {
 	statusCode := http.StatusInternalServerError
-	errorCode := "LAYR_DATA_001"
-	message := err.Error()
+	message := "Service temporarily unavailable"
+	debugLog := err.Error()
 
 	var pgError *pgconn.PgError
 	if errors.As(err, &pgError) {
 		switch pgError.Code {
 		case "42501": // insufficient_privilege
 			statusCode = http.StatusForbidden
-			errorCode = "LAYR_DATA_003"
-			message = "Permission denied by database security policy"
+			message = "Access denied"
 		case "23505": // unique_violation
 			statusCode = http.StatusConflict
-			errorCode = "LAYR_DATA_004"
-			message = fmt.Sprintf("Unique constraint violation: %s", pgError.Detail)
+			message = "Resource already exists"
 		case "23503", "23001": // foreign_key_violation or restrict_violation
 			statusCode = http.StatusConflict
-			errorCode = "LAYR_DATA_004"
-			message = fmt.Sprintf("Foreign key violation: %s", pgError.Detail)
+			message = "Invalid reference"
 		case "42P01", "42883": // undefined_table or undefined_function
 			statusCode = http.StatusNotFound
-			errorCode = "LAYR_DATA_002"
-			message = "Relation does not exist"
+			message = "Resource not found"
 		case "42703": // undefined_column
 			statusCode = http.StatusBadRequest
-			errorCode = "LAYR_DATA_001"
-			message = fmt.Sprintf("Column does not exist: %s", pgError.Message)
+			message = "Invalid field specified"
 		}
 	}
 
-	handler.writeError(responseWriter, request, statusCode, message, errorCode)
+	core.WriteErrorResponse(responseWriter, request, statusCode, message, debugLog)
 }
 
 // isRLSBypassed returns true if the request caller has the necessary service account scope to bypass RLS.

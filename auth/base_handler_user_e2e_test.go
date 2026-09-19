@@ -279,7 +279,7 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	activeConfig.SMSDispatcher.Driver = nil
 	configManager.Set(activeConfig)
 
-	// 1. Email Verification Request -> 422 Unprocessable Entity
+	// 1. Email Verification Request -> 500 Internal Server Error
 	emailPayload, _ := json.Marshal(map[string]any{"email": "unconfigured@example.com"})
 	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/email/verification/request", bytes.NewReader(emailPayload))
 	request.Header.Set("Content-Type", "application/json")
@@ -290,14 +290,14 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	bodyBytes, _ := io.ReadAll(response.Body)
 	_ = response.Body.Close()
 
-	if response.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 Unprocessable Entity on email request, got: %d (%s)", response.StatusCode, string(bodyBytes))
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on email request, got: %d (%s)", response.StatusCode, string(bodyBytes))
 	}
-	if !strings.Contains(string(bodyBytes), "LAYR_AUTH_EMAIL_UNAVAILABLE") {
-		t.Fatalf("expected LAYR_AUTH_EMAIL_UNAVAILABLE in response, got: %s", string(bodyBytes))
+	if !strings.Contains(string(bodyBytes), "Service temporarily unavailable") {
+		t.Fatalf("expected Service temporarily unavailable in response, got: %s", string(bodyBytes))
 	}
 
-	// 2. Phone Verification Request -> 422 Unprocessable Entity
+	// 2. Phone Verification Request -> 500 Internal Server Error
 	phonePayload, _ := json.Marshal(map[string]any{"phone": "+15551112222"})
 	phoneRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/phone/verification/request", bytes.NewReader(phonePayload))
 	phoneRequest.Header.Set("Content-Type", "application/json")
@@ -308,10 +308,10 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	phoneBodyBytes, _ := io.ReadAll(phoneResponse.Body)
 	_ = phoneResponse.Body.Close()
 
-	if phoneResponse.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 Unprocessable Entity on phone request, got: %d (%s)", phoneResponse.StatusCode, string(phoneBodyBytes))
+	if phoneResponse.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error on phone request, got: %d (%s)", phoneResponse.StatusCode, string(phoneBodyBytes))
 	}
-	if !strings.Contains(string(phoneBodyBytes), "LAYR_AUTH_SMS_UNAVAILABLE") {
-		t.Fatalf("expected LAYR_AUTH_SMS_UNAVAILABLE in response, got: %s", string(phoneBodyBytes))
+	if !strings.Contains(string(phoneBodyBytes), "Service temporarily unavailable") {
+		t.Fatalf("expected Service temporarily unavailable in response, got: %s", string(phoneBodyBytes))
 	}
 }

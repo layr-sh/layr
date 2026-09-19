@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"layr.sh/core"
 )
 
 // HandleGetConfig handles GET /api/v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) HandleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.read") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	if controlPlaneHandler.configManager != nil {
@@ -22,11 +24,11 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetConfig(responseWriter h
 // HandleUpdateConfig handles PUT /api/v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) HandleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	if controlPlaneHandler.configManager == nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Config manager not initialized")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Config manager not initialized")
 		return
 	}
 
@@ -40,11 +42,11 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUpdateConfig(responseWrite
 // HandleFlushCache handles POST /api/v1/_/data/cache/flush.
 func (controlPlaneHandler *ControlPlaneHandler) HandleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
+		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
 	if !controlPlaneHandler.checkScope(request, "data:cache.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 
@@ -69,18 +71,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleFlushCache(responseWriter 
 // HandleInvalidateCache handles POST /api/v1/_/data/cache/invalidate.
 func (controlPlaneHandler *ControlPlaneHandler) HandleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
+		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
 	if !controlPlaneHandler.checkScope(request, "data:cache.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 
 	var invalidateCacheRequest InvalidateCacheRequest
 	if request.Body != nil {
 		if decodeErr := json.NewDecoder(request.Body).Decode(&invalidateCacheRequest); decodeErr != nil && decodeErr.Error() != "EOF" {
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 			return
 		}
 	}

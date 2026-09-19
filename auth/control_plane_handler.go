@@ -89,10 +89,6 @@ func (controlPlaneHandler *ControlPlaneHandler) writeJSON(responseWriter http.Re
 	_ = json.NewEncoder(responseWriter).Encode(payload)
 }
 
-func (controlPlaneHandler *ControlPlaneHandler) writeError(responseWriter http.ResponseWriter, request *http.Request, statusCode int, message string, errorCode string) {
-	core.WriteErrorResponse(responseWriter, request, statusCode, message, errorCode)
-}
-
 func (controlPlaneHandler *ControlPlaneHandler) extractUserID(request *http.Request) string {
 	userID := request.PathValue("user_id")
 	if userID != "" {

@@ -23,15 +23,13 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	log.Trace("handling sign-up request")
 	config := handler.configManager.Get()
 	if !config.Password.Enabled {
-		log.Debug("sign-up rejected: password registration disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Password registration is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "sign-up rejected: password registration is disabled in configuration")
 		return
 	}
 
 	var signUpRequest SignUpRequest
 	if err := json.NewDecoder(request.Body).Decode(&signUpRequest); err != nil {
-		log.Debugf("sign-up rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -40,20 +38,17 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	if signUpRequest.Phone != "" {
 		normalizedPhone, err := NormalizePhone(signUpRequest.Phone)
 		if err != nil {
-			log.Debugf("sign-up rejected: invalid phone format: %v", err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		signUpRequest.Phone = normalizedPhone
 	}
 	if signUpRequest.Email == "" && signUpRequest.Phone == "" {
-		log.Debug("sign-up rejected: email or phone number required")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
 	if len(signUpRequest.Password) < config.Password.MinLength {
-		log.Debugf("sign-up rejected: password length %d below minimum %d", len(signUpRequest.Password), config.Password.MinLength)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
 
@@ -74,8 +69,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	propertiesJSON, _ := json.Marshal(inputProperties)
 
 	if handler.db == nil {
-		log.Debug("sign-up rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sign-up rejected: database pool unavailable")
 		return
 	}
 
@@ -98,11 +92,10 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			LIMIT 1
 		`, emailPtr, phonePtr).Scan(&existingUserID)
 		if err == nil && existingUserID != anonymousUserRecord.ID {
-			log.Debugf("sign-up conversion conflict: email or phone already registered by user %s", existingUserID)
 			if emailPtr != nil {
-				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 			} else {
-				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account", "LAYR_AUTH_001")
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account")
 			}
 			return
 		}
@@ -124,8 +117,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
-			log.Debugf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to convert user", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, err))
 			return
 		}
 
@@ -156,8 +148,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("failed to create user: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to create user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to create user: %v", err))
 		return
 	}
 
@@ -177,8 +168,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	log.Trace("handling sign-in request")
 	var signInRequest SignInRequest
 	if err := json.NewDecoder(request.Body).Decode(&signInRequest); err != nil {
-		log.Debugf("sign-in rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -186,15 +176,13 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	if identifier == "" && signInRequest.Phone != "" {
 		normalizedPhone, err := NormalizePhone(signInRequest.Phone)
 		if err != nil {
-			log.Debugf("sign-in rejected: invalid phone format: %v", err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		identifier = normalizedPhone
 	}
 	if identifier == "" || signInRequest.Password == "" {
-		log.Debug("sign-in rejected: missing credentials")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -210,7 +198,6 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
 		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
-			log.Debugf("sign-in rejected: rate limit exceeded for identifier %s (count: %d)", identifier, count)
 			if handler.eventBus != nil {
 				handler.eventBus.Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
 					Identifier:   identifier,
@@ -220,14 +207,13 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 					UserAgent:    request.UserAgent(),
 				}))
 			}
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.", "LAYR_AUTH_005")
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
 			return
 		}
 	}
 
 	if handler.db == nil {
-		log.Debug("sign-in rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sign-in rejected: database pool unavailable")
 		return
 	}
 
@@ -247,7 +233,6 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("sign-in rejected: user not found for identifier %s: %v", identifier, err)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 		}
@@ -260,12 +245,11 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 				UserAgent:  request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Debugf("sign-in rejected: account locked until %v for user %s", *userRecord.LockedUntil, userRecord.ID)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
@@ -280,13 +264,12 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 				User:       &userRecord,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
 	ok, err := handler.hasher.Verify(signInRequest.Password, passHash)
 	if err != nil || !ok {
-		log.Debugf("sign-in rejected: password mismatch for user %s: %v", userRecord.ID, err)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
@@ -301,7 +284,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 				User:       &userRecord,
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
@@ -323,15 +306,13 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	log.Trace("handling password reset request")
 	config := handler.configManager.Get()
 	if !config.Password.Enabled {
-		log.Debug("password reset rejected: password authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Password authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "password reset rejected: password authentication is disabled in configuration")
 		return
 	}
 
 	var passwordResetRequest PasswordResetRequest
 	if err := json.NewDecoder(request.Body).Decode(&passwordResetRequest); err != nil {
-		log.Debugf("password reset request rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -343,8 +324,7 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		recipient = strings.TrimSpace(passwordResetRequest.Phone)
 	}
 	if recipient == "" {
-		log.Debug("password reset request rejected: missing recipient")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
 
@@ -364,8 +344,7 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			log.Debugf("password reset request rejected: invalid phone number %q: %v", recipient, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		recipient = normalizedPhone
@@ -377,29 +356,25 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		clientIP := core.ExtractRequestClientIP(request)
 		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > ipPasswordResetLimit {
-			log.Debugf("password reset request rejected: IP rate limit exceeded for %s", clientIP)
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.", "LAYR_AUTH_RATE_LIMIT_EXCEEDED")
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.")
 			return
 		}
 
 		cooldownKey := fmt.Sprintf("auth:cooldown:password_reset:%s", recipient)
 		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
-			log.Debugf("password reset request rejected: cooldown active for recipient %s", recipient)
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code", "LAYR_AUTH_COOLDOWN")
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code")
 			return
 		}
 	}
 
 	if handler.db == nil {
-		log.Debug("password reset request rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "password reset request rejected: database pool unavailable")
 		return
 	}
 
 	userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient)
 	if err != nil {
-		log.Debugf("password reset request rejected: user not found for recipient %s: %v", recipient, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 	userID := userRecord.ID
@@ -439,15 +414,13 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 	log.Trace("handling password reset confirmation request")
 	config := handler.configManager.Get()
 	if !config.Password.Enabled {
-		log.Debug("password reset confirmation rejected: password authentication is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Password authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "password reset confirmation rejected: password authentication is disabled in configuration")
 		return
 	}
 
 	var passwordResetConfirmRequest PasswordResetConfirmRequest
 	if err := json.NewDecoder(request.Body).Decode(&passwordResetConfirmRequest); err != nil {
-		log.Debugf("password reset confirmation rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -459,24 +432,21 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		recipient = strings.TrimSpace(passwordResetConfirmRequest.Phone)
 	}
 	if recipient == "" || passwordResetConfirmRequest.Code == "" || passwordResetConfirmRequest.Password == "" {
-		log.Debug("password reset confirmation rejected: missing required fields")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient, code, and new password are required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient, code, and new password are required")
 		return
 	}
 
 	if !strings.Contains(recipient, "@") {
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			log.Debugf("password reset confirmation rejected: invalid phone %q: %v", recipient, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		recipient = normalizedPhone
 	}
 
 	if len(passwordResetConfirmRequest.Password) < config.Password.MinLength {
-		log.Debugf("password reset confirmation rejected: password shorter than min length (%d)", config.Password.MinLength)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
 
@@ -485,8 +455,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 	}
 
 	if handler.db == nil {
-		log.Debug("password reset confirmation rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "password reset confirmation rejected: database pool unavailable")
 		return
 	}
 
@@ -503,22 +472,19 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		LIMIT 1
 	`, recipient).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
-		log.Debugf("password reset confirmation failed: OTP not found or expired for %s: %v", recipient, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired reset code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired reset code")
 		return
 	}
 
 	if attempts >= maxPasswordResetAttempts {
-		log.Debugf("password reset confirmation failed: max attempts exceeded for %s", recipient)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(passwordResetConfirmRequest.Code, storedHash) {
-		log.Debugf("password reset confirmation failed: invalid code for %s", recipient)
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code")
 		return
 	}
 
@@ -544,8 +510,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		&rawProps, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("password reset user update failed for recipient %s: %v", recipient, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
@@ -555,8 +520,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Warnf("failed password reset completion for locked user %s", userRecord.ID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
@@ -572,25 +536,21 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 }
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling update user password request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("update user password rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	var updateUserPasswordRequest UpdateUserPasswordRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPasswordRequest); decodeErr != nil {
-		log.Debugf("update user password rejected: invalid JSON payload: %v", decodeErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("update user password rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user password rejected: database pool unavailable")
 		return
 	}
 
@@ -607,41 +567,35 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		WHERE id = $1
 	`, userID).Scan(&isCallerAnonymous, &email, &phone, &existingPasswordHash, &lockedUntil)
 	if err != nil {
-		log.Debugf("update user password failed: user %s not found: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
 	if lockedUntil != nil && time.Now().UTC().Before(*lockedUntil) {
-		log.Warnf("failed update user password for locked user %s", userID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
 	if isCallerAnonymous || (email == nil && phone == nil) {
-		log.Debugf("update user password rejected: anonymous or identifier-less account %s", userID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot set password on an account without a registered email or phone number", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot set password on an account without a registered email or phone number")
 		return
 	}
 
 	if existingPasswordHash != nil && *existingPasswordHash != "" {
 		if updateUserPasswordRequest.CurrentPassword == "" {
-			log.Debug("update user password rejected: missing current password")
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is required", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is required")
 			return
 		}
 		isCurrentPasswordValid, verifyErr := handler.hasher.Verify(updateUserPasswordRequest.CurrentPassword, *existingPasswordHash)
 		if verifyErr != nil || !isCurrentPasswordValid {
-			log.Debugf("update user password rejected: incorrect current password for %s: %v", userID, verifyErr)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is incorrect", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is incorrect")
 			return
 		}
 	}
 
 	config := handler.configManager.Get()
 	if len(updateUserPasswordRequest.NewPassword) < config.Password.MinLength {
-		log.Debugf("update user password rejected: password shorter than min length (%d)", config.Password.MinLength)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength), "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
 

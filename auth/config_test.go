@@ -448,8 +448,8 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	if unconfiguredOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 Unprocessable Entity on OTP enable without active SMTP, got: %d (%s)", unconfiguredOTPPutResponseRecorder.Code, unconfiguredOTPPutResponseRecorder.Body.String())
 	}
-	if !strings.Contains(unconfiguredOTPPutResponseRecorder.Body.String(), "LAYR_AUTH_EMAIL_UNCONFIGURED") {
-		t.Fatalf("expected LAYR_AUTH_EMAIL_UNCONFIGURED, got: %s", unconfiguredOTPPutResponseRecorder.Body.String())
+	if !strings.Contains(unconfiguredOTPPutResponseRecorder.Body.String(), "SMTP is not configured") {
+		t.Fatalf("expected SMTP is not configured error, got: %s", unconfiguredOTPPutResponseRecorder.Body.String())
 	}
 
 	// Test HandlePutConfig rejecting sms_otp.enabled without active SMS provider -> 422
@@ -460,8 +460,8 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	if unconfiguredSMSOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 Unprocessable Entity on SMS OTP enable without active SMS provider, got: %d (%s)", unconfiguredSMSOTPPutResponseRecorder.Code, unconfiguredSMSOTPPutResponseRecorder.Body.String())
 	}
-	if !strings.Contains(unconfiguredSMSOTPPutResponseRecorder.Body.String(), "LAYR_AUTH_SMS_UNCONFIGURED") {
-		t.Fatalf("expected LAYR_AUTH_SMS_UNCONFIGURED, got: %s", unconfiguredSMSOTPPutResponseRecorder.Body.String())
+	if !strings.Contains(unconfiguredSMSOTPPutResponseRecorder.Body.String(), "SMS provider is not configured") {
+		t.Fatalf("expected SMS provider is not configured error, got: %s", unconfiguredSMSOTPPutResponseRecorder.Body.String())
 	}
 
 	// Test HandlePutConfig enabling OTP with active SMTP -> 200 OK

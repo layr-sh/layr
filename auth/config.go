@@ -727,8 +727,7 @@ func (configManager *ConfigManager) HandleGetConfig(responseWriter http.Response
 	log.Tracef("HandleGetConfig invoked")
 
 	if !configManager.checkScope(request, "auth:config.read") {
-		log.Debugf("HandleGetConfig rejected: missing auth:config.read scope")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.read required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.read required")
 		return
 	}
 
@@ -743,8 +742,7 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 	log.Tracef("HandlePutConfig invoked")
 
 	if !configManager.checkScope(request, "auth:config.write") {
-		log.Debugf("HandlePutConfig rejected: missing auth:config.write scope")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.write required")
 		return
 	}
 
@@ -752,7 +750,7 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 	inputConfig := configManager.Get()
 	bodyBytes, readErr := io.ReadAll(request.Body)
 	if readErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 	defer func() {
@@ -760,8 +758,7 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 	}()
 
 	if err := json.Unmarshal(bodyBytes, &inputConfig); err != nil {
-		log.Debugf("HandlePutConfig rejected: invalid JSON payload: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Invalid JSON payload: %v", err))
 		return
 	}
 
@@ -893,30 +890,25 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 		case "turnstile", "cloudflare", "recaptcha", "google", "hcaptcha":
 			// valid
 		default:
-			log.Debugf("HandlePutConfig rejected: unsupported captcha provider %s", inputConfig.Threat.BotProtection.Provider)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Unsupported CAPTCHA provider", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Unsupported CAPTCHA provider")
 			return
 		}
 		if inputConfig.Threat.BotProtection.SecretKey == "" {
-			log.Debugf("HandlePutConfig rejected: captcha secret key required when bot protection is enabled")
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA secret key is required when bot protection is enabled", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA secret key is required when bot protection is enabled")
 			return
 		}
 		if inputConfig.Threat.BotProtection.Mode != "" && inputConfig.Threat.BotProtection.Mode != "always" && inputConfig.Threat.BotProtection.Mode != "adaptive" {
-			log.Debugf("HandlePutConfig rejected: invalid captcha mode %s", inputConfig.Threat.BotProtection.Mode)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid bot protection mode; must be always or adaptive", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid bot protection mode; must be always or adaptive")
 			return
 		}
 	}
 
 	if inputConfig.EmailOTP.Enabled && !IsEmailDeliveryReady(inputConfig.EmailDispatcher) {
-		log.Debugf("HandlePutConfig rejected: email delivery unconfigured while EmailOTP is enabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Email delivery is unavailable because SMTP is not configured by the console user", "LAYR_AUTH_EMAIL_UNCONFIGURED")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Email delivery is unavailable because SMTP is not configured by the console user")
 		return
 	}
 	if inputConfig.SMSOTP.Enabled && !IsSMSDeliveryReady(inputConfig.SMSDispatcher) {
-		log.Debugf("HandlePutConfig rejected: sms delivery unconfigured while SMSOTP is enabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "SMS delivery is unavailable because an SMS provider is not configured", "LAYR_AUTH_SMS_UNCONFIGURED")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "SMS delivery is unavailable because an SMS provider is not configured")
 		return
 	}
 
@@ -937,33 +929,27 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 
 	// 1. Prevent user to update showXxx method to true when the method isn't enabled in the config
 	if rawPut.OIDC.UI.ShowPassword != nil && *rawPut.OIDC.UI.ShowPassword && !inputConfig.Password.Enabled {
-		log.Debugf("HandlePutConfig rejected: show_password cannot be enabled when password auth is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_password in UI config when password authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_password in UI config when password authentication is disabled")
 		return
 	}
 	if rawPut.OIDC.UI.ShowSignUp != nil && *rawPut.OIDC.UI.ShowSignUp && !inputConfig.Password.Enabled {
-		log.Debugf("HandlePutConfig rejected: show_sign_up cannot be enabled when password auth is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sign_up in UI config when password authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sign_up in UI config when password authentication is disabled")
 		return
 	}
 	if rawPut.OIDC.UI.ShowPasskeys != nil && *rawPut.OIDC.UI.ShowPasskeys && !inputConfig.Passkeys.Enabled {
-		log.Debugf("HandlePutConfig rejected: show_passkeys cannot be enabled when passkey auth is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_passkeys in UI config when passkey authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_passkeys in UI config when passkey authentication is disabled")
 		return
 	}
 	if rawPut.OIDC.UI.ShowEmailOTP != nil && *rawPut.OIDC.UI.ShowEmailOTP && !inputConfig.EmailOTP.Enabled {
-		log.Debugf("HandlePutConfig rejected: show_email_otp cannot be enabled when email OTP auth is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_email_otp in UI config when email OTP authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_email_otp in UI config when email OTP authentication is disabled")
 		return
 	}
 	if rawPut.OIDC.UI.ShowSMSOTP != nil && *rawPut.OIDC.UI.ShowSMSOTP && !inputConfig.SMSOTP.Enabled {
-		log.Debugf("HandlePutConfig rejected: show_sms_otp cannot be enabled when SMS OTP auth is disabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sms_otp in UI config when SMS OTP authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_sms_otp in UI config when SMS OTP authentication is disabled")
 		return
 	}
 	if rawPut.OIDC.UI.ShowOAuth != nil && *rawPut.OIDC.UI.ShowOAuth && !hasOAuthInput {
-		log.Debugf("HandlePutConfig rejected: show_oauth cannot be enabled when no OAuth providers are enabled")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_oauth in UI config when no OAuth providers are enabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Cannot enable show_oauth in UI config when no OAuth providers are enabled")
 		return
 	}
 
@@ -1003,8 +989,7 @@ func (configManager *ConfigManager) HandlePutConfig(responseWriter http.Response
 	}
 
 	if err := configManager.Save(request.Context(), inputConfig); err != nil {
-		log.Debugf("HandlePutConfig failed to persist configuration: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to persist configuration", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 

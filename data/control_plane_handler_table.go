@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"layr.sh/core"
 )
 
 // HandleListTables lists all tables in the allowed schemas.
 func (controlPlaneHandler *ControlPlaneHandler) HandleListTables(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schemas := []string{"public"}
@@ -18,7 +20,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListTables(responseWriter 
 	}
 	tables, err := controlPlaneHandler.ddlEngine.ListTables(request.Context(), schemas)
 	if err != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, err.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListTablesResponse{
@@ -30,16 +32,16 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListTables(responseWriter 
 // HandleCreateTable creates a new database table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleCreateTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	var createTableRequest CreateTableRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&createTableRequest); decodeErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON request body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON request body")
 		return
 	}
 	if createErr := controlPlaneHandler.ddlEngine.CreateTable(request.Context(), createTableRequest); createErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, createErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
@@ -66,17 +68,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateTable(responseWriter
 // HandleGetTable returns the schema summary for a specific table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleGetTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	tableSummary, err := controlPlaneHandler.ddlEngine.GetTable(request.Context(), schema, table)
 	if err != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, err.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, tableSummary)
@@ -85,17 +87,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetTable(responseWriter ht
 // HandleDropTable drops a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleDropTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"
 	if dropErr := controlPlaneHandler.ddlEngine.DropTable(request.Context(), schema, table, cascade); dropErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, dropErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
@@ -120,17 +122,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropTable(responseWriter h
 // HandleTruncateTable truncates all rows in a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleTruncateTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"
-	if truncErr := controlPlaneHandler.ddlEngine.TruncateTable(request.Context(), schema, table, cascade); truncErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, truncErr.Error())
+	if truncateErr := controlPlaneHandler.ddlEngine.TruncateTable(request.Context(), schema, table, cascade); truncateErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, truncateErr.Error())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]any{

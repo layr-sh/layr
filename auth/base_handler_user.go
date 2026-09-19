@@ -4,24 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"layr.sh/core"
 )
 
 func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling get user profile request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("get user profile rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	if handler.db == nil {
-		log.Debug("get user profile rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "get user profile rejected: database pool unavailable")
 		return
 	}
 
@@ -39,8 +37,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("get user profile failed: user %s not found: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
@@ -68,25 +65,21 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 }
 
 func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling update user properties request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("update user properties rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	var updateUpdateUserPropertiesRequest UpdateUserPropertiesRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUpdateUserPropertiesRequest); decodeErr != nil {
-		log.Debugf("update user properties rejected: invalid JSON payload: %v", decodeErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("update user properties rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user properties rejected: database pool unavailable")
 		return
 	}
 
@@ -108,8 +101,7 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("failed to update user properties for %s: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update user properties", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user properties for %s: %v", userID, err))
 		return
 	}
 
@@ -129,18 +121,15 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 }
 
 func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling delete user account request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("delete user account rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
 
 	if handler.db == nil {
-		log.Debug("delete user account rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "delete user account rejected: database pool unavailable")
 		return
 	}
 
@@ -175,8 +164,7 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 
 	_, err = handler.db.Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
 	if err != nil {
-		log.Debugf("failed to delete user account %s: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete user account", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to delete user account %s: %v", userID, err))
 		return
 	}
 

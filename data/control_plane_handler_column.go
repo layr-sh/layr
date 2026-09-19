@@ -4,26 +4,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"layr.sh/core"
 )
 
 // HandleAddColumn adds a new column to a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleAddColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns")
 		return
 	}
 	var columnDefinition ColumnDefinition
 	if decodeErr := json.NewDecoder(request.Body).Decode(&columnDefinition); decodeErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	if addErr := controlPlaneHandler.ddlEngine.AddColumn(request.Context(), schema, table, columnDefinition); addErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, addErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, addErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
@@ -48,22 +50,22 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAddColumn(responseWriter h
 // HandleAlterColumn alters a column definition.
 func (controlPlaneHandler *ControlPlaneHandler) HandleAlterColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	columnName := controlPlaneHandler.extractColumnName(request)
 	if schema == "" || table == "" || columnName == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
 		return
 	}
 	var alterColumnRequest AlterColumnRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&alterColumnRequest); decodeErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	if alterErr := controlPlaneHandler.ddlEngine.AlterColumn(request.Context(), schema, table, columnName, alterColumnRequest); alterErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, alterErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, alterErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
@@ -88,18 +90,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAlterColumn(responseWriter
 // HandleDropColumn drops a column from a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleDropColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	columnName := controlPlaneHandler.extractColumnName(request)
 	if schema == "" || table == "" || columnName == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"
 	if dropErr := controlPlaneHandler.ddlEngine.DropColumn(request.Context(), schema, table, columnName, cascade); dropErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, dropErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())

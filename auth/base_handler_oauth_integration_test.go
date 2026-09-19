@@ -145,8 +145,8 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	nonExistentUserInfoRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentUserInfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.HandleOAuthUserInfo(nonExistentUserInfoResponseRecorder, nonExistentUserInfoRequest)
-	if nonExistentUserInfoResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on non-existent user info, got: %d", nonExistentUserInfoResponseRecorder.Code)
+	if nonExistentUserInfoResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on non-existent user info, got: %d", nonExistentUserInfoResponseRecorder.Code)
 	}
 
 	// 6. Anonymous user conversion

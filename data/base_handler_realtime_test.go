@@ -30,7 +30,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.HandleRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Real-Time API is disabled")
+		assert.Contains(t, responseRecorder.Body.String(), "Access denied")
 	})
 
 	t.Run("InvalidWebSocketUpgrade", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		nilHubBaseHandler.HandleRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Realtime hub is not initialized")
+		assert.Contains(t, responseRecorder.Body.String(), "Service temporarily unavailable")
 	})
 
 	t.Run("MaxConnectionsThrottling", func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.HandleRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusTooManyRequests, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Too many active realtime connections")
+		assert.Contains(t, responseRecorder.Body.String(), "Too many requests. Please try again later.")
 	})
 
 	t.Run("ValidatorAccessControlViaWebSocket", func(t *testing.T) {

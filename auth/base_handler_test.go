@@ -128,8 +128,8 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 	if baseHandler.assertEmailDeliveryReady(responseRecorder, request) {
 		t.Fatal("expected assertEmailDeliveryReady to return false when unconfigured")
 	}
-	if responseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got: %d", responseRecorder.Code)
+	if responseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got: %d", responseRecorder.Code)
 	}
 
 	// Unconfigured SMS dispatcher
@@ -137,8 +137,8 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 	if baseHandler.assertSMSDeliveryReady(smsResponseRecorder, request) {
 		t.Fatal("expected assertSMSDeliveryReady to return false when unconfigured")
 	}
-	if smsResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got: %d", smsResponseRecorder.Code)
+	if smsResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got: %d", smsResponseRecorder.Code)
 	}
 
 	// Configured email dispatcher
