@@ -58,17 +58,17 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
 
-	// 1. Email Verification Request - Unconfigured Dispatcher Failure (HTTP 422)
+	// 1. Email Verification Request - Unconfigured Dispatcher Failure (HTTP 500)
 	requestBodyBytes, _ := json.Marshal(map[string]any{"email": testEmail})
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(requestBodyBytes))
 	responseRecorder := httptest.NewRecorder()
 	baseHandler.handleUserEmailVerificationRequest(responseRecorder, request)
 
-	if responseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 Unprocessable Entity when email unconfigured, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
+	if responseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error when email unconfigured, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if !strings.Contains(responseRecorder.Body.String(), "LAYR_AUTH_EMAIL_UNAVAILABLE") {
-		t.Fatalf("expected LAYR_AUTH_EMAIL_UNAVAILABLE, got: %s", responseRecorder.Body.String())
+	if !strings.Contains(responseRecorder.Body.String(), "Service temporarily unavailable") {
+		t.Fatalf("expected Service temporarily unavailable, got: %s", responseRecorder.Body.String())
 	}
 
 	// 2. Configure mock Email and SMS Webhook Servers

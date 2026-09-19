@@ -50,7 +50,7 @@ func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 	// writeError
 	errorResponseRecorder := httptest.NewRecorder()
 	errorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/test", nil)
-	controlPlaneHandler.writeError(errorResponseRecorder, errorRequest, http.StatusBadRequest, "bad request")
+	core.WriteErrorResponse(errorResponseRecorder, errorRequest, http.StatusBadRequest, "bad request")
 	if errorResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", errorResponseRecorder.Code)
 	}
@@ -58,7 +58,7 @@ func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 	// writeForbidden
 	forbiddenResponseRecorder := httptest.NewRecorder()
 	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/test", nil)
-	controlPlaneHandler.writeForbidden(forbiddenResponseRecorder, forbiddenRequest)
+	core.WriteErrorResponse(forbiddenResponseRecorder, forbiddenRequest, http.StatusForbidden, "Insufficient scope permissions for this operation")
 	if forbiddenResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenResponseRecorder.Code)
 	}

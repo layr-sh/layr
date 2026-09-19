@@ -103,13 +103,13 @@ func TestCoreDatabaseKVStoreIntegration(t *testing.T) {
 	}
 
 	// SetNX
-	ok, setNxErr := kvStore.SetNX(ctx, "nx:key", "first", 0)
-	if setNxErr != nil || !ok {
-		t.Fatalf("expected SetNX true for fresh key: ok=%v, err=%v", ok, setNxErr)
+	ok, setNXErr := kvStore.SetNX(ctx, "nx:key", "first", 0)
+	if setNXErr != nil || !ok {
+		t.Fatalf("expected SetNX true for fresh key: ok=%v, err=%v", ok, setNXErr)
 	}
-	ok, setNxErr = kvStore.SetNX(ctx, "nx:key", "second", 10*time.Second)
-	if setNxErr != nil || ok {
-		t.Fatalf("expected SetNX false for existing key: ok=%v, err=%v", ok, setNxErr)
+	ok, setNXErr = kvStore.SetNX(ctx, "nx:key", "second", 10*time.Second)
+	if setNXErr != nil || ok {
+		t.Fatalf("expected SetNX false for existing key: ok=%v, err=%v", ok, setNXErr)
 	}
 
 	// Expire

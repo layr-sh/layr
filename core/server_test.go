@@ -279,8 +279,8 @@ func TestCoreServerPanicRecoveryUnit(t *testing.T) {
 	if responseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500 from panic recovery, got %d", responseRecorder.Code)
 	}
-	if !strings.Contains(responseRecorder.Body.String(), "LAYR_CORE_500") {
-		t.Fatalf("expected body to contain error code LAYR_CORE_500, got: %s", responseRecorder.Body.String())
+	if !strings.Contains(responseRecorder.Body.String(), "Service temporarily unavailable") {
+		t.Fatalf("expected body to contain Service temporarily unavailable detail, got: %s", responseRecorder.Body.String())
 	}
 }
 

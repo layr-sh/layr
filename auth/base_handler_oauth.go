@@ -22,9 +22,12 @@ func (handler *BaseHandler) HandleOAuthAuthorize(responseWriter http.ResponseWri
 
 	config := handler.configManager.Get()
 	oAuthProviderConfig, ok := config.OAuthProviders[provider]
-	if !ok || !oAuthProviderConfig.Enabled {
-		log.Debugf("OAuth provider %q not found or disabled", provider)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("OAuth provider '%s' is not enabled", provider), "LAYR_AUTH_001")
+	if !ok {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusNotFound, "invalid_request", "Resource not found")
+		return
+	}
+	if !oAuthProviderConfig.Enabled {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth provider %q is disabled", provider))
 		return
 	}
 
@@ -44,8 +47,7 @@ func (handler *BaseHandler) HandleOAuthAuthorize(responseWriter http.ResponseWri
 		AvatarAttribute: oAuthProviderConfig.AvatarAttribute,
 	})
 	if err != nil {
-		log.Debugf("failed to resolve OAuth provider config for %q: %v", provider, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Invalid request", fmt.Sprintf("failed to resolve OAuth provider config for %q: %v", provider, err))
 		return
 	}
 
@@ -145,21 +147,18 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 	}
 
 	if state == "" {
-		log.Debug("OAuth callback rejected: missing state parameter")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "OAuth state parameter is required", "LAYR_AUTH_INVALID_STATE")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "OAuth state parameter is required")
 		return
 	}
 
 	if handler.kvStore == nil {
-		log.Debug("OAuth callback rejected: KV store unavailable to verify state")
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OAuth state has expired or is invalid", "LAYR_AUTH_INVALID_STATE")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: KV store unavailable to verify state %q", state))
 		return
 	}
 
 	storedState, err := handler.kvStore.Get(request.Context(), "auth:pkce:"+state)
 	if err != nil || storedState == "" {
-		log.Debugf("OAuth callback rejected: state %s not found in KV store or expired", state)
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OAuth state has expired or is invalid", "LAYR_AUTH_INVALID_STATE")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: state %s not found in KV store or expired", state))
 		return
 	}
 
@@ -168,32 +167,32 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 	if unmarshalErr := json.Unmarshal([]byte(storedState), &parsedOAuthStatePayload); unmarshalErr == nil && parsedOAuthStatePayload.StateID != "" {
 		isPayload = true
 		if parsedOAuthStatePayload.StateID != state {
-			log.Debugf("OAuth callback rejected: state mismatch (%s != %s)", parsedOAuthStatePayload.StateID, state)
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OAuth state has expired or is invalid", "LAYR_AUTH_INVALID_STATE")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: state mismatch (%s != %s)", parsedOAuthStatePayload.StateID, state))
 			return
 		}
 		if redirectURI == "" && parsedOAuthStatePayload.RedirectURI != "" {
 			redirectURI = parsedOAuthStatePayload.RedirectURI
 		}
 	} else if storedState != state {
-		log.Debugf("OAuth callback rejected: plain state mismatch (%s != %s)", storedState, state)
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OAuth state has expired or is invalid", "LAYR_AUTH_INVALID_STATE")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: plain state mismatch (%s != %s)", storedState, state))
 		return
 	}
 
 	_ = handler.kvStore.Delete(request.Context(), "auth:pkce:"+state)
 
 	if provider == "" || code == "" {
-		log.Debug("OAuth callback rejected: provider and authorization code are required")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Provider and authorization code required", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Provider and authorization code required")
 		return
 	}
 
 	config := handler.configManager.Get()
 	oAuthProviderConfig, ok := config.OAuthProviders[provider]
-	if !ok || !oAuthProviderConfig.Enabled {
-		log.Debugf("OAuth callback rejected: provider %q is disabled", provider)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("OAuth provider '%s' is disabled", provider), "LAYR_AUTH_001")
+	if !ok {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusNotFound, "invalid_request", "Resource not found")
+		return
+	}
+	if !oAuthProviderConfig.Enabled {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: provider %q is disabled", provider))
 		return
 	}
 
@@ -219,22 +218,19 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 		AvatarAttribute: oAuthProviderConfig.AvatarAttribute,
 	})
 	if err != nil {
-		log.Debugf("failed to resolve OAuth provider config for callback %q: %v", provider, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error(), "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Invalid request", fmt.Sprintf("failed to resolve OAuth provider config for callback %q: %v", provider, err))
 		return
 	}
 
 	log.Tracef("exchanging authorization code with provider %s", provider)
 	userInfo, err := oauth.ExchangeCodeWithConfig(request.Context(), resolvedProviderConfig, code, redirectURI)
 	if err != nil {
-		log.Debugf("OAuth exchange error for provider %s: %v", provider, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("OAuth exchange error: %s", err.Error()), "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authentication failed", fmt.Sprintf("OAuth exchange error for provider %s: %v", provider, err))
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("OAuth callback failed: database pool is not available")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OAuth callback failed: database pool unavailable")
 		return
 	}
 
@@ -244,8 +240,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 	var existingUserID string
 	err = handler.db.QueryRow(ctx, "SELECT user_id FROM auth.identities WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID).Scan(&existingUserID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		log.Debugf("OAuth callback database query error: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database error", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("OAuth callback database query error: %v", err))
 		return
 	}
 
@@ -256,8 +251,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 	if anonymousUserRecord != nil {
 		log.Debugf("linking OAuth identity %s:%s to anonymous user %s", provider, userInfo.ProviderUserID, anonymousUserRecord.ID)
 		if err == nil && existingUserID != anonymousUserRecord.ID {
-			log.Debugf("conflict: OAuth identity %s:%s is already linked to user %s", provider, userInfo.ProviderUserID, existingUserID)
-			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "OAuth identity is already linked to another account", "LAYR_AUTH_001")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusConflict, "invalid_request", "OAuth identity is already linked to another account")
 			return
 		}
 
@@ -267,8 +261,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			var conflictingUserID string
 			conflictErr := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
 			if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
-				log.Debugf("conflict: email %s is already in use by user %s", userInfo.Email, conflictingUserID)
-				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
+				core.WriteOAuthErrorResponse(responseWriter, http.StatusConflict, "invalid_request", "Email is already in use by another account")
 				return
 			}
 		}
@@ -298,8 +291,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if updateErr != nil {
-			log.Debugf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, updateErr)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to convert user", "LAYR_AUTH_001")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, updateErr))
 			return
 		}
 
@@ -327,8 +319,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
 		}
 		if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-			log.Warnf("failed OAuth sign in for locked user %s", userRecord.ID)
-			core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account is temporarily locked", fmt.Sprintf("failed OAuth sign in for locked user %s", userRecord.ID))
 			return
 		}
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
@@ -417,17 +408,14 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 
 // HandleOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
 func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling OAuth user info request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("OAuth userinfo rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required", "LAYR_AUTH_002")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "Bearer token required")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("OAuth userinfo failed: database pool is not available")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OAuth userinfo failed: database pool unavailable")
 		return
 	}
 
@@ -444,12 +432,10 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("OAuth userinfo user not found for ID %s: %v", authContext.UserID, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "The access token is invalid")
 			return
 		}
-		log.Debugf("OAuth userinfo database query error for ID %s: %v", authContext.UserID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database error", "LAYR_AUTH_001")
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("OAuth userinfo database query error for ID %s: %v", authContext.UserID, err))
 		return
 	}
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)

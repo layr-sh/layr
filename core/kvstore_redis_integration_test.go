@@ -84,13 +84,13 @@ func TestCoreRedisKVStoreIntegration(t *testing.T) {
 	}
 
 	// SetNX
-	ok, setNxErr := kvStore.SetNX(ctx, "rnx:key", "first", 5*time.Minute)
-	if setNxErr != nil || !ok {
-		t.Fatalf("expected redis SetNX true for fresh key: ok=%v, err=%v", ok, setNxErr)
+	ok, setNXErr := kvStore.SetNX(ctx, "rnx:key", "first", 5*time.Minute)
+	if setNXErr != nil || !ok {
+		t.Fatalf("expected redis SetNX true for fresh key: ok=%v, err=%v", ok, setNXErr)
 	}
-	ok, setNxErr = kvStore.SetNX(ctx, "rnx:key", "second", 5*time.Minute)
-	if setNxErr != nil || ok {
-		t.Fatalf("expected redis SetNX false for existing key: ok=%v, err=%v", ok, setNxErr)
+	ok, setNXErr = kvStore.SetNX(ctx, "rnx:key", "second", 5*time.Minute)
+	if setNXErr != nil || ok {
+		t.Fatalf("expected redis SetNX false for existing key: ok=%v, err=%v", ok, setNXErr)
 	}
 
 	// Expire

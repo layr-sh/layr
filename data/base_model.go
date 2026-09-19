@@ -135,7 +135,6 @@ type GraphQLLocation struct {
 // GraphQLError represents a GraphQL execution or validation error.
 type GraphQLError struct {
 	Message    string            `json:"message"`
-	ErrorCode  string            `json:"error_code,omitempty"`
 	Locations  []GraphQLLocation `json:"locations,omitempty"`
 	Path       []any             `json:"path,omitempty"`
 	Extensions map[string]any    `json:"extensions,omitempty"`

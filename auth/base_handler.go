@@ -128,8 +128,7 @@ func (handler *BaseHandler) GetTOTPManager() *core.TOTPManager {
 
 func (handler *BaseHandler) assertEmailDeliveryReady(responseWriter http.ResponseWriter, request *http.Request) bool {
 	if handler.emailDispatcher == nil || !handler.emailDispatcher.IsConfigured() {
-		log.Debugf("email delivery check failed: email dispatcher is not configured (remote: %s)", request.RemoteAddr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Email delivery is currently unavailable", "LAYR_AUTH_EMAIL_UNAVAILABLE")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email delivery check failed: email dispatcher is not configured")
 		return false
 	}
 	log.Trace("email delivery readiness asserted")
@@ -138,11 +137,10 @@ func (handler *BaseHandler) assertEmailDeliveryReady(responseWriter http.Respons
 
 func (handler *BaseHandler) assertSMSDeliveryReady(responseWriter http.ResponseWriter, request *http.Request) bool {
 	if handler.smsDispatcher == nil || !handler.smsDispatcher.IsConfigured() {
-		log.Debugf("SMS delivery check failed: SMS dispatcher is not configured (remote: %s)", request.RemoteAddr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "SMS delivery is currently unavailable", "LAYR_AUTH_SMS_UNAVAILABLE")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sms delivery check failed: sms dispatcher is not configured")
 		return false
 	}
-	log.Trace("SMS delivery readiness asserted")
+	log.Trace("sms delivery readiness asserted")
 	return true
 }
 

@@ -28,8 +28,8 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	anonymousDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	anonymousDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAnonymousSignIn(anonymousDisabledResponseRecorder, anonymousDisabledRequest)
-	if anonymousDisabledResponseRecorder.Code != http.StatusForbidden || !strings.Contains(anonymousDisabledResponseRecorder.Body.String(), "LAYR_AUTH_001") {
-		t.Fatalf("expected 403 LAYR_AUTH_001 on disabled anonymous auth, got: %d (%s)", anonymousDisabledResponseRecorder.Code, anonymousDisabledResponseRecorder.Body.String())
+	if anonymousDisabledResponseRecorder.Code != http.StatusForbidden || !strings.Contains(anonymousDisabledResponseRecorder.Body.String(), "Access denied") {
+		t.Fatalf("expected 403 on disabled anonymous auth, got: %d (%s)", anonymousDisabledResponseRecorder.Code, anonymousDisabledResponseRecorder.Body.String())
 	}
 
 	// 2. Anonymous auth enabled with nil database pool -> 500

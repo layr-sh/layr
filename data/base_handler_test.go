@@ -87,7 +87,7 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 	t.Run("writeError", func(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-		baseHandler.writeError(responseRecorder, request, http.StatusBadRequest, "bad request", "LAYR_TEST_001")
+		core.WriteErrorResponse(responseRecorder, request, http.StatusBadRequest, "bad request")
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 

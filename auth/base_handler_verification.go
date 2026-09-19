@@ -28,8 +28,7 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	}
 
 	if recipientEmail == "" || !strings.Contains(recipientEmail, "@") {
-		log.Debugf("email verification request rejected: invalid recipient email %q", recipientEmail)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email address is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email address is required")
 		return
 	}
 
@@ -38,8 +37,7 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	}
 
 	if handler.db == nil {
-		log.Debug("email verification request rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email verification request rejected: database pool unavailable")
 		return
 	}
 
@@ -50,15 +48,13 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	targetUserID := existingUserID
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
-			log.Debugf("email verification conflict: email %s already in use by user %s (caller: %s)", recipientEmail, existingUserID, authUserID)
-			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use")
 			return
 		}
 		targetUserID = authUserID
 	} else {
 		if err != nil {
-			log.Debugf("email verification request rejected: user not found for email %s: %v", recipientEmail, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
 	}
@@ -115,11 +111,9 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 }
 
 func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling user email verification confirmation")
 	var userEmailVerificationConfirmRequest UserEmailVerificationConfirmRequest
 	if err := json.NewDecoder(request.Body).Decode(&userEmailVerificationConfirmRequest); err != nil {
-		log.Debugf("email verification confirmation rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -133,14 +127,12 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 
 	code := strings.TrimSpace(userEmailVerificationConfirmRequest.Code)
 	if recipientEmail == "" || code == "" {
-		log.Debug("email verification confirmation rejected: missing email or code")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email and verification code are required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email and verification code are required")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("email verification confirmation rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email verification confirmation rejected: database pool unavailable")
 		return
 	}
 
@@ -159,29 +151,25 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 	`
 	err := handler.db.QueryRow(ctx, query, recipientEmail).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
-		log.Debugf("email verification confirmation failed: OTP not found for %s: %v", recipientEmail, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code")
 		return
 	}
 
 	if time.Now().UTC().After(expiresAt) {
-		log.Debugf("email verification confirmation failed: OTP expired for %s", recipientEmail)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Verification code has expired", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Verification code has expired")
 		return
 	}
 
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
-		log.Debugf("email verification confirmation failed: max attempts exceeded for %s", recipientEmail)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
-		log.Debugf("email verification confirmation failed: invalid code for %s", recipientEmail)
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
 
@@ -209,8 +197,7 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
-			log.Debugf("failed to update user email verification for %s: %v", authUserID, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update email verification status", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user email verification for %s: %v", authUserID, err))
 			return
 		}
 
@@ -245,8 +232,7 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("failed to update unauthenticated user email verification for %s: %v", recipientEmail, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update email verification status", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update unauthenticated user email verification for %s: %v", recipientEmail, err))
 		return
 	}
 
@@ -285,15 +271,13 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	}
 
 	if recipientPhone == "" {
-		log.Debug("phone verification request rejected: missing phone number")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number is required")
 		return
 	}
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		log.Debugf("phone verification request rejected: invalid phone %q: %v", recipientPhone, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 		return
 	}
 	recipientPhone = normalizedPhone
@@ -303,8 +287,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	}
 
 	if handler.db == nil {
-		log.Debug("phone verification request rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "phone verification request rejected: database pool unavailable")
 		return
 	}
 
@@ -316,15 +299,13 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	targetUserID := existingUserID
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
-			log.Debugf("phone verification conflict: phone %s already in use by user %s (caller: %s)", recipientPhone, existingUserID, authUserID)
-			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use")
 			return
 		}
 		targetUserID = authUserID
 	} else {
 		if err != nil {
-			log.Debugf("phone verification request rejected: user not found for phone %s: %v", recipientPhone, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
 	}
@@ -381,11 +362,9 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 }
 
 func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling phone verification confirmation request")
 	var userPhoneVerificationConfirmRequest UserPhoneVerificationConfirmRequest
 	if err := json.NewDecoder(request.Body).Decode(&userPhoneVerificationConfirmRequest); err != nil {
-		log.Debugf("phone verification confirmation rejected: invalid JSON body: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -399,22 +378,19 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 
 	code := strings.TrimSpace(userPhoneVerificationConfirmRequest.Code)
 	if recipientPhone == "" || code == "" {
-		log.Debug("phone verification confirmation rejected: missing phone or code")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number and verification code are required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number and verification code are required")
 		return
 	}
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		log.Debugf("phone verification confirmation rejected: invalid phone %q: %v", recipientPhone, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 		return
 	}
 	recipientPhone = normalizedPhone
 
 	if handler.db == nil {
-		log.Debug("phone verification confirmation rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "phone verification confirmation rejected: database pool unavailable")
 		return
 	}
 
@@ -433,29 +409,25 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 	`
 	err = handler.db.QueryRow(ctx, query, recipientPhone).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
-		log.Debugf("phone verification confirmation failed: OTP not found for %s: %v", recipientPhone, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code")
 		return
 	}
 
 	if time.Now().UTC().After(expiresAt) {
-		log.Debugf("phone verification confirmation failed: OTP expired for %s", recipientPhone)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Verification code has expired", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Verification code has expired")
 		return
 	}
 
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
-		log.Debugf("phone verification confirmation failed: max attempts exceeded for %s", recipientPhone)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
-		log.Debugf("phone verification confirmation failed: invalid code for %s", recipientPhone)
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
 
@@ -483,8 +455,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 		)
 		if err != nil {
-			log.Debugf("failed to update user phone verification for %s: %v", authUserID, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update phone verification status", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user phone verification for %s: %v", authUserID, err))
 			return
 		}
 
@@ -519,8 +490,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("failed to update unauthenticated user phone verification for %s: %v", recipientPhone, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update phone verification status", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update unauthenticated user phone verification for %s: %v", recipientPhone, err))
 		return
 	}
 
@@ -544,26 +514,22 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 }
 
 func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling update user email request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("update user email rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	authUserID := authContext.UserID
 
 	var updateUpdateUserEmailRequest UpdateUserEmailRequest
 	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserEmailRequest); err != nil {
-		log.Debugf("update user email rejected: invalid JSON payload: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	recipientEmail := strings.TrimSpace(strings.ToLower(updateUpdateUserEmailRequest.Email))
 	if recipientEmail == "" || !strings.Contains(recipientEmail, "@") {
-		log.Debugf("update user email rejected: invalid email address %q", recipientEmail)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Valid email address is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Valid email address is required")
 		return
 	}
 
@@ -572,8 +538,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 	}
 
 	if handler.db == nil {
-		log.Debug("update user email rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user email rejected: database pool unavailable")
 		return
 	}
 
@@ -581,15 +546,13 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 	var existingUserID string
 	err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
-		log.Debugf("update user email conflict: email %s already in use by user %s", recipientEmail, existingUserID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 		return
 	}
 
 	anonymousUserRecord, resolveErr := handler.resolveAnonymousCaller(request)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
-		log.Debugf("failed to resolve anonymous caller: %v", resolveErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to resolve anonymous caller: %v", resolveErr))
 		return
 	}
 
@@ -601,8 +564,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 			WHERE id = $2
 		`, recipientEmail, anonymousUserRecord.ID)
 		if updateErr != nil {
-			log.Debugf("failed to update anonymous user email: %v", updateErr)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update user email", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update anonymous user email: %v", updateErr))
 			return
 		}
 
@@ -649,33 +611,28 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 }
 
 func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling update user phone request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("update user phone rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	authUserID := authContext.UserID
 
 	var updateUpdateUserPhoneRequest UpdateUserPhoneRequest
 	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserPhoneRequest); err != nil {
-		log.Debugf("update user phone rejected: invalid JSON payload: %v", err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	recipientPhone := strings.TrimSpace(updateUpdateUserPhoneRequest.Phone)
 	if recipientPhone == "" {
-		log.Debug("update user phone rejected: empty phone number")
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number is required")
 		return
 	}
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		log.Debugf("update user phone rejected: invalid phone %q: %v", recipientPhone, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 		return
 	}
 	recipientPhone = normalizedPhone
@@ -685,8 +642,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 	}
 
 	if handler.db == nil {
-		log.Debug("update user phone rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user phone rejected: database pool unavailable")
 		return
 	}
 
@@ -694,15 +650,13 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 	var existingUserID string
 	err = handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
-		log.Debugf("update user phone conflict: phone %s already in use by user %s", recipientPhone, existingUserID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account")
 		return
 	}
 
 	anonymousUserRecord, resolveErr := handler.resolveAnonymousCaller(request)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
-		log.Debugf("failed to resolve anonymous caller: %v", resolveErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to resolve anonymous caller: %v", resolveErr))
 		return
 	}
 
@@ -714,8 +668,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 			WHERE id = $2
 		`, recipientPhone, anonymousUserRecord.ID)
 		if updateErr != nil {
-			log.Debugf("failed to update anonymous user phone: %v", updateErr)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update user phone", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update anonymous user phone: %v", updateErr))
 			return
 		}
 

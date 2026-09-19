@@ -27,30 +27,30 @@ const (
 // HandleGraphQL processes POST /api/v1/graphql requests.
 func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
-		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests", "LAYR_DATA_001")
+		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests")
 		return
 	}
 
 	config := handler.configManager.Get()
 	if !config.GraphQL.Enabled {
-		handler.writeGraphQLError(responseWriter, http.StatusForbidden, "GraphQL API is disabled", "LAYR_DATA_003")
+		handler.writeGraphQLError(responseWriter, http.StatusForbidden, "GraphQL API is disabled")
 		return
 	}
 
 	var graphQLRequest GraphQLRequest
 	if err := json.NewDecoder(request.Body).Decode(&graphQLRequest); err != nil {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "Invalid JSON request payload", "LAYR_DATA_001")
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "Invalid JSON request payload")
 		return
 	}
 
 	if strings.TrimSpace(graphQLRequest.Query) == "" {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL query string cannot be empty", "LAYR_DATA_001")
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL query string cannot be empty")
 		return
 	}
 
 	operationNode, err := graphql.ParseGraphQLWithOperation(graphQLRequest.Query, graphQLRequest.OperationName, graphQLRequest.Variables)
 	if err != nil {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL syntax error: %v", err), "LAYR_DATA_001")
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL syntax error: %v", err))
 		return
 	}
 
@@ -60,7 +60,7 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 	}
 	actualDepth := operationNode.CalculateDepth()
 	if actualDepth > maxDepth {
-		handler.writeGraphQLError(responseWriter, http.StatusUnprocessableEntity, fmt.Sprintf("Query depth %d exceeds maximum allowed depth %d", actualDepth, maxDepth), "LAYR_DATA_005")
+		handler.writeGraphQLError(responseWriter, http.StatusUnprocessableEntity, fmt.Sprintf("Query depth %d exceeds maximum allowed depth %d", actualDepth, maxDepth))
 		return
 	}
 
@@ -70,14 +70,14 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 	}
 	complexity := operationNode.CalculateComplexity()
 	if complexity > maxComplexity {
-		handler.writeGraphQLError(responseWriter, http.StatusUnprocessableEntity, fmt.Sprintf("Query complexity %d exceeds limit of %d", complexity, maxComplexity), "LAYR_DATA_005")
+		handler.writeGraphQLError(responseWriter, http.StatusUnprocessableEntity, fmt.Sprintf("Query complexity %d exceeds limit of %d", complexity, maxComplexity))
 		return
 	}
 
 	// Handle standard GraphQL introspection query (__schema or __type)
 	if operationNode.Type == graphql.QueryOperationType && handler.isIntrospectionQuery(operationNode) {
 		if !config.GraphQL.IntrospectionEnabled {
-			handler.writeGraphQLError(responseWriter, http.StatusForbidden, "GraphQL introspection is disabled", "LAYR_DATA_003")
+			handler.writeGraphQLError(responseWriter, http.StatusForbidden, "GraphQL introspection is disabled")
 			return
 		}
 		introspectionData := handler.handleIntrospection(operationNode)
@@ -159,12 +159,12 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 
 	sqlQuery, err := handler.graphqlCompiler.Compile(operationNode)
 	if err != nil {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL compilation error: %v", err), "LAYR_DATA_001")
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL compilation error: %v", err))
 		return
 	}
 
 	if handler.db == nil {
-		handler.writeGraphQLError(responseWriter, http.StatusInternalServerError, "Database connection is not initialized", "LAYR_DATA_005")
+		handler.writeGraphQLError(responseWriter, http.StatusInternalServerError, "Database connection is not initialized")
 		return
 	}
 
@@ -381,7 +381,6 @@ func (handler *BaseHandler) writeGraphQLSuccess(responseWriter http.ResponseWrit
 
 func (handler *BaseHandler) writeGraphQLDBError(responseWriter http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
-	errorCode := "LAYR_DATA_005"
 	message := err.Error()
 
 	var pgError *pgconn.PgError
@@ -389,38 +388,32 @@ func (handler *BaseHandler) writeGraphQLDBError(responseWriter http.ResponseWrit
 		switch pgError.Code {
 		case "42501": // insufficient_privilege
 			status = http.StatusForbidden
-			errorCode = "LAYR_DATA_003"
 			message = "Permission denied by database security policy"
 		case "23505": // unique_violation
 			status = http.StatusConflict
-			errorCode = "LAYR_DATA_004"
 			message = fmt.Sprintf("Unique constraint violation: %s", pgError.Detail)
 		case "23503", "23001": // foreign_key_violation or restrict_violation
 			status = http.StatusConflict
-			errorCode = "LAYR_DATA_004"
 			message = fmt.Sprintf("Foreign key violation: %s", pgError.Detail)
 		case "42P01", "42883": // undefined_table or undefined_function
 			status = http.StatusNotFound
-			errorCode = "LAYR_DATA_002"
 			message = "Relation does not exist"
 		case "42703": // undefined_column
 			status = http.StatusBadRequest
-			errorCode = "LAYR_DATA_001"
 			message = fmt.Sprintf("Column does not exist: %s", pgError.Message)
 		}
 	}
 
-	handler.writeGraphQLError(responseWriter, status, message, errorCode)
+	handler.writeGraphQLError(responseWriter, status, message)
 }
 
-func (handler *BaseHandler) writeGraphQLError(responseWriter http.ResponseWriter, status int, detail, errorCode string) {
+func (handler *BaseHandler) writeGraphQLError(responseWriter http.ResponseWriter, status int, detail string) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(status)
 	_ = json.NewEncoder(responseWriter).Encode(GraphQLResponse{
 		Errors: []GraphQLError{
 			{
-				Message:   detail,
-				ErrorCode: errorCode,
+				Message: detail,
 				Extensions: map[string]any{
 					"status":    status,
 					"timestamp": time.Now().UTC().Format(time.RFC3339),

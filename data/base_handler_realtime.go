@@ -15,12 +15,12 @@ import (
 func (handler *BaseHandler) HandleRealtime(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.Realtime.Enabled {
-		core.WriteErrorResponseProblem(responseWriter, request, http.StatusForbidden, "Real-Time API Disabled", "Real-Time API is disabled", "LAYR_DATA_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "realtime connection rejected: Real-Time API is disabled in configuration")
 		return
 	}
 
 	if handler.realtimeHub == nil {
-		core.WriteErrorResponseProblem(responseWriter, request, http.StatusServiceUnavailable, "Real-Time Service Unavailable", "Realtime hub is not initialized", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "realtime connection rejected: realtime hub is not initialized")
 		return
 	}
 
@@ -29,7 +29,7 @@ func (handler *BaseHandler) HandleRealtime(responseWriter http.ResponseWriter, r
 		maxConnections = 10000
 	}
 	if handler.realtimeHub.ClientCount() >= maxConnections {
-		core.WriteErrorResponseProblem(responseWriter, request, http.StatusTooManyRequests, "Connection Limit Exceeded", "Too many active realtime connections", "LAYR_DATA_004")
+		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many requests. Please try again later.", fmt.Sprintf("realtime connection rejected: max connections limit (%d) reached", maxConnections))
 		return
 	}
 

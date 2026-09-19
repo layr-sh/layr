@@ -36,12 +36,12 @@ func validateKVKey(cacheKey string) (bool, string) {
 func (handler *BaseHandler) HandleGetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv get rejected: KV store is not available")
 		return
 	}
 	cacheKey := handler.extractKVKey(request)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -52,12 +52,12 @@ func (handler *BaseHandler) HandleGetKV(responseWriter http.ResponseWriter, requ
 func (handler *BaseHandler) HandlePostKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv post rejected: KV store is not available")
 		return
 	}
 	cacheKey := handler.extractKVKey(request)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -68,12 +68,12 @@ func (handler *BaseHandler) HandlePostKV(responseWriter http.ResponseWriter, req
 func (handler *BaseHandler) HandlePutKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv put rejected: KV store is not available")
 		return
 	}
 	cacheKey := handler.extractKVKey(request)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -93,12 +93,12 @@ func (handler *BaseHandler) HandleSetKV(responseWriter http.ResponseWriter, requ
 func (handler *BaseHandler) HandlePatchKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv patch rejected: KV store is not available")
 		return
 	}
 	cacheKey := handler.extractKVKey(request)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -109,12 +109,12 @@ func (handler *BaseHandler) HandlePatchKV(responseWriter http.ResponseWriter, re
 func (handler *BaseHandler) HandleDeleteKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv delete rejected: KV store is not available")
 		return
 	}
 	cacheKey := handler.extractKVKey(request)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -125,7 +125,7 @@ func (handler *BaseHandler) HandleDeleteKV(responseWriter http.ResponseWriter, r
 func (handler *BaseHandler) HandleMGetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv mget rejected: KV store is not available")
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -136,7 +136,7 @@ func (handler *BaseHandler) HandleMGetKV(responseWriter http.ResponseWriter, req
 func (handler *BaseHandler) HandleMSetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv mset rejected: KV store is not available")
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -147,7 +147,7 @@ func (handler *BaseHandler) HandleMSetKV(responseWriter http.ResponseWriter, req
 func (handler *BaseHandler) HandleIncrementKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
-		handler.writeError(responseWriter, request, http.StatusServiceUnavailable, "KV store is not available", "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "kv increment rejected: KV store is not available")
 		return
 	}
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
@@ -171,10 +171,10 @@ func (handler *BaseHandler) handleGetKV(responseWriter http.ResponseWriter, requ
 	storedValue, err := handler.kvStore.Get(request.Context(), internalKey)
 	if err != nil {
 		if errors.Is(err, core.ErrKVStoreKeyNotFound) || err.Error() == "key not found" {
-			handler.writeError(responseWriter, request, http.StatusNotFound, "Key not found", "LAYR_DATA_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Key not found")
 			return
 		}
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, err.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv get failed for key %q: %v", cacheKey, err))
 		return
 	}
 
@@ -190,30 +190,30 @@ func (handler *BaseHandler) handlePostKV(responseWriter http.ResponseWriter, req
 	if readErr != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(readErr, &maxBytesError) {
-			handler.writeError(responseWriter, request, http.StatusRequestEntityTooLarge, "Request body exceeds 2MB limit", "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusRequestEntityTooLarge, "Request body exceeds size limit")
 			return
 		}
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 	if len(bodyBytes) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 
 	var rawMap map[string]json.RawMessage
 	if unmarshalMapErr := json.Unmarshal(bodyBytes, &rawMap); unmarshalMapErr != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: expected JSON object", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 	if _, hasValue := rawMap["value"]; !hasValue {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Missing required 'value' property in JSON body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing required 'value' property")
 		return
 	}
 
 	var kvSetRequest KVSetRequest
 	if decodeErr := json.Unmarshal(bodyBytes, &kvSetRequest); decodeErr != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: expected { value: string, ttl?: number }", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -227,11 +227,11 @@ func (handler *BaseHandler) handlePostKV(responseWriter http.ResponseWriter, req
 	if isNX {
 		created, setNXErr := handler.kvStore.SetNX(request.Context(), internalKey, kvSetRequest.Value, time.Duration(ttlSeconds)*time.Second)
 		if setNXErr != nil {
-			handler.writeError(responseWriter, request, http.StatusInternalServerError, setNXErr.Error(), "LAYR_DATA_005")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv post (nx) failed for key %q: %v", cacheKey, setNXErr))
 			return
 		}
 		if !created {
-			handler.writeError(responseWriter, request, http.StatusConflict, "Key already exists", "LAYR_DATA_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Key already exists")
 			return
 		}
 		handler.writeJSON(responseWriter, http.StatusCreated, KVSetResponse{
@@ -245,7 +245,7 @@ func (handler *BaseHandler) handlePostKV(responseWriter http.ResponseWriter, req
 
 	setErr := handler.kvStore.Set(request.Context(), internalKey, kvSetRequest.Value, time.Duration(ttlSeconds)*time.Second)
 	if setErr != nil {
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, setErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv post failed for key %q: %v", cacheKey, setErr))
 		return
 	}
 
@@ -262,14 +262,14 @@ func (handler *BaseHandler) handlePutKV(responseWriter http.ResponseWriter, requ
 	if readErr != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(readErr, &maxBytesError) {
-			handler.writeError(responseWriter, request, http.StatusRequestEntityTooLarge, "Request body exceeds 2MB limit", "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusRequestEntityTooLarge, "Request body exceeds size limit")
 			return
 		}
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 	if len(bodyBytes) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
 	}
 
@@ -290,11 +290,11 @@ func (handler *BaseHandler) handlePutKV(responseWriter http.ResponseWriter, requ
 	if isNX {
 		created, setNXErr := handler.kvStore.SetNX(request.Context(), internalKey, valueToStore, time.Duration(ttlSeconds)*time.Second)
 		if setNXErr != nil {
-			handler.writeError(responseWriter, request, http.StatusInternalServerError, setNXErr.Error(), "LAYR_DATA_005")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv put (nx) failed for key %q: %v", cacheKey, setNXErr))
 			return
 		}
 		if !created {
-			handler.writeError(responseWriter, request, http.StatusConflict, "Key already exists", "LAYR_DATA_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Key already exists")
 			return
 		}
 		handler.writeJSON(responseWriter, http.StatusCreated, KVSetResponse{
@@ -308,7 +308,7 @@ func (handler *BaseHandler) handlePutKV(responseWriter http.ResponseWriter, requ
 
 	setErr := handler.kvStore.Set(request.Context(), internalKey, valueToStore, time.Duration(ttlSeconds)*time.Second)
 	if setErr != nil {
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, setErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv put failed for key %q: %v", cacheKey, setErr))
 		return
 	}
 
@@ -323,7 +323,7 @@ func (handler *BaseHandler) handlePatchKV(responseWriter http.ResponseWriter, re
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxKVPayloadBytes)
 	var kvTouchRequest KVTouchRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&kvTouchRequest); decodeErr != nil || kvTouchRequest.TTL <= 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: positive 'ttl' required", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid expiration value")
 		return
 	}
 
@@ -331,10 +331,10 @@ func (handler *BaseHandler) handlePatchKV(responseWriter http.ResponseWriter, re
 	expireErr := handler.kvStore.Expire(request.Context(), internalKey, time.Duration(kvTouchRequest.TTL)*time.Second)
 	if expireErr != nil {
 		if errors.Is(expireErr, core.ErrKVStoreKeyNotFound) || expireErr.Error() == "key not found" {
-			handler.writeError(responseWriter, request, http.StatusNotFound, "Key not found", "LAYR_DATA_002")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Key not found")
 			return
 		}
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, expireErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv patch failed for key %q: %v", cacheKey, expireErr))
 		return
 	}
 
@@ -355,7 +355,7 @@ func (handler *BaseHandler) handleMGetKV(responseWriter http.ResponseWriter, req
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxKVPayloadBytes)
 	var kvmGetRequest KVMGetRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&kvmGetRequest); decodeErr != nil || len(kvmGetRequest.Keys) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: 'keys' array required", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Keys are required")
 		return
 	}
 
@@ -391,11 +391,11 @@ func (handler *BaseHandler) handleMSetKV(responseWriter http.ResponseWriter, req
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxKVPayloadBytes)
 	var kvMSetRequest KVMSetRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&kvMSetRequest); decodeErr != nil {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: 'entries' map required", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 	if len(kvMSetRequest.Entries) == 0 {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "'entries' must not be empty", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Entries cannot be empty")
 		return
 	}
 
@@ -407,7 +407,7 @@ func (handler *BaseHandler) handleMSetKV(responseWriter http.ResponseWriter, req
 	internalEntries := make(map[string]string, len(kvMSetRequest.Entries))
 	for userKey, userValue := range kvMSetRequest.Entries {
 		if valid, errorMsg := validateKVKey(userKey); !valid {
-			handler.writeError(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Invalid key %q: %s", userKey, errorMsg), "LAYR_DATA_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Invalid key %q: %s", userKey, errorMsg))
 			return
 		}
 		internalKey := datakv.BuildInternalKey(authContext, userKey)
@@ -416,7 +416,7 @@ func (handler *BaseHandler) handleMSetKV(responseWriter http.ResponseWriter, req
 
 	msetErr := handler.kvStore.MSet(request.Context(), internalEntries, time.Duration(ttlSeconds)*time.Second)
 	if msetErr != nil {
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, msetErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv mset failed: %v", msetErr))
 		return
 	}
 
@@ -430,12 +430,12 @@ func (handler *BaseHandler) handleIncrementKV(responseWriter http.ResponseWriter
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxKVPayloadBytes)
 	var kvIncrementRequest KVIncrementRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&kvIncrementRequest); decodeErr != nil || kvIncrementRequest.Key == "" {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body: 'key' required", "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Key is required")
 		return
 	}
 
 	if valid, errorMsg := validateKVKey(kvIncrementRequest.Key); !valid {
-		handler.writeError(responseWriter, request, http.StatusBadRequest, errorMsg, "LAYR_DATA_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
 	}
 
@@ -452,7 +452,7 @@ func (handler *BaseHandler) handleIncrementKV(responseWriter http.ResponseWriter
 	internalKey := datakv.BuildInternalKey(authContext, kvIncrementRequest.Key)
 	counterValue, incrementErr := handler.kvStore.IncrementBy(request.Context(), internalKey, delta, time.Duration(ttlSeconds)*time.Second)
 	if incrementErr != nil {
-		handler.writeError(responseWriter, request, http.StatusInternalServerError, incrementErr.Error(), "LAYR_DATA_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("kv increment failed for key %q: %v", kvIncrementRequest.Key, incrementErr))
 		return
 	}
 

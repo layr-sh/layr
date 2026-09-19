@@ -11,6 +11,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"layr.sh/core"
 )
 
 // HandleListUsers lists registered application users with filtering and pagination (auth:user.read).
@@ -18,13 +19,11 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 	log.Trace("HandleListUsers invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		log.Debug("HandleListUsers rejected: missing auth:user.read scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
 		return
 	}
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleListUsers rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -74,8 +73,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 
 	rows, err = controlPlaneHandler.db.Query(ctx, baseQuery, arguments...)
 	if err != nil {
-		log.Debugf("HandleListUsers query failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to query users", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	defer rows.Close()
@@ -107,15 +105,13 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 	log.Trace("HandleCreateUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		log.Debug("HandleCreateUser rejected: missing auth:user.write scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
 	var userCreateRequest UserCreateRequest
 	if err := json.NewDecoder(request.Body).Decode(&userCreateRequest); err != nil {
-		log.Debugf("HandleCreateUser rejected: invalid JSON body: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
@@ -125,22 +121,19 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 	if userCreateRequest.Phone != "" {
 		normalizedPhone, err := NormalizePhone(userCreateRequest.Phone)
 		if err != nil {
-			log.Debugf("HandleCreateUser rejected: invalid phone %q: %v", userCreateRequest.Phone, err)
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		userCreateRequest.Phone = normalizedPhone
 	}
 
 	if userCreateRequest.Email == "" && userCreateRequest.Phone == "" {
-		log.Debug("HandleCreateUser rejected: email or phone required")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Email or phone number is required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleCreateUser rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -193,8 +186,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("HandleCreateUser insert failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to create user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -211,21 +203,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 	log.Trace("HandleGetUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		log.Debug("HandleGetUser rejected: missing auth:user.read scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleGetUser rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleGetUser rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -245,12 +234,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("HandleGetUser: user %s not found", userID)
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
-		log.Debugf("HandleGetUser query failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to query user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -263,21 +250,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 	log.Trace("HandleDeleteUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		log.Debug("HandleDeleteUser rejected: missing auth:user.write scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleDeleteUser rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleDeleteUser rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -296,12 +280,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("HandleDeleteUser: user %s not found", userID)
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
-		log.Debugf("HandleDeleteUser exec failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to delete user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -322,21 +304,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 	log.Trace("HandleLockUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		log.Debug("HandleLockUser rejected: missing auth:user.write scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleLockUser rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleLockUser rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -365,12 +344,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("HandleLockUser: user %s not found", userID)
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
-		log.Debugf("HandleLockUser query failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to lock user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
@@ -418,21 +395,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	log.Trace("HandleUnlockUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		log.Debug("HandleUnlockUser rejected: missing auth:user.write scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleUnlockUser rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleUnlockUser rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -453,12 +427,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Debugf("HandleUnlockUser: user %s not found", userID)
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusNotFound, "User not found", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 			return
 		}
-		log.Debugf("HandleUnlockUser query failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to unlock user", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	_ = json.Unmarshal(rawProperties, &userRecord.Properties)

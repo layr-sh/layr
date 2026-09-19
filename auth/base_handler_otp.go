@@ -19,13 +19,13 @@ const (
 func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp send rejected: OTP authentication is disabled in configuration")
 		return
 	}
 
 	var otpSendRequest OTPSendRequest
 	if err := json.NewDecoder(request.Body).Decode(&otpSendRequest); err != nil || otpSendRequest.Recipient == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required")
 		return
 	}
 
@@ -44,7 +44,7 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 	var tokenExpiryMinutes int
 	if isEmail {
 		if !config.EmailOTP.Enabled {
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp send rejected: email OTP is disabled in configuration")
 			return
 		}
 		if !handler.assertEmailDeliveryReady(responseWriter, request) {
@@ -53,7 +53,7 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 		tokenExpiryMinutes = config.EmailOTP.TokenExpiryMinutes
 	} else {
 		if !config.SMSOTP.Enabled {
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp send rejected: SMS OTP is disabled in configuration")
 			return
 		}
 		if !handler.assertSMSDeliveryReady(responseWriter, request) {
@@ -61,7 +61,7 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		recipient = normalizedPhone
@@ -79,19 +79,19 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 		clientIP := core.ExtractRequestClientIP(request)
 		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.", "LAYR_AUTH_RATE_LIMIT_EXCEEDED")
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.")
 			return
 		}
 
 		cooldownKey := fmt.Sprintf("auth:cooldown:%s:%s", purpose, recipient)
 		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code", "LAYR_AUTH_COOLDOWN")
+			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code")
 			return
 		}
 	}
 
 	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "otp send rejected: database pool unavailable")
 		return
 	}
 
@@ -134,13 +134,13 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp verify rejected: OTP authentication is disabled in configuration")
 		return
 	}
 
 	var otpVerifyRequest OTPVerifyRequest
 	if err := json.NewDecoder(request.Body).Decode(&otpVerifyRequest); err != nil || otpVerifyRequest.Recipient == "" || otpVerifyRequest.Code == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code required")
 		return
 	}
 
@@ -162,24 +162,24 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 	}
 	if isEmail {
 		if !config.EmailOTP.Enabled {
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp verify rejected: email OTP is disabled in configuration")
 			return
 		}
 	} else {
 		if !config.SMSOTP.Enabled {
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "OTP authentication is disabled", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp verify rejected: SMS OTP is disabled in configuration")
 			return
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", "LAYR_AUTH_INVALID_PHONE")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		recipient = normalizedPhone
 	}
 
 	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "otp verify rejected: database pool unavailable")
 		return
 	}
 
@@ -206,7 +206,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				UserAgent: request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired OTP code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired OTP code")
 		return
 	}
 
@@ -226,7 +226,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				UserAgent: request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid OTP code")
 		return
 	}
 
@@ -248,9 +248,9 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		conflictErr := handler.db.QueryRow(ctx, checkQuery, recipient).Scan(&conflictingUserID)
 		if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
 			if isEmail {
-				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account", "LAYR_AUTH_001")
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 			} else {
-				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account", "LAYR_AUTH_001")
+				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account")
 			}
 			return
 		}
@@ -338,7 +338,6 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 	}
 
 	if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Warnf("failed OTP sign in for locked user %s", userRecord.ID)
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
 				Recipient: recipient,
@@ -349,7 +348,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				UserAgent: request.UserAgent(),
 			}))
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 

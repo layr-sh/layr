@@ -672,7 +672,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on token exchange for nonexistent user, got: %d", orphanResponseRecorder.Code)
 	}
 
-	// c. Deleted/nonexistent user in userinfo -> 404
+	// c. Deleted/nonexistent user in userinfo -> 401 invalid_token
 	ghostToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: "01918a24-8888-7000-8000-000000000088",
 		Email:   "ghost@example.com",
@@ -690,8 +690,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	ghostRequest.Header.Set("Authorization", "Bearer "+ghostToken)
 	ghostResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleOIDCUserInfo(ghostResponseRecorder, ghostRequest)
-	if ghostResponseRecorder.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 on userinfo for nonexistent user, got: %d", ghostResponseRecorder.Code)
+	if ghostResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on userinfo for nonexistent user, got: %d", ghostResponseRecorder.Code)
 	}
 
 	// d. CompleteOAuthFlow with OIDCStateID against real pool (covers sessions insert)

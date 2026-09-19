@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"layr.sh/core"
@@ -289,7 +288,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected is_anonymous to be true")
 	}
 
-	// 3. Attempting to set password on anonymous user MUST FAIL (400 Bad Request LAYR_AUTH_001)
+	// 3. Attempting to set password on anonymous user MUST FAIL (400 Bad Request)
 	forbiddenPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
 		NewPassword: "AttemptedPassword123!",
 	})
@@ -297,8 +296,8 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	forbiddenPasswordRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	forbiddenPasswordResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(forbiddenPasswordResponseRecorder, forbiddenPasswordRequest)
-	if forbiddenPasswordResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(forbiddenPasswordResponseRecorder.Body.String(), "LAYR_AUTH_001") {
-		t.Fatalf("expected 400 LAYR_AUTH_001 on anonymous password change, got: %d (%s)", forbiddenPasswordResponseRecorder.Code, forbiddenPasswordResponseRecorder.Body.String())
+	if forbiddenPasswordResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on anonymous password change, got: %d (%s)", forbiddenPasswordResponseRecorder.Code, forbiddenPasswordResponseRecorder.Body.String())
 	}
 
 	// 4. Update Profile Properties

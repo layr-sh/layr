@@ -146,15 +146,15 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	unconfiguredEmailOTPResponseRecorder := httptest.NewRecorder()
 	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
 	baseHandler.handleOTPSend(unconfiguredEmailOTPResponseRecorder, unconfiguredEmailOTPRequest)
-	if unconfiguredEmailOTPResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured email OTP, got: %d (%s)", unconfiguredEmailOTPResponseRecorder.Code, unconfiguredEmailOTPResponseRecorder.Body.String())
+	if unconfiguredEmailOTPResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured email OTP, got: %d (%s)", unconfiguredEmailOTPResponseRecorder.Code, unconfiguredEmailOTPResponseRecorder.Body.String())
 	}
 
 	unconfiguredPhoneOTPResponseRecorder := httptest.NewRecorder()
 	unconfiguredPhoneOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222","purpose":"sign_in"}`))
 	baseHandler.handleOTPSend(unconfiguredPhoneOTPResponseRecorder, unconfiguredPhoneOTPRequest)
-	if unconfiguredPhoneOTPResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured phone OTP, got: %d (%s)", unconfiguredPhoneOTPResponseRecorder.Code, unconfiguredPhoneOTPResponseRecorder.Body.String())
+	if unconfiguredPhoneOTPResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured phone OTP, got: %d (%s)", unconfiguredPhoneOTPResponseRecorder.Code, unconfiguredPhoneOTPResponseRecorder.Body.String())
 	}
 
 	// Restore configured delivery

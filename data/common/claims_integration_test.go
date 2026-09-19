@@ -44,8 +44,8 @@ func TestCommonClaimsApplyRLSIntegration(t *testing.T) {
 	}
 	defer db.Close()
 
-	if migErr := db.RunMigrations(ctx, core.SystemDatabaseMigrations); migErr != nil {
-		t.Fatalf("failed to apply migrations: %v", migErr)
+	if migrationErr := db.RunMigrations(ctx, core.SystemDatabaseMigrations); migrationErr != nil {
+		t.Fatalf("failed to apply migrations: %v", migrationErr)
 	}
 
 	// 2. Begin transaction and apply claims

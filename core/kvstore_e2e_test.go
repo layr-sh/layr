@@ -76,9 +76,9 @@ func TestCoreKVStoreLifecycleE2E(t *testing.T) {
 	}
 
 	// 4. Distributed lock simulation via SetNX
-	lockAcquired, setNxErr := kvStore.SetNX(ctx, "lock:cron:sync", "node-1", 10*time.Second)
-	if setNxErr != nil || !lockAcquired {
-		t.Fatalf("expected first SetNX to acquire lock, ok=%v, err=%v", lockAcquired, setNxErr)
+	lockAcquired, setNXErr := kvStore.SetNX(ctx, "lock:cron:sync", "node-1", 10*time.Second)
+	if setNXErr != nil || !lockAcquired {
+		t.Fatalf("expected first SetNX to acquire lock, ok=%v, err=%v", lockAcquired, setNXErr)
 	}
 	secondLockAttempt, secondLockErr := kvStore.SetNX(ctx, "lock:cron:sync", "node-2", 10*time.Second)
 	if secondLockErr != nil || secondLockAttempt {

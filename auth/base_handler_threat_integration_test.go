@@ -277,8 +277,8 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	breachedUpdateRequest = withUserAuth(breachedUpdateRequest, userAID, "authenticated", false)
 	breachedUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(breachedUpdateResponseRecorder, breachedUpdateRequest)
-	if breachedUpdateResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(breachedUpdateResponseRecorder.Body.String(), "LAYR_AUTH_PASSWORD_BREACHED") {
-		t.Fatalf("expected 400 LAYR_AUTH_PASSWORD_BREACHED on updating to breached password, got: %d (%s)", breachedUpdateResponseRecorder.Code, breachedUpdateResponseRecorder.Body.String())
+	if breachedUpdateResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(breachedUpdateResponseRecorder.Body.String(), "breach") {
+		t.Fatalf("expected 400 on updating to breached password, got: %d (%s)", breachedUpdateResponseRecorder.Code, breachedUpdateResponseRecorder.Body.String())
 	}
 
 	// Safe password update succeeds

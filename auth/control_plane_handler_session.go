@@ -3,6 +3,8 @@ package auth
 import (
 	"net/http"
 	"uuid"
+
+	"layr.sh/core"
 )
 
 // HandleListUserSessions lists active sessions for a user (auth:user.read).
@@ -10,21 +12,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 	log.Trace("HandleListUserSessions invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		log.Debug("HandleListUserSessions rejected: missing auth:user.read scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleListUserSessions rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleListUserSessions rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -36,8 +35,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 		ORDER BY created_at DESC
 	`, userID)
 	if err != nil {
-		log.Debugf("HandleListUserSessions query failed: %v", err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to query sessions", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	defer rows.Close()
@@ -63,29 +61,25 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	log.Trace("HandleRevokeUserSessions invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		log.Debug("HandleRevokeUserSessions rejected: missing auth:user.write scope")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
 	userID := controlPlaneHandler.extractUserID(request)
 	if _, err := uuid.Parse(userID); err != nil {
-		log.Debugf("HandleRevokeUserSessions rejected: invalid UUID %q: %v", userID, err)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid user UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
 	if controlPlaneHandler.db == nil {
-		log.Debug("HandleRevokeUserSessions rejected: database unavailable")
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
 	ctx := request.Context()
 	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID)
 	if deleteErr != nil {
-		log.Debugf("HandleRevokeUserSessions delete failed: %v", deleteErr)
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, "Failed to revoke sessions", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deleteErr.Error())
 		return
 	}
 	targetSessions := make([]ClientSessionInfo, 0)

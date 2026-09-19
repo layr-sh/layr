@@ -502,14 +502,10 @@ func (kernel *Kernel) writeJSONWithStatus(responseWriter http.ResponseWriter, st
 	_ = json.NewEncoder(responseWriter).Encode(data)
 }
 
-func (kernel *Kernel) writeError(responseWriter http.ResponseWriter, status int, title string, detail string) {
-	WriteErrorResponseProblem(responseWriter, nil, status, title, detail, "LAYR_CORE_001")
-}
-
 func (kernel *Kernel) handleListServiceAccountsRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	accounts, err := kernel.serviceAccountManager.List(request.Context())
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, accounts)
@@ -518,12 +514,12 @@ func (kernel *Kernel) handleListServiceAccountsRequest(responseWriter http.Respo
 func (kernel *Kernel) handleCreateServiceAccountRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	var createServiceAccountInput CreateServiceAccountInput
 	if err := json.NewDecoder(request.Body).Decode(&createServiceAccountInput); err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	serviceAccount, err := kernel.serviceAccountManager.Create(request.Context(), createServiceAccountInput)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
@@ -536,7 +532,7 @@ func (kernel *Kernel) handleGetServiceAccountRequest(responseWriter http.Respons
 	serviceAccountID := request.PathValue("service_account_id")
 	serviceAccount, err := kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, serviceAccount)
@@ -546,16 +542,16 @@ func (kernel *Kernel) handleUpdateServiceAccountRequest(responseWriter http.Resp
 	serviceAccountID := request.PathValue("service_account_id")
 	var updateServiceAccountInput UpdateServiceAccountInput
 	if err := json.NewDecoder(request.Body).Decode(&updateServiceAccountInput); err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	serviceAccount, err := kernel.serviceAccountManager.Update(request.Context(), serviceAccountID, updateServiceAccountInput)
 	if err != nil {
 		if errors.Is(err, ErrServiceAccountNotFound) {
-			kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
+			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 			return
 		}
-		kernel.writeError(responseWriter, http.StatusForbidden, "Root Account Protected", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusForbidden, err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
@@ -568,12 +564,12 @@ func (kernel *Kernel) handleDeleteServiceAccountRequest(responseWriter http.Resp
 	serviceAccountID := request.PathValue("service_account_id")
 	serviceAccount, err := kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Service Account Not Found", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	err = kernel.serviceAccountManager.Delete(request.Context(), serviceAccountID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusForbidden, "Root Account Protected", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusForbidden, err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
@@ -595,7 +591,7 @@ func (kernel *Kernel) handleListEventHooksRequest(responseWriter http.ResponseWr
 
 	eventHooks, err := kernel.eventHookManager.List(request.Context(), eventHookFilter)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, eventHooks)
@@ -604,12 +600,12 @@ func (kernel *Kernel) handleListEventHooksRequest(responseWriter http.ResponseWr
 func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	var createEventHookInput CreateEventHookInput
 	if err := json.NewDecoder(request.Body).Decode(&createEventHookInput); err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	eventHook, err := kernel.eventHookManager.Create(request.Context(), createEventHookInput)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
@@ -622,12 +618,12 @@ func (kernel *Kernel) handleCreateEventHookRequest(responseWriter http.ResponseW
 func (kernel *Kernel) handleGetEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, eventHook)
@@ -636,21 +632,21 @@ func (kernel *Kernel) handleGetEventHookRequest(responseWriter http.ResponseWrit
 func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	var updateEventHookInput UpdateEventHookInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateEventHookInput); decodeErr != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Request Body", decodeErr.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, decodeErr.Error())
 		return
 	}
 	eventHook, err := kernel.eventHookManager.Update(request.Context(), hookID, updateEventHookInput)
 	if err != nil {
 		if errors.Is(err, ErrEventHookNotFound) {
-			kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 			return
 		}
-		kernel.writeError(responseWriter, http.StatusBadRequest, err.Error(), err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	if kernel.eventBus != nil {
@@ -663,12 +659,12 @@ func (kernel *Kernel) handleUpdateEventHookRequest(responseWriter http.ResponseW
 func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	eventHook, err := kernel.eventHookManager.Get(request.Context(), hookID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Event Hook Not Found", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	_ = kernel.eventHookManager.Delete(request.Context(), hookID)
@@ -682,12 +678,12 @@ func (kernel *Kernel) handleDeleteEventHookRequest(responseWriter http.ResponseW
 func (kernel *Kernel) handleListEventHookDeliveriesRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	hookID, err := uuid.Parse(request.PathValue("event_hook_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Hook ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	deliveries, err := kernel.eventHookManager.ListDeliveries(request.Context(), hookID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, deliveries)
@@ -696,16 +692,16 @@ func (kernel *Kernel) handleListEventHookDeliveriesRequest(responseWriter http.R
 func (kernel *Kernel) handleRetryEventHookDeliveryRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	deliveryID, err := uuid.Parse(request.PathValue("delivery_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Delivery ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	eventHookDelivery, err := kernel.eventHookManager.RetryDelivery(request.Context(), deliveryID)
 	if err != nil {
 		if errors.Is(err, ErrEventHookNotFound) || errors.Is(err, ErrEventHookDeliveryNotFound) {
-			kernel.writeError(responseWriter, http.StatusNotFound, "Not Found", err.Error())
+			WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 			return
 		}
-		kernel.writeError(responseWriter, http.StatusInternalServerError, "Delivery Failed", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, eventHookDelivery)
@@ -744,7 +740,7 @@ func (kernel *Kernel) handleListEventsRequest(responseWriter http.ResponseWriter
 
 	events, err := kernel.eventManager.List(request.Context(), eventFilter)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusInternalServerError, "Internal Server Error", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, events)
@@ -753,12 +749,12 @@ func (kernel *Kernel) handleListEventsRequest(responseWriter http.ResponseWriter
 func (kernel *Kernel) handleGetEventRequest(responseWriter http.ResponseWriter, request *http.Request) {
 	eventID, err := uuid.Parse(request.PathValue("event_id"))
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusBadRequest, "Invalid Event ID", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 	event, err := kernel.eventManager.Get(request.Context(), eventID)
 	if err != nil {
-		kernel.writeError(responseWriter, http.StatusNotFound, "Event Not Found", err.Error())
+		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
 	kernel.writeJSON(responseWriter, event)

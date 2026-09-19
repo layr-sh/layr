@@ -4,22 +4,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"layr.sh/core"
 )
 
 // HandleListPolicies lists all Row-Level Security policies on a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
 		return
 	}
 	policies, err := controlPlaneHandler.ddlEngine.ListPolicies(request.Context(), schema, table)
 	if err != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusInternalServerError, err.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListPoliciesResponse{
@@ -31,21 +33,21 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListPolicies(responseWrite
 // HandleCreatePolicy creates a new Row-Level Security policy on a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
 		return
 	}
 	var createPolicyRequest CreatePolicyRequest
 	if decodeErr := json.NewDecoder(request.Body).Decode(&createPolicyRequest); decodeErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 	if createErr := controlPlaneHandler.ddlEngine.CreatePolicy(request.Context(), schema, table, createPolicyRequest); createErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, createErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
 
@@ -68,17 +70,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreatePolicy(responseWrite
 // HandleDropPolicy drops a Row-Level Security policy from a table.
 func (controlPlaneHandler *ControlPlaneHandler) HandleDropPolicy(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	policyName := controlPlaneHandler.extractPolicyName(request)
 	if schema == "" || table == "" || policyName == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies/{policy}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies/{policy}")
 		return
 	}
 	if dropErr := controlPlaneHandler.ddlEngine.DropPolicy(request.Context(), schema, table, policyName); dropErr != nil {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, dropErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
 
@@ -101,12 +103,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropPolicy(responseWriter 
 // HandleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
 func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		controlPlaneHandler.writeForbidden(responseWriter, request)
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/rls")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/rls")
 		return
 	}
 
@@ -135,7 +137,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 	switch action {
 	case "ENABLE":
 		if enableErr := controlPlaneHandler.ddlEngine.EnableRLS(request.Context(), schema, table); enableErr != nil {
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, enableErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, enableErr.Error())
 			return
 		}
 		if controlPlaneHandler.eventBus != nil {
@@ -152,7 +154,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 		})
 	case "DISABLE":
 		if disableErr := controlPlaneHandler.ddlEngine.DisableRLS(request.Context(), schema, table); disableErr != nil {
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, disableErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, disableErr.Error())
 			return
 		}
 		if controlPlaneHandler.eventBus != nil {
@@ -170,7 +172,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 	case "FORCE":
 		force := request.URL.Query().Get("force") != "false"
 		if forceErr := controlPlaneHandler.ddlEngine.ForceRLS(request.Context(), schema, table, force); forceErr != nil {
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, forceErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, forceErr.Error())
 			return
 		}
 		status := "forced"
@@ -191,7 +193,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 		})
 	case "UNFORCE":
 		if unforceErr := controlPlaneHandler.ddlEngine.ForceRLS(request.Context(), schema, table, false); unforceErr != nil {
-			controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, unforceErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, unforceErr.Error())
 			return
 		}
 		if controlPlaneHandler.eventBus != nil {
@@ -207,6 +209,6 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 			Mode:   "UNFORCE",
 		})
 	default:
-		controlPlaneHandler.writeError(responseWriter, request, http.StatusBadRequest, "Unknown RLS action")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Unknown RLS action")
 	}
 }

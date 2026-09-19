@@ -126,7 +126,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	GetRoute[string](server.BaseRouter(), "/api/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var postgresVersion string
 		if err := db.QueryRow(request.Context(), "SELECT version()").Scan(&postgresVersion); err != nil {
-			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", "LAYR_DB_ERROR")
+			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", err.Error())
 			return
 		}
 		responseWriter.WriteHeader(http.StatusOK)

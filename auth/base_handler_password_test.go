@@ -133,15 +133,15 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	unconfEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"user@example.com"}`))
 	unconfEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasswordResetRequest(unconfEmailResponseRecorder, unconfEmailRequest)
-	if unconfEmailResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured email delivery, got: %d", unconfEmailResponseRecorder.Code)
+	if unconfEmailResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured email delivery, got: %d", unconfEmailResponseRecorder.Code)
 	}
 
 	unconfSMSRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"phone":"+15551234567"}`))
 	unconfSMSResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasswordResetRequest(unconfSMSResponseRecorder, unconfSMSRequest)
-	if unconfSMSResponseRecorder.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422 on unconfigured SMS delivery, got: %d", unconfSMSResponseRecorder.Code)
+	if unconfSMSResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on unconfigured SMS delivery, got: %d", unconfSMSResponseRecorder.Code)
 	}
 
 	// 6. Configure Mock Delivery
@@ -295,14 +295,14 @@ func TestAuthPasswordThreatValidationUnit(t *testing.T) {
 	signupBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", strings.NewReader(`{"email":"test@example.com","password":"password"}`))
 	signupBreachedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupBreachedResponseRecorder, signupBreachedRequest)
-	if signupBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(signupBreachedResponseRecorder.Body.String(), "LAYR_AUTH_PASSWORD_BREACHED") {
-		t.Fatalf("expected 400 LAYR_AUTH_PASSWORD_BREACHED on breached password sign up, got: %d (%s)", signupBreachedResponseRecorder.Code, signupBreachedResponseRecorder.Body.String())
+	if signupBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(signupBreachedResponseRecorder.Body.String(), "breach") {
+		t.Fatalf("expected 400 on breached password sign up, got: %d (%s)", signupBreachedResponseRecorder.Code, signupBreachedResponseRecorder.Body.String())
 	}
 
 	confirmBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"password"}`))
 	confirmBreachedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handlePasswordResetConfirm(confirmBreachedResponseRecorder, confirmBreachedRequest)
-	if confirmBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(confirmBreachedResponseRecorder.Body.String(), "LAYR_AUTH_PASSWORD_BREACHED") {
-		t.Fatalf("expected 400 LAYR_AUTH_PASSWORD_BREACHED on breached password reset confirm, got: %d (%s)", confirmBreachedResponseRecorder.Code, confirmBreachedResponseRecorder.Body.String())
+	if confirmBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(confirmBreachedResponseRecorder.Body.String(), "breach") {
+		t.Fatalf("expected 400 on breached password reset confirm, got: %d (%s)", confirmBreachedResponseRecorder.Code, confirmBreachedResponseRecorder.Body.String())
 	}
 }

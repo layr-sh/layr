@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -14,8 +15,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 	log.Trace("handling list active user sessions request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("list user sessions rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
@@ -24,8 +24,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 	currentSessionID := authContext.JWT.SessionID
 
 	if handler.db == nil {
-		log.Debug("list user sessions rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "list user sessions rejected: database pool unavailable")
 		return
 	}
 
@@ -37,8 +36,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 		ORDER BY created_at DESC
 	`, userID)
 	if err != nil {
-		log.Debugf("failed to query active sessions for user %s: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to query sessions", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to query active sessions for user %s: %v", userID, err))
 		return
 	}
 	defer rows.Close()
@@ -88,8 +86,7 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 	log.Trace("handling revoke session request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("revoke session rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
@@ -101,20 +98,17 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 		targetSessionID = strings.TrimPrefix(path, "/api/v1/auth/user/sessions/")
 	}
 	if targetSessionID == "" || strings.Contains(targetSessionID, "/") {
-		log.Debugf("revoke session rejected: invalid session ID format: %q", targetSessionID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid session ID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid session ID")
 		return
 	}
 
 	if _, parseErr := uuid.Parse(targetSessionID); parseErr != nil {
-		log.Debugf("revoke session rejected: invalid UUID %q: %v", targetSessionID, parseErr)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid session UUID", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid session ID")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("revoke session rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "revoke session rejected: database pool unavailable")
 		return
 	}
 
@@ -128,8 +122,7 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 	`, targetSessionID, userID).Scan(&deletedRefreshTokenHash, &deletedClientID)
 
 	if err != nil {
-		log.Debugf("revoke session failed: session %s not found for user %s: %v", targetSessionID, userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Session not found", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Session not found")
 		return
 	}
 
@@ -160,14 +153,12 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 	log.Trace("handling revoke other sessions request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		log.Debug("revoke other sessions rejected: unauthenticated caller")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 
 	if handler.db == nil {
-		log.Debug("revoke other sessions rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "revoke other sessions rejected: database pool unavailable")
 		return
 	}
 
@@ -195,8 +186,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 			SELECT count(*) FROM auth.sessions WHERE user_id = $1 AND expires_at > clock_timestamp()
 		`, userID).Scan(&activeSessionCount)
 		if err != nil {
-			log.Debugf("failed to count active sessions for user %s: %v", userID, err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to count active sessions", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to count active sessions for user %s: %v", userID, err))
 			return
 		}
 
@@ -210,8 +200,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 			return
 		}
 
-		log.Debugf("revoke other sessions rejected: ambiguous current session for user %s with %d sessions", userID, activeSessionCount)
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current session identifier required to revoke other devices", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current session identifier required to revoke other devices")
 		return
 	}
 
@@ -221,8 +210,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 		RETURNING id, client_id, refresh_token_hash
 	`, userID, resolvedCurrentSessionID)
 	if err != nil {
-		log.Debugf("failed to revoke other sessions for user %s: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to revoke other sessions", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to revoke other sessions for user %s: %v", userID, err))
 		return
 	}
 	defer rows.Close()
@@ -280,8 +268,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	var refreshTokenRequest RefreshTokenRequest
 	if request.Body != nil && request.ContentLength != 0 {
 		if err := json.NewDecoder(request.Body).Decode(&refreshTokenRequest); err != nil {
-			log.Debugf("token refresh rejected: invalid JSON body: %v", err)
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", "LAYR_AUTH_001")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 			return
 		}
 	}
@@ -289,8 +276,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 	if refreshTokenRequest.RefreshToken == "" {
-		log.Debug("token refresh rejected: missing refresh token")
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token required", "LAYR_AUTH_002")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token required")
 		return
 	}
 
@@ -308,8 +294,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 					_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				}
 				if cachedSession.User.LockedUntil != nil && time.Now().UTC().Before(*cachedSession.User.LockedUntil) {
-					log.Warnf("failed token refresh for locked user %s via fast-path cache", cachedSession.User.ID)
-					core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+					core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 					return
 				}
 				handler.issueSessionResponse(responseWriter, request, cachedSession.User, "session_refresh")
@@ -319,8 +304,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	}
 
 	if handler.db == nil {
-		log.Debug("token refresh rejected: database pool unavailable")
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "token refresh rejected: database pool unavailable")
 		return
 	}
 
@@ -334,15 +318,13 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	`, tokenHash).Scan(&sessionID, &userID, &expiresAt)
 
 	if err != nil {
-		log.Debugf("token refresh rejected: session not found for token hash %s: %v", tokenHash, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token revoked or invalid", "LAYR_AUTH_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token revoked or invalid")
 		return
 	}
 
 	if time.Now().UTC().After(expiresAt) {
-		log.Debugf("token refresh rejected: session %s expired at %v", sessionID, expiresAt)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token expired", "LAYR_AUTH_003")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token expired")
 		return
 	}
 
@@ -358,8 +340,7 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
 	)
 	if err != nil {
-		log.Debugf("token refresh rejected: user %s not found: %v", userID, err)
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "User not found", "LAYR_AUTH_001")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "User not found")
 		return
 	}
 
@@ -369,9 +350,8 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 	}
 
 	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-		log.Warnf("failed token refresh for locked user %s", userRecord.ID)
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
-		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked", "LAYR_AUTH_005")
+		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
