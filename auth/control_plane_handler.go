@@ -95,8 +95,10 @@ func (controlPlaneHandler *ControlPlaneHandler) extractUserID(request *http.Requ
 		return userID
 	}
 	pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
-	if len(pathSegments) >= 6 && pathSegments[4] == "users" {
-		return pathSegments[5]
+	for i, segment := range pathSegments {
+		if segment == "users" && i+1 < len(pathSegments) {
+			return pathSegments[i+1]
+		}
 	}
 	return ""
 }

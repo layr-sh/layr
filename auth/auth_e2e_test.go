@@ -42,7 +42,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 			"tier": "enterprise",
 		},
 	})
-	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupPayload))
+	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupPayload))
 	signupRequest.Header.Set("Content-Type", "application/json")
 	signupRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	signupResponseRecorder := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 		"email":    userEmail,
 		"password": userPassword,
 	})
-	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signinPayload))
+	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	signinRequest.Header.Set("Content-Type", "application/json")
 	signinRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	signinResponseRecorder := httptest.NewRecorder()
@@ -81,7 +81,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	}
 
 	// 3. Authenticated Profile Access via User Export
-	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil)
+	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil)
 	exportRequest.Header.Set("Authorization", "Bearer "+signinAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(exportResponseRecorder, exportRequest)
@@ -94,7 +94,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	refreshPayload, _ := json.Marshal(map[string]any{
 		"refresh_token": signinAuthTokenResponse.RefreshToken,
 	})
-	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
+	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
 	refreshRequest.Header.Set("Content-Type", "application/json")
 	refreshRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	refreshResponseRecorder := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	_ = json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshedAuthTokenResponse)
 
 	// 5. Sign Out / Session Revocation
-	signoutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", nil)
+	signoutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", nil)
 	signoutRequest.Header.Set("Authorization", "Bearer "+refreshedAuthTokenResponse.AccessToken)
 	signoutRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: refreshedAuthTokenResponse.RefreshToken})
 	signoutResponseRecorder := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	}
 
 	// 6. Old Refresh Token Must Now Fail
-	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
+	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
 	revokedRefreshRequest.Header.Set("Content-Type", "application/json")
 	revokedRefreshRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	revokedRefreshResponseRecorder := httptest.NewRecorder()
@@ -158,7 +158,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 		"email":    userEmail,
 		"password": userPassword,
 	})
-	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupPayload))
+	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupPayload))
 	signupRequest.Header.Set("Content-Type", "application/json")
 	signupRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	signupResponseRecorder := httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 		"email":    userEmail,
 		"password": userPassword,
 	})
-	signInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	signInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	signInRequest.Header.Set("Content-Type", "application/json")
 	signInRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	signInRequest.Header.Set("User-Agent", "Secondary-Device-Tablet")
@@ -187,7 +187,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	_ = json.NewDecoder(signInResponseRecorder.Body).Decode(&secondAuthTokenResponse)
 
 	// 3. List active sessions via E2E server mux
-	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/sessions", nil)
+	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/sessions", nil)
 	listSessionsRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	listSessionsRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	listSessionsResponseRecorder := httptest.NewRecorder()
@@ -212,7 +212,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	}
 
 	// 4. Revoke secondary session via E2E server mux
-	deleteSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/sessions/"+secondarySessionID, nil)
+	deleteSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/sessions/"+secondarySessionID, nil)
 	deleteSessionRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	deleteSessionResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(deleteSessionResponseRecorder, deleteSessionRequest)
@@ -221,7 +221,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	}
 
 	// 5. Revoke other sessions via E2E server mux (now only 1 session left)
-	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sessions/revoke-others", nil)
+	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sessions/revoke-others", nil)
 	revokeOthersRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	revokeOthersRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	revokeOthersResponseRecorder := httptest.NewRecorder()
@@ -275,7 +275,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	}
 
 	// 2. Inspect Anonymous Profile
-	initialProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user", nil)
+	initialProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user", nil)
 	initialProfileRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	initialProfileResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(initialProfileResponseRecorder, initialProfileRequest)
@@ -292,7 +292,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	forbiddenPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: "AttemptedPassword123!",
 	})
-	forbiddenPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(forbiddenPasswordPayload))
+	forbiddenPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/password", bytes.NewReader(forbiddenPasswordPayload))
 	forbiddenPasswordRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	forbiddenPasswordResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(forbiddenPasswordResponseRecorder, forbiddenPasswordRequest)
@@ -307,7 +307,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 			"theme":        "dark",
 		},
 	})
-	patchPropertiesRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/properties", bytes.NewReader(patchPropertiesPayload))
+	patchPropertiesRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/properties", bytes.NewReader(patchPropertiesPayload))
 	patchPropertiesRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	patchPropertiesResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(patchPropertiesResponseRecorder, patchPropertiesRequest)
@@ -331,7 +331,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	initialSetPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: initialUserPassword,
 	})
-	initialSetPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(initialSetPasswordPayload))
+	initialSetPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/password", bytes.NewReader(initialSetPasswordPayload))
 	initialSetPasswordRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	initialSetPasswordResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(initialSetPasswordResponseRecorder, initialSetPasswordRequest)
@@ -345,7 +345,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		CurrentPassword: initialUserPassword,
 		NewPassword:     rotatedPassword,
 	})
-	rotatePasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(rotatePasswordPayload))
+	rotatePasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/password", bytes.NewReader(rotatePasswordPayload))
 	rotatePasswordRequest.Header.Set("Authorization", "Bearer "+currentAccessToken)
 	rotatePasswordResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(rotatePasswordResponseRecorder, rotatePasswordRequest)
@@ -358,7 +358,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		"email":    claimedEmail,
 		"password": rotatedPassword,
 	})
-	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signinPayload))
+	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	signinRequest.Header.Set("Content-Type", "application/json")
 	signinRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	signinResponseRecorder := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	_ = json.NewDecoder(signinResponseRecorder.Body).Decode(&newAuthTokenResponse)
 
 	// 9. Inspect profile again - verify is_anonymous is false, properties preserved
-	convertedProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user", nil)
+	convertedProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user", nil)
 	convertedProfileRequest.Header.Set("Authorization", "Bearer "+newAuthTokenResponse.AccessToken)
 	convertedProfileResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(convertedProfileResponseRecorder, convertedProfileRequest)
@@ -384,7 +384,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	}
 
 	// 10. Self-Delete Account
-	deleteAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user", nil)
+	deleteAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user", nil)
 	deleteAccountRequest.Header.Set("Authorization", "Bearer "+newAuthTokenResponse.AccessToken)
 	deleteAccountResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(deleteAccountResponseRecorder, deleteAccountRequest)
@@ -393,7 +393,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	}
 
 	// Verify user cannot log in anymore
-	postDeleteSigninRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signinPayload))
+	postDeleteSigninRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	postDeleteSigninRequest.Header.Set("Content-Type", "application/json")
 	postDeleteSigninRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	postDeleteSigninResponseRecorder := httptest.NewRecorder()

@@ -69,7 +69,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"user_id": userID,
 	}
 	encodedMFASetup, _ := json.Marshal(mfaSetupPayload)
-	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
+	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
 	mfaSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
@@ -106,7 +106,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code":    "000000",
 	}
 	encodedWrongVerify, _ := json.Marshal(wrongVerifyPayload)
-	wrongVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedWrongVerify))
+	wrongVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedWrongVerify))
 	wrongVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	wrongVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(wrongVerifyResponseRecorder, wrongVerifyRequest)
@@ -124,7 +124,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code": currentTOTPCode,
 	}
 	encodedValidVerify, _ := json.Marshal(validVerifyPayload)
-	validVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	validVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	validVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	validVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(validVerifyResponseRecorder, validVerifyRequest)
@@ -160,7 +160,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
-	lockedSetupRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", nil), userID, "authenticated", false)
+	lockedSetupRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", nil), userID, "authenticated", false)
 	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(lockedSetupResponseRecorder, lockedSetupRequest)
@@ -168,7 +168,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 423 StatusLocked on locked user setup, got: %d", lockedSetupResponseRecorder.Code)
 	}
 
-	lockedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	lockedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(lockedVerifyResponseRecorder, lockedVerifyRequest)
@@ -179,7 +179,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 5. Test corrupted encrypted secret -> 500
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'invalid-secret' WHERE id = $1", userID)
-	corruptedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	corruptedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(corruptedVerifyResponseRecorder, corruptedVerifyRequest)
@@ -189,7 +189,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 6. Test missing MFA secret in DB -> 400
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL, mfa_enabled = false WHERE id = $1", userID)
-	noSecretVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	noSecretVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(noSecretVerifyResponseRecorder, noSecretVerifyRequest)
@@ -203,7 +203,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code":    "123456",
 	}
 	encodedNonExistent, _ := json.Marshal(nonExistentVerifyPayload)
-	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedNonExistent))
+	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedNonExistent))
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
 	if nonExistentVerifyResponseRecorder.Code != http.StatusNotFound {
@@ -214,7 +214,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"user_id": "01918a24-9999-7000-8000-000000000099",
 	}
 	encodedNonExistentSetup, _ := json.Marshal(nonExistentSetupPayload)
-	nonExistentSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedNonExistentSetup))
+	nonExistentSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedNonExistentSetup))
 	nonExistentSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(nonExistentSetupResponseRecorder, nonExistentSetupRequest)
 	if nonExistentSetupResponseRecorder.Code != http.StatusNotFound {
@@ -240,7 +240,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"user_id": phoneUserID,
 	}
 	encodedPhoneSetup, _ := json.Marshal(phoneSetupPayload)
-	phoneSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedPhoneSetup))
+	phoneSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedPhoneSetup))
 	phoneSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(phoneSetupResponseRecorder, phoneSetupRequest)
 	if phoneSetupResponseRecorder.Code != http.StatusOK {
@@ -262,7 +262,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code":    phoneTOTPCode,
 	}
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedPhoneVerify))
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
@@ -284,7 +284,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		Subject: "01918a24-9999-7000-8000-000000000099",
 		Role:    "authenticated",
 	}, 3600)
-	nonExistentDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: "01918a24-9999-7000-8000-000000000099"}), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	nonExistentDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: "01918a24-9999-7000-8000-000000000099"}), http.MethodDelete, "/v1/auth/mfa", nil)
 	nonExistentDisableRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDisableMFA(nonExistentDisableResponseRecorder, nonExistentDisableRequest)
@@ -294,7 +294,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// Locked user -> 423
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", phoneUserID)
-	lockedDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	lockedDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/v1/auth/mfa", nil)
 	lockedDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	lockedDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDisableMFA(lockedDisableResponseRecorder, lockedDisableRequest)
@@ -304,7 +304,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", phoneUserID)
 
 	// Successful MFA disable -> 204
-	validDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
+	validDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/v1/auth/mfa", nil)
 	validDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	validDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDisableMFA(validDisableResponseRecorder, validDisableRequest)
@@ -382,7 +382,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		Email:    userEmail,
 		Password: rawPassword,
 	})
-	preMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	preMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	preMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(preMFAResponseRecorder, preMFARequest)
 	if preMFAResponseRecorder.Code != http.StatusOK {
@@ -400,7 +400,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		Role:    "authenticated",
 	}, 900)
 
-	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
+	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
 	setupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	setupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(setupResponseRecorder, setupRequest)
@@ -413,7 +413,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
 	verifyPayload, _ := json.Marshal(map[string]any{"code": totpCode})
-	verifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
+	verifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
 	verifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	verifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(verifyResponseRecorder, verifyRequest)
@@ -422,7 +422,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 3. Password sign-in AFTER MFA enabled -> intercepted, issues MFA ticket
-	postMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	postMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	postMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(postMFAResponseRecorder, postMFARequest)
 	if postMFAResponseRecorder.Code != http.StatusOK {
@@ -439,7 +439,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	// Sign-in with nil KV store when MFA enabled -> 200
 	baseHandler.SetKVStore(nil)
-	nilKVRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	nilKVRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	nilKVResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(nilKVResponseRecorder, nilKVRequest)
 	if nilKVResponseRecorder.Code != http.StatusOK {
@@ -449,7 +449,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	// 4. MFA Challenge: Invalid/missing fields -> 400
 	emptyChallengePayload, _ := json.Marshal(ChallengeMFAInput{})
-	emptyChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(emptyChallengePayload))
+	emptyChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(emptyChallengePayload))
 	emptyChallengeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(emptyChallengeResponseRecorder, emptyChallengeRequest)
 	if emptyChallengeResponseRecorder.Code != http.StatusBadRequest {
@@ -461,7 +461,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: "mfa_tk_non_existent",
 		Code:      "123456",
 	})
-	ghostChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostChallengePayload))
+	ghostChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(ghostChallengePayload))
 	ghostChallengeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(ghostChallengeResponseRecorder, ghostChallengeRequest)
 	if ghostChallengeResponseRecorder.Code != http.StatusUnauthorized {
@@ -473,7 +473,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: signInResponse.MFATicket,
 		Code:      "000000",
 	})
-	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
+	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusUnauthorized {
@@ -481,7 +481,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 7. Replay attack: The previous ticket was consumed on attempt -> 401
-	replayRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
+	replayRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
 	replayResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(replayResponseRecorder, replayRequest)
 	if replayResponseRecorder.Code != http.StatusUnauthorized {
@@ -489,7 +489,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 8. Generate fresh ticket via sign-in and succeed with valid TOTP code
-	freshSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(signInPayload))
+	freshSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	freshSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(freshSignInResponseRecorder, freshSignInRequest)
 	var freshSignInResponse SignInResponse
@@ -500,7 +500,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: freshSignInResponse.MFATicket,
 		Code:      currentCode,
 	})
-	validChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(validChallengePayload))
+	validChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(validChallengePayload))
 	validChallengeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(validChallengeResponseRecorder, validChallengeRequest)
 	if validChallengeResponseRecorder.Code != http.StatusOK {
@@ -525,7 +525,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: lockedTicket,
 		Code:      currentCode,
 	})
-	lockedChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(lockedChallengePayload))
+	lockedChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(lockedChallengePayload))
 	lockedChallengeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(lockedChallengeResponseRecorder, lockedChallengeRequest)
 	if lockedChallengeResponseRecorder.Code != http.StatusLocked {
@@ -544,7 +544,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: noSecretTicket,
 		Code:      currentCode,
 	})
-	noSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(noSecretPayload))
+	noSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(noSecretPayload))
 	noSecretResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(noSecretResponseRecorder, noSecretRequest)
 	if noSecretResponseRecorder.Code != http.StatusBadRequest {
@@ -560,7 +560,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: corruptSecretTicket,
 		Code:      currentCode,
 	})
-	corruptSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(corruptSecretPayload))
+	corruptSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(corruptSecretPayload))
 	corruptSecretResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(corruptSecretResponseRecorder, corruptSecretRequest)
 	if corruptSecretResponseRecorder.Code != http.StatusInternalServerError {
@@ -577,7 +577,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		MFATicket: ghostUserTicket,
 		Code:      currentCode,
 	})
-	ghostUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostUserPayload))
+	ghostUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/challenge", bytes.NewReader(ghostUserPayload))
 	ghostUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(ghostUserResponseRecorder, ghostUserRequest)
 	if ghostUserResponseRecorder.Code != http.StatusUnauthorized {

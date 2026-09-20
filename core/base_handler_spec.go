@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// /api/v1/spec.json - Client OpenAPI 3.1 JSON
+// /v1/spec.json - Client OpenAPI 3.1 JSON
 func (server *Server) handleGetBaseSpecJSON(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -15,7 +15,7 @@ func (server *Server) handleGetBaseSpecJSON(responseWriter http.ResponseWriter, 
 	_ = json.NewEncoder(responseWriter).Encode(openAPISpec)
 }
 
-// /api/v1/spec.yaml - Client OpenAPI 3.1 YAML
+// /v1/spec.yaml - Client OpenAPI 3.1 YAML
 func (server *Server) handleGetBaseSpecYAML(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)

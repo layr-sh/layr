@@ -155,7 +155,7 @@ func TestOauthAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 1. Initiate authorization request
-	clientCallbackURL := "http://localhost:8080/api/v1/auth/oauth/callback"
+	clientCallbackURL := "http://localhost:8080/v1/auth/oauth/callback"
 	sessionState := "random_security_state_98765"
 	authorizeURL, err := BuildAuthorizeURLWithConfig(providerConfig, clientCallbackURL, sessionState)
 	if err != nil {

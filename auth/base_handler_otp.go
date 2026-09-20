@@ -30,7 +30,7 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, sendOTPInput.CaptchaToken, "/api/v1/auth/otp") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, sendOTPInput.CaptchaToken, "/v1/auth/otp") {
 		return
 	}
 
@@ -145,7 +145,7 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, verifyOTPInput.CaptchaToken, "/api/v1/auth/otp/verify") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, verifyOTPInput.CaptchaToken, "/v1/auth/otp/verify") {
 		return
 	}
 

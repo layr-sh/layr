@@ -59,7 +59,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 	}
 
 	// 1. List user sessions
-	sessionsListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID+"/sessions", nil)
+	sessionsListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	sessionsListRequest.Header.Set("Authorization", authBearerHeader)
 	sessionsListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUserSessions(sessionsListResponseRecorder, sessionsListRequest)
@@ -72,7 +72,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 	}
 
 	// 2. Revoke user sessions
-	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
+	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
@@ -104,7 +104,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. List Sessions error
-	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+randomID+"/sessions", nil)
+	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID+"/sessions", nil)
 	listSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUserSessions(listSessionsResponseRecorder, listSessionsRequest)
 	if listSessionsResponseRecorder.Code != http.StatusInternalServerError {
@@ -112,7 +112,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 2. Revoke Sessions error
-	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+randomID+"/sessions/revoke", nil)
+	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+randomID+"/sessions/revoke", nil)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 	if revokeSessionsResponseRecorder.Code != http.StatusInternalServerError {
@@ -204,7 +204,7 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 		t.Fatalf("failed to insert session: %v", insertSessionErr)
 	}
 
-	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
+	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)

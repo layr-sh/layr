@@ -18,7 +18,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden ListTables
-	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListTables(forbiddenListResponseRecorder, forbiddenListRequest)
@@ -27,7 +27,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden CreateTable
-	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte(`{}`)))
+	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
@@ -36,7 +36,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden GetTable
-	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users", nil)
+	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/users", nil)
 	forbiddenGetRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenGetResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetTable(forbiddenGetResponseRecorder, forbiddenGetRequest)
@@ -45,7 +45,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden DropTable
-	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users", nil)
+	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/users", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteTable(forbiddenDropResponseRecorder, forbiddenDropRequest)
@@ -54,7 +54,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden TruncateTable
-	forbiddenTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/truncate", nil)
+	forbiddenTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/truncate", nil)
 	forbiddenTruncateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenTruncateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleTruncateTable(forbiddenTruncateResponseRecorder, forbiddenTruncateRequest)
@@ -69,7 +69,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Malformed JSON on CreateTable
-	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte("not json")))
+	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader([]byte("not json")))
 	malformedCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(malformedCreateResponseRecorder, malformedCreateRequest)
 	if malformedCreateResponseRecorder.Code != http.StatusBadRequest {
@@ -77,7 +77,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Missing parameters on GetTable
-	missingParamsGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	missingParamsGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	missingParamsGetResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetTable(missingParamsGetResponseRecorder, missingParamsGetRequest)
 	if missingParamsGetResponseRecorder.Code != http.StatusBadRequest {
@@ -85,7 +85,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Missing parameters on DropTable
-	missingParamsDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
+	missingParamsDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables", nil)
 	missingParamsDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteTable(missingParamsDropResponseRecorder, missingParamsDropRequest)
 	if missingParamsDropResponseRecorder.Code != http.StatusBadRequest {
@@ -93,7 +93,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Missing parameters on TruncateTable
-	missingParamsTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
+	missingParamsTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
 	missingParamsTruncateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleTruncateTable(missingParamsTruncateResponseRecorder, missingParamsTruncateRequest)
 	if missingParamsTruncateResponseRecorder.Code != http.StatusBadRequest {
@@ -101,7 +101,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// CreateTable on protected schema error
-	protectedSchemaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte(`{"schema":"core","name":"test"}`)))
+	protectedSchemaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader([]byte(`{"schema":"core","name":"test"}`)))
 	protectedSchemaResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(protectedSchemaResponseRecorder, protectedSchemaRequest)
 	if protectedSchemaResponseRecorder.Code != http.StatusBadRequest {

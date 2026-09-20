@@ -22,7 +22,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 
 	// 1. Execute SELECT using "sql" payload field
 	sqlPayload := `{"sql":"SELECT 42 AS answer, 'hello' AS greeting"}`
-	sqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(sqlPayload)))
+	sqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(sqlPayload)))
 	sqlResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(sqlResponseRecorder, sqlRequest)
 	if sqlResponseRecorder.Code != http.StatusOK {
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 
 	// 2. Execute SELECT using "query" payload field
 	queryPayload := `{"query":"SELECT 100 AS number"}`
-	queryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(queryPayload)))
+	queryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(queryPayload)))
 	queryResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(queryResponseRecorder, queryRequest)
 	if queryResponseRecorder.Code != http.StatusOK {
@@ -48,7 +48,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 
 	// 3. Syntax error in SQL
 	syntaxErrorPayload := `{"sql":"SELECT FROM WHERE INVALID"}`
-	syntaxErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(syntaxErrorPayload)))
+	syntaxErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(syntaxErrorPayload)))
 	syntaxErrorResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(syntaxErrorResponseRecorder, syntaxErrorRequest)
 	if syntaxErrorResponseRecorder.Code != http.StatusBadRequest {

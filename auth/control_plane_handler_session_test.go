@@ -25,7 +25,7 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	serviceAccountManager := core.NewServiceAccountManager(nil)
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
-	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID+"/sessions", nil)
+	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
 	forbiddenRequest.SetPathValue("user_id", testUserID)
 
@@ -44,7 +44,7 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	// 2. Test Invalid UUIDs on session endpoints (with valid scope)
 	controlPlaneHandler.SetServiceAccountManager(nil)
 	invalidUUID := "not-a-valid-uuid"
-	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+invalidUUID+"/sessions", nil)
+	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+invalidUUID+"/sessions", nil)
 	invalidUUIDRequest.SetPathValue("user_id", invalidUUID)
 
 	invalidUUIDSessionsResponseRecorder := httptest.NewRecorder()
@@ -60,7 +60,7 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	}
 
 	// 3. Test Nil DB on Session handlers
-	singleUserRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID+"/sessions", nil)
+	singleUserRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	singleUserRequest.SetPathValue("user_id", testUserID)
 
 	nilDBSessionsResponseRecorder := httptest.NewRecorder()

@@ -73,7 +73,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter ht
 	}
 	schema, tableName := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || tableName == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	table, err := controlPlaneHandler.ddlEngine.GetTable(request.Context(), schema, tableName)
@@ -92,7 +92,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"
@@ -127,7 +127,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWrit
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"

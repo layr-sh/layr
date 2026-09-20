@@ -18,7 +18,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden ListIndexes
-	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users/indexes", nil)
+	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/users/indexes", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListIndexes(forbiddenListResponseRecorder, forbiddenListRequest)
@@ -27,7 +27,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden CreateIndex
-	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/indexes", bytes.NewReader([]byte(`{}`)))
+	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/indexes", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateIndex(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
@@ -36,7 +36,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden DropIndex
-	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/indexes/idx_users_name", nil)
+	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/users/indexes/idx_users_name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteIndex(forbiddenDropResponseRecorder, forbiddenDropRequest)
@@ -51,7 +51,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Missing parameters on ListIndexes
-	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	missingListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListIndexes(missingListResponseRecorder, missingListRequest)
 	if missingListResponseRecorder.Code != http.StatusBadRequest {
@@ -59,7 +59,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Missing parameters on CreateIndex
-	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
+	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
 	missingCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateIndex(missingCreateResponseRecorder, missingCreateRequest)
 	if missingCreateResponseRecorder.Code != http.StatusBadRequest {
@@ -67,7 +67,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Malformed JSON on CreateIndex
-	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/indexes", bytes.NewReader([]byte("not json")))
+	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/indexes", bytes.NewReader([]byte("not json")))
 	malformedCreateRequest.SetPathValue("schema_name", "public")
 	malformedCreateRequest.SetPathValue("table_name", "users")
 	malformedCreateResponseRecorder := httptest.NewRecorder()
@@ -77,7 +77,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	}
 
 	// Missing parameters on DropIndex
-	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
+	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables", nil)
 	missingDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteIndex(missingDropResponseRecorder, missingDropRequest)
 	if missingDropResponseRecorder.Code != http.StatusBadRequest {

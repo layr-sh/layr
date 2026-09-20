@@ -127,7 +127,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	server := NewServer(db, cryptoKeyManager)
 
 	// Register a public endpoint that queries the live PostgreSQL database
-	GetRoute[string](server.BaseRouter(), "/api/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var postgresVersion string
 		if scanErr := db.QueryRow(request.Context(), "SELECT version()").Scan(&postgresVersion); scanErr != nil {
 			WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "database query failed", scanErr.Error())
@@ -138,7 +138,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	})
 
 	// 1. Without publishable key -> 401 Unauthorized
-	unauthorizedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
+	unauthorizedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
 	unauthorizedResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(unauthorizedResponseRecorder, unauthorizedRequest)
 
@@ -147,7 +147,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	// 2. With invalid publishable key -> 401 Unauthorized
-	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
 	invalidKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", "invalid_publishable_key_123456789")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(invalidKeyResponseRecorder, invalidKeyRequest)
@@ -158,7 +158,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 3. With valid derived publishable key -> 200 OK and live DB query result
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
-	validKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
+	validKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
 	validKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	validKeyResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(validKeyResponseRecorder, validKeyRequest)
@@ -177,7 +177,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	if createErr != nil {
 		t.Fatalf("failed to create test service account: %v", createErr)
 	}
-	serviceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/db-check", nil)
+	serviceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
 	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", createdServiceAccount.SecretKey)
 	serviceAccountResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(serviceAccountResponseRecorder, serviceAccountRequest)
@@ -224,14 +224,14 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	`, sessionUUID, testUserID, liveRefreshHash)
 
 	var capturedAuthContext AuthContext
-	GetRoute[string](server.BaseRouter(), "/api/v1/auth-check", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/v1/auth-check", func(responseWriter http.ResponseWriter, request *http.Request) {
 		capturedAuthContext = GetAuthContext(request.Context())
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("auth-ok"))
 	})
 
 	// 5a. With secure session cookie
-	secureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	secureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
 	secureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	secureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameSecure, Value: liveRefreshToken})
 	secureCookieResponseRecorder := httptest.NewRecorder()
@@ -245,7 +245,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	// 5b. With insecure session cookie
-	insecureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	insecureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
 	insecureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	insecureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameInsecure, Value: liveRefreshToken})
 	insecureCookieResponseRecorder := httptest.NewRecorder()
@@ -259,7 +259,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	// 5c. With X-Refresh-Token header
-	refreshHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth-check", nil)
+	refreshHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
 	refreshHeaderRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	refreshHeaderRequest.Header.Set("X-Refresh-Token", liveRefreshToken)
 	refreshHeaderResponseRecorder := httptest.NewRecorder()
@@ -285,24 +285,24 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	server := NewServer(nil, cryptoKeyManager)
 
 	// Register operations on BaseRouter
-	GetRoute[string](server.BaseRouter(), "/api/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok"))
 	}, RouteTag("Data"), RouteSummary("List Data Records"), RouteOperationID("listDataRecords"))
 
 	// Register operations on ControlPlaneRouter
-	GetRoute[string](server.ControlPlaneRouter(), "/api/v1/_/console/status", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.ControlPlaneRouter(), "/v1/_/console/status", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok"))
 	}, RouteTag("Console"), RouteSummary("Get Console Status"), RouteOperationID("getConsoleStatus"))
 
 	// 1. Test Public OpenAPI Spec JSON
-	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.json", nil)
+	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/spec.json", nil)
 	jsonSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(jsonSpecResponseRecorder, jsonSpecRequest)
 
 	if jsonSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
 	}
 	jsonSpecResponseBody := jsonSpecResponseRecorder.Body.String()
 	if !strings.Contains(jsonSpecResponseBody, "listDataRecords") || !strings.Contains(jsonSpecResponseBody, "Layr Client API Engine") {
@@ -310,12 +310,12 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	}
 
 	// 2. Test Control Plane OpenAPI Spec JSON
-	controlPlaneJSONSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/spec.json", nil)
+	controlPlaneJSONSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/spec.json", nil)
 	controlPlaceJSONSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(controlPlaceJSONSpecResponseRecorder, controlPlaneJSONSpecRequest)
 
 	if controlPlaceJSONSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/_/spec.json 200, got %d", controlPlaceJSONSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/_/spec.json 200, got %d", controlPlaceJSONSpecResponseRecorder.Code)
 	}
 	controlPlaneJSONSpecResponseBody := controlPlaceJSONSpecResponseRecorder.Body.String()
 	if !strings.Contains(controlPlaneJSONSpecResponseBody, "getConsoleStatus") || !strings.Contains(controlPlaneJSONSpecResponseBody, "Layr Control Plane API Engine") {
@@ -323,12 +323,12 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	}
 
 	// 3. Test Public OpenAPI Spec YAML
-	yamlSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.yaml", nil)
+	yamlSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/spec.yaml", nil)
 	yamlSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(yamlSpecResponseRecorder, yamlSpecRequest)
 
 	if yamlSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.yaml 200, got %d", yamlSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/spec.yaml 200, got %d", yamlSpecResponseRecorder.Code)
 	}
 	if !strings.Contains(yamlSpecResponseRecorder.Body.String(), "openapi: 3.1.0") {
 		t.Fatalf("expected openapi: 3.1.0 in YAML spec: %s", yamlSpecResponseRecorder.Body.String())
@@ -360,7 +360,7 @@ func TestCoreServerMiddlewareMetricsAndProbesIntegration(t *testing.T) {
 			case 1:
 				targetPath = "/readyz"
 			default:
-				targetPath = "/api/v1/manifest"
+				targetPath = "/v1/manifest"
 			}
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, targetPath, nil)
 			responseResponseRecorder := httptest.NewRecorder()

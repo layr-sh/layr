@@ -18,7 +18,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden ListPolicies
-	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users/policies", nil)
+	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/users/policies", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListPolicies(forbiddenListResponseRecorder, forbiddenListRequest)
@@ -27,7 +27,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden CreatePolicy
-	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/policies", bytes.NewReader([]byte(`{}`)))
+	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/policies", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreatePolicy(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
@@ -36,7 +36,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden DropPolicy
-	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/policies/policy_name", nil)
+	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/users/policies/policy_name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeletePolicy(forbiddenDropResponseRecorder, forbiddenDropRequest)
@@ -45,7 +45,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden ToggleRLS
-	forbiddenToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/rls", nil)
+	forbiddenToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/users/rls", nil)
 	forbiddenToggleRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenToggleResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleToggleRLS(forbiddenToggleResponseRecorder, forbiddenToggleRequest)
@@ -60,7 +60,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Missing parameters on ListPolicies
-	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	missingListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListPolicies(missingListResponseRecorder, missingListRequest)
 	if missingListResponseRecorder.Code != http.StatusBadRequest {
@@ -68,7 +68,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Missing parameters on CreatePolicy
-	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
+	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
 	missingCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreatePolicy(missingCreateResponseRecorder, missingCreateRequest)
 	if missingCreateResponseRecorder.Code != http.StatusBadRequest {
@@ -76,7 +76,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Malformed JSON on CreatePolicy
-	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/policies", bytes.NewReader([]byte("not json")))
+	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/policies", bytes.NewReader([]byte("not json")))
 	malformedCreateRequest.SetPathValue("schema_name", "public")
 	malformedCreateRequest.SetPathValue("table_name", "users")
 	malformedCreateResponseRecorder := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Missing parameters on DropPolicy
-	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
+	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables", nil)
 	missingDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeletePolicy(missingDropResponseRecorder, missingDropRequest)
 	if missingDropResponseRecorder.Code != http.StatusBadRequest {
@@ -94,7 +94,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Missing parameters on ToggleRLS
-	missingToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables", nil)
+	missingToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables", nil)
 	missingToggleResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleToggleRLS(missingToggleResponseRecorder, missingToggleRequest)
 	if missingToggleResponseRecorder.Code != http.StatusBadRequest {
@@ -102,7 +102,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Unknown RLS action on ToggleRLS
-	unknownActionRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/rls?action=UNKNOWN", nil)
+	unknownActionRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/users/rls?action=UNKNOWN", nil)
 	unknownActionRequest.SetPathValue("schema_name", "public")
 	unknownActionRequest.SetPathValue("table_name", "users")
 	unknownActionResponseRecorder := httptest.NewRecorder()

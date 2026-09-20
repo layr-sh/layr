@@ -10,7 +10,7 @@ import (
 	"layr.sh/core"
 )
 
-// handleGetConfig handles GET /api/v1/_/auth/config returning sanitized config without raw secrets.
+// handleGetConfig handles GET /v1/_/auth/config returning sanitized config without raw secrets.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handleGetConfig invoked")
 
@@ -30,7 +30,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 	_ = json.NewEncoder(responseWriter).Encode(sanitizedConfig)
 }
 
-// handleUpdateConfig handles PUT /api/v1/_/auth/config updating runtime config with envelope encryption.
+// handleUpdateConfig handles PUT /v1/_/auth/config updating runtime config with envelope encryption.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handleUpdateConfig invoked")
 

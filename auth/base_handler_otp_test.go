@@ -28,14 +28,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	disabledConfig.SMSOTP.Enabled = false
 	configManager.Set(disabledConfig)
 
-	disabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
+	disabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
 	disabledSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(disabledSendResponseRecorder, disabledSendRequest)
 	if disabledSendResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when OTP disabled, got: %d", disabledSendResponseRecorder.Code)
 	}
 
-	verifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com","code":"123456"}`))
+	verifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com","code":"123456"}`))
 	verifyDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(verifyDisabledResponseRecorder, verifyDisabledRequest)
 	if verifyDisabledResponseRecorder.Code != http.StatusForbidden {
@@ -66,28 +66,28 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}, nil))
 
 	// 3. Validation errors
-	missingRecipientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{}`))
+	missingRecipientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{}`))
 	missingRecipientResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(missingRecipientResponseRecorder, missingRecipientRequest)
 	if missingRecipientResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing OTP recipient, got: %d", missingRecipientResponseRecorder.Code)
 	}
 
-	missingCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com"}`))
+	missingCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com"}`))
 	missingCodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(missingCodeResponseRecorder, missingCodeRequest)
 	if missingCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing OTP verify code, got: %d", missingCodeResponseRecorder.Code)
 	}
 
-	invalidPhoneSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"invalid"}`))
+	invalidPhoneSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"invalid"}`))
 	invalidPhoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(invalidPhoneSendResponseRecorder, invalidPhoneSendRequest)
 	if invalidPhoneSendResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid phone in OTP send, got: %d", invalidPhoneSendResponseRecorder.Code)
 	}
 
-	invalidPhoneVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"invalid","code":"123456"}`))
+	invalidPhoneVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"invalid","code":"123456"}`))
 	invalidPhoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(invalidPhoneVerifyResponseRecorder, invalidPhoneVerifyRequest)
 	if invalidPhoneVerifyResponseRecorder.Code != http.StatusBadRequest {
@@ -100,14 +100,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	emailOnlyConfig.SMSOTP.Enabled = false
 	configManager.Set(emailOnlyConfig)
 
-	smsDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222"}`))
+	smsDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222"}`))
 	smsDisabledSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(smsDisabledSendResponseRecorder, smsDisabledSendRequest)
 	if smsDisabledSendResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on SMS OTP send when SMS OTP disabled, got: %d", smsDisabledSendResponseRecorder.Code)
 	}
 
-	smsDisabledVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+15551112222","code":"123456"}`))
+	smsDisabledVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+15551112222","code":"123456"}`))
 	smsDisabledVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(smsDisabledVerifyResponseRecorder, smsDisabledVerifyRequest)
 	if smsDisabledVerifyResponseRecorder.Code != http.StatusForbidden {
@@ -119,14 +119,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	smsOnlyConfig.SMSOTP.Enabled = true
 	configManager.Set(smsOnlyConfig)
 
-	emailDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com"}`))
+	emailDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com"}`))
 	emailDisabledSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(emailDisabledSendResponseRecorder, emailDisabledSendRequest)
 	if emailDisabledSendResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on email OTP send when email OTP disabled, got: %d", emailDisabledSendResponseRecorder.Code)
 	}
 
-	emailDisabledVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"user@example.com","code":"123456"}`))
+	emailDisabledVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"user@example.com","code":"123456"}`))
 	emailDisabledVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(emailDisabledVerifyResponseRecorder, emailDisabledVerifyRequest)
 	if emailDisabledVerifyResponseRecorder.Code != http.StatusForbidden {
@@ -144,14 +144,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	baseHandler.SetSMSDispatcher(nil)
 
 	unconfiguredEmailOTPResponseRecorder := httptest.NewRecorder()
-	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
+	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
 	baseHandler.handleSendOTP(unconfiguredEmailOTPResponseRecorder, unconfiguredEmailOTPRequest)
 	if unconfiguredEmailOTPResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unconfigured email OTP, got: %d (%s)", unconfiguredEmailOTPResponseRecorder.Code, unconfiguredEmailOTPResponseRecorder.Body.String())
 	}
 
 	unconfiguredPhoneOTPResponseRecorder := httptest.NewRecorder()
-	unconfiguredPhoneOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222","purpose":"sign_in"}`))
+	unconfiguredPhoneOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222","purpose":"sign_in"}`))
 	baseHandler.handleSendOTP(unconfiguredPhoneOTPResponseRecorder, unconfiguredPhoneOTPRequest)
 	if unconfiguredPhoneOTPResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unconfigured phone OTP, got: %d (%s)", unconfiguredPhoneOTPResponseRecorder.Code, unconfiguredPhoneOTPResponseRecorder.Body.String())
@@ -170,7 +170,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 
 	// 6. Rate limits & Cooldown
 	_ = testKVStore.Set(context.Background(), "auth:cooldown:sign_in:cooldown_user@example.com", "1", 60*time.Second)
-	cooldownOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"cooldown_user@example.com","purpose":"sign_in"}`))
+	cooldownOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"cooldown_user@example.com","purpose":"sign_in"}`))
 	cooldownOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(cooldownOTPResponseRecorder, cooldownOTPRequest)
 	if cooldownOTPResponseRecorder.Code != http.StatusTooManyRequests {
@@ -178,7 +178,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	_ = testKVStore.Set(context.Background(), "auth:ratelimit:otp:ip:203.0.113.50", "10", time.Hour)
-	rateLimitedOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"fresh_user@example.com","purpose":"sign_in"}`))
+	rateLimitedOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"fresh_user@example.com","purpose":"sign_in"}`))
 	rateLimitedOTPRequest.RemoteAddr = "203.0.113.50:1234"
 	rateLimitedOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(rateLimitedOTPResponseRecorder, rateLimitedOTPRequest)
@@ -187,14 +187,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	// 7. Nil database pool -> 500
-	otpSignUpSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"sign_up"}`))
+	otpSignUpSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"sign_up"}`))
 	otpSignUpSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSignUpSendResponseRecorder, otpSignUpSendRequest)
 	if otpSignUpSendResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on OTP sign up send nil pool, got: %d", otpSignUpSendResponseRecorder.Code)
 	}
 
-	otpSignUpVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"sign_up"}`))
+	otpSignUpVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"sign_up"}`))
 	otpSignUpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpSignUpVerifyResponseRecorder, otpSignUpVerifyRequest)
 	if otpSignUpVerifyResponseRecorder.Code != http.StatusInternalServerError {
@@ -204,7 +204,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	// 8. Event Bus on Nil database pool -> 500
 	eventBus := core.NewEventBus(nil, cryptoKeyManager)
 	baseHandler.SetEventBus(eventBus)
-	eventOTPSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"event_user@example.com"}`))
+	eventOTPSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"event_user@example.com"}`))
 	eventOTPSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(eventOTPSendResponseRecorder, eventOTPSendRequest)
 	if eventOTPSendResponseRecorder.Code != http.StatusInternalServerError {
@@ -233,7 +233,7 @@ func TestAuthOTPThreatValidationUnit(t *testing.T) {
 	configManager.Set(botProtectionConfig)
 
 	// OTP Send captcha check
-	otpSendNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
+	otpSendNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
 	otpSendNoCaptchaResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSendNoCaptchaResponseRecorder, otpSendNoCaptchaRequest)
 	if otpSendNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
@@ -241,7 +241,7 @@ func TestAuthOTPThreatValidationUnit(t *testing.T) {
 	}
 
 	// OTP Verify captcha check
-	otpVerifyNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com","code":"123456"}`))
+	otpVerifyNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"test@example.com","code":"123456"}`))
 	otpVerifyNoCaptchaResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyNoCaptchaResponseRecorder, otpVerifyNoCaptchaRequest)
 	if otpVerifyNoCaptchaResponseRecorder.Code != http.StatusBadRequest {

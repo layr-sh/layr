@@ -218,7 +218,7 @@ const (
 
 // parsePath extracts schema, table, and optional record_id from the request URL.
 func (handler *BaseHandler) parsePath(path string) (string, string, string, error) {
-	trimmed := strings.TrimPrefix(path, "/api/v1/data/")
+	trimmed := strings.TrimPrefix(path, "/v1/data/")
 	parts := strings.Split(trimmed, "/")
 	if len(parts) < minPathSegments || parts[0] == "" || parts[1] == "" {
 		return "", "", "", errors.New("path must include schema and table name")

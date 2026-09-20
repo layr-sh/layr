@@ -11,7 +11,7 @@ import (
 func TestCoreErrorResponseSerializationAndHelpersUnit(t *testing.T) {
 	// 1. Test WriteErrorResponse with standard status code and debugLog
 	responseRecorder := httptest.NewRecorder()
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/test", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/test", nil)
 	WriteErrorResponse(responseRecorder, request, http.StatusNotFound, "Resource not found", "item-123 not found in db")
 
 	if responseRecorder.Code != http.StatusNotFound {
@@ -52,7 +52,7 @@ func TestCoreErrorResponseSerializationAndHelpersUnit(t *testing.T) {
 	if errorResponse.Detail != "Resource not found" {
 		t.Errorf("unexpected Detail: %s", errorResponse.Detail)
 	}
-	if errorResponse.Instance != "/api/v1/test" {
+	if errorResponse.Instance != "/v1/test" {
 		t.Errorf("unexpected Instance: %s", errorResponse.Instance)
 	}
 	if errorResponse.Timestamp == "" {

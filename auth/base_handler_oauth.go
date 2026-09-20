@@ -53,7 +53,7 @@ func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWri
 
 	redirectURI := request.URL.Query().Get("redirect_uri")
 	if redirectURI == "" {
-		redirectURI = fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
+		redirectURI = fmt.Sprintf("%s/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
 	}
 
 	state := request.URL.Query().Get("state")
@@ -106,18 +106,36 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 	var provider, code, redirectURI, state string
 
 	if request.Method == http.MethodGet {
-		pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
-		if len(pathSegments) >= 5 && pathSegments[4] != "token" && pathSegments[4] != "callback" {
-			provider = pathSegments[4]
+		provider = request.PathValue("provider")
+		if provider == "" {
+			pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+			for i, segment := range pathSegments {
+				if segment == "oauth" && i+1 < len(pathSegments) {
+					candidate := pathSegments[i+1]
+					if candidate != "token" && candidate != "callback" {
+						provider = candidate
+					}
+					break
+				}
+			}
 		}
 		code = request.URL.Query().Get("code")
 		redirectURI = request.URL.Query().Get("redirect_uri")
 		state = request.URL.Query().Get("state")
 	} else if strings.Contains(request.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
 		_ = request.ParseForm()
-		pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
-		if len(pathSegments) >= 5 && pathSegments[4] != "token" && pathSegments[4] != "callback" {
-			provider = pathSegments[4]
+		provider = request.PathValue("provider")
+		if provider == "" {
+			pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
+			for i, segment := range pathSegments {
+				if segment == "oauth" && i+1 < len(pathSegments) {
+					candidate := pathSegments[i+1]
+					if candidate != "token" && candidate != "callback" {
+						provider = candidate
+					}
+					break
+				}
+			}
 		}
 		if provider == "" {
 			provider = request.FormValue("provider")
@@ -133,9 +151,18 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		_ = json.NewDecoder(request.Body).Decode(&exchangeOAuthTokenInput)
 		provider = exchangeOAuthTokenInput.Provider
 		if provider == "" {
+			provider = request.PathValue("provider")
+		}
+		if provider == "" {
 			pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
-			if len(pathSegments) >= 5 && pathSegments[4] != "token" && pathSegments[4] != "callback" {
-				provider = pathSegments[4]
+			for i, segment := range pathSegments {
+				if segment == "oauth" && i+1 < len(pathSegments) {
+					candidate := pathSegments[i+1]
+					if candidate != "token" && candidate != "callback" {
+						provider = candidate
+					}
+					break
+				}
 			}
 		}
 		code = exchangeOAuthTokenInput.Code
@@ -198,7 +225,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 
 	clientSecret, _ := handler.configManager.DecryptSecret(oAuthProviderConfig.ClientSecret)
 	if redirectURI == "" {
-		redirectURI = fmt.Sprintf("%s/api/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
+		redirectURI = fmt.Sprintf("%s/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
 	}
 
 	resolvedProviderConfig, err := oauth.ResolveProviderConfig(provider, oauth.ProviderConfig{

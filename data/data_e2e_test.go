@@ -40,7 +40,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	controlPlaneServeMux := coreServer.ControlPlaneRouter().Mux()
 
 	// 1. User Journey: Check initial data config
-	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	configResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(configResponseRecorder, configRequest)
 	if configResponseRecorder.Code != http.StatusOK {
@@ -61,15 +61,15 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	if marshalErr != nil {
 		t.Fatalf("failed to marshal create table payload: %v", marshalErr)
 	}
-	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTablePayload))
+	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader(createTablePayload))
 	createTableResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(createTableResponseRecorder, createTableRequest)
 	if createTableResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create table, got %d: %s", createTableResponseRecorder.Code, createTableResponseRecorder.Body.String())
 	}
 
-	// 3. User Journey: Verify table exists via GET /api/v1/_/data/tables/public/books
-	getTableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/books", nil)
+	// 3. User Journey: Verify table exists via GET /v1/_/data/tables/public/books
+	getTableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/books", nil)
 	getTableResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(getTableResponseRecorder, getTableRequest)
 	if getTableResponseRecorder.Code != http.StatusOK {
@@ -88,7 +88,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	if insertMarshalErr != nil {
 		t.Fatalf("failed to marshal insert payload: %v", insertMarshalErr)
 	}
-	insertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/books", bytes.NewReader(insertPayload))
+	insertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/books", bytes.NewReader(insertPayload))
 	insertRequest.Header.Set("Content-Type", "application/json")
 	insertRequest.Header.Set("Prefer", "return=representation")
 	insertResponseRecorder := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 
 	// 5. User Journey: Query via GraphQL
 	graphqlReader := bytes.NewReader([]byte(`{"query":"query { books { id title author } }"}`))
-	graphqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", graphqlReader)
+	graphqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", graphqlReader)
 	graphqlRequest.Header.Set("Content-Type", "application/json")
 	graphqlResponseRecorder := httptest.NewRecorder()
 	publicServeMux.ServeHTTP(graphqlResponseRecorder, graphqlRequest)
@@ -118,7 +118,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 
 	// 6. User Journey: Invalidate Cache
 	invalidateReader := bytes.NewReader([]byte(`{"schema":"public","table":"books"}`))
-	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", invalidateReader)
+	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", invalidateReader)
 	invalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(invalidateResponseRecorder, invalidateRequest)
 	if invalidateResponseRecorder.Code != http.StatusOK {
@@ -127,7 +127,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 
 	// 7. User Journey: Enable RLS on books table
 	rlsReader := bytes.NewReader([]byte(`{"action":"enable"}`))
-	rlsRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/books/rls", rlsReader)
+	rlsRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/books/rls", rlsReader)
 	rlsResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(rlsResponseRecorder, rlsRequest)
 	if rlsResponseRecorder.Code != http.StatusOK {
@@ -136,7 +136,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 
 	// 8. User Journey: Execute SQL via Control Plane
 	sqlReader := bytes.NewReader([]byte(`{"sql":"SELECT count(*) FROM public.books;"}`))
-	sqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", sqlReader)
+	sqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", sqlReader)
 	sqlResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(sqlResponseRecorder, sqlRequest)
 	if sqlResponseRecorder.Code != http.StatusOK {
@@ -145,7 +145,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 
 	// 9. Edge Case: Malformed SQL returns 400
 	badSQLReader := bytes.NewReader([]byte(`{"sql":"SELECT FROM SYNTAX ERROR;"}`))
-	badSQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", badSQLReader)
+	badSQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", badSQLReader)
 	badSQLResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(badSQLResponseRecorder, badSQLRequest)
 	if badSQLResponseRecorder.Code != http.StatusBadRequest {
@@ -153,7 +153,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	}
 
 	// 10. User Journey: Drop Table
-	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/books", nil)
+	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/books", nil)
 	dropResponseRecorder := httptest.NewRecorder()
 	controlPlaneServeMux.ServeHTTP(dropResponseRecorder, dropRequest)
 	if dropResponseRecorder.Code != http.StatusOK {

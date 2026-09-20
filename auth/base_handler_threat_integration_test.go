@@ -101,7 +101,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		"email":    userAEmail,
 		"password": "WrongPassword123!",
 	})
-	failedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(wrongPasswordPayload))
+	failedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(wrongPasswordPayload))
 	failedSignInRequest.Header.Set("X-Forwarded-For", "203.0.113.50")
 	failedSignInRequest.Header.Set("User-Agent", "TestBrowser/1.0")
 	failedSignInResponseRecorder := httptest.NewRecorder()
@@ -121,7 +121,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		"email":    userAEmail,
 		"password": userAPassword,
 	})
-	adaptiveSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
+	adaptiveSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	adaptiveSignInRequest.Header.Set("X-Forwarded-For", "203.0.113.50")
 	adaptiveSignInRequest.Header.Set("User-Agent", "TestBrowser/1.0")
 	adaptiveSignInResponseRecorder := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 3. Second sign-in from known device/IP (10.0.0.1, KnownBrowser/1.0): low risk -> Adaptive MFA is bypassed!
-	knownDeviceSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
+	knownDeviceSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	knownDeviceSignInRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	knownDeviceSignInRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	knownDeviceSignInResponseRecorder := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 
 	// 3b. Sign-in with low risk (known User-Agent, but new IP):
 	// Evaluates to RiskLevelLow with reason "new_ip". When RiskTriggers contains "new_ip", adaptive MFA triggers.
-	lowRiskMatchedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
+	lowRiskMatchedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	lowRiskMatchedSignInRequest.Header.Set("X-Forwarded-For", "198.51.100.22")
 	lowRiskMatchedSignInRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	lowRiskMatchedResponseRecorder := httptest.NewRecorder()
@@ -189,7 +189,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	customRiskConfig.MFA.RiskTriggers = []string{"excessive_failed_attempts"}
 	configManager.Set(customRiskConfig)
 
-	lowRiskUnmatchedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
+	lowRiskUnmatchedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	lowRiskUnmatchedSignInRequest.Header.Set("X-Forwarded-For", "198.51.100.23")
 	lowRiskUnmatchedSignInRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	lowRiskUnmatchedResponseRecorder := httptest.NewRecorder()
@@ -210,7 +210,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	alwaysMFAConfig.MFA.Policy = "always"
 	configManager.Set(alwaysMFAConfig)
 
-	alwaysPolicySignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
+	alwaysPolicySignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	alwaysPolicySignInRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	alwaysPolicySignInRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	alwaysPolicySignInResponseRecorder := httptest.NewRecorder()
@@ -243,7 +243,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		"email":    lockedUserEmail,
 		"password": "AnyPassword123!",
 	})
-	lockedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(lockedPayload))
+	lockedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(lockedPayload))
 	lockedSignInRequest.Header.Set("X-Forwarded-For", "203.0.113.99")
 	lockedSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(lockedSignInResponseRecorder, lockedSignInRequest)
@@ -273,7 +273,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		CurrentPassword: userAPassword,
 		NewPassword:     "password",
 	})
-	breachedUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/auth/user/password", bytes.NewReader(breachedUpdatePayload))
+	breachedUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/auth/user/password", bytes.NewReader(breachedUpdatePayload))
 	breachedUpdateRequest = withUserAuth(breachedUpdateRequest, userAID, "authenticated", false)
 	breachedUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(breachedUpdateResponseRecorder, breachedUpdateRequest)
@@ -294,7 +294,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		CurrentPassword: userAPassword,
 		NewPassword:     "NewCleanPassword123!#",
 	})
-	safeUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/auth/user/password", bytes.NewReader(safeUpdatePayload))
+	safeUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/auth/user/password", bytes.NewReader(safeUpdatePayload))
 	safeUpdateRequest = withUserAuth(safeUpdateRequest, userAID, "authenticated", false)
 	safeUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(safeUpdateResponseRecorder, safeUpdateRequest)
@@ -324,7 +324,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		Recipient: userAEmail,
 		Code:      "999999",
 	})
-	otpVerifyWrongRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(wrongOTPPayload))
+	otpVerifyWrongRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(wrongOTPPayload))
 	otpVerifyWrongRequest.Header.Set("X-Forwarded-For", "198.51.100.77")
 	otpVerifyWrongResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyWrongResponseRecorder, otpVerifyWrongRequest)
@@ -340,7 +340,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		Recipient: userAEmail,
 		Code:      otpCode,
 	})
-	otpVerifyKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(validOTPPayload))
+	otpVerifyKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(validOTPPayload))
 	otpVerifyKnownRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	otpVerifyKnownRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	otpVerifyKnownResponseRecorder := httptest.NewRecorder()
@@ -365,7 +365,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		t.Fatalf("failed to insert second test otp: %v", insertNewOTPErr)
 	}
 
-	otpVerifyNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(validOTPPayload))
+	otpVerifyNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(validOTPPayload))
 	otpVerifyNewDeviceRequest.Header.Set("X-Forwarded-For", "203.0.113.88")
 	otpVerifyNewDeviceRequest.Header.Set("User-Agent", "BrandNewOTPBrowser/1.0")
 	otpVerifyNewDeviceResponseRecorder := httptest.NewRecorder()
@@ -390,7 +390,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 9a. Direct OAuth callback from known device: Adaptive MFA is bypassed
-	oauthKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/callback", nil)
+	oauthKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback", nil)
 	oauthKnownRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	oauthKnownRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	oauthKnownRequest.SetPathValue("provider", "google")
@@ -410,7 +410,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	// 9b. Direct OAuth callback from new device: triggers Adaptive MFA challenge ticket & alert
 	suspiciousAlertDispatched = false
 	dispatchedSuspiciousEmail = ""
-	oauthNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/callback", nil)
+	oauthNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback", nil)
 	oauthNewDeviceRequest.Header.Set("X-Forwarded-For", "203.0.113.77")
 	oauthNewDeviceRequest.Header.Set("User-Agent", "BrandNewOAuthBrowser/1.0")
 	oauthNewDeviceRequest.SetPathValue("provider", "google")

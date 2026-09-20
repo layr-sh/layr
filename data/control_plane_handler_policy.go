@@ -16,7 +16,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/policies")
 		return
 	}
 	policies, err := controlPlaneHandler.ddlEngine.ListPolicies(request.Context(), schema, table)
@@ -38,7 +38,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/policies")
 		return
 	}
 	var createPolicyInput CreatePolicyInput
@@ -76,7 +76,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	policyName := controlPlaneHandler.extractPolicyName(request)
 	if schema == "" || table == "" || policyName == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies/{policy}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/policies/{policy}")
 		return
 	}
 	if dropErr := controlPlaneHandler.ddlEngine.DropPolicy(request.Context(), schema, table, policyName); dropErr != nil {
@@ -108,7 +108,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/rls")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/rls")
 		return
 	}
 

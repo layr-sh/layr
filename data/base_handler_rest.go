@@ -30,7 +30,7 @@ const (
 	pgTypeOIDVoid       uint32 = 2278
 )
 
-// handleListRecords handles GET /api/v1/data/{schema_name}/{table_name}.
+// handleListRecords handles GET /v1/data/{schema_name}/{table_name}.
 func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
@@ -158,7 +158,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	_, _ = responseWriter.Write(responseJSON)
 }
 
-// handleGetRecord handles GET /api/v1/data/{schema_name}/{table_name}/{record_id}.
+// handleGetRecord handles GET /v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
@@ -212,7 +212,7 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 	_ = json.NewEncoder(responseWriter).Encode(results[0])
 }
 
-// handleCreateRecord handles POST /api/v1/data/{schema_name}/{table_name}.
+// handleCreateRecord handles POST /v1/data/{schema_name}/{table_name}.
 func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
@@ -343,7 +343,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 		rowID := ""
 		if rawID, exists := insertedRows[0][primaryKey]; exists && rawID != nil {
 			rowID = fmt.Sprintf("%v", rawID)
-			responseWriter.Header().Set("Location", fmt.Sprintf("/api/v1/data/%s/%s/%s", schema, table, rowID))
+			responseWriter.Header().Set("Location", fmt.Sprintf("/v1/data/%s/%s/%s", schema, table, rowID))
 		}
 		_ = json.NewEncoder(responseWriter).Encode(insertedRows[0])
 	} else {
@@ -351,7 +351,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	}
 }
 
-// handleUpdateRecord handles PATCH/PUT /api/v1/data/{schema_name}/{table_name}/{record_id}.
+// handleUpdateRecord handles PATCH/PUT /v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
@@ -458,7 +458,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 	_ = json.NewEncoder(responseWriter).Encode(updatedRow)
 }
 
-// handleDeleteRecord handles DELETE /api/v1/data/{schema_name}/{table_name}/{record_id}.
+// handleDeleteRecord handles DELETE /v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
@@ -524,7 +524,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-// handleExecuteFunction handles GET and POST /api/v1/data/{schema_name}/rpc/{function_name}.
+// handleExecuteFunction handles GET and POST /v1/data/{schema_name}/rpc/{function_name}.
 // It invokes PostgreSQL stored functions/procedures with the caller's RLS session claims.
 // - GET: Read operation with arguments provided via URL query params.
 // - POST: Mutation operation with arguments provided via flat JSON body.
@@ -545,7 +545,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 	schema := request.PathValue("schema_name")
 	functionName := request.PathValue("function_name")
 	if schema == "" || functionName == "" {
-		trimmed := strings.TrimPrefix(request.URL.Path, "/api/v1/data/")
+		trimmed := strings.TrimPrefix(request.URL.Path, "/v1/data/")
 		parts := strings.Split(trimmed, "/")
 		if len(parts) >= 3 && parts[1] == "rpc" {
 			schema = parts[0]

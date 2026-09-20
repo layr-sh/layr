@@ -56,7 +56,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		},
 	}
 	encodedCreate, _ := json.Marshal(createPayload)
-	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader(encodedCreate))
+	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader(encodedCreate))
 	createRequest.Header.Set("Authorization", authBearerHeader)
 	createResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(createResponseRecorder, createRequest)
@@ -76,7 +76,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		"phone_verified": true,
 	}
 	encodedCreatePhone, _ := json.Marshal(createPhonePayload)
-	createPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader(encodedCreatePhone))
+	createPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader(encodedCreatePhone))
 	createPhoneRequest.Header.Set("Authorization", authBearerHeader)
 	createPhoneResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(createPhoneResponseRecorder, createPhoneRequest)
@@ -85,7 +85,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	// 3. List Users with Pagination and Filters
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users?limit=10&offset=0&role=authenticated&search=cp-created", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users?limit=10&offset=0&role=authenticated&search=cp-created", nil)
 	listRequest.Header.Set("Authorization", authBearerHeader)
 	listResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUsers(listResponseRecorder, listRequest)
@@ -103,7 +103,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	// 4. Get User by ID
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+createdUser.ID, nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+createdUser.ID, nil)
 	getRequest.Header.Set("Authorization", authBearerHeader)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(getResponseRecorder, getRequest)
@@ -114,7 +114,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 
 	// Get non-existent user returns 404
 	randomID := uuid.NewV7().String()
-	notFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+randomID, nil)
+	notFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID, nil)
 	notFoundRequest.Header.Set("Authorization", authBearerHeader)
 	notFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(notFoundResponseRecorder, notFoundRequest)
@@ -131,7 +131,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 
 	futureLockTime := time.Now().Add(48 * time.Hour).UTC()
 	lockPayload, _ := json.Marshal(map[string]any{"locked_until": futureLockTime.Format(time.RFC3339)})
-	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+createdUser.ID+"/lock", bytes.NewReader(lockPayload))
+	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+createdUser.ID+"/lock", bytes.NewReader(lockPayload))
 	lockRequest.Header.Set("Authorization", authBearerHeader)
 	lockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockResponseRecorder, lockRequest)
@@ -140,7 +140,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK from handleLockUser, got: %d", lockResponseRecorder.Code)
 	}
 
-	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+createdUser.ID+"/lock", nil)
+	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+createdUser.ID+"/lock", nil)
 	unlockRequest.Header.Set("Authorization", authBearerHeader)
 	unlockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockResponseRecorder, unlockRequest)
@@ -150,7 +150,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	// 6. Delete User
-	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+createdUser.ID, nil)
+	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+createdUser.ID, nil)
 	deleteRequest.Header.Set("Authorization", authBearerHeader)
 	deleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteResponseRecorder, deleteRequest)
@@ -162,7 +162,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	// 7. Non-existent User Operations (Delete, Lock, Unlock -> 404)
 	nonExistentUUID := uuid.NewV7().String()
 
-	deleteNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+nonExistentUUID, nil)
+	deleteNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+nonExistentUUID, nil)
 	deleteNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	deleteNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteNotFoundResponseRecorder, deleteNotFoundRequest)
@@ -170,7 +170,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		t.Fatalf("expected 404 on deleting non-existent user, got: %d", deleteNotFoundResponseRecorder.Code)
 	}
 
-	lockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+nonExistentUUID+"/lock", strings.NewReader(`{}`))
+	lockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+nonExistentUUID+"/lock", strings.NewReader(`{}`))
 	lockNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	lockNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockNotFoundResponseRecorder, lockNotFoundRequest)
@@ -178,7 +178,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		t.Fatalf("expected 404 on locking non-existent user, got: %d", lockNotFoundResponseRecorder.Code)
 	}
 
-	unlockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+nonExistentUUID+"/lock", nil)
+	unlockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+nonExistentUUID+"/lock", nil)
 	unlockNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	unlockNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockNotFoundResponseRecorder, unlockNotFoundRequest)
@@ -190,7 +190,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	noEmailOrPhonePayload, _ := json.Marshal(map[string]any{
 		"role": "authenticated",
 	})
-	noEmailOrPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader(noEmailOrPhonePayload))
+	noEmailOrPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader(noEmailOrPhonePayload))
 	noEmailOrPhoneRequest.Header.Set("Authorization", authBearerHeader)
 	noEmailOrPhoneResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(noEmailOrPhoneResponseRecorder, noEmailOrPhoneRequest)
@@ -204,7 +204,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		"phone_verified": true,
 		"role":           "authenticated",
 	})
-	phoneCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader(phoneCreatePayload))
+	phoneCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader(phoneCreatePayload))
 	phoneCreateRequest.Header.Set("Authorization", authBearerHeader)
 	phoneCreateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(phoneCreateResponseRecorder, phoneCreateRequest)
@@ -213,7 +213,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	// 9. List Users with Cursor pagination
-	listCursorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users?limit=1&cursor=2099-01-01T00:00:00Z", nil)
+	listCursorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users?limit=1&cursor=2099-01-01T00:00:00Z", nil)
 	listCursorRequest.Header.Set("Authorization", authBearerHeader)
 	listCursorResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUsers(listCursorResponseRecorder, listCursorRequest)
@@ -237,7 +237,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. List Users error
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	listResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUsers(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusInternalServerError {
@@ -245,7 +245,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 2. Create User error
-	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", strings.NewReader(`{"email":"broken@test.com"}`))
+	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", strings.NewReader(`{"email":"broken@test.com"}`))
 	createResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(createResponseRecorder, createRequest)
 	if createResponseRecorder.Code != http.StatusInternalServerError {
@@ -253,7 +253,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 3. Get User error
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+randomID, nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID, nil)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusInternalServerError {
@@ -261,7 +261,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 4. Delete User error
-	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+randomID, nil)
+	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+randomID, nil)
 	deleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteResponseRecorder, deleteRequest)
 	if deleteResponseRecorder.Code != http.StatusInternalServerError {
@@ -269,7 +269,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 5. Lock User error
-	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+randomID+"/lock", nil)
+	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+randomID+"/lock", nil)
 	lockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockResponseRecorder, lockRequest)
 	if lockResponseRecorder.Code != http.StatusInternalServerError {
@@ -277,7 +277,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// 6. Unlock User error
-	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/auth/users/"+randomID+"/lock", nil)
+	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+randomID+"/lock", nil)
 	unlockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockResponseRecorder, unlockRequest)
 	if unlockResponseRecorder.Code != http.StatusInternalServerError {

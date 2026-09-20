@@ -37,14 +37,14 @@ func TestDataBaseHandlerKVIntegration(t *testing.T) {
 		TTL:   300,
 	}
 	setBytes, _ := json.Marshal(setKVInput)
-	setRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/user-pref", bytes.NewReader(setBytes))
+	setRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/kv/user-pref", bytes.NewReader(setBytes))
 	setRequest.SetPathValue("key", "user-pref")
 	setResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetKV(setResponseRecorder, setRequest)
 	assert.Equal(t, http.StatusOK, setResponseRecorder.Code)
 
 	// 2. Get KV
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/kv/user-pref", nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/kv/user-pref", nil)
 	getRequest.SetPathValue("key", "user-pref")
 	getResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetKV(getResponseRecorder, getRequest)
@@ -57,7 +57,7 @@ func TestDataBaseHandlerKVIntegration(t *testing.T) {
 		TTL: 300,
 	}
 	incBytes, _ := json.Marshal(incrementKVInput)
-	incrementRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader(incBytes))
+	incrementRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/kv/increment", bytes.NewReader(incBytes))
 	incrementResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIncrementKV(incrementResponseRecorder, incrementRequest)
 	assert.Equal(t, http.StatusOK, incrementResponseRecorder.Code)
@@ -68,13 +68,13 @@ func TestDataBaseHandlerKVIntegration(t *testing.T) {
 		Keys: []string{"user-pref", "hits"},
 	}
 	mgetBytes, _ := json.Marshal(getMultipleKVInput)
-	mgetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/mget", bytes.NewReader(mgetBytes))
+	mgetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/kv/mget", bytes.NewReader(mgetBytes))
 	mgetResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetMultipleKV(mgetResponseRecorder, mgetRequest)
 	assert.Equal(t, http.StatusOK, mgetResponseRecorder.Code)
 
 	// 5. Delete KV
-	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/kv/user-pref", nil)
+	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/kv/user-pref", nil)
 	deleteRequest.SetPathValue("key", "user-pref")
 	deleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeleteKV(deleteResponseRecorder, deleteRequest)

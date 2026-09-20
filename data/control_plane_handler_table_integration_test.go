@@ -32,7 +32,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. List Tables
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	listResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListTables(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusOK {
@@ -43,7 +43,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	{
 		canceledCtx, cancel := context.WithCancel(ctx)
 		cancel()
-		errorListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/_/data/tables", nil)
+		errorListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/_/data/tables", nil)
 		errorListResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListTables(errorListResponseRecorder, errorListRequest)
 		if errorListResponseRecorder.Code != http.StatusInternalServerError {
@@ -62,7 +62,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 			{Name: "is_published", Type: "bool", IsNullable: false, DefaultValue: &defaultValue},
 		},
 	})
-	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
+	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(createResponseRecorder, createRequest)
 	if createResponseRecorder.Code != http.StatusCreated {
@@ -70,7 +70,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// 3. Get Table details
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/blog_posts", nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/blog_posts", nil)
 	getRequest.SetPathValue("schema_name", "public")
 	getRequest.SetPathValue("table_name", "blog_posts")
 	getResponseRecorder := httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// Get non-existent table (404)
-	nonExistentGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/nonexistent_table", nil)
+	nonExistentGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/nonexistent_table", nil)
 	nonExistentGetRequest.SetPathValue("schema_name", "public")
 	nonExistentGetRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentGetResponseRecorder := httptest.NewRecorder()
@@ -98,7 +98,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// 4. Truncate Table
-	truncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/blog_posts/truncate?cascade=true", nil)
+	truncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/blog_posts/truncate?cascade=true", nil)
 	truncateRequest.SetPathValue("schema_name", "public")
 	truncateRequest.SetPathValue("table_name", "blog_posts")
 	truncateResponseRecorder := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// Truncate non-existent table error
-	nonExistentTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/nonexistent_table/truncate", nil)
+	nonExistentTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/nonexistent_table/truncate", nil)
 	nonExistentTruncateRequest.SetPathValue("schema_name", "public")
 	nonExistentTruncateRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentTruncateResponseRecorder := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// 5. Drop Table
-	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/blog_posts?cascade=true", nil)
+	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/blog_posts?cascade=true", nil)
 	dropRequest.SetPathValue("schema_name", "public")
 	dropRequest.SetPathValue("table_name", "blog_posts")
 	dropResponseRecorder := httptest.NewRecorder()
@@ -128,7 +128,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	}
 
 	// Drop Table error (protected schema)
-	protectedDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/core/nodes", nil)
+	protectedDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/core/nodes", nil)
 	protectedDropRequest.SetPathValue("schema_name", "core")
 	protectedDropRequest.SetPathValue("table_name", "nodes")
 	protectedDropResponseRecorder := httptest.NewRecorder()

@@ -363,7 +363,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	controlPlaneRouter := server.ControlPlaneRouter()
 
 	// Register Core Routes on Control Plane Router
-	GetRoute[ListServiceAccountsResponse](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleListServiceAccounts,
+	GetRoute[ListServiceAccountsResponse](controlPlaneRouter, "/v1/_/core/service-accounts", kernel.handleListServiceAccounts,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List all service accounts"),
 		RouteDescription("Lists all machine service accounts with status, name, and permission scopes."),
@@ -371,7 +371,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[CreateServiceAccountResponse, CreateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts", kernel.handleCreateServiceAccount,
+	PostRoute[CreateServiceAccountResponse, CreateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts", kernel.handleCreateServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Create a new machine service account"),
 		RouteDescription("Creates a machine service account, generates a 32-byte hex secret key, and hashes it."),
@@ -380,7 +380,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[ServiceAccount](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleGetServiceAccount,
+	GetRoute[ServiceAccount](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", kernel.handleGetServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get service account by ID"),
 		RouteDescription("Retrieves a service account by UUID."),
@@ -388,7 +388,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleUpdateServiceAccount,
+	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", kernel.handleUpdateServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Update service account"),
 		RouteDescription("Updates service account scopes, name, or enabled status while protecting root accounts."),
@@ -396,7 +396,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "serviceAccounts"),
 		RouteSDKMethodName("update"),
 	)
-	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/service-accounts/{service_account_id}", kernel.handleDeleteServiceAccount,
+	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", kernel.handleDeleteServiceAccount,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Delete service account"),
 		RouteDescription("Deletes a machine service account, enforcing invariant that at least one root account remains."),
@@ -407,7 +407,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	)
 
 	// Event Hooks Routes
-	GetRoute[ListEventHooksResponse](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleListEventHooks,
+	GetRoute[ListEventHooksResponse](controlPlaneRouter, "/v1/_/core/event-hooks", kernel.handleListEventHooks,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List all event hooks"),
 		RouteDescription("Lists all active event hooks with driver, target URLs/functions, events, and retry policies."),
@@ -415,7 +415,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks", kernel.handleCreateEventHook,
+	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks", kernel.handleCreateEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Create a new event hook"),
 		RouteDescription("Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching."),
@@ -424,7 +424,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("create"),
 	)
-	GetRoute[EventHook](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleGetEventHook,
+	GetRoute[EventHook](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", kernel.handleGetEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get event hook by ID"),
 		RouteDescription("Retrieves an event hook by UUID."),
@@ -432,7 +432,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("get"),
 	)
-	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleUpdateEventHook,
+	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", kernel.handleUpdateEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Update event hook"),
 		RouteDescription("Updates event hook driver, targets, subscribed events, secret, or enabled status."),
@@ -440,7 +440,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("update"),
 	)
-	DeleteRoute[Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}", kernel.handleDeleteEventHook,
+	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", kernel.handleDeleteEventHook,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Delete event hook"),
 		RouteDescription("Deletes an event hook."),
@@ -449,7 +449,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks"),
 		RouteSDKMethodName("delete"),
 	)
-	GetRoute[ListEventHookDeliveriesResponse](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries", kernel.handleListEventHookDeliveries,
+	GetRoute[ListEventHookDeliveriesResponse](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries", kernel.handleListEventHookDeliveries,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List event hook deliveries"),
 		RouteDescription("Queries recent dispatch attempts, response status, and latency for an event hook."),
@@ -457,7 +457,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "eventHooks", "deliveries"),
 		RouteSDKMethodName("list"),
 	)
-	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/api/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", kernel.handleRetryEventHookDelivery,
+	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", kernel.handleRetryEventHookDelivery,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Retry event hook delivery"),
 		RouteDescription("Manually redrives a past event hook delivery attempt."),
@@ -467,7 +467,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	)
 
 	// Events Routes
-	GetRoute[ListEventsResponse](controlPlaneRouter, "/api/v1/_/core/events", kernel.handleListEvents,
+	GetRoute[ListEventsResponse](controlPlaneRouter, "/v1/_/core/events", kernel.handleListEvents,
 		RouteTag("Core Control Plane"),
 		RouteSummary("List events"),
 		RouteDescription("Queries immutable system and domain events with multi-field filtering and pagination."),
@@ -475,7 +475,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 		RouteSDKGroupName("core", "events"),
 		RouteSDKMethodName("list"),
 	)
-	GetRoute[Event](controlPlaneRouter, "/api/v1/_/core/events/{event_id}", kernel.handleGetEvent,
+	GetRoute[Event](controlPlaneRouter, "/v1/_/core/events/{event_id}", kernel.handleGetEvent,
 		RouteTag("Core Control Plane"),
 		RouteSummary("Get event by ID"),
 		RouteDescription("Retrieves an individual event entry by UUID."),
@@ -485,7 +485,7 @@ func (kernel *Kernel) registerCoreRoutes(server *Server) {
 	)
 
 	// Mount Core Control Plane Router into root mux with Service Account authentication
-	serveMux.Handle("/api/v1/_/core/", ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(controlPlaneRouter.Mux()))
+	serveMux.Handle("/v1/_/core/", ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(controlPlaneRouter.Mux()))
 }
 
 func (kernel *Kernel) writeJSON(responseWriter http.ResponseWriter, data any) {

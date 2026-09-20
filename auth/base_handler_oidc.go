@@ -48,11 +48,11 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 	normalizedBaseURL := strings.TrimRight(baseURL, "/")
 	return OIDCConfiguration{
 		Issuer:                              normalizedBaseURL,
-		AuthorizationEndpoint:               normalizedBaseURL + "/api/v1/auth/oauth/authorize",
-		TokenEndpoint:                       normalizedBaseURL + "/api/v1/auth/oauth/token",
-		UserinfoEndpoint:                    normalizedBaseURL + "/api/v1/auth/oauth/userinfo",
+		AuthorizationEndpoint:               normalizedBaseURL + "/v1/auth/oauth/authorize",
+		TokenEndpoint:                       normalizedBaseURL + "/v1/auth/oauth/token",
+		UserinfoEndpoint:                    normalizedBaseURL + "/v1/auth/oauth/userinfo",
 		JwksURI:                             normalizedBaseURL + "/.well-known/jwks.json",
-		EndSessionEndpoint:                  normalizedBaseURL + "/api/v1/auth/oauth/sign-out",
+		EndSessionEndpoint:                  normalizedBaseURL + "/v1/auth/oauth/sign-out",
 		BackChannelSignOutSupported:         true,
 		BackChannelSignOutSessionSupported:  true,
 		FrontChannelSignOutSupported:        true,
@@ -127,7 +127,7 @@ func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, re
 	_ = json.NewEncoder(responseWriter).Encode(jwks)
 }
 
-// 2. Authorization Endpoint (GET /api/v1/auth/oauth/authorize)
+// 2. Authorization Endpoint (GET /v1/auth/oauth/authorize)
 
 func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
@@ -299,7 +299,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	http.Redirect(responseWriter, request, targetURL.String(), http.StatusFound)
 }
 
-// 3. Authorization Form Submission (POST /api/v1/auth/oauth/authorize)
+// 3. Authorization Form Submission (POST /v1/auth/oauth/authorize)
 
 func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
@@ -791,7 +791,7 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenInput {
 	return oauthTokenInput
 }
 
-// 4. Token Endpoint (POST /api/v1/auth/oauth/token)
+// 4. Token Endpoint (POST /v1/auth/oauth/token)
 
 func (handler *BaseHandler) handleIssueOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
 	oauthTokenInput := parseOAuthTokenRequest(request)
@@ -1239,7 +1239,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	_ = json.NewEncoder(responseWriter).Encode(issueOIDCTokenResponse)
 }
 
-// 5. Userinfo Endpoint (GET /api/v1/auth/oauth/userinfo)
+// 5. Userinfo Endpoint (GET /v1/auth/oauth/userinfo)
 
 func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
@@ -1299,7 +1299,7 @@ func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWr
 	_ = json.NewEncoder(responseWriter).Encode(getOIDCUserInfoResponse)
 }
 
-// 6. Sign-Out Endpoint (GET/POST /api/v1/auth/oauth/sign-out)
+// 6. Sign-Out Endpoint (GET/POST /v1/auth/oauth/sign-out)
 
 func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
@@ -2015,7 +2015,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
 
       {{if eq .AuthMode "mfa"}}
         <!-- MFA Challenge Form -->
-        <form action="/api/v1/auth/oauth/authorize" method="POST">
+        <form action="/v1/auth/oauth/authorize" method="POST">
           <input type="hidden" name="state" value="{{.StateID}}">
           <input type="hidden" name="action" value="verify_mfa">
           <input type="hidden" name="mfa_token" value="{{.MFAToken}}">
@@ -2026,11 +2026,11 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
           </div>
 
           <button type="submit" class="btn submit-btn w-full">Verify Code</button>
-          <a href="/api/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+          <a href="/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
         </form>
       {{else if eq .AuthMode "otp_verify"}}
         <!-- OTP Code Verification Form -->
-        <form action="/api/v1/auth/oauth/authorize" method="POST">
+        <form action="/v1/auth/oauth/authorize" method="POST">
           <input type="hidden" name="state" value="{{.StateID}}">
           <input type="hidden" name="action" value="verify_otp">
           <input type="hidden" name="recipient" value="{{.OTPRecipient}}">
@@ -2041,7 +2041,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
           </div>
 
           <button type="submit" class="btn submit-btn w-full">Verify & Sign in</button>
-          <a href="/api/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+          <a href="/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
         </form>
       {{else}}
         <!-- Standard Sign-in / Sign-up / OTP-request container -->
@@ -2057,7 +2057,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- Sign-in form -->
         <div id="sign-in-container" class="sign-in-container" style="{{if or (eq .AuthMode "sign_up") (eq .AuthMode "otp_request")}}display:none;{{end}}">
           {{if .ShowPassword}}
-            <form action="/api/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/auth/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="sign_in">
 
@@ -2091,7 +2091,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
             <div class="divider"><span>Or</span></div>
             <div class="providers-grid">
               {{range .Providers}}
-                <a href="/api/v1/auth/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="btn provider-btn w-full" data-variant="outline">
+                <a href="/v1/auth/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="btn provider-btn w-full" data-variant="outline">
                   Sign in with {{.Name}}
                 </a>
               {{end}}
@@ -2102,7 +2102,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- Sign-up form -->
         {{if and .ShowSignUp .ShowPassword}}
           <div id="sign-up-container" class="sign-up-container" style="{{if ne .AuthMode "sign_up"}}display:none;{{end}}">
-            <form action="/api/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/auth/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="sign_up">
 
@@ -2129,7 +2129,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- OTP Request form -->
         {{if or .ShowEmailOTP .ShowSMSOTP}}
           <div id="otp-container" style="{{if ne .AuthMode "otp_request"}}display:none;{{end}}">
-            <form action="/api/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/auth/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="send_otp">
 
@@ -2197,7 +2197,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
       var btn = document.getElementById('passkey-btn');
       if (btn) btn.disabled = true;
       try {
-        var beginRes = await fetch('/api/v1/auth/passkeys/sign-in', {
+        var beginRes = await fetch('/v1/auth/passkeys/sign-in', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin'
@@ -2252,7 +2252,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         }
         var signature = btoa(sigStr);
 
-        var verifyRes = await fetch('/api/v1/auth/passkeys/sign-in/verify', {
+        var verifyRes = await fetch('/v1/auth/passkeys/sign-in/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',

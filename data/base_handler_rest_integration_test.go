@@ -46,7 +46,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		},
 	}
 	rawTableJSONBytes, _ := json.Marshal(createTableInput)
-	createTableHTTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public", bytes.NewReader(rawTableJSONBytes))
+	createTableHTTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public", bytes.NewReader(rawTableJSONBytes))
 	createTableHTTPRequest.SetPathValue("schema_name", "public")
 	createTableResponseRecorder := httptest.NewRecorder()
 	service.GetControlPlaneHandler().handleCreateTable(createTableResponseRecorder, createTableHTTPRequest)
@@ -55,7 +55,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	// 2. Insert single record with representation
 	insertPayload := map[string]any{"name": "Item 1", "status": "active"}
 	insertBytes, _ := json.Marshal(insertPayload)
-	postRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader(insertBytes))
+	postRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader(insertBytes))
 	postRequest.SetPathValue("schema_name", "public")
 	postRequest.SetPathValue("table_name", "items")
 	postRequest.Header.Set("Prefer", "return=representation")
@@ -75,7 +75,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		{"name": "Item 3", "status": "active"},
 	}
 	bulkBytes, _ := json.Marshal(bulkPayload)
-	bulkPostRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader(bulkBytes))
+	bulkPostRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader(bulkBytes))
 	bulkPostRequest.SetPathValue("schema_name", "public")
 	bulkPostRequest.SetPathValue("table_name", "items")
 	bulkPostRequest.Header.Set("Prefer", "return=minimal")
@@ -84,7 +84,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, bulkPostResponseRecorder.Code)
 
 	// 4. List records with exact count and caching
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items?count=exact&order=name.asc&cache_ttl=60", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?count=exact&order=name.asc&cache_ttl=60", nil)
 	listRequest.SetPathValue("schema_name", "public")
 	listRequest.SetPathValue("table_name", "items")
 	listResponseRecorder := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	tableConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(tableConfig)
 	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
-	capListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items?limit=2", nil)
+	capListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?limit=2", nil)
 	capListRequest.SetPathValue("schema_name", "public")
 	capListRequest.SetPathValue("table_name", "items")
 	capListRequest.Header.Set("X-Layr-Cache-TTL", "60")
@@ -115,7 +115,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	service.GetConfigManager().SetMemoryConfig(tableConfig)
 
 	// 5. Get record by ID
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items/"+itemID, nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items/"+itemID, nil)
 	getRequest.SetPathValue("schema_name", "public")
 	getRequest.SetPathValue("table_name", "items")
 	getRequest.SetPathValue("record_id", itemID)
@@ -124,7 +124,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, getResponseRecorder.Code)
 
 	// Get record with minimal
-	getMinimalRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items/"+itemID, nil)
+	getMinimalRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items/"+itemID, nil)
 	getMinimalRequest.SetPathValue("schema_name", "public")
 	getMinimalRequest.SetPathValue("table_name", "items")
 	getMinimalRequest.SetPathValue("record_id", itemID)
@@ -134,7 +134,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, getMinimalResponseRecorder.Code)
 
 	// Get non-existent -> 404
-	getBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items/018f0000-0000-7000-8000-000000000000", nil)
+	getBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items/018f0000-0000-7000-8000-000000000000", nil)
 	getBadRequest.SetPathValue("schema_name", "public")
 	getBadRequest.SetPathValue("table_name", "items")
 	getBadRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000000")
@@ -145,7 +145,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	// 6. Update record with representation
 	patchPayload := map[string]any{"status": "archived"}
 	patchBytes, _ := json.Marshal(patchPayload)
-	patchRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/"+itemID, bytes.NewReader(patchBytes))
+	patchRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/"+itemID, bytes.NewReader(patchBytes))
 	patchRequest.SetPathValue("schema_name", "public")
 	patchRequest.SetPathValue("table_name", "items")
 	patchRequest.SetPathValue("record_id", itemID)
@@ -155,7 +155,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Contains(t, patchResponseRecorder.Body.String(), "archived")
 
 	// Update record with minimal
-	patchMinimalRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/"+itemID, bytes.NewReader(patchBytes))
+	patchMinimalRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/"+itemID, bytes.NewReader(patchBytes))
 	patchMinimalRequest.SetPathValue("schema_name", "public")
 	patchMinimalRequest.SetPathValue("table_name", "items")
 	patchMinimalRequest.SetPathValue("record_id", itemID)
@@ -165,7 +165,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, patchMinimalResponseRecorder.Code)
 
 	// Update non-existent -> 404
-	patchBadRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/018f0000-0000-7000-8000-000000000000", bytes.NewReader(patchBytes))
+	patchBadRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/018f0000-0000-7000-8000-000000000000", bytes.NewReader(patchBytes))
 	patchBadRequest.SetPathValue("schema_name", "public")
 	patchBadRequest.SetPathValue("table_name", "items")
 	patchBadRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000000")
@@ -174,7 +174,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, patchBadResponseRecorder.Code)
 
 	// 7. Delete record
-	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/public/items/"+itemID, nil)
+	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/items/"+itemID, nil)
 	deleteRequest.SetPathValue("schema_name", "public")
 	deleteRequest.SetPathValue("table_name", "items")
 	deleteRequest.SetPathValue("record_id", itemID)
@@ -193,7 +193,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		{"name": "Bulk Rep 2", "status": "active"},
 	}
 	bulkRepBytes, _ := json.Marshal(bulkRepPayload)
-	bulkRepRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader(bulkRepBytes))
+	bulkRepRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader(bulkRepBytes))
 	bulkRepRequest.SetPathValue("schema_name", "public")
 	bulkRepRequest.SetPathValue("table_name", "items")
 	bulkRepRequest.Header.Set("Prefer", "return=representation")
@@ -212,7 +212,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		},
 	}
 	payloadBytes, _ := json.Marshal(createRecordInput)
-	insertPayloadRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader(payloadBytes))
+	insertPayloadRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader(payloadBytes))
 	insertPayloadRequest.SetPathValue("schema_name", "public")
 	insertPayloadRequest.SetPathValue("table_name", "items")
 	insertPayloadRequest.Header.Set("Prefer", "return=representation")
@@ -227,7 +227,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		},
 	}
 	updatePayloadBytes, _ := json.Marshal(updateRecordInput)
-	updatePayloadRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/018f0000-0000-7000-8000-000000000099", bytes.NewReader(updatePayloadBytes))
+	updatePayloadRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/018f0000-0000-7000-8000-000000000099", bytes.NewReader(updatePayloadBytes))
 	updatePayloadRequest.SetPathValue("schema_name", "public")
 	updatePayloadRequest.SetPathValue("table_name", "items")
 	updatePayloadRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000099")
@@ -236,7 +236,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, updatePayloadResponseRecorder.Code)
 
 	// 13. Cache TTL via header
-	listHeaderRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items", nil)
+	listHeaderRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	listHeaderRequest.SetPathValue("schema_name", "public")
 	listHeaderRequest.SetPathValue("table_name", "items")
 	listHeaderRequest.Header.Set("X-Layr-Cache-TTL", "60")
@@ -250,7 +250,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		Name:   "Bypass SA",
 		Scopes: []string{"data:query.read", "data:query.write"},
 	})
-	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items", nil)
+	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountRequest.SetPathValue("schema_name", "public")
 	serviceAccountRequest.SetPathValue("table_name", "items")
 	serviceAccountRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
@@ -261,12 +261,12 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		Name:   "No Read Scope",
 		Scopes: []string{"auth:users.read"},
 	})
-	serviceAccountNoScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items", nil)
+	serviceAccountNoScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountNoScopeRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
 	assert.False(t, baseHandler.isRLSBypassed(serviceAccountNoScopeRequest, "data:query.read"))
 
 	// SA invalid key
-	serviceAccountBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items", nil)
+	serviceAccountBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountBadRequest.Header.Set("Authorization", "Bearer invalid_secret_key_12345678901234567890")
 	assert.False(t, baseHandler.isRLSBypassed(serviceAccountBadRequest, "data:query.read"))
 
@@ -279,14 +279,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	canceledListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/data/public/items", nil)
+	canceledListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/data/public/items", nil)
 	canceledListRequest.SetPathValue("schema_name", "public")
 	canceledListRequest.SetPathValue("table_name", "items")
 	canceledListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(canceledListResponseRecorder, canceledListRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledListResponseRecorder.Code)
 
-	canceledGetRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/data/public/items/123", nil)
+	canceledGetRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/data/public/items/123", nil)
 	canceledGetRequest.SetPathValue("schema_name", "public")
 	canceledGetRequest.SetPathValue("table_name", "items")
 	canceledGetRequest.SetPathValue("record_id", "123")
@@ -294,14 +294,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleGetRecord(canceledGetResponseRecorder, canceledGetRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledGetResponseRecorder.Code)
 
-	canceledCreateRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader([]byte(`{"name":"test"}`)))
+	canceledCreateRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/v1/data/public/items", bytes.NewReader([]byte(`{"name":"test"}`)))
 	canceledCreateRequest.SetPathValue("schema_name", "public")
 	canceledCreateRequest.SetPathValue("table_name", "items")
 	canceledCreateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleCreateRecord(canceledCreateResponseRecorder, canceledCreateRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledCreateResponseRecorder.Code)
 
-	canceledUpdateRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPatch, "/api/v1/data/public/items/123", bytes.NewReader([]byte(`{"name":"test"}`)))
+	canceledUpdateRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPatch, "/v1/data/public/items/123", bytes.NewReader([]byte(`{"name":"test"}`)))
 	canceledUpdateRequest.SetPathValue("schema_name", "public")
 	canceledUpdateRequest.SetPathValue("table_name", "items")
 	canceledUpdateRequest.SetPathValue("record_id", "123")
@@ -309,7 +309,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleUpdateRecord(canceledUpdateResponseRecorder, canceledUpdateRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledUpdateResponseRecorder.Code)
 
-	canceledDeleteRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodDelete, "/api/v1/data/public/items/123", nil)
+	canceledDeleteRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodDelete, "/v1/data/public/items/123", nil)
 	canceledDeleteRequest.SetPathValue("schema_name", "public")
 	canceledDeleteRequest.SetPathValue("table_name", "items")
 	canceledDeleteRequest.SetPathValue("record_id", "123")
@@ -326,7 +326,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		Columns:    []string{"id", "name"},
 	})
 
-	noPKCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/no_pk_items", bytes.NewReader([]byte(`{"name":"No PK Item"}`)))
+	noPKCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/no_pk_items", bytes.NewReader([]byte(`{"name":"No PK Item"}`)))
 	noPKCreateRequest.SetPathValue("schema_name", "public")
 	noPKCreateRequest.SetPathValue("table_name", "no_pk_items")
 	noPKCreateResponseRecorder := httptest.NewRecorder()
@@ -337,7 +337,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	_ = json.NewDecoder(noPKCreateResponseRecorder.Body).Decode(&createdNoPK)
 	noPKID := createdNoPK["id"].(string)
 
-	noPKGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/no_pk_items/"+noPKID, nil)
+	noPKGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/no_pk_items/"+noPKID, nil)
 	noPKGetRequest.SetPathValue("schema_name", "public")
 	noPKGetRequest.SetPathValue("table_name", "no_pk_items")
 	noPKGetRequest.SetPathValue("record_id", noPKID)
@@ -345,7 +345,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleGetRecord(noPKGetResponseRecorder, noPKGetRequest)
 	assert.Equal(t, http.StatusOK, noPKGetResponseRecorder.Code)
 
-	noPKUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/no_pk_items/"+noPKID, bytes.NewReader([]byte(`{"name":"Updated No PK"}`)))
+	noPKUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/no_pk_items/"+noPKID, bytes.NewReader([]byte(`{"name":"Updated No PK"}`)))
 	noPKUpdateRequest.SetPathValue("schema_name", "public")
 	noPKUpdateRequest.SetPathValue("table_name", "no_pk_items")
 	noPKUpdateRequest.SetPathValue("record_id", noPKID)
@@ -353,7 +353,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleUpdateRecord(noPKUpdateResponseRecorder, noPKUpdateRequest)
 	assert.Equal(t, http.StatusOK, noPKUpdateResponseRecorder.Code)
 
-	noPKDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/public/no_pk_items/"+noPKID, nil)
+	noPKDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/no_pk_items/"+noPKID, nil)
 	noPKDeleteRequest.SetPathValue("schema_name", "public")
 	noPKDeleteRequest.SetPathValue("table_name", "no_pk_items")
 	noPKDeleteRequest.SetPathValue("record_id", noPKID)
@@ -362,14 +362,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, noPKDeleteResponseRecorder.Code)
 
 	// 18. Database execution errors on invalid columns / functions
-	badSelectRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items?select=non_existent_column", nil)
+	badSelectRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?select=non_existent_column", nil)
 	badSelectRequest.SetPathValue("schema_name", "public")
 	badSelectRequest.SetPathValue("table_name", "items")
 	badSelectResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(badSelectResponseRecorder, badSelectRequest)
 	assert.Equal(t, http.StatusBadRequest, badSelectResponseRecorder.Code)
 
-	badGetColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items/123?select=non_existent_column", nil)
+	badGetColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items/123?select=non_existent_column", nil)
 	badGetColumnRequest.SetPathValue("schema_name", "public")
 	badGetColumnRequest.SetPathValue("table_name", "items")
 	badGetColumnRequest.SetPathValue("record_id", "123")
@@ -377,14 +377,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleGetRecord(badGetColumnResponseRecorder, badGetColumnRequest)
 	assert.Equal(t, http.StatusBadRequest, badGetColumnResponseRecorder.Code)
 
-	badInsertColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader([]byte(`{"non_existent_column":"dummy"}`)))
+	badInsertColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader([]byte(`{"non_existent_column":"dummy"}`)))
 	badInsertColumnRequest.SetPathValue("schema_name", "public")
 	badInsertColumnRequest.SetPathValue("table_name", "items")
 	badInsertColumnResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleCreateRecord(badInsertColumnResponseRecorder, badInsertColumnRequest)
 	assert.Equal(t, http.StatusBadRequest, badInsertColumnResponseRecorder.Code)
 
-	badUpdateColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/123", bytes.NewReader([]byte(`{"non_existent_column":"dummy"}`)))
+	badUpdateColumnRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/123", bytes.NewReader([]byte(`{"non_existent_column":"dummy"}`)))
 	badUpdateColumnRequest.SetPathValue("schema_name", "public")
 	badUpdateColumnRequest.SetPathValue("table_name", "items")
 	badUpdateColumnRequest.SetPathValue("record_id", "123")
@@ -393,14 +393,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, badUpdateColumnResponseRecorder.Code)
 
 	// 19. Builder errors: invalid column identifier in update & insert payloads
-	builderBadInsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/items", bytes.NewReader([]byte(`{"bad-identifier!":"dummy"}`)))
+	builderBadInsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/items", bytes.NewReader([]byte(`{"bad-identifier!":"dummy"}`)))
 	builderBadInsertRequest.SetPathValue("schema_name", "public")
 	builderBadInsertRequest.SetPathValue("table_name", "items")
 	builderBadInsertResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleCreateRecord(builderBadInsertResponseRecorder, builderBadInsertRequest)
 	assert.Equal(t, http.StatusBadRequest, builderBadInsertResponseRecorder.Code)
 
-	builderBadUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/items/123", bytes.NewReader([]byte(`{"bad-identifier!":"dummy"}`)))
+	builderBadUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/items/123", bytes.NewReader([]byte(`{"bad-identifier!":"dummy"}`)))
 	builderBadUpdateRequest.SetPathValue("schema_name", "public")
 	builderBadUpdateRequest.SetPathValue("table_name", "items")
 	builderBadUpdateRequest.SetPathValue("record_id", "123")
@@ -414,7 +414,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		Table:      "items_bad_pk",
 		PrimaryKey: "bad-pk-identifier!",
 	})
-	badPKDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/public/items_bad_pk/123", nil)
+	badPKDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/items_bad_pk/123", nil)
 	badPKDeleteRequest.SetPathValue("schema_name", "public")
 	badPKDeleteRequest.SetPathValue("table_name", "items_bad_pk")
 	badPKDeleteRequest.SetPathValue("record_id", "123")
@@ -429,7 +429,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		INSERT INTO public.parent_items (id, name) VALUES ('018f0000-0000-7000-8000-000000000001', 'Parent');
 		INSERT INTO public.child_items (parent_id) VALUES ('018f0000-0000-7000-8000-000000000001');
 	`)
-	deleteForeignKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/public/parent_items/018f0000-0000-7000-8000-000000000001", nil)
+	deleteForeignKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/parent_items/018f0000-0000-7000-8000-000000000001", nil)
 	deleteForeignKeyRequest.SetPathValue("schema_name", "public")
 	deleteForeignKeyRequest.SetPathValue("table_name", "parent_items")
 	deleteForeignKeyRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000001")
@@ -438,7 +438,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, deleteForeignKeyResponseRecorder.Code)
 
 	// 21. Count exact on zero results (end < offset)
-	emptyCountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/items?count=exact&status=eq.non_existent_status_12345", nil)
+	emptyCountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?count=exact&status=eq.non_existent_status_12345", nil)
 	emptyCountRequest.SetPathValue("schema_name", "public")
 	emptyCountRequest.SetPathValue("table_name", "items")
 	emptyCountResponseRecorder := httptest.NewRecorder()
@@ -460,7 +460,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		"raw_data": "\\xdeadbeef",
 	}
 	typedInsertBytes, _ := json.Marshal(typedInsertPayload)
-	typedInsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/typed_data", bytes.NewReader(typedInsertBytes))
+	typedInsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/typed_data", bytes.NewReader(typedInsertBytes))
 	typedInsertRequest.SetPathValue("schema_name", "public")
 	typedInsertRequest.SetPathValue("table_name", "typed_data")
 	typedInsertResponseRecorder := httptest.NewRecorder()
@@ -471,7 +471,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	_ = json.NewDecoder(typedInsertResponseRecorder.Body).Decode(&createdTyped)
 	typedID := createdTyped["id"].(string)
 
-	typedGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/typed_data/"+typedID, nil)
+	typedGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/typed_data/"+typedID, nil)
 	typedGetRequest.SetPathValue("schema_name", "public")
 	typedGetRequest.SetPathValue("table_name", "typed_data")
 	typedGetRequest.SetPathValue("record_id", typedID)
@@ -490,7 +490,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.NoError(t, err)
 	invItem := map[string]any{"sku": "SKU001", "qty": 10}
 	invBytes, _ := json.Marshal(invItem)
-	invRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/inventory", bytes.NewReader(invBytes))
+	invRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/inventory", bytes.NewReader(invBytes))
 	invRequest.SetPathValue("schema_name", "public")
 	invRequest.SetPathValue("table_name", "inventory")
 	invResponseRecorder := httptest.NewRecorder()
@@ -500,7 +500,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	// Upsert with on_conflict
 	invUpsertItem := map[string]any{"sku": "SKU001", "qty": 20}
 	invUpsertBytes, _ := json.Marshal(invUpsertItem)
-	invUpsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/inventory?on_conflict=sku", bytes.NewReader(invUpsertBytes))
+	invUpsertRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/inventory?on_conflict=sku", bytes.NewReader(invUpsertBytes))
 	invUpsertRequest.SetPathValue("schema_name", "public")
 	invUpsertRequest.SetPathValue("table_name", "inventory")
 	invUpsertResponseRecorder := httptest.NewRecorder()
@@ -528,7 +528,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		{"code": "DUP_CODE_BATCH"},
 	}
 	deferCreateBytes, _ := json.Marshal(deferCreatePayload)
-	deferCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/defer_items", bytes.NewReader(deferCreateBytes))
+	deferCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/defer_items", bytes.NewReader(deferCreateBytes))
 	deferCreateRequest.SetPathValue("schema_name", "public")
 	deferCreateRequest.SetPathValue("table_name", "defer_items")
 	deferCreateResponseRecorder := httptest.NewRecorder()
@@ -544,7 +544,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 25b. UpdateRecord deferred constraint collision fails at commit
-	deferUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/data/public/defer_items/018f0000-0000-7000-8000-000000000020", bytes.NewReader([]byte(`{"code":"CODE_A"}`)))
+	deferUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/defer_items/018f0000-0000-7000-8000-000000000020", bytes.NewReader([]byte(`{"code":"CODE_A"}`)))
 	deferUpdateRequest.SetPathValue("schema_name", "public")
 	deferUpdateRequest.SetPathValue("table_name", "defer_items")
 	deferUpdateRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000020")
@@ -558,7 +558,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		INSERT INTO public.defer_child (parent_id) VALUES ('018f0000-0000-7000-8000-000000000030');
 	`)
 	assert.NoError(t, err)
-	deferDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/public/defer_parent/018f0000-0000-7000-8000-000000000030", nil)
+	deferDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/defer_parent/018f0000-0000-7000-8000-000000000030", nil)
 	deferDeleteRequest.SetPathValue("schema_name", "public")
 	deferDeleteRequest.SetPathValue("table_name", "defer_parent")
 	deferDeleteRequest.SetPathValue("record_id", "018f0000-0000-7000-8000-000000000030")
@@ -592,7 +592,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	// 1. Scalar echo function via POST (flat JSON payload)
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.echo_test(msg text) RETURNS text LANGUAGE sql AS $$ SELECT msg $$;`)
 	rpcBodyReader := bytes.NewReader([]byte(`{"msg":"hello world"}`))
-	rpcRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/echo_test", rpcBodyReader)
+	rpcRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/echo_test", rpcBodyReader)
 	rpcRequest.Header.Set("X-Layr-Invalidate-Tables", "users, public.products")
 	rpcRequest.SetPathValue("schema_name", "public")
 	rpcRequest.SetPathValue("function_name", "echo_test")
@@ -602,7 +602,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	assert.Equal(t, "\"hello world\"\n", rpcResponseRecorder.Body.String())
 
 	// 2. Scalar echo function via GET (query parameter)
-	rpcGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/echo_test?msg=hello+get", nil)
+	rpcGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/rpc/echo_test?msg=hello+get", nil)
 	rpcGetRequest.SetPathValue("schema_name", "public")
 	rpcGetRequest.SetPathValue("function_name", "echo_test")
 	rpcGetResponseRecorder := httptest.NewRecorder()
@@ -612,7 +612,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 
 	// 3. Table-valued RPC returning array of objects
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.test_table_rpc() RETURNS TABLE(id int, name text) LANGUAGE sql AS $$ SELECT 1, 'first' UNION ALL SELECT 2, 'second' $$;`)
-	rpcTableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/test_table_rpc", nil)
+	rpcTableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/rpc/test_table_rpc", nil)
 	rpcTableRequest.SetPathValue("schema_name", "public")
 	rpcTableRequest.SetPathValue("function_name", "test_table_rpc")
 	rpcTableResponseRecorder := httptest.NewRecorder()
@@ -623,7 +623,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 
 	// 4. Multi-row scalar function returning array of scalars
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.test_scalar_series() RETURNS SETOF int LANGUAGE sql AS $$ SELECT generate_series(1, 2) $$;`)
-	rpcSeriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/test_scalar_series", nil)
+	rpcSeriesRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/rpc/test_scalar_series", nil)
 	rpcSeriesRequest.SetPathValue("schema_name", "public")
 	rpcSeriesRequest.SetPathValue("function_name", "test_scalar_series")
 	rpcSeriesResponseRecorder := httptest.NewRecorder()
@@ -633,7 +633,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 
 	// 5. Zero-arg RPC function with invalidate_tables query parameter
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.zero_args_test() RETURNS text LANGUAGE sql AS $$ SELECT 'zero_ok' $$;`)
-	rpcZeroRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/public/rpc/zero_args_test?invalidate_tables=items", nil)
+	rpcZeroRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/rpc/zero_args_test?invalidate_tables=items", nil)
 	rpcZeroRequest.SetPathValue("schema_name", "public")
 	rpcZeroRequest.SetPathValue("function_name", "zero_args_test")
 	rpcZeroResponseRecorder := httptest.NewRecorder()
@@ -651,7 +651,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 		$$;
 	`)
 	assert.NoError(t, err)
-	rpcMutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/rpc_update_status", bytes.NewReader([]byte(`{"item_status":"updated"}`)))
+	rpcMutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/rpc_update_status", bytes.NewReader([]byte(`{"item_status":"updated"}`)))
 	rpcMutationRequest.SetPathValue("schema_name", "public")
 	rpcMutationRequest.SetPathValue("function_name", "rpc_update_status")
 	rpcMutationRequest.Header.Set("X-Layr-Invalidate-Tables", "rpc_demo_items")
@@ -662,7 +662,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	// 7. Context canceled -> 500 error
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	canceledRPCRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/data/public/rpc/zero_args_test", nil)
+	canceledRPCRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/v1/data/public/rpc/zero_args_test", nil)
 	canceledRPCRequest.SetPathValue("schema_name", "public")
 	canceledRPCRequest.SetPathValue("function_name", "zero_args_test")
 	canceledRPCResponseRecorder := httptest.NewRecorder()
@@ -670,7 +670,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, canceledRPCResponseRecorder.Code)
 
 	// 8. Non-existent function -> 404 error
-	badRPCFunctionRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/non_existent_func", nil)
+	badRPCFunctionRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/non_existent_func", nil)
 	badRPCFunctionRequest.SetPathValue("schema_name", "public")
 	badRPCFunctionRequest.SetPathValue("function_name", "non_existent_func")
 	badRPCFunctionResponseRecorder := httptest.NewRecorder()
@@ -692,7 +692,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 		$$;
 	`)
 	assert.NoError(t, err)
-	deferRPCRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/public/rpc/rpc_fail_defer", nil)
+	deferRPCRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/rpc_fail_defer", nil)
 	deferRPCRequest.SetPathValue("schema_name", "public")
 	deferRPCRequest.SetPathValue("function_name", "rpc_fail_defer")
 	deferRPCResponseRecorder := httptest.NewRecorder()

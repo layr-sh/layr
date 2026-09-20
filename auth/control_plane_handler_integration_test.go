@@ -33,7 +33,7 @@ func TestAuthControlPlaneHandlerIntegration(t *testing.T) {
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
 	// Valid scope check
-	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	validRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
 	if !controlPlaneHandler.checkScope(validRequest, "auth:user.read") {
 		t.Fatal("expected checkScope to pass with valid service account and scope")
@@ -53,7 +53,7 @@ func TestAuthControlPlaneHandlerIntegration(t *testing.T) {
 			Scope:   "auth:user.read",
 		},
 	})
-	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/v1/_/auth/users", nil)
 	if !controlPlaneHandler.checkScope(m2mValidRequest, "auth:user.read") {
 		t.Fatal("expected checkScope to pass with M2M AuthContext containing auth:user.read")
 	}

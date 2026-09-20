@@ -32,7 +32,7 @@ func validateKVKey(cacheKey string) (bool, string) {
 	return true, ""
 }
 
-// handleGetKV handles GET /api/v1/data/kv/{key...}.
+// handleGetKV handles GET /v1/data/kv/{key...}.
 func (handler *BaseHandler) handleGetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -48,7 +48,7 @@ func (handler *BaseHandler) handleGetKV(responseWriter http.ResponseWriter, requ
 	handler.executeGetKV(responseWriter, request, authContext, cacheKey)
 }
 
-// handleSetKV handles POST /api/v1/data/kv/{key...}.
+// handleSetKV handles POST /v1/data/kv/{key...}.
 func (handler *BaseHandler) handleSetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -64,7 +64,7 @@ func (handler *BaseHandler) handleSetKV(responseWriter http.ResponseWriter, requ
 	handler.executePostKV(responseWriter, request, authContext, cacheKey)
 }
 
-// handleUpdateKV handles PUT /api/v1/data/kv/{key...}.
+// handleUpdateKV handles PUT /v1/data/kv/{key...}.
 func (handler *BaseHandler) handleUpdateKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -80,7 +80,7 @@ func (handler *BaseHandler) handleUpdateKV(responseWriter http.ResponseWriter, r
 	handler.executePutKV(responseWriter, request, authContext, cacheKey)
 }
 
-// handleTouchKV handles PATCH /api/v1/data/kv/{key...}.
+// handleTouchKV handles PATCH /v1/data/kv/{key...}.
 func (handler *BaseHandler) handleTouchKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -96,7 +96,7 @@ func (handler *BaseHandler) handleTouchKV(responseWriter http.ResponseWriter, re
 	handler.executePatchKV(responseWriter, request, authContext, cacheKey)
 }
 
-// handleDeleteKV handles DELETE /api/v1/data/kv/{key...}.
+// handleDeleteKV handles DELETE /v1/data/kv/{key...}.
 func (handler *BaseHandler) handleDeleteKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -112,7 +112,7 @@ func (handler *BaseHandler) handleDeleteKV(responseWriter http.ResponseWriter, r
 	handler.executeDeleteKV(responseWriter, request, authContext, cacheKey)
 }
 
-// handleGetMultipleKV handles POST /api/v1/data/kv/mget.
+// handleGetMultipleKV handles POST /v1/data/kv/mget.
 func (handler *BaseHandler) handleGetMultipleKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -123,7 +123,7 @@ func (handler *BaseHandler) handleGetMultipleKV(responseWriter http.ResponseWrit
 	handler.executeMGetKV(responseWriter, request, authContext)
 }
 
-// handleSetMultipleKV handles POST /api/v1/data/kv/mset.
+// handleSetMultipleKV handles POST /v1/data/kv/mset.
 func (handler *BaseHandler) handleSetMultipleKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -134,7 +134,7 @@ func (handler *BaseHandler) handleSetMultipleKV(responseWriter http.ResponseWrit
 	handler.executeMSetKV(responseWriter, request, authContext)
 }
 
-// handleIncrementKV handles POST /api/v1/data/kv/increment.
+// handleIncrementKV handles POST /v1/data/kv/increment.
 func (handler *BaseHandler) handleIncrementKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if handler.kvStore == nil {
@@ -153,7 +153,7 @@ func (handler *BaseHandler) extractKVKey(request *http.Request) string {
 	if cacheKey != "" {
 		return strings.Trim(cacheKey, "/")
 	}
-	trimmed := strings.TrimPrefix(request.URL.Path, "/api/v1/data/kv")
+	trimmed := strings.TrimPrefix(request.URL.Path, "/v1/data/kv")
 	return strings.Trim(trimmed, "/")
 }
 

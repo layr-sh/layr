@@ -42,7 +42,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 		},
 	}
 	tableJSONBytes, _ := json.Marshal(createTableInput)
-	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public", bytes.NewReader(tableJSONBytes))
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public", bytes.NewReader(tableJSONBytes))
 	request.SetPathValue("schema_name", "public")
 	responseRecorder := httptest.NewRecorder()
 	service.GetControlPlaneHandler().handleCreateTable(responseRecorder, request)
@@ -65,7 +65,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 
 	// 3. Query via GraphQL
 	graphQLQuery := `query { posts { id title body } }`
-	graphQLQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
+	graphQLQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	graphQLQueryRequest.Header.Set("Content-Type", "application/json")
 	graphQLQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(graphQLQueryResponseRecorder, graphQLQueryRequest)
@@ -74,7 +74,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	assert.Contains(t, graphQLQueryResponseRecorder.Body.String(), "First Post")
 
 	// 4. Query with Cache TTL
-	cachedQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
+	cachedQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	cachedQueryRequest.Header.Set("Content-Type", "application/json")
 	cachedQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	cachedQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
@@ -85,7 +85,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	assert.Equal(t, "MISS", cachedQueryResponseRecorder.Header().Get("X-Layr-Cache"))
 
 	// Query again -> HIT
-	hitQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
+	hitQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	hitQueryRequest.Header.Set("Content-Type", "application/json")
 	hitQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	hitQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
@@ -99,7 +99,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	appConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(appConfig)
 	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
-	capQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
+	capQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	capQueryRequest.Header.Set("Content-Type", "application/json")
 	capQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	capQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "cap-suffix")
@@ -112,7 +112,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	// 5. GraphQL Mutation
 	mutationQuery := `mutation { insert_posts(objects: [{title: "Second Post", body: "Second Body"}]) { id title } }`
 	mutationPayloadBytes, _ := json.Marshal(ExecuteGraphQLInput{Query: mutationQuery})
-	mutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader(mutationPayloadBytes))
+	mutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader(mutationPayloadBytes))
 	mutationRequest.Header.Set("Content-Type", "application/json")
 	mutationResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(mutationResponseRecorder, mutationRequest)
@@ -123,7 +123,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, `CREATE TABLE public.temp_gql (id uuid primary key default uuidv7(), name text);`)
 	_ = service.IntrospectSchemas(ctx)
 	_, _ = db.Exec(ctx, `DROP TABLE public.temp_gql;`)
-	dropQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { temp_gql { id } }"}`)))
+	dropQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { temp_gql { id } }"}`)))
 	dropQueryRequest.Header.Set("Content-Type", "application/json")
 	dropQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(dropQueryResponseRecorder, dropQueryRequest)
@@ -132,7 +132,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	// 7. Canceled context on Begin
 	canceledGraphQLCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	canceledGraphQLRequest := httptest.NewRequestWithContext(canceledGraphQLCtx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
+	canceledGraphQLRequest := httptest.NewRequestWithContext(canceledGraphQLCtx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	canceledGraphQLRequest.Header.Set("Content-Type", "application/json")
 	canceledGraphQLResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(canceledGraphQLResponseRecorder, canceledGraphQLRequest)

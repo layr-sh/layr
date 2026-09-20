@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// /api/v1/manifest - Dynamic cluster & manifest discovery
+// /v1/manifest - Dynamic cluster & manifest discovery
 func (server *Server) handleGetManifest(responseWriter http.ResponseWriter, request *http.Request) {
 	publishableKey := ""
 	if server.cryptoKeyManager != nil {

@@ -86,7 +86,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	}
 	encodedPutPayload, _ := json.Marshal(putPayload)
 
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedPutPayload))
+	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", bytes.NewReader(encodedPutPayload))
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 
@@ -147,7 +147,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	}
 	encodedSecondPut, _ := json.Marshal(secondPutPayload)
 
-	secondPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedSecondPut))
+	secondPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", bytes.NewReader(encodedSecondPut))
 	secondPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(secondPutResponseRecorder, secondPutRequest)
 
@@ -168,7 +168,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 		},
 	}
 	encodedNullDriver, _ := json.Marshal(nullDriverPayload)
-	nullDriverRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedNullDriver))
+	nullDriverRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", bytes.NewReader(encodedNullDriver))
 	nullDriverResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullDriverResponseRecorder, nullDriverRequest)
 
@@ -223,7 +223,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
 	// 1. GET with read scope succeeds
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
 	getRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(getResponseRecorder, getRequest)
@@ -232,7 +232,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	}
 
 	// 2. PUT with only read scope fails with 403 Forbidden
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{}`))
+	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{}`))
 	putRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
@@ -241,7 +241,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	}
 
 	// 3. GET with invalid key fails with 403
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(invalidKeyResponseRecorder, invalidKeyRequest)
@@ -273,7 +273,7 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// handleUpdateConfig with broken pool returns 500
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{}`))
+	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{}`))
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 	if putResponseRecorder.Code != http.StatusInternalServerError {

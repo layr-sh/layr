@@ -44,8 +44,8 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
 	serveMux := controlPlaneRouter.Mux()
 
-	// 2. Control Plane GET /api/v1/_/data/config
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	// 2. Control Plane GET /v1/_/data/config
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	getResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(getResponseRecorder, getRequest)
 
@@ -53,14 +53,14 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected GET config 200, got %d: %s", getResponseRecorder.Code, getResponseRecorder.Body.String())
 	}
 
-	// 3. Control Plane PUT /api/v1/_/data/config with custom limits
+	// 3. Control Plane PUT /v1/_/data/config with custom limits
 	updatedConfig := DefaultConfig()
 	updatedConfig.REST.MaxLimit = 500
 	rawPut, marshalErr := json.Marshal(updatedConfig)
 	if marshalErr != nil {
 		t.Fatalf("failed to marshal config: %v", marshalErr)
 	}
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(rawPut))
+	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader(rawPut))
 	putResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(putResponseRecorder, putRequest)
 
@@ -98,36 +98,36 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	_ = dataService.GetConfigManager().Set(ctx, DefaultConfig())
 
 	// 7. Control Plane Invalid JSON on PUT
-	badPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte("not json")))
+	badPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte("not json")))
 	badPutResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(badPutResponseRecorder, badPutRequest)
 	if badPutResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad PUT json, got %d", badPutResponseRecorder.Code)
 	}
 
-	// 8. Test Cache Invalidation Endpoint POST /api/v1/_/data/cache/invalidate
-	invalidTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"schema":"public","table":"users"}`)))
+	// 8. Test Cache Invalidation Endpoint POST /v1/_/data/cache/invalidate
+	invalidTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"schema":"public","table":"users"}`)))
 	invalidTableResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidTableResponseRecorder, invalidTableRequest)
 	if invalidTableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on invalidate table, got %d", invalidTableResponseRecorder.Code)
 	}
 
-	invalidCatalogRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
+	invalidCatalogRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
 	invalidCatalogResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidCatalogResponseRecorder, invalidCatalogRequest)
 	if invalidCatalogResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on invalidate catalog, got %d", invalidCatalogResponseRecorder.Code)
 	}
 
-	invalidAllRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"all":true}`)))
+	invalidAllRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"all":true}`)))
 	invalidAllResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidAllResponseRecorder, invalidAllRequest)
 	if invalidAllResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on invalidate all, got %d", invalidAllResponseRecorder.Code)
 	}
 
-	invalidBadJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte("invalid-json")))
+	invalidBadJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte("invalid-json")))
 	invalidBadJSONResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidBadJSONResponseRecorder, invalidBadJSONRequest)
 	if invalidBadJSONResponseRecorder.Code != http.StatusBadRequest {
@@ -150,7 +150,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	// 9. Test ServiceAccountManager, EventBus, and Cache Flush
-	dummyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	dummyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	if !dataService.CheckScope(dummyRequest, "data:config.read") {
 		t.Fatal("expected true when no service account key provided (internal/session allowed)")
 	}
@@ -175,7 +175,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	// Flush Cache with valid key
-	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	flushRequest.Header.Set("Authorization", "Bearer "+controlPlaneCacheServiceAccount.SecretKey)
 	flushResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(flushResponseRecorder, flushRequest)
@@ -192,7 +192,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to create read-only service account: %v", readOnlyErr)
 	}
 
-	flushForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	flushForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	flushForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	flushForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(flushForbiddenResponseRecorder, flushForbiddenRequest)
@@ -200,7 +200,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 403 on flush cache with read-only scope, got %d", flushForbiddenResponseRecorder.Code)
 	}
 
-	invalidForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", nil)
+	invalidForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", nil)
 	invalidForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	invalidForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidForbiddenResponseRecorder, invalidForbiddenRequest)
@@ -209,7 +209,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	// Config endpoints with service account auth
-	configForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	configForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	configForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	configForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(configForbiddenResponseRecorder, configForbiddenRequest)
@@ -217,7 +217,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 403 on GET config with read-only scope, got %d", configForbiddenResponseRecorder.Code)
 	}
 
-	configPutForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(rawPut))
+	configPutForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader(rawPut))
 	configPutForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	configPutForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(configPutForbiddenResponseRecorder, configPutForbiddenRequest)
@@ -226,7 +226,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	// Bad service account key
-	badKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	badKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	badKeyRequest.Header.Set("Authorization", "Bearer invalid_service_account_key_123")
 	badKeyResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(badKeyResponseRecorder, badKeyRequest)
@@ -268,8 +268,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	if publicOpenAPISpec == nil {
 		t.Fatal("expected non-nil public spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/{schema_name}/{table_name}") == nil ||
-		publicOpenAPISpec.Paths.Value("/api/v1/graphql") == nil {
+	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil ||
+		publicOpenAPISpec.Paths.Value("/v1/graphql") == nil {
 		t.Fatal("expected public spec to contain Data service paths")
 	}
 
@@ -277,8 +277,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	if controlPlaneOpenAPISpec == nil {
 		t.Fatal("expected non-nil control plane spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/tables") == nil ||
-		controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/sql") == nil {
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/tables") == nil ||
+		controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/sql") == nil {
 		t.Fatal("expected control spec to contain Data service paths")
 	}
 
@@ -291,8 +291,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		t.Fatalf("failed to create control plane service account: %v", createErr)
 	}
 
-	// 1. GET /api/v1/_/data/config via control router
-	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	// 1. GET /v1/_/data/config via control router
+	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	configRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	configResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(configResponseRecorder, configRequest)
@@ -300,8 +300,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on GET config via control router, got %d", configResponseRecorder.Code)
 	}
 
-	// 2. PUT /api/v1/_/data/config via control router
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":200}}`)))
+	// 2. PUT /v1/_/data/config via control router
+	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":200}}`)))
 	putRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	putRequest.Header.Set("Content-Type", "application/json")
 	putResponseRecorder := httptest.NewRecorder()
@@ -310,8 +310,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on PUT config via control router, got %d", putResponseRecorder.Code)
 	}
 
-	// 3. POST /api/v1/_/data/cache/flush via control router
-	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	// 3. POST /v1/_/data/cache/flush via control router
+	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	flushRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	flushResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(flushResponseRecorder, flushRequest)
@@ -319,8 +319,8 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on POST flush via control router, got %d", flushResponseRecorder.Code)
 	}
 
-	// 4. POST /api/v1/_/data/cache/invalidate via control router
-	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
+	// 4. POST /v1/_/data/cache/invalidate via control router
+	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
 	invalidateRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	invalidateRequest.Header.Set("Content-Type", "application/json")
 	invalidateResponseRecorder := httptest.NewRecorder()
@@ -342,10 +342,10 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodGet, "/api/v1/_/data/config"},
-		{http.MethodPut, "/api/v1/_/data/config"},
-		{http.MethodPost, "/api/v1/_/data/cache/flush"},
-		{http.MethodPost, "/api/v1/_/data/cache/invalidate"},
+		{http.MethodGet, "/v1/_/data/config"},
+		{http.MethodPut, "/v1/_/data/config"},
+		{http.MethodPost, "/v1/_/data/cache/flush"},
+		{http.MethodPost, "/v1/_/data/cache/invalidate"},
 	} {
 		endpointRequest := httptest.NewRequestWithContext(ctx, endpoint.method, endpoint.path, nil)
 		endpointRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)

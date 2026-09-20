@@ -37,7 +37,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal create table request: %v", err)
 	}
-	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
+	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createTableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(createTableResponseRecorder, createTableRequest)
 	if createTableResponseRecorder.Code != http.StatusCreated {
@@ -53,7 +53,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal create index request: %v", err)
 	}
-	createIndexRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/index_test_table/indexes", bytes.NewReader(createIndexBody))
+	createIndexRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/index_test_table/indexes", bytes.NewReader(createIndexBody))
 	createIndexRequest.SetPathValue("schema_name", "public")
 	createIndexRequest.SetPathValue("table_name", "index_test_table")
 	createIndexResponseRecorder := httptest.NewRecorder()
@@ -70,7 +70,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal invalid index request: %v", err)
 	}
-	invalidIndexRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/index_test_table/indexes", bytes.NewReader(invalidIndexBody))
+	invalidIndexRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/index_test_table/indexes", bytes.NewReader(invalidIndexBody))
 	invalidIndexRequest.SetPathValue("schema_name", "public")
 	invalidIndexRequest.SetPathValue("table_name", "index_test_table")
 	invalidIndexResponseRecorder := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	}
 
 	// 2. List Indexes
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/index_test_table/indexes", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/index_test_table/indexes", nil)
 	listRequest.SetPathValue("schema_name", "public")
 	listRequest.SetPathValue("table_name", "index_test_table")
 	listResponseRecorder := httptest.NewRecorder()
@@ -90,7 +90,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	}
 
 	// List Indexes error (protected schema)
-	invalidListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/core/index_test_table/indexes", nil)
+	invalidListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/core/index_test_table/indexes", nil)
 	invalidListRequest.SetPathValue("schema_name", "core")
 	invalidListRequest.SetPathValue("table_name", "index_test_table")
 	invalidListResponseRecorder := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	}
 
 	// 3. Drop Index
-	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/index_test_table/indexes/idx_index_test_email", nil)
+	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/index_test_table/indexes/idx_index_test_email", nil)
 	dropRequest.SetPathValue("schema_name", "public")
 	dropRequest.SetPathValue("table_name", "index_test_table")
 	dropRequest.SetPathValue("index_name", "idx_index_test_email")
@@ -111,7 +111,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	}
 
 	// Drop Index error (protected schema)
-	invalidDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/core/index_test_table/indexes/idx_index_test_email", nil)
+	invalidDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/core/index_test_table/indexes/idx_index_test_email", nil)
 	invalidDropRequest.SetPathValue("schema_name", "core")
 	invalidDropRequest.SetPathValue("table_name", "index_test_table")
 	invalidDropRequest.SetPathValue("index_name", "idx_index_test_email")

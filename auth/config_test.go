@@ -176,7 +176,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	serviceAccountManager := core.NewServiceAccountManager(nil)
 	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/auth/config", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid-sec-key")
 	if controlPlaneHandler.checkScope(invalidKeyRequest, "auth:config.read") {
 		t.Fatal("expected checkScope to fail on invalid secret key")
@@ -206,7 +206,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	controlPlaneHandler.SetEventBus(eventBus)
 
 	validPutBody := `{"password":{"enabled":true,"min_length":10},"smtp":{"password":"new-smtp-password"}}`
-	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validPutBody))
+	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(validPutBody))
 	validPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(validPutResponseRecorder, validPutRequest)
 	if validPutResponseRecorder.Code != http.StatusOK {
@@ -217,7 +217,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test handleUpdateConfig invalid JSON body -> 400
-	invalidJSONPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{invalid-json`))
+	invalidJSONPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{invalid-json`))
 	invalidJSONPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidJSONPutResponseRecorder, invalidJSONPutRequest)
 	if invalidJSONPutResponseRecorder.Code != http.StatusBadRequest {
@@ -225,7 +225,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test handleUpdateConfig body read error -> 400
-	brokenReaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", brokenBodyReader{})
+	brokenReaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", brokenBodyReader{})
 	brokenReaderResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(brokenReaderResponseRecorder, brokenReaderRequest)
 	if brokenReaderResponseRecorder.Code != http.StatusBadRequest {
@@ -234,7 +234,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with OAuth provider secret update
 	oauthPutBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":"new-plaintext-secret"}}}`
-	oauthPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(oauthPutBody))
+	oauthPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(oauthPutBody))
 	oauthPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(oauthPutResponseRecorder, oauthPutRequest)
 	if oauthPutResponseRecorder.Code != http.StatusOK {
@@ -246,7 +246,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig preserving OAuth secret when empty
 	preserveOAuthBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":""}}}`
-	preserveOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveOAuthBody))
+	preserveOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveOAuthBody))
 	preserveOAuthResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveOAuthResponseRecorder, preserveOAuthRequest)
 	if preserveOAuthResponseRecorder.Code != http.StatusOK {
@@ -255,7 +255,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oauth_providers preserving current
 	nullOAuthBody := `{"oauth_providers":null}`
-	nullOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullOAuthBody))
+	nullOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOAuthBody))
 	nullOAuthResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullOAuthResponseRecorder, nullOAuthRequest)
 	if nullOAuthResponseRecorder.Code != http.StatusOK {
@@ -264,7 +264,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oidc.clients preserving current
 	nullOIDCBody := `{"oidc":{"clients":null}}`
-	nullOIDCRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullOIDCBody))
+	nullOIDCRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOIDCBody))
 	nullOIDCResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullOIDCResponseRecorder, nullOIDCRequest)
 	if nullOIDCResponseRecorder.Code != http.StatusOK {
@@ -273,7 +273,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oidc.resource_servers preserving current
 	nullResourceServersBody := `{"oidc":{"resource_servers":null}}`
-	nullResourceServersRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
+	nullResourceServersRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
 	nullResourceServersResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullResourceServersResponseRecorder, nullResourceServersRequest)
 	if nullResourceServersResponseRecorder.Code != http.StatusOK {
@@ -293,7 +293,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"url": "https://test.com/sms", "signing_secret": "new-sms-secret"}
 		}
 	}`
-	emailSMSPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(emailSMSPutBody))
+	emailSMSPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(emailSMSPutBody))
 	emailSMSPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(emailSMSPutResponseRecorder, emailSMSPutRequest)
 	if emailSMSPutResponseRecorder.Code != http.StatusOK {
@@ -336,7 +336,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"url": "https://test.com/sms", "signing_secret": ""}
 		}
 	}`
-	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveBody))
+	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveBody))
 	preserveResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 	if preserveResponseRecorder.Code != http.StatusOK {
@@ -360,7 +360,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"driver": null
 		}
 	}`
-	nullDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullDriverBody))
+	nullDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullDriverBody))
 	nullDriverResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullDriverResponseRecorder, nullDriverRequest)
 	if nullDriverResponseRecorder.Code != http.StatusOK {
@@ -393,7 +393,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"driver": ""
 		}
 	}`
-	emptyDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(emptyDriverBody))
+	emptyDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(emptyDriverBody))
 	emptyDriverResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(emptyDriverResponseRecorder, emptyDriverRequest)
 	if emptyDriverResponseRecorder.Code != http.StatusOK {
@@ -412,7 +412,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		"email_dispatcher": null,
 		"sms_dispatcher": null
 	}`
-	nullConfigRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullConfigBody))
+	nullConfigRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullConfigBody))
 	nullConfigResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullConfigResponseRecorder, nullConfigRequest)
 	if nullConfigResponseRecorder.Code != http.StatusOK {
@@ -439,7 +439,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"signing_secret": "plain-secret"}
 		}
 	}`
-	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(plainSecretBody))
+	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(plainSecretBody))
 	plainResponseRecorder := httptest.NewRecorder()
 	nilCryptoKeyManagerControlPlaneHandler.handleUpdateConfig(plainResponseRecorder, plainRequest)
 	if plainResponseRecorder.Code != http.StatusOK {
@@ -448,7 +448,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig rejecting email_otp.enabled without active SMTP -> 422
 	unconfiguredOTPPutBody := `{"email_otp":{"enabled":true}}`
-	unconfiguredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unconfiguredOTPPutBody))
+	unconfiguredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredOTPPutBody))
 	unconfiguredOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(unconfiguredOTPPutResponseRecorder, unconfiguredOTPPutRequest)
 	if unconfiguredOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
@@ -460,7 +460,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig rejecting sms_otp.enabled without active SMS provider -> 422
 	unconfiguredSMSOTPPutBody := `{"sms_otp":{"enabled":true}}`
-	unconfiguredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unconfiguredSMSOTPPutBody))
+	unconfiguredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredSMSOTPPutBody))
 	unconfiguredSMSOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(unconfiguredSMSOTPPutResponseRecorder, unconfiguredSMSOTPPutRequest)
 	if unconfiguredSMSOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
@@ -478,7 +478,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"smtp":{"host":"smtp.example.com","port":587,"username":"user","password":"password"}
 		}
 	}`
-	configuredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(configuredOTPPutBody))
+	configuredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredOTPPutBody))
 	configuredOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(configuredOTPPutResponseRecorder, configuredOTPPutRequest)
 	if configuredOTPPutResponseRecorder.Code != http.StatusOK {
@@ -493,7 +493,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"twilio":{"account_sid":"AC123","auth_token":"token123","from_number":"+15551234567"}
 		}
 	}`
-	configuredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(configuredSMSOTPPutBody))
+	configuredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredSMSOTPPutBody))
 	configuredSMSOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(configuredSMSOTPPutResponseRecorder, configuredSMSOTPPutRequest)
 	if configuredSMSOTPPutResponseRecorder.Code != http.StatusOK {
@@ -556,7 +556,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 	}`
 
 	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
-	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(oidcPutBody))
+	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(oidcPutBody))
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 
@@ -657,7 +657,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 			]
 		}
 	}`
-	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveSecretBody))
+	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveSecretBody))
 	preserveResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 
@@ -739,7 +739,7 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 
 	for _, currentTestCase := range testCases {
 		t.Run(currentTestCase.name, func(t *testing.T) {
-			validationRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(currentTestCase.putBody))
+			validationRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(currentTestCase.putBody))
 			validationResponseRecorder := httptest.NewRecorder()
 			controlPlaneHandler.handleUpdateConfig(validationResponseRecorder, validationRequest)
 
@@ -773,7 +773,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"github": {"enabled": false}
 		}
 	}`
-	disableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(disableAllBody))
+	disableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(disableAllBody))
 	disableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(disableResponseRecorder, disableRequest)
 	if disableResponseRecorder.Code != http.StatusOK {
@@ -803,7 +803,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"google": {"enabled": true, "preset": "google"}
 		}
 	}`
-	enableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(enableAllBody))
+	enableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(enableAllBody))
 	enableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(enableResponseRecorder, enableRequest)
 	if enableResponseRecorder.Code != http.StatusOK {
@@ -834,7 +834,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"google": {"enabled": false}
 		}
 	}`
-	disableMethodRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(disablePassAndOAuth))
+	disableMethodRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(disablePassAndOAuth))
 	disableMethodResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(disableMethodResponseRecorder, disableMethodRequest)
 	if disableMethodResponseRecorder.Code != http.StatusOK {
@@ -1076,7 +1076,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 
 	// 1. Unsupported provider -> 400
 	unsupportedProviderBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"unknown_captcha","secret_key":"secret123"}}}`
-	unsupportedRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unsupportedProviderBody))
+	unsupportedRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(unsupportedProviderBody))
 	unsupportedResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(unsupportedResponseRecorder, unsupportedRequest)
 	if unsupportedResponseRecorder.Code != http.StatusBadRequest {
@@ -1085,7 +1085,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 
 	// 2. Enabled but missing secret key -> 400
 	missingSecretBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":""}}}`
-	missingSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(missingSecretBody))
+	missingSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(missingSecretBody))
 	missingSecretResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(missingSecretResponseRecorder, missingSecretRequest)
 	if missingSecretResponseRecorder.Code != http.StatusBadRequest {
@@ -1094,7 +1094,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 
 	// 3. Invalid mode -> 400
 	invalidModeBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"secret123","mode":"invalid_mode"}}}`
-	invalidModeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(invalidModeBody))
+	invalidModeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(invalidModeBody))
 	invalidModeResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidModeResponseRecorder, invalidModeRequest)
 	if invalidModeResponseRecorder.Code != http.StatusBadRequest {
@@ -1103,7 +1103,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 
 	// 4. Valid update -> 200, secret is envelope encrypted
 	validBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"my-turnstile-secret","mode":"adaptive","adaptive_failed_attempts":7}}}`
-	validRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validBody))
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(validBody))
 	validResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(validResponseRecorder, validRequest)
 	if validResponseRecorder.Code != http.StatusOK {
@@ -1119,7 +1119,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 
 	// 5. Preserving existing secret when empty secret key sent
 	preserveBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"","mode":"always"}}}`
-	preserveRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveBody))
+	preserveRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveBody))
 	preserveResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 	if preserveResponseRecorder.Code != http.StatusOK {

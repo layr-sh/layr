@@ -82,8 +82,8 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("metrics body missing expected prometheus metrics: %s", metricsBody)
 	}
 
-	// Test /api/v1/manifest without publishable key -> 200 (System Discovery is public & unauthenticated)
-	noKeyManifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
+	// Test /v1/manifest without publishable key -> 200 (System Discovery is public & unauthenticated)
+	noKeyManifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/manifest", nil)
 	noKeyManifestResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(noKeyManifestResponseRecorder, noKeyManifestRequest)
 	if noKeyManifestResponseRecorder.Code != http.StatusOK {
@@ -91,13 +91,13 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 
 	// Register a base client test endpoint on router
-	GetRoute[string](server.BaseRouter(), "/api/v1/client-test", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/v1/client-test", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok-client"))
 	})
 
 	// Test base client endpoint without publishable key -> 401
-	noKeyClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	noKeyClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	noKeyClientResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(noKeyClientResponseRecorder, noKeyClientRequest)
 	if noKeyClientResponseRecorder.Code != http.StatusUnauthorized {
@@ -106,7 +106,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 
 	// Test base client endpoint with valid publishable key -> 200
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
-	clientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	clientRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	clientResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientResponseRecorder, clientRequest)
@@ -122,7 +122,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to sign access token: %v", err)
 	}
-	clientAuthHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientAuthHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer "+validJWTToken)
 	clientAuthHeaderResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientAuthHeaderResponseRecorder, clientAuthHeaderRequest)
@@ -134,7 +134,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	authenticatedCtx := WithAuthContext(context.Background(), AuthContext{
 		ServiceAccountID: "01918a24-7777-7000-8000-000000000002",
 	})
-	clientAuthContextRequest := httptest.NewRequestWithContext(authenticatedCtx, http.MethodGet, "/api/v1/client-test", nil)
+	clientAuthContextRequest := httptest.NewRequestWithContext(authenticatedCtx, http.MethodGet, "/v1/client-test", nil)
 	clientAuthContextResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientAuthContextResponseRecorder, clientAuthContextRequest)
 	if clientAuthContextResponseRecorder.Code != http.StatusOK {
@@ -142,7 +142,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 
 	// Test base client endpoint with invalid Authorization header -> 401 Unauthorized
-	clientInvalidAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientInvalidAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	clientInvalidAuthRequest.Header.Set("Authorization", "Bearer invalid_signature_token")
 	clientInvalidAuthResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientInvalidAuthResponseRecorder, clientInvalidAuthRequest)
@@ -151,7 +151,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 
 	// Test base client endpoint with unauthenticated service account key -> 401 Unauthorized
-	clientUnauthKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/client-test", nil)
+	clientUnauthKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	clientUnauthKeyRequest.Header.Set("X-Layr-Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	clientUnauthKeyResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientUnauthKeyResponseRecorder, clientUnauthKeyRequest)
@@ -161,52 +161,52 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 
 	// Test PublishableKeyMiddleware with nil CryptoKeyManager -> passes through
 	nilCryptoKeyManagerHttpServer := NewServer(nil, nil)
-	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
+	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/manifest", nil)
 	nilCryptoKeyManagerClientResponseRecorder := httptest.NewRecorder()
 	nilCryptoKeyManagerHttpServer.server.Handler.ServeHTTP(nilCryptoKeyManagerClientResponseRecorder, nilCryptoKeyManagerClientRequest)
 	if nilCryptoKeyManagerClientResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected manifest 200 with nil key manager, got %d", nilCryptoKeyManagerClientResponseRecorder.Code)
 	}
 
-	// Test Public OpenAPI /api/v1/spec.json
-	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.json", nil)
+	// Test Public OpenAPI /v1/spec.json
+	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/spec.json", nil)
 	jsonSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(jsonSpecResponseRecorder, jsonSpecRequest)
 	if jsonSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
 	}
 	if !strings.Contains(jsonSpecResponseRecorder.Body.String(), "Layr Client API Engine") {
 		t.Fatalf("expected public openapi spec in response: %s", jsonSpecResponseRecorder.Body.String())
 	}
 
-	// Test Public OpenAPI /api/v1/spec.yaml
-	yamlSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/spec.yaml", nil)
+	// Test Public OpenAPI /v1/spec.yaml
+	yamlSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/spec.yaml", nil)
 	yamlSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(yamlSpecResponseRecorder, yamlSpecRequest)
 	if yamlSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/spec.yaml 200, got %d", yamlSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/spec.yaml 200, got %d", yamlSpecResponseRecorder.Code)
 	}
 	if !strings.Contains(yamlSpecResponseRecorder.Body.String(), "Layr Client API Engine") {
 		t.Fatalf("expected public openapi 3.1.0 in yaml response: %s", yamlSpecResponseRecorder.Body.String())
 	}
 
-	// Test Control Plane OpenAPI /api/v1/_/spec.json
-	controlPlaneJsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/spec.json", nil)
+	// Test Control Plane OpenAPI /v1/_/spec.json
+	controlPlaneJsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/spec.json", nil)
 	controlPlaneJsonSpecResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(controlPlaneJsonSpecResponseRecorder, controlPlaneJsonSpecRequest)
 	if controlPlaneJsonSpecResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/_/spec.json 200, got %d", controlPlaneJsonSpecResponseRecorder.Code)
+		t.Fatalf("expected /v1/_/spec.json 200, got %d", controlPlaneJsonSpecResponseRecorder.Code)
 	}
 	if !strings.Contains(controlPlaneJsonSpecResponseRecorder.Body.String(), "Layr Control Plane API Engine") {
 		t.Fatalf("expected control plane openapi spec in response: %s", controlPlaneJsonSpecResponseRecorder.Body.String())
 	}
 
-	// Test Control Plane OpenAPI /api/v1/_/spec.yaml
-	controlPlaneYamlRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/spec.yaml", nil)
+	// Test Control Plane OpenAPI /v1/_/spec.yaml
+	controlPlaneYamlRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/spec.yaml", nil)
 	controlPlaneYamlResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(controlPlaneYamlResponseRecorder, controlPlaneYamlRequest)
 	if controlPlaneYamlResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /api/v1/_/spec.yaml 200, got %d", controlPlaneYamlResponseRecorder.Code)
+		t.Fatalf("expected /v1/_/spec.yaml 200, got %d", controlPlaneYamlResponseRecorder.Code)
 	}
 	if !strings.Contains(controlPlaneYamlResponseRecorder.Body.String(), "Layr Control Plane API Engine") {
 		t.Fatalf("expected control plane openapi 3.1.0 in yaml response: %s", controlPlaneYamlResponseRecorder.Body.String())
@@ -226,7 +226,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 	handlerStartedChannel := make(chan struct{})
 	unblockHandlerChannel := make(chan struct{})
 
-	GetRoute[string](drainServer.BaseRouter(), "/api/v1/blocking-test", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](drainServer.BaseRouter(), "/v1/blocking-test", func(responseWriter http.ResponseWriter, request *http.Request) {
 		close(handlerStartedChannel)
 		<-unblockHandlerChannel
 		responseWriter.WriteHeader(http.StatusOK)
@@ -243,7 +243,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 	}()
 
 	go func() {
-		inFlightRequest, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+tcpListener.Addr().String()+"/api/v1/blocking-test", nil)
+		inFlightRequest, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+tcpListener.Addr().String()+"/v1/blocking-test", nil)
 		if requestErr == nil {
 			response, clientErr := http.DefaultClient.Do(inFlightRequest)
 			if clientErr == nil {
@@ -268,11 +268,11 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 
 func TestCoreServerPanicRecoveryUnit(t *testing.T) {
 	server := NewServer(nil, nil)
-	GetRoute[string](server.BaseRouter(), "/api/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
+	GetRoute[string](server.BaseRouter(), "/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
 		panic("simulated unhandled panic in handler")
 	})
 
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/panic-endpoint", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/panic-endpoint", nil)
 	responseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(responseRecorder, request)
 
