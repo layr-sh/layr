@@ -33,8 +33,8 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/confirm", baseHandler.handleConfirmEmailVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/email/verification/confirm", baseHandler.handleConfirmEmailVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -79,7 +79,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 	verifyRequestPayload, _ := json.Marshal(map[string]any{
 		"email": userEmail,
 	})
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/email/verification/request", bytes.NewReader(verifyRequestPayload))
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/email/verification/request", bytes.NewReader(verifyRequestPayload))
 	request.Header.Set("Content-Type", "application/json")
 	response, err := httpClient.Do(request)
 	if err != nil {
@@ -108,7 +108,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 		"email": userEmail,
 		"code":  interceptedCode,
 	})
-	confirmRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/email/verification/confirm", bytes.NewReader(confirmPayload))
+	confirmRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/email/verification/confirm", bytes.NewReader(confirmPayload))
 	confirmRequest.Header.Set("Content-Type", "application/json")
 	confirmResponse, err := httpClient.Do(confirmRequest)
 	if err != nil {
@@ -150,8 +150,8 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/confirm", baseHandler.handleConfirmPhoneVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/phone/verification/confirm", baseHandler.handleConfirmPhoneVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -195,7 +195,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 	verifyRequestPayload, _ := json.Marshal(map[string]any{
 		"phone": testPhoneNumber,
 	})
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/phone/verification/request", bytes.NewReader(verifyRequestPayload))
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/phone/verification/request", bytes.NewReader(verifyRequestPayload))
 	request.Header.Set("Content-Type", "application/json")
 	response, err := httpClient.Do(request)
 	if err != nil {
@@ -224,7 +224,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 		"phone": testPhoneNumber,
 		"code":  interceptedCode,
 	})
-	confirmRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/phone/verification/confirm", bytes.NewReader(confirmPayload))
+	confirmRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/phone/verification/confirm", bytes.NewReader(confirmPayload))
 	confirmRequest.Header.Set("Content-Type", "application/json")
 	confirmResponse, err := httpClient.Do(confirmRequest)
 	if err != nil {
@@ -266,8 +266,8 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
+	serveMux.HandleFunc("POST /v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -281,7 +281,7 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 
 	// 1. Email Verification Request -> 500 Internal Server Error
 	emailPayload, _ := json.Marshal(map[string]any{"email": "unconfigured@example.com"})
-	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/email/verification/request", bytes.NewReader(emailPayload))
+	request, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/email/verification/request", bytes.NewReader(emailPayload))
 	request.Header.Set("Content-Type", "application/json")
 	response, err := httpClient.Do(request)
 	if err != nil {
@@ -299,7 +299,7 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 
 	// 2. Phone Verification Request -> 500 Internal Server Error
 	phonePayload, _ := json.Marshal(map[string]any{"phone": "+15551112222"})
-	phoneRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/api/v1/auth/user/phone/verification/request", bytes.NewReader(phonePayload))
+	phoneRequest, _ := http.NewRequestWithContext(ctx, http.MethodPost, testServer.URL+"/v1/auth/user/phone/verification/request", bytes.NewReader(phonePayload))
 	phoneRequest.Header.Set("Content-Type", "application/json")
 	phoneResponse, err := httpClient.Do(phoneRequest)
 	if err != nil {

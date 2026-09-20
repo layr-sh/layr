@@ -39,7 +39,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 2. Anonymous Auth
-	core.PostRoute[AuthTokenResponse, SignInAnonymousInput](router, "/api/v1/auth/anonymous", service.baseHandler.handleSignInAnonymous,
+	core.PostRoute[AuthTokenResponse, SignInAnonymousInput](router, "/v1/auth/anonymous", service.baseHandler.handleSignInAnonymous,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Sign in or initialize an anonymous guest user account"),
 		core.RouteDescription("Issues an Ed25519 JWT access token and refresh token for an anonymous guest user with null email/phone and is_anonymous set to true."),
@@ -49,7 +49,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 3. Password Auth
-	core.PostRoute[AuthTokenResponse, SignUpInput](router, "/api/v1/auth/sign-up", service.baseHandler.handleSignUp,
+	core.PostRoute[AuthTokenResponse, SignUpInput](router, "/v1/auth/sign-up", service.baseHandler.handleSignUp,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Register a new user with email/phone and password"),
 		core.RouteDescription("Registers a new application user account with argon2id password hashing, optional auto-sign-in, and welcome email verification."),
@@ -57,7 +57,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth"),
 		core.RouteSDKMethodName("signUp"),
 	)
-	core.PostRoute[AuthTokenResponse, SignInInput](router, "/api/v1/auth/sign-in", service.baseHandler.handleSignIn,
+	core.PostRoute[AuthTokenResponse, SignInInput](router, "/v1/auth/sign-in", service.baseHandler.handleSignIn,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Authenticate with email/phone and password"),
 		core.RouteDescription("Authenticates an application user with email/phone and password, returning an Ed25519 JWT access token, rotated refresh token, and custom claims resolved via public.auth_claims."),
@@ -65,7 +65,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth"),
 		core.RouteSDKMethodName("signIn"),
 	)
-	core.PostRoute[core.Empty, core.Empty](router, "/api/v1/auth/sign-out", service.baseHandler.handleSignOut,
+	core.PostRoute[core.Empty, core.Empty](router, "/v1/auth/sign-out", service.baseHandler.handleSignOut,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Revoke active session and refresh token"),
 		core.RouteDescription("Revokes the active refresh token and invalidates the session record in auth.sessions."),
@@ -75,7 +75,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth"),
 		core.RouteSDKMethodName("signOut"),
 	)
-	core.PostRoute[AuthTokenResponse, RefreshTokenInput](router, "/api/v1/auth/token/refresh", service.baseHandler.handleRefreshToken,
+	core.PostRoute[AuthTokenResponse, RefreshTokenInput](router, "/v1/auth/token/refresh", service.baseHandler.handleRefreshToken,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Exchange refresh token for fresh JWT access token"),
 		core.RouteDescription("Exchanges a valid refresh token for a freshly signed Ed25519 JWT access token with updated claims resolved via public.auth_claims."),
@@ -83,7 +83,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "token"),
 		core.RouteSDKMethodName("refresh"),
 	)
-	core.PostRoute[core.Empty, RequestPasswordResetInput](router, "/api/v1/auth/password-reset/request", service.baseHandler.handleRequestPasswordReset,
+	core.PostRoute[core.Empty, RequestPasswordResetInput](router, "/v1/auth/password-reset/request", service.baseHandler.handleRequestPasswordReset,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Request a password reset verification code via email or SMS"),
 		core.RouteDescription("Initiates password recovery by dispatching a single-use verification code to the registered email or SMS number."),
@@ -92,7 +92,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passwordReset"),
 		core.RouteSDKMethodName("request"),
 	)
-	core.PostRoute[core.Empty, ConfirmPasswordResetInput](router, "/api/v1/auth/password-reset/confirm", service.baseHandler.handleConfirmPasswordReset,
+	core.PostRoute[core.Empty, ConfirmPasswordResetInput](router, "/v1/auth/password-reset/confirm", service.baseHandler.handleConfirmPasswordReset,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Confirm password reset with verification code and new password"),
 		core.RouteDescription("Verifies the password recovery code and updates the user's password using argon2id key derivation."),
@@ -103,7 +103,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 4. Passkeys (WebAuthn / FIDO2)
-	core.PostRoute[passkey.SignUpOptions, BeginPasskeySignUpInput](router, "/api/v1/auth/passkeys/sign-up", service.baseHandler.handleBeginPasskeySignUp,
+	core.PostRoute[passkey.SignUpOptions, BeginPasskeySignUpInput](router, "/v1/auth/passkeys/sign-up", service.baseHandler.handleBeginPasskeySignUp,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Begin WebAuthn passkey registration ceremony"),
 		core.RouteDescription("Begins the WebAuthn ceremony for registering a hardware or biometric passkey, returning a cryptographic challenge."),
@@ -111,7 +111,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "signUp"),
 		core.RouteSDKMethodName("begin"),
 	)
-	core.PostRoute[core.Empty, VerifyPasskeySignUpInput](router, "/api/v1/auth/passkeys/sign-up/verify", service.baseHandler.handleVerifyPasskeySignUp,
+	core.PostRoute[core.Empty, VerifyPasskeySignUpInput](router, "/v1/auth/passkeys/sign-up/verify", service.baseHandler.handleVerifyPasskeySignUp,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Verify WebAuthn passkey registration attestation"),
 		core.RouteDescription("Validates the WebAuthn attestation response and stores the public key credential in auth.identities."),
@@ -120,7 +120,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "signUp"),
 		core.RouteSDKMethodName("verify"),
 	)
-	core.PostRoute[passkey.SignInOptions, core.Empty](router, "/api/v1/auth/passkeys/sign-in", service.baseHandler.handleBeginPasskeySignIn,
+	core.PostRoute[passkey.SignInOptions, core.Empty](router, "/v1/auth/passkeys/sign-in", service.baseHandler.handleBeginPasskeySignIn,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Begin WebAuthn passkey authentication ceremony"),
 		core.RouteDescription("Begins WebAuthn passkey authentication, generating an assertion challenge for the user's registered credential."),
@@ -129,7 +129,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "signIn"),
 		core.RouteSDKMethodName("begin"),
 	)
-	core.PostRoute[AuthTokenResponse, VerifyPasskeySignInInput](router, "/api/v1/auth/passkeys/sign-in/verify", service.baseHandler.handleVerifyPasskeySignIn,
+	core.PostRoute[AuthTokenResponse, VerifyPasskeySignInInput](router, "/v1/auth/passkeys/sign-in/verify", service.baseHandler.handleVerifyPasskeySignIn,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Verify WebAuthn passkey assertion signature"),
 		core.RouteDescription("Verifies WebAuthn assertion signature against stored public key and issues an authenticated session."),
@@ -137,7 +137,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "signIn"),
 		core.RouteSDKMethodName("verify"),
 	)
-	core.GetRoute[ListPasskeysResponse](router, "/api/v1/auth/user/passkeys", service.baseHandler.handleListPasskeys,
+	core.GetRoute[ListPasskeysResponse](router, "/v1/auth/user/passkeys", service.baseHandler.handleListPasskeys,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("List registered passkeys for current user"),
 		core.RouteDescription("Retrieves all registered WebAuthn passkey credentials belonging to the authenticated user."),
@@ -145,7 +145,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "passkeys"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/auth/user/passkeys/{id}", service.baseHandler.handleDeletePasskey,
+	core.DeleteRoute[core.Empty](router, "/v1/auth/user/passkeys/{id}", service.baseHandler.handleDeletePasskey,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Revoke a registered passkey"),
 		core.RouteDescription("Revokes and deletes a registered WebAuthn passkey credential belonging to the authenticated user."),
@@ -156,7 +156,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 5. Passwordless OTP
-	core.PostRoute[core.Empty, SendOTPInput](router, "/api/v1/auth/otp", service.baseHandler.handleSendOTP,
+	core.PostRoute[core.Empty, SendOTPInput](router, "/v1/auth/otp", service.baseHandler.handleSendOTP,
 		core.RouteTag("Passwordless"),
 		core.RouteSummary("Request a 6-digit one-time password code via email or SMS"),
 		core.RouteDescription("Sends a 6-digit one-time password (OTP) verification code via configured SMS or email provider."),
@@ -165,7 +165,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "otp"),
 		core.RouteSDKMethodName("send"),
 	)
-	core.PostRoute[AuthTokenResponse, VerifyOTPInput](router, "/api/v1/auth/otp/verify", service.baseHandler.handleVerifyOTP,
+	core.PostRoute[AuthTokenResponse, VerifyOTPInput](router, "/v1/auth/otp/verify", service.baseHandler.handleVerifyOTP,
 		core.RouteTag("Passwordless"),
 		core.RouteSummary("Verify 6-digit OTP code and issue authenticated session"),
 		core.RouteDescription("Validates the 6-digit OTP code against argon2id hash and issues an authenticated session."),
@@ -175,7 +175,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 6. Multi-Factor Authentication
-	core.PostRoute[SetupMFAResponse, SetupMFAInput](router, "/api/v1/auth/mfa", service.baseHandler.handleSetupMFA,
+	core.PostRoute[SetupMFAResponse, SetupMFAInput](router, "/v1/auth/mfa", service.baseHandler.handleSetupMFA,
 		core.RouteTag("Multi-Factor Authentication"),
 		core.RouteSummary("Generate TOTP secret and setup URI for authenticator apps"),
 		core.RouteDescription("Generates a cryptographic TOTP secret and QR-code URI for Google Authenticator or 1Password enrollment."),
@@ -183,7 +183,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("setup"),
 	)
-	core.PostRoute[AuthTokenResponse, VerifyMFAInput](router, "/api/v1/auth/mfa/verify", service.baseHandler.handleVerifyMFA,
+	core.PostRoute[AuthTokenResponse, VerifyMFAInput](router, "/v1/auth/mfa/verify", service.baseHandler.handleVerifyMFA,
 		core.RouteTag("Multi-Factor Authentication"),
 		core.RouteSummary("Verify 2FA TOTP code and enable MFA on account"),
 		core.RouteDescription("Verifies the 6-digit TOTP code and marks MFA as enrolled on the user account."),
@@ -191,7 +191,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("verify"),
 	)
-	core.PostRoute[AuthTokenResponse, ChallengeMFAInput](router, "/api/v1/auth/mfa/challenge", service.baseHandler.handleChallengeMFA,
+	core.PostRoute[AuthTokenResponse, ChallengeMFAInput](router, "/v1/auth/mfa/challenge", service.baseHandler.handleChallengeMFA,
 		core.RouteTag("Multi-Factor Authentication"),
 		core.RouteSummary("Verify MFA challenge ticket with TOTP code"),
 		core.RouteDescription("Verifies the short-lived MFA challenge ticket and TOTP code after password sign-in and issues an authenticated session."),
@@ -199,7 +199,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("challenge"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/auth/mfa", service.baseHandler.handleDisableMFA,
+	core.DeleteRoute[core.Empty](router, "/v1/auth/mfa", service.baseHandler.handleDisableMFA,
 		core.RouteTag("Multi-Factor Authentication"),
 		core.RouteSummary("Disable multi-factor authentication on user account"),
 		core.RouteDescription("Disables TOTP multi-factor authentication, clears the user's encrypted MFA secret, and emits auth.mfa.disabled."),
@@ -210,7 +210,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 7. OAuth & OpenID Connect
-	core.GetRoute[core.Empty](router, "/api/v1/auth/oauth/authorize", service.baseHandler.handleAuthorizeOIDC,
+	core.GetRoute[core.Empty](router, "/v1/auth/oauth/authorize", service.baseHandler.handleAuthorizeOIDC,
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("OpenID Connect authorization endpoint and Universal Sign-In page"),
 		core.RouteDescription("Renders the hosted Universal Sign-In page or performs SSO active session bypass redirect with authorization code."),
@@ -219,7 +219,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oidc"),
 		core.RouteSDKMethodName("authorize"),
 	)
-	core.GetRoute[core.Empty](router, "/api/v1/auth/oauth/{provider}/authorize", service.baseHandler.handleAuthorizeOAuth,
+	core.GetRoute[core.Empty](router, "/v1/auth/oauth/{provider}/authorize", service.baseHandler.handleAuthorizeOAuth,
 		core.RouteTag("OAuth"),
 		core.RouteSummary("Redirect to third-party OAuth provider authorization URL"),
 		core.RouteDescription("Redirects the client browser to the third-party OAuth2 / OIDC provider authorization URL with PKCE challenge."),
@@ -228,7 +228,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oauth"),
 		core.RouteSDKMethodName("authorize"),
 	)
-	core.PostRoute[IssueOIDCTokenResponse, core.Empty](router, "/api/v1/auth/oauth/token", service.baseHandler.handleIssueOIDCToken,
+	core.PostRoute[IssueOIDCTokenResponse, core.Empty](router, "/v1/auth/oauth/token", service.baseHandler.handleIssueOIDCToken,
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("Exchange authorization code or refresh token for OpenID Connect tokens"),
 		core.RouteDescription("Issues access token, refresh token, and ID token in exchange for an authorization code with PKCE verification."),
@@ -236,7 +236,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oidc"),
 		core.RouteSDKMethodName("token"),
 	)
-	core.GetRoute[GetOIDCUserInfoResponse](router, "/api/v1/auth/oauth/userinfo", service.baseHandler.handleGetOIDCUserInfo,
+	core.GetRoute[GetOIDCUserInfoResponse](router, "/v1/auth/oauth/userinfo", service.baseHandler.handleGetOIDCUserInfo,
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("Retrieve OpenID Connect Core 1.0 user claims"),
 		core.RouteDescription("Retrieves standard OpenID Connect profile claims (sub, email, email_verified, name) for the authenticated caller."),
@@ -246,14 +246,14 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// Runtime non-OpenAPI browser callback and form submission routes
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/authorize", service.baseHandler.handleSubmitOIDCAuthorize)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
-	router.Mux().HandleFunc("GET /api/v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
-	router.Mux().HandleFunc("POST /api/v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
+	router.Mux().HandleFunc("POST /v1/auth/oauth/authorize", service.baseHandler.handleSubmitOIDCAuthorize)
+	router.Mux().HandleFunc("GET /v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
+	router.Mux().HandleFunc("POST /v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
+	router.Mux().HandleFunc("GET /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
+	router.Mux().HandleFunc("POST /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
 
 	// 8. GDPR Export
-	core.PostRoute[ExportUserResponse, core.Empty](router, "/api/v1/auth/users/{user_id}/export", service.baseHandler.handleExportUser,
+	core.PostRoute[ExportUserResponse, core.Empty](router, "/v1/auth/users/{user_id}/export", service.baseHandler.handleExportUser,
 		core.RouteTag("GDPR Compliance"),
 		core.RouteSummary("Export comprehensive user account data graph"),
 		core.RouteDescription("Exports all personal data, sessions, and identities associated with the user in compliance with GDPR Article 20."),
@@ -264,7 +264,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 9. Device & Session Management
-	core.GetRoute[ListSessionsResponse](router, "/api/v1/auth/sessions", service.baseHandler.handleListSessions,
+	core.GetRoute[ListSessionsResponse](router, "/v1/auth/sessions", service.baseHandler.handleListSessions,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("List active sessions for current user"),
 		core.RouteDescription("Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker."),
@@ -272,7 +272,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "sessions"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/auth/sessions/{session_id}", service.baseHandler.handleRevokeSession,
+	core.DeleteRoute[core.Empty](router, "/v1/auth/sessions/{session_id}", service.baseHandler.handleRevokeSession,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Revoke specific user session"),
 		core.RouteDescription("Revokes an active session by session ID belonging to the authenticated user."),
@@ -281,7 +281,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "sessions"),
 		core.RouteSDKMethodName("revoke"),
 	)
-	core.PostRoute[RevokeOtherSessionsResponse, core.Empty](router, "/api/v1/auth/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions,
+	core.PostRoute[RevokeOtherSessionsResponse, core.Empty](router, "/v1/auth/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("Sign out of all other devices"),
 		core.RouteDescription("Revokes all active sessions for the current user except the currently active device session."),
@@ -292,12 +292,12 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// Session management user-prefixed aliases
-	router.Mux().HandleFunc("GET /api/v1/auth/user/sessions", service.baseHandler.handleListSessions)
-	router.Mux().HandleFunc("DELETE /api/v1/auth/user/sessions/{session_id}", service.baseHandler.handleRevokeSession)
-	router.Mux().HandleFunc("POST /api/v1/auth/user/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
+	router.Mux().HandleFunc("GET /v1/auth/user/sessions", service.baseHandler.handleListSessions)
+	router.Mux().HandleFunc("DELETE /v1/auth/user/sessions/{session_id}", service.baseHandler.handleRevokeSession)
+	router.Mux().HandleFunc("POST /v1/auth/user/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
 
 	// 10. User Self-Service Account Management
-	core.GetRoute[GetUserResponse](router, "/api/v1/auth/user", service.baseHandler.handleGetUser,
+	core.GetRoute[GetUserResponse](router, "/v1/auth/user", service.baseHandler.handleGetUser,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Get authenticated user"),
 		core.RouteDescription("Retrieves the authenticated user, verification status, and MFA enrollment status."),
@@ -305,7 +305,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PatchRoute[UpdateUserPropertiesResponse, UpdateUserPropertiesInput](router, "/api/v1/auth/user/properties", service.baseHandler.handleUpdateUserProperties,
+	core.PatchRoute[UpdateUserPropertiesResponse, UpdateUserPropertiesInput](router, "/v1/auth/user/properties", service.baseHandler.handleUpdateUserProperties,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Update user personal properties"),
 		core.RouteDescription("Merges personal custom properties into the authenticated user."),
@@ -313,7 +313,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "properties"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.PatchRoute[core.Empty, UpdateUserEmailInput](router, "/api/v1/auth/user/email", service.baseHandler.handleUpdateUserEmail,
+	core.PatchRoute[core.Empty, UpdateUserEmailInput](router, "/v1/auth/user/email", service.baseHandler.handleUpdateUserEmail,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Request to update authenticated user email"),
 		core.RouteDescription("Asserts email uniqueness, generates a single-use verification code, and dispatches it to the new email address."),
@@ -322,7 +322,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "email"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.PostRoute[core.Empty, RequestEmailVerificationInput](router, "/api/v1/auth/user/email/verification/request", service.baseHandler.handleRequestEmailVerification,
+	core.PostRoute[core.Empty, RequestEmailVerificationInput](router, "/v1/auth/user/email/verification/request", service.baseHandler.handleRequestEmailVerification,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Request an email verification code"),
 		core.RouteDescription("Dispatches a single-use verification code to the recipient's email address."),
@@ -331,7 +331,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "email", "verification"),
 		core.RouteSDKMethodName("request"),
 	)
-	core.PostRoute[core.Empty, ConfirmEmailVerificationInput](router, "/api/v1/auth/user/email/verification/confirm", service.baseHandler.handleConfirmEmailVerification,
+	core.PostRoute[core.Empty, ConfirmEmailVerificationInput](router, "/v1/auth/user/email/verification/confirm", service.baseHandler.handleConfirmEmailVerification,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Confirm email verification with code"),
 		core.RouteDescription("Verifies the email code and marks the user's email as verified."),
@@ -340,7 +340,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "email", "verification"),
 		core.RouteSDKMethodName("confirm"),
 	)
-	core.PatchRoute[core.Empty, UpdateUserPhoneInput](router, "/api/v1/auth/user/phone", service.baseHandler.handleUpdateUserPhone,
+	core.PatchRoute[core.Empty, UpdateUserPhoneInput](router, "/v1/auth/user/phone", service.baseHandler.handleUpdateUserPhone,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Request to update authenticated user phone number"),
 		core.RouteDescription("Asserts phone uniqueness, generates a single-use verification code, and dispatches it via SMS to the new phone number."),
@@ -349,7 +349,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "phone"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.PostRoute[core.Empty, RequestPhoneVerificationInput](router, "/api/v1/auth/user/phone/verification/request", service.baseHandler.handleRequestPhoneVerification,
+	core.PostRoute[core.Empty, RequestPhoneVerificationInput](router, "/v1/auth/user/phone/verification/request", service.baseHandler.handleRequestPhoneVerification,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Request a phone verification code"),
 		core.RouteDescription("Dispatches a single-use verification code via SMS to the recipient's phone number."),
@@ -358,7 +358,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "phone", "verification"),
 		core.RouteSDKMethodName("request"),
 	)
-	core.PostRoute[core.Empty, ConfirmPhoneVerificationInput](router, "/api/v1/auth/user/phone/verification/confirm", service.baseHandler.handleConfirmPhoneVerification,
+	core.PostRoute[core.Empty, ConfirmPhoneVerificationInput](router, "/v1/auth/user/phone/verification/confirm", service.baseHandler.handleConfirmPhoneVerification,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Confirm phone verification with code"),
 		core.RouteDescription("Verifies the phone code and marks the user's phone number as verified."),
@@ -367,7 +367,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "phone", "verification"),
 		core.RouteSDKMethodName("confirm"),
 	)
-	core.PatchRoute[core.Empty, UpdateUserPasswordInput](router, "/api/v1/auth/user/password", service.baseHandler.handleUpdateUserPassword,
+	core.PatchRoute[core.Empty, UpdateUserPasswordInput](router, "/v1/auth/user/password", service.baseHandler.handleUpdateUserPassword,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Change or set account password"),
 		core.RouteDescription("Updates the user's password, verifying current password if one is already set. Prohibited on anonymous accounts."),
@@ -376,7 +376,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "password"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/auth/user", service.baseHandler.handleDeleteUser,
+	core.DeleteRoute[core.Empty](router, "/v1/auth/user", service.baseHandler.handleDeleteUser,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Permanently delete authenticated user account"),
 		core.RouteDescription("Deletes the user account, cascading active sessions, passkeys, and identities, and revoking authentication cookies."),
@@ -393,15 +393,15 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	}
 
 	// 1. Dynamic Runtime Configuration
-	core.GetRoute[Config](router, "/api/v1/_/auth/config", service.controlPlaneHandler.handleGetConfig,
+	core.GetRoute[Config](router, "/v1/_/auth/config", service.controlPlaneHandler.handleGetConfig,
 		core.RouteTag("Auth Control Plane"),
-		core.RouteSummary("Retrieve dynamic runtime auth configuration (zero-decryption projection)"),
+		core.RouteSummary("Retrieve dynamic runtime auth configuration"),
 		core.RouteDescription("Retrieves dynamic runtime authentication configuration with secrets projected as boolean indicators."),
 		core.RouteOperationID("auth__config__get"),
 		core.RouteSDKGroupName("auth", "config"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PutRoute[Config, Config](router, "/api/v1/_/auth/config", service.controlPlaneHandler.handleUpdateConfig,
+	core.PutRoute[Config, Config](router, "/v1/_/auth/config", service.controlPlaneHandler.handleUpdateConfig,
 		core.RouteTag("Auth Control Plane"),
 		core.RouteSummary("Update dynamic runtime auth configuration with write-only secrets"),
 		core.RouteDescription("Updates dynamic runtime auth configuration, envelope-encrypting new secrets with master encryption key."),
@@ -411,7 +411,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 2. User Management
-	core.GetRoute[ListUsersResponse](router, "/api/v1/_/auth/users", service.controlPlaneHandler.handleListUsers,
+	core.GetRoute[ListUsersResponse](router, "/v1/_/auth/users", service.controlPlaneHandler.handleListUsers,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("List registered application users with filtering and pagination"),
 		core.RouteDescription("Lists registered application users with pagination, role filters, and search capabilities."),
@@ -419,7 +419,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[User, CreateUserInput](router, "/api/v1/_/auth/users", service.controlPlaneHandler.handleCreateUser,
+	core.PostRoute[User, CreateUserInput](router, "/v1/_/auth/users", service.controlPlaneHandler.handleCreateUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Create a new application user account"),
 		core.RouteDescription("Creates a new application user account directly through the control plane."),
@@ -427,7 +427,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[User](router, "/api/v1/_/auth/users/{user_id}", service.controlPlaneHandler.handleGetUser,
+	core.GetRoute[User](router, "/v1/_/auth/users/{user_id}", service.controlPlaneHandler.handleGetUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Get detailed user record by UUID"),
 		core.RouteDescription("Retrieves full user account details including identities, verification status, and lockout metadata."),
@@ -435,7 +435,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/_/auth/users/{user_id}", service.controlPlaneHandler.handleDeleteUser,
+	core.DeleteRoute[core.Empty](router, "/v1/_/auth/users/{user_id}", service.controlPlaneHandler.handleDeleteUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Delete application user and cascade related sessions/identities"),
 		core.RouteDescription("Permanently deletes user account and cascades deletion to sessions and identities."),
@@ -446,7 +446,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 3. User Lock Management
-	core.PostRoute[core.Empty, LockUserInput](router, "/api/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleLockUser,
+	core.PostRoute[core.Empty, LockUserInput](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleLockUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Lock application user and revoke active sessions"),
 		core.RouteDescription("Locks user account to prevent authentication and revokes all active sessions immediately."),
@@ -456,7 +456,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("lock"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleUnlockUser,
+	core.DeleteRoute[core.Empty](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleUnlockUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Unlock application user and restore access"),
 		core.RouteDescription("Unlocks user account and restores login capabilities."),
@@ -467,7 +467,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 4. Session Management
-	core.GetRoute[ListUserSessionsResponse](router, "/api/v1/_/auth/users/{user_id}/sessions", service.controlPlaneHandler.handleListUserSessions,
+	core.GetRoute[ListUserSessionsResponse](router, "/v1/_/auth/users/{user_id}/sessions", service.controlPlaneHandler.handleListUserSessions,
 		core.RouteTag("Auth Session Management"),
 		core.RouteSummary("List active sessions for an application user"),
 		core.RouteDescription("Lists all active sessions for a specific user, including IP address, user agent, and expiration time."),
@@ -475,7 +475,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "users", "sessions"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[core.Empty, core.Empty](router, "/api/v1/_/auth/users/{user_id}/sessions/revoke", service.controlPlaneHandler.handleRevokeUserSessions,
+	core.PostRoute[core.Empty, core.Empty](router, "/v1/_/auth/users/{user_id}/sessions/revoke", service.controlPlaneHandler.handleRevokeUserSessions,
 		core.RouteTag("Auth Session Management"),
 		core.RouteSummary("Revoke all active sessions for an application user"),
 		core.RouteDescription("Revokes all active sessions and refresh tokens for the specified user."),

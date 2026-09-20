@@ -25,7 +25,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	disabledAnonymousConfig.Anonymous.Enabled = false
 	configManager.Set(disabledAnonymousConfig)
 
-	anonymousDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	anonymousDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	anonymousDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(anonymousDisabledResponseRecorder, anonymousDisabledRequest)
 	if anonymousDisabledResponseRecorder.Code != http.StatusForbidden || !strings.Contains(anonymousDisabledResponseRecorder.Body.String(), "Access denied") {
@@ -34,7 +34,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 
 	// 2. Anonymous auth enabled with nil database pool -> 500
 	configManager.Set(DefaultConfig())
-	anonymousNilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
+	anonymousNilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
 	anonymousNilDBResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(anonymousNilDBResponseRecorder, anonymousNilDBRequest)
 	if anonymousNilDBResponseRecorder.Code != http.StatusInternalServerError {

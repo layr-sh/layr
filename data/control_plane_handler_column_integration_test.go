@@ -40,7 +40,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 			{Name: "initial_name", Type: "text", IsNullable: false},
 		},
 	})
-	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
+	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createTableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateTable(createTableResponseRecorder, createTableRequest)
 	if createTableResponseRecorder.Code != http.StatusCreated {
@@ -53,7 +53,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 		Type:       "text",
 		IsNullable: true,
 	})
-	addRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/column_test_table/columns", bytes.NewReader(addColumnBody))
+	addRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/column_test_table/columns", bytes.NewReader(addColumnBody))
 	addRequest.SetPathValue("schema_name", "public")
 	addRequest.SetPathValue("table_name", "column_test_table")
 	addResponseRecorder := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 	}
 
 	// Add Column error (duplicate or invalid column type)
-	invalidAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/column_test_table/columns", bytes.NewReader(addColumnBody))
+	invalidAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/column_test_table/columns", bytes.NewReader(addColumnBody))
 	invalidAddRequest.SetPathValue("schema_name", "public")
 	invalidAddRequest.SetPathValue("table_name", "column_test_table")
 	invalidAddResponseRecorder := httptest.NewRecorder()
@@ -77,7 +77,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 	alterBody, _ := json.Marshal(UpdateColumnInput{
 		NewName: &newName,
 	})
-	alterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/column_test_table/columns/bio", bytes.NewReader(alterBody))
+	alterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/column_test_table/columns/bio", bytes.NewReader(alterBody))
 	alterRequest.SetPathValue("schema_name", "public")
 	alterRequest.SetPathValue("table_name", "column_test_table")
 	alterRequest.SetPathValue("column_name", "bio")
@@ -88,7 +88,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 	}
 
 	// Alter Column error (non-existent column)
-	invalidAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/column_test_table/columns/nonexistent", bytes.NewReader(alterBody))
+	invalidAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/column_test_table/columns/nonexistent", bytes.NewReader(alterBody))
 	invalidAlterRequest.SetPathValue("schema_name", "public")
 	invalidAlterRequest.SetPathValue("table_name", "column_test_table")
 	invalidAlterRequest.SetPathValue("column_name", "nonexistent")
@@ -99,7 +99,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 	}
 
 	// 3. Drop Column
-	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/column_test_table/columns/biography?cascade=true", nil)
+	dropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/column_test_table/columns/biography?cascade=true", nil)
 	dropRequest.SetPathValue("schema_name", "public")
 	dropRequest.SetPathValue("table_name", "column_test_table")
 	dropRequest.SetPathValue("column_name", "biography")
@@ -110,7 +110,7 @@ func TestDataControlPlaneHandlerColumnLifecycleIntegration(t *testing.T) {
 	}
 
 	// Drop Column error (protected schema)
-	invalidDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/core/nodes/columns/nonexistent", nil)
+	invalidDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/core/nodes/columns/nonexistent", nil)
 	invalidDropRequest.SetPathValue("schema_name", "core")
 	invalidDropRequest.SetPathValue("table_name", "nodes")
 	invalidDropRequest.SetPathValue("column_name", "nonexistent")

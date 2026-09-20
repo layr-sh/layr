@@ -24,7 +24,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		config.REST.Enabled = false
 		configManager.SetMemoryConfig(config)
 
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
@@ -35,7 +35,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidIdentifier", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/bad-schema/users", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/bad-schema/users", nil)
 		request.SetPathValue("schema_name", "bad-schema")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -44,7 +44,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("UnexposedSchema", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/private/users", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/private/users", nil)
 		request.SetPathValue("schema_name", "private")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -57,7 +57,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		config.REST.ExcludedTables = []string{"secret"}
 		configManager.SetMemoryConfig(config)
 
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/secret", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/secret", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "secret")
 		responseRecorder := httptest.NewRecorder()
@@ -69,7 +69,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("GetRecordMissingID", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users/", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users/", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -78,7 +78,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("CreateRecordEmptyBody", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", bytes.NewReader([]byte{}))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users", bytes.NewReader([]byte{}))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("CreateRecordEmptyArray", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", bytes.NewReader([]byte(`[]`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users", bytes.NewReader([]byte(`[]`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("UpdateRecordMissingID", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/", bytes.NewReader([]byte(`{"name":"Alice"}`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/data/public/users/", bytes.NewReader([]byte(`{"name":"Alice"}`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("UpdateRecordEmptyBody", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/123", bytes.NewReader([]byte{}))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/data/public/users/123", bytes.NewReader([]byte{}))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		request.SetPathValue("record_id", "123")
@@ -115,7 +115,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("UpdateRecordInvalidJSON", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/123", bytes.NewReader([]byte(`invalid`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/data/public/users/123", bytes.NewReader([]byte(`invalid`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		request.SetPathValue("record_id", "123")
@@ -125,7 +125,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("DeleteRecordMissingID", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/users/", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/data/public/users/", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -134,12 +134,12 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("BuildSelectColumns", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users?select=id,name,email", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users?select=id,name,email", nil)
 		selectedColumns := baseHandler.buildSelectColumns(request, rest.TableMetadata{})
 		assert.Equal(t, `"id", "name", "email"`, selectedColumns)
 
 		tableMetadata := rest.TableMetadata{Columns: []string{"id", "title"}}
-		defaultRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users", nil)
+		defaultRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users", nil)
 		defaultColumns := baseHandler.buildSelectColumns(defaultRequest, tableMetadata)
 		assert.Equal(t, `"id", "title"`, defaultColumns)
 	})
@@ -154,25 +154,25 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		}()
 
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.handleGetRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleGetRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.handleCreateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", nil))
+		baseHandler.handleCreateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.handleUpdateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleUpdateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.handleDeleteRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleDeleteRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
 	t.Run("CreateRecordInvalidJSONVariations", func(t *testing.T) {
 		// Bad array json
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", bytes.NewReader([]byte(`[bad json`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users", bytes.NewReader([]byte(`[bad json`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -180,7 +180,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Bad object json
-		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", bytes.NewReader([]byte(`{bad json`)))
+		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users", bytes.NewReader([]byte(`{bad json`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder = httptest.NewRecorder()
@@ -189,7 +189,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("PathParsingFallbacks", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users/rec-123", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users/rec-123", nil)
 		s, tbl, id, err := baseHandler.extractSchemaTableAndRecordID(request)
 		assert.NoError(t, err)
 		assert.Equal(t, "public", s)
@@ -197,7 +197,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		assert.Equal(t, "rec-123", id)
 
 		// Invalid short path
-		badRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/invalid", nil)
+		badRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/invalid", nil)
 		_, _, _, err = baseHandler.extractSchemaTableAndRecordID(badRequest)
 		assert.Error(t, err)
 	})
@@ -252,7 +252,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("ListRecordsInvalidQueryParams", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users?limit=not_a_number", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/users?limit=not_a_number", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -261,7 +261,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("PrepareTableContextInvalidPath", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/invalid", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/invalid", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -311,7 +311,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("CreateRecordInvalidOnConflict", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users?on_conflict=bad-id", bytes.NewReader([]byte(`[{"name":"Alice"}]`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/users?on_conflict=bad-id", bytes.NewReader([]byte(`[{"name":"Alice"}]`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
@@ -343,7 +343,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	baseHandler := NewBaseHandler(nil, configManager)
 
 	t.Run("MethodNotAllowed", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/rpc/test", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/data/public/rpc/test", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "test")
 		responseRecorder := httptest.NewRecorder()
@@ -360,7 +360,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 			configManager.SetMemoryConfig(config)
 		}()
 
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/test", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/test", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "test")
 		responseRecorder := httptest.NewRecorder()
@@ -369,14 +369,14 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("MissingNames", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
 	t.Run("InvalidIdentifier", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/bad-fn;drop", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/bad-fn;drop", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "bad-fn;drop")
 		responseRecorder := httptest.NewRecorder()
@@ -385,7 +385,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("UnexposedSchema", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/private/rpc/my_func", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/private/rpc/my_func", nil)
 		request.SetPathValue("schema_name", "private")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
@@ -394,7 +394,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidJSON", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{invalid`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{invalid`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
@@ -403,7 +403,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidArgumentNamePOST", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"bad-name":1}`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"bad-name":1}`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
@@ -412,7 +412,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidArgumentNameGET", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/rpc/my_func?bad-name=1", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/rpc/my_func?bad-name=1", nil)
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
@@ -421,7 +421,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("DatabaseNil", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"a":1}`)))
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"a":1}`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
@@ -430,7 +430,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 	})
 
 	t.Run("PathFallback", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/rpc/my_func", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/rpc/my_func", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)

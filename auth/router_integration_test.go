@@ -52,7 +52,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	}
 
 	// 3. Verify Control Plane Config endpoint
-	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
+	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
 	configResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(configResponseRecorder, configRequest)
 	if configResponseRecorder.Code != http.StatusOK {
@@ -60,7 +60,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	}
 
 	// 4. Verify Control Plane Users endpoint
-	usersRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	usersRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	usersResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(usersResponseRecorder, usersRequest)
 	if usersResponseRecorder.Code != http.StatusOK {
@@ -68,7 +68,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	}
 
 	// 5. Verify session user-prefixed alias route on public router
-	sessionAliasRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	sessionAliasRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	sessionAliasResponseRecorder := httptest.NewRecorder()
 	baseRouter.Mux().ServeHTTP(sessionAliasResponseRecorder, sessionAliasRequest)
 	if sessionAliasResponseRecorder.Code != http.StatusUnauthorized {

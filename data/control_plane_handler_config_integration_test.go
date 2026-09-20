@@ -21,7 +21,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. Get Config
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusOK {
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal config: %v", err)
 	}
-	updateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(updatePayload))
+	updateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader(updatePayload))
 	updateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(updateResponseRecorder, updateRequest)
 	if updateResponseRecorder.Code != http.StatusOK {
@@ -49,7 +49,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	// 2b. Update Config with canceled context causes 500
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	closedContextRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(updatePayload))
+	closedContextRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPut, "/v1/_/data/config", bytes.NewReader(updatePayload))
 	closedContextResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(closedContextResponseRecorder, closedContextRequest)
 	if closedContextResponseRecorder.Code != http.StatusInternalServerError {
@@ -57,7 +57,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	}
 
 	// 3. Flush Cache
-	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	flushResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleFlushCache(flushResponseRecorder, flushRequest)
 	if flushResponseRecorder.Code != http.StatusOK {
@@ -66,7 +66,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 
 	// 4. Invalidate Cache
 	invalidatePayload := `{"schema":"public","table":"users"}`
-	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(invalidatePayload)))
+	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(invalidatePayload)))
 	invalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleInvalidateCache(invalidateResponseRecorder, invalidateRequest)
 	if invalidateResponseRecorder.Code != http.StatusOK {

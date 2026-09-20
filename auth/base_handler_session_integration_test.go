@@ -78,7 +78,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		JWT:              core.JWTClaims{Subject: userID, Email: userEmail, Role: "authenticated"},
 		RefreshTokenHash: session1Hash,
 	})
-	cookieListRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	cookieListRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	cookieListRequest.Header.Set("Authorization", "Bearer "+userToken)
 	cookieListRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameSecure, Value: session1Refresh})
 	cookieListResponseRecorder := httptest.NewRecorder()
@@ -108,7 +108,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		JWT:              core.JWTClaims{Subject: userID, Email: userEmail, Role: "authenticated"},
 		RefreshTokenHash: session2Hash,
 	})
-	refreshTokenListRequest := httptest.NewRequestWithContext(refreshCtx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	refreshTokenListRequest := httptest.NewRequestWithContext(refreshCtx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	refreshTokenListRequest.Header.Set("Authorization", "Bearer "+userToken)
 	refreshTokenListRequest.Header.Set("X-Refresh-Token", session2Refresh)
 	refreshTokenListResponseRecorder := httptest.NewRecorder()
@@ -137,7 +137,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		UserID: userID,
 		JWT:    session3JWTClaims,
 	})
-	sessionIDListRequest := httptest.NewRequestWithContext(session3Ctx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	sessionIDListRequest := httptest.NewRequestWithContext(session3Ctx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	sessionIDListRequest.Header.Set("Authorization", "Bearer "+session3Token)
 	sessionIDListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(sessionIDListResponseRecorder, sessionIDListRequest)
@@ -172,7 +172,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		UserID: singleUserID,
 		JWT:    core.JWTClaims{Subject: singleUserID, Role: "authenticated"},
 	})
-	singleListRequest := httptest.NewRequestWithContext(singleCtx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+	singleListRequest := httptest.NewRequestWithContext(singleCtx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	singleListRequest.Header.Set("Authorization", "Bearer "+singleToken)
 	singleListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(singleListResponseRecorder, singleListRequest)
@@ -183,7 +183,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	}
 
 	// 4. Revoke Single Session -> 204
-	revokeRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodDelete, "/api/v1/auth/user/sessions/"+session1ID, nil)
+	revokeRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodDelete, "/v1/auth/user/sessions/"+session1ID, nil)
 	revokeRequest.SetPathValue("session_id", session1ID)
 	revokeRequest.Header.Set("Authorization", "Bearer "+userToken)
 	revokeResponseRecorder := httptest.NewRecorder()
@@ -204,7 +204,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 
 	// 5. Revoke Non-Existent Session -> 404
 	ghostSessionID := "01918a24-9999-7000-8000-000000000099"
-	ghostRevokeRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodDelete, "/api/v1/auth/user/sessions/"+ghostSessionID, nil)
+	ghostRevokeRequest := httptest.NewRequestWithContext(cookieCtx, http.MethodDelete, "/v1/auth/user/sessions/"+ghostSessionID, nil)
 	ghostRevokeRequest.SetPathValue("session_id", ghostSessionID)
 	ghostRevokeRequest.Header.Set("Authorization", "Bearer "+userToken)
 	ghostRevokeResponseRecorder := httptest.NewRecorder()
@@ -218,7 +218,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		UserID: userID,
 		JWT:    core.JWTClaims{Subject: userID, Role: "authenticated"},
 	})
-	ambiguousRequest := httptest.NewRequestWithContext(ambiguousCtx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+	ambiguousRequest := httptest.NewRequestWithContext(ambiguousCtx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 	ambiguousRequest.Header.Set("Authorization", "Bearer "+userToken)
 	ambiguousResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRevokeOtherSessions(ambiguousResponseRecorder, ambiguousRequest)
@@ -246,7 +246,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		JWT:    session4JWTClaims,
 	})
 
-	revokeOthersWithSessionIDRequest := httptest.NewRequestWithContext(session4Ctx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+	revokeOthersWithSessionIDRequest := httptest.NewRequestWithContext(session4Ctx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 	revokeOthersWithSessionIDRequest.Header.Set("Authorization", "Bearer "+session4Token)
 	revokeOthersWithSessionIDResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRevokeOtherSessions(revokeOthersWithSessionIDResponseRecorder, revokeOthersWithSessionIDRequest)
@@ -274,7 +274,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		JWT:              core.JWTClaims{Subject: userID, Role: "authenticated"},
 		RefreshTokenHash: session5Hash,
 	})
-	revokeOthersRequest := httptest.NewRequestWithContext(session5Ctx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+	revokeOthersRequest := httptest.NewRequestWithContext(session5Ctx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 	revokeOthersRequest.Header.Set("Authorization", "Bearer "+userToken)
 	revokeOthersRequest.Header.Set("X-Refresh-Token", session5Refresh)
 	revokeOthersResponseRecorder := httptest.NewRecorder()
@@ -293,7 +293,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		UserID: userID,
 		JWT:    core.JWTClaims{Subject: userID, Role: "authenticated"},
 	})
-	singleActiveRequest := httptest.NewRequestWithContext(singleActiveCtx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+	singleActiveRequest := httptest.NewRequestWithContext(singleActiveCtx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 	singleActiveRequest.Header.Set("Authorization", "Bearer "+userToken)
 	singleActiveResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRevokeOtherSessions(singleActiveResponseRecorder, singleActiveRequest)
@@ -316,7 +316,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 			JWT:    core.JWTClaims{Subject: userID, Role: "authenticated"},
 		})
 
-		canceledListRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodGet, "/api/v1/auth/user/sessions", nil)
+		canceledListRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodGet, "/v1/auth/user/sessions", nil)
 		canceledListRequest.Header.Set("Authorization", "Bearer "+userToken)
 		canceledListResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleListSessions(canceledListResponseRecorder, canceledListRequest)
@@ -324,7 +324,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 			t.Fatalf("expected 500 on canceled list sessions, got: %d", canceledListResponseRecorder.Code)
 		}
 
-		canceledRevokeRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodDelete, "/api/v1/auth/user/sessions/"+session2ID, nil)
+		canceledRevokeRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodDelete, "/v1/auth/user/sessions/"+session2ID, nil)
 		canceledRevokeRequest.SetPathValue("session_id", session2ID)
 		canceledRevokeRequest.Header.Set("Authorization", "Bearer "+userToken)
 		canceledRevokeResponseRecorder := httptest.NewRecorder()
@@ -333,7 +333,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 			t.Fatalf("expected 404 on canceled revoke session, got: %d", canceledRevokeResponseRecorder.Code)
 		}
 
-		canceledRevokeOthersRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+		canceledRevokeOthersRequest := httptest.NewRequestWithContext(canceledAuthedCtx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 		canceledRevokeOthersRequest.Header.Set("Authorization", "Bearer "+userToken)
 		canceledRevokeOthersResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleRevokeOtherSessions(canceledRevokeOthersResponseRecorder, canceledRevokeOthersRequest)
@@ -345,7 +345,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 			UserID: userID,
 			JWT:    core.JWTClaims{Subject: userID, Role: "authenticated", SessionID: session5ID},
 		})
-		canceledRevokeOthersWithSessionRequest := httptest.NewRequestWithContext(canceledRevokeOthersWithSessionCtx, http.MethodPost, "/api/v1/auth/user/sessions/revoke-others", nil)
+		canceledRevokeOthersWithSessionRequest := httptest.NewRequestWithContext(canceledRevokeOthersWithSessionCtx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 		canceledRevokeOthersWithSessionRequest.Header.Set("Authorization", "Bearer "+userToken)
 		canceledRevokeOthersWithSessionResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleRevokeOtherSessions(canceledRevokeOthersWithSessionResponseRecorder, canceledRevokeOthersWithSessionRequest)

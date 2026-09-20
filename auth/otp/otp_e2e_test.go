@@ -152,8 +152,8 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	authServer := newSimulatedAuthServer(dispatcher)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/api/v1/auth/otp/send", authServer.handleSend)
-	serveMux.HandleFunc("/api/v1/auth/otp/verify", authServer.handleVerify)
+	serveMux.HandleFunc("/v1/auth/otp/send", authServer.handleSend)
+	serveMux.HandleFunc("/v1/auth/otp/verify", authServer.handleVerify)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -164,7 +164,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 
 	// 1. Send OTP Request
 	sendPayload := `{"recipient":"` + userPhoneNumber + `","purpose":"login"}`
-	sendResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/send", sendPayload)
+	sendResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/send", sendPayload)
 	defer func() { _ = sendResponse.Body.Close() }()
 
 	if sendResponse.StatusCode != http.StatusOK {
@@ -184,7 +184,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 		if receivedCode == "000000" {
 			verifyPayload = `{"recipient":"` + userPhoneNumber + `","code":"111111"}`
 		}
-		failedResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/verify", verifyPayload)
+		failedResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/verify", verifyPayload)
 		_ = failedResponse.Body.Close()
 
 		if failedResponse.StatusCode != http.StatusUnauthorized {
@@ -194,7 +194,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 
 	// 6th attempt with correct code should be locked out (429 Too Many Requests)
 	lockedOutPayload := `{"recipient":"` + userPhoneNumber + `","code":"` + receivedCode + `"}`
-	lockedOutResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/verify", lockedOutPayload)
+	lockedOutResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/verify", lockedOutPayload)
 	defer func() { _ = lockedOutResponse.Body.Close() }()
 
 	if lockedOutResponse.StatusCode != http.StatusTooManyRequests {
@@ -202,7 +202,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 4. Successful login flow with fresh code
-	sendFreshResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/send", sendPayload)
+	sendFreshResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/send", sendPayload)
 	_ = sendFreshResponse.Body.Close()
 
 	freshCode := dispatcher.LastMessage(userPhoneNumber)
@@ -211,7 +211,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	successfulPayload := `{"recipient":"` + userPhoneNumber + `","code":"` + freshCode + `"}`
-	successfulResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/verify", successfulPayload)
+	successfulResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/verify", successfulPayload)
 	defer func() { _ = successfulResponse.Body.Close() }()
 
 	if successfulResponse.StatusCode != http.StatusOK {
@@ -230,7 +230,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 5. Consumed code replay prevention
-	replayResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/verify", successfulPayload)
+	replayResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/verify", successfulPayload)
 	defer func() { _ = replayResponse.Body.Close() }()
 
 	if replayResponse.StatusCode != http.StatusNotFound {
@@ -238,7 +238,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 6. Expired code rejection
-	sendExpiredResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/send", sendPayload)
+	sendExpiredResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/send", sendPayload)
 	_ = sendExpiredResponse.Body.Close()
 
 	expiredCode := dispatcher.LastMessage(userPhoneNumber)
@@ -248,7 +248,7 @@ func TestOtpAuthenticationFlowE2E(t *testing.T) {
 	authServer.mutex.Unlock()
 
 	expiredPayload := `{"recipient":"` + userPhoneNumber + `","code":"` + expiredCode + `"}`
-	verifyExpiredResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/api/v1/auth/otp/verify", expiredPayload)
+	verifyExpiredResponse := executePostRequest(ctx, t, testClient, testServer.URL+"/v1/auth/otp/verify", expiredPayload)
 	defer func() { _ = verifyExpiredResponse.Body.Close() }()
 
 	if verifyExpiredResponse.StatusCode != http.StatusBadRequest {

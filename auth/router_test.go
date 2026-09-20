@@ -39,21 +39,21 @@ func TestAuthRouterUnit(t *testing.T) {
 	if publicOpenAPISpec.Paths.Value("/.well-known/openid-configuration") == nil {
 		t.Fatal("expected /.well-known/openid-configuration route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/auth/sign-in") == nil {
-		t.Fatal("expected /api/v1/auth/sign-in route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/auth/sign-in") == nil {
+		t.Fatal("expected /v1/auth/sign-in route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/auth/user") == nil {
-		t.Fatal("expected /api/v1/auth/user route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/auth/user") == nil {
+		t.Fatal("expected /v1/auth/user route in public OpenAPI spec")
 	}
 
 	controlPlaneOpenAPISpec := controlPlaneRouter.OutputOpenAPISpec()
 	if controlPlaneOpenAPISpec == nil {
 		t.Fatal("expected non-nil control plane OpenAPI specification")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/auth/config") == nil {
-		t.Fatal("expected /api/v1/_/auth/config route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/auth/config") == nil {
+		t.Fatal("expected /v1/_/auth/config route in control plane OpenAPI spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/auth/users") == nil {
-		t.Fatal("expected /api/v1/_/auth/users route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/auth/users") == nil {
+		t.Fatal("expected /v1/_/auth/users route in control plane OpenAPI spec")
 	}
 }

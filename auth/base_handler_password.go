@@ -53,7 +53,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, signUpInput.CaptchaToken, "/api/v1/auth/sign-up") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signUpInput.CaptchaToken, "/v1/auth/sign-up") {
 		return
 	}
 	if !handler.checkPasswordBreach(responseWriter, request, signUpInput.Password, signUpInput.Email) {
@@ -190,7 +190,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	config := handler.configManager.Get()
 	clientIP := core.ExtractRequestClientIP(request)
 
-	if !handler.checkCaptcha(responseWriter, request, clientIP, signInInput.CaptchaToken, "/api/v1/auth/sign-in") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signInInput.CaptchaToken, "/v1/auth/sign-in") {
 		return
 	}
 
@@ -201,7 +201,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 			if handler.eventBus != nil {
 				handler.eventBus.Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
 					Identifier:   identifier,
-					Endpoint:     "/api/v1/auth/sign-in",
+					Endpoint:     "/v1/auth/sign-in",
 					AttemptCount: count,
 					IPAddress:    clientIP,
 					UserAgent:    request.UserAgent(),
@@ -330,7 +330,7 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, requestPasswordResetInput.CaptchaToken, "/api/v1/auth/password-reset/request") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, requestPasswordResetInput.CaptchaToken, "/v1/auth/password-reset/request") {
 		return
 	}
 

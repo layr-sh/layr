@@ -17,7 +17,7 @@ func TestDataControlPlaneHandlerSQLScopeForbiddenUnit(t *testing.T) {
 	service.SetServiceAccountManager(serviceAccountManager)
 	controlPlaneHandler := service.controlPlaneHandler
 
-	forbiddenSQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(`{"sql":"SELECT 1"}`)))
+	forbiddenSQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(`{"sql":"SELECT 1"}`)))
 	forbiddenSQLRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenSQLResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(forbiddenSQLResponseRecorder, forbiddenSQLRequest)
@@ -32,7 +32,7 @@ func TestDataControlPlaneHandlerSQLValidationUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Method Not Allowed
-	invalidMethodRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/sql", nil)
+	invalidMethodRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/sql", nil)
 	invalidMethodResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(invalidMethodResponseRecorder, invalidMethodRequest)
 	if invalidMethodResponseRecorder.Code != http.StatusMethodNotAllowed {
@@ -40,7 +40,7 @@ func TestDataControlPlaneHandlerSQLValidationUnit(t *testing.T) {
 	}
 
 	// Malformed JSON
-	malformedJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte("not json")))
+	malformedJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte("not json")))
 	malformedJSONResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(malformedJSONResponseRecorder, malformedJSONRequest)
 	if malformedJSONResponseRecorder.Code != http.StatusBadRequest {
@@ -48,7 +48,7 @@ func TestDataControlPlaneHandlerSQLValidationUnit(t *testing.T) {
 	}
 
 	// Empty SQL query
-	emptySQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(`{"sql":""}`)))
+	emptySQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(`{"sql":""}`)))
 	emptySQLResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleExecuteSQL(emptySQLResponseRecorder, emptySQLRequest)
 	if emptySQLResponseRecorder.Code != http.StatusBadRequest {

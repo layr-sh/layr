@@ -396,7 +396,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	botChallengeFailedEvent := NewBotChallengeFailedEvent("192.168.1.1", BotChallengeFailedEventData{
 		IPAddress: "192.168.1.1",
 		Provider:  "turnstile",
-		Endpoint:  "/api/v1/auth/sign-in",
+		Endpoint:  "/v1/auth/sign-in",
 	})
 	if botChallengeFailedEvent.Type != "auth.threat.bot_challenge_failed" {
 		t.Fatalf("unexpected bot challenge event type: %s", botChallengeFailedEvent.Type)
@@ -482,7 +482,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 27. RateLimitExceeded
 	rateLimitExceededEvent := NewRateLimitExceededEvent("test@example.com", RateLimitExceededEventData{
 		Identifier:   "test@example.com",
-		Endpoint:     "/api/v1/auth/sign-in",
+		Endpoint:     "/v1/auth/sign-in",
 		AttemptCount: 6,
 		IPAddress:    "192.168.1.50",
 		UserAgent:    "Mozilla/5.0",

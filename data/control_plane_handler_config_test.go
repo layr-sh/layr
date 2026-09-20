@@ -16,7 +16,7 @@ func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. handleGetConfig success
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusOK {
@@ -32,7 +32,7 @@ func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 	}
 
 	// 3. handleUpdateConfig invalid JSON
-	invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte("{invalid")))
+	invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte("{invalid")))
 	invalidJSONResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidJSONResponseRecorder, invalidJSONRequest)
 	if invalidJSONResponseRecorder.Code != http.StatusBadRequest {
@@ -40,7 +40,7 @@ func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 	}
 
 	// 4. handleUpdateConfig with nil configManager
-	validJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{"schemas":["public"]}`)))
+	validJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"schemas":["public"]}`)))
 	nilConfigUpdateResponseRecorder := httptest.NewRecorder()
 	handlerNoConfigControlPlaneHandler.handleUpdateConfig(nilConfigUpdateResponseRecorder, validJSONRequest)
 	if nilConfigUpdateResponseRecorder.Code != http.StatusInternalServerError {
@@ -56,7 +56,7 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden Get
-	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	forbiddenGetRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenGetResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(forbiddenGetResponseRecorder, forbiddenGetRequest)
@@ -65,7 +65,7 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden Update
-	forbiddenUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{}`)))
+	forbiddenUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{}`)))
 	forbiddenUpdateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenUpdateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(forbiddenUpdateResponseRecorder, forbiddenUpdateRequest)
@@ -74,7 +74,7 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden Flush
-	forbiddenFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	forbiddenFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	forbiddenFlushRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenFlushResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleFlushCache(forbiddenFlushResponseRecorder, forbiddenFlushRequest)
@@ -83,7 +83,7 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden Invalidate
-	forbiddenInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", nil)
+	forbiddenInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", nil)
 	forbiddenInvalidateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenInvalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleInvalidateCache(forbiddenInvalidateResponseRecorder, forbiddenInvalidateRequest)
@@ -98,7 +98,7 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Flush Cache wrong method
-	invalidMethodFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/cache/flush", nil)
+	invalidMethodFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/cache/flush", nil)
 	invalidMethodFlushResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleFlushCache(invalidMethodFlushResponseRecorder, invalidMethodFlushRequest)
 	if invalidMethodFlushResponseRecorder.Code != http.StatusMethodNotAllowed {
@@ -106,7 +106,7 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	}
 
 	// Flush Cache success
-	validFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	validFlushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	validFlushResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleFlushCache(validFlushResponseRecorder, validFlushRequest)
 	if validFlushResponseRecorder.Code != http.StatusOK {
@@ -114,7 +114,7 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	}
 
 	// Invalidate Cache wrong method
-	invalidMethodInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/cache/invalidate", nil)
+	invalidMethodInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/cache/invalidate", nil)
 	invalidMethodInvalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleInvalidateCache(invalidMethodInvalidateResponseRecorder, invalidMethodInvalidateRequest)
 	if invalidMethodInvalidateResponseRecorder.Code != http.StatusMethodNotAllowed {
@@ -122,7 +122,7 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	}
 
 	// Invalidate Cache success
-	validInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
+	validInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
 	validInvalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleInvalidateCache(validInvalidateResponseRecorder, validInvalidateRequest)
 	if validInvalidateResponseRecorder.Code != http.StatusOK {
@@ -130,7 +130,7 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	}
 
 	// Invalidate Cache with pattern
-	patternInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"pattern":"items:*"}`)))
+	patternInvalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"pattern":"items:*"}`)))
 	patternInvalidateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleInvalidateCache(patternInvalidateResponseRecorder, patternInvalidateRequest)
 	if patternInvalidateResponseRecorder.Code != http.StatusOK {

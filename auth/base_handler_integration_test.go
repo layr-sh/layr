@@ -63,7 +63,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	userEmail := "alice.handler@example.com"
 	userPassword := "SuperStrongPassword123!"
 
-	// 1. Sign Up via POST /api/v1/auth/sign-up
+	// 1. Sign Up via POST /v1/auth/sign-up
 	signupPayload := map[string]any{
 		"email":    userEmail,
 		"password": userPassword,
@@ -72,7 +72,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		},
 	}
 	encodedSignup, _ := json.Marshal(signupPayload)
-	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(encodedSignup))
+	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(encodedSignup))
 	signupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupResponseRecorder, signupRequest)
 
@@ -88,13 +88,13 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("invalid sign up response: %+v", signupAuthTokenResponse)
 	}
 
-	// 2. Sign In via POST /api/v1/auth/sign-in
+	// 2. Sign In via POST /v1/auth/sign-in
 	loginPayload := map[string]any{
 		"email":    userEmail,
 		"password": userPassword,
 	}
 	encodedLogin, _ := json.Marshal(loginPayload)
-	loginRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(encodedLogin))
+	loginRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(encodedLogin))
 	loginResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(loginResponseRecorder, loginRequest)
 
@@ -105,12 +105,12 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	var loginAuthTokenResponse AuthTokenResponse
 	_ = json.NewDecoder(loginResponseRecorder.Body).Decode(&loginAuthTokenResponse)
 
-	// 3. Token Refresh via POST /api/v1/auth/token/refresh
+	// 3. Token Refresh via POST /v1/auth/token/refresh
 	refreshPayload := map[string]any{
 		"refresh_token": loginAuthTokenResponse.RefreshToken,
 	}
 	encodedRefresh, _ := json.Marshal(refreshPayload)
-	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(encodedRefresh))
+	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(encodedRefresh))
 	refreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(refreshResponseRecorder, refreshRequest)
 
@@ -129,7 +129,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
-	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
+	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
 	otpSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSendResponseRecorder, otpSendRequest)
 
@@ -149,7 +149,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
-	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
+	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusBadRequest {
@@ -163,7 +163,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
-	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
+	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
 	otpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
 	if otpVerifyResponseRecorder.Code != http.StatusOK {
@@ -177,7 +177,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedMissingOTP, _ := json.Marshal(missingOTPPayload)
-	missingOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedMissingOTP))
+	missingOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedMissingOTP))
 	missingOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(missingOTPResponseRecorder, missingOTPRequest)
 	if missingOTPResponseRecorder.Code != http.StatusBadRequest {
@@ -190,7 +190,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
-	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
+	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
 	phoneOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(phoneOTPResponseRecorder, phoneOTPRequest)
 	if phoneOTPResponseRecorder.Code != http.StatusNoContent {
@@ -207,7 +207,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"code":      phoneCode,
 	}
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
@@ -219,7 +219,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"email": userEmail,
 	}
 	encodedReset, _ := json.Marshal(resetPayload)
-	resetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(encodedReset))
+	resetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/request", bytes.NewReader(encodedReset))
 	resetResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRequestPasswordReset(resetResponseRecorder, resetRequest)
 	if resetResponseRecorder.Code != http.StatusNoContent {
@@ -238,7 +238,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"password": "NewSuperPassword123!",
 	}
 	encodedWrongConfirm, _ := json.Marshal(wrongConfirmPayload)
-	wrongConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(encodedWrongConfirm))
+	wrongConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/confirm", bytes.NewReader(encodedWrongConfirm))
 	wrongConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmPasswordReset(wrongConfirmResponseRecorder, wrongConfirmRequest)
 	if wrongConfirmResponseRecorder.Code != http.StatusBadRequest {
@@ -252,7 +252,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"password": "NewSuperPassword123!",
 	}
 	encodedValidConfirm, _ := json.Marshal(validConfirmPayload)
-	validConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(encodedValidConfirm))
+	validConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/confirm", bytes.NewReader(encodedValidConfirm))
 	validConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmPasswordReset(validConfirmResponseRecorder, validConfirmRequest)
 	if validConfirmResponseRecorder.Code != http.StatusOK {
@@ -265,7 +265,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"user_name": "Alice",
 	}
 	encodedPasskeyOptions, _ := json.Marshal(passkeyOptionsPayload)
-	passkeyOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(encodedPasskeyOptions))
+	passkeyOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-up", bytes.NewReader(encodedPasskeyOptions))
 	passkeyOptionsResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(passkeyOptionsResponseRecorder, passkeyOptionsRequest)
 	if passkeyOptionsResponseRecorder.Code != http.StatusOK {
@@ -285,7 +285,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"friendly_name": "Alice MacBook",
 	}
 	encodedPasskeyVerify, _ := json.Marshal(passkeyVerifyPayload)
-	passkeyVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(encodedPasskeyVerify))
+	passkeyVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-up/verify", bytes.NewReader(encodedPasskeyVerify))
 	passkeyVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(passkeyVerifyResponseRecorder, passkeyVerifyRequest)
 	if passkeyVerifyResponseRecorder.Code != http.StatusOK && passkeyVerifyResponseRecorder.Code != http.StatusCreated {
@@ -293,7 +293,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 7. Passkey Sign In Options & Verify
-	passkeySignInOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
+	passkeySignInOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	passkeySignInOptionsResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignIn(passkeySignInOptionsResponseRecorder, passkeySignInOptionsRequest)
 	if passkeySignInOptionsResponseRecorder.Code != http.StatusOK {
@@ -310,7 +310,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"credential_id": "cred-id-12345",
 	}
 	encodedSignInVerify, _ := json.Marshal(passkeySignInVerifyPayload)
-	passkeySignInVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(encodedSignInVerify))
+	passkeySignInVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-in/verify", bytes.NewReader(encodedSignInVerify))
 	passkeySignInVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(passkeySignInVerifyResponseRecorder, passkeySignInVerifyRequest)
 	if passkeySignInVerifyResponseRecorder.Code != http.StatusOK {
@@ -322,7 +322,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		"user_id": signupAuthTokenResponse.User.ID,
 	}
 	encodedMFASetup, _ := json.Marshal(mfaSetupPayload)
-	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
+	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
 	mfaSetupRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
@@ -343,7 +343,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 			"code":    currentTOTPCode,
 		}
 		encodedMFAVerify, _ := json.Marshal(mfaVerifyPayload)
-		mfaVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedMFAVerify))
+		mfaVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedMFAVerify))
 		mfaVerifyRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 		mfaVerifyResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleVerifyMFA(mfaVerifyResponseRecorder, mfaVerifyRequest)
@@ -378,7 +378,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 	configManager.Set(activeConfig)
 
-	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:8080/callback&state=valid-state", nil)
+	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:8080/callback&state=valid-state", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAuthorizeOAuth(oauthAuthResponseRecorder, oauthAuthRequest)
@@ -386,7 +386,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 302 redirect on /oauth/google/authorize, got: %d", oauthAuthResponseRecorder.Code)
 	}
 
-	oauthCallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=valid-state", nil)
+	oauthCallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-code&state=valid-state", nil)
 	oauthCallbackRequest.SetPathValue("provider", "google")
 	oauthCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthCallbackResponseRecorder, oauthCallbackRequest)
@@ -394,7 +394,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected successful oauth callback, got: %d (body: %s)", oauthCallbackResponseRecorder.Code, oauthCallbackResponseRecorder.Body.String())
 	}
 
-	// 10. User Export via POST /api/v1/auth/users/{user_id}/export
+	// 10. User Export via POST /v1/auth/users/{user_id}/export
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
 		VALUES ($1, 'github', 'gh_user_123', '{"login":"alice"}'::jsonb, clock_timestamp(), clock_timestamp())
@@ -403,7 +403,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test identity for export: %v", err)
 	}
 
-	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
+	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
 	exportRequest.SetPathValue("user_id", signupAuthTokenResponse.User.ID)
 	exportRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
@@ -435,7 +435,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 			Role:    "authenticated",
 		},
 	})
-	nonExistentExportRequest := httptest.NewRequestWithContext(nonExistentCtx, http.MethodPost, "/api/v1/auth/users/"+nonExistentUserID+"/export", nil)
+	nonExistentExportRequest := httptest.NewRequestWithContext(nonExistentCtx, http.MethodPost, "/v1/auth/users/"+nonExistentUserID+"/export", nil)
 	nonExistentExportRequest.SetPathValue("user_id", nonExistentUserID)
 	nonExistentExportRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentExportResponseRecorder := httptest.NewRecorder()
@@ -444,10 +444,10 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 404 Not Found on non-existent user export, got: %d", nonExistentExportResponseRecorder.Code)
 	}
 
-	// 11. Sign Out via POST /api/v1/auth/sign-out with active refresh token to trigger SessionDeletedEvent
+	// 11. Sign Out via POST /v1/auth/sign-out with active refresh token to trigger SessionDeletedEvent
 	_, _ = db.Exec(ctx, "UPDATE auth.sessions SET client_id = 'client-signout-test'")
 	signOutPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: refreshAuthTokenResponse.RefreshToken})
-	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", bytes.NewReader(signOutPayload))
+	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", bytes.NewReader(signOutPayload))
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutResponseRecorder, signOutRequest)
 	if signOutResponseRecorder.Code != http.StatusOK {
@@ -505,14 +505,14 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	baseHandler.SetKVStore(databaseKVStore)
 	baseHandler.SetEventBus(eventBus)
 
-	// 1. Anonymous Sign-In (POST /api/v1/auth/anonymous)
+	// 1. Anonymous Sign-In (POST /v1/auth/anonymous)
 	anonymousPayload, _ := json.Marshal(map[string]any{
 		"properties": map[string]any{
 			"theme":      "dark",
 			"cart_count": 3,
 		},
 	})
-	anonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", bytes.NewReader(anonymousPayload))
+	anonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", bytes.NewReader(anonymousPayload))
 	anonymousResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(anonymousResponseRecorder, anonymousRequest)
 
@@ -573,7 +573,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatal("expected auth.user.signed_up event to be emitted with anonymous user id")
 	}
 
-	// 2. In-Place Auto-Conversion via Sign-Up (POST /api/v1/auth/sign-up)
+	// 2. In-Place Auto-Conversion via Sign-Up (POST /v1/auth/sign-up)
 	targetEmail := fmt.Sprintf("converted_%d@example.com", time.Now().UnixNano())
 	targetPassword := "ConvertedSecurePassword123!"
 
@@ -584,7 +584,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 			"subscribed": true,
 		},
 	})
-	signupConversionRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
+	signupConversionRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
 	signupConversionRequest.Header.Set("Authorization", "Bearer "+anonymousAuthTokenResponse.AccessToken)
 	signupConversionResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupConversionResponseRecorder, signupConversionRequest)
@@ -648,7 +648,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		"email":    brandNewEmail,
 		"password": brandNewPassword,
 	})
-	brandNewRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(brandNewPayload))
+	brandNewRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(brandNewPayload))
 	brandNewResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(brandNewResponseRecorder, brandNewRequest)
 
@@ -671,8 +671,8 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("expected email %s, got: %v", brandNewEmail, brandNewAuthTokenResponse.User.Email)
 	}
 
-	// 4. In-Place Auto-Conversion via OTP Verify (POST /api/v1/auth/otp/verify)
-	secondAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	// 4. In-Place Auto-Conversion via OTP Verify (POST /v1/auth/otp/verify)
+	secondAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	secondAnonymousResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(secondAnonymousResponseRecorder, secondAnonymousRequest)
 	if secondAnonymousResponseRecorder.Code != http.StatusOK {
@@ -703,7 +703,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		"code":      otpCode,
 		"purpose":   "sign_in",
 	})
-	otpVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
+	otpVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
 	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousAuthTokenResponse.AccessToken)
 	otpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
@@ -734,7 +734,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 
 	// 5. Updating User Email converts anonymous user to regular user
-	thirdAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	thirdAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	thirdAnonymousResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(thirdAnonymousResponseRecorder, thirdAnonymousRequest)
 	var thirdAnonymousAuthTokenResponse AuthTokenResponse
@@ -743,7 +743,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updateEmail := fmt.Sprintf("update_email_%d@example.com", time.Now().UnixNano())
 	patchEmailPayload, _ := json.Marshal(UpdateUserEmailInput{Email: updateEmail})
-	patchEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
+	patchEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
 	patchEmailRequest.Header.Set("Authorization", "Bearer "+thirdAnonymousAuthTokenResponse.AccessToken)
 	patchEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(patchEmailResponseRecorder, patchEmailRequest)
@@ -766,7 +766,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 
 	// 6. Updating User Phone converts anonymous user to regular user
-	fourthAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	fourthAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	fourthAnonymousResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(fourthAnonymousResponseRecorder, fourthAnonymousRequest)
 	var fourthAnonymousAuthTokenResponse AuthTokenResponse
@@ -775,7 +775,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updatePhone := fmt.Sprintf("+1415%07d", time.Now().UnixNano()%10000000)
 	patchPhonePayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: updatePhone})
-	patchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
+	patchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
 	patchPhoneRequest.Header.Set("Authorization", "Bearer "+fourthAnonymousAuthTokenResponse.AccessToken)
 	patchPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(patchPhoneResponseRecorder, patchPhoneRequest)
@@ -832,7 +832,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
-	phoneSignupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(phoneSignupPayload))
+	phoneSignupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(phoneSignupPayload))
 	phoneSignupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(phoneSignupResponseRecorder, phoneSignupRequest)
 	if phoneSignupResponseRecorder.Code != http.StatusOK {
@@ -844,7 +844,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: "WrongPassword999!",
 	})
-	wrongPassRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(wrongPassPayload))
+	wrongPassRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(wrongPassPayload))
 	wrongPassResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(wrongPassResponseRecorder, wrongPassRequest)
 	if wrongPassResponseRecorder.Code != http.StatusUnauthorized {
@@ -856,7 +856,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    "+12025550100",
 		Password: "Password123!",
 	})
-	missingUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(missingUserPayload))
+	missingUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(missingUserPayload))
 	missingUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(missingUserResponseRecorder, missingUserRequest)
 	if missingUserResponseRecorder.Code != http.StatusUnauthorized {
@@ -868,7 +868,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
-	validPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validPhonePayload))
+	validPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPhonePayload))
 	validPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(validPhoneResponseRecorder, validPhoneRequest)
 	if validPhoneResponseRecorder.Code != http.StatusOK {
@@ -882,7 +882,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 			Email:    rateLimitedEmail,
 			Password: "WrongPassword123!",
 		})
-		rateAttemptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(rateAttemptPayload))
+		rateAttemptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(rateAttemptPayload))
 		rateAttemptResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleSignIn(rateAttemptResponseRecorder, rateAttemptRequest)
 	}
@@ -891,7 +891,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    rateLimitedEmail,
 		Password: "WrongPassword123!",
 	})
-	rateBlockedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(rateBlockedPayload))
+	rateBlockedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(rateBlockedPayload))
 	rateBlockedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(rateBlockedResponseRecorder, rateBlockedRequest)
 	if rateBlockedResponseRecorder.Code != http.StatusTooManyRequests {
@@ -913,7 +913,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
-	lockedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(lockedSignInPayload))
+	lockedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(lockedSignInPayload))
 	lockedSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(lockedSignInResponseRecorder, lockedSignInRequest)
 	if lockedSignInResponseRecorder.Code != http.StatusLocked {
@@ -929,12 +929,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    conflictEmail,
 		Password: "Password123!",
 	})
-	conflictSignupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictSignupPayload))
+	conflictSignupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictSignupPayload))
 	conflictSignupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictSignupResponseRecorder, conflictSignupRequest)
 
 	// Create anonymous user
-	anonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	anonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	anonResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(anonResponseRecorder, anonRequest)
 	var anonAuthTokenResponse AuthTokenResponse
@@ -945,7 +945,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    conflictEmail,
 		Password: "NewPassword123!",
 	})
-	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	conflictEmailRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictEmailResponseRecorder, conflictEmailRequest)
@@ -958,7 +958,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: "NewPassword123!",
 	})
-	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	conflictPhoneRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictPhoneResponseRecorder, conflictPhoneRequest)
@@ -979,7 +979,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    "block_convert@example.com",
 		Password: "Password123!",
 	})
-	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	blockConvertRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	blockConvertResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(blockConvertResponseRecorder, blockConvertRequest)
@@ -992,7 +992,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	canceledAnonRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/auth/anonymous", nil)
+	canceledAnonRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/v1/auth/anonymous", nil)
 	canceledAnonResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(canceledAnonResponseRecorder, canceledAnonRequest)
 	if canceledAnonResponseRecorder.Code != http.StatusInternalServerError {
@@ -1003,7 +1003,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    "canceled_signup@example.com",
 		Password: "Password123!",
 	})
-	canceledSignupRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(canceledSignupPayload))
+	canceledSignupRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(canceledSignupPayload))
 	canceledSignupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(canceledSignupResponseRecorder, canceledSignupRequest)
 	if canceledSignupResponseRecorder.Code != http.StatusInternalServerError {
@@ -1018,7 +1018,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	// A) Missing / revoked refresh token in DB -> 401
 	revokedRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: "revoked-or-missing-token"})
-	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(revokedRefreshPayload))
+	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(revokedRefreshPayload))
 	revokedRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(revokedRefreshResponseRecorder, revokedRefreshRequest)
 	if revokedRefreshResponseRecorder.Code != http.StatusUnauthorized {
@@ -1040,7 +1040,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	expiredRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: expiredToken})
-	expiredRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(expiredRefreshPayload))
+	expiredRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(expiredRefreshPayload))
 	expiredRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(expiredRefreshResponseRecorder, expiredRefreshRequest)
 	if expiredRefreshResponseRecorder.Code != http.StatusUnauthorized {
@@ -1071,7 +1071,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	deletedUserRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: deletedUserToken})
-	deletedUserRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(deletedUserRefreshPayload))
+	deletedUserRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(deletedUserRefreshPayload))
 	deletedUserRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(deletedUserRefreshResponseRecorder, deletedUserRefreshRequest)
 	if deletedUserRefreshResponseRecorder.Code != http.StatusUnauthorized {
@@ -1089,7 +1089,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    conflictEmail,
 		Password: "Password123!",
 	})
-	validDBSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", bytes.NewReader(validDBSignInPayload))
+	validDBSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validDBSignInPayload))
 	validDBSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(validDBSignInResponseRecorder, validDBSignInRequest)
 	if validDBSignInRecCode := validDBSignInResponseRecorder.Code; validDBSignInRecCode != http.StatusOK {
@@ -1102,7 +1102,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	validDBRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: validDBAuthTokenResponse.RefreshToken})
-	validDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(validDBRefreshPayload))
+	validDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(validDBRefreshPayload))
 	validDBRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(validDBRefreshResponseRecorder, validDBRefreshRequest)
 	if validDBRefreshResponseRecorder.Code != http.StatusOK {
@@ -1115,7 +1115,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	// Locked user DB token refresh -> 423
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE email = $1", conflictEmail)
 	lockedDBRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: rotatedAuthTokenResponse.RefreshToken})
-	lockedDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(lockedDBRefreshPayload))
+	lockedDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(lockedDBRefreshPayload))
 	lockedDBRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(lockedDBRefreshResponseRecorder, lockedDBRefreshRequest)
 	if lockedDBRefreshResponseRecorder.Code != http.StatusLocked {

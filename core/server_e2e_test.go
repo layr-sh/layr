@@ -51,7 +51,7 @@ func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
 	}
 
 	// 3. Manifest Discovery Flow
-	manifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/manifest", nil)
+	manifestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/manifest", nil)
 	manifestResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(manifestResponseRecorder, manifestRequest)
 

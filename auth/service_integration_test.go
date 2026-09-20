@@ -40,14 +40,14 @@ func TestAuthServiceIntegration(t *testing.T) {
 	}
 
 	// Authorized scope
-	validScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	validScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	validScopeRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
 	if !service.CheckScope(validScopeRequest, "auth:user.read") {
 		t.Fatal("expected CheckScope to return true for granted scope")
 	}
 
 	// Unauthorized scope
-	missingScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	missingScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	missingScopeRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
 	if service.CheckScope(missingScopeRequest, "auth:user.write") {
 		t.Fatal("expected CheckScope to return false for ungranted scope")

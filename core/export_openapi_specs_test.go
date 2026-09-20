@@ -15,7 +15,7 @@ type dummyServiceWithRegistrar struct{}
 func (service *dummyServiceWithRegistrar) Start(ctx context.Context) error { return nil }
 func (service *dummyServiceWithRegistrar) Stop() error                     { return nil }
 func (service *dummyServiceWithRegistrar) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
-	GetRoute[string](router, "/api/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
+	GetRoute[string](router, "/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
 		RouteTag("Dummy"),
 		RouteSummary("Dummy route"),
 		RouteOperationID("getDummy"),
@@ -56,12 +56,12 @@ func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
 	assert.Nil(t, controlPlaneOpenAPISpec.Paths.Find("/healthz"))
 
 	// Control plane route should be present in control and unified
-	assert.NotNil(t, controlPlaneOpenAPISpec.Paths.Find("/api/v1/_/core/service-accounts"))
-	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/api/v1/_/core/service-accounts"))
-	assert.Nil(t, openAPISpec.Paths.Find("/api/v1/_/core/service-accounts"))
+	assert.NotNil(t, controlPlaneOpenAPISpec.Paths.Find("/v1/_/core/service-accounts"))
+	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/v1/_/core/service-accounts"))
+	assert.Nil(t, openAPISpec.Paths.Find("/v1/_/core/service-accounts"))
 
 	// Dummy route registered via mock registrar
-	assert.NotNil(t, openAPISpec.Paths.Find("/api/v1/dummy/test"))
+	assert.NotNil(t, openAPISpec.Paths.Find("/v1/dummy/test"))
 }
 
 func TestCoreExportOpenAPISpecsMergeEdgeCasesUnit(t *testing.T) {

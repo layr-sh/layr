@@ -26,7 +26,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			configManager.SetMemoryConfig(config)
 		}()
 
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
@@ -34,7 +34,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidWebSocketUpgrade", func(t *testing.T) {
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -147,7 +147,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			configManager: configManager,
 			realtimeHub:   nil,
 		}
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
 		nilHubBaseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
@@ -167,7 +167,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		baseHandler.realtimeHub.RegisterClient(dummyClient)
 		defer baseHandler.realtimeHub.UnregisterClient(dummyClient)
 
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusTooManyRequests, responseRecorder.Code)

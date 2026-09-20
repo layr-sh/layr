@@ -39,21 +39,21 @@ func TestDataControlPlaneHandlerBaseScopeIntegration(t *testing.T) {
 	}
 
 	// 2. Test valid scope check
-	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	validRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	if !controlPlaneHandler.checkScope(validRequest, "data:schema.read") {
 		t.Fatal("expected checkScope to return true for matching scope")
 	}
 
 	// 3. Test invalid scope check
-	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
+	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
 	invalidScopeRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	if controlPlaneHandler.checkScope(invalidScopeRequest, "data:schema.write") {
 		t.Fatal("expected checkScope to return false for missing scope")
 	}
 
 	// 4. Test invalid API key token
-	malformedTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	malformedTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	malformedTokenRequest.Header.Set("Authorization", "Bearer invalid_api_key_token")
 	if controlPlaneHandler.checkScope(malformedTokenRequest, "data:schema.read") {
 		t.Fatal("expected checkScope to return false for invalid token")

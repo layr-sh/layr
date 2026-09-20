@@ -8,7 +8,7 @@ import (
 	"layr.sh/core"
 )
 
-// handleGetConfig handles GET /api/v1/_/data/config.
+// handleGetConfig handles GET /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
@@ -21,7 +21,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DefaultConfig())
 }
 
-// handleUpdateConfig handles PUT /api/v1/_/data/config.
+// handleUpdateConfig handles PUT /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
@@ -50,7 +50,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	}
 }
 
-// handleFlushCache handles POST /api/v1/_/data/cache/flush.
+// handleFlushCache handles POST /v1/_/data/cache/flush.
 func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
@@ -79,7 +79,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter 
 	})
 }
 
-// handleInvalidateCache handles POST /api/v1/_/data/cache/invalidate.
+// handleInvalidateCache handles POST /v1/_/data/cache/invalidate.
 func (controlPlaneHandler *ControlPlaneHandler) handleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")

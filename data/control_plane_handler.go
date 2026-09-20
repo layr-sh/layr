@@ -9,7 +9,7 @@ import (
 	"layr.sh/core"
 )
 
-// ControlPlaneHandler handles control plane endpoints under /api/v1/_/data/*.
+// ControlPlaneHandler handles control plane endpoints under /v1/_/data/*.
 type ControlPlaneHandler struct {
 	ddlEngine             *DDLEngine
 	service               *Service
@@ -91,8 +91,8 @@ func (controlPlaneHandler *ControlPlaneHandler) extractSchemaAndTable(request *h
 	if schema != "" && table != "" {
 		return schema, table
 	}
-	path := strings.TrimPrefix(request.URL.Path, "/api/v1/_/data/tables")
-	path = strings.TrimPrefix(path, "/api/v1/_/data")
+	path := strings.TrimPrefix(request.URL.Path, "/v1/_/data/tables")
+	path = strings.TrimPrefix(path, "/v1/_/data")
 	cleaned := strings.Trim(path, "/")
 	if cleaned == "" {
 		return schema, table
@@ -116,8 +116,8 @@ func (controlPlaneHandler *ControlPlaneHandler) extractColumnName(request *http.
 	if columnName != "" {
 		return columnName
 	}
-	path := strings.TrimPrefix(request.URL.Path, "/api/v1/_/data/tables")
-	path = strings.TrimPrefix(path, "/api/v1/_/data")
+	path := strings.TrimPrefix(request.URL.Path, "/v1/_/data/tables")
+	path = strings.TrimPrefix(path, "/v1/_/data")
 	cleaned := strings.Trim(path, "/")
 	if cleaned == "" {
 		return ""
@@ -139,8 +139,8 @@ func (controlPlaneHandler *ControlPlaneHandler) extractIndexName(request *http.R
 	if indexName != "" {
 		return indexName
 	}
-	path := strings.TrimPrefix(request.URL.Path, "/api/v1/_/data/tables")
-	path = strings.TrimPrefix(path, "/api/v1/_/data")
+	path := strings.TrimPrefix(request.URL.Path, "/v1/_/data/tables")
+	path = strings.TrimPrefix(path, "/v1/_/data")
 	cleaned := strings.Trim(path, "/")
 	if cleaned == "" {
 		return ""
@@ -162,8 +162,8 @@ func (controlPlaneHandler *ControlPlaneHandler) extractPolicyName(request *http.
 	if policyName != "" {
 		return policyName
 	}
-	path := strings.TrimPrefix(request.URL.Path, "/api/v1/_/data/tables")
-	path = strings.TrimPrefix(path, "/api/v1/_/data")
+	path := strings.TrimPrefix(request.URL.Path, "/v1/_/data/tables")
+	path = strings.TrimPrefix(path, "/v1/_/data")
 	cleaned := strings.Trim(path, "/")
 	if cleaned == "" {
 		return ""

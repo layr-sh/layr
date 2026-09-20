@@ -54,19 +54,19 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 	baseHandler := NewBaseHandler(nil, configManager)
 
 	t.Run("parsePath", func(t *testing.T) {
-		schema, table, recordID, err := baseHandler.parsePath("/api/v1/data/public/users/123")
+		schema, table, recordID, err := baseHandler.parsePath("/v1/data/public/users/123")
 		assert.NoError(t, err)
 		assert.Equal(t, "public", schema)
 		assert.Equal(t, "users", table)
 		assert.Equal(t, "123", recordID)
 
-		schema, table, recordID, err = baseHandler.parsePath("/api/v1/data/public/users")
+		schema, table, recordID, err = baseHandler.parsePath("/v1/data/public/users")
 		assert.NoError(t, err)
 		assert.Equal(t, "public", schema)
 		assert.Equal(t, "users", table)
 		assert.Empty(t, recordID)
 
-		_, _, _, err = baseHandler.parsePath("/api/v1/data/invalid")
+		_, _, _, err = baseHandler.parsePath("/v1/data/invalid")
 		assert.Error(t, err)
 	})
 

@@ -48,9 +48,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	disabledConfig.Threat.BotProtection.Enabled = false
 	configManager.Set(disabledConfig)
 
-	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	disabledResponseRecorder := httptest.NewRecorder()
-	if !baseHandler.checkCaptcha(disabledResponseRecorder, disabledRequest, "192.168.1.1", "", "/api/v1/auth/sign-in") {
+	if !baseHandler.checkCaptcha(disabledResponseRecorder, disabledRequest, "192.168.1.1", "", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return true when bot protection is disabled")
 	}
 
@@ -61,9 +61,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	adaptiveConfig.Threat.BotProtection.AdaptiveFailedAttempts = 5
 	configManager.Set(adaptiveConfig)
 
-	adaptiveAllowedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	adaptiveAllowedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	adaptiveAllowedResponseRecorder := httptest.NewRecorder()
-	if !baseHandler.checkCaptcha(adaptiveAllowedResponseRecorder, adaptiveAllowedRequest, "192.168.1.2", "", "/api/v1/auth/sign-in") {
+	if !baseHandler.checkCaptcha(adaptiveAllowedResponseRecorder, adaptiveAllowedRequest, "192.168.1.2", "", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return true when failed attempts < threshold")
 	}
 
@@ -75,9 +75,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 		_, _ = threat.RecordFailedAttempt(ctx, testKVStore, "192.168.1.3", 0)
 	}
 
-	adaptiveTriggeredRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	adaptiveTriggeredRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	adaptiveTriggeredResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(adaptiveTriggeredResponseRecorder, adaptiveTriggeredRequest, "192.168.1.3", "", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(adaptiveTriggeredResponseRecorder, adaptiveTriggeredRequest, "192.168.1.3", "", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false when adaptive challenge triggered without token")
 	}
 	if adaptiveTriggeredResponseRecorder.Code != http.StatusBadRequest {
@@ -95,9 +95,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	alwaysConfig.Threat.BotProtection.Provider = "turnstile"
 	configManager.Set(alwaysConfig)
 
-	emptyTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	emptyTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	emptyTokenResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(emptyTokenResponseRecorder, emptyTokenRequest, "192.168.1.4", "   ", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(emptyTokenResponseRecorder, emptyTokenRequest, "192.168.1.4", "   ", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false with empty token")
 	}
 	if emptyTokenResponseRecorder.Code != http.StatusBadRequest {
@@ -108,9 +108,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	alwaysConfig.Threat.BotProtection.SecretKey = "invalid-corrupted-prefix"
 	configManager.Set(alwaysConfig)
 
-	decryptFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	decryptFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	decryptFailResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(decryptFailResponseRecorder, decryptFailRequest, "192.168.1.5", "token-123", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(decryptFailResponseRecorder, decryptFailRequest, "192.168.1.5", "token-123", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false when secret decryption fails")
 	}
 	if decryptFailResponseRecorder.Code != http.StatusInternalServerError {
@@ -121,9 +121,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	alwaysConfig.Threat.BotProtection.SecretKey = encryptedEmptySecret
 	configManager.Set(alwaysConfig)
 
-	emptySecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	emptySecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	emptySecretResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(emptySecretResponseRecorder, emptySecretRequest, "192.168.1.5", "token-123", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(emptySecretResponseRecorder, emptySecretRequest, "192.168.1.5", "token-123", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false when secret decrypts to empty")
 	}
 	if emptySecretResponseRecorder.Code != http.StatusInternalServerError {
@@ -136,9 +136,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	alwaysConfig.Threat.BotProtection.Provider = "unsupported-provider"
 	configManager.Set(alwaysConfig)
 
-	invalidProviderRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	invalidProviderRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	invalidProviderResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(invalidProviderResponseRecorder, invalidProviderRequest, "192.168.1.6", "token-123", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(invalidProviderResponseRecorder, invalidProviderRequest, "192.168.1.6", "token-123", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false with unsupported provider")
 	}
 	if invalidProviderResponseRecorder.Code != http.StatusInternalServerError {
@@ -156,9 +156,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 		}, nil
 	}
 
-	verifyFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	verifyFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	verifyFailResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(verifyFailResponseRecorder, verifyFailRequest, "192.168.1.7", "invalid-token", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(verifyFailResponseRecorder, verifyFailRequest, "192.168.1.7", "invalid-token", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false when verify returns false")
 	}
 	if verifyFailResponseRecorder.Code != http.StatusBadRequest {
@@ -167,9 +167,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 
 	// Also test without event bus (nil event bus branch)
 	baseHandler.SetEventBus(nil)
-	nilBusVerifyFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	nilBusVerifyFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	nilBusVerifyFailResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(nilBusVerifyFailResponseRecorder, nilBusVerifyFailRequest, "192.168.1.7", "invalid-token", "/api/v1/auth/sign-in") {
+	if baseHandler.checkCaptcha(nilBusVerifyFailResponseRecorder, nilBusVerifyFailRequest, "192.168.1.7", "invalid-token", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return false without event bus")
 	}
 
@@ -182,9 +182,9 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 		}, nil
 	}
 
-	verifySuccessRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-in", nil)
+	verifySuccessRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	verifySuccessResponseRecorder := httptest.NewRecorder()
-	if !baseHandler.checkCaptcha(verifySuccessResponseRecorder, verifySuccessRequest, "192.168.1.8", "valid-token", "/api/v1/auth/sign-in") {
+	if !baseHandler.checkCaptcha(verifySuccessResponseRecorder, verifySuccessRequest, "192.168.1.8", "valid-token", "/v1/auth/sign-in") {
 		t.Fatal("expected checkCaptcha to return true on successful verification")
 	}
 }
@@ -209,7 +209,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	disabledConfig.Password.BreachCheck.Enabled = false
 	configManager.Set(disabledConfig)
 
-	breachDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", nil)
+	breachDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	breachDisabledResponseRecorder := httptest.NewRecorder()
 	if !baseHandler.checkPasswordBreach(breachDisabledResponseRecorder, breachDisabledRequest, "anyPassword", "test@example.com") {
 		t.Fatal("expected checkPasswordBreach to return true when disabled")
@@ -224,7 +224,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 		return nil, errors.New("simulated network timeout")
 	}
 
-	breachErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", nil)
+	breachErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	breachErrorResponseRecorder := httptest.NewRecorder()
 	if baseHandler.checkPasswordBreach(breachErrorResponseRecorder, breachErrorRequest, "password123", "test@example.com") {
 		t.Fatal("expected checkPasswordBreach to return false on network failure with failOpen=false")
@@ -248,7 +248,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 		}, nil
 	}
 
-	breachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", nil)
+	breachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	breachedResponseRecorder := httptest.NewRecorder()
 	if baseHandler.checkPasswordBreach(breachedResponseRecorder, breachedRequest, "password", "victim@example.com") {
 		t.Fatal("expected checkPasswordBreach to return false for breached password")
@@ -259,7 +259,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 
 	// Also test without event bus (nil event bus branch)
 	baseHandler.SetEventBus(nil)
-	nilBusBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", nil)
+	nilBusBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	nilBusBreachedResponseRecorder := httptest.NewRecorder()
 	if baseHandler.checkPasswordBreach(nilBusBreachedResponseRecorder, nilBusBreachedRequest, "password", "victim@example.com") {
 		t.Fatal("expected checkPasswordBreach to return false for breached password without event bus")
@@ -274,7 +274,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 		}, nil
 	}
 
-	safePasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", nil)
+	safePasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	safePasswordResponseRecorder := httptest.NewRecorder()
 	if !baseHandler.checkPasswordBreach(safePasswordResponseRecorder, safePasswordRequest, "unbreachedPassword123!", "user@example.com") {
 		t.Fatal("expected checkPasswordBreach to return true for safe password")

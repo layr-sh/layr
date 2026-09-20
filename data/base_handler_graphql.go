@@ -24,7 +24,7 @@ const (
 	maxGraphQLComplexity   = 500
 )
 
-// handleExecuteGraphQL processes POST /api/v1/graphql requests.
+// handleExecuteGraphQL processes POST /v1/graphql requests.
 func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests")

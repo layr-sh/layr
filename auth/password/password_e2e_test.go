@@ -149,9 +149,9 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 	server := newTestAuthServer()
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/api/v1/auth/register", server.handleRegister)
-	serveMux.HandleFunc("/api/v1/auth/login", server.handleLogin)
-	serveMux.HandleFunc("/api/v1/auth/password/change", server.handleChangePassword)
+	serveMux.HandleFunc("/v1/auth/register", server.handleRegister)
+	serveMux.HandleFunc("/v1/auth/login", server.handleLogin)
+	serveMux.HandleFunc("/v1/auth/password/change", server.handleChangePassword)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -175,7 +175,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 
 	// 1. User Registration
 	registerPayload := `{"email":"` + userEmail + `","password":"` + initialPassword + `"}`
-	registerResponse, err := postJSON(testServer.URL+"/api/v1/auth/register", registerPayload)
+	registerResponse, err := postJSON(testServer.URL+"/v1/auth/register", registerPayload)
 	if err != nil {
 		t.Fatalf("failed to post registration: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 
 	// 2. Login with Incorrect Password
 	wrongLoginPayload := `{"email":"` + userEmail + `","password":"IncorrectPassword999!"}`
-	wrongLoginResponse, err := postJSON(testServer.URL+"/api/v1/auth/login", wrongLoginPayload)
+	wrongLoginResponse, err := postJSON(testServer.URL+"/v1/auth/login", wrongLoginPayload)
 	if err != nil {
 		t.Fatalf("failed to post login: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 
 	// 3. Login with Correct Initial Password
 	correctLoginPayload := `{"email":"` + userEmail + `","password":"` + initialPassword + `"}`
-	correctLoginResponse, err := postJSON(testServer.URL+"/api/v1/auth/login", correctLoginPayload)
+	correctLoginResponse, err := postJSON(testServer.URL+"/v1/auth/login", correctLoginPayload)
 	if err != nil {
 		t.Fatalf("failed to post valid login: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 
 	// 4. Change Password
 	changePasswordPayload := `{"email":"` + userEmail + `","old_password":"` + initialPassword + `","new_password":"` + updatedPassword + `"}`
-	changePasswordResponse, err := postJSON(testServer.URL+"/api/v1/auth/password/change", changePasswordPayload)
+	changePasswordResponse, err := postJSON(testServer.URL+"/v1/auth/password/change", changePasswordPayload)
 	if err != nil {
 		t.Fatalf("failed to post password change: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 5. Old Password Login Fails After Change
-	oldLoginResponse, err := postJSON(testServer.URL+"/api/v1/auth/login", correctLoginPayload)
+	oldLoginResponse, err := postJSON(testServer.URL+"/v1/auth/login", correctLoginPayload)
 	if err != nil {
 		t.Fatalf("failed to post old login: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestPasswordAuthenticationFlowE2E(t *testing.T) {
 
 	// 6. New Password Login Succeeds
 	newLoginPayload := `{"email":"` + userEmail + `","password":"` + updatedPassword + `"}`
-	newLoginResponse, err := postJSON(testServer.URL+"/api/v1/auth/login", newLoginPayload)
+	newLoginResponse, err := postJSON(testServer.URL+"/v1/auth/login", newLoginPayload)
 	if err != nil {
 		t.Fatalf("failed to post new password login: %v", err)
 	}

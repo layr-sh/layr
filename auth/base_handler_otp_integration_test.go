@@ -72,7 +72,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedFirstOTP, _ := json.Marshal(firstOTPPayload)
-	firstOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedFirstOTP))
+	firstOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedFirstOTP))
 	firstOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(firstOTPResponseRecorder, firstOTPRequest)
 	if firstOTPResponseRecorder.Code != http.StatusNoContent {
@@ -85,7 +85,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedSecondOTP, _ := json.Marshal(secondOTPPayload)
-	secondOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedSecondOTP))
+	secondOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedSecondOTP))
 	secondOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(secondOTPResponseRecorder, secondOTPRequest)
 	if secondOTPResponseRecorder.Code != http.StatusTooManyRequests {
@@ -110,7 +110,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedThirdOTP, _ := json.Marshal(thirdOTPPayload)
-	thirdOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedThirdOTP))
+	thirdOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedThirdOTP))
 	thirdOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(thirdOTPResponseRecorder, thirdOTPRequest)
 	if thirdOTPResponseRecorder.Code != http.StatusNoContent {
@@ -125,7 +125,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 			"purpose":   "sign_in",
 		}
 		encodedLoop, _ := json.Marshal(loopPayload)
-		loopRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLoop))
+		loopRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedLoop))
 		loopRequest.RemoteAddr = limitedClientIP
 		loopResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleSendOTP(loopResponseRecorder, loopRequest)
@@ -140,7 +140,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedEleventh, _ := json.Marshal(eleventhPayload)
-	eleventhRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedEleventh))
+	eleventhRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedEleventh))
 	eleventhRequest.RemoteAddr = limitedClientIP
 	eleventhResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(eleventhResponseRecorder, eleventhRequest)
@@ -220,7 +220,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
-	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
+	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
 	otpSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSendResponseRecorder, otpSendRequest)
 	if otpSendResponseRecorder.Code != http.StatusNoContent {
@@ -239,7 +239,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
-	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
+	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusBadRequest {
@@ -253,7 +253,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
-	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
+	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
 	otpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
 	if otpVerifyResponseRecorder.Code != http.StatusOK {
@@ -276,7 +276,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedLockedOTPSend, _ := json.Marshal(lockedOTPSendPayload)
-	lockedOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLockedOTPSend))
+	lockedOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedLockedOTPSend))
 	lockedOTPSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(lockedOTPSendResponseRecorder, lockedOTPSendRequest)
 	if lockedOTPSendResponseRecorder.Code != http.StatusNoContent {
@@ -290,7 +290,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedLockedOTPVerify, _ := json.Marshal(lockedOTPVerifyPayload)
-	lockedOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedLockedOTPVerify))
+	lockedOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedLockedOTPVerify))
 	lockedOTPVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(lockedOTPVerifyResponseRecorder, lockedOTPVerifyRequest)
 	if lockedOTPVerifyResponseRecorder.Code != http.StatusLocked {
@@ -305,7 +305,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	}
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
-	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
+	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
 	phoneOTPResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(phoneOTPResponseRecorder, phoneOTPRequest)
 	if phoneOTPResponseRecorder.Code != http.StatusNoContent {
@@ -322,7 +322,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      phoneCode,
 	}
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
@@ -347,7 +347,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"recipient": convertEmail,
 		"purpose":   "sign_in",
 	})
-	convertSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertSendPayload))
+	convertSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(convertSendPayload))
 	convertSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(convertSendResponseRecorder, convertSendRequest)
 	if convertSendResponseRecorder.Code != http.StatusNoContent {
@@ -361,7 +361,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      convertCode,
 		"purpose":   "sign_in",
 	})
-	convertVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, anonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
+	convertVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, anonAuthContext), http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
 	convertVerifyRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	convertVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(convertVerifyResponseRecorder, convertVerifyRequest)
@@ -384,7 +384,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      "123456",
 		"purpose":   "sign_in",
 	})
-	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(nonExistentVerifyPayload))
+	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(nonExistentVerifyPayload))
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
 	if nonExistentVerifyResponseRecorder.Code != http.StatusBadRequest {
@@ -416,7 +416,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"recipient": existingConflictEmail,
 		"purpose":   "sign_in",
 	})
-	conflictEmailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictEmailSendPayload))
+	conflictEmailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(conflictEmailSendPayload))
 	conflictEmailSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(conflictEmailSendResponseRecorder, conflictEmailSendRequest)
 	if conflictEmailSendResponseRecorder.Code != http.StatusNoContent {
@@ -429,7 +429,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      conflictEmailCode,
 		"purpose":   "sign_in",
 	})
-	conflictEmailVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
+	conflictEmailVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
 	conflictEmailVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictEmailVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(conflictEmailVerifyResponseRecorder, conflictEmailVerifyRequest)
@@ -442,7 +442,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"recipient": existingConflictPhone,
 		"purpose":   "sign_in",
 	})
-	conflictPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictPhoneSendPayload))
+	conflictPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(conflictPhoneSendPayload))
 	conflictPhoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(conflictPhoneSendResponseRecorder, conflictPhoneSendRequest)
 	if conflictPhoneSendResponseRecorder.Code != http.StatusNoContent {
@@ -455,7 +455,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      conflictPhoneCode,
 		"purpose":   "sign_in",
 	})
-	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
+	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
 	conflictPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictPhoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(conflictPhoneVerifyResponseRecorder, conflictPhoneVerifyRequest)
@@ -481,7 +481,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"recipient": convertPhoneRecipient,
 		"purpose":   "sign_in",
 	})
-	convertPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertPhoneSendPayload))
+	convertPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(convertPhoneSendPayload))
 	convertPhoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(convertPhoneSendResponseRecorder, convertPhoneSendRequest)
 	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", convertPhoneRecipient))
@@ -491,7 +491,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		"code":      convertPhoneCode,
 		"purpose":   "sign_in",
 	})
-	convertPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, phoneAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
+	convertPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, phoneAnonAuthContext), http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
 	convertPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+phoneAnonToken)
 	convertPhoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(convertPhoneVerifyResponseRecorder, convertPhoneVerifyRequest)
@@ -588,7 +588,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	}
 
 	sendPayload, _ := json.Marshal(map[string]any{"recipient": emailMFAUser})
-	sendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(sendPayload))
+	sendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(sendPayload))
 	sendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(sendResponseRecorder, sendRequest)
 	if sendResponseRecorder.Code != http.StatusNoContent {
@@ -604,7 +604,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 		"recipient": emailMFAUser,
 		"code":      code,
 	})
-	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(verifyPayload))
+	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(verifyPayload))
 	verifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(verifyResponseRecorder, verifyRequest)
 	if verifyResponseRecorder.Code != http.StatusOK {
@@ -629,7 +629,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	}
 
 	phoneSendPayload, _ := json.Marshal(map[string]any{"recipient": phoneMFAUser})
-	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(phoneSendPayload))
+	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", bytes.NewReader(phoneSendPayload))
 	phoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(phoneSendResponseRecorder, phoneSendRequest)
 	if phoneSendResponseRecorder.Code != http.StatusNoContent {
@@ -645,7 +645,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 		"recipient": phoneMFAUser,
 		"code":      phoneCode,
 	})
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(phoneVerifyPayload))
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(phoneVerifyPayload))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {

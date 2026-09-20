@@ -110,7 +110,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("metrics"),
 	)
-	GetRoute[GetManifestResponse](baseRouter, "/api/v1/manifest", server.handleGetManifest,
+	GetRoute[GetManifestResponse](baseRouter, "/v1/manifest", server.handleGetManifest,
 		RouteTag("Discovery"),
 		RouteSummary("Get dynamic cluster manifest and enabled services"),
 		RouteDescription("Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization."),
@@ -135,18 +135,18 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	serveMux.Handle("/console/", baseRouter.Mux())
 
 	// Public OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/spec.json", server.handleGetBaseSpecJSON)
-	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleGetBaseSpecYAML)
+	serveMux.HandleFunc("/v1/spec.json", server.handleGetBaseSpecJSON)
+	serveMux.HandleFunc("/v1/spec.yaml", server.handleGetBaseSpecYAML)
 
 	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleGetControlPlaneSpecJSON)
-	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleGetControlPlaneSpecYAML)
+	serveMux.HandleFunc("/v1/_/spec.json", server.handleGetControlPlaneSpecJSON)
+	serveMux.HandleFunc("/v1/_/spec.yaml", server.handleGetControlPlaneSpecYAML)
 
 	// Mount Control Plane API Router
-	serveMux.Handle("/api/v1/_/", controlPlaneRouter.Mux())
+	serveMux.Handle("/v1/_/", controlPlaneRouter.Mux())
 
 	// Mount Public API Router with Publishable Key Gate
-	serveMux.Handle("/api/v1/", server.PublishableKeyMiddleware(baseRouter.Mux()))
+	serveMux.Handle("/v1/", server.PublishableKeyMiddleware(baseRouter.Mux()))
 
 	server.server = &http.Server{
 		Addr:              config.Server.ListenAddr,
@@ -383,16 +383,16 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 	})
 }
 
-// PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /api/v1/* routes.
+// PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /v1/* routes.
 func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
 		log.Tracef("evaluating publishable key middleware for path %s", path)
-		if path == "/api/v1/manifest" ||
-			strings.HasPrefix(path, "/api/v1/_/") ||
-			path == "/api/v1/_" ||
-			path == "/api/v1/spec.json" ||
-			path == "/api/v1/spec.yaml" ||
+		if path == "/v1/manifest" ||
+			strings.HasPrefix(path, "/v1/_/") ||
+			path == "/v1/_" ||
+			path == "/v1/spec.json" ||
+			path == "/v1/spec.yaml" ||
 			strings.HasPrefix(path, "/.well-known/") {
 			handler.ServeHTTP(responseWriter, request)
 			return

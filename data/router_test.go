@@ -35,49 +35,49 @@ func TestDataRouterUnit(t *testing.T) {
 	if publicOpenAPISpec == nil {
 		t.Fatal("expected non-nil public OpenAPI specification")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/{schema_name}/{table_name}") == nil {
-		t.Fatal("expected /api/v1/data/{schema_name}/{table_name} route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil {
+		t.Fatal("expected /v1/data/{schema_name}/{table_name} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/{schema_name}/{table_name}/{record_id}") == nil {
-		t.Fatal("expected /api/v1/data/{schema_name}/{table_name}/{record_id} route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}/{record_id}") == nil {
+		t.Fatal("expected /v1/data/{schema_name}/{table_name}/{record_id} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/kv/{key}") == nil {
-		t.Fatal("expected /api/v1/data/kv/{key} route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/kv/{key}") == nil {
+		t.Fatal("expected /v1/data/kv/{key} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/kv/mget") == nil {
-		t.Fatal("expected /api/v1/data/kv/mget route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/kv/mget") == nil {
+		t.Fatal("expected /v1/data/kv/mget route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/kv/mset") == nil {
-		t.Fatal("expected /api/v1/data/kv/mset route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/kv/mset") == nil {
+		t.Fatal("expected /v1/data/kv/mset route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/data/kv/increment") == nil {
-		t.Fatal("expected /api/v1/data/kv/increment route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/data/kv/increment") == nil {
+		t.Fatal("expected /v1/data/kv/increment route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/graphql") == nil {
-		t.Fatal("expected /api/v1/graphql route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/graphql") == nil {
+		t.Fatal("expected /v1/graphql route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/api/v1/realtime") == nil {
-		t.Fatal("expected /api/v1/realtime route in public OpenAPI spec")
+	if publicOpenAPISpec.Paths.Value("/v1/realtime") == nil {
+		t.Fatal("expected /v1/realtime route in public OpenAPI spec")
 	}
 
 	controlPlaneOpenAPISpec := controlPlaneRouter.OutputOpenAPISpec()
 	if controlPlaneOpenAPISpec == nil {
 		t.Fatal("expected non-nil control plane OpenAPI specification")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/config") == nil {
-		t.Fatal("expected /api/v1/_/data/config route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/config") == nil {
+		t.Fatal("expected /v1/_/data/config route in control plane OpenAPI spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/cache/flush") == nil {
-		t.Fatal("expected /api/v1/_/data/cache/flush route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/cache/flush") == nil {
+		t.Fatal("expected /v1/_/data/cache/flush route in control plane OpenAPI spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/cache/invalidate") == nil {
-		t.Fatal("expected /api/v1/_/data/cache/invalidate route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/cache/invalidate") == nil {
+		t.Fatal("expected /v1/_/data/cache/invalidate route in control plane OpenAPI spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/tables") == nil {
-		t.Fatal("expected /api/v1/_/data/tables route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/tables") == nil {
+		t.Fatal("expected /v1/_/data/tables route in control plane OpenAPI spec")
 	}
-	if controlPlaneOpenAPISpec.Paths.Value("/api/v1/_/data/sql") == nil {
-		t.Fatal("expected /api/v1/_/data/sql route in control plane OpenAPI spec")
+	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/sql") == nil {
+		t.Fatal("expected /v1/_/data/sql route in control plane OpenAPI spec")
 	}
 
 	// 5. Verify payload and response struct definitions

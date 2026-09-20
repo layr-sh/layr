@@ -29,28 +29,28 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	disabledConfig.Passkeys.Enabled = false
 	configManager.Set(disabledConfig)
 
-	passkeySignUpDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u1","user_name":"Alice"}`))
+	passkeySignUpDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u1","user_name":"Alice"}`))
 	passkeySignUpDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(passkeySignUpDisabledResponseRecorder, passkeySignUpDisabledRequest)
 	if passkeySignUpDisabledResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on passkey sign-up when passkeys disabled, got: %d", passkeySignUpDisabledResponseRecorder.Code)
 	}
 
-	passkeyVerifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{}`))
+	passkeyVerifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{}`))
 	passkeyVerifyDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(passkeyVerifyDisabledResponseRecorder, passkeyVerifyDisabledRequest)
 	if passkeyVerifyDisabledResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on passkey verify when passkeys disabled, got: %d", passkeyVerifyDisabledResponseRecorder.Code)
 	}
 
-	passkeySignInDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
+	passkeySignInDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	passkeySignInDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignIn(passkeySignInDisabledResponseRecorder, passkeySignInDisabledRequest)
 	if passkeySignInDisabledResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on passkey sign-in when passkeys disabled, got: %d", passkeySignInDisabledResponseRecorder.Code)
 	}
 
-	passkeySignInVerifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{}`))
+	passkeySignInVerifyDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{}`))
 	passkeySignInVerifyDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(passkeySignInVerifyDisabledResponseRecorder, passkeySignInVerifyDisabledRequest)
 	if passkeySignInVerifyDisabledResponseRecorder.Code != http.StatusForbidden {
@@ -63,14 +63,14 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	configManager.Set(enabledConfig)
 
 	// 2. Passkey SignUp Bad JSON / Missing Fields
-	badJSONPasskeySignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{invalid`))
+	badJSONPasskeySignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{invalid`))
 	badJSONPasskeySignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(badJSONPasskeySignUpResponseRecorder, badJSONPasskeySignUpRequest)
 	if badJSONPasskeySignUpResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad JSON passkey sign-up, got: %d", badJSONPasskeySignUpResponseRecorder.Code)
 	}
 
-	missingUserIDPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
+	missingUserIDPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
 	missingUserIDPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(missingUserIDPasskeyResponseRecorder, missingUserIDPasskeyRequest)
 	if missingUserIDPasskeyResponseRecorder.Code != http.StatusBadRequest {
@@ -79,7 +79,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 
 	// 3. Passkey SignUp Default Username -> 200
 	testUserUUID := "01918a24-5678-789a-bcde-f0123456789a"
-	emptyNamePasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"`+testUserUUID+`"}`))
+	emptyNamePasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"`+testUserUUID+`"}`))
 	emptyNamePasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(emptyNamePasskeyResponseRecorder, emptyNamePasskeyRequest)
 	if emptyNamePasskeyResponseRecorder.Code != http.StatusOK {
@@ -87,7 +87,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	// 4. Passkey SignUp Verify Bad JSON & Mismatched User ID
-	badJSONPasskeyVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{invalid`))
+	badJSONPasskeyVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{invalid`))
 	badJSONPasskeyVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(badJSONPasskeyVerifyResponseRecorder, badJSONPasskeyVerifyRequest)
 	if badJSONPasskeyVerifyResponseRecorder.Code != http.StatusBadRequest {
@@ -96,7 +96,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 
 	challenge1, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge1, testUserUUID, 0)
-	mismatchUserPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"mismatched-user-uuid","challenge":"`+challenge1+`"}`))
+	mismatchUserPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"mismatched-user-uuid","challenge":"`+challenge1+`"}`))
 	mismatchUserPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(mismatchUserPasskeyResponseRecorder, mismatchUserPasskeyRequest)
 	if mismatchUserPasskeyResponseRecorder.Code != http.StatusBadRequest {
@@ -106,7 +106,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	// 5. Passkey SignUp Verify Empty Friendly Name on Nil Pool -> 500
 	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge2, testUserUUID, 0)
-	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"`+testUserUUID+`","challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
+	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"`+testUserUUID+`","challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
 	emptyFriendlyPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(emptyFriendlyPasskeyResponseRecorder, emptyFriendlyPasskeyRequest)
 	if emptyFriendlyPasskeyResponseRecorder.Code != http.StatusInternalServerError {
@@ -114,7 +114,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	// 6. Passkey SignIn -> 200
-	passkeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
+	passkeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	passkeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignIn(passkeySignInResponseRecorder, passkeySignInRequest)
 	if passkeySignInResponseRecorder.Code != http.StatusOK {
@@ -122,7 +122,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	// 7. Passkey SignIn Verify with Invalid/Consumed Challenge -> 400
-	invalidPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"non-existent-challenge"}`))
+	invalidPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"non-existent-challenge"}`))
 	invalidPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(invalidPasskeySignInResponseRecorder, invalidPasskeySignInRequest)
 	if invalidPasskeySignInResponseRecorder.Code != http.StatusBadRequest {
@@ -130,7 +130,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	}
 
 	// 8. Passkey SignIn Verify Bad JSON -> 400
-	badJSONPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader([]byte(`{invalid`)))
+	badJSONPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in/verify", bytes.NewReader([]byte(`{invalid`)))
 	badJSONPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(badJSONPasskeySignInResponseRecorder, badJSONPasskeySignInRequest)
 	if badJSONPasskeySignInResponseRecorder.Code != http.StatusBadRequest {
@@ -140,7 +140,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	// 9. Passkey SignIn Verify Valid Challenge on Nil Pool -> 500
 	validSignInChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+validSignInChallenge, "", 0)
-	nilDBPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"`+validSignInChallenge+`","credential_id":"cred_123"}`))
+	nilDBPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"`+validSignInChallenge+`","credential_id":"cred_123"}`))
 	nilDBPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(nilDBPasskeySignInResponseRecorder, nilDBPasskeySignInRequest)
 	if nilDBPasskeySignInResponseRecorder.Code != http.StatusInternalServerError {
@@ -152,14 +152,14 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	failingPasskeyManager.SetRandomReader(errEntropyReader{})
 	baseHandler.SetPasskeyManager(failingPasskeyManager)
 
-	failingSignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u-entropy"}`))
+	failingSignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u-entropy"}`))
 	failingSignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(failingSignUpResponseRecorder, failingSignUpRequest)
 	if failingSignUpResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on entropy failure sign-up, got: %d", failingSignUpResponseRecorder.Code)
 	}
 
-	failingSignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
+	failingSignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	failingSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignIn(failingSignInResponseRecorder, failingSignInRequest)
 	if failingSignInResponseRecorder.Code != http.StatusInternalServerError {
@@ -193,7 +193,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	authContext := core.AuthContext{UserID: testUserUUID, JWT: core.JWTClaims{Subject: testUserUUID, Role: "authenticated"}}
 
 	// 1. List user passkeys - unauthenticated -> 401
-	unauthListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	unauthListRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/user/passkeys", nil)
 	unauthListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListPasskeys(unauthListResponseRecorder, unauthListRequest)
 	if unauthListResponseRecorder.Code != http.StatusUnauthorized {
@@ -201,7 +201,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 2. List user passkeys - authenticated on nil DB -> 500
-	authListRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
+	authListRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodGet, "/v1/auth/user/passkeys", nil)
 	authListRequest.Header.Set("Authorization", bearerHeader)
 	authListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListPasskeys(authListResponseRecorder, authListRequest)
@@ -210,7 +210,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 3. Delete user passkey - unauthenticated -> 401
-	unauthDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
+	unauthDeleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/auth/user/passkeys/pk-1", nil)
 	unauthDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(unauthDeleteResponseRecorder, unauthDeleteRequest)
 	if unauthDeleteResponseRecorder.Code != http.StatusUnauthorized {
@@ -218,7 +218,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 4. Delete user passkey - authenticated with empty ID -> 400
-	emptyIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/api/v1/auth/user/passkeys/", nil)
+	emptyIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/v1/auth/user/passkeys/", nil)
 	emptyIDDeleteRequest.Header.Set("Authorization", bearerHeader)
 	emptyIDDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(emptyIDDeleteResponseRecorder, emptyIDDeleteRequest)
@@ -227,7 +227,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 5. Delete user passkey - authenticated with valid ID on nil DB -> 500
-	validIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/api/v1/auth/user/passkeys/pk-1", nil)
+	validIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/v1/auth/user/passkeys/pk-1", nil)
 	validIDDeleteRequest.SetPathValue("id", "pk-1")
 	validIDDeleteRequest.Header.Set("Authorization", bearerHeader)
 	validIDDeleteResponseRecorder := httptest.NewRecorder()
@@ -237,7 +237,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	}
 
 	// 6. Passkey SignUp with Bearer Token and empty user_id -> 200
-	authSignUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
+	authSignUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_name":"Alice"}`))
 	authSignUpRequest.Header.Set("Authorization", bearerHeader)
 	authSignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleBeginPasskeySignUp(authSignUpResponseRecorder, authSignUpRequest)
@@ -248,7 +248,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 	// 7. Passkey SignUpVerify with Bearer Token and empty user_id on nil DB -> 500
 	challenge, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge, testUserUUID, 0)
-	authVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
+	authVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
 	authVerifyRequest.Header.Set("Authorization", bearerHeader)
 	authVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(authVerifyResponseRecorder, authVerifyRequest)

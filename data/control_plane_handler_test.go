@@ -49,7 +49,7 @@ func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 
 	// writeError
 	errorResponseRecorder := httptest.NewRecorder()
-	errorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/test", nil)
+	errorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/test", nil)
 	core.WriteErrorResponse(errorResponseRecorder, errorRequest, http.StatusBadRequest, "bad request")
 	if errorResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", errorResponseRecorder.Code)
@@ -57,7 +57,7 @@ func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 
 	// writeForbidden
 	forbiddenResponseRecorder := httptest.NewRecorder()
-	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/test", nil)
+	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/test", nil)
 	core.WriteErrorResponse(forbiddenResponseRecorder, forbiddenRequest, http.StatusForbidden, "Insufficient scope permissions for this operation")
 	if forbiddenResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenResponseRecorder.Code)
@@ -69,7 +69,7 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 	controlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
 
 	// Path Value extractor test
-	pathValueRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/myschema/mytable/columns/mycolumn", nil)
+	pathValueRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/myschema/mytable/columns/mycolumn", nil)
 	pathValueRequest.SetPathValue("schema_name", "myschema")
 	pathValueRequest.SetPathValue("table_name", "mytable")
 	pathValueRequest.SetPathValue("column_name", "mycolumn")
@@ -91,7 +91,7 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 	}
 
 	// URL path segments fallback test
-	fallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/fallback_schema/fallback_table/columns/fallback_column", nil)
+	fallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/fallback_schema/fallback_table/columns/fallback_column", nil)
 	schema, table = controlPlaneHandler.extractSchemaAndTable(fallbackRequest)
 	if schema != "fallback_schema" || table != "fallback_table" {
 		t.Fatalf("expected fallback_schema/fallback_table, got %s/%s", schema, table)
@@ -100,18 +100,18 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 		t.Fatalf("expected fallback_column, got %s", column)
 	}
 
-	indexFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/fallback_schema/fallback_table/indexes/fallback_index", nil)
+	indexFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/fallback_schema/fallback_table/indexes/fallback_index", nil)
 	if index := controlPlaneHandler.extractIndexName(indexFallbackRequest); index != "fallback_index" {
 		t.Fatalf("expected fallback_index, got %s", index)
 	}
 
-	policyFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/fallback_schema/fallback_table/policies/fallback_policy", nil)
+	policyFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/fallback_schema/fallback_table/policies/fallback_policy", nil)
 	if policy := controlPlaneHandler.extractPolicyName(policyFallbackRequest); policy != "fallback_policy" {
 		t.Fatalf("expected fallback_policy, got %s", policy)
 	}
 
 	// Empty / missing parts test
-	emptyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
+	emptyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
 	schema, table = controlPlaneHandler.extractSchemaAndTable(emptyRequest)
 	if schema != "" || table != "" {
 		t.Fatalf("expected empty schema/table, got %s/%s", schema, table)
@@ -127,7 +127,7 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 	}
 
 	// Test non-matching path with insufficient parts
-	nonMatchingRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users", nil)
+	nonMatchingRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/users", nil)
 	if index := controlPlaneHandler.extractIndexName(nonMatchingRequest); index != "" {
 		t.Fatalf("expected empty index for non-matching path, got %s", index)
 	}
@@ -141,7 +141,7 @@ func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
 
 	// Nil manager returns true
 	handlerWithoutManagerControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
-	allowedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	allowedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	if !handlerWithoutManagerControlPlaneHandler.checkScope(allowedRequest, "data:config.read") {
 		t.Fatal("expected true when serviceAccountManager is nil")
 	}
@@ -163,7 +163,7 @@ func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
 	}
 
 	// Invalid key with serviceAccountManager returns false
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_key")
 	if handlerWithManagerControlPlaneHandler.checkScope(invalidKeyRequest, "data:config.read") {
 		t.Fatal("expected false on invalid service account key")
@@ -175,7 +175,7 @@ func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
 			Role:  "service_role",
 			Scope: "data:config.read",
 		},
-	}), http.MethodGet, "/api/v1/_/data/config", nil)
+	}), http.MethodGet, "/v1/_/data/config", nil)
 	if !handlerWithManagerControlPlaneHandler.checkScope(allowedJWTRequest, "data:config.read") {
 		t.Fatal("expected true on service_role JWT with required scope")
 	}
@@ -186,7 +186,7 @@ func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
 			Role:  "service_role",
 			Scope: "other:scope",
 		},
-	}), http.MethodGet, "/api/v1/_/data/config", nil)
+	}), http.MethodGet, "/v1/_/data/config", nil)
 	if handlerWithManagerControlPlaneHandler.checkScope(deniedJWTRequest, "data:config.read") {
 		t.Fatal("expected false on service_role JWT without required scope")
 	}

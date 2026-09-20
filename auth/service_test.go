@@ -69,7 +69,7 @@ func TestAuthServiceUnit(t *testing.T) {
 			Scope:   "auth:user.read",
 		},
 	})
-	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/api/v1/test", nil)
+	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/v1/test", nil)
 	if !service.CheckScope(m2mValidRequest, "auth:user.read") {
 		t.Fatal("expected CheckScope to return true when M2M AuthContext has required scope")
 	}
@@ -79,19 +79,19 @@ func TestAuthServiceUnit(t *testing.T) {
 
 	// Branch A: serviceAccountManager is nil -> returns true
 	noManagerService := &Service{}
-	noManagerRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/test", nil)
+	noManagerRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
 	if !noManagerService.CheckScope(noManagerRequest, "auth:test.scope") {
 		t.Fatal("expected CheckScope to return true when serviceAccountManager is nil")
 	}
 
 	// Branch B: serviceAccountManager present, but request has no service account key -> returns true
-	noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/test", nil)
+	noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
 	if !service.CheckScope(noKeyRequest, "auth:test.scope") {
 		t.Fatal("expected CheckScope to return true when request has no service account key")
 	}
 
 	// Branch C: serviceAccountManager present, request has invalid secret key -> Authenticate fails -> returns false
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/test", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
 	if service.CheckScope(invalidKeyRequest, "auth:test.scope") {
 		t.Fatal("expected CheckScope to return false when service account authentication fails")

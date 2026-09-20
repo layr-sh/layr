@@ -16,7 +16,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/columns")
 		return
 	}
 	var column Column
@@ -56,7 +56,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	columnName := controlPlaneHandler.extractColumnName(request)
 	if schema == "" || table == "" || columnName == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/columns/{column}")
 		return
 	}
 	var updateColumnInput UpdateColumnInput
@@ -96,7 +96,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWrite
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	columnName := controlPlaneHandler.extractColumnName(request)
 	if schema == "" || table == "" || columnName == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/columns/{column}")
 		return
 	}
 	cascade := request.URL.Query().Get("cascade") == "true"

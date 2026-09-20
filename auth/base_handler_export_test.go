@@ -20,7 +20,7 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Missing user_id path parameter -> 400
-	missingPathRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users//export", nil)
+	missingPathRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users//export", nil)
 	missingPathResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(missingPathResponseRecorder, missingPathRequest)
 	if missingPathResponseRecorder.Code != http.StatusBadRequest {
@@ -28,7 +28,7 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	}
 
 	// 2. Missing auth -> 401
-	missingBearerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/user-123/export", nil)
+	missingBearerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/user-123/export", nil)
 	missingBearerRequest.SetPathValue("user_id", "user-123")
 	missingBearerResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(missingBearerResponseRecorder, missingBearerRequest)
@@ -47,7 +47,7 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	})
 
 	// 3. Mismatched subject -> 401
-	mismatchedRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/users/other-uuid/export", nil)
+	mismatchedRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/users/other-uuid/export", nil)
 	mismatchedRequest.SetPathValue("user_id", "other-uuid")
 	mismatchedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(mismatchedResponseRecorder, mismatchedRequest)
@@ -56,7 +56,7 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 	}
 
 	// 4. Matched subject on nil db pool -> 500
-	matchedRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/api/v1/auth/users/"+testUserUUID+"/export", nil)
+	matchedRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/users/"+testUserUUID+"/export", nil)
 	matchedRequest.SetPathValue("user_id", testUserUUID)
 	matchedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(matchedResponseRecorder, matchedRequest)

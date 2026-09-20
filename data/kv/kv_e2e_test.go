@@ -57,7 +57,7 @@ func TestKVLifecycleE2E(t *testing.T) {
 
 	// 2. Journey 1: Anonymous Visitor querying public catalog
 	// First request: Cache Miss -> compute, cache, return
-	catalogQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/products?select=id,title,price&price=gte.10", nil)
+	catalogQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/products?select=id,title,price&price=gte.10", nil)
 	catalogQueryRequest.Header.Set("X-Forwarded-For", "198.51.100.25")
 	catalogQueryRequest.Header.Set("User-Agent", "MobileSafari/17.0")
 
@@ -108,7 +108,7 @@ func TestKVLifecycleE2E(t *testing.T) {
 			Role:    "customer",
 		},
 	})
-	aliceOrdersRequest := httptest.NewRequestWithContext(aliceCtx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
+	aliceOrdersRequest := httptest.NewRequestWithContext(aliceCtx, http.MethodGet, "/v1/data/orders?customer_id=eq.alice", nil)
 
 	aliceAuthContext := ExtractAuthContext(aliceOrdersRequest, saltSecret)
 	ordersQueryKey := BuildRESTQueryKey("public", "orders", []string{"id", "total"}, nil, []string{"customer_id.eq.alice"}, nil, 10, 0, false, "")
@@ -138,7 +138,7 @@ func TestKVLifecycleE2E(t *testing.T) {
 			Role:    "customer",
 		},
 	})
-	bobOrdersRequest := httptest.NewRequestWithContext(bobCtx, http.MethodGet, "/api/v1/data/orders?customer_id=eq.alice", nil)
+	bobOrdersRequest := httptest.NewRequestWithContext(bobCtx, http.MethodGet, "/v1/data/orders?customer_id=eq.alice", nil)
 
 	bobAuthContext := ExtractAuthContext(bobOrdersRequest, saltSecret)
 	bobInternalOrdersKey := BuildInternalKey(bobAuthContext, ordersQueryKey)

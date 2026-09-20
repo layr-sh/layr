@@ -55,11 +55,11 @@ func TestKVKVStoreIntegration(t *testing.T) {
 	defer func() { _ = databaseKVStore.Close() }()
 
 	// 3. Integration Scenario: Anonymous Visitor Isolation
-	visitorOneRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/users", nil)
+	visitorOneRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/users", nil)
 	visitorOneRequest.Header.Set("X-Forwarded-For", "198.51.100.1")
 	visitorOneRequest.Header.Set("User-Agent", "VisitorOneBrowser/1.0")
 
-	visitorTwoRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/users", nil)
+	visitorTwoRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/users", nil)
 	visitorTwoRequest.Header.Set("X-Forwarded-For", "203.0.113.50")
 	visitorTwoRequest.Header.Set("User-Agent", "VisitorTwoBrowser/2.0")
 

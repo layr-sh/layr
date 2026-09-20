@@ -24,21 +24,21 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	controlPlaneHandler.SetHasher(password.NewHasher())
 
 	// 1. handleCreateUser validation
-	badJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader([]byte(`invalid-json`)))
+	badJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader([]byte(`invalid-json`)))
 	badJSONResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(badJSONResponseRecorder, badJSONRequest)
 	if badJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on invalid JSON, got: %d", badJSONResponseRecorder.Code)
 	}
 
-	emptyUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader([]byte(`{}`)))
+	emptyUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader([]byte(`{}`)))
 	emptyUserResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(emptyUserResponseRecorder, emptyUserRequest)
 	if emptyUserResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on empty user body, got: %d", emptyUserResponseRecorder.Code)
 	}
 
-	invalidPhoneUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader([]byte(`{"phone":"invalid"}`)))
+	invalidPhoneUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader([]byte(`{"phone":"invalid"}`)))
 	invalidPhoneUserResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(invalidPhoneUserResponseRecorder, invalidPhoneUserRequest)
 	if invalidPhoneUserResponseRecorder.Code != http.StatusBadRequest {
@@ -46,14 +46,14 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	}
 
 	// 2. handleListUsers with invalid pagination parameters
-	paginationRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users?limit=bad&offset=bad", nil)
+	paginationRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users?limit=bad&offset=bad", nil)
 	paginationResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUsers(paginationResponseRecorder, paginationRequest)
 	if paginationResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 Internal Server Error on nil db list, got: %d", paginationResponseRecorder.Code)
 	}
 
-	validPaginationRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users?limit=25&offset=10&role=authenticated&search=alice", nil)
+	validPaginationRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users?limit=25&offset=10&role=authenticated&search=alice", nil)
 	validPaginationResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUsers(validPaginationResponseRecorder, validPaginationRequest)
 	if validPaginationResponseRecorder.Code != http.StatusInternalServerError {
@@ -62,7 +62,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 
 	// 3. handleLockUser bad JSON duration
 	testUserID := uuid.NewV7().String()
-	badLockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/lock", bytes.NewReader([]byte(`invalid-json`)))
+	badLockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/lock", bytes.NewReader([]byte(`invalid-json`)))
 	badLockRequest.SetPathValue("user_id", testUserID)
 	badLockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(badLockResponseRecorder, badLockRequest)
@@ -74,7 +74,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	serviceAccountManager := core.NewServiceAccountManager(nil)
 	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
-	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID, nil)
+	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID, nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
 	forbiddenRequest.SetPathValue("user_id", testUserID)
 
@@ -117,7 +117,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	// 5. Test Invalid UUIDs on all single-user endpoints (with valid scope)
 	controlPlaneHandler.SetServiceAccountManager(nil)
 	invalidUUID := "not-a-valid-uuid"
-	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+invalidUUID, nil)
+	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+invalidUUID, nil)
 	invalidUUIDRequest.SetPathValue("user_id", invalidUUID)
 
 	invalidUUIDGetResponseRecorder := httptest.NewRecorder()
@@ -145,7 +145,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	}
 
 	// 6. Test Nil DB on Single-User handlers
-	singleUserRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID, nil)
+	singleUserRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID, nil)
 	singleUserRequest.SetPathValue("user_id", testUserID)
 
 	nilDBGetResponseRecorder := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	}
 
 	// 7. Test handleCreateUser on nil db with valid payload -> 500
-	validCreateUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users", bytes.NewReader([]byte(`{"email":"nildb@example.com","password":"Password123!"}`)))
+	validCreateUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader([]byte(`{"email":"nildb@example.com","password":"Password123!"}`)))
 	validCreateUserResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateUser(validCreateUserResponseRecorder, validCreateUserRequest)
 	if validCreateUserResponseRecorder.Code != http.StatusInternalServerError {
@@ -176,7 +176,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 
 	// 8. Test handleLockUser with explicit locked_until timestamp on nil db -> 500
 	futureTime := time.Now().Add(24 * time.Hour)
-	lockWithTimeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/lock", bytes.NewReader([]byte(`{"locked_until":"`+futureTime.Format(time.RFC3339)+`"}`)))
+	lockWithTimeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/lock", bytes.NewReader([]byte(`{"locked_until":"`+futureTime.Format(time.RFC3339)+`"}`)))
 	lockWithTimeRequest.SetPathValue("user_id", testUserID)
 	lockWithTimeResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockWithTimeResponseRecorder, lockWithTimeRequest)

@@ -97,7 +97,7 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	}
 
 	// 3. handleFlushCache
-	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
+	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
 	flushResponseRecorder := httptest.NewRecorder()
 	dataService.handleFlushCache(flushResponseRecorder, flushRequest)
 	if flushResponseRecorder.Code != http.StatusOK {
@@ -106,7 +106,7 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 
 	// 4. handleInvalidateCache with valid JSON body
 	invalidationReader := bytes.NewReader([]byte(`{"schema":"public","table":"products"}`))
-	invalidationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", invalidationReader)
+	invalidationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", invalidationReader)
 	invalidationResponseRecorder := httptest.NewRecorder()
 	dataService.handleInvalidateCache(invalidationResponseRecorder, invalidationRequest)
 	if invalidationResponseRecorder.Code != http.StatusOK {
@@ -115,7 +115,7 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 
 	// 5. handleInvalidateCache with malformed JSON
 	malformedReader := bytes.NewReader([]byte(`{bad json`))
-	malformedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", malformedReader)
+	malformedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", malformedReader)
 	malformedResponseRecorder := httptest.NewRecorder()
 	dataService.handleInvalidateCache(malformedResponseRecorder, malformedRequest)
 	if malformedResponseRecorder.Code != http.StatusBadRequest {
@@ -123,7 +123,7 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	}
 
 	// 6. handleInvalidateCache with nil body (empty)
-	nilBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", nil)
+	nilBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", nil)
 	nilBodyResponseRecorder := httptest.NewRecorder()
 	dataService.handleInvalidateCache(nilBodyResponseRecorder, nilBodyRequest)
 	if nilBodyResponseRecorder.Code != http.StatusOK {

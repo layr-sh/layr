@@ -16,7 +16,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/indexes")
 		return
 	}
 	indexes, err := controlPlaneHandler.ddlEngine.ListIndexes(request.Context(), schema, table)
@@ -38,7 +38,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	if schema == "" || table == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/indexes")
 		return
 	}
 	var createIndexInput CreateIndexInput
@@ -78,7 +78,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
 	indexName := controlPlaneHandler.extractIndexName(request)
 	if schema == "" || indexName == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes/{index}")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /v1/_/data/tables/{schema}/{table}/indexes/{index}")
 		return
 	}
 	if dropErr := controlPlaneHandler.ddlEngine.DropIndex(request.Context(), schema, indexName); dropErr != nil {

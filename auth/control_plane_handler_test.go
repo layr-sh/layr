@@ -25,7 +25,7 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	controlPlaneHandler.SetHasher(password.NewHasher())
 
 	// 1. checkScope when serviceAccountManager is nil (passes)
-	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	if !controlPlaneHandler.checkScope(listRequest, "auth:user.read") {
 		t.Fatal("expected checkScope to return true when serviceAccountManager is nil")
 	}
@@ -38,7 +38,7 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	}
 
 	// 3. checkScope with invalid secret key
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key")
 	if controlPlaneHandler.checkScope(invalidKeyRequest, "auth:user.read") {
 		t.Fatal("expected checkScope to return false for invalid secret key")
@@ -46,7 +46,7 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 
 	// 4. Test fallback path where PathValue is empty and path does not have user_id segment
 	controlPlaneHandler.SetServiceAccountManager(nil)
-	emptyUserPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/other", nil)
+	emptyUserPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/other", nil)
 	emptyUserPathResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(emptyUserPathResponseRecorder, emptyUserPathRequest)
 	if emptyUserPathResponseRecorder.Code != http.StatusBadRequest {
@@ -54,7 +54,7 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	}
 
 	// 5. Test fallback path where PathValue is empty but path has >= 6 segments with users
-	fallbackUserPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/01234567-89ab-cdef-0123-456789abcdef", nil)
+	fallbackUserPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/01234567-89ab-cdef-0123-456789abcdef", nil)
 	extractedID := controlPlaneHandler.extractUserID(fallbackUserPathRequest)
 	if extractedID != "01234567-89ab-cdef-0123-456789abcdef" {
 		t.Fatalf("expected extracted ID from fallback path, got: %s", extractedID)
@@ -62,14 +62,14 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 
 	// 6. Test nil configManager branches for handleGetConfig and handleUpdateConfig
 	nilConfigControlPlaneHandler := NewControlPlaneHandler(nil, nil)
-	getConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
+	getConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
 	getConfigTestResponseRecorder := httptest.NewRecorder()
 	nilConfigControlPlaneHandler.handleGetConfig(getConfigTestResponseRecorder, getConfigTestRequest)
 	if getConfigTestResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on handleGetConfig with nil configManager, got: %d", getConfigTestResponseRecorder.Code)
 	}
 
-	updateConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader("{}"))
+	updateConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", strings.NewReader("{}"))
 	updateConfigTestResponseRecorder := httptest.NewRecorder()
 	nilConfigControlPlaneHandler.handleUpdateConfig(updateConfigTestResponseRecorder, updateConfigTestRequest)
 	if updateConfigTestResponseRecorder.Code != http.StatusInternalServerError {

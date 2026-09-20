@@ -18,7 +18,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden AddColumn
-	forbiddenAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/columns", bytes.NewReader([]byte(`{}`)))
+	forbiddenAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/columns", bytes.NewReader([]byte(`{}`)))
 	forbiddenAddRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenAddResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateColumn(forbiddenAddResponseRecorder, forbiddenAddRequest)
@@ -27,7 +27,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden AlterColumn
-	forbiddenAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/columns/name", bytes.NewReader([]byte(`{}`)))
+	forbiddenAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/users/columns/name", bytes.NewReader([]byte(`{}`)))
 	forbiddenAlterRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenAlterResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateColumn(forbiddenAlterResponseRecorder, forbiddenAlterRequest)
@@ -36,7 +36,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	}
 
 	// Forbidden DropColumn
-	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/columns/name", nil)
+	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/users/columns/name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteColumn(forbiddenDropResponseRecorder, forbiddenDropRequest)
@@ -51,7 +51,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Missing parameters on AddColumn
-	missingAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
+	missingAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
 	missingAddResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateColumn(missingAddResponseRecorder, missingAddRequest)
 	if missingAddResponseRecorder.Code != http.StatusBadRequest {
@@ -59,7 +59,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Malformed JSON on AddColumn
-	malformedAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/columns", bytes.NewReader([]byte("not json")))
+	malformedAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables/public/users/columns", bytes.NewReader([]byte("not json")))
 	malformedAddRequest.SetPathValue("schema_name", "public")
 	malformedAddRequest.SetPathValue("table_name", "users")
 	malformedAddResponseRecorder := httptest.NewRecorder()
@@ -69,7 +69,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Missing parameters on AlterColumn
-	missingAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/columns", nil)
+	missingAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/users/columns", nil)
 	missingAlterRequest.SetPathValue("schema_name", "public")
 	missingAlterRequest.SetPathValue("table_name", "users")
 	missingAlterResponseRecorder := httptest.NewRecorder()
@@ -79,7 +79,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Malformed JSON on AlterColumn
-	malformedAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/columns/name", bytes.NewReader([]byte("not json")))
+	malformedAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/data/tables/public/users/columns/name", bytes.NewReader([]byte("not json")))
 	malformedAlterRequest.SetPathValue("schema_name", "public")
 	malformedAlterRequest.SetPathValue("table_name", "users")
 	malformedAlterRequest.SetPathValue("column_name", "name")
@@ -90,7 +90,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	}
 
 	// Missing parameters on DropColumn
-	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/columns", nil)
+	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/data/tables/public/users/columns", nil)
 	missingDropRequest.SetPathValue("schema_name", "public")
 	missingDropRequest.SetPathValue("table_name", "users")
 	missingDropResponseRecorder := httptest.NewRecorder()
