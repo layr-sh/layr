@@ -36,6 +36,8 @@ const (
 	ScopeFileStorageBucketWrite = "storage:bucket.write"
 	ScopeFileStorageObjectRead  = "storage:object.read"
 	ScopeFileStorageObjectWrite = "storage:object.write"
+	ScopeFileStorageConfigRead  = "storage:config.read"
+	ScopeFileStorageConfigWrite = "storage:config.write"
 
 	// Tasks scopes
 	ScopeTasksJobRead        = "scheduler:job.read"
