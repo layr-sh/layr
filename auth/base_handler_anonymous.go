@@ -8,7 +8,7 @@ import (
 	"layr.sh/core"
 )
 
-func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleSignInAnonymous(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling anonymous sign-in request")
 	config := handler.configManager.Get()
 	if !config.Anonymous.Enabled {
@@ -16,12 +16,12 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 		return
 	}
 
-	var anonymousSignInRequest AnonymousSignInRequest
+	var signInAnonymousInput SignInAnonymousInput
 	if request.Body != nil {
-		_ = json.NewDecoder(request.Body).Decode(&anonymousSignInRequest)
+		_ = json.NewDecoder(request.Body).Decode(&signInAnonymousInput)
 	}
 
-	inputProperties := anonymousSignInRequest.Properties
+	inputProperties := signInAnonymousInput.Properties
 	if inputProperties == nil {
 		inputProperties = make(map[string]any)
 	}
@@ -33,7 +33,7 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		INSERT INTO auth.users (role, is_anonymous, properties, created_at, last_updated_at)
@@ -41,24 +41,24 @@ func (handler *BaseHandler) handleAnonymousSignIn(responseWriter http.ResponseWr
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := handler.db.QueryRow(ctx, query, propertiesJSON).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to create anonymous user: %v", err))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord, "anonymous")
+	handler.issueSessionResponse(responseWriter, request, user, "anonymous")
 }

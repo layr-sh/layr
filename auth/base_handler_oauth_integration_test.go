@@ -60,7 +60,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	oauthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/authorize", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(oauthAuthResponseResponseRecorder, oauthAuthRequest)
+	baseHandler.handleAuthorizeOAuth(oauthAuthResponseResponseRecorder, oauthAuthRequest)
 	if oauthAuthResponseResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect on OAuth authorize, got: %d", oauthAuthResponseResponseRecorder.Code)
 	}
@@ -79,19 +79,19 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	callbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("/api/v1/auth/oauth/google/callback?code=valid-mock-code&state=%s", generatedState), nil)
 	callbackRequest.SetPathValue("provider", "google")
 	callbackResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(callbackResponseResponseRecorder, callbackRequest)
+	baseHandler.handleProcessOAuthCallback(callbackResponseResponseRecorder, callbackRequest)
 	if callbackResponseResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on first OAuth callback, got: %d (%s)", callbackResponseResponseRecorder.Code, callbackResponseResponseRecorder.Body.String())
 	}
 
-	var firstSessionResponse SessionResponse
-	if err := json.Unmarshal(callbackResponseResponseRecorder.Body.Bytes(), &firstSessionResponse); err != nil {
+	var firstAuthTokenResponse AuthTokenResponse
+	if err := json.Unmarshal(callbackResponseResponseRecorder.Body.Bytes(), &firstAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode auth response JSON: %v", err)
 	}
-	if firstSessionResponse.User.Email == nil || *firstSessionResponse.User.Email != "oauth777@gmail.com" {
-		t.Fatalf("unexpected user email: %v", firstSessionResponse.User.Email)
+	if firstAuthTokenResponse.User.Email == nil || *firstAuthTokenResponse.User.Email != "oauth777@gmail.com" {
+		t.Fatalf("unexpected user email: %v", firstAuthTokenResponse.User.Email)
 	}
-	if firstSessionResponse.User.IsAnonymous {
+	if firstAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected is_anonymous to be false for federated user")
 	}
 
@@ -100,34 +100,34 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	secondCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-mock-code&state=re-login-state", nil)
 	secondCallbackRequest.SetPathValue("provider", "google")
 	secondCallbackResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(secondCallbackResponseResponseRecorder, secondCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(secondCallbackResponseResponseRecorder, secondCallbackRequest)
 	if secondCallbackResponseResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on second OAuth callback, got: %d", secondCallbackResponseResponseRecorder.Code)
 	}
 
-	var secondSessionResponse SessionResponse
-	_ = json.Unmarshal(secondCallbackResponseResponseRecorder.Body.Bytes(), &secondSessionResponse)
-	if secondSessionResponse.User.ID != firstSessionResponse.User.ID {
-		t.Fatalf("expected same user ID %s on second login, got: %s", firstSessionResponse.User.ID, secondSessionResponse.User.ID)
+	var secondAuthTokenResponse AuthTokenResponse
+	_ = json.Unmarshal(secondCallbackResponseResponseRecorder.Body.Bytes(), &secondAuthTokenResponse)
+	if secondAuthTokenResponse.User.ID != firstAuthTokenResponse.User.ID {
+		t.Fatalf("expected same user ID %s on second login, got: %s", firstAuthTokenResponse.User.ID, secondAuthTokenResponse.User.ID)
 	}
 
 	// 4b. Locked federated user callback -> 423
-	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", firstSessionResponse.User.ID)
+	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", firstAuthTokenResponse.User.ID)
 	_ = testKVStore.Set(context.Background(), "auth:pkce:locked-login-state", "locked-login-state", 10*time.Minute)
 	lockedOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-mock-code&state=locked-login-state", nil)
 	lockedOAuthRequest.SetPathValue("provider", "google")
 	lockedOAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(lockedOAuthResponseRecorder, lockedOAuthRequest)
+	baseHandler.handleProcessOAuthCallback(lockedOAuthResponseRecorder, lockedOAuthRequest)
 	if lockedOAuthResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked OAuth callback, got: %d", lockedOAuthResponseRecorder.Code)
 	}
-	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = NULL WHERE id = $1", firstSessionResponse.User.ID)
+	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = NULL WHERE id = $1", firstAuthTokenResponse.User.ID)
 
 	// 5. UserInfo GET returns user from database
-	userInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, Role: "authenticated"}}), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
-	userInfoRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
+	userInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: secondAuthTokenResponse.User.ID, JWT: core.JWTClaims{Subject: secondAuthTokenResponse.User.ID, Role: "authenticated"}}), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
+	userInfoRequest.Header.Set("Authorization", "Bearer "+secondAuthTokenResponse.AccessToken)
 	userInfoResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthUserInfo(userInfoResponseResponseRecorder, userInfoRequest)
+	baseHandler.handleGetOAuthUserInfo(userInfoResponseResponseRecorder, userInfoRequest)
 	if userInfoResponseResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on userinfo, got: %d", userInfoResponseResponseRecorder.Code)
 	}
@@ -144,7 +144,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	nonExistentUserInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: nonExistentUserID, JWT: core.JWTClaims{Subject: nonExistentUserID, Role: "authenticated"}}), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	nonExistentUserInfoRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentUserInfoResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthUserInfo(nonExistentUserInfoResponseRecorder, nonExistentUserInfoRequest)
+	baseHandler.handleGetOAuthUserInfo(nonExistentUserInfoResponseRecorder, nonExistentUserInfoRequest)
 	if nonExistentUserInfoResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on non-existent user info, got: %d", nonExistentUserInfoResponseRecorder.Code)
 	}
@@ -170,12 +170,12 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	}
 	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
-	// Test HandleOAuthAuthorize with active anonymous caller
+	// Test handleAuthorizeOAuth with active anonymous caller
 	anonAuthorizeRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodGet, "/api/v1/auth/oauth/google/authorize", nil)
 	anonAuthorizeRequest.SetPathValue("provider", "google")
 	anonAuthorizeRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	anonAuthorizeResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(anonAuthorizeResponseRecorder, anonAuthorizeRequest)
+	baseHandler.handleAuthorizeOAuth(anonAuthorizeResponseRecorder, anonAuthorizeRequest)
 	if anonAuthorizeResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 on anon oauth authorize, got: %d", anonAuthorizeResponseRecorder.Code)
 	}
@@ -201,21 +201,21 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	conversionRequest.SetPathValue("provider", "google")
 	conversionRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	conversionResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(conversionResponseResponseRecorder, conversionRequest)
+	baseHandler.handleProcessOAuthCallback(conversionResponseResponseRecorder, conversionRequest)
 	if conversionResponseResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on anonymous conversion, got: %d (%s)", conversionResponseResponseRecorder.Code, conversionResponseResponseRecorder.Body.String())
 	}
 
-	var convertedSessionResponse SessionResponse
-	_ = json.Unmarshal(conversionResponseResponseRecorder.Body.Bytes(), &convertedSessionResponse)
-	if convertedSessionResponse.User.ID != anonUserID {
-		t.Fatalf("expected preserved anonymous user ID %s, got: %s", anonUserID, convertedSessionResponse.User.ID)
+	var convertedAuthTokenResponse AuthTokenResponse
+	_ = json.Unmarshal(conversionResponseResponseRecorder.Body.Bytes(), &convertedAuthTokenResponse)
+	if convertedAuthTokenResponse.User.ID != anonUserID {
+		t.Fatalf("expected preserved anonymous user ID %s, got: %s", anonUserID, convertedAuthTokenResponse.User.ID)
 	}
-	if convertedSessionResponse.User.IsAnonymous {
+	if convertedAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected is_anonymous to be false after conversion")
 	}
-	if convertedSessionResponse.User.Email == nil || *convertedSessionResponse.User.Email != "converted@example.com" {
-		t.Fatalf("unexpected converted email: %v", convertedSessionResponse.User.Email)
+	if convertedAuthTokenResponse.User.Email == nil || *convertedAuthTokenResponse.User.Email != "converted@example.com" {
+		t.Fatalf("unexpected converted email: %v", convertedAuthTokenResponse.User.Email)
 	}
 
 	// 7. Conflict handling: identity conflict (another anonymous user tries to link already linked sub)
@@ -236,7 +236,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	conflictRequest.SetPathValue("provider", "google")
 	conflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
 	conflictResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(conflictResponseResponseRecorder, conflictRequest)
+	baseHandler.handleProcessOAuthCallback(conflictResponseResponseRecorder, conflictRequest)
 	if conflictResponseResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict on identity already linked, got: %d", conflictResponseResponseRecorder.Code)
 	}
@@ -262,7 +262,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	emailConflictRequest.SetPathValue("provider", "google")
 	emailConflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
 	emailConflictResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(emailConflictResponseResponseRecorder, emailConflictRequest)
+	baseHandler.handleProcessOAuthCallback(emailConflictResponseResponseRecorder, emailConflictRequest)
 	if emailConflictResponseResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict on email in use, got: %d", emailConflictResponseResponseRecorder.Code)
 	}
@@ -288,7 +288,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	oidcLinkRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=oauth_oidc_state", nil)
 	oidcLinkRequest.SetPathValue("provider", "google")
 	oidcLinkResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oidcLinkResponseResponseRecorder, oidcLinkRequest)
+	baseHandler.handleProcessOAuthCallback(oidcLinkResponseResponseRecorder, oidcLinkRequest)
 	if oidcLinkResponseResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 Found redirect on OIDC state linkage, got: %d", oidcLinkResponseResponseRecorder.Code)
 	}
@@ -309,15 +309,15 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	brokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=broken-pool-state", nil)
 	brokenRequest.SetPathValue("provider", "google")
 	brokenResponseRecorder := httptest.NewRecorder()
-	brokenBaseHandler.HandleOAuthCallback(brokenResponseRecorder, brokenRequest)
+	brokenBaseHandler.handleProcessOAuthCallback(brokenResponseRecorder, brokenRequest)
 	if brokenResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on broken pool, got: %d", brokenResponseRecorder.Code)
 	}
 
-	brokenUserInfoRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil), secondSessionResponse.User.ID, "authenticated", false)
-	brokenUserInfoRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
+	brokenUserInfoRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil), secondAuthTokenResponse.User.ID, "authenticated", false)
+	brokenUserInfoRequest.Header.Set("Authorization", "Bearer "+secondAuthTokenResponse.AccessToken)
 	brokenUserInfoResponseRecorder := httptest.NewRecorder()
-	brokenBaseHandler.HandleOAuthUserInfo(brokenUserInfoResponseRecorder, brokenUserInfoRequest)
+	brokenBaseHandler.handleGetOAuthUserInfo(brokenUserInfoResponseRecorder, brokenUserInfoRequest)
 	if brokenUserInfoResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on userinfo with broken pool, got: %d", brokenUserInfoResponseRecorder.Code)
 	}
@@ -371,32 +371,32 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	_, _ = db.Exec(context.Background(), `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, $2, '127.0.0.1', 'test-agent', clock_timestamp() + interval '1 day', clock_timestamp())
-	`, firstSessionResponse.User.ID, refreshHash)
+	`, firstAuthTokenResponse.User.ID, refreshHash)
 
 	var foundSessionUserID string
 	_ = db.QueryRow(context.Background(), "SELECT user_id FROM auth.sessions WHERE refresh_token_hash = $1", refreshHash).Scan(&foundSessionUserID)
-	if foundSessionUserID != firstSessionResponse.User.ID {
-		t.Fatalf("expected session user %s, got %s", firstSessionResponse.User.ID, foundSessionUserID)
+	if foundSessionUserID != firstAuthTokenResponse.User.ID {
+		t.Fatalf("expected session user %s, got %s", firstAuthTokenResponse.User.ID, foundSessionUserID)
 	}
 
 	// 14. resolveAnonymousCaller branches
-	regularAuthContext := core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, IsAnonymous: false}}
+	regularAuthContext := core.AuthContext{UserID: secondAuthTokenResponse.User.ID, JWT: core.JWTClaims{Subject: secondAuthTokenResponse.User.ID, IsAnonymous: false}}
 	regularAuthRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), regularAuthContext), http.MethodGet, "/", nil)
-	regularAuthRequest.Header.Set("Authorization", "Bearer "+secondSessionResponse.AccessToken)
-	if anonUserRecord, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(regularAuthRequest); anonUserRecord != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for regular user in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveAnonymousCallerErr)
+	regularAuthRequest.Header.Set("Authorization", "Bearer "+secondAuthTokenResponse.AccessToken)
+	if anonUser, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(regularAuthRequest); anonUser != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for regular user in resolveAnonymousCaller, got: %+v (err: %v)", anonUser, resolveAnonymousCallerErr)
 	}
 
-	convertedAuthContext := core.AuthContext{UserID: secondSessionResponse.User.ID, JWT: core.JWTClaims{Subject: secondSessionResponse.User.ID, IsAnonymous: true}}
+	convertedAuthContext := core.AuthContext{UserID: secondAuthTokenResponse.User.ID, JWT: core.JWTClaims{Subject: secondAuthTokenResponse.User.ID, IsAnonymous: true}}
 	convertedAuthRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), convertedAuthContext), http.MethodGet, "/", nil)
-	if anonUserRecord, resolveErr := baseHandler.resolveAnonymousCaller(convertedAuthRequest); anonUserRecord != nil || !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for converted user in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveErr)
+	if anonUser, resolveErr := baseHandler.resolveAnonymousCaller(convertedAuthRequest); anonUser != nil || !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected nil, ErrAnonymousSessionNotFound for converted user in resolveAnonymousCaller, got: %+v (err: %v)", anonUser, resolveErr)
 	}
 
 	brokenAnonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, IsAnonymous: true}}
 	brokenAnonRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), brokenAnonAuthContext), http.MethodGet, "/", nil)
-	if anonUserRecord, resolveAnonymousCallerErr := brokenBaseHandler.resolveAnonymousCaller(brokenAnonRequest); anonUserRecord != nil || resolveAnonymousCallerErr == nil || errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected nil, DB error for broken db in resolveAnonymousCaller, got: %+v (err: %v)", anonUserRecord, resolveAnonymousCallerErr)
+	if anonUser, resolveAnonymousCallerErr := brokenBaseHandler.resolveAnonymousCaller(brokenAnonRequest); anonUser != nil || resolveAnonymousCallerErr == nil || errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected nil, DB error for broken db in resolveAnonymousCaller, got: %+v (err: %v)", anonUser, resolveAnonymousCallerErr)
 	}
 
 	// 15. Failed anonymous user conversion update error
@@ -442,7 +442,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	failUpdateRequest.SetPathValue("provider", "google")
 	failUpdateRequest.Header.Set("Authorization", "Bearer "+failAnonToken)
 	failUpdateResponseResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(failUpdateResponseResponseRecorder, failUpdateRequest)
+	baseHandler.handleProcessOAuthCallback(failUpdateResponseResponseRecorder, failUpdateRequest)
 
 	_, _ = db.Exec(context.Background(), `
 		DROP TRIGGER IF EXISTS fail_update_trigger ON auth.users;

@@ -87,13 +87,13 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on list sessions, got: %d (%s)", cookieListResponseRecorder.Code, cookieListResponseRecorder.Body.String())
 	}
 
-	var cookieListUserSessionsResponse ListUserSessionsResponse
-	_ = json.NewDecoder(cookieListResponseRecorder.Body).Decode(&cookieListUserSessionsResponse)
-	if cookieListUserSessionsResponse.Count != 3 {
-		t.Fatalf("expected 3 sessions, got: %d", cookieListUserSessionsResponse.Count)
+	var cookieListSessionsResponse ListSessionsResponse
+	_ = json.NewDecoder(cookieListResponseRecorder.Body).Decode(&cookieListSessionsResponse)
+	if cookieListSessionsResponse.Count != 3 {
+		t.Fatalf("expected 3 sessions, got: %d", cookieListSessionsResponse.Count)
 	}
 	var currentFound bool
-	for _, s := range cookieListUserSessionsResponse.Sessions {
+	for _, s := range cookieListSessionsResponse.Sessions {
 		if s.ID == session1ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -113,10 +113,10 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	refreshTokenListRequest.Header.Set("X-Refresh-Token", session2Refresh)
 	refreshTokenListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(refreshTokenListResponseRecorder, refreshTokenListRequest)
-	var refreshTokenListUserSessionsResponse ListUserSessionsResponse
-	_ = json.NewDecoder(refreshTokenListResponseRecorder.Body).Decode(&refreshTokenListUserSessionsResponse)
+	var refreshTokenListSessionsResponse ListSessionsResponse
+	_ = json.NewDecoder(refreshTokenListResponseRecorder.Body).Decode(&refreshTokenListSessionsResponse)
 	currentFound = false
-	for _, s := range refreshTokenListUserSessionsResponse.Sessions {
+	for _, s := range refreshTokenListSessionsResponse.Sessions {
 		if s.ID == session2ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -141,10 +141,10 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	sessionIDListRequest.Header.Set("Authorization", "Bearer "+session3Token)
 	sessionIDListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(sessionIDListResponseRecorder, sessionIDListRequest)
-	var sessionIDListUserSessionsResponse ListUserSessionsResponse
-	_ = json.NewDecoder(sessionIDListResponseRecorder.Body).Decode(&sessionIDListUserSessionsResponse)
+	var sessionIDListSessionsResponse ListSessionsResponse
+	_ = json.NewDecoder(sessionIDListResponseRecorder.Body).Decode(&sessionIDListSessionsResponse)
 	currentFound = false
-	for _, s := range sessionIDListUserSessionsResponse.Sessions {
+	for _, s := range sessionIDListSessionsResponse.Sessions {
 		if s.ID == session3ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -176,9 +176,9 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	singleListRequest.Header.Set("Authorization", "Bearer "+singleToken)
 	singleListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListSessions(singleListResponseRecorder, singleListRequest)
-	var singleListUserSessionsResponse ListUserSessionsResponse
-	_ = json.NewDecoder(singleListResponseRecorder.Body).Decode(&singleListUserSessionsResponse)
-	if singleListUserSessionsResponse.Count != 1 || !singleListUserSessionsResponse.Sessions[0].IsCurrent {
+	var singleListSessionsResponse ListSessionsResponse
+	_ = json.NewDecoder(singleListResponseRecorder.Body).Decode(&singleListSessionsResponse)
+	if singleListSessionsResponse.Count != 1 || !singleListSessionsResponse.Sessions[0].IsCurrent {
 		t.Fatalf("expected single session fallback to mark IsCurrent = true")
 	}
 

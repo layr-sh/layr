@@ -16,14 +16,14 @@ func NewConfigUpdatedEvent(key string, configUpdatedEventData ConfigUpdatedEvent
 
 // SessionCreatedEventData represents the payload for auth.session.created.
 type SessionCreatedEventData struct {
-	ID         string     `json:"id"`
-	User       UserRecord `json:"user"`
-	AuthMethod string     `json:"auth_method,omitempty"`
-	Provider   string     `json:"provider,omitempty"`
-	IPAddress  *string    `json:"ip_address,omitempty"`
-	UserAgent  *string    `json:"user_agent,omitempty"`
-	ExpiresAt  time.Time  `json:"expires_at"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID         string    `json:"id"`
+	User       User      `json:"user"`
+	AuthMethod string    `json:"auth_method,omitempty"`
+	Provider   string    `json:"provider,omitempty"`
+	IPAddress  *string   `json:"ip_address,omitempty"`
+	UserAgent  *string   `json:"user_agent,omitempty"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // NewSessionCreatedEvent creates a typed event for session creation.
@@ -33,9 +33,9 @@ func NewSessionCreatedEvent(resourceID string, sessionCreatedEventData SessionCr
 
 // SessionDeletedEventData represents the payload for auth.session.deleted.
 type SessionDeletedEventData struct {
-	User         UserRecord `json:"user"`
-	SessionID    *string    `json:"session_id,omitempty"`
-	RevokedCount *int       `json:"revoked_count,omitempty"`
+	User         User    `json:"user"`
+	SessionID    *string `json:"session_id,omitempty"`
+	RevokedCount *int    `json:"revoked_count,omitempty"`
 }
 
 // NewSessionDeletedEvent creates a typed event for session deletion or revocation.
@@ -45,10 +45,10 @@ func NewSessionDeletedEvent(resourceID string, sessionDeletedEventData SessionDe
 
 // PasskeyCreatedEventData represents the payload for auth.passkey.created.
 type PasskeyCreatedEventData struct {
-	ID           string     `json:"id"`
-	User         UserRecord `json:"user"`
-	FriendlyName string     `json:"friendly_name,omitempty"`
-	Transports   []string   `json:"transports,omitempty"`
+	ID           string   `json:"id"`
+	User         User     `json:"user"`
+	FriendlyName string   `json:"friendly_name,omitempty"`
+	Transports   []string `json:"transports,omitempty"`
 }
 
 // NewPasskeyCreatedEvent creates a typed event for passkey credential creation.
@@ -58,8 +58,8 @@ func NewPasskeyCreatedEvent(resourceID string, passkeyCreatedEventData PasskeyCr
 
 // PasskeyDeletedEventData represents the payload for auth.passkey.deleted.
 type PasskeyDeletedEventData struct {
-	ID   string     `json:"id"`
-	User UserRecord `json:"user"`
+	ID   string `json:"id"`
+	User User   `json:"user"`
 }
 
 // NewPasskeyDeletedEvent creates a typed event for passkey credential revocation.
@@ -68,7 +68,7 @@ func NewPasskeyDeletedEvent(resourceID string, passkeyDeletedEventData PasskeyDe
 }
 
 // UserSignedUpEventData represents the payload for auth.user.signed_up.
-type UserSignedUpEventData UserRecord
+type UserSignedUpEventData User
 
 // NewUserSignedUpEvent creates a typed event for user sign up.
 func NewUserSignedUpEvent(resourceID string, userSignedUpEventData UserSignedUpEventData) core.Event {
@@ -76,7 +76,7 @@ func NewUserSignedUpEvent(resourceID string, userSignedUpEventData UserSignedUpE
 }
 
 // UserConvertedEventData represents the payload for auth.user.converted.
-type UserConvertedEventData UserRecord
+type UserConvertedEventData User
 
 // NewUserConvertedEvent creates a typed event for anonymous-to-authenticated user conversion.
 func NewUserConvertedEvent(resourceID string, userConvertedEventData UserConvertedEventData) core.Event {
@@ -84,7 +84,7 @@ func NewUserConvertedEvent(resourceID string, userConvertedEventData UserConvert
 }
 
 // UserEmailVerifiedEventData represents the payload for auth.user.email_verified.
-type UserEmailVerifiedEventData UserRecord
+type UserEmailVerifiedEventData User
 
 // NewUserEmailVerifiedEvent creates a typed event for user email verification.
 func NewUserEmailVerifiedEvent(resourceID string, userEmailVerifiedEventData UserEmailVerifiedEventData) core.Event {
@@ -92,7 +92,7 @@ func NewUserEmailVerifiedEvent(resourceID string, userEmailVerifiedEventData Use
 }
 
 // UserPhoneVerifiedEventData represents the payload for auth.user.phone_verified.
-type UserPhoneVerifiedEventData UserRecord
+type UserPhoneVerifiedEventData User
 
 // NewUserPhoneVerifiedEvent creates a typed event for user phone verification.
 func NewUserPhoneVerifiedEvent(resourceID string, userPhoneVerifiedEventData UserPhoneVerifiedEventData) core.Event {
@@ -100,7 +100,7 @@ func NewUserPhoneVerifiedEvent(resourceID string, userPhoneVerifiedEventData Use
 }
 
 // UserUpdatedEventData represents the payload for auth.user.updated.
-type UserUpdatedEventData UserRecord
+type UserUpdatedEventData User
 
 // NewUserUpdatedEvent creates a typed event for user updates.
 func NewUserUpdatedEvent(resourceID string, userUpdatedEventData UserUpdatedEventData) core.Event {
@@ -108,7 +108,7 @@ func NewUserUpdatedEvent(resourceID string, userUpdatedEventData UserUpdatedEven
 }
 
 // UserDeletedEventData represents the payload for auth.user.deleted.
-type UserDeletedEventData UserRecord
+type UserDeletedEventData User
 
 // NewUserDeletedEvent creates a typed event for user account deletion.
 func NewUserDeletedEvent(resourceID string, userDeletedEventData UserDeletedEventData) core.Event {
@@ -117,8 +117,8 @@ func NewUserDeletedEvent(resourceID string, userDeletedEventData UserDeletedEven
 
 // PasswordResetRequestedEventData represents the payload for auth.password.reset_requested.
 type PasswordResetRequestedEventData struct {
-	Recipient string     `json:"recipient"`
-	User      UserRecord `json:"user"`
+	Recipient string `json:"recipient"`
+	User      User   `json:"user"`
 }
 
 // NewPasswordResetRequestedEvent creates a typed event for password reset request.
@@ -128,8 +128,8 @@ func NewPasswordResetRequestedEvent(resourceID string, passwordResetRequestedEve
 
 // PasswordResetEventData represents the payload for auth.password.reset.
 type PasswordResetEventData struct {
-	Recipient string     `json:"recipient"`
-	User      UserRecord `json:"user"`
+	Recipient string `json:"recipient"`
+	User      User   `json:"user"`
 }
 
 // NewPasswordResetEvent creates a typed event for password reset completion.
@@ -138,7 +138,7 @@ func NewPasswordResetEvent(resourceID string, passwordResetEventData PasswordRes
 }
 
 // PasswordChangedEventData represents the payload for auth.password.changed.
-type PasswordChangedEventData UserRecord
+type PasswordChangedEventData User
 
 // NewPasswordChangedEvent creates a typed event for password change.
 func NewPasswordChangedEvent(resourceID string, passwordChangedEventData PasswordChangedEventData) core.Event {
@@ -146,7 +146,7 @@ func NewPasswordChangedEvent(resourceID string, passwordChangedEventData Passwor
 }
 
 // MFAEnabledEventData represents the payload for auth.mfa.enabled.
-type MFAEnabledEventData UserRecord
+type MFAEnabledEventData User
 
 // NewMFAEnabledEvent creates a typed event for multi-factor authentication enablement.
 func NewMFAEnabledEvent(resourceID string, mfaEnabledEventData MFAEnabledEventData) core.Event {
@@ -154,7 +154,7 @@ func NewMFAEnabledEvent(resourceID string, mfaEnabledEventData MFAEnabledEventDa
 }
 
 // MFADisabledEventData represents the payload for auth.mfa.disabled.
-type MFADisabledEventData UserRecord
+type MFADisabledEventData User
 
 // NewMFADisabledEvent creates a typed event for multi-factor authentication disablement.
 func NewMFADisabledEvent(resourceID string, mfaDisabledEventData MFADisabledEventData) core.Event {
@@ -163,10 +163,10 @@ func NewMFADisabledEvent(resourceID string, mfaDisabledEventData MFADisabledEven
 
 // OTPSentEventData represents the payload for auth.otp.sent.
 type OTPSentEventData struct {
-	Recipient string      `json:"recipient"`
-	Purpose   string      `json:"purpose"`
-	Channel   string      `json:"channel"`
-	User      *UserRecord `json:"user,omitempty"`
+	Recipient string `json:"recipient"`
+	Purpose   string `json:"purpose"`
+	Channel   string `json:"channel"`
+	User      *User  `json:"user,omitempty"`
 }
 
 // NewOTPSentEvent creates a typed event for dispatched one-time passwords.
@@ -176,10 +176,10 @@ func NewOTPSentEvent(resourceID string, otpSentEventData OTPSentEventData) core.
 
 // OTPVerifiedEventData represents the payload for auth.otp.verified.
 type OTPVerifiedEventData struct {
-	Recipient string      `json:"recipient"`
-	Purpose   string      `json:"purpose"`
-	Channel   string      `json:"channel"`
-	User      *UserRecord `json:"user,omitempty"`
+	Recipient string `json:"recipient"`
+	Purpose   string `json:"purpose"`
+	Channel   string `json:"channel"`
+	User      *User  `json:"user,omitempty"`
 }
 
 // NewOTPVerifiedEvent creates a typed event for verified one-time passwords.
@@ -188,7 +188,7 @@ func NewOTPVerifiedEvent(resourceID string, otpVerifiedEventData OTPVerifiedEven
 }
 
 // UserCreatedEventData represents the payload for auth.user.created.
-type UserCreatedEventData UserRecord
+type UserCreatedEventData User
 
 // NewUserCreatedEvent creates a typed event for user creation.
 func NewUserCreatedEvent(resourceID string, userCreatedEventData UserCreatedEventData) core.Event {
@@ -197,7 +197,7 @@ func NewUserCreatedEvent(resourceID string, userCreatedEventData UserCreatedEven
 
 // UserLockedEventData represents the payload for auth.user.locked.
 type UserLockedEventData struct {
-	User        UserRecord `json:"user"`
+	User        User       `json:"user"`
 	LockedUntil *time.Time `json:"locked_until,omitempty"`
 }
 
@@ -207,7 +207,7 @@ func NewUserLockedEvent(resourceID string, userLockedEventData UserLockedEventDa
 }
 
 // UserUnlockedEventData represents the payload for auth.user.unlocked.
-type UserUnlockedEventData UserRecord
+type UserUnlockedEventData User
 
 // NewUserUnlockedEvent creates a typed event for user account unlocking.
 func NewUserUnlockedEvent(resourceID string, userUnlockedEventData UserUnlockedEventData) core.Event {
@@ -239,12 +239,12 @@ func NewBotChallengeFailedEvent(resourceID string, botChallengeFailedEventData B
 
 // SuspiciousSignInEventData represents the payload for auth.user.suspicious_sign_in.
 type SuspiciousSignInEventData struct {
-	User      UserRecord `json:"user"`
-	IPAddress string     `json:"ip_address"`
-	UserAgent string     `json:"user_agent"`
-	RiskScore int        `json:"risk_score"`
-	RiskLevel string     `json:"risk_level"`
-	Reasons   []string   `json:"reasons"`
+	User      User     `json:"user"`
+	IPAddress string   `json:"ip_address"`
+	UserAgent string   `json:"user_agent"`
+	RiskScore int      `json:"risk_score"`
+	RiskLevel string   `json:"risk_level"`
+	Reasons   []string `json:"reasons"`
 }
 
 // NewSuspiciousSignInEvent creates a typed event for anomalous or new-device sign-in detections.
@@ -254,12 +254,12 @@ func NewSuspiciousSignInEvent(resourceID string, suspiciousSignInEventData Suspi
 
 // UserSignInFailedEventData represents the payload for auth.user.sign_in_failed.
 type UserSignInFailedEventData struct {
-	Identifier string      `json:"identifier"`
-	AuthMethod string      `json:"auth_method"`
-	Reason     string      `json:"reason"`
-	IPAddress  string      `json:"ip_address"`
-	UserAgent  string      `json:"user_agent"`
-	User       *UserRecord `json:"user,omitempty"`
+	Identifier string `json:"identifier"`
+	AuthMethod string `json:"auth_method"`
+	Reason     string `json:"reason"`
+	IPAddress  string `json:"ip_address"`
+	UserAgent  string `json:"user_agent"`
+	User       *User  `json:"user,omitempty"`
 }
 
 // NewUserSignInFailedEvent creates a typed event for failed authentication attempts.
@@ -269,11 +269,11 @@ func NewUserSignInFailedEvent(resourceID string, userSignInFailedEventData UserS
 
 // MFAChallengeFailedEventData represents the payload for auth.mfa.challenge_failed.
 type MFAChallengeFailedEventData struct {
-	UserID    string      `json:"user_id,omitempty"`
-	Reason    string      `json:"reason"`
-	IPAddress string      `json:"ip_address"`
-	UserAgent string      `json:"user_agent"`
-	User      *UserRecord `json:"user,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
+	Reason    string `json:"reason"`
+	IPAddress string `json:"ip_address"`
+	UserAgent string `json:"user_agent"`
+	User      *User  `json:"user,omitempty"`
 }
 
 // NewMFAChallengeFailedEvent creates a typed event for failed multi-factor authentication challenges.
@@ -311,7 +311,7 @@ func NewRateLimitExceededEvent(resourceID string, rateLimitExceededEventData Rat
 }
 
 // UserExportedEventData represents the payload for auth.user.exported.
-type UserExportedEventData UserRecord
+type UserExportedEventData User
 
 // NewUserExportedEvent creates a typed event for user account data export under GDPR.
 func NewUserExportedEvent(resourceID string, userExportedEventData UserExportedEventData) core.Event {

@@ -16,26 +16,26 @@ const (
 	defaultOTPCooldown = 60 * time.Second
 )
 
-func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp send rejected: OTP authentication is disabled in configuration")
 		return
 	}
 
-	var otpSendRequest OTPSendRequest
-	if err := json.NewDecoder(request.Body).Decode(&otpSendRequest); err != nil || otpSendRequest.Recipient == "" {
+	var sendOTPInput SendOTPInput
+	if err := json.NewDecoder(request.Body).Decode(&sendOTPInput); err != nil || sendOTPInput.Recipient == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required")
 		return
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, otpSendRequest.CaptchaToken, "/api/v1/auth/otp/send") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, sendOTPInput.CaptchaToken, "/api/v1/auth/otp") {
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(otpSendRequest.Recipient))
-	purpose := strings.TrimSpace(otpSendRequest.Purpose)
+	recipient := strings.TrimSpace(strings.ToLower(sendOTPInput.Recipient))
+	purpose := strings.TrimSpace(sendOTPInput.Purpose)
 	if purpose == "" {
 		purpose = "sign_in"
 	}
@@ -116,41 +116,41 @@ func (handler *BaseHandler) handleOTPSend(responseWriter http.ResponseWriter, re
 	}
 
 	if handler.eventBus != nil {
-		var targetUserRecord *UserRecord
-		if userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient); err == nil {
-			targetUserRecord = &userRecord
+		var targetUser *User
+		if user, err := fetchUserByRecipient(ctx, handler.db, recipient); err == nil {
+			targetUser = &user
 		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
 			Recipient: recipient,
 			Purpose:   purpose,
 			Channel:   channel,
-			User:      targetUserRecord,
+			User:      targetUser,
 		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp verify rejected: OTP authentication is disabled in configuration")
 		return
 	}
 
-	var otpVerifyRequest OTPVerifyRequest
-	if err := json.NewDecoder(request.Body).Decode(&otpVerifyRequest); err != nil || otpVerifyRequest.Recipient == "" || otpVerifyRequest.Code == "" {
+	var verifyOTPInput VerifyOTPInput
+	if err := json.NewDecoder(request.Body).Decode(&verifyOTPInput); err != nil || verifyOTPInput.Recipient == "" || verifyOTPInput.Code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code required")
 		return
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, otpVerifyRequest.CaptchaToken, "/api/v1/auth/otp/verify") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, verifyOTPInput.CaptchaToken, "/api/v1/auth/otp/verify") {
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(otpVerifyRequest.Recipient))
-	purpose := strings.TrimSpace(otpVerifyRequest.Purpose)
+	recipient := strings.TrimSpace(strings.ToLower(verifyOTPInput.Recipient))
+	purpose := strings.TrimSpace(verifyOTPInput.Purpose)
 	if purpose == "" {
 		purpose = "sign_in"
 	}
@@ -210,7 +210,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	if !otp.VerifyCode(otpVerifyRequest.Code, storedHash) {
+	if !otp.VerifyCode(verifyOTPInput.Code, storedHash) {
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
@@ -236,8 +236,8 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient))
 	}
 
-	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)
-	if anonymousUserRecord != nil {
+	anonymousUser, _ := handler.resolveAnonymousCaller(request)
+	if anonymousUser != nil {
 		var conflictingUserID string
 		var checkQuery string
 		if isEmail {
@@ -246,7 +246,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			checkQuery = "SELECT id FROM auth.users WHERE phone = $1"
 		}
 		conflictErr := handler.db.QueryRow(ctx, checkQuery, recipient).Scan(&conflictingUserID)
-		if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
+		if conflictErr == nil && conflictingUserID != anonymousUser.ID {
 			if isEmail {
 				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 			} else {
@@ -255,7 +255,7 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			return
 		}
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		if isEmail {
 			_ = handler.db.QueryRow(ctx, `
@@ -263,11 +263,11 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-			`, recipient, anonymousUserRecord.ID).Scan(
-				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			`, recipient, anonymousUser.ID).Scan(
+				&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+				&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+				&user.EncryptedMFASecret, &user.MFAEnabled,
+				&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 			)
 		} else {
 			_ = handler.db.QueryRow(ctx, `
@@ -275,35 +275,35 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-			`, recipient, anonymousUserRecord.ID).Scan(
-				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			`, recipient, anonymousUser.ID).Scan(
+				&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+				&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+				&user.EncryptedMFASecret, &user.MFAEnabled,
+				&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 			)
 		}
 
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
 				Recipient: recipient,
 				Purpose:   purpose,
 				Channel:   channel,
-				User:      &userRecord,
+				User:      &user,
 			}))
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
+		handler.issueSessionResponse(responseWriter, request, user, "otp")
 		return
 	}
 
 	// Ensure User exists
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	var isNewUser bool
 	if isEmail {
@@ -313,10 +313,10 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 		`, recipient).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt, &isNewUser,
 		)
 	} else {
 		_ = handler.db.QueryRow(ctx, `
@@ -325,19 +325,19 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 			ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 		`, recipient).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt, &isNewUser,
 		)
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if !isNewUser && user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		if handler.eventBus != nil {
 			handler.eventBus.Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
 				Recipient: recipient,
@@ -354,15 +354,15 @@ func (handler *BaseHandler) handleOTPVerify(responseWriter http.ResponseWriter, 
 
 	if handler.eventBus != nil {
 		if isNewUser {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 		}
 		handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
 			Recipient: recipient,
 			Purpose:   purpose,
 			Channel:   channel,
-			User:      &userRecord,
+			User:      &user,
 		}))
 	}
 
-	handler.completeSignInFlow(responseWriter, request, userRecord, "otp")
+	handler.completeSignInFlow(responseWriter, request, user, "otp")
 }

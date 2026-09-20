@@ -24,44 +24,44 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	userResponse := UserResponse{
-		ID:            userRecord.ID,
-		Email:         userRecord.Email,
-		Phone:         userRecord.Phone,
-		Role:          userRecord.Role,
-		IsAnonymous:   userRecord.IsAnonymous,
-		EmailVerified: userRecord.EmailVerifiedAt != nil,
-		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
-		MFAEnabled:    userRecord.MFAEnabled,
-		Properties:    userRecord.Properties,
-		CreatedAt:     userRecord.CreatedAt,
-		LastUpdatedAt: userRecord.LastUpdatedAt,
+	getUserResponse := GetUserResponse{
+		ID:            user.ID,
+		Email:         user.Email,
+		Phone:         user.Phone,
+		Role:          user.Role,
+		IsAnonymous:   user.IsAnonymous,
+		EmailVerified: user.EmailVerifiedAt != nil,
+		PhoneVerified: user.PhoneVerifiedAt != nil,
+		MFAEnabled:    user.MFAEnabled,
+		Properties:    user.Properties,
+		CreatedAt:     user.CreatedAt,
+		LastUpdatedAt: user.LastUpdatedAt,
 	}
 
 	log.Debugf("user profile successfully retrieved for %s", userID)
-	handler.writeJSON(responseWriter, userResponse)
+	handler.writeJSON(responseWriter, getUserResponse)
 }
 
 func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
@@ -72,8 +72,8 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 	}
 	userID := authContext.UserID
 
-	var updateUpdateUserPropertiesRequest UpdateUserPropertiesRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUpdateUserPropertiesRequest); decodeErr != nil {
+	var updateUserPropertiesInput UpdateUserPropertiesInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPropertiesInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
@@ -83,10 +83,10 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		return
 	}
 
-	propertiesJSON, _ := json.Marshal(updateUpdateUserPropertiesRequest.Properties)
+	propertiesJSON, _ := json.Marshal(updateUserPropertiesInput.Properties)
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		UPDATE auth.users
@@ -95,28 +95,28 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		WHERE id = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, propertiesJSON, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user properties for %s: %v", userID, err))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 	}
 
 	log.Debugf("user properties successfully updated for %s", userID)
 	handler.writeJSON(responseWriter, UpdateUserPropertiesResponse{
-		Properties: userRecord.Properties,
+		Properties: user.Properties,
 	})
 }
 
@@ -135,20 +135,20 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 
 	ctx := request.Context()
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	_ = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	sessionRows, err := handler.db.Query(ctx, "SELECT refresh_token_hash FROM auth.sessions WHERE user_id = $1", userID)
@@ -168,71 +168,71 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 		return
 	}
 
-	if userRecord.Email != nil && *userRecord.Email != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *userRecord.Email)
+	if user.Email != nil && *user.Email != "" {
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Email)
 	}
-	if userRecord.Phone != nil && *userRecord.Phone != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *userRecord.Phone)
+	if user.Phone != nil && *user.Phone != "" {
+		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Phone)
 	}
 
 	core.ClearSessionCookie(responseWriter, request)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserDeletedEvent(userRecord.ID, UserDeletedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 	}
 
 	log.Debugf("user account %s deleted successfully", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func fetchUserRecordByID(ctx context.Context, db *core.DatabasePool, userID string) (UserRecord, error) {
+func fetchUserByID(ctx context.Context, db *core.DatabasePool, userID string) (User, error) {
 	if db == nil {
-		return UserRecord{ID: userID}, errors.New("database pool unavailable")
+		return User{ID: userID}, errors.New("database pool unavailable")
 	}
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		return UserRecord{ID: userID}, err
+		return User{ID: userID}, err
 	}
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
-	return userRecord, nil
+	return user, nil
 }
 
-func fetchUserRecordByRecipient(ctx context.Context, db *core.DatabasePool, recipient string) (UserRecord, error) {
+func fetchUserByRecipient(ctx context.Context, db *core.DatabasePool, recipient string) (User, error) {
 	if db == nil {
-		return UserRecord{}, errors.New("database pool unavailable")
+		return User{}, errors.New("database pool unavailable")
 	}
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE email = $1 OR phone = $1
 	`, recipient).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		return UserRecord{}, err
+		return User{}, err
 	}
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
-	return userRecord, nil
+	return user, nil
 }

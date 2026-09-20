@@ -18,7 +18,7 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 
 func (service *Service) registerBaseRoutes(router *core.Router) {
 	// 1. REST Auto-CRUD Gateway
-	core.GetRoute[TableRowsResponse](router, "/api/v1/data/{schema_name}/{table_name}", service.baseHandler.HandleListRecords,
+	core.GetRoute[ListRecordsResponse](router, "/api/v1/data/{schema_name}/{table_name}", service.baseHandler.handleListRecords,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Query multiple rows with pagination, filtering, and sorting"),
 		core.RouteDescription("Queries PostgreSQL table with dynamic filters, JSON path filtering, pagination, and sorting with RLS enforcement."),
@@ -26,7 +26,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.GetRoute[TableRowResponse](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.HandleGetRecord,
+	core.GetRoute[GetRecordResponse](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.handleGetRecord,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Get a single row by primary key"),
 		core.RouteDescription("Retrieves a single row from PostgreSQL by its UUID or primary key with RLS enforcement."),
@@ -34,7 +34,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PostRoute[TableRowsResponse, InsertRowPayload](router, "/api/v1/data/{schema_name}/{table_name}", service.baseHandler.HandleCreateRecords,
+	core.PostRoute[CreateRecordResponse, CreateRecordInput](router, "/api/v1/data/{schema_name}/{table_name}", service.baseHandler.handleCreateRecord,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Insert single or bulk rows with RETURNING *"),
 		core.RouteDescription("Inserts a single row or batch of records into PostgreSQL, automatically applying defaults and returning inserted tuples."),
@@ -42,7 +42,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.PatchRoute[TableRowResponse, UpdateRowPayload](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.HandleUpdateRecord,
+	core.PatchRoute[UpdateRecordResponse, UpdateRecordInput](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.handleUpdateRecord,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Partially update a row by primary key"),
 		core.RouteDescription("Applies a partial update to a row identified by primary key, validating against RLS UPDATE policies."),
@@ -50,7 +50,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.PutRoute[TableRowResponse, UpdateRowPayload](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.HandleUpdateRecord,
+	core.PutRoute[UpdateRecordResponse, UpdateRecordInput](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.handleUpdateRecord,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Update a row by primary key"),
 		core.RouteDescription("Updates a row identified by primary key, validating against RLS UPDATE policies."),
@@ -58,7 +58,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("put"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.HandleDeleteRecord,
+	core.DeleteRoute[core.Empty](router, "/api/v1/data/{schema_name}/{table_name}/{record_id}", service.baseHandler.handleDeleteRecord,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Delete a row by primary key"),
 		core.RouteDescription("Deletes a row by primary key from PostgreSQL subject to RLS DELETE policies."),
@@ -67,7 +67,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "records"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.GetRoute[ExecuteFunctionResponse](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.HandleExecuteFunction,
+	core.GetRoute[ExecuteFunctionResponse](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.handleExecuteFunction,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Execute database stored function or procedure (read-only)"),
 		core.RouteDescription("Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims using query parameters."),
@@ -75,7 +75,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "rpc"),
 		core.RouteSDKMethodName("query"),
 	)
-	core.PostRoute[ExecuteFunctionResponse, ExecuteFunctionRequest](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.HandleExecuteFunction,
+	core.PostRoute[ExecuteFunctionResponse, ExecuteFunctionInput](router, "/api/v1/data/{schema_name}/rpc/{function_name}", service.baseHandler.handleExecuteFunction,
 		core.RouteTag("Data REST Gateway"),
 		core.RouteSummary("Execute database stored function or procedure"),
 		core.RouteDescription("Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims."),
@@ -85,7 +85,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 2. Developer Ephemeral KV Endpoints
-	core.PostRoute[KVMGetResponse, KVMGetRequest](router, "/api/v1/data/kv/mget", service.baseHandler.HandleMGetKV,
+	core.PostRoute[GetMultipleKVResponse, GetMultipleKVInput](router, "/api/v1/data/kv/mget", service.baseHandler.handleGetMultipleKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Multi-get KV entries by list of keys"),
 		core.RouteDescription("Batch fetches multiple keys from the ephemeral KV cache in a single atomic pipelined round-trip."),
@@ -93,7 +93,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("mget"),
 	)
-	core.PostRoute[KVMSetResponse, KVMSetRequest](router, "/api/v1/data/kv/mset", service.baseHandler.HandleMSetKV,
+	core.PostRoute[SetMultipleKVResponse, SetMultipleKVInput](router, "/api/v1/data/kv/mset", service.baseHandler.handleSetMultipleKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Batch set multiple KV entries"),
 		core.RouteDescription("Batch stores multiple key-value entries in the ephemeral KV store in a single round-trip."),
@@ -101,7 +101,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("mset"),
 	)
-	core.PostRoute[KVIncrementResponse, KVIncrementRequest](router, "/api/v1/data/kv/increment", service.baseHandler.HandleIncrementKV,
+	core.PostRoute[IncrementKVResponse, IncrementKVInput](router, "/api/v1/data/kv/increment", service.baseHandler.handleIncrementKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Atomically increment or decrement a KV key"),
 		core.RouteDescription("Atomically increments or decrements an integer counter in the KV cache with custom step and TTL preservation."),
@@ -109,7 +109,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("increment"),
 	)
-	core.GetRoute[KVGetResponse](router, "/api/v1/data/kv/{key}", service.baseHandler.HandleGetKV,
+	core.GetRoute[GetKVResponse](router, "/api/v1/data/kv/{key}", service.baseHandler.handleGetKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Get an ephemeral KV entry by key"),
 		core.RouteDescription("Retrieves an ephemeral key-value entry with session/tenant isolation from the distributed KV store."),
@@ -117,7 +117,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PostRoute[KVSetResponse, KVSetRequest](router, "/api/v1/data/kv/{key}", service.baseHandler.HandlePostKV,
+	core.PostRoute[SetKVResponse, SetKVInput](router, "/api/v1/data/kv/{key}", service.baseHandler.handleSetKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Set an ephemeral KV entry with envelope"),
 		core.RouteDescription("Stores a key-value entry in the ephemeral KV store with { value, ttl } JSON envelope and optional SetNX."),
@@ -125,7 +125,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("set"),
 	)
-	core.PutRoute[KVSetResponse, string](router, "/api/v1/data/kv/{key}", service.baseHandler.HandlePutKV,
+	core.PutRoute[SetKVResponse, string](router, "/api/v1/data/kv/{key}", service.baseHandler.handleUpdateKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Put raw ephemeral KV entry"),
 		core.RouteDescription("Stores raw request body directly in the ephemeral KV store with optional ?ttl= query parameter and SetNX."),
@@ -133,7 +133,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("put"),
 	)
-	core.PatchRoute[KVTouchResponse, KVTouchRequest](router, "/api/v1/data/kv/{key}", service.baseHandler.HandlePatchKV,
+	core.PatchRoute[TouchKVResponse, TouchKVInput](router, "/api/v1/data/kv/{key}", service.baseHandler.handleTouchKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Refresh TTL of an ephemeral KV entry"),
 		core.RouteDescription("Updates expiration TTL of an existing key without modifying its value."),
@@ -141,7 +141,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "kv"),
 		core.RouteSDKMethodName("touch"),
 	)
-	core.DeleteRoute[core.Empty](router, "/api/v1/data/kv/{key}", service.baseHandler.HandleDeleteKV,
+	core.DeleteRoute[core.Empty](router, "/api/v1/data/kv/{key}", service.baseHandler.handleDeleteKV,
 		core.RouteTag("Data KV"),
 		core.RouteSummary("Delete an ephemeral KV entry"),
 		core.RouteDescription("Evicts an entry from the ephemeral key-value cache."),
@@ -152,7 +152,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 3. Dynamic GraphQL Engine
-	core.PostRoute[GraphQLResponse, GraphQLRequest](router, "/api/v1/graphql", service.baseHandler.HandleGraphQL,
+	core.PostRoute[ExecuteGraphQLResponse, ExecuteGraphQLInput](router, "/api/v1/graphql", service.baseHandler.handleExecuteGraphQL,
 		core.RouteTag("Data GraphQL"),
 		core.RouteSummary("Execute GraphQL query or mutation"),
 		core.RouteDescription("Dynamic GraphQL introspection and query engine over PostgreSQL catalog."),
@@ -162,7 +162,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 4. Real-Time CDC WebSocket
-	core.GetRoute[core.Empty](router, "/api/v1/realtime", service.baseHandler.HandleRealtime,
+	core.GetRoute[core.Empty](router, "/api/v1/realtime", service.baseHandler.handleConnectRealtime,
 		core.RouteTag("Data Real-Time"),
 		core.RouteSummary("Connect to real-time Change Data Capture (CDC) WebSocket"),
 		core.RouteDescription("Live bidirectional WebSocket channel streaming PostgreSQL CDC events."),
@@ -176,7 +176,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	// 1. Dynamic Config
-	core.GetRoute[Config](router, "/api/v1/_/data/config", service.controlPlaneHandler.HandleGetConfig,
+	core.GetRoute[Config](router, "/api/v1/_/data/config", service.controlPlaneHandler.handleGetConfig,
 		core.RouteTag("Data Control Plane"),
 		core.RouteSummary("Retrieve dynamic data service configuration"),
 		core.RouteDescription("Retrieves dynamic runtime data service settings including exposed schemas, pool sizes, and cache TTL rules."),
@@ -184,7 +184,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "config"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PutRoute[Config, Config](router, "/api/v1/_/data/config", service.controlPlaneHandler.HandleUpdateConfig,
+	core.PutRoute[Config, Config](router, "/api/v1/_/data/config", service.controlPlaneHandler.handleUpdateConfig,
 		core.RouteTag("Data Control Plane"),
 		core.RouteSummary("Update dynamic data service configuration"),
 		core.RouteDescription("Updates dynamic runtime data service configuration without requiring server restarts."),
@@ -194,7 +194,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 2. Cache Management
-	core.PostRoute[FlushCacheResponse, core.Empty](router, "/api/v1/_/data/cache/flush", service.controlPlaneHandler.HandleFlushCache,
+	core.PostRoute[FlushCacheResponse, core.Empty](router, "/api/v1/_/data/cache/flush", service.controlPlaneHandler.handleFlushCache,
 		core.RouteTag("Data Control Plane"),
 		core.RouteSummary("Flush all global query and schema reflection caches"),
 		core.RouteDescription("Flushes in-memory and distributed query result caches across all cluster nodes."),
@@ -203,7 +203,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "cache"),
 		core.RouteSDKMethodName("flush"),
 	)
-	core.PostRoute[InvalidateCacheResponse, InvalidateCacheRequest](router, "/api/v1/_/data/cache/invalidate", service.controlPlaneHandler.HandleInvalidateCache,
+	core.PostRoute[InvalidateCacheResponse, InvalidateCacheInput](router, "/api/v1/_/data/cache/invalidate", service.controlPlaneHandler.handleInvalidateCache,
 		core.RouteTag("Data Control Plane"),
 		core.RouteSummary("Programmatically invalidate specific table or catalog caches"),
 		core.RouteDescription("Invalidates reflection and query caches for a specific table or schema pattern."),
@@ -213,7 +213,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 3. Visual Table Schema & DDL Management
-	core.GetRoute[ListTablesResponse](router, "/api/v1/_/data/tables", service.controlPlaneHandler.HandleListTables,
+	core.GetRoute[ListTablesResponse](router, "/api/v1/_/data/tables", service.controlPlaneHandler.handleListTables,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("List all user tables across configured schemas"),
 		core.RouteDescription("Queries PostgreSQL information_schema and pg_catalog to list tables, primary keys, and approximate row counts."),
@@ -221,7 +221,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[CreateTableResponse, CreateTableRequest](router, "/api/v1/_/data/tables", service.controlPlaneHandler.HandleCreateTable,
+	core.PostRoute[CreateTableResponse, CreateTableInput](router, "/api/v1/_/data/tables", service.controlPlaneHandler.handleCreateTable,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Create a new PostgreSQL table with UUIDv7 primary key"),
 		core.RouteDescription("Executes DDL to create a table adhering to Layr invariants (UUIDv7 primary keys and timestamps)."),
@@ -230,7 +230,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[TableSummary](router, "/api/v1/_/data/tables/{schema_name}/{table_name}", service.controlPlaneHandler.HandleGetTable,
+	core.GetRoute[Table](router, "/api/v1/_/data/tables/{schema_name}/{table_name}", service.controlPlaneHandler.handleGetTable,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Inspect table schema, columns, indexes, and constraints"),
 		core.RouteDescription("Retrieves column definitions, foreign keys, indexes, and RLS policies for a specific table."),
@@ -238,7 +238,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.DeleteRoute[DropTableResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}", service.controlPlaneHandler.HandleDropTable,
+	core.DeleteRoute[DeleteTableResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}", service.controlPlaneHandler.handleDeleteTable,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Drop a table"),
 		core.RouteDescription("Drops a table and its associated constraints, indexes, and triggers from PostgreSQL."),
@@ -246,7 +246,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.PostRoute[AddColumnResponse, ColumnDefinition](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns", service.controlPlaneHandler.HandleAddColumn,
+	core.PostRoute[CreateColumnResponse, Column](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns", service.controlPlaneHandler.handleCreateColumn,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Add a new column to a table"),
 		core.RouteDescription("Alters table schema to add a new column with type validation and optional default values."),
@@ -254,7 +254,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "columns"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.PatchRoute[AlterColumnResponse, AlterColumnRequest](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}", service.controlPlaneHandler.HandleAlterColumn,
+	core.PatchRoute[UpdateColumnResponse, UpdateColumnInput](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}", service.controlPlaneHandler.handleUpdateColumn,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Alter column type, default, nullable, or rename"),
 		core.RouteDescription("Alters column attributes or renames a column."),
@@ -262,7 +262,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "columns"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.DeleteRoute[DropColumnResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}", service.controlPlaneHandler.HandleDropColumn,
+	core.DeleteRoute[DeleteColumnResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}", service.controlPlaneHandler.handleDeleteColumn,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Drop a column from a table"),
 		core.RouteDescription("Drops a column from a table schema."),
@@ -270,7 +270,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "columns"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.PostRoute[CreateIndexResponse, CreateIndexRequest](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes", service.controlPlaneHandler.HandleCreateIndex,
+	core.PostRoute[CreateIndexResponse, CreateIndexInput](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes", service.controlPlaneHandler.handleCreateIndex,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Create an index on a table"),
 		core.RouteDescription("Creates a B-Tree, GIN, GiST, or BRIN index on table columns."),
@@ -278,7 +278,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "indexes"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[ListIndexesResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes", service.controlPlaneHandler.HandleListIndexes,
+	core.GetRoute[ListIndexesResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes", service.controlPlaneHandler.handleListIndexes,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("List indexes on a table"),
 		core.RouteDescription("Lists all indexes defined on the specified table."),
@@ -286,7 +286,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "indexes"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[DropIndexResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes/{index_name}", service.controlPlaneHandler.HandleDropIndex,
+	core.DeleteRoute[DeleteIndexResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/indexes/{index_name}", service.controlPlaneHandler.handleDeleteIndex,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Drop an index from a table"),
 		core.RouteDescription("Drops an index from PostgreSQL."),
@@ -294,7 +294,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "indexes"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.GetRoute[ListPoliciesResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies", service.controlPlaneHandler.HandleListPolicies,
+	core.GetRoute[ListPoliciesResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies", service.controlPlaneHandler.handleListPolicies,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("List RLS policies on a table"),
 		core.RouteDescription("Lists Row-Level Security policies with USING and WITH CHECK SQL expressions."),
@@ -302,7 +302,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "policies"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[CreatePolicyResponse, CreatePolicyRequest](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies", service.controlPlaneHandler.HandleCreatePolicy,
+	core.PostRoute[CreatePolicyResponse, CreatePolicyInput](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies", service.controlPlaneHandler.handleCreatePolicy,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Create a Row-Level Security policy on a table"),
 		core.RouteDescription("Creates an RLS policy defining declarative access rules for roles and commands."),
@@ -310,7 +310,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "policies"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.DeleteRoute[DropPolicyResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies/{policy_name}", service.controlPlaneHandler.HandleDropPolicy,
+	core.DeleteRoute[DeletePolicyResponse](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/policies/{policy_name}", service.controlPlaneHandler.handleDeletePolicy,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Drop an RLS policy from a table"),
 		core.RouteDescription("Drops an RLS policy from a table."),
@@ -318,7 +318,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables", "policies"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.PatchRoute[ToggleTableRLSResponse, ToggleTableRLSRequest](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/rls", service.controlPlaneHandler.HandleToggleRLS,
+	core.PatchRoute[ToggleRLSResponse, ToggleRLSInput](router, "/api/v1/_/data/tables/{schema_name}/{table_name}/rls", service.controlPlaneHandler.handleToggleRLS,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Toggle Row-Level Security (ENABLE / DISABLE / FORCE)"),
 		core.RouteDescription("Toggles Row-Level Security enforcement mode on a table."),
@@ -328,7 +328,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 4. Console SQL Scratchpad
-	core.PostRoute[ExecuteSQLResponse, ExecuteSQLRequest](router, "/api/v1/_/data/sql", service.controlPlaneHandler.HandleExecuteSQL,
+	core.PostRoute[ExecuteSQLResponse, ExecuteSQLInput](router, "/api/v1/_/data/sql", service.controlPlaneHandler.handleExecuteSQL,
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Execute raw SQL query or DDL script from Console scratchpad"),
 		core.RouteDescription("Executes arbitrary SQL queries or migrations within a controlled transaction block with execution timing."),

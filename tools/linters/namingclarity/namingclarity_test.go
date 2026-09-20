@@ -236,7 +236,7 @@ func TestNamingclarityShouldReportUnclearNameUnit(t *testing.T) {
 		{"nodeRegistryPrimary", "NodeRegistry", "\"nodeRegistryPrimary\" should be named \"nodeRegistry\" or suffixed with \"NodeRegistry\"", true},
 		{"embeddedRestart", "EmbeddedDatabase", "\"embeddedRestart\" should be named \"embeddedDatabase\" or suffixed with \"EmbeddedDatabase\"", true},
 		{"db", "sql.DB", "", false},
-		{"serviceAccount", "core.ServiceAccountWithSecretKey", "", false},
+		{"serviceAccount", "core.CreateServiceAccountResponse", "", false},
 		{"certPool", "x509.CertPool", "", false},
 		{"caCertPool", "x509.CertPool", "", false},
 		{"rootCertPool", "x509.CertPool", "", false},

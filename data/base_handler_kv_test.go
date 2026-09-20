@@ -101,35 +101,35 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/test", nil)
 		request.SetPathValue("key", "test")
 		responseRecorder := httptest.NewRecorder()
-		nilKVBaseHandler.HandleGetKV(responseRecorder, request)
+		nilKVBaseHandler.handleGetKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandleSetKV(responseRecorder, request)
+		nilKVBaseHandler.handleSetKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandleDeleteKV(responseRecorder, request)
+		nilKVBaseHandler.handleDeleteKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandleMGetKV(responseRecorder, request)
+		nilKVBaseHandler.handleGetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandleIncrementKV(responseRecorder, request)
+		nilKVBaseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandlePutKV(responseRecorder, request)
+		nilKVBaseHandler.handleUpdateKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandlePatchKV(responseRecorder, request)
+		nilKVBaseHandler.handleTouchKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		nilKVBaseHandler.HandleMSetKV(responseRecorder, request)
+		nilKVBaseHandler.handleSetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 	})
 
@@ -137,46 +137,46 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		// Empty key
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, request)
+		baseHandler.handleGetKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleSetKV(responseRecorder, request)
+		baseHandler.handleSetKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, request)
+		baseHandler.handleUpdateKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePatchKV(responseRecorder, request)
+		baseHandler.handleTouchKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleDeleteKV(responseRecorder, request)
+		baseHandler.handleDeleteKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Reserved key "mget"
 		mgetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/mget", nil)
 		mgetRequest.SetPathValue("key", "mget")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, mgetRequest)
+		baseHandler.handleGetKV(responseRecorder, mgetRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "reserved")
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, mgetRequest)
+		baseHandler.handleUpdateKV(responseRecorder, mgetRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePatchKV(responseRecorder, mgetRequest)
+		baseHandler.handleTouchKV(responseRecorder, mgetRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Reserved key "increment"
 		incRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/increment", nil)
 		incRequest.SetPathValue("key", "increment")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, incRequest)
+		baseHandler.handleGetKV(responseRecorder, incRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "reserved")
 
@@ -185,7 +185,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		longKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/"+longKey, nil)
 		longKeyRequest.SetPathValue("key", longKey)
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, longKeyRequest)
+		baseHandler.handleGetKV(responseRecorder, longKeyRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "exceeds maximum")
 	})
@@ -195,14 +195,14 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/mykey", nil)
 		getRequest.SetPathValue("key", "mykey")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getRequest)
+		baseHandler.handleGetKV(responseRecorder, getRequest)
 		assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
 
 		// 2. Set with empty body -> 400
 		setEmptyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mykey", nil)
 		setEmptyRequest.SetPathValue("key", "mykey")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleSetKV(responseRecorder, setEmptyRequest)
+		baseHandler.handleSetKV(responseRecorder, setEmptyRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// 3. Set with JSON payload and custom TTL
@@ -210,7 +210,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		setRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mykey", bodyReader)
 		setRequest.SetPathValue("key", "mykey")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleSetKV(responseRecorder, setRequest)
+		baseHandler.handleSetKV(responseRecorder, setRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"ttl":60`)
 
@@ -219,7 +219,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/rawkey", rawBodyReader)
 		putRequest.SetPathValue("key", "rawkey")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleSetKV(responseRecorder, putRequest)
+		baseHandler.handleUpdateKV(responseRecorder, putRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// 5. POST with arbitrary JSON without "value" wrapper -> 400 Bad Request
@@ -227,7 +227,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		arbitraryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/user_profile", arbitraryJSONReader)
 		arbitraryRequest.SetPathValue("key", "user_profile")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, arbitraryRequest)
+		baseHandler.handleSetKV(responseRecorder, arbitraryRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// 5b. PUT with arbitrary JSON without "value" wrapper -> 200 OK (stores verbatim)
@@ -235,7 +235,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		arbitraryPUTRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/user_profile", arbitraryPUTReader)
 		arbitraryPUTRequest.SetPathValue("key", "user_profile")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, arbitraryPUTRequest)
+		baseHandler.handleUpdateKV(responseRecorder, arbitraryPUTRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// 5c. PUT raw JSON array with URL query param ?ttl=300 -> 200 OK
@@ -243,37 +243,37 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		rawArrayRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/raw_array?ttl=300", rawArrayReader)
 		rawArrayRequest.SetPathValue("key", "raw_array")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, rawArrayRequest)
+		baseHandler.handleUpdateKV(responseRecorder, rawArrayRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"ttl":300`)
 
 		getProfileRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/user_profile", nil)
 		getProfileRequest.SetPathValue("key", "user_profile")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getProfileRequest)
+		baseHandler.handleGetKV(responseRecorder, getProfileRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
-		var profileKVGetResponse KVGetResponse
-		_ = json.NewDecoder(responseRecorder.Body).Decode(&profileKVGetResponse)
-		assert.Contains(t, profileKVGetResponse.Value, `"user_id":123`)
+		var profileGetKVResponse GetKVResponse
+		_ = json.NewDecoder(responseRecorder.Body).Decode(&profileGetKVResponse)
+		assert.Contains(t, profileGetKVResponse.Value, `"user_id":123`)
 
 		// 6. Set and get legitimate empty string value
 		emptyValueReader := bytes.NewReader([]byte(`{"value":""}`))
 		emptyValueSetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/empty_val_key", emptyValueReader)
 		emptyValueSetRequest.SetPathValue("key", "empty_val_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, emptyValueSetRequest)
+		baseHandler.handleSetKV(responseRecorder, emptyValueSetRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		getEmptyValueRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/empty_val_key", nil)
 		getEmptyValueRequest.SetPathValue("key", "empty_val_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getEmptyValueRequest)
+		baseHandler.handleGetKV(responseRecorder, getEmptyValueRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"value":""`)
 
 		// 7. Get existing -> 200
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getRequest)
+		baseHandler.handleGetKV(responseRecorder, getRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "hello world")
 
@@ -281,12 +281,12 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		deleteRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/kv/mykey", nil)
 		deleteRequest.SetPathValue("key", "mykey")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleDeleteKV(responseRecorder, deleteRequest)
+		baseHandler.handleDeleteKV(responseRecorder, deleteRequest)
 		assert.Equal(t, http.StatusNoContent, responseRecorder.Code)
 
 		// 9. Get deleted -> 404
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getRequest)
+		baseHandler.handleGetKV(responseRecorder, getRequest)
 		assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
 	})
 
@@ -295,7 +295,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		largeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/large_key", bytes.NewReader(largePayload))
 		largeRequest.SetPathValue("key", "large_key")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, largeRequest)
+		baseHandler.handleSetKV(responseRecorder, largeRequest)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, responseRecorder.Code)
 	})
 
@@ -309,7 +309,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/failkey", bodyReader)
 		request.SetPathValue("key", "failkey")
 		responseRecorder := httptest.NewRecorder()
-		failBaseHandler.HandlePostKV(responseRecorder, request)
+		failBaseHandler.handleSetKV(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 		// Get failure
@@ -320,14 +320,14 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/failkey", nil)
 		getRequest.SetPathValue("key", "failkey")
 		responseRecorder = httptest.NewRecorder()
-		failGetBaseHandler.HandleGetKV(responseRecorder, getRequest)
+		failGetBaseHandler.handleGetKV(responseRecorder, getRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 		// Read failure from body reader
 		readFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/readfail", &failingBodyReader{})
 		readFailRequest.SetPathValue("key", "readfail")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, readFailRequest)
+		baseHandler.handleSetKV(responseRecorder, readFailRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Non-string value returns 400 Bad Request in POST
@@ -335,7 +335,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		nonStringRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/numeric_key", nonStringValueReader)
 		nonStringRequest.SetPathValue("key", "numeric_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, nonStringRequest)
+		baseHandler.handleSetKV(responseRecorder, nonStringRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Non-object JSON in POST -> 400
@@ -343,7 +343,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		nonObjectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/str_key", nonObjectReader)
 		nonObjectRequest.SetPathValue("key", "str_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, nonObjectRequest)
+		baseHandler.handleSetKV(responseRecorder, nonObjectRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Negative TTL in POST -> clamped to 0
@@ -351,7 +351,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		negTTLRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/neg_ttl", negTTLReader)
 		negTTLRequest.SetPathValue("key", "neg_ttl")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, negTTLRequest)
+		baseHandler.handleSetKV(responseRecorder, negTTLRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// Post SetNX error
@@ -359,7 +359,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		postNXFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/post_nx?nx=true", bytes.NewReader([]byte(`{"value":"v"}`)))
 		postNXFailRequest.SetPathValue("key", "post_nx")
 		responseRecorder = httptest.NewRecorder()
-		failBaseHandler.HandlePostKV(responseRecorder, postNXFailRequest)
+		failBaseHandler.handleSetKV(responseRecorder, postNXFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 		failingKVDriver.setNXErr = nil
 
@@ -367,21 +367,21 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		putLargeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/large_put", bytes.NewReader(bytes.Repeat([]byte("a"), 2*1024*1024+10)))
 		putLargeRequest.SetPathValue("key", "large_put")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, putLargeRequest)
+		baseHandler.handleUpdateKV(responseRecorder, putLargeRequest)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, responseRecorder.Code)
 
 		// PUT read failure
 		putReadFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_read_fail", &failingBodyReader{})
 		putReadFailRequest.SetPathValue("key", "put_read_fail")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, putReadFailRequest)
+		baseHandler.handleUpdateKV(responseRecorder, putReadFailRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// PUT empty body
 		putEmptyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_empty", bytes.NewReader([]byte("")))
 		putEmptyRequest.SetPathValue("key", "put_empty")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, putEmptyRequest)
+		baseHandler.handleUpdateKV(responseRecorder, putEmptyRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// PUT X-Layr-Cache-TTL header
@@ -389,7 +389,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		putHeaderRequest.Header.Set("X-Layr-Cache-TTL", "60")
 		putHeaderRequest.SetPathValue("key", "put_header")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, putHeaderRequest)
+		baseHandler.handleUpdateKV(responseRecorder, putHeaderRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// PUT SetNX error
@@ -397,7 +397,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		putNXFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_nx_fail?nx=true", bytes.NewReader([]byte("raw_val")))
 		putNXFailRequest.SetPathValue("key", "put_nx_fail")
 		responseRecorder = httptest.NewRecorder()
-		failBaseHandler.HandlePutKV(responseRecorder, putNXFailRequest)
+		failBaseHandler.handleUpdateKV(responseRecorder, putNXFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 		failingKVDriver.setNXErr = nil
 
@@ -405,13 +405,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		firstPutNXConflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_nx_conf?nx=true", bytes.NewReader([]byte("v1")))
 		firstPutNXConflictRequest.SetPathValue("key", "put_nx_conf")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, firstPutNXConflictRequest)
+		baseHandler.handleUpdateKV(responseRecorder, firstPutNXConflictRequest)
 		assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
 		secondPutNXConflictRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_nx_conf?nx=true", bytes.NewReader([]byte("v2")))
 		secondPutNXConflictRequest.SetPathValue("key", "put_nx_conf")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePutKV(responseRecorder, secondPutNXConflictRequest)
+		baseHandler.handleUpdateKV(responseRecorder, secondPutNXConflictRequest)
 		assert.Equal(t, http.StatusConflict, responseRecorder.Code)
 
 		// PUT Set error
@@ -419,7 +419,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		putSetFailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/data/kv/put_set_fail", bytes.NewReader([]byte("raw_val")))
 		putSetFailRequest.SetPathValue("key", "put_set_fail")
 		responseRecorder = httptest.NewRecorder()
-		failBaseHandler.HandlePutKV(responseRecorder, putSetFailRequest)
+		failBaseHandler.handleUpdateKV(responseRecorder, putSetFailRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 		failingKVDriver.setErr = nil
 	})
@@ -430,7 +430,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		nxRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/lock_key?nx=true", nxBodyReader)
 		nxRequest.SetPathValue("key", "lock_key")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, nxRequest)
+		baseHandler.handleSetKV(responseRecorder, nxRequest)
 		assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"created":true`)
 
@@ -439,7 +439,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		nxSecondRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/lock_key?nx=true", nxSecondBodyReader)
 		nxSecondRequest.SetPathValue("key", "lock_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, nxSecondRequest)
+		baseHandler.handleSetKV(responseRecorder, nxSecondRequest)
 		assert.Equal(t, http.StatusConflict, responseRecorder.Code)
 	})
 
@@ -449,7 +449,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		setRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/touch_key", setReader)
 		setRequest.SetPathValue("key", "touch_key")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, setRequest)
+		baseHandler.handleSetKV(responseRecorder, setRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// Valid touch via PATCH
@@ -457,7 +457,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		patchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/kv/touch_key", touchReader)
 		patchRequest.SetPathValue("key", "touch_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePatchKV(responseRecorder, patchRequest)
+		baseHandler.handleTouchKV(responseRecorder, patchRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"ttl":3600`)
 
@@ -466,14 +466,14 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		badPatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/kv/touch_key", badTouchReader)
 		badPatchRequest.SetPathValue("key", "touch_key")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePatchKV(responseRecorder, badPatchRequest)
+		baseHandler.handleTouchKV(responseRecorder, badPatchRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Touch non-existent key -> 404
 		nonExistentPatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/kv/non_existent", bytes.NewReader([]byte(`{"ttl":60}`)))
 		nonExistentPatchRequest.SetPathValue("key", "non_existent")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandlePatchKV(responseRecorder, nonExistentPatchRequest)
+		baseHandler.handleTouchKV(responseRecorder, nonExistentPatchRequest)
 		assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
 
 		// Touch expire error -> 500
@@ -484,7 +484,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		failExpirePatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/kv/any_key", bytes.NewReader([]byte(`{"ttl":60}`)))
 		failExpirePatchRequest.SetPathValue("key", "any_key")
 		responseRecorder = httptest.NewRecorder()
-		failTouchBaseHandler.HandlePatchKV(responseRecorder, failExpirePatchRequest)
+		failTouchBaseHandler.handleTouchKV(responseRecorder, failExpirePatchRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 
@@ -492,25 +492,25 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		// Invalid body
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`invalid`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleMSetKV(responseRecorder, request)
+		baseHandler.handleSetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Empty entries
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`{"entries":{}}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleMSetKV(responseRecorder, request)
+		baseHandler.handleSetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Reserved key inside entries
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`{"entries":{"mget":"val"}}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleMSetKV(responseRecorder, request)
+		baseHandler.handleSetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Valid mset
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`{"entries":{"theme":"dark","notifications":"true"},"ttl":86400}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleMSetKV(responseRecorder, request)
+		baseHandler.handleSetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"count":2`)
 
@@ -521,7 +521,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		failMSetBaseHandler.SetKVStore(failMSetDriver.KVStore())
 		failMSetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mset", bytes.NewReader([]byte(`{"entries":{"a":"1"}}`)))
 		responseRecorder = httptest.NewRecorder()
-		failMSetBaseHandler.HandleMSetKV(responseRecorder, failMSetRequest)
+		failMSetBaseHandler.handleSetMultipleKV(responseRecorder, failMSetRequest)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 
@@ -531,13 +531,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		setRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/"+slashKey, setReader)
 		setRequest.SetPathValue("key", slashKey)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandlePostKV(responseRecorder, setRequest)
+		baseHandler.handleSetKV(responseRecorder, setRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/kv/"+slashKey, nil)
 		getRequest.SetPathValue("key", slashKey)
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGetKV(responseRecorder, getRequest)
+		baseHandler.handleGetKV(responseRecorder, getRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "active")
 	})
@@ -546,13 +546,13 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		// Invalid body
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mget", bytes.NewReader([]byte(`invalid`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleMGetKV(responseRecorder, request)
+		baseHandler.handleGetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Empty keys
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mget", bytes.NewReader([]byte(`{"keys":[]}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleMGetKV(responseRecorder, request)
+		baseHandler.handleGetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Valid keys
@@ -560,7 +560,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		_ = inMemoryKVStore.Set(context.Background(), datakv.BuildInternalKey(authContext, "k1"), "v1", time.Hour)
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/mget", bytes.NewReader([]byte(`{"keys":["k1","k2","mget",""]}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleMGetKV(responseRecorder, request)
+		baseHandler.handleGetMultipleKV(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "values")
 	})
@@ -569,39 +569,39 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		// Invalid body
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`invalid`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Empty key
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":""}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Reserved key
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"mget"}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Valid increment with custom TTL
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"counter","ttl":300}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"value":1`)
 
 		// Increment by custom step +5
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"counter","step":5,"ttl":300}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"value":6`)
 
 		// Decrement by step -2
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"counter","step":-2,"ttl":300}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleIncrementKV(responseRecorder, request)
+		baseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"value":4`)
 
@@ -613,7 +613,7 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader([]byte(`{"key":"fail"}`)))
 		responseRecorder = httptest.NewRecorder()
-		failBaseHandler.HandleIncrementKV(responseRecorder, request)
+		failBaseHandler.handleIncrementKV(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 }

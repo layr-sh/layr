@@ -10,19 +10,19 @@ import (
 	"layr.sh/core"
 )
 
-func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "mfa setup rejected: MFA is disabled in configuration")
 		return
 	}
 
-	var mfaSetupRequest MFASetupRequest
+	var setupMFAInput SetupMFAInput
 	if request.Body != nil && request.ContentLength != 0 {
-		_ = json.NewDecoder(request.Body).Decode(&mfaSetupRequest)
+		_ = json.NewDecoder(request.Body).Decode(&setupMFAInput)
 	}
 
-	userID := strings.TrimSpace(mfaSetupRequest.UserID)
+	userID := strings.TrimSpace(setupMFAInput.UserID)
 	if userID == "" {
 		authContext := core.GetAuthContext(request.Context())
 		if authContext.UserID == "" {
@@ -38,29 +38,29 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
@@ -68,25 +68,25 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	secretBase32, _ := handler.totpManager.GenerateSecret()
 	encryptedSecret, _ := handler.cryptoKeyManager.EncryptField([]byte(secretBase32))
 
-	userRecord.EncryptedMFASecret = &encryptedSecret
-	userRecord.MFAEnabled = false
+	user.EncryptedMFASecret = &encryptedSecret
+	user.MFAEnabled = false
 
 	_, _ = handler.db.Exec(ctx, `
 		UPDATE auth.users
 		SET encrypted_mfa_secret = $1, mfa_enabled = false, last_updated_at = clock_timestamp()
 		WHERE id = $2
-	`, encryptedSecret, userRecord.ID)
+	`, encryptedSecret, user.ID)
 
-	accountName := userRecord.ID
-	if userRecord.Email != nil && *userRecord.Email != "" {
-		accountName = *userRecord.Email
-	} else if userRecord.Phone != nil && *userRecord.Phone != "" {
-		accountName = *userRecord.Phone
+	accountName := user.ID
+	if user.Email != nil && *user.Email != "" {
+		accountName = *user.Email
+	} else if user.Phone != nil && *user.Phone != "" {
+		accountName = *user.Phone
 	}
 
 	authURL := handler.totpManager.BuildAuthURL(accountName, secretBase32)
 
-	handler.writeJSON(responseWriter, MFASetupResponse{
+	handler.writeJSON(responseWriter, SetupMFAResponse{
 		Secret:        secretBase32,
 		AuthURL:       authURL,
 		Issuer:        config.MFA.Issuer,
@@ -95,19 +95,19 @@ func (handler *BaseHandler) handleMFASetup(responseWriter http.ResponseWriter, r
 	})
 }
 
-func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "mfa verify rejected: MFA is disabled in configuration")
 		return
 	}
 
-	var mfaVerifyRequest MFAVerifyRequest
+	var verifyMFAInput VerifyMFAInput
 	if request.Body != nil && request.ContentLength != 0 {
-		_ = json.NewDecoder(request.Body).Decode(&mfaVerifyRequest)
+		_ = json.NewDecoder(request.Body).Decode(&verifyMFAInput)
 	}
 
-	userID := strings.TrimSpace(mfaVerifyRequest.UserID)
+	userID := strings.TrimSpace(verifyMFAInput.UserID)
 	if userID == "" {
 		authContext := core.GetAuthContext(request.Context())
 		if authContext.UserID == "" {
@@ -117,7 +117,7 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 		userID = authContext.UserID
 	}
 
-	if mfaVerifyRequest.Code == "" {
+	if verifyMFAInput.Code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Code required")
 		return
 	}
@@ -128,66 +128,66 @@ func (handler *BaseHandler) handleMFAVerify(responseWriter http.ResponseWriter, 
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
-	if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+	if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA is not set up on this account")
 		return
 	}
 
-	secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+	secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("mfa verify rejected: failed to decrypt MFA secret for user %s: %v", userRecord.ID, err))
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("mfa verify rejected: failed to decrypt MFA secret for user %s: %v", user.ID, err))
 		return
 	}
 
-	if !handler.totpManager.ValidateCode(string(secretBytes), mfaVerifyRequest.Code, time.Now().UTC(), 1) {
+	if !handler.totpManager.ValidateCode(string(secretBytes), verifyMFAInput.Code, time.Now().UTC(), 1) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
 		return
 	}
 
-	userRecord.MFAEnabled = true
+	user.MFAEnabled = true
 
 	_, _ = handler.db.Exec(ctx, `
 		UPDATE auth.users
 		SET mfa_enabled = true, last_updated_at = clock_timestamp()
 		WHERE id = $1
-	`, userRecord.ID)
+	`, user.ID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewMFAEnabledEvent(userRecord.ID, MFAEnabledEventData(userRecord)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewMFAEnabledEvent(user.ID, MFAEnabledEventData(user)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord, "mfa")
+	handler.issueSessionResponse(responseWriter, request, user, "mfa")
 }
 
-func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling MFA challenge verification request")
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
@@ -195,16 +195,16 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 		return
 	}
 
-	var mfaChallengeRequest MFAChallengeRequest
+	var challengeMFAInput ChallengeMFAInput
 	if request.Body != nil && request.ContentLength != 0 {
-		if err := json.NewDecoder(request.Body).Decode(&mfaChallengeRequest); err != nil {
+		if err := json.NewDecoder(request.Body).Decode(&challengeMFAInput); err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 			return
 		}
 	}
 
-	ticket := strings.TrimSpace(mfaChallengeRequest.MFATicket)
-	code := strings.TrimSpace(mfaChallengeRequest.Code)
+	ticket := strings.TrimSpace(challengeMFAInput.MFATicket)
+	code := strings.TrimSpace(challengeMFAInput.Code)
 	if ticket == "" || code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA ticket and code are required")
 		return
@@ -238,74 +238,74 @@ func (handler *BaseHandler) handleMFAChallenge(responseWriter http.ResponseWrite
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		if handler.eventBus != nil {
 			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(userRecord.ID, MFAChallengeFailedEventData{
-				UserID:    userRecord.ID,
+			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
+				UserID:    user.ID,
 				Reason:    "account_locked",
 				IPAddress: clientIP,
 				UserAgent: request.UserAgent(),
-				User:      &userRecord,
+				User:      &user,
 			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
-	if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+	if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA is not set up on this account")
 		return
 	}
 
-	secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+	secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("MFA challenge rejected: failed to decrypt MFA secret for user %s: %v", userRecord.ID, err))
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("MFA challenge rejected: failed to decrypt MFA secret for user %s: %v", user.ID, err))
 		return
 	}
 
 	if !handler.totpManager.ValidateCode(string(secretBytes), code, time.Now().UTC(), 1) {
 		if handler.eventBus != nil {
 			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(userRecord.ID, MFAChallengeFailedEventData{
-				UserID:    userRecord.ID,
+			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
+				UserID:    user.ID,
 				Reason:    "invalid_code",
 				IPAddress: clientIP,
 				UserAgent: request.UserAgent(),
-				User:      &userRecord,
+				User:      &user,
 			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
 		return
 	}
 
-	log.Debugf("MFA challenge succeeded for user %s, issuing session", userRecord.ID)
-	handler.issueSessionResponse(responseWriter, request, userRecord, "mfa")
+	log.Debugf("MFA challenge succeeded for user %s, issuing session", user.ID)
+	handler.issueSessionResponse(responseWriter, request, user, "mfa")
 }
 
-func (handler *BaseHandler) handleMFADisable(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleDisableMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling MFA disable request")
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
@@ -326,47 +326,47 @@ func (handler *BaseHandler) handleMFADisable(responseWriter http.ResponseWriter,
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
-	userRecord.MFAEnabled = false
-	userRecord.EncryptedMFASecret = nil
+	user.MFAEnabled = false
+	user.EncryptedMFASecret = nil
 
 	_, _ = handler.db.Exec(ctx, `
 		UPDATE auth.users
 		SET mfa_enabled = false, encrypted_mfa_secret = NULL, last_updated_at = clock_timestamp()
 		WHERE id = $1
-	`, userRecord.ID)
+	`, user.ID)
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewMFADisabledEvent(userRecord.ID, MFADisabledEventData(userRecord)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewMFADisabledEvent(user.ID, MFADisabledEventData(user)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 	}
 
-	log.Debugf("MFA successfully disabled for user %s", userRecord.ID)
+	log.Debugf("MFA successfully disabled for user %s", user.ID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

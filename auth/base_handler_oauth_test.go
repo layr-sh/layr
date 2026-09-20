@@ -29,7 +29,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	unknownProviderOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/unknown_provider/authorize", nil)
 	unknownProviderOAuthRequest.SetPathValue("provider", "unknown_provider")
 	unknownProviderOAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(unknownProviderOAuthResponseRecorder, unknownProviderOAuthRequest)
+	baseHandler.handleAuthorizeOAuth(unknownProviderOAuthResponseRecorder, unknownProviderOAuthRequest)
 	if unknownProviderOAuthResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on unknown OAuth provider, got: %d", unknownProviderOAuthResponseRecorder.Code)
 	}
@@ -44,7 +44,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	disabledOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/disabled_provider/authorize", nil)
 	disabledOAuthRequest.SetPathValue("provider", "disabled_provider")
 	disabledOAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(disabledOAuthResponseRecorder, disabledOAuthRequest)
+	baseHandler.handleAuthorizeOAuth(disabledOAuthResponseRecorder, disabledOAuthRequest)
 	if disabledOAuthResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on disabled OAuth provider authorize, got: %d", disabledOAuthResponseRecorder.Code)
 	}
@@ -61,7 +61,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	oauthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:3000/callback&state=teststate123&scope=custom_scope", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(oauthAuthResponseRecorder, oauthAuthRequest)
+	baseHandler.handleAuthorizeOAuth(oauthAuthResponseRecorder, oauthAuthRequest)
 	if oauthAuthResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect on OAuth authorize, got: %d", oauthAuthResponseRecorder.Code)
 	}
@@ -74,7 +74,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	defaultRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/authorize", nil)
 	defaultRedirectRequest.SetPathValue("provider", "google")
 	defaultRedirectResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(defaultRedirectResponseRecorder, defaultRedirectRequest)
+	baseHandler.handleAuthorizeOAuth(defaultRedirectResponseRecorder, defaultRedirectRequest)
 	if defaultRedirectResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 on default redirect URI authorize, got: %d", defaultRedirectResponseRecorder.Code)
 	}
@@ -92,7 +92,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	brokenOAuthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/broken/authorize", nil)
 	brokenOAuthAuthRequest.SetPathValue("provider", "broken")
 	brokenOAuthAuthResponseRecorder := httptest.NewRecorder()
-	brokenOAuthBaseHandler.HandleOAuthAuthorize(brokenOAuthAuthResponseRecorder, brokenOAuthAuthRequest)
+	brokenOAuthBaseHandler.handleAuthorizeOAuth(brokenOAuthAuthResponseRecorder, brokenOAuthAuthRequest)
 	if brokenOAuthAuthResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on broken oauth authorize, got: %d", brokenOAuthAuthResponseRecorder.Code)
 	}
@@ -101,7 +101,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	brokenOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/broken/callback?code=mock_code&state=broken-state", nil)
 	brokenOAuthCallbackRequest.SetPathValue("provider", "broken")
 	brokenOAuthCallbackResponseRecorder := httptest.NewRecorder()
-	brokenOAuthBaseHandler.HandleOAuthCallback(brokenOAuthCallbackResponseRecorder, brokenOAuthCallbackRequest)
+	brokenOAuthBaseHandler.handleProcessOAuthCallback(brokenOAuthCallbackResponseRecorder, brokenOAuthCallbackRequest)
 	if brokenOAuthCallbackResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on broken oauth callback, got: %d", brokenOAuthCallbackResponseRecorder.Code)
 	}
@@ -111,7 +111,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	oauthTokenFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/google/token", strings.NewReader("code=authcode123&redirect_uri=http://localhost:3000/callback&state=form-state"))
 	oauthTokenFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	oauthTokenFormResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthToken(oauthTokenFormResponseRecorder, oauthTokenFormRequest)
+	baseHandler.handleExchangeOAuthToken(oauthTokenFormResponseRecorder, oauthTokenFormRequest)
 	if oauthTokenFormResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on fake code exchange, got: %d", oauthTokenFormResponseRecorder.Code)
 	}
@@ -119,7 +119,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:json-state", "json-state", 10*time.Minute)
 	oauthTokenJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(`{"provider":"google","code":"authcode123","state":"json-state"}`))
 	oauthTokenJSONResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthToken(oauthTokenJSONResponseRecorder, oauthTokenJSONRequest)
+	baseHandler.handleExchangeOAuthToken(oauthTokenJSONResponseRecorder, oauthTokenJSONRequest)
 	if oauthTokenJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on fake code JSON exchange, got: %d", oauthTokenJSONResponseRecorder.Code)
 	}
@@ -127,7 +127,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	oauthTokenGrantRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials"))
 	oauthTokenGrantRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	oauthTokenGrantResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthToken(oauthTokenGrantResponseRecorder, oauthTokenGrantRequest)
+	baseHandler.handleExchangeOAuthToken(oauthTokenGrantResponseRecorder, oauthTokenGrantRequest)
 	if oauthTokenGrantResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on grant_type token exchange without credentials, got: %d", oauthTokenGrantResponseRecorder.Code)
 	}
@@ -136,7 +136,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:err-state", "err-state", 10*time.Minute)
 	oauthErrorCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?error=access_denied&error_description=user_cancelled&state=err-state", nil)
 	oauthErrorCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oauthErrorCallbackResponseRecorder, oauthErrorCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(oauthErrorCallbackResponseRecorder, oauthErrorCallbackRequest)
 	if oauthErrorCallbackResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on oauth error callback, got: %d", oauthErrorCallbackResponseRecorder.Code)
 	}
@@ -145,7 +145,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:mock-state", "mock-state", 10*time.Minute)
 	oauthGetCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock-code&state=mock-state", nil)
 	oauthGetCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oauthGetCallbackResponseRecorder, oauthGetCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(oauthGetCallbackResponseRecorder, oauthGetCallbackRequest)
 	if oauthGetCallbackResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on mock get callback, got: %d", oauthGetCallbackResponseRecorder.Code)
 	}
@@ -154,7 +154,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:disabled-provider-state", "disabled-provider-state", 10*time.Minute)
 	oauthDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/unknown_disabled_provider/callback?code=123&state=disabled-provider-state", nil)
 	oauthDisabledCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oauthDisabledCallbackResponseRecorder, oauthDisabledCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(oauthDisabledCallbackResponseRecorder, oauthDisabledCallbackRequest)
 	if oauthDisabledCallbackResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on disabled oauth provider callback, got: %d", oauthDisabledCallbackResponseRecorder.Code)
 	}
@@ -168,7 +168,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:disabled-provider-state-2", "disabled-provider-state-2", 10*time.Minute)
 	oauthConfiguredDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/disabled_provider/callback?code=123&state=disabled-provider-state-2", nil)
 	oauthConfiguredDisabledCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oauthConfiguredDisabledCallbackResponseRecorder, oauthConfiguredDisabledCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(oauthConfiguredDisabledCallbackResponseRecorder, oauthConfiguredDisabledCallbackRequest)
 	if oauthConfiguredDisabledCallbackResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on configured disabled oauth provider callback, got: %d", oauthConfiguredDisabledCallbackResponseRecorder.Code)
 	}
@@ -176,7 +176,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	// 9. State validation branches
 	missingStateGetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=any-code", nil)
 	missingStateGetResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(missingStateGetResponseRecorder, missingStateGetRequest)
+	baseHandler.handleProcessOAuthCallback(missingStateGetResponseRecorder, missingStateGetRequest)
 	if missingStateGetResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(missingStateGetResponseRecorder.Body.String(), "invalid_request") {
 		t.Fatalf("expected 400 invalid_request on missing state GET, got: %d (%s)", missingStateGetResponseRecorder.Code, missingStateGetResponseRecorder.Body.String())
 	}
@@ -184,21 +184,21 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	missingStateFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/google/callback", strings.NewReader("code=any-code"))
 	missingStateFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingStateFormResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(missingStateFormResponseRecorder, missingStateFormRequest)
+	baseHandler.handleProcessOAuthCallback(missingStateFormResponseRecorder, missingStateFormRequest)
 	if missingStateFormResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing state form POST, got: %d", missingStateFormResponseRecorder.Code)
 	}
 
 	missingStateJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/google/callback", strings.NewReader(`{"code":"any-code"}`))
 	missingStateJSONResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(missingStateJSONResponseRecorder, missingStateJSONRequest)
+	baseHandler.handleProcessOAuthCallback(missingStateJSONResponseRecorder, missingStateJSONRequest)
 	if missingStateJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing state JSON POST, got: %d", missingStateJSONResponseRecorder.Code)
 	}
 
 	fakeStateGetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=any-code&state=fake-nonexistent-state", nil)
 	fakeStateGetResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(fakeStateGetResponseRecorder, fakeStateGetRequest)
+	baseHandler.handleProcessOAuthCallback(fakeStateGetResponseRecorder, fakeStateGetRequest)
 	if fakeStateGetResponseRecorder.Code != http.StatusForbidden || !strings.Contains(fakeStateGetResponseRecorder.Body.String(), "access_denied") {
 		t.Fatalf("expected 403 access_denied on fake state GET, got: %d", fakeStateGetResponseRecorder.Code)
 	}
@@ -206,7 +206,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:mismatched-state", "different-stored-value", 10*time.Minute)
 	mismatchedStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=any-code&state=mismatched-state", nil)
 	mismatchedStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(mismatchedStateResponseRecorder, mismatchedStateRequest)
+	baseHandler.handleProcessOAuthCallback(mismatchedStateResponseRecorder, mismatchedStateRequest)
 	if mismatchedStateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on mismatched state value, got: %d", mismatchedStateResponseRecorder.Code)
 	}
@@ -214,7 +214,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	baseHandler.SetKVStore(nil)
 	nilKVStoreStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=any-code&state=valid-looking-state", nil)
 	nilKVStoreStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(nilKVStoreStateResponseRecorder, nilKVStoreStateRequest)
+	baseHandler.handleProcessOAuthCallback(nilKVStoreStateResponseRecorder, nilKVStoreStateRequest)
 	if nilKVStoreStateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 with nil kvstore, got: %d", nilKVStoreStateResponseRecorder.Code)
 	}
@@ -223,7 +223,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:missing-code-state", "missing-code-state", 10*time.Minute)
 	missingCodeStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?state=missing-code-state", nil)
 	missingCodeStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(missingCodeStateResponseRecorder, missingCodeStateRequest)
+	baseHandler.handleProcessOAuthCallback(missingCodeStateResponseRecorder, missingCodeStateRequest)
 	if missingCodeStateResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(missingCodeStateResponseRecorder.Body.String(), "invalid_request") {
 		t.Fatalf("expected 400 invalid_request on missing code with valid state, got: %d (%s)", missingCodeStateResponseRecorder.Code, missingCodeStateResponseRecorder.Body.String())
 	}
@@ -232,7 +232,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	invalidTokenUserInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	invalidTokenUserInfoRequest.Header.Set("Authorization", "Bearer invalid-token")
 	invalidTokenUserInfoResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthUserInfo(invalidTokenUserInfoResponseRecorder, invalidTokenUserInfoRequest)
+	baseHandler.handleGetOAuthUserInfo(invalidTokenUserInfoResponseRecorder, invalidTokenUserInfoRequest)
 	if invalidTokenUserInfoResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on invalid token userinfo, got: %d", invalidTokenUserInfoResponseRecorder.Code)
 	}
@@ -240,7 +240,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	noBearerUserInfoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	noBearerUserInfoRequest.Header.Set("Authorization", "Basic credentials")
 	noBearerUserInfoResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthUserInfo(noBearerUserInfoResponseRecorder, noBearerUserInfoRequest)
+	baseHandler.handleGetOAuthUserInfo(noBearerUserInfoResponseRecorder, noBearerUserInfoRequest)
 	if noBearerUserInfoResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on non-bearer userinfo, got: %d", noBearerUserInfoResponseRecorder.Code)
 	}
@@ -267,7 +267,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	validTokenUserInfoRequest := httptest.NewRequestWithContext(validTokenUserInfoCtx, http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	validTokenUserInfoRequest.Header.Set("Authorization", bearerHeader)
 	validTokenUserInfoResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthUserInfo(validTokenUserInfoResponseRecorder, validTokenUserInfoRequest)
+	baseHandler.handleGetOAuthUserInfo(validTokenUserInfoResponseRecorder, validTokenUserInfoRequest)
 	if validTokenUserInfoResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on valid token userinfo with nil pool, got: %d", validTokenUserInfoResponseRecorder.Code)
 	}
@@ -292,7 +292,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	_ = testKVStore.Set(context.Background(), "auth:pkce:mock_state", "mock_state", 10*time.Minute)
 	nilDBOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock_code&state=mock_state", nil)
 	nilDBOAuthCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(nilDBOAuthCallbackResponseRecorder, nilDBOAuthCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(nilDBOAuthCallbackResponseRecorder, nilDBOAuthCallbackRequest)
 	if nilDBOAuthCallbackResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on oauth callback with nil pool, got: %d", nilDBOAuthCallbackResponseRecorder.Code)
 	}
@@ -307,7 +307,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	anonAuthRequest.SetPathValue("provider", "google")
 	anonAuthRequest.Header.Set("Authorization", "Bearer "+anonToken)
 	anonAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(anonAuthResponseRecorder, anonAuthRequest)
+	baseHandler.handleAuthorizeOAuth(anonAuthResponseRecorder, anonAuthRequest)
 	if anonAuthResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 on authorize with anonymous user, got: %d", anonAuthResponseRecorder.Code)
 	}
@@ -321,7 +321,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	mismatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback?code=mock_code&state=mismatch_state", nil)
 	mismatchRequest.SetPathValue("provider", "google")
 	mismatchResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(mismatchResponseRecorder, mismatchRequest)
+	baseHandler.handleProcessOAuthCallback(mismatchResponseRecorder, mismatchRequest)
 	if mismatchResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on mismatched state ID in payload, got: %d", mismatchResponseRecorder.Code)
 	}
@@ -342,7 +342,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		Provider:    "google",
 		OIDCStateID: oidcStateID,
 	}
-	userRecord := UserRecord{
+	user := User{
 		ID:   "018f2234-5678-789a-bcde-f0123456789c",
 		Role: "authenticated",
 	}
@@ -355,7 +355,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	completeOIDCRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/google/callback", nil)
 	completeOIDCRequest.Header.Set("X-Forwarded-Proto", "https")
 	completeOIDCResponseRecorder := httptest.NewRecorder()
-	baseHandler.CompleteOAuthFlow(completeOIDCResponseRecorder, completeOIDCRequest, userRecord, oAuthStatePayload, true)
+	baseHandler.CompleteOAuthFlow(completeOIDCResponseRecorder, completeOIDCRequest, user, oAuthStatePayload, true)
 	if completeOIDCResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect from CompleteOAuthFlow with OIDCStateID, got: %d", completeOIDCResponseRecorder.Code)
 	}
@@ -368,7 +368,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	formBodyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/callback", strings.NewReader("provider=google&code=mock_code&state=fake_state"))
 	formBodyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	formBodyResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(formBodyResponseRecorder, formBodyRequest)
+	baseHandler.handleProcessOAuthCallback(formBodyResponseRecorder, formBodyRequest)
 	if formBodyResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on fake state with provider in form body, got: %d", formBodyResponseRecorder.Code)
 	}
@@ -400,7 +400,7 @@ func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 	anonOAuthRequest.SetPathValue("provider", "google")
 	anonOAuthRequest.Header.Set("Authorization", "Bearer "+anonToken)
 	anonOAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(anonOAuthResponseRecorder, anonOAuthRequest)
+	baseHandler.handleAuthorizeOAuth(anonOAuthResponseRecorder, anonOAuthRequest)
 	if anonOAuthResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect on anon oauth authorize, got: %d", anonOAuthResponseRecorder.Code)
 	}

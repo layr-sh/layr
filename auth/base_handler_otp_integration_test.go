@@ -74,7 +74,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	encodedFirstOTP, _ := json.Marshal(firstOTPPayload)
 	firstOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedFirstOTP))
 	firstOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(firstOTPResponseRecorder, firstOTPRequest)
+	baseHandler.handleSendOTP(firstOTPResponseRecorder, firstOTPRequest)
 	if firstOTPResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on first OTP send, got: %d (body: %s)", firstOTPResponseRecorder.Code, firstOTPResponseRecorder.Body.String())
 	}
@@ -87,7 +87,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	encodedSecondOTP, _ := json.Marshal(secondOTPPayload)
 	secondOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedSecondOTP))
 	secondOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(secondOTPResponseRecorder, secondOTPRequest)
+	baseHandler.handleSendOTP(secondOTPResponseRecorder, secondOTPRequest)
 	if secondOTPResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on second OTP send within cooldown, got: %d", secondOTPResponseRecorder.Code)
 	}
@@ -112,7 +112,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	encodedThirdOTP, _ := json.Marshal(thirdOTPPayload)
 	thirdOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedThirdOTP))
 	thirdOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(thirdOTPResponseRecorder, thirdOTPRequest)
+	baseHandler.handleSendOTP(thirdOTPResponseRecorder, thirdOTPRequest)
 	if thirdOTPResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on OTP send after cooldown expired, got: %d (body: %s)", thirdOTPResponseRecorder.Code, thirdOTPResponseRecorder.Body.String())
 	}
@@ -128,7 +128,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		loopRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLoop))
 		loopRequest.RemoteAddr = limitedClientIP
 		loopResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleOTPSend(loopResponseRecorder, loopRequest)
+		baseHandler.handleSendOTP(loopResponseRecorder, loopRequest)
 		if loopResponseRecorder.Code != http.StatusNoContent {
 			t.Fatalf("expected 204 for request %d within IP rate limit, got: %d", counter, loopResponseRecorder.Code)
 		}
@@ -143,7 +143,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	eleventhRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedEleventh))
 	eleventhRequest.RemoteAddr = limitedClientIP
 	eleventhResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(eleventhResponseRecorder, eleventhRequest)
+	baseHandler.handleSendOTP(eleventhResponseRecorder, eleventhRequest)
 	if eleventhResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on 11th request from same IP, got: %d", eleventhResponseRecorder.Code)
 	}
@@ -222,7 +222,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
 	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
 	otpSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(otpSendResponseRecorder, otpSendRequest)
+	baseHandler.handleSendOTP(otpSendResponseRecorder, otpSendRequest)
 	if otpSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", otpSendResponseRecorder.Code, otpSendResponseRecorder.Body.String())
 	}
@@ -241,7 +241,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
 	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(wrongCodeResponseRecorder, wrongCodeRequest)
+	baseHandler.handleVerifyOTP(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on wrong OTP code, got: %d", wrongCodeResponseRecorder.Code)
 	}
@@ -255,17 +255,17 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
 	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
 	otpVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyResponseRecorder, otpVerifyRequest)
+	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
 	if otpVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from /otp/verify, got: %d (%s)", otpVerifyResponseRecorder.Code, otpVerifyResponseRecorder.Body.String())
 	}
 
-	var sessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(otpVerifyResponseRecorder.Body).Decode(&sessionResponse); decodeErr != nil {
+	var authTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(otpVerifyResponseRecorder.Body).Decode(&authTokenResponse); decodeErr != nil {
 		t.Fatalf("failed to decode verify response: %v", decodeErr)
 	}
-	if sessionResponse.User.Email == nil || *sessionResponse.User.Email != userEmail {
-		t.Fatalf("expected user email %s, got: %v", userEmail, sessionResponse.User.Email)
+	if authTokenResponse.User.Email == nil || *authTokenResponse.User.Email != userEmail {
+		t.Fatalf("expected user email %s, got: %v", userEmail, authTokenResponse.User.Email)
 	}
 
 	// 3b. Test existing locked user OTP verify -> 423 StatusLocked
@@ -278,7 +278,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedLockedOTPSend, _ := json.Marshal(lockedOTPSendPayload)
 	lockedOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedLockedOTPSend))
 	lockedOTPSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(lockedOTPSendResponseRecorder, lockedOTPSendRequest)
+	baseHandler.handleSendOTP(lockedOTPSendResponseRecorder, lockedOTPSendRequest)
 	if lockedOTPSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 from /otp/send, got: %d (%s)", lockedOTPSendResponseRecorder.Code, lockedOTPSendResponseRecorder.Body.String())
 	}
@@ -292,7 +292,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedLockedOTPVerify, _ := json.Marshal(lockedOTPVerifyPayload)
 	lockedOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedLockedOTPVerify))
 	lockedOTPVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(lockedOTPVerifyResponseRecorder, lockedOTPVerifyRequest)
+	baseHandler.handleVerifyOTP(lockedOTPVerifyResponseRecorder, lockedOTPVerifyRequest)
 	if lockedOTPVerifyResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user OTP verify, got: %d", lockedOTPVerifyResponseRecorder.Code)
 	}
@@ -307,7 +307,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
 	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
 	phoneOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(phoneOTPResponseRecorder, phoneOTPRequest)
+	baseHandler.handleSendOTP(phoneOTPResponseRecorder, phoneOTPRequest)
 	if phoneOTPResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
@@ -324,7 +324,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
 	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on phone OTP verify: %d", phoneVerifyResponseRecorder.Code)
 	}
@@ -349,7 +349,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	})
 	convertSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertSendPayload))
 	convertSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(convertSendResponseRecorder, convertSendRequest)
+	baseHandler.handleSendOTP(convertSendResponseRecorder, convertSendRequest)
 	if convertSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on convert OTP send: %d", convertSendResponseRecorder.Code)
 	}
@@ -364,17 +364,17 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	convertVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, anonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertVerifyPayload))
 	convertVerifyRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	convertVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(convertVerifyResponseRecorder, convertVerifyRequest)
+	baseHandler.handleVerifyOTP(convertVerifyResponseRecorder, convertVerifyRequest)
 	if convertVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on conversion verify: %d (%s)", convertVerifyResponseRecorder.Code, convertVerifyResponseRecorder.Body.String())
 	}
 
-	var convertedSessionResponse SessionResponse
-	_ = json.NewDecoder(convertVerifyResponseRecorder.Body).Decode(&convertedSessionResponse)
-	if convertedSessionResponse.User.ID != anonUserID {
-		t.Fatalf("expected user ID %s to remain unchanged on conversion, got: %s", anonUserID, convertedSessionResponse.User.ID)
+	var convertedAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(convertVerifyResponseRecorder.Body).Decode(&convertedAuthTokenResponse)
+	if convertedAuthTokenResponse.User.ID != anonUserID {
+		t.Fatalf("expected user ID %s to remain unchanged on conversion, got: %s", anonUserID, convertedAuthTokenResponse.User.ID)
 	}
-	if convertedSessionResponse.User.IsAnonymous {
+	if convertedAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected user to no longer be anonymous")
 	}
 
@@ -386,7 +386,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	})
 	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(nonExistentVerifyPayload))
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
+	baseHandler.handleVerifyOTP(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
 	if nonExistentVerifyResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent OTP code verify, got: %d", nonExistentVerifyResponseRecorder.Code)
 	}
@@ -418,7 +418,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	})
 	conflictEmailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictEmailSendPayload))
 	conflictEmailSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(conflictEmailSendResponseRecorder, conflictEmailSendRequest)
+	baseHandler.handleSendOTP(conflictEmailSendResponseRecorder, conflictEmailSendRequest)
 	if conflictEmailSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict email OTP send: %d", conflictEmailSendResponseRecorder.Code)
 	}
@@ -432,7 +432,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	conflictEmailVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictEmailVerifyPayload))
 	conflictEmailVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictEmailVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(conflictEmailVerifyResponseRecorder, conflictEmailVerifyRequest)
+	baseHandler.handleVerifyOTP(conflictEmailVerifyResponseRecorder, conflictEmailVerifyRequest)
 	if conflictEmailVerifyResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict on anonymous conversion to existing email, got: %d (%s)", conflictEmailVerifyResponseRecorder.Code, conflictEmailVerifyResponseRecorder.Body.String())
 	}
@@ -444,7 +444,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	})
 	conflictPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(conflictPhoneSendPayload))
 	conflictPhoneSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(conflictPhoneSendResponseRecorder, conflictPhoneSendRequest)
+	baseHandler.handleSendOTP(conflictPhoneSendResponseRecorder, conflictPhoneSendRequest)
 	if conflictPhoneSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on conflict phone OTP send: %d", conflictPhoneSendResponseRecorder.Code)
 	}
@@ -458,7 +458,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	conflictPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, conflictAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(conflictPhoneVerifyPayload))
 	conflictPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+conflictAnonToken)
 	conflictPhoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(conflictPhoneVerifyResponseRecorder, conflictPhoneVerifyRequest)
+	baseHandler.handleVerifyOTP(conflictPhoneVerifyResponseRecorder, conflictPhoneVerifyRequest)
 	if conflictPhoneVerifyResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict on anonymous conversion to existing phone, got: %d (%s)", conflictPhoneVerifyResponseRecorder.Code, conflictPhoneVerifyResponseRecorder.Body.String())
 	}
@@ -483,7 +483,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	})
 	convertPhoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(convertPhoneSendPayload))
 	convertPhoneSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(convertPhoneSendResponseRecorder, convertPhoneSendRequest)
+	baseHandler.handleSendOTP(convertPhoneSendResponseRecorder, convertPhoneSendRequest)
 	convertPhoneCode, _ := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", convertPhoneRecipient))
 
 	convertPhoneVerifyPayload, _ := json.Marshal(map[string]any{
@@ -494,16 +494,16 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	convertPhoneVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, phoneAnonAuthContext), http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(convertPhoneVerifyPayload))
 	convertPhoneVerifyRequest.Header.Set("Authorization", "Bearer "+phoneAnonToken)
 	convertPhoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(convertPhoneVerifyResponseRecorder, convertPhoneVerifyRequest)
+	baseHandler.handleVerifyOTP(convertPhoneVerifyResponseRecorder, convertPhoneVerifyRequest)
 	if convertPhoneVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on anonymous phone conversion, got: %d (%s)", convertPhoneVerifyResponseRecorder.Code, convertPhoneVerifyResponseRecorder.Body.String())
 	}
-	var phoneConvertedSessionResponse SessionResponse
-	_ = json.NewDecoder(convertPhoneVerifyResponseRecorder.Body).Decode(&phoneConvertedSessionResponse)
-	if phoneConvertedSessionResponse.User.ID != phoneAnonID {
-		t.Fatalf("expected user ID %s to remain unchanged on conversion, got: %s", phoneAnonID, phoneConvertedSessionResponse.User.ID)
+	var phoneConvertedAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(convertPhoneVerifyResponseRecorder.Body).Decode(&phoneConvertedAuthTokenResponse)
+	if phoneConvertedAuthTokenResponse.User.ID != phoneAnonID {
+		t.Fatalf("expected user ID %s to remain unchanged on conversion, got: %s", phoneAnonID, phoneConvertedAuthTokenResponse.User.ID)
 	}
-	if phoneConvertedSessionResponse.User.IsAnonymous {
+	if phoneConvertedAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected user to no longer be anonymous")
 	}
 
@@ -590,9 +590,9 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	sendPayload, _ := json.Marshal(map[string]any{"recipient": emailMFAUser})
 	sendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(sendPayload))
 	sendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(sendResponseRecorder, sendRequest)
+	baseHandler.handleSendOTP(sendResponseRecorder, sendRequest)
 	if sendResponseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 from handleOTPSend, got: %d", sendResponseRecorder.Code)
+		t.Fatalf("expected 204 from handleSendOTP, got: %d", sendResponseRecorder.Code)
 	}
 
 	code, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", emailMFAUser))
@@ -606,9 +606,9 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	})
 	verifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(verifyPayload))
 	verifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(verifyResponseRecorder, verifyRequest)
+	baseHandler.handleVerifyOTP(verifyResponseRecorder, verifyRequest)
 	if verifyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleOTPVerify, got: %d (%s)", verifyResponseRecorder.Code, verifyResponseRecorder.Body.String())
+		t.Fatalf("expected 200 from handleVerifyOTP, got: %d (%s)", verifyResponseRecorder.Code, verifyResponseRecorder.Body.String())
 	}
 	var emailSignInResponse SignInResponse
 	if decodeErr := json.NewDecoder(verifyResponseRecorder.Body).Decode(&emailSignInResponse); decodeErr != nil {
@@ -631,9 +631,9 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	phoneSendPayload, _ := json.Marshal(map[string]any{"recipient": phoneMFAUser})
 	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(phoneSendPayload))
 	phoneSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(phoneSendResponseRecorder, phoneSendRequest)
+	baseHandler.handleSendOTP(phoneSendResponseRecorder, phoneSendRequest)
 	if phoneSendResponseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 from handleOTPSend for phone, got: %d", phoneSendResponseRecorder.Code)
+		t.Fatalf("expected 204 from handleSendOTP for phone, got: %d", phoneSendResponseRecorder.Code)
 	}
 
 	phoneCode, err := databaseKVStore.Get(ctx, fmt.Sprintf("auth:otp:sign_in:%s", phoneMFAUser))
@@ -647,9 +647,9 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	})
 	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(phoneVerifyPayload))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 from handleOTPVerify for phone, got: %d (%s)", phoneVerifyResponseRecorder.Code, phoneVerifyResponseRecorder.Body.String())
+		t.Fatalf("expected 200 from handleVerifyOTP for phone, got: %d (%s)", phoneVerifyResponseRecorder.Code, phoneVerifyResponseRecorder.Body.String())
 	}
 	var phoneSignInResponse SignInResponse
 	if decodeErr := json.NewDecoder(phoneVerifyResponseRecorder.Body).Decode(&phoneSignInResponse); decodeErr != nil {

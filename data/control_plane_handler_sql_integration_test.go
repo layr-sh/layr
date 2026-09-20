@@ -24,7 +24,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 	sqlPayload := `{"sql":"SELECT 42 AS answer, 'hello' AS greeting"}`
 	sqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(sqlPayload)))
 	sqlResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleExecuteSQL(sqlResponseRecorder, sqlRequest)
+	controlPlaneHandler.handleExecuteSQL(sqlResponseRecorder, sqlRequest)
 	if sqlResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on SQL execution, got %d", sqlResponseRecorder.Code)
 	}
@@ -41,7 +41,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 	queryPayload := `{"query":"SELECT 100 AS number"}`
 	queryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(queryPayload)))
 	queryResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleExecuteSQL(queryResponseRecorder, queryRequest)
+	controlPlaneHandler.handleExecuteSQL(queryResponseRecorder, queryRequest)
 	if queryResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on query execution, got %d", queryResponseRecorder.Code)
 	}
@@ -50,7 +50,7 @@ func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
 	syntaxErrorPayload := `{"sql":"SELECT FROM WHERE INVALID"}`
 	syntaxErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/sql", bytes.NewReader([]byte(syntaxErrorPayload)))
 	syntaxErrorResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleExecuteSQL(syntaxErrorResponseRecorder, syntaxErrorRequest)
+	controlPlaneHandler.handleExecuteSQL(syntaxErrorResponseRecorder, syntaxErrorRequest)
 	if syntaxErrorResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on SQL syntax error, got %d", syntaxErrorResponseRecorder.Code)
 	}

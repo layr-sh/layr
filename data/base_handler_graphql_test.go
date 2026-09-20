@@ -26,7 +26,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 	t.Run("MethodNotAllowed", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/graphql", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusMethodNotAllowed, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "only supports POST")
 	})
@@ -42,7 +42,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { test }"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "GraphQL API is disabled")
 	})
@@ -50,7 +50,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 	t.Run("InvalidJSONPayload", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`invalid`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Invalid JSON request payload")
 	})
@@ -58,7 +58,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 	t.Run("EmptyQueryString", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"   "}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "cannot be empty")
 	})
@@ -66,7 +66,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 	t.Run("SyntaxError", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"bad syntax {"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "syntax error")
 	})
@@ -83,7 +83,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		deepQuery := `query { users { posts { comments { id } } } }`
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+deepQuery+`"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusUnprocessableEntity, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "exceeds maximum allowed depth")
 	})
@@ -96,7 +96,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		query := `query { users { ` + complexFields + `} }`
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+query+`"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusUnprocessableEntity, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "exceeds limit")
 	})
@@ -111,7 +111,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+query+`"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Equal(t, "HIT", responseRecorder.Header().Get("X-Layr-Cache"))
@@ -131,14 +131,14 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { test { id } }"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 
 	t.Run("CompilationError", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"mutation { unsupported_op { id } }"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "compilation error")
 	})
@@ -147,7 +147,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		query := `query { test { id } }`
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+query+`"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Database connection is not initialized")
 	})
@@ -189,28 +189,28 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 		// __schema query
 		schemaQuery := `query { __schema { types { name } } }`
-		schemaBytes, _ := json.Marshal(GraphQLRequest{Query: schemaQuery})
+		schemaBytes, _ := json.Marshal(ExecuteGraphQLInput{Query: schemaQuery})
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(schemaBytes))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"users"`)
 
 		// __type query found
 		typeQuery := `query { __type(name: "users") { name fields { name } } }`
-		typeBytes, _ := json.Marshal(GraphQLRequest{Query: typeQuery})
+		typeBytes, _ := json.Marshal(ExecuteGraphQLInput{Query: typeQuery})
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(typeBytes))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"users"`)
 
 		// __type query not found
 		typeNotFoundQuery := `query { __type(name: "nonexistent") { name } }`
-		typeNotFoundBytes, _ := json.Marshal(GraphQLRequest{Query: typeNotFoundQuery})
+		typeNotFoundBytes, _ := json.Marshal(ExecuteGraphQLInput{Query: typeNotFoundQuery})
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(typeNotFoundBytes))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), `"__type":null`)
 
@@ -224,7 +224,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		}()
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(typeBytes))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
@@ -252,13 +252,13 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 	t.Run("MultiOperationSelect", func(t *testing.T) {
 		multiQuery := "query OpA { posts { id } }\nquery OpB { posts { title } }"
-		multiBytes, _ := json.Marshal(GraphQLRequest{
+		multiBytes, _ := json.Marshal(ExecuteGraphQLInput{
 			Query:         multiQuery,
 			OperationName: "OpB",
 		})
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(multiBytes))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Database connection is not initialized")
 	})
@@ -277,7 +277,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { users { id } }"}`)))
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 		// 2. Clamped when limit exceeds REST MaxLimit (literal int64)
@@ -285,17 +285,17 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		configManager.SetMemoryConfig(config)
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { users(limit: 500) { id } }"}`)))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 		// 3. Clamped when limit comes from variable (float64 from json unmarshal)
-		varLimitBytes, _ := json.Marshal(GraphQLRequest{
+		varLimitBytes, _ := json.Marshal(ExecuteGraphQLInput{
 			Query:     "query($lim: Int) { users(limit: $lim) { id } }",
 			Variables: map[string]any{"lim": float64(500)},
 		})
 		request = httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/graphql", bytes.NewReader(varLimitBytes))
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleGraphQL(responseRecorder, request)
+		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 

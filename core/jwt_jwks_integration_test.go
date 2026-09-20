@@ -26,7 +26,7 @@ func TestCoreJWTJWKSHTTPIntegration(t *testing.T) {
 	}
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/.well-known/jwks.json", jwtSigner.HandleJWKS)
+	serveMux.HandleFunc("/.well-known/jwks.json", jwtSigner.handleGetJWKS)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()

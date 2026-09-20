@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleListTables lists all tables in the allowed schemas.
-func (controlPlaneHandler *ControlPlaneHandler) HandleListTables(responseWriter http.ResponseWriter, request *http.Request) {
+// handleListTables lists all tables in the allowed schemas.
+func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -29,63 +29,63 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListTables(responseWriter 
 	})
 }
 
-// HandleCreateTable creates a new database table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleCreateTable(responseWriter http.ResponseWriter, request *http.Request) {
+// handleCreateTable creates a new database table.
+func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
-	var createTableRequest CreateTableRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&createTableRequest); decodeErr != nil {
+	var createTableInput CreateTableInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&createTableInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON request body")
 		return
 	}
-	if createErr := controlPlaneHandler.ddlEngine.CreateTable(request.Context(), createTableRequest); createErr != nil {
+	if createErr := controlPlaneHandler.ddlEngine.CreateTable(request.Context(), createTableInput); createErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
 	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.invalidateTableCache(request.Context(), createTableRequest.Schema, createTableRequest.Name)
+	controlPlaneHandler.invalidateTableCache(request.Context(), createTableInput.Schema, createTableInput.Name)
 
 	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", createTableRequest.Schema, createTableRequest.Name)
+		tableID := fmt.Sprintf("%s.%s", createTableInput.Schema, createTableInput.Name)
 		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableCreatedEvent(tableID, TableCreatedEventData{
-			Schema:      createTableRequest.Schema,
-			Table:       createTableRequest.Name,
-			Columns:     createTableRequest.Columns,
-			ForeignKeys: createTableRequest.ForeignKeys,
+			Schema:      createTableInput.Schema,
+			Table:       createTableInput.Name,
+			Columns:     createTableInput.Columns,
+			ForeignKeys: createTableInput.ForeignKeys,
 		}))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreateTableResponse{
 		Status:  "created",
-		Schema:  createTableRequest.Schema,
-		Table:   createTableRequest.Name,
-		Message: fmt.Sprintf("Table %s.%s successfully created", createTableRequest.Schema, createTableRequest.Name),
+		Schema:  createTableInput.Schema,
+		Table:   createTableInput.Name,
+		Message: fmt.Sprintf("Table %s.%s successfully created", createTableInput.Schema, createTableInput.Name),
 	})
 }
 
-// HandleGetTable returns the schema summary for a specific table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleGetTable(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetTable returns the schema summary for a specific table.
+func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
-	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
-	if schema == "" || table == "" {
+	schema, tableName := controlPlaneHandler.extractSchemaAndTable(request)
+	if schema == "" || tableName == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}")
 		return
 	}
-	tableSummary, err := controlPlaneHandler.ddlEngine.GetTable(request.Context(), schema, table)
+	table, err := controlPlaneHandler.ddlEngine.GetTable(request.Context(), schema, tableName)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, tableSummary)
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, table)
 }
 
-// HandleDropTable drops a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleDropTable(responseWriter http.ResponseWriter, request *http.Request) {
+// handleDeleteTable drops a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -111,7 +111,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropTable(responseWriter h
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DropTableResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeleteTableResponse{
 		Status:  "deleted",
 		Schema:  schema,
 		Table:   table,
@@ -119,8 +119,8 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropTable(responseWriter h
 	})
 }
 
-// HandleTruncateTable truncates all rows in a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleTruncateTable(responseWriter http.ResponseWriter, request *http.Request) {
+// handleTruncateTable truncates all rows in a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return

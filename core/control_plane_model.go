@@ -5,9 +5,6 @@ import (
 	"uuid"
 )
 
-// Empty represents an empty JSON object.
-type Empty struct{}
-
 // ServiceAccount represents a machine identity stored in core.service_accounts.
 type ServiceAccount struct {
 	ID            string     `json:"id"`
@@ -24,6 +21,9 @@ type ServiceAccount struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	LastUpdatedAt time.Time  `json:"last_updated_at"`
 }
+
+// ListServiceAccountsResponse represents the response containing multiple service accounts.
+type ListServiceAccountsResponse []ServiceAccount
 
 // CreateServiceAccountInput holds the input parameters for creating a new Service Account.
 type CreateServiceAccountInput struct {
@@ -45,8 +45,8 @@ type UpdateServiceAccountInput struct {
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
-// ServiceAccountWithSecretKey returned when creating a new Service Account, containing the plaintext secret.
-type ServiceAccountWithSecretKey struct {
+// CreateServiceAccountResponse returned when creating a new Service Account, containing the plaintext secret.
+type CreateServiceAccountResponse struct {
 	ServiceAccount
 	SecretKey string `json:"secret_key"`
 }
@@ -100,6 +100,9 @@ type EventHookFilter struct {
 	IsEnabled *bool   `json:"is_enabled,omitempty"`
 }
 
+// ListEventHooksResponse represents the response containing multiple event hooks.
+type ListEventHooksResponse []EventHook
+
 // EventHookDelivery represents an execution audit trail stored in core.event_hook_deliveries.
 type EventHookDelivery struct {
 	ID                 uuid.UUID  `json:"id"`
@@ -116,6 +119,12 @@ type EventHookDelivery struct {
 	DeliveredAt        *time.Time `json:"delivered_at,omitempty"`
 	CreatedAt          time.Time  `json:"created_at"`
 }
+
+// ListEventHookDeliveriesResponse represents the response containing multiple event hook deliveries.
+type ListEventHookDeliveriesResponse []EventHookDelivery
+
+// ListEventsResponse represents the response containing multiple events.
+type ListEventsResponse []Event
 
 // EventFilter provides multi-field filtering and pagination options for querying events.
 type EventFilter struct {

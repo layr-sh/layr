@@ -38,14 +38,14 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 
 	resetDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"test@example.com"}`))
 	resetDisabledResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(resetDisabledResponseRecorder, resetDisabledRequest)
+	baseHandler.handleRequestPasswordReset(resetDisabledResponseRecorder, resetDisabledRequest)
 	if resetDisabledResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on password reset when password disabled, got: %d", resetDisabledResponseRecorder.Code)
 	}
 
 	confirmDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"Password123!"}`))
 	confirmDisabledResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(confirmDisabledResponseRecorder, confirmDisabledRequest)
+	baseHandler.handleConfirmPasswordReset(confirmDisabledResponseRecorder, confirmDisabledRequest)
 	if confirmDisabledResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on password reset confirm when password disabled, got: %d", confirmDisabledResponseRecorder.Code)
 	}
@@ -132,14 +132,14 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 
 	unconfEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"user@example.com"}`))
 	unconfEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(unconfEmailResponseRecorder, unconfEmailRequest)
+	baseHandler.handleRequestPasswordReset(unconfEmailResponseRecorder, unconfEmailRequest)
 	if unconfEmailResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unconfigured email delivery, got: %d", unconfEmailResponseRecorder.Code)
 	}
 
 	unconfSMSRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"phone":"+15551234567"}`))
 	unconfSMSResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(unconfSMSResponseRecorder, unconfSMSRequest)
+	baseHandler.handleRequestPasswordReset(unconfSMSResponseRecorder, unconfSMSRequest)
 	if unconfSMSResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unconfigured SMS delivery, got: %d", unconfSMSResponseRecorder.Code)
 	}
@@ -167,21 +167,21 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// 7. Validation errors on Password Reset Request
 	badResetJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{invalid`))
 	badResetJSONResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(badResetJSONResponseRecorder, badResetJSONRequest)
+	baseHandler.handleRequestPasswordReset(badResetJSONResponseRecorder, badResetJSONRequest)
 	if badResetJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad reset JSON, got: %d", badResetJSONResponseRecorder.Code)
 	}
 
 	emptyRecipientResetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{}`))
 	emptyRecipientResetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(emptyRecipientResetResponseRecorder, emptyRecipientResetRequest)
+	baseHandler.handleRequestPasswordReset(emptyRecipientResetResponseRecorder, emptyRecipientResetRequest)
 	if emptyRecipientResetResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty recipient password reset, got: %d", emptyRecipientResetResponseRecorder.Code)
 	}
 
 	invalidPhoneResetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"phone":"invalid"}`))
 	invalidPhoneResetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(invalidPhoneResetResponseRecorder, invalidPhoneResetRequest)
+	baseHandler.handleRequestPasswordReset(invalidPhoneResetResponseRecorder, invalidPhoneResetRequest)
 	if invalidPhoneResetResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid phone in password reset request, got: %d", invalidPhoneResetResponseRecorder.Code)
 	}
@@ -189,7 +189,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// Nil pool on valid request -> 500
 	validResetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"valid@example.com"}`))
 	validResetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(validResetResponseRecorder, validResetRequest)
+	baseHandler.handleRequestPasswordReset(validResetResponseRecorder, validResetRequest)
 	if validResetResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool password reset request, got: %d", validResetResponseRecorder.Code)
 	}
@@ -197,28 +197,28 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// 8. Validation errors on Confirm
 	badConfirmJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{invalid`))
 	badConfirmJSONResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(badConfirmJSONResponseRecorder, badConfirmJSONRequest)
+	baseHandler.handleConfirmPasswordReset(badConfirmJSONResponseRecorder, badConfirmJSONRequest)
 	if badConfirmJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad JSON in password reset confirm, got: %d", badConfirmJSONResponseRecorder.Code)
 	}
 
 	badConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com"}`))
 	badConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(badConfirmResponseRecorder, badConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(badConfirmResponseRecorder, badConfirmRequest)
 	if badConfirmResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing confirm fields, got: %d", badConfirmResponseRecorder.Code)
 	}
 
 	invalidPhoneConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"phone":"invalid-phone","code":"123456","password":"ValidPassword123!"}`))
 	invalidPhoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(invalidPhoneConfirmResponseRecorder, invalidPhoneConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(invalidPhoneConfirmResponseRecorder, invalidPhoneConfirmRequest)
 	if invalidPhoneConfirmResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid phone in confirm, got: %d", invalidPhoneConfirmResponseRecorder.Code)
 	}
 
 	shortConfirmPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"short"}`))
 	shortConfirmPasswordResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(shortConfirmPasswordResponseRecorder, shortConfirmPasswordRequest)
+	baseHandler.handleConfirmPasswordReset(shortConfirmPasswordResponseRecorder, shortConfirmPasswordRequest)
 	if shortConfirmPasswordResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on short password in confirm, got: %d", shortConfirmPasswordResponseRecorder.Code)
 	}
@@ -226,7 +226,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// Nil pool on valid confirm -> 500
 	validConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"ValidPassword123!"}`))
 	validConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(validConfirmResponseRecorder, validConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(validConfirmResponseRecorder, validConfirmRequest)
 	if validConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil pool confirm, got: %d", validConfirmResponseRecorder.Code)
 	}
@@ -272,7 +272,7 @@ func TestAuthPasswordThreatValidationUnit(t *testing.T) {
 	// PasswordResetRequest captcha check
 	resetNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"test@example.com"}`))
 	resetNoCaptchaResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(resetNoCaptchaResponseRecorder, resetNoCaptchaRequest)
+	baseHandler.handleRequestPasswordReset(resetNoCaptchaResponseRecorder, resetNoCaptchaRequest)
 	if resetNoCaptchaResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on password reset request without captcha, got: %d", resetNoCaptchaResponseRecorder.Code)
 	}
@@ -301,7 +301,7 @@ func TestAuthPasswordThreatValidationUnit(t *testing.T) {
 
 	confirmBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"password"}`))
 	confirmBreachedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(confirmBreachedResponseRecorder, confirmBreachedRequest)
+	baseHandler.handleConfirmPasswordReset(confirmBreachedResponseRecorder, confirmBreachedRequest)
 	if confirmBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(confirmBreachedResponseRecorder.Body.String(), "breach") {
 		t.Fatalf("expected 400 on breached password reset confirm, got: %d (%s)", confirmBreachedResponseRecorder.Code, confirmBreachedResponseRecorder.Body.String())
 	}

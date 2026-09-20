@@ -41,7 +41,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 	}
 	defer rows.Close()
 
-	sessions := make([]UserSessionRecord, 0)
+	sessions := make([]UserSession, 0)
 	for rows.Next() {
 		var sessionID string
 		var ipAddress *string
@@ -59,7 +59,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 			isCurrent = true
 		}
 
-		sessions = append(sessions, UserSessionRecord{
+		sessions = append(sessions, UserSession{
 			ID:        sessionID,
 			IPAddress: ipAddress,
 			UserAgent: userAgent,
@@ -74,9 +74,7 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 	}
 
 	log.Debugf("retrieved %d active session(s) for user %s", len(sessions), userID)
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(ListUserSessionsResponse{
+	handler.writeJSON(responseWriter, ListSessionsResponse{
 		Sessions: sessions,
 		Count:    len(sessions),
 	})
@@ -138,9 +136,9 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 	}
 
 	if handler.eventBus != nil {
-		userRecord, _ := fetchUserRecordByID(ctx, handler.db, userID)
+		user, _ := fetchUserByID(ctx, handler.db, userID)
 		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(targetSessionID, SessionDeletedEventData{
-			User:      userRecord,
+			User:      user,
 			SessionID: &targetSessionID,
 		}))
 	}
@@ -192,9 +190,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 
 		if activeSessionCount <= 1 {
 			log.Debugf("no other active sessions to revoke for user %s", userID)
-			responseWriter.Header().Set("Content-Type", "application/json")
-			responseWriter.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(responseWriter).Encode(RevokeOtherSessionsResponse{
+			handler.writeJSON(responseWriter, RevokeOtherSessionsResponse{
 				RevokedCount: 0,
 			})
 			return
@@ -247,40 +243,38 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 	}
 
 	if handler.eventBus != nil {
-		userRecord, _ := fetchUserRecordByID(ctx, handler.db, userID)
+		user, _ := fetchUserByID(ctx, handler.db, userID)
 		revokedCount := len(deletedHashes)
 		handler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
-			User:         userRecord,
+			User:         user,
 			RevokedCount: &revokedCount,
 		}))
 	}
 
 	log.Debugf("revoked %d other session(s) for user %s", len(deletedHashes), userID)
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(RevokeOtherSessionsResponse{
+	handler.writeJSON(responseWriter, RevokeOtherSessionsResponse{
 		RevokedCount: int64(len(deletedHashes)),
 	})
 }
 
-func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleRefreshToken(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling token refresh request")
-	var refreshTokenRequest RefreshTokenRequest
+	var refreshTokenInput RefreshTokenInput
 	if request.Body != nil && request.ContentLength != 0 {
-		if err := json.NewDecoder(request.Body).Decode(&refreshTokenRequest); err != nil {
+		if err := json.NewDecoder(request.Body).Decode(&refreshTokenInput); err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 			return
 		}
 	}
-	if refreshTokenRequest.RefreshToken == "" {
-		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request)
+	if refreshTokenInput.RefreshToken == "" {
+		refreshTokenInput.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
-	if refreshTokenRequest.RefreshToken == "" {
+	if refreshTokenInput.RefreshToken == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token required")
 		return
 	}
 
-	tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenRequest.RefreshToken)
+	tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenInput.RefreshToken)
 	ctx := request.Context()
 
 	config := handler.configManager.Get()
@@ -328,28 +322,28 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token revoked or invalid")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
@@ -357,21 +351,21 @@ func (handler *BaseHandler) handleTokenRefresh(responseWriter http.ResponseWrite
 
 	// Rotate refresh token
 	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
-	handler.issueSessionResponse(responseWriter, request, userRecord, "session_refresh")
+	handler.issueSessionResponse(responseWriter, request, user, "session_refresh")
 }
 
 func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling sign-out request")
-	var refreshTokenRequest RefreshTokenRequest
+	var refreshTokenInput RefreshTokenInput
 	if request.Body != nil && request.ContentLength != 0 {
-		_ = json.NewDecoder(request.Body).Decode(&refreshTokenRequest)
+		_ = json.NewDecoder(request.Body).Decode(&refreshTokenInput)
 	}
-	if refreshTokenRequest.RefreshToken == "" {
-		refreshTokenRequest.RefreshToken = core.ExtractRequestSessionToken(request)
+	if refreshTokenInput.RefreshToken == "" {
+		refreshTokenInput.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 
-	if refreshTokenRequest.RefreshToken != "" {
-		tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenRequest.RefreshToken)
+	if refreshTokenInput.RefreshToken != "" {
+		tokenHash := handler.jwtSigner.HashRefreshToken(refreshTokenInput.RefreshToken)
 		if handler.kvStore != nil {
 			_ = handler.kvStore.Delete(request.Context(), "auth:session:"+tokenHash)
 		}
@@ -391,9 +385,9 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 					})
 				}
 				if handler.eventBus != nil {
-					userRecord, _ := fetchUserRecordByID(request.Context(), handler.db, userID)
+					user, _ := fetchUserByID(request.Context(), handler.db, userID)
 					handler.eventBus.Publish(request.Context(), NewSessionDeletedEvent(sessionID, SessionDeletedEventData{
-						User:      userRecord,
+						User:      user,
 						SessionID: &sessionID,
 					}))
 				}

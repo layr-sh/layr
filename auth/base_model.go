@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// UserRecord represents a user in auth.users.
-type UserRecord struct {
+// User represents a user in auth.users.
+type User struct {
 	ID                 string         `json:"id"`
 	Email              *string        `json:"email"`
 	Phone              *string        `json:"phone"`
@@ -22,8 +22,8 @@ type UserRecord struct {
 	LastUpdatedAt      time.Time      `json:"last_updated_at"`
 }
 
-// SessionRecord represents an active refresh session in auth.sessions.
-type SessionRecord struct {
+// Session represents an active refresh session in auth.sessions.
+type Session struct {
 	ID               string    `json:"id"`
 	UserID           string    `json:"user_id"`
 	ClientID         *string   `json:"client_id,omitempty"`
@@ -36,13 +36,15 @@ type SessionRecord struct {
 
 // CachedSession represents the cached user session data in kvstore for fast-path validation.
 type CachedSession struct {
-	User   UserRecord     `json:"user"`
+	User   User           `json:"user"`
 	Claims map[string]any `json:"claims,omitempty"`
 }
 
-// SessionResponse represents the successful authentication token payload.
-type SessionResponse struct {
-	User         UserRecord     `json:"user"`
+// AuthTokenResponse represents the successful authentication token payload.
+//
+//nolint:revive
+type AuthTokenResponse struct {
+	User         User           `json:"user"`
 	AccessToken  string         `json:"access_token"`
 	RefreshToken string         `json:"refresh_token"`
 	ExpiresIn    int            `json:"expires_in"`
@@ -52,14 +54,14 @@ type SessionResponse struct {
 
 // SignInResponse represents the response to a sign-in attempt, either returning session tokens or an MFA challenge.
 type SignInResponse struct {
-	SessionResponse
+	AuthTokenResponse
 	MFARequired bool   `json:"mfa_required,omitempty"`
 	MFATicket   string `json:"mfa_ticket,omitempty"`
 	Factor      string `json:"factor,omitempty"`
 }
 
-// UserResponse represents the sanitized authenticated user details.
-type UserResponse struct {
+// GetUserResponse represents the sanitized authenticated user details.
+type GetUserResponse struct {
 	ID            string         `json:"id"`
 	Email         *string        `json:"email"`
 	Phone         *string        `json:"phone"`
@@ -73,13 +75,13 @@ type UserResponse struct {
 	LastUpdatedAt time.Time      `json:"last_updated_at"`
 }
 
-// AnonymousSignInRequest represents optional parameters when initializing an anonymous session.
-type AnonymousSignInRequest struct {
+// SignInAnonymousInput represents optional parameters when initializing an anonymous session.
+type SignInAnonymousInput struct {
 	Properties map[string]any `json:"properties,omitempty"`
 }
 
-// SignUpRequest defines registration parameters with password.
-type SignUpRequest struct {
+// SignUpInput defines registration parameters with password.
+type SignUpInput struct {
 	Email        string         `json:"email"`
 	Phone        string         `json:"phone"`
 	Password     string         `json:"password"`
@@ -87,29 +89,29 @@ type SignUpRequest struct {
 	Properties   map[string]any `json:"properties"`
 }
 
-// SignInRequest defines login credentials.
-type SignInRequest struct {
+// SignInInput defines login credentials.
+type SignInInput struct {
 	Email        string `json:"email"`
 	Phone        string `json:"phone"`
 	Password     string `json:"password"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
-// RefreshTokenRequest defines token refresh input.
-type RefreshTokenRequest struct {
+// RefreshTokenInput defines token refresh input.
+type RefreshTokenInput struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-// PasswordResetRequest defines password reset request input.
-type PasswordResetRequest struct {
+// RequestPasswordResetInput defines password reset request input.
+type RequestPasswordResetInput struct {
 	Recipient    string `json:"recipient"`
 	Email        string `json:"email"`
 	Phone        string `json:"phone"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
-// PasswordResetConfirmRequest defines password reset confirmation input.
-type PasswordResetConfirmRequest struct {
+// ConfirmPasswordResetInput defines password reset confirmation input.
+type ConfirmPasswordResetInput struct {
 	Recipient string `json:"recipient"`
 	Email     string `json:"email"`
 	Phone     string `json:"phone"`
@@ -117,14 +119,14 @@ type PasswordResetConfirmRequest struct {
 	Password  string `json:"password"`
 }
 
-// UpdateUserPasswordRequest represents the payload to set or change an account password.
-type UpdateUserPasswordRequest struct {
+// UpdateUserPasswordInput represents the payload to set or change an account password.
+type UpdateUserPasswordInput struct {
 	CurrentPassword string `json:"current_password,omitempty"`
 	NewPassword     string `json:"new_password"`
 }
 
-// UpdateUserPropertiesRequest represents the payload to merge personal user properties.
-type UpdateUserPropertiesRequest struct {
+// UpdateUserPropertiesInput represents the payload to merge personal user properties.
+type UpdateUserPropertiesInput struct {
 	Properties map[string]any `json:"properties"`
 }
 
@@ -133,40 +135,40 @@ type UpdateUserPropertiesResponse struct {
 	Properties map[string]any `json:"properties"`
 }
 
-// UpdateUserEmailRequest represents the payload to request updating user email.
-type UpdateUserEmailRequest struct {
+// UpdateUserEmailInput represents the payload to request updating user email.
+type UpdateUserEmailInput struct {
 	Email string `json:"email"`
 }
 
-// UpdateUserPhoneRequest represents the payload to request updating user phone number.
-type UpdateUserPhoneRequest struct {
+// UpdateUserPhoneInput represents the payload to request updating user phone number.
+type UpdateUserPhoneInput struct {
 	Phone string `json:"phone"`
 }
 
-// UserEmailVerificationRequest represents the payload to request an email verification code.
-type UserEmailVerificationRequest struct {
+// RequestEmailVerificationInput represents the payload to request an email verification code.
+type RequestEmailVerificationInput struct {
 	Email string `json:"email"`
 }
 
-// UserEmailVerificationConfirmRequest represents the payload to confirm email verification with a code.
-type UserEmailVerificationConfirmRequest struct {
+// ConfirmEmailVerificationInput represents the payload to confirm email verification with a code.
+type ConfirmEmailVerificationInput struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`
 }
 
-// UserPhoneVerificationRequest represents the payload to request a phone verification code.
-type UserPhoneVerificationRequest struct {
+// RequestPhoneVerificationInput represents the payload to request a phone verification code.
+type RequestPhoneVerificationInput struct {
 	Phone string `json:"phone"`
 }
 
-// UserPhoneVerificationConfirmRequest represents the payload to confirm phone verification with a code.
-type UserPhoneVerificationConfirmRequest struct {
+// ConfirmPhoneVerificationInput represents the payload to confirm phone verification with a code.
+type ConfirmPhoneVerificationInput struct {
 	Phone string `json:"phone"`
 	Code  string `json:"code"`
 }
 
-// UserSessionRecord represents a safe, public view of an active user session.
-type UserSessionRecord struct {
+// UserSession represents a safe, public view of an active user session.
+type UserSession struct {
 	ID        string    `json:"id"`
 	IPAddress *string   `json:"ip_address,omitempty"`
 	UserAgent *string   `json:"user_agent,omitempty"`
@@ -175,10 +177,10 @@ type UserSessionRecord struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ListUserSessionsResponse represents the list of active sessions for the current user.
-type ListUserSessionsResponse struct {
-	Sessions []UserSessionRecord `json:"sessions"`
-	Count    int                 `json:"count"`
+// ListSessionsResponse represents the list of active sessions for the current user.
+type ListSessionsResponse struct {
+	Sessions []UserSession `json:"sessions"`
+	Count    int           `json:"count"`
 }
 
 // RevokeOtherSessionsResponse represents the result of revoking other devices.
@@ -186,28 +188,28 @@ type RevokeOtherSessionsResponse struct {
 	RevokedCount int64 `json:"revoked_count"`
 }
 
-// OTPSendRequest defines parameters for dispatching a one-time passcode.
-type OTPSendRequest struct {
+// SendOTPInput defines parameters for dispatching a one-time passcode.
+type SendOTPInput struct {
 	Recipient    string `json:"recipient"`
 	Purpose      string `json:"purpose"` // 'sign_in' | 'sign_up' | 'mfa'
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
-// OTPVerifyRequest defines parameters for verifying a one-time passcode.
-type OTPVerifyRequest struct {
+// VerifyOTPInput defines parameters for verifying a one-time passcode.
+type VerifyOTPInput struct {
 	Recipient    string `json:"recipient"`
 	Code         string `json:"code"`
 	Purpose      string `json:"purpose"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
-// MFASetupRequest defines input for TOTP MFA setup.
-type MFASetupRequest struct {
+// SetupMFAInput defines input for TOTP MFA setup.
+type SetupMFAInput struct {
 	UserID string `json:"user_id,omitempty"`
 }
 
-// MFASetupResponse defines response payload for TOTP MFA setup.
-type MFASetupResponse struct {
+// SetupMFAResponse defines response payload for TOTP MFA setup.
+type SetupMFAResponse struct {
 	Secret        string `json:"secret"`
 	AuthURL       string `json:"auth_url"`
 	Issuer        string `json:"issuer"`
@@ -215,26 +217,26 @@ type MFASetupResponse struct {
 	PeriodSeconds int    `json:"period_seconds"`
 }
 
-// MFAVerifyRequest defines input for TOTP MFA verification.
-type MFAVerifyRequest struct {
+// VerifyMFAInput defines input for TOTP MFA verification.
+type VerifyMFAInput struct {
 	UserID string `json:"user_id,omitempty"`
 	Code   string `json:"code"`
 }
 
-// MFAChallengeRequest defines input to satisfy an MFA challenge during sign-in.
-type MFAChallengeRequest struct {
+// ChallengeMFAInput defines input to satisfy an MFA challenge during sign-in.
+type ChallengeMFAInput struct {
 	MFATicket string `json:"mfa_ticket"`
 	Code      string `json:"code"`
 }
 
-// PasskeySignUpRequest defines input for passkey sign up ceremony.
-type PasskeySignUpRequest struct {
+// BeginPasskeySignUpInput defines input for passkey sign up ceremony.
+type BeginPasskeySignUpInput struct {
 	UserID   string `json:"user_id"`
 	UserName string `json:"user_name"`
 }
 
-// PasskeySignUpVerifyRequest defines input to verify and store passkey credentials.
-type PasskeySignUpVerifyRequest struct {
+// VerifyPasskeySignUpInput defines input to verify and store passkey credentials.
+type VerifyPasskeySignUpInput struct {
 	UserID       string   `json:"user_id"`
 	Challenge    string   `json:"challenge"`
 	CredentialID string   `json:"credential_id"`
@@ -243,8 +245,8 @@ type PasskeySignUpVerifyRequest struct {
 	Transports   []string `json:"transports"`
 }
 
-// PasskeySignInVerifyRequest defines input to complete passkey assertion ceremony.
-type PasskeySignInVerifyRequest struct {
+// VerifyPasskeySignInInput defines input to complete passkey assertion ceremony.
+type VerifyPasskeySignInInput struct {
 	Challenge         string `json:"challenge"`
 	CredentialID      string `json:"credential_id"`
 	ClientDataJSON    string `json:"client_data_json,omitempty"`
@@ -252,8 +254,8 @@ type PasskeySignInVerifyRequest struct {
 	Signature         string `json:"signature,omitempty"`
 }
 
-// UserPasskeyResponse represents a user's registered passkey credential.
-type UserPasskeyResponse struct {
+// Passkey represents a user's registered passkey credential.
+type Passkey struct {
 	ID           string    `json:"id"`
 	FriendlyName string    `json:"friendly_name"`
 	Transports   []string  `json:"transports"`
@@ -261,8 +263,11 @@ type UserPasskeyResponse struct {
 	LastUsedAt   time.Time `json:"last_used_at"`
 }
 
-// OAuthTokenExchangeRequest defines the body for OAuth token exchange.
-type OAuthTokenExchangeRequest struct {
+// ListPasskeysResponse represents the list of passkeys registered to a user.
+type ListPasskeysResponse []Passkey
+
+// ExchangeOAuthTokenInput defines the body for OAuth token exchange.
+type ExchangeOAuthTokenInput struct {
 	Provider    string `json:"provider"`
 	Code        string `json:"code"`
 	RedirectURI string `json:"redirect_uri"`
@@ -304,8 +309,8 @@ type OIDCAuthorizationCodePayload struct {
 	Nonce               string `json:"nonce,omitempty"`
 }
 
-// OIDCTokenResponse represents the standard OAuth 2.0 / OIDC token response.
-type OIDCTokenResponse struct {
+// IssueOIDCTokenResponse represents the standard OAuth 2.0 / OIDC token response.
+type IssueOIDCTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
@@ -314,8 +319,8 @@ type OIDCTokenResponse struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
-// OAuthTokenRequest represents incoming parameters for OAuth 2.0 token requests.
-type OAuthTokenRequest struct {
+// OAuthTokenInput represents incoming parameters for OAuth 2.0 token requests.
+type OAuthTokenInput struct {
 	GrantType    string `json:"grant_type"`
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
@@ -328,8 +333,8 @@ type OAuthTokenRequest struct {
 	Provider     string `json:"provider"`
 }
 
-// OIDCUserInfoResponse represents OpenID Connect Core 1.0 standard claims.
-type OIDCUserInfoResponse struct {
+// GetOIDCUserInfoResponse represents OpenID Connect Core 1.0 standard claims.
+type GetOIDCUserInfoResponse struct {
 	Subject             string         `json:"sub"`
 	Name                string         `json:"name,omitempty"`
 	Email               *string        `json:"email,omitempty"`
@@ -351,9 +356,9 @@ type ExportIdentityRecord struct {
 	LastSignInAt   time.Time      `json:"last_sign_in_at"`
 }
 
-// ExportUserDataResponse represents comprehensive user account data graph for GDPR compliance.
-type ExportUserDataResponse struct {
-	User       UserRecord             `json:"user"`
+// ExportUserResponse represents comprehensive user account data graph for GDPR compliance.
+type ExportUserResponse struct {
+	User       User                   `json:"user"`
 	Identities []ExportIdentityRecord `json:"identities"`
 	ExportDate string                 `json:"export_date"`
 }

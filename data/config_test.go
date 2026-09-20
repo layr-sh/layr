@@ -1,11 +1,6 @@
 package data
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -102,35 +97,5 @@ func TestDataConfigManagerMemoryUnit(t *testing.T) {
 	currentConfig := configManager.Get()
 	if !currentConfig.REST.Enabled || !currentConfig.GraphQL.Enabled {
 		t.Fatal("expected default settings in new config manager")
-	}
-}
-
-func TestDataConfigManagerHTTPUnit(t *testing.T) {
-	ctx := context.Background()
-	configManager := NewConfigManager(nil)
-
-	// 1. HandleGetConfig
-	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
-	getResponseRecorder := httptest.NewRecorder()
-	configManager.HandleGetConfig(getResponseRecorder, getRequest)
-
-	if getResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on HandleGetConfig, got %d", getResponseRecorder.Code)
-	}
-	var retrievedConfig Config
-	if err := json.NewDecoder(getResponseRecorder.Body).Decode(&retrievedConfig); err != nil {
-		t.Fatalf("failed to decode get config response: %v", err)
-	}
-	if !retrievedConfig.REST.Enabled {
-		t.Fatal("expected REST enabled in response")
-	}
-
-	// 2. HandlePutConfig with malformed JSON
-	putMalformedRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader([]byte(`{invalid json`)))
-	putMalformedResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putMalformedResponseRecorder, putMalformedRequest)
-
-	if putMalformedResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 Bad Request on malformed JSON, got %d", putMalformedResponseRecorder.Code)
 	}
 }

@@ -38,15 +38,15 @@ func NewCacheInvalidatedEvent(resourceID string, cacheInvalidatedEventData Cache
 
 // TableCreatedEventData represents the payload for data.table.created.
 type TableCreatedEventData struct {
-	Schema              string                 `json:"schema"`
-	Table               string                 `json:"table"`
-	Columns             []ColumnDefinition     `json:"columns,omitempty"`
-	PrimaryKeys         []string               `json:"primary_keys,omitempty"`
-	ForeignKeys         []ForeignKeyDefinition `json:"foreign_keys,omitempty"`
-	Indexes             []IndexDefinition      `json:"indexes,omitempty"`
-	Policies            []PolicyDefinition     `json:"policies,omitempty"`
-	ApproximateRowCount int64                  `json:"approximate_row_count,omitempty"`
-	RLSEnabled          bool                   `json:"rls_enabled"`
+	Schema              string       `json:"schema"`
+	Table               string       `json:"table"`
+	Columns             []Column     `json:"columns,omitempty"`
+	PrimaryKeys         []string     `json:"primary_keys,omitempty"`
+	ForeignKeys         []ForeignKey `json:"foreign_keys,omitempty"`
+	Indexes             []Index      `json:"indexes,omitempty"`
+	Policies            []Policy     `json:"policies,omitempty"`
+	ApproximateRowCount int64        `json:"approximate_row_count,omitempty"`
+	RLSEnabled          bool         `json:"rls_enabled"`
 }
 
 // NewTableCreatedEvent creates a typed event for table creations.

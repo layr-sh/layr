@@ -32,51 +32,51 @@ func TestDataBaseHandlerKVIntegration(t *testing.T) {
 	baseHandler := service.BaseHandler()
 
 	// 1. Set KV
-	kvSetRequest := KVSetRequest{
+	setKVInput := SetKVInput{
 		Value: "integrated-kv-value",
 		TTL:   300,
 	}
-	setBytes, _ := json.Marshal(kvSetRequest)
+	setBytes, _ := json.Marshal(setKVInput)
 	setRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/user-pref", bytes.NewReader(setBytes))
 	setRequest.SetPathValue("key", "user-pref")
 	setResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleSetKV(setResponseRecorder, setRequest)
+	baseHandler.handleSetKV(setResponseRecorder, setRequest)
 	assert.Equal(t, http.StatusOK, setResponseRecorder.Code)
 
 	// 2. Get KV
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/data/kv/user-pref", nil)
 	getRequest.SetPathValue("key", "user-pref")
 	getResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGetKV(getResponseRecorder, getRequest)
+	baseHandler.handleGetKV(getResponseRecorder, getRequest)
 	assert.Equal(t, http.StatusOK, getResponseRecorder.Code)
 	assert.Contains(t, getResponseRecorder.Body.String(), "integrated-kv-value")
 
 	// 3. Increment KV
-	kvIncrementRequest := KVIncrementRequest{
+	incrementKVInput := IncrementKVInput{
 		Key: "hits",
 		TTL: 300,
 	}
-	incBytes, _ := json.Marshal(kvIncrementRequest)
+	incBytes, _ := json.Marshal(incrementKVInput)
 	incrementRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/increment", bytes.NewReader(incBytes))
 	incrementResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleIncrementKV(incrementResponseRecorder, incrementRequest)
+	baseHandler.handleIncrementKV(incrementResponseRecorder, incrementRequest)
 	assert.Equal(t, http.StatusOK, incrementResponseRecorder.Code)
 	assert.Contains(t, incrementResponseRecorder.Body.String(), `"value":1`)
 
 	// 4. MGet KV
-	kvmGetRequest := KVMGetRequest{
+	getMultipleKVInput := GetMultipleKVInput{
 		Keys: []string{"user-pref", "hits"},
 	}
-	mgetBytes, _ := json.Marshal(kvmGetRequest)
+	mgetBytes, _ := json.Marshal(getMultipleKVInput)
 	mgetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/data/kv/mget", bytes.NewReader(mgetBytes))
 	mgetResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleMGetKV(mgetResponseRecorder, mgetRequest)
+	baseHandler.handleGetMultipleKV(mgetResponseRecorder, mgetRequest)
 	assert.Equal(t, http.StatusOK, mgetResponseRecorder.Code)
 
 	// 5. Delete KV
 	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/data/kv/user-pref", nil)
 	deleteRequest.SetPathValue("key", "user-pref")
 	deleteResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleDeleteKV(deleteResponseRecorder, deleteRequest)
+	baseHandler.handleDeleteKV(deleteResponseRecorder, deleteRequest)
 	assert.Equal(t, http.StatusNoContent, deleteResponseRecorder.Code)
 }

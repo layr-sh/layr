@@ -78,7 +78,7 @@ func HashSecretKey(secretKey string) string {
 }
 
 // Create creates a new Service Account and returns the plaintext key once.
-func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, createServiceAccountInput CreateServiceAccountInput) (*ServiceAccountWithSecretKey, error) {
+func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, createServiceAccountInput CreateServiceAccountInput) (*CreateServiceAccountResponse, error) {
 	log.Debugf("creating service account %q", createServiceAccountInput.Name)
 	if serviceAccountManager.db == nil {
 		return nil, fmt.Errorf("db connection pool not available")
@@ -125,7 +125,7 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 	_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 
 	log.Tracef("created service account %s with prefix %s", serviceAccountID, prefix)
-	return &ServiceAccountWithSecretKey{
+	return &CreateServiceAccountResponse{
 		ServiceAccount: serviceAccount,
 		SecretKey:      secretKey,
 	}, nil

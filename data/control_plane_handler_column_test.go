@@ -21,7 +21,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	forbiddenAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/columns", bytes.NewReader([]byte(`{}`)))
 	forbiddenAddRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenAddResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAddColumn(forbiddenAddResponseRecorder, forbiddenAddRequest)
+	controlPlaneHandler.handleCreateColumn(forbiddenAddResponseRecorder, forbiddenAddRequest)
 	if forbiddenAddResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenAddResponseRecorder.Code)
 	}
@@ -30,7 +30,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	forbiddenAlterRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/columns/name", bytes.NewReader([]byte(`{}`)))
 	forbiddenAlterRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenAlterResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAlterColumn(forbiddenAlterResponseRecorder, forbiddenAlterRequest)
+	controlPlaneHandler.handleUpdateColumn(forbiddenAlterResponseRecorder, forbiddenAlterRequest)
 	if forbiddenAlterResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenAlterResponseRecorder.Code)
 	}
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/columns/name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropColumn(forbiddenDropResponseRecorder, forbiddenDropRequest)
+	controlPlaneHandler.handleDeleteColumn(forbiddenDropResponseRecorder, forbiddenDropRequest)
 	if forbiddenDropResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenDropResponseRecorder.Code)
 	}
@@ -53,7 +53,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	// Missing parameters on AddColumn
 	missingAddRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
 	missingAddResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAddColumn(missingAddResponseRecorder, missingAddRequest)
+	controlPlaneHandler.handleCreateColumn(missingAddResponseRecorder, missingAddRequest)
 	if missingAddResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingAddResponseRecorder.Code)
 	}
@@ -63,7 +63,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	malformedAddRequest.SetPathValue("schema_name", "public")
 	malformedAddRequest.SetPathValue("table_name", "users")
 	malformedAddResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAddColumn(malformedAddResponseRecorder, malformedAddRequest)
+	controlPlaneHandler.handleCreateColumn(malformedAddResponseRecorder, malformedAddRequest)
 	if malformedAddResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on malformed JSON, got %d", malformedAddResponseRecorder.Code)
 	}
@@ -73,7 +73,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	missingAlterRequest.SetPathValue("schema_name", "public")
 	missingAlterRequest.SetPathValue("table_name", "users")
 	missingAlterResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAlterColumn(missingAlterResponseRecorder, missingAlterRequest)
+	controlPlaneHandler.handleUpdateColumn(missingAlterResponseRecorder, missingAlterRequest)
 	if missingAlterResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing column name, got %d", missingAlterResponseRecorder.Code)
 	}
@@ -84,7 +84,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	malformedAlterRequest.SetPathValue("table_name", "users")
 	malformedAlterRequest.SetPathValue("column_name", "name")
 	malformedAlterResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleAlterColumn(malformedAlterResponseRecorder, malformedAlterRequest)
+	controlPlaneHandler.handleUpdateColumn(malformedAlterResponseRecorder, malformedAlterRequest)
 	if malformedAlterResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on malformed JSON, got %d", malformedAlterResponseRecorder.Code)
 	}
@@ -94,7 +94,7 @@ func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.
 	missingDropRequest.SetPathValue("schema_name", "public")
 	missingDropRequest.SetPathValue("table_name", "users")
 	missingDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropColumn(missingDropResponseRecorder, missingDropRequest)
+	controlPlaneHandler.handleDeleteColumn(missingDropResponseRecorder, missingDropRequest)
 	if missingDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing column name, got %d", missingDropResponseRecorder.Code)
 	}

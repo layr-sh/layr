@@ -145,8 +145,8 @@ func (handler *BaseHandler) assertSMSDeliveryReady(responseWriter http.ResponseW
 	return true
 }
 
-func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord, sessionMeta ...string) {
-	log.Debugf("issuing session response for user %s (role: %s, is_anonymous: %t)", userRecord.ID, userRecord.Role, userRecord.IsAnonymous)
+func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWriter, request *http.Request, user User, sessionMeta ...string) {
+	log.Debugf("issuing session response for user %s (role: %s, is_anonymous: %t)", user.ID, user.Role, user.IsAnonymous)
 	config := handler.configManager.Get()
 
 	var authMethod string
@@ -159,12 +159,12 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 	}
 
 	email := ""
-	if userRecord.Email != nil {
-		email = *userRecord.Email
+	if user.Email != nil {
+		email = *user.Email
 	}
 	phone := ""
-	if userRecord.Phone != nil {
-		phone = *userRecord.Phone
+	if user.Phone != nil {
+		phone = *user.Phone
 	}
 
 	refreshToken := handler.jwtSigner.GenerateRefreshToken()
@@ -182,14 +182,14 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 	var sessionID string
 	var sessionCreatedAt time.Time
 	if handler.db != nil {
-		log.Tracef("persisting session record in database for user %s", userRecord.ID)
+		log.Tracef("persisting session record in database for user %s", user.ID)
 		queryErr := handler.db.QueryRow(request.Context(), `
 			INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 			VALUES ($1, $2, $3, $4, $5, clock_timestamp())
 			RETURNING id, created_at
-		`, userRecord.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
+		`, user.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
 		if queryErr != nil {
-			log.Debugf("failed to persist database session for user %s: %v", userRecord.ID, queryErr)
+			log.Debugf("failed to persist database session for user %s: %v", user.ID, queryErr)
 		}
 	}
 	if sessionID == "" {
@@ -197,14 +197,14 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		sessionCreatedAt = time.Now().UTC()
 	}
 
-	customClaims := handler.resolveCustomClaims(request.Context(), userRecord.ID)
+	customClaims := handler.resolveCustomClaims(request.Context(), user.ID)
 	userJWTClaims := core.JWTClaims{
-		Subject:     userRecord.ID,
+		Subject:     user.ID,
 		SessionID:   sessionID,
 		Email:       email,
 		Phone:       phone,
-		Role:        userRecord.Role,
-		IsAnonymous: userRecord.IsAnonymous,
+		Role:        user.Role,
+		IsAnonymous: user.IsAnonymous,
 		Claims:      customClaims,
 	}
 	accessToken, _ := handler.jwtSigner.GenerateAccessToken(userJWTClaims, config.Sessions.AccessTokenExpirySeconds)
@@ -212,7 +212,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
 		sessionKey := "auth:session:" + refreshHash
 		cachedSession := CachedSession{
-			User:   userRecord,
+			User:   user,
 			Claims: customClaims,
 		}
 		sessionData, _ := json.Marshal(cachedSession)
@@ -222,7 +222,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		}
 		log.Tracef("caching fast-path session in KV store: %s (ttl: %ds)", sessionKey, sessionTTLSeconds)
 		if kvErr := handler.kvStore.Set(request.Context(), sessionKey, string(sessionData), time.Duration(sessionTTLSeconds)*time.Second); kvErr != nil {
-			log.Debugf("failed to cache fast-path session in KV store for user %s: %v", userRecord.ID, kvErr)
+			log.Debugf("failed to cache fast-path session in KV store for user %s: %v", user.ID, kvErr)
 		}
 	}
 
@@ -232,8 +232,8 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 			ipAddressPtr = &clientIP
 		}
 		publishCtx := request.Context()
-		if parsedUserUUID, parseErr := uuid.Parse(userRecord.ID); parseErr == nil {
-			role := userRecord.Role
+		if parsedUserUUID, parseErr := uuid.Parse(user.ID); parseErr == nil {
+			role := user.Role
 			publishCtx = core.WithEventActor(publishCtx, core.EventActor{
 				Type: "user",
 				ID:   &parsedUserUUID,
@@ -242,7 +242,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		}
 		handler.eventBus.Publish(publishCtx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 			ID:         sessionID,
-			User:       userRecord,
+			User:       user,
 			AuthMethod: authMethod,
 			Provider:   provider,
 			IPAddress:  ipAddressPtr,
@@ -254,8 +254,8 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 
 	core.SetSessionCookie(responseWriter, request, refreshToken, refreshTokenExpiredAt)
 
-	sessionResponse := SessionResponse{
-		User:         userRecord,
+	authTokenResponse := AuthTokenResponse{
+		User:         user,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		ExpiresIn:    config.Sessions.AccessTokenExpirySeconds,
@@ -263,7 +263,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		Claims:       customClaims,
 	}
 
-	handler.writeJSON(responseWriter, sessionResponse)
+	handler.writeJSON(responseWriter, authTokenResponse)
 }
 
 func (handler *BaseHandler) issueOIDCAuthorizationCode(ctx context.Context, clientID, redirectURI, userID, scope, codeChallenge, codeChallengeMethod, nonce string) string {
@@ -333,7 +333,7 @@ func (handler *BaseHandler) resolveCustomClaims(ctx context.Context, userID stri
 // resolveAnonymousCaller checks if the caller provided an active anonymous session
 // strictly defined as email IS NULL AND phone IS NULL AND is_anonymous = true.
 // Returns ErrAnonymousSessionNotFound if the caller is unauthenticated or not an anonymous user.
-func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*UserRecord, error) {
+func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User, error) {
 	log.Trace("resolving anonymous caller from request")
 	if handler == nil || handler.db == nil {
 		log.Debug("anonymous caller resolution rejected: database pool unavailable")
@@ -348,17 +348,17 @@ func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User
 	userID := authContext.UserID
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -369,16 +369,16 @@ func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User
 		return nil, err
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if userRecord.Email == nil && userRecord.Phone == nil && userRecord.IsAnonymous {
-		log.Debugf("resolved active anonymous caller: %s", userRecord.ID)
-		return &userRecord, nil
+	if user.Email == nil && user.Phone == nil && user.IsAnonymous {
+		log.Debugf("resolved active anonymous caller: %s", user.ID)
+		return &user, nil
 	}
 
-	log.Debugf("caller %s is not an anonymous user", userRecord.ID)
+	log.Debugf("caller %s is not an anonymous user", user.ID)
 	return nil, ErrAnonymousSessionNotFound
 }

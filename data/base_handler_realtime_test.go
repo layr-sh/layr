@@ -28,7 +28,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleRealtime(responseRecorder, request)
+		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Access denied")
 	})
@@ -36,12 +36,12 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 	t.Run("InvalidWebSocketUpgrade", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleRealtime(responseRecorder, request)
+		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
 	t.Run("ValidWebSocketConnectionAndOriginChecks", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(baseHandler.HandleRealtime))
+		server := httptest.NewServer(http.HandlerFunc(baseHandler.handleConnectRealtime))
 		defer server.Close()
 
 		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -127,7 +127,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			configManager.SetMemoryConfig(config)
 		}()
 
-		server := httptest.NewServer(http.HandlerFunc(baseHandler.HandleRealtime))
+		server := httptest.NewServer(http.HandlerFunc(baseHandler.handleConnectRealtime))
 		defer server.Close()
 
 		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -149,7 +149,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		}
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
-		nilHubBaseHandler.HandleRealtime(responseRecorder, request)
+		nilHubBaseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Service temporarily unavailable")
 	})
@@ -169,7 +169,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/realtime", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleRealtime(responseRecorder, request)
+		baseHandler.handleConnectRealtime(responseRecorder, request)
 		assert.Equal(t, http.StatusTooManyRequests, responseRecorder.Code)
 		assert.Contains(t, responseRecorder.Body.String(), "Too many requests. Please try again later.")
 	})
@@ -185,7 +185,7 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			configManager.SetMemoryConfig(config)
 		}()
 
-		server := httptest.NewServer(http.HandlerFunc(baseHandler.HandleRealtime))
+		server := httptest.NewServer(http.HandlerFunc(baseHandler.handleConnectRealtime))
 		defer server.Close()
 
 		wsURL := "ws" + strings.TrimPrefix(server.URL, "http")

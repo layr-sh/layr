@@ -6,6 +6,7 @@ import (
 	"layr.sh/core"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -47,9 +48,9 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	controlPlaneHandler.SetServiceAccountManager(nil)
 	emptyUserPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/other", nil)
 	emptyUserPathResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetUser(emptyUserPathResponseRecorder, emptyUserPathRequest)
+	controlPlaneHandler.handleGetUser(emptyUserPathResponseRecorder, emptyUserPathRequest)
 	if emptyUserPathResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on HandleGetUser with missing user ID in path, got: %d", emptyUserPathResponseRecorder.Code)
+		t.Fatalf("expected 400 on handleGetUser with missing user ID in path, got: %d", emptyUserPathResponseRecorder.Code)
 	}
 
 	// 5. Test fallback path where PathValue is empty but path has >= 6 segments with users
@@ -57,5 +58,21 @@ func TestAuthControlPlaneHandlerUnit(t *testing.T) {
 	extractedID := controlPlaneHandler.extractUserID(fallbackUserPathRequest)
 	if extractedID != "01234567-89ab-cdef-0123-456789abcdef" {
 		t.Fatalf("expected extracted ID from fallback path, got: %s", extractedID)
+	}
+
+	// 6. Test nil configManager branches for handleGetConfig and handleUpdateConfig
+	nilConfigControlPlaneHandler := NewControlPlaneHandler(nil, nil)
+	getConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
+	getConfigTestResponseRecorder := httptest.NewRecorder()
+	nilConfigControlPlaneHandler.handleGetConfig(getConfigTestResponseRecorder, getConfigTestRequest)
+	if getConfigTestResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on handleGetConfig with nil configManager, got: %d", getConfigTestResponseRecorder.Code)
+	}
+
+	updateConfigTestRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader("{}"))
+	updateConfigTestResponseRecorder := httptest.NewRecorder()
+	nilConfigControlPlaneHandler.handleUpdateConfig(updateConfigTestResponseRecorder, updateConfigTestRequest)
+	if updateConfigTestResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on handleUpdateConfig with nil configManager, got: %d", updateConfigTestResponseRecorder.Code)
 	}
 }

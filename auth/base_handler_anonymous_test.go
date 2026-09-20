@@ -27,7 +27,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 
 	anonymousDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	anonymousDisabledResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(anonymousDisabledResponseRecorder, anonymousDisabledRequest)
+	baseHandler.handleSignInAnonymous(anonymousDisabledResponseRecorder, anonymousDisabledRequest)
 	if anonymousDisabledResponseRecorder.Code != http.StatusForbidden || !strings.Contains(anonymousDisabledResponseRecorder.Body.String(), "Access denied") {
 		t.Fatalf("expected 403 on disabled anonymous auth, got: %d (%s)", anonymousDisabledResponseRecorder.Code, anonymousDisabledResponseRecorder.Body.String())
 	}
@@ -36,7 +36,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	configManager.Set(DefaultConfig())
 	anonymousNilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
 	anonymousNilDBResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(anonymousNilDBResponseRecorder, anonymousNilDBRequest)
+	baseHandler.handleSignInAnonymous(anonymousNilDBResponseRecorder, anonymousNilDBRequest)
 	if anonymousNilDBResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on anonymous sign in with nil db, got: %d", anonymousNilDBResponseRecorder.Code)
 	}

@@ -27,42 +27,42 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		return
 	}
 
-	var signUpRequest SignUpRequest
-	if err := json.NewDecoder(request.Body).Decode(&signUpRequest); err != nil {
+	var signUpInput SignUpInput
+	if err := json.NewDecoder(request.Body).Decode(&signUpInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	signUpRequest.Email = strings.TrimSpace(strings.ToLower(signUpRequest.Email))
-	signUpRequest.Phone = strings.TrimSpace(signUpRequest.Phone)
-	if signUpRequest.Phone != "" {
-		normalizedPhone, err := NormalizePhone(signUpRequest.Phone)
+	signUpInput.Email = strings.TrimSpace(strings.ToLower(signUpInput.Email))
+	signUpInput.Phone = strings.TrimSpace(signUpInput.Phone)
+	if signUpInput.Phone != "" {
+		normalizedPhone, err := NormalizePhone(signUpInput.Phone)
 		if err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
-		signUpRequest.Phone = normalizedPhone
+		signUpInput.Phone = normalizedPhone
 	}
-	if signUpRequest.Email == "" && signUpRequest.Phone == "" {
+	if signUpInput.Email == "" && signUpInput.Phone == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
-	if len(signUpRequest.Password) < config.Password.MinLength {
+	if len(signUpInput.Password) < config.Password.MinLength {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, signUpRequest.CaptchaToken, "/api/v1/auth/sign-up") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signUpInput.CaptchaToken, "/api/v1/auth/sign-up") {
 		return
 	}
-	if !handler.checkPasswordBreach(responseWriter, request, signUpRequest.Password, signUpRequest.Email) {
+	if !handler.checkPasswordBreach(responseWriter, request, signUpInput.Password, signUpInput.Email) {
 		return
 	}
 
-	passHash, _ := handler.hasher.Hash(signUpRequest.Password)
+	passHash, _ := handler.hasher.Hash(signUpInput.Password)
 
-	inputProperties := signUpRequest.Properties
+	inputProperties := signUpInput.Properties
 	if inputProperties == nil {
 		inputProperties = make(map[string]any)
 	}
@@ -75,15 +75,15 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 
 	ctx := request.Context()
 	var emailPtr, phonePtr *string
-	if signUpRequest.Email != "" {
-		emailPtr = &signUpRequest.Email
+	if signUpInput.Email != "" {
+		emailPtr = &signUpInput.Email
 	}
-	if signUpRequest.Phone != "" {
-		phonePtr = &signUpRequest.Phone
+	if signUpInput.Phone != "" {
+		phonePtr = &signUpInput.Phone
 	}
 
-	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)
-	if anonymousUserRecord != nil {
+	anonymousUser, _ := handler.resolveAnonymousCaller(request)
+	if anonymousUser != nil {
 		var existingUserID string
 		err := handler.db.QueryRow(ctx, `
 			SELECT id FROM auth.users 
@@ -91,7 +91,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			   OR (phone IS NOT NULL AND phone = $2)
 			LIMIT 1
 		`, emailPtr, phonePtr).Scan(&existingUserID)
-		if err == nil && existingUserID != anonymousUserRecord.ID {
+		if err == nil && existingUserID != anonymousUser.ID {
 			if emailPtr != nil {
 				core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 			} else {
@@ -100,7 +100,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			return
 		}
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		updateQuery := `
 			UPDATE auth.users
@@ -110,31 +110,31 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			WHERE id = $5
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`
-		err = handler.db.QueryRow(ctx, updateQuery, emailPtr, phonePtr, passHash, propertiesJSON, anonymousUserRecord.ID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		err = handler.db.QueryRow(ctx, updateQuery, emailPtr, phonePtr, passHash, propertiesJSON, anonymousUser.ID).Scan(
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, err))
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUser.ID, err))
 			return
 		}
 
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord, "password")
+		handler.issueSessionResponse(responseWriter, request, user, "password")
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		INSERT INTO auth.users (email, phone, password_hash, role, properties, created_at, last_updated_at)
@@ -142,46 +142,46 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := handler.db.QueryRow(ctx, query, emailPtr, phonePtr, passHash, propertiesJSON).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to create user: %v", err))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord, "password")
+	handler.issueSessionResponse(responseWriter, request, user, "password")
 }
 
 func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling sign-in request")
-	var signInRequest SignInRequest
-	if err := json.NewDecoder(request.Body).Decode(&signInRequest); err != nil {
+	var signInInput SignInInput
+	if err := json.NewDecoder(request.Body).Decode(&signInInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	identifier := strings.TrimSpace(strings.ToLower(signInRequest.Email))
-	if identifier == "" && signInRequest.Phone != "" {
-		normalizedPhone, err := NormalizePhone(signInRequest.Phone)
+	identifier := strings.TrimSpace(strings.ToLower(signInInput.Email))
+	if identifier == "" && signInInput.Phone != "" {
+		normalizedPhone, err := NormalizePhone(signInInput.Phone)
 		if err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
 		identifier = normalizedPhone
 	}
-	if identifier == "" || signInRequest.Password == "" {
+	if identifier == "" || signInInput.Password == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -190,7 +190,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	config := handler.configManager.Get()
 	clientIP := core.ExtractRequestClientIP(request)
 
-	if !handler.checkCaptcha(responseWriter, request, clientIP, signInRequest.CaptchaToken, "/api/v1/auth/sign-in") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, signInInput.CaptchaToken, "/api/v1/auth/sign-in") {
 		return
 	}
 
@@ -217,7 +217,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var passHash string
 	var rawProperties []byte
 
@@ -227,13 +227,13 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		WHERE email = $1 OR phone = $1
 	`
 	err := handler.db.QueryRow(ctx, query, identifier).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &passHash, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &passHash, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		handler.verifyDummyPassword(signInRequest.Password)
+		handler.verifyDummyPassword(signInInput.Password)
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
 		}
@@ -250,48 +250,48 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		return
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, user.ID, 0)
 		}
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
 				Identifier: identifier,
 				AuthMethod: "password",
 				Reason:     "account_locked",
 				IPAddress:  clientIP,
 				UserAgent:  request.UserAgent(),
-				User:       &userRecord,
+				User:       &user,
 			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
-	ok, err := handler.hasher.Verify(signInRequest.Password, passHash)
+	ok, err := handler.hasher.Verify(signInInput.Password, passHash)
 	if err != nil || !ok {
 		if handler.kvStore != nil {
 			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, userRecord.ID, 0)
+			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, user.ID, 0)
 		}
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
 				Identifier: identifier,
 				AuthMethod: "password",
 				Reason:     "invalid_credentials",
 				IPAddress:  clientIP,
 				UserAgent:  request.UserAgent(),
-				User:       &userRecord,
+				User:       &user,
 			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	// Reset rate limit on successful authentication
@@ -300,10 +300,10 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		_ = handler.kvStore.Delete(ctx, rateKey)
 	}
 
-	handler.completeSignInFlow(responseWriter, request, userRecord, "password")
+	handler.completeSignInFlow(responseWriter, request, user, "password")
 }
 
-func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling password reset request")
 	config := handler.configManager.Get()
 	if !config.Password.Enabled {
@@ -311,18 +311,18 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		return
 	}
 
-	var passwordResetRequest PasswordResetRequest
-	if err := json.NewDecoder(request.Body).Decode(&passwordResetRequest); err != nil {
+	var requestPasswordResetInput RequestPasswordResetInput
+	if err := json.NewDecoder(request.Body).Decode(&requestPasswordResetInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(passwordResetRequest.Recipient))
+	recipient := strings.TrimSpace(strings.ToLower(requestPasswordResetInput.Recipient))
 	if recipient == "" {
-		recipient = strings.TrimSpace(strings.ToLower(passwordResetRequest.Email))
+		recipient = strings.TrimSpace(strings.ToLower(requestPasswordResetInput.Email))
 	}
 	if recipient == "" {
-		recipient = strings.TrimSpace(passwordResetRequest.Phone)
+		recipient = strings.TrimSpace(requestPasswordResetInput.Phone)
 	}
 	if recipient == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
@@ -330,7 +330,7 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if !handler.checkCaptcha(responseWriter, request, clientIP, passwordResetRequest.CaptchaToken, "/api/v1/auth/password/reset") {
+	if !handler.checkCaptcha(responseWriter, request, clientIP, requestPasswordResetInput.CaptchaToken, "/api/v1/auth/password-reset/request") {
 		return
 	}
 
@@ -373,13 +373,13 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 		return
 	}
 
-	userRecord, err := fetchUserRecordByRecipient(ctx, handler.db, recipient)
+	user, err := fetchUserByRecipient(ctx, handler.db, recipient)
 	if err != nil {
 		log.Debugf("password reset requested for unregistered recipient %s", recipient)
 		responseWriter.WriteHeader(http.StatusNoContent)
 		return
 	}
-	userID := userRecord.ID
+	userID := user.ID
 
 	code, _ := otp.GenerateCode(nil)
 	codeHash := otp.HashCode(code)
@@ -402,9 +402,9 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(userRecord.ID, PasswordResetRequestedEventData{
+		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(user.ID, PasswordResetRequestedEventData{
 			Recipient: recipient,
-			User:      userRecord,
+			User:      user,
 		}))
 	}
 
@@ -412,7 +412,7 @@ func (handler *BaseHandler) handlePasswordResetRequest(responseWriter http.Respo
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling password reset confirmation request")
 	config := handler.configManager.Get()
 	if !config.Password.Enabled {
@@ -420,20 +420,20 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		return
 	}
 
-	var passwordResetConfirmRequest PasswordResetConfirmRequest
-	if err := json.NewDecoder(request.Body).Decode(&passwordResetConfirmRequest); err != nil {
+	var confirmPasswordResetInput ConfirmPasswordResetInput
+	if err := json.NewDecoder(request.Body).Decode(&confirmPasswordResetInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(passwordResetConfirmRequest.Recipient))
+	recipient := strings.TrimSpace(strings.ToLower(confirmPasswordResetInput.Recipient))
 	if recipient == "" {
-		recipient = strings.TrimSpace(strings.ToLower(passwordResetConfirmRequest.Email))
+		recipient = strings.TrimSpace(strings.ToLower(confirmPasswordResetInput.Email))
 	}
 	if recipient == "" {
-		recipient = strings.TrimSpace(passwordResetConfirmRequest.Phone)
+		recipient = strings.TrimSpace(confirmPasswordResetInput.Phone)
 	}
-	if recipient == "" || passwordResetConfirmRequest.Code == "" || passwordResetConfirmRequest.Password == "" {
+	if recipient == "" || confirmPasswordResetInput.Code == "" || confirmPasswordResetInput.Password == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient, code, and new password are required")
 		return
 	}
@@ -447,12 +447,12 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		recipient = normalizedPhone
 	}
 
-	if len(passwordResetConfirmRequest.Password) < config.Password.MinLength {
+	if len(confirmPasswordResetInput.Password) < config.Password.MinLength {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
 
-	if !handler.checkPasswordBreach(responseWriter, request, passwordResetConfirmRequest.Password, recipient) {
+	if !handler.checkPasswordBreach(responseWriter, request, confirmPasswordResetInput.Password, recipient) {
 		return
 	}
 
@@ -484,7 +484,7 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		return
 	}
 
-	if !otp.VerifyCode(passwordResetConfirmRequest.Code, storedHash) {
+	if !otp.VerifyCode(confirmPasswordResetInput.Code, storedHash) {
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code")
 		return
@@ -496,9 +496,9 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient))
 	}
 
-	passHash, _ := handler.hasher.Hash(passwordResetConfirmRequest.Password)
+	passHash, _ := handler.hasher.Hash(confirmPasswordResetInput.Password)
 
-	var userRecord UserRecord
+	var user User
 	var rawProps []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE auth.users 
@@ -506,35 +506,35 @@ func (handler *BaseHandler) handlePasswordResetConfirm(responseWriter http.Respo
 		WHERE email = $2 OR phone = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, passHash, recipient).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProps, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProps, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired reset code")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProps) > 0 {
-		_ = json.Unmarshal(rawProps, &userRecord.Properties)
+		_ = json.Unmarshal(rawProps, &user.Properties)
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasswordResetEvent(userRecord.ID, PasswordResetEventData{
+		handler.eventBus.Publish(ctx, NewPasswordResetEvent(user.ID, PasswordResetEventData{
 			Recipient: recipient,
-			User:      userRecord,
+			User:      user,
 		}))
 	}
 
-	log.Debugf("password reset successful for user %s", userRecord.ID)
-	handler.issueSessionResponse(responseWriter, request, userRecord, "password_reset")
+	log.Debugf("password reset successful for user %s", user.ID)
+	handler.issueSessionResponse(responseWriter, request, user, "password_reset")
 }
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
@@ -545,8 +545,8 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	}
 	userID := authContext.UserID
 
-	var updateUserPasswordRequest UpdateUserPasswordRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPasswordRequest); decodeErr != nil {
+	var updateUserPasswordInput UpdateUserPasswordInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPasswordInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
@@ -584,11 +584,11 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	}
 
 	if existingPasswordHash != nil && *existingPasswordHash != "" {
-		if updateUserPasswordRequest.CurrentPassword == "" {
+		if updateUserPasswordInput.CurrentPassword == "" {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is required")
 			return
 		}
-		isCurrentPasswordValid, verifyErr := handler.hasher.Verify(updateUserPasswordRequest.CurrentPassword, *existingPasswordHash)
+		isCurrentPasswordValid, verifyErr := handler.hasher.Verify(updateUserPasswordInput.CurrentPassword, *existingPasswordHash)
 		if verifyErr != nil || !isCurrentPasswordValid {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current password is incorrect")
 			return
@@ -596,7 +596,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	}
 
 	config := handler.configManager.Get()
-	if len(updateUserPasswordRequest.NewPassword) < config.Password.MinLength {
+	if len(updateUserPasswordInput.NewPassword) < config.Password.MinLength {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
 		return
 	}
@@ -605,13 +605,13 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	if email != nil {
 		userEmail = *email
 	}
-	if !handler.checkPasswordBreach(responseWriter, request, updateUserPasswordRequest.NewPassword, userEmail) {
+	if !handler.checkPasswordBreach(responseWriter, request, updateUserPasswordInput.NewPassword, userEmail) {
 		return
 	}
 
-	hashedPassword, _ := handler.hasher.Hash(updateUserPasswordRequest.NewPassword)
+	hashedPassword, _ := handler.hasher.Hash(updateUserPasswordInput.NewPassword)
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	queryErr := handler.db.QueryRow(ctx, `
 		UPDATE auth.users
@@ -619,18 +619,18 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		WHERE id = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, hashedPassword, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if queryErr == nil {
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(userRecord.ID, PasswordChangedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(user.ID, PasswordChangedEventData(user)))
 		}
 	}
 

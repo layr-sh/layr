@@ -46,8 +46,8 @@ func (signer *JWTSigner) BuildJWKS() JWKS {
 	}
 }
 
-// HandleJWKS serves the GET /.well-known/jwks.json HTTP endpoint.
-func (signer *JWTSigner) HandleJWKS(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetJWKS serves the GET /.well-known/jwks.json HTTP endpoint.
+func (signer *JWTSigner) handleGetJWKS(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handling JWKS HTTP request from %s", request.RemoteAddr)
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)

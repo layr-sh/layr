@@ -21,7 +21,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users/policies", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListPolicies(forbiddenListResponseRecorder, forbiddenListRequest)
+	controlPlaneHandler.handleListPolicies(forbiddenListResponseRecorder, forbiddenListRequest)
 	if forbiddenListResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenListResponseRecorder.Code)
 	}
@@ -30,7 +30,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/policies", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreatePolicy(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
+	controlPlaneHandler.handleCreatePolicy(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
 	if forbiddenCreateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenCreateResponseRecorder.Code)
 	}
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/policies/policy_name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropPolicy(forbiddenDropResponseRecorder, forbiddenDropRequest)
+	controlPlaneHandler.handleDeletePolicy(forbiddenDropResponseRecorder, forbiddenDropRequest)
 	if forbiddenDropResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenDropResponseRecorder.Code)
 	}
@@ -48,7 +48,7 @@ func TestDataControlPlaneHandlerPolicyScopeForbiddenUnit(t *testing.T) {
 	forbiddenToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables/public/users/rls", nil)
 	forbiddenToggleRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenToggleResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(forbiddenToggleResponseRecorder, forbiddenToggleRequest)
+	controlPlaneHandler.handleToggleRLS(forbiddenToggleResponseRecorder, forbiddenToggleRequest)
 	if forbiddenToggleResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenToggleResponseRecorder.Code)
 	}
@@ -62,7 +62,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	// Missing parameters on ListPolicies
 	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
 	missingListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListPolicies(missingListResponseRecorder, missingListRequest)
+	controlPlaneHandler.handleListPolicies(missingListResponseRecorder, missingListRequest)
 	if missingListResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingListResponseRecorder.Code)
 	}
@@ -70,7 +70,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	// Missing parameters on CreatePolicy
 	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
 	missingCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreatePolicy(missingCreateResponseRecorder, missingCreateRequest)
+	controlPlaneHandler.handleCreatePolicy(missingCreateResponseRecorder, missingCreateRequest)
 	if missingCreateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingCreateResponseRecorder.Code)
 	}
@@ -80,7 +80,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	malformedCreateRequest.SetPathValue("schema_name", "public")
 	malformedCreateRequest.SetPathValue("table_name", "users")
 	malformedCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreatePolicy(malformedCreateResponseRecorder, malformedCreateRequest)
+	controlPlaneHandler.handleCreatePolicy(malformedCreateResponseRecorder, malformedCreateRequest)
 	if malformedCreateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on malformed JSON, got %d", malformedCreateResponseRecorder.Code)
 	}
@@ -88,7 +88,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	// Missing parameters on DropPolicy
 	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
 	missingDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropPolicy(missingDropResponseRecorder, missingDropRequest)
+	controlPlaneHandler.handleDeletePolicy(missingDropResponseRecorder, missingDropRequest)
 	if missingDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingDropResponseRecorder.Code)
 	}
@@ -96,7 +96,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	// Missing parameters on ToggleRLS
 	missingToggleRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/_/data/tables", nil)
 	missingToggleResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(missingToggleResponseRecorder, missingToggleRequest)
+	controlPlaneHandler.handleToggleRLS(missingToggleResponseRecorder, missingToggleRequest)
 	if missingToggleResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingToggleResponseRecorder.Code)
 	}
@@ -106,7 +106,7 @@ func TestDataControlPlaneHandlerPolicyValidationAndMissingParamsUnit(t *testing.
 	unknownActionRequest.SetPathValue("schema_name", "public")
 	unknownActionRequest.SetPathValue("table_name", "users")
 	unknownActionResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(unknownActionResponseRecorder, unknownActionRequest)
+	controlPlaneHandler.handleToggleRLS(unknownActionResponseRecorder, unknownActionRequest)
 	if unknownActionResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on unknown RLS action, got %d", unknownActionResponseRecorder.Code)
 	}

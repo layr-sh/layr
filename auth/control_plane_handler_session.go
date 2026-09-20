@@ -7,9 +7,9 @@ import (
 	"layr.sh/core"
 )
 
-// HandleListUserSessions lists active sessions for a user (auth:user.read).
-func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleListUserSessions invoked")
+// handleListUserSessions lists active sessions for a user (auth:user.read).
+func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListUserSessions invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
@@ -40,25 +40,25 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUserSessions(responseW
 	}
 	defer rows.Close()
 
-	sessionRecords := make([]SessionRecord, 0)
+	sessions := make([]Session, 0)
 	for rows.Next() {
-		var sessionRecord SessionRecord
+		var session Session
 		_ = rows.Scan(
-			&sessionRecord.ID, &sessionRecord.UserID, &sessionRecord.ClientID, &sessionRecord.RefreshTokenHash,
-			&sessionRecord.IPAddress, &sessionRecord.UserAgent, &sessionRecord.ExpiresAt, &sessionRecord.CreatedAt,
+			&session.ID, &session.UserID, &session.ClientID, &session.RefreshTokenHash,
+			&session.IPAddress, &session.UserAgent, &session.ExpiresAt, &session.CreatedAt,
 		)
-		sessionRecords = append(sessionRecords, sessionRecord)
+		sessions = append(sessions, session)
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]any{
-		"sessions": sessionRecords,
-		"count":    len(sessionRecords),
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListUserSessionsResponse{
+		Sessions: sessions,
+		Count:    len(sessions),
 	})
 }
 
-// HandleRevokeUserSessions terminates all sessions for a user (auth:user.write).
-func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleRevokeUserSessions invoked")
+// handleRevokeUserSessions terminates all sessions for a user (auth:user.write).
+func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleRevokeUserSessions invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
@@ -110,9 +110,9 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleRevokeUserSessions(respons
 	}
 
 	if controlPlaneHandler.eventBus != nil {
-		userRecord, _ := fetchUserRecordByID(ctx, controlPlaneHandler.db, userID)
+		user, _ := fetchUserByID(ctx, controlPlaneHandler.db, userID)
 		controlPlaneHandler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
-			User:         userRecord,
+			User:         user,
 			RevokedCount: &revokedCount,
 		}))
 	}

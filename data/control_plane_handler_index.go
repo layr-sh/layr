@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleListIndexes lists all indexes on a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
+// handleListIndexes lists all indexes on a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -30,8 +30,8 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListIndexes(responseWriter
 	})
 }
 
-// HandleCreateIndex creates a new index on a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
+// handleCreateIndex creates a new index on a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -41,12 +41,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateIndex(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/indexes")
 		return
 	}
-	var createIndexRequest CreateIndexRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&createIndexRequest); decodeErr != nil {
+	var createIndexInput CreateIndexInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&createIndexInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if createErr := controlPlaneHandler.ddlEngine.CreateIndex(request.Context(), schema, table, createIndexRequest); createErr != nil {
+	if createErr := controlPlaneHandler.ddlEngine.CreateIndex(request.Context(), schema, table, createIndexInput); createErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
@@ -59,18 +59,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateIndex(responseWriter
 			Schema: schema,
 			Table:  table,
 			Action: "create_index",
-			Detail: createIndexRequest.IndexName,
+			Detail: createIndexInput.IndexName,
 		}))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreateIndexResponse{
 		Status: "created",
-		Index:  createIndexRequest.IndexName,
+		Index:  createIndexInput.IndexName,
 	})
 }
 
-// HandleDropIndex drops an index from a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleDropIndex(responseWriter http.ResponseWriter, request *http.Request) {
+// handleDeleteIndex drops an index from a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -100,7 +100,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropIndex(responseWriter h
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DropIndexResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeleteIndexResponse{
 		Status: "deleted",
 		Index:  indexName,
 	})

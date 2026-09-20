@@ -11,8 +11,8 @@ import (
 	"layr.sh/data/realtime"
 )
 
-// HandleRealtime upgrades HTTP connection to WebSocket and attaches to the CDC Hub.
-func (handler *BaseHandler) HandleRealtime(responseWriter http.ResponseWriter, request *http.Request) {
+// handleConnectRealtime upgrades HTTP connection to WebSocket and attaches to the CDC Hub.
+func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.Realtime.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "realtime connection rejected: Real-Time API is disabled in configuration")

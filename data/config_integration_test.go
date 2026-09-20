@@ -1,11 +1,7 @@
 package data
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -58,17 +54,7 @@ func TestDataConfigPostgresIntegration(t *testing.T) {
 		t.Fatalf("expected clamped values on zero config, got: %+v", clampedConfig)
 	}
 
-	// 4. HandlePutConfig HTTP endpoint with valid JSON
-	putPayload, _ := json.Marshal(customConfig)
-	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(putPayload))
-	putResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putResponseRecorder, putRequest)
-
-	if putResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on HandlePutConfig, got %d", putResponseRecorder.Code)
-	}
-
-	// 5. Corrupt JSON in database causes Load to return error
+	// 4. Corrupt JSON in database causes Load to return error
 	const corruptSQLStatement = `UPDATE data.config SET value = '"invalid json string not object"'::jsonb WHERE key = 'runtime'`
 	if _, execErr := db.Exec(ctx, corruptSQLStatement); execErr != nil {
 		t.Fatalf("failed to corrupt config JSON: %v", execErr)
@@ -77,18 +63,10 @@ func TestDataConfigPostgresIntegration(t *testing.T) {
 		t.Fatal("expected Load error on invalid JSON structure in DB")
 	}
 
-	// 6. DB execution error on Set (e.g. canceled context)
+	// 5. DB execution error on Set (e.g. canceled context)
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	if err := configManager.Set(canceledCtx, customConfig); err == nil {
 		t.Fatal("expected error on Set with canceled context")
-	}
-
-	// 7. HandlePutConfig with closed/failing DB causes 500 Internal Server Error
-	closedContextRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(putPayload))
-	closedContextResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(closedContextResponseRecorder, closedContextRequest)
-	if closedContextResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on failing DB in HandlePutConfig, got %d", closedContextResponseRecorder.Code)
 	}
 }

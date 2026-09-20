@@ -112,7 +112,7 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 
 // 1. OIDC Discovery & JWKS
 
-func (handler *BaseHandler) handleOIDCDiscovery(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleGetOIDCDiscovery(responseWriter http.ResponseWriter, request *http.Request) {
 	baseURL := core.GetConfig().ServerBaseURL()
 	oidcConfiguration := BuildOIDCDiscovery(baseURL)
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -120,7 +120,7 @@ func (handler *BaseHandler) handleOIDCDiscovery(responseWriter http.ResponseWrit
 	_ = json.NewEncoder(responseWriter).Encode(oidcConfiguration)
 }
 
-func (handler *BaseHandler) handleJWKS(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, request *http.Request) {
 	jwks := handler.jwtSigner.BuildJWKS()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -129,7 +129,7 @@ func (handler *BaseHandler) handleJWKS(responseWriter http.ResponseWriter, reque
 
 // 2. Authorization Endpoint (GET /api/v1/auth/oauth/authorize)
 
-func (handler *BaseHandler) handleOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize request rejected: OIDC identity provider is disabled in configuration")
@@ -241,7 +241,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	request *http.Request,
 	stateID string,
 	oidcAuthorizationStatePayload OIDCAuthorizationStatePayload,
-	userRecord UserRecord,
+	user User,
 ) {
 	ctx := request.Context()
 	config := handler.configManager.Get()
@@ -256,7 +256,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 		ctx,
 		oidcAuthorizationStatePayload.ClientID,
 		oidcAuthorizationStatePayload.RedirectURI,
-		userRecord.ID,
+		user.ID,
 		oidcAuthorizationStatePayload.Scope,
 		oidcAuthorizationStatePayload.CodeChallenge,
 		oidcAuthorizationStatePayload.CodeChallengeMethod,
@@ -271,14 +271,14 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	_, _ = handler.db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, clock_timestamp())
-	`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
+	`, sessionID, user.ID, refreshTokenHash, expiresAt)
 
 	core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 			ID:        sessionID,
-			User:      userRecord,
+			User:      user,
 			ExpiresAt: expiresAt,
 			CreatedAt: time.Now().UTC(),
 		}))
@@ -301,7 +301,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 
 // 3. Authorization Form Submission (POST /api/v1/auth/oauth/authorize)
 
-func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize submit rejected: OIDC identity provider is disabled in configuration")
@@ -362,7 +362,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 			return
 		}
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		query := `
 			SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
@@ -370,28 +370,28 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 			WHERE id = $1
 		`
 		scanErr := handler.db.QueryRow(ctx, query, mfaUserID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
-			&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
-			&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.PasswordHash,
+			&user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt,
+			&user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if scanErr != nil {
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
 		}
 
-		if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+		if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error", "", mfaToken)
 			return
 		}
-		secretBytes, decryptErr := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+		secretBytes, decryptErr := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
 		if decryptErr != nil {
-			log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, decryptErr)
+			log.Errorf("failed to decrypt MFA secret for user %s: %v", user.ID, decryptErr)
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication", "", mfaToken)
 			return
 		}
 		if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
-			log.Debugf("invalid MFA code supplied during OIDC MFA challenge for user %s", userRecord.ID)
+			log.Debugf("invalid MFA code supplied during OIDC MFA challenge for user %s", user.ID)
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code", "", mfaToken)
 			return
 		}
@@ -399,7 +399,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		if handler.kvStore != nil {
 			_ = handler.kvStore.Delete(ctx, "auth:oidc:mfa:"+mfaToken)
 		}
-		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
 
@@ -473,15 +473,15 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		}
 
 		if handler.eventBus != nil {
-			var targetUserRecord *UserRecord
-			if fetchedUserRecord, fetchErr := fetchUserRecordByRecipient(ctx, handler.db, recipient); fetchErr == nil {
-				targetUserRecord = &fetchedUserRecord
+			var targetUser *User
+			if fetchedUser, fetchErr := fetchUserByRecipient(ctx, handler.db, recipient); fetchErr == nil {
+				targetUser = &fetchedUser
 			}
 			handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
 				Recipient: recipient,
 				Purpose:   "sign_in",
 				Channel:   channel,
-				User:      targetUserRecord,
+				User:      targetUser,
 			}))
 		}
 
@@ -533,7 +533,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 			_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient))
 		}
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		var isNewUser bool
 		if isEmail {
@@ -543,10 +543,10 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 				ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 			`, recipient).Scan(
-				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+				&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+				&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+				&user.EncryptedMFASecret, &user.MFAEnabled,
+				&rawProperties, &user.CreatedAt, &user.LastUpdatedAt, &isNewUser,
 			)
 		} else {
 			_ = handler.db.QueryRow(ctx, `
@@ -555,14 +555,14 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 				ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at, (xmax = 0) AS is_new
 			`, recipient).Scan(
-				&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-				&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-				&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-				&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt, &isNewUser,
+				&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+				&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+				&user.EncryptedMFASecret, &user.MFAEnabled,
+				&rawProperties, &user.CreatedAt, &user.LastUpdatedAt, &isNewUser,
 			)
 		}
 
-		if !isNewUser && userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+		if !isNewUser && user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Account temporarily locked. Please try again later.")
 			return
 		}
@@ -573,26 +573,26 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		}
 		if handler.eventBus != nil {
 			if isNewUser {
-				handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+				handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 			}
 			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
 				Recipient: recipient,
 				Purpose:   "sign_in",
 				Channel:   channel,
-				User:      &userRecord,
+				User:      &user,
 			}))
 		}
 
-		if userRecord.MFAEnabled {
+		if user.MFAEnabled {
 			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
 			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, userRecord.ID, defaultOIDCMFATTL)
+				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
 			}
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
 			return
 		}
 
-		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
 
@@ -628,7 +628,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		}
 
 		passHash, _ := handler.hasher.Hash(password)
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		userID := uuid.NewV7().String()
 		query := `
@@ -637,10 +637,10 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`
 		err = handler.db.QueryRow(ctx, query, userID, email, passHash).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if err != nil {
 			log.Debugf("failed to create user in OIDC sign up: %v", err)
@@ -649,10 +649,10 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 		}
 
-		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
 
@@ -670,7 +670,7 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 	}
 
 	// Verify user credentials
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, password_hash, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
@@ -678,66 +678,66 @@ func (handler *BaseHandler) handleOIDCAuthorizeSubmit(responseWriter http.Respon
 		WHERE email = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.PasswordHash,
-		&userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt,
-		&userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.PasswordHash,
+		&user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt,
+		&user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
-	if scanErr != nil || userRecord.PasswordHash == nil {
+	if scanErr != nil || user.PasswordHash == nil {
 		handler.verifyDummyPassword(userPassword)
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
 		return
 	}
 
-	if userRecord.LockedUntil != nil && userRecord.LockedUntil.After(time.Now().UTC()) {
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now().UTC()) {
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Account temporarily locked. Please try again later.")
 		return
 	}
 
-	match, verifyErr := handler.hasher.Verify(userPassword, *userRecord.PasswordHash)
+	match, verifyErr := handler.hasher.Verify(userPassword, *user.PasswordHash)
 	if verifyErr != nil || !match {
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
 		return
 	}
 
-	if userRecord.MFAEnabled {
+	if user.MFAEnabled {
 		mfaCode := strings.TrimSpace(request.FormValue("mfa_code"))
 		if mfaCode != "" {
-			if userRecord.EncryptedMFASecret == nil || *userRecord.EncryptedMFASecret == "" {
+			if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
 				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
 				return
 			}
-			secretBytes, err := handler.cryptoKeyManager.DecryptField(*userRecord.EncryptedMFASecret)
+			secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
 			if err != nil {
-				log.Errorf("failed to decrypt MFA secret for user %s: %v", userRecord.ID, err)
+				log.Errorf("failed to decrypt MFA secret for user %s: %v", user.ID, err)
 				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
 				return
 			}
 			if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
-				log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", userRecord.ID)
+				log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", user.ID)
 				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
 				return
 			}
 		} else {
 			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
 			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, userRecord.ID, defaultOIDCMFATTL)
+				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
 			}
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
 			return
 		}
 	}
 
-	handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, userRecord)
+	handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 }
 
-func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
-	var oauthTokenRequest OAuthTokenRequest
+func parseOAuthTokenRequest(request *http.Request) OAuthTokenInput {
+	var oauthTokenInput OAuthTokenInput
 
 	if strings.Contains(request.Header.Get("Content-Type"), "application/json") && request.Body != nil {
 		bodyBytes, readErr := io.ReadAll(request.Body)
 		if readErr == nil {
-			_ = json.Unmarshal(bodyBytes, &oauthTokenRequest)
+			_ = json.Unmarshal(bodyBytes, &oauthTokenInput)
 			request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		}
 	} else {
@@ -745,65 +745,65 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenRequest {
 		if request.FormValue("grant_type") == "" && request.Body != nil {
 			bodyBytes, readErr := io.ReadAll(request.Body)
 			if readErr == nil {
-				_ = json.Unmarshal(bodyBytes, &oauthTokenRequest)
+				_ = json.Unmarshal(bodyBytes, &oauthTokenInput)
 				request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 			}
 		}
 	}
 
-	if oauthTokenRequest.GrantType == "" {
-		oauthTokenRequest.GrantType = request.FormValue("grant_type")
+	if oauthTokenInput.GrantType == "" {
+		oauthTokenInput.GrantType = request.FormValue("grant_type")
 	}
-	if oauthTokenRequest.ClientID == "" {
-		oauthTokenRequest.ClientID = request.FormValue("client_id")
+	if oauthTokenInput.ClientID == "" {
+		oauthTokenInput.ClientID = request.FormValue("client_id")
 	}
-	if oauthTokenRequest.ClientSecret == "" {
-		oauthTokenRequest.ClientSecret = request.FormValue("client_secret")
+	if oauthTokenInput.ClientSecret == "" {
+		oauthTokenInput.ClientSecret = request.FormValue("client_secret")
 	}
-	if oauthTokenRequest.Code == "" {
-		oauthTokenRequest.Code = request.FormValue("code")
+	if oauthTokenInput.Code == "" {
+		oauthTokenInput.Code = request.FormValue("code")
 	}
-	if oauthTokenRequest.RedirectURI == "" {
-		oauthTokenRequest.RedirectURI = request.FormValue("redirect_uri")
+	if oauthTokenInput.RedirectURI == "" {
+		oauthTokenInput.RedirectURI = request.FormValue("redirect_uri")
 	}
-	if oauthTokenRequest.CodeVerifier == "" {
-		oauthTokenRequest.CodeVerifier = request.FormValue("code_verifier")
+	if oauthTokenInput.CodeVerifier == "" {
+		oauthTokenInput.CodeVerifier = request.FormValue("code_verifier")
 	}
-	if oauthTokenRequest.RefreshToken == "" {
-		oauthTokenRequest.RefreshToken = request.FormValue("refresh_token")
+	if oauthTokenInput.RefreshToken == "" {
+		oauthTokenInput.RefreshToken = request.FormValue("refresh_token")
 	}
-	if oauthTokenRequest.Scope == "" {
-		oauthTokenRequest.Scope = request.FormValue("scope")
+	if oauthTokenInput.Scope == "" {
+		oauthTokenInput.Scope = request.FormValue("scope")
 	}
-	if oauthTokenRequest.Audience == "" {
-		oauthTokenRequest.Audience = request.FormValue("audience")
+	if oauthTokenInput.Audience == "" {
+		oauthTokenInput.Audience = request.FormValue("audience")
 	}
-	if oauthTokenRequest.Provider == "" {
-		oauthTokenRequest.Provider = request.FormValue("provider")
+	if oauthTokenInput.Provider == "" {
+		oauthTokenInput.Provider = request.FormValue("provider")
 	}
 
 	basicClientID, basicClientSecret, hasBasicAuth := request.BasicAuth()
 	if hasBasicAuth && (basicClientID != "" || basicClientSecret != "") {
-		oauthTokenRequest.ClientID = basicClientID
-		oauthTokenRequest.ClientSecret = basicClientSecret
+		oauthTokenInput.ClientID = basicClientID
+		oauthTokenInput.ClientSecret = basicClientSecret
 	}
 
-	return oauthTokenRequest
+	return oauthTokenInput
 }
 
 // 4. Token Endpoint (POST /api/v1/auth/oauth/token)
 
-func (handler *BaseHandler) handleOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
-	oauthTokenRequest := parseOAuthTokenRequest(request)
+func (handler *BaseHandler) handleIssueOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
+	oauthTokenInput := parseOAuthTokenRequest(request)
 
 	// If no grant_type or if provider parameter is present, delegate to handleOAuthCallback
-	if oauthTokenRequest.GrantType == "" || oauthTokenRequest.Provider != "" {
-		handler.HandleOAuthCallback(responseWriter, request)
+	if oauthTokenInput.GrantType == "" || oauthTokenInput.Provider != "" {
+		handler.handleProcessOAuthCallback(responseWriter, request)
 		return
 	}
 
-	if oauthTokenRequest.GrantType == "client_credentials" {
-		handler.handleOAuthClientCredentials(responseWriter, request, oauthTokenRequest)
+	if oauthTokenInput.GrantType == "client_credentials" {
+		handler.handleOAuthClientCredentials(responseWriter, request, oauthTokenInput)
 		return
 	}
 
@@ -813,22 +813,22 @@ func (handler *BaseHandler) handleOIDCToken(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	if oauthTokenRequest.GrantType == "authorization_code" {
-		handler.handleOIDCTokenAuthorizationCode(responseWriter, request)
+	if oauthTokenInput.GrantType == "authorization_code" {
+		handler.handleIssueOIDCTokenAuthorizationCode(responseWriter, request)
 		return
 	}
 
-	if oauthTokenRequest.GrantType == "refresh_token" {
-		handler.handleOIDCTokenRefreshToken(responseWriter, request)
+	if oauthTokenInput.GrantType == "refresh_token" {
+		handler.handleIssueOIDCTokenRefreshToken(responseWriter, request)
 		return
 	}
 
-	core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "unsupported_grant_type", fmt.Sprintf("Unsupported grant_type '%s'", oauthTokenRequest.GrantType))
+	core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "unsupported_grant_type", fmt.Sprintf("Unsupported grant_type '%s'", oauthTokenInput.GrantType))
 }
 
-func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.ResponseWriter, request *http.Request, oauthTokenRequest OAuthTokenRequest) {
-	clientID := oauthTokenRequest.ClientID
-	clientSecret := oauthTokenRequest.ClientSecret
+func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.ResponseWriter, request *http.Request, oauthTokenInput OAuthTokenInput) {
+	clientID := oauthTokenInput.ClientID
+	clientSecret := oauthTokenInput.ClientSecret
 
 	if clientSecret == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
@@ -852,7 +852,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 		return
 	}
 
-	targetAudience := strings.TrimSpace(oauthTokenRequest.Audience)
+	targetAudience := strings.TrimSpace(oauthTokenInput.Audience)
 	if targetAudience == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "audience parameter is required")
 		return
@@ -883,7 +883,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	}
 
 	var grantedScopes []string
-	trimmedScope := strings.TrimSpace(oauthTokenRequest.Scope)
+	trimmedScope := strings.TrimSpace(oauthTokenInput.Scope)
 	if targetAudience == layrAudience {
 		if trimmedScope != "" {
 			requestedScopes := strings.Fields(trimmedScope)
@@ -939,7 +939,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 		return
 	}
 
-	oidcTokenResponse := OIDCTokenResponse{
+	issueOIDCTokenResponse := IssueOIDCTokenResponse{
 		AccessToken: accessToken,
 		TokenType:   "Bearer",
 		ExpiresIn:   defaultM2MTokenExpirySeconds,
@@ -950,15 +950,15 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	responseWriter.Header().Set("Cache-Control", "no-store")
 	responseWriter.Header().Set("Pragma", "no-cache")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(oidcTokenResponse)
+	_ = json.NewEncoder(responseWriter).Encode(issueOIDCTokenResponse)
 }
 
-// handleOAuthToken delegates to handleOIDCToken for OAuth 2.0 token requests.
-func (handler *BaseHandler) handleOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
-	handler.handleOIDCToken(responseWriter, request)
+// handleIssueOAuthToken delegates to handleIssueOIDCToken for OAuth 2.0 token requests.
+func (handler *BaseHandler) handleIssueOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+	handler.handleIssueOIDCToken(responseWriter, request)
 }
 
-func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter http.ResponseWriter, request *http.Request) {
 	clientID, clientSecret, hasBasicAuth := request.BasicAuth()
 	if !hasBasicAuth {
 		clientID = request.FormValue("client_id")
@@ -1029,7 +1029,7 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 
 	// Retrieve user record
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
@@ -1037,41 +1037,41 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 		WHERE id = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, oidcAuthorizationCodePayload.UserID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties,
-		&userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &rawProperties,
+		&user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("Failed to query user: %v", scanErr))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	config := handler.configManager.Get()
 	accessExpiry := config.Sessions.AccessTokenExpirySeconds
 
 	userEmail := ""
-	if userRecord.Email != nil {
-		userEmail = *userRecord.Email
+	if user.Email != nil {
+		userEmail = *user.Email
 	}
 	userPhone := ""
-	if userRecord.Phone != nil {
-		userPhone = *userRecord.Phone
+	if user.Phone != nil {
+		userPhone = *user.Phone
 	}
 
 	sessionID := uuid.NewV7().String()
-	customClaims := handler.resolveCustomClaims(ctx, userRecord.ID)
+	customClaims := handler.resolveCustomClaims(ctx, user.ID)
 	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
-		Subject:     userRecord.ID,
+		Subject:     user.ID,
 		SessionID:   sessionID,
 		Email:       userEmail,
 		Phone:       userPhone,
-		Role:        userRecord.Role,
-		IsAnonymous: userRecord.IsAnonymous,
+		Role:        user.Role,
+		IsAnonymous: user.IsAnonymous,
 		Claims:      customClaims,
 	}, accessExpiry)
 
@@ -1082,12 +1082,12 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	_, _ = handler.db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
-	`, sessionID, userRecord.ID, clientID, refreshTokenHash, expiresAt)
+	`, sessionID, user.ID, clientID, refreshTokenHash, expiresAt)
 
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 			ID:        sessionID,
-			User:      userRecord,
+			User:      user,
 			ExpiresAt: expiresAt,
 			CreatedAt: time.Now().UTC(),
 		}))
@@ -1096,20 +1096,20 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 	baseURL := core.GetConfig().ServerBaseURL()
 	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
 		Issuer:        baseURL,
-		Subject:       userRecord.ID,
+		Subject:       user.ID,
 		SessionID:     sessionID,
 		Audience:      clientID,
 		Nonce:         oidcAuthorizationCodePayload.Nonce,
 		Email:         userEmail,
-		EmailVerified: userRecord.EmailVerifiedAt != nil,
+		EmailVerified: user.EmailVerifiedAt != nil,
 		Phone:         userPhone,
-		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
-		Role:          userRecord.Role,
-		IsAnonymous:   userRecord.IsAnonymous,
+		PhoneVerified: user.PhoneVerifiedAt != nil,
+		Role:          user.Role,
+		IsAnonymous:   user.IsAnonymous,
 		Claims:        customClaims,
 	}, accessExpiry)
 
-	oidcTokenResponse := OIDCTokenResponse{
+	issueOIDCTokenResponse := IssueOIDCTokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    accessExpiry,
@@ -1120,10 +1120,10 @@ func (handler *BaseHandler) handleOIDCTokenAuthorizationCode(responseWriter http
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(oidcTokenResponse)
+	_ = json.NewEncoder(responseWriter).Encode(issueOIDCTokenResponse)
 }
 
-func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http.ResponseWriter, request *http.Request) {
 	clientID, clientSecret, hasBasicAuth := request.BasicAuth()
 	if !hasBasicAuth {
 		clientID = request.FormValue("client_id")
@@ -1160,17 +1160,17 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until
 		FROM auth.users WHERE id = $1
-	`, userID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil)
+	`, userID).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil)
 	if err != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid or expired refresh token")
 		return
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Account is temporarily locked")
 		return
@@ -1192,41 +1192,41 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 	accessExpiry := config.Sessions.AccessTokenExpirySeconds
 
 	userEmail := ""
-	if userRecord.Email != nil {
-		userEmail = *userRecord.Email
+	if user.Email != nil {
+		userEmail = *user.Email
 	}
 	userPhone := ""
-	if userRecord.Phone != nil {
-		userPhone = *userRecord.Phone
+	if user.Phone != nil {
+		userPhone = *user.Phone
 	}
 
-	customClaims := handler.resolveCustomClaims(ctx, userRecord.ID)
+	customClaims := handler.resolveCustomClaims(ctx, user.ID)
 	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
-		Subject:     userRecord.ID,
+		Subject:     user.ID,
 		SessionID:   sessionID,
 		Email:       userEmail,
 		Phone:       userPhone,
-		Role:        userRecord.Role,
-		IsAnonymous: userRecord.IsAnonymous,
+		Role:        user.Role,
+		IsAnonymous: user.IsAnonymous,
 		Claims:      customClaims,
 	}, accessExpiry)
 
 	baseURL := core.GetConfig().ServerBaseURL()
 	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
 		Issuer:        baseURL,
-		Subject:       userRecord.ID,
+		Subject:       user.ID,
 		SessionID:     sessionID,
 		Audience:      clientID,
 		Email:         userEmail,
-		EmailVerified: userRecord.EmailVerifiedAt != nil,
+		EmailVerified: user.EmailVerifiedAt != nil,
 		Phone:         userPhone,
-		PhoneVerified: userRecord.PhoneVerifiedAt != nil,
-		Role:          userRecord.Role,
-		IsAnonymous:   userRecord.IsAnonymous,
+		PhoneVerified: user.PhoneVerifiedAt != nil,
+		Role:          user.Role,
+		IsAnonymous:   user.IsAnonymous,
 		Claims:        customClaims,
 	}, accessExpiry)
 
-	oidcTokenResponse := OIDCTokenResponse{
+	issueOIDCTokenResponse := IssueOIDCTokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    accessExpiry,
@@ -1236,12 +1236,12 @@ func (handler *BaseHandler) handleOIDCTokenRefreshToken(responseWriter http.Resp
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(oidcTokenResponse)
+	_ = json.NewEncoder(responseWriter).Encode(issueOIDCTokenResponse)
 }
 
 // 5. Userinfo Endpoint (GET /api/v1/auth/oauth/userinfo)
 
-func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC userinfo rejected: OIDC identity provider is disabled in configuration")
@@ -1255,53 +1255,53 @@ func (handler *BaseHandler) handleOIDCUserInfo(responseWriter http.ResponseWrite
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`
 	scanErr := handler.db.QueryRow(ctx, query, authContext.UserID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties,
-		&userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &rawProperties,
+		&user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "The access token is invalid")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	name := ""
-	if nameProperty, ok := userRecord.Properties["name"].(string); ok {
+	if nameProperty, ok := user.Properties["name"].(string); ok {
 		name = nameProperty
 	}
 
-	oidcUserInfoResponse := OIDCUserInfoResponse{
-		Subject:             userRecord.ID,
+	getOIDCUserInfoResponse := GetOIDCUserInfoResponse{
+		Subject:             user.ID,
 		Name:                name,
-		Email:               userRecord.Email,
-		EmailVerified:       userRecord.EmailVerifiedAt != nil,
-		PhoneNumber:         userRecord.Phone,
-		PhoneNumberVerified: userRecord.PhoneVerifiedAt != nil,
-		Role:                userRecord.Role,
-		IsAnonymous:         userRecord.IsAnonymous,
-		UpdatedAt:           userRecord.LastUpdatedAt.Unix(),
-		Properties:          userRecord.Properties,
+		Email:               user.Email,
+		EmailVerified:       user.EmailVerifiedAt != nil,
+		PhoneNumber:         user.Phone,
+		PhoneNumberVerified: user.PhoneVerifiedAt != nil,
+		Role:                user.Role,
+		IsAnonymous:         user.IsAnonymous,
+		UpdatedAt:           user.LastUpdatedAt.Unix(),
+		Properties:          user.Properties,
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(oidcUserInfoResponse)
+	_ = json.NewEncoder(responseWriter).Encode(getOIDCUserInfoResponse)
 }
 
 // 6. Sign-Out Endpoint (GET/POST /api/v1/auth/oauth/sign-out)
 
-func (handler *BaseHandler) handleOIDCSignOut(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC sign-out rejected: OIDC identity provider is disabled in configuration")

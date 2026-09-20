@@ -21,7 +21,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users/indexes", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListIndexes(forbiddenListResponseRecorder, forbiddenListRequest)
+	controlPlaneHandler.handleListIndexes(forbiddenListResponseRecorder, forbiddenListRequest)
 	if forbiddenListResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenListResponseRecorder.Code)
 	}
@@ -30,7 +30,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/indexes", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateIndex(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
+	controlPlaneHandler.handleCreateIndex(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
 	if forbiddenCreateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenCreateResponseRecorder.Code)
 	}
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users/indexes/idx_users_name", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropIndex(forbiddenDropResponseRecorder, forbiddenDropRequest)
+	controlPlaneHandler.handleDeleteIndex(forbiddenDropResponseRecorder, forbiddenDropRequest)
 	if forbiddenDropResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenDropResponseRecorder.Code)
 	}
@@ -53,7 +53,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on ListIndexes
 	missingListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
 	missingListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListIndexes(missingListResponseRecorder, missingListRequest)
+	controlPlaneHandler.handleListIndexes(missingListResponseRecorder, missingListRequest)
 	if missingListResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingListResponseRecorder.Code)
 	}
@@ -61,7 +61,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on CreateIndex
 	missingCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
 	missingCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateIndex(missingCreateResponseRecorder, missingCreateRequest)
+	controlPlaneHandler.handleCreateIndex(missingCreateResponseRecorder, missingCreateRequest)
 	if missingCreateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingCreateResponseRecorder.Code)
 	}
@@ -71,7 +71,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	malformedCreateRequest.SetPathValue("schema_name", "public")
 	malformedCreateRequest.SetPathValue("table_name", "users")
 	malformedCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateIndex(malformedCreateResponseRecorder, malformedCreateRequest)
+	controlPlaneHandler.handleCreateIndex(malformedCreateResponseRecorder, malformedCreateRequest)
 	if malformedCreateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on malformed JSON, got %d", malformedCreateResponseRecorder.Code)
 	}
@@ -79,7 +79,7 @@ func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on DropIndex
 	missingDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
 	missingDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropIndex(missingDropResponseRecorder, missingDropRequest)
+	controlPlaneHandler.handleDeleteIndex(missingDropResponseRecorder, missingDropRequest)
 	if missingDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingDropResponseRecorder.Code)
 	}

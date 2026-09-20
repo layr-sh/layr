@@ -174,108 +174,113 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test checkScope with invalid secret key
 	serviceAccountManager := core.NewServiceAccountManager(nil)
-	configManager.SetServiceAccountManager(serviceAccountManager)
+	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid-sec-key")
-	if configManager.checkScope(invalidKeyRequest, "auth:config.read") {
+	if controlPlaneHandler.checkScope(invalidKeyRequest, "auth:config.read") {
 		t.Fatal("expected checkScope to fail on invalid secret key")
 	}
 
-	// Test checkScope forbidden on HandleGetConfig
+	// Test checkScope forbidden on handleGetConfig
 	forbiddenGetResponseRecorder := httptest.NewRecorder()
-	configManager.HandleGetConfig(forbiddenGetResponseRecorder, invalidKeyRequest)
+	controlPlaneHandler.handleGetConfig(forbiddenGetResponseRecorder, invalidKeyRequest)
 	if forbiddenGetResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden on HandleGetConfig, got: %d", forbiddenGetResponseRecorder.Code)
+		t.Fatalf("expected 403 Forbidden on handleGetConfig, got: %d", forbiddenGetResponseRecorder.Code)
 	}
 
-	// Test checkScope forbidden on HandlePutConfig
+	// Test checkScope forbidden on handleUpdateConfig
 	forbiddenPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(forbiddenPutResponseRecorder, invalidKeyRequest)
+	controlPlaneHandler.handleUpdateConfig(forbiddenPutResponseRecorder, invalidKeyRequest)
 	if forbiddenPutResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden on HandlePutConfig, got: %d", forbiddenPutResponseRecorder.Code)
+		t.Fatalf("expected 403 Forbidden on handleUpdateConfig, got: %d", forbiddenPutResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig success and event bus publish
+	// Reset serviceAccountManager so later calls pass scope checks
+	controlPlaneHandler.SetServiceAccountManager(nil)
+
+	// Test handleUpdateConfig success and event bus publish
 	eventBus := core.NewEventBus(nil, cryptoKeyManager)
 	defer eventBus.Close()
 	configManager.SetEventBus(eventBus)
+	controlPlaneHandler.SetEventBus(eventBus)
 
 	validPutBody := `{"password":{"enabled":true,"min_length":10},"smtp":{"password":"new-smtp-password"}}`
 	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validPutBody))
 	validPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(validPutResponseRecorder, validPutRequest)
+	controlPlaneHandler.handleUpdateConfig(validPutResponseRecorder, validPutRequest)
 	if validPutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig, got: %d (body: %s)", validPutResponseRecorder.Code, validPutResponseRecorder.Body.String())
+		t.Fatalf("expected 200 OK from handleUpdateConfig, got: %d (body: %s)", validPutResponseRecorder.Code, validPutResponseRecorder.Body.String())
 	}
 	if configManager.Get().Password.MinLength != 10 {
 		t.Fatalf("expected updated min length 10, got: %d", configManager.Get().Password.MinLength)
 	}
 
-	// Test HandlePutConfig invalid JSON body -> 400
+	// Test handleUpdateConfig invalid JSON body -> 400
 	invalidJSONPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{invalid-json`))
 	invalidJSONPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(invalidJSONPutResponseRecorder, invalidJSONPutRequest)
+	controlPlaneHandler.handleUpdateConfig(invalidJSONPutResponseRecorder, invalidJSONPutRequest)
 	if invalidJSONPutResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on invalid JSON in HandlePutConfig, got: %d", invalidJSONPutResponseRecorder.Code)
+		t.Fatalf("expected 400 on invalid JSON in handleUpdateConfig, got: %d", invalidJSONPutResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig body read error -> 400
+	// Test handleUpdateConfig body read error -> 400
 	brokenReaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", brokenBodyReader{})
 	brokenReaderResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(brokenReaderResponseRecorder, brokenReaderRequest)
+	controlPlaneHandler.handleUpdateConfig(brokenReaderResponseRecorder, brokenReaderRequest)
 	if brokenReaderResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on read error in HandlePutConfig, got: %d", brokenReaderResponseRecorder.Code)
+		t.Fatalf("expected 400 on read error in handleUpdateConfig, got: %d", brokenReaderResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig with OAuth provider secret update
+	// Test handleUpdateConfig with OAuth provider secret update
 	oauthPutBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":"new-plaintext-secret"}}}`
 	oauthPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(oauthPutBody))
 	oauthPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(oauthPutResponseRecorder, oauthPutRequest)
+	controlPlaneHandler.handleUpdateConfig(oauthPutResponseRecorder, oauthPutRequest)
 	if oauthPutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with OAuth, got: %d", oauthPutResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with OAuth, got: %d", oauthPutResponseRecorder.Code)
 	}
 	if configManager.Get().OAuthProviders["google"].ClientID != "new-client-id" {
 		t.Fatalf("expected updated OAuth client ID, got: %+v", configManager.Get().OAuthProviders["google"])
 	}
 
-	// Test HandlePutConfig preserving OAuth secret when empty
+	// Test handleUpdateConfig preserving OAuth secret when empty
 	preserveOAuthBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":""}}}`
 	preserveOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveOAuthBody))
 	preserveOAuthResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(preserveOAuthResponseRecorder, preserveOAuthRequest)
+	controlPlaneHandler.handleUpdateConfig(preserveOAuthResponseRecorder, preserveOAuthRequest)
 	if preserveOAuthResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig preserving OAuth secret, got: %d", preserveOAuthResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig preserving OAuth secret, got: %d", preserveOAuthResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig with null oauth_providers preserving current
+	// Test handleUpdateConfig with null oauth_providers preserving current
 	nullOAuthBody := `{"oauth_providers":null}`
 	nullOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullOAuthBody))
 	nullOAuthResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullOAuthResponseRecorder, nullOAuthRequest)
+	controlPlaneHandler.handleUpdateConfig(nullOAuthResponseRecorder, nullOAuthRequest)
 	if nullOAuthResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with null oauth_providers, got: %d", nullOAuthResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with null oauth_providers, got: %d", nullOAuthResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig with null oidc.clients preserving current
+	// Test handleUpdateConfig with null oidc.clients preserving current
 	nullOIDCBody := `{"oidc":{"clients":null}}`
 	nullOIDCRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullOIDCBody))
 	nullOIDCResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullOIDCResponseRecorder, nullOIDCRequest)
+	controlPlaneHandler.handleUpdateConfig(nullOIDCResponseRecorder, nullOIDCRequest)
 	if nullOIDCResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with null oidc.clients, got: %d", nullOIDCResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with null oidc.clients, got: %d", nullOIDCResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig with null oidc.resource_servers preserving current
+	// Test handleUpdateConfig with null oidc.resource_servers preserving current
 	nullResourceServersBody := `{"oidc":{"resource_servers":null}}`
 	nullResourceServersRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
 	nullResourceServersResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullResourceServersResponseRecorder, nullResourceServersRequest)
+	controlPlaneHandler.handleUpdateConfig(nullResourceServersResponseRecorder, nullResourceServersRequest)
 	if nullResourceServersResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with null oidc.resource_servers, got: %d", nullResourceServersResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with null oidc.resource_servers, got: %d", nullResourceServersResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig with Email and SMS plaintext secrets
+	// Test handleUpdateConfig with Email and SMS plaintext secrets
 	emailSMSPutBody := `{
 		"email_dispatcher": {
 			"driver": "smtp",
@@ -290,9 +295,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	emailSMSPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(emailSMSPutBody))
 	emailSMSPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(emailSMSPutResponseRecorder, emailSMSPutRequest)
+	controlPlaneHandler.handleUpdateConfig(emailSMSPutResponseRecorder, emailSMSPutRequest)
 	if emailSMSPutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with Email and SMS, got: %d", emailSMSPutResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with Email and SMS, got: %d", emailSMSPutResponseRecorder.Code)
 	}
 
 	savedConfig := configManager.Get()
@@ -318,7 +323,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected sms secrets configured in GetUnencrypted, got: %+v", unencryptedConfig.SMSDispatcher)
 	}
 
-	// Test HandlePutConfig with empty secrets preserving existing secrets
+	// Test handleUpdateConfig with empty secrets preserving existing secrets
 	preserveBody := `{
 		"email_dispatcher": {
 			"driver": "smtp",
@@ -333,9 +338,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveBody))
 	preserveResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(preserveResponseRecorder, preserveRequest)
+	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 	if preserveResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig preserving secrets, got: %d", preserveResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig preserving secrets, got: %d", preserveResponseRecorder.Code)
 	}
 
 	preservedConfig := configManager.Get()
@@ -357,9 +362,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	nullDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullDriverBody))
 	nullDriverResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullDriverResponseRecorder, nullDriverRequest)
+	controlPlaneHandler.handleUpdateConfig(nullDriverResponseRecorder, nullDriverRequest)
 	if nullDriverResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with null driver, got: %d", nullDriverResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with null driver, got: %d", nullDriverResponseRecorder.Code)
 	}
 
 	nullDriverConfig := configManager.Get()
@@ -390,9 +395,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	emptyDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(emptyDriverBody))
 	emptyDriverResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(emptyDriverResponseRecorder, emptyDriverRequest)
+	controlPlaneHandler.handleUpdateConfig(emptyDriverResponseRecorder, emptyDriverRequest)
 	if emptyDriverResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with empty string driver, got: %d", emptyDriverResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with empty string driver, got: %d", emptyDriverResponseRecorder.Code)
 	}
 	emptyDriverConfig := configManager.Get()
 	if emptyDriverConfig.EmailDispatcher.Driver != nil {
@@ -402,16 +407,16 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected sms driver to be normalized to nil from empty string, got: %v", *emptyDriverConfig.SMSDispatcher.Driver)
 	}
 
-	// Test that email and sms cannot be set to null via HandlePutConfig
+	// Test that email and sms cannot be set to null via handleUpdateConfig
 	nullConfigBody := `{
 		"email_dispatcher": null,
 		"sms_dispatcher": null
 	}`
 	nullConfigRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(nullConfigBody))
 	nullConfigResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullConfigResponseRecorder, nullConfigRequest)
+	controlPlaneHandler.handleUpdateConfig(nullConfigResponseRecorder, nullConfigRequest)
 	if nullConfigResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with null email/sms, got: %d", nullConfigResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with null email/sms, got: %d", nullConfigResponseRecorder.Code)
 	}
 	afterNullConfig := configManager.Get()
 	if afterNullConfig.EmailDispatcher.Templates.EmailVerification.Subject == "" {
@@ -421,8 +426,9 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatal("expected sms templates to be preserved when payload sends null sms")
 	}
 
-	// Test HandlePutConfig without keyManager
+	// Test handleUpdateConfig without keyManager
 	nilCryptoKeyManagerConfigManager := NewConfigManager(nil, nil)
+	nilCryptoKeyManagerControlPlaneHandler := NewControlPlaneHandler(nil, nilCryptoKeyManagerConfigManager)
 	plainSecretBody := `{
 		"email_dispatcher": {
 			"smtp": {"password": "plain-password"},
@@ -435,16 +441,16 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(plainSecretBody))
 	plainResponseRecorder := httptest.NewRecorder()
-	nilCryptoKeyManagerConfigManager.HandlePutConfig(plainResponseRecorder, plainRequest)
+	nilCryptoKeyManagerControlPlaneHandler.handleUpdateConfig(plainResponseRecorder, plainRequest)
 	if plainResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig without keyManager, got: %d", plainResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig without keyManager, got: %d", plainResponseRecorder.Code)
 	}
 
-	// Test HandlePutConfig rejecting email_otp.enabled without active SMTP -> 422
+	// Test handleUpdateConfig rejecting email_otp.enabled without active SMTP -> 422
 	unconfiguredOTPPutBody := `{"email_otp":{"enabled":true}}`
 	unconfiguredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unconfiguredOTPPutBody))
 	unconfiguredOTPPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(unconfiguredOTPPutResponseRecorder, unconfiguredOTPPutRequest)
+	controlPlaneHandler.handleUpdateConfig(unconfiguredOTPPutResponseRecorder, unconfiguredOTPPutRequest)
 	if unconfiguredOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 Unprocessable Entity on OTP enable without active SMTP, got: %d (%s)", unconfiguredOTPPutResponseRecorder.Code, unconfiguredOTPPutResponseRecorder.Body.String())
 	}
@@ -452,11 +458,11 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected SMTP is not configured error, got: %s", unconfiguredOTPPutResponseRecorder.Body.String())
 	}
 
-	// Test HandlePutConfig rejecting sms_otp.enabled without active SMS provider -> 422
+	// Test handleUpdateConfig rejecting sms_otp.enabled without active SMS provider -> 422
 	unconfiguredSMSOTPPutBody := `{"sms_otp":{"enabled":true}}`
 	unconfiguredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unconfiguredSMSOTPPutBody))
 	unconfiguredSMSOTPPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(unconfiguredSMSOTPPutResponseRecorder, unconfiguredSMSOTPPutRequest)
+	controlPlaneHandler.handleUpdateConfig(unconfiguredSMSOTPPutResponseRecorder, unconfiguredSMSOTPPutRequest)
 	if unconfiguredSMSOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("expected 422 Unprocessable Entity on SMS OTP enable without active SMS provider, got: %d (%s)", unconfiguredSMSOTPPutResponseRecorder.Code, unconfiguredSMSOTPPutResponseRecorder.Body.String())
 	}
@@ -464,7 +470,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected SMS provider is not configured error, got: %s", unconfiguredSMSOTPPutResponseRecorder.Body.String())
 	}
 
-	// Test HandlePutConfig enabling OTP with active SMTP -> 200 OK
+	// Test handleUpdateConfig enabling OTP with active SMTP -> 200 OK
 	configuredOTPPutBody := `{
 		"email_otp":{"enabled":true},
 		"email_dispatcher":{
@@ -474,12 +480,12 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	configuredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(configuredOTPPutBody))
 	configuredOTPPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(configuredOTPPutResponseRecorder, configuredOTPPutRequest)
+	controlPlaneHandler.handleUpdateConfig(configuredOTPPutResponseRecorder, configuredOTPPutRequest)
 	if configuredOTPPutResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on OTP enable with active SMTP, got: %d (%s)", configuredOTPPutResponseRecorder.Code, configuredOTPPutResponseRecorder.Body.String())
 	}
 
-	// Test HandlePutConfig enabling SMS OTP with active SMS provider -> 200 OK
+	// Test handleUpdateConfig enabling SMS OTP with active SMS provider -> 200 OK
 	configuredSMSOTPPutBody := `{
 		"sms_otp":{"enabled":true},
 		"sms_dispatcher":{
@@ -489,7 +495,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	configuredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(configuredSMSOTPPutBody))
 	configuredSMSOTPPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(configuredSMSOTPPutResponseRecorder, configuredSMSOTPPutRequest)
+	controlPlaneHandler.handleUpdateConfig(configuredSMSOTPPutResponseRecorder, configuredSMSOTPPutRequest)
 	if configuredSMSOTPPutResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on SMS OTP enable with active SMS provider, got: %d (%s)", configuredSMSOTPPutResponseRecorder.Code, configuredSMSOTPPutResponseRecorder.Body.String())
 	}
@@ -517,7 +523,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		t.Fatal("expected GetOIDCClient to return false for non-existent client")
 	}
 
-	// 3. Test HandlePutConfig with OIDC clients and UI
+	// 3. Test handleUpdateConfig with OIDC clients and UI
 	oidcPutBody := `{
 		"oidc": {
 			"enabled": true,
@@ -549,12 +555,13 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		}
 	}`
 
+	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
 	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(oidcPutBody))
 	putResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putResponseRecorder, putRequest)
+	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 
 	if putResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig with OIDC config, got: %d (%s)", putResponseRecorder.Code, putResponseRecorder.Body.String())
+		t.Fatalf("expected 200 OK from handleUpdateConfig with OIDC config, got: %d (%s)", putResponseRecorder.Code, putResponseRecorder.Body.String())
 	}
 
 	savedConfig := configManager.Get()
@@ -635,7 +642,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		t.Fatal("expected ClientSecretConfigured=false for public client without secret")
 	}
 
-	// 5. Test HandlePutConfig preserving secret when empty client_secret is provided
+	// 5. Test handleUpdateConfig preserving secret when empty client_secret is provided
 	preserveSecretBody := `{
 		"oidc": {
 			"enabled": true,
@@ -652,7 +659,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 	}`
 	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveSecretBody))
 	preserveResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(preserveResponseRecorder, preserveRequest)
+	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 
 	if preserveResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK preserving client secret, got: %d (%s)", preserveResponseRecorder.Code, preserveResponseRecorder.Body.String())
@@ -728,11 +735,13 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 		},
 	}
 
+	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+
 	for _, currentTestCase := range testCases {
 		t.Run(currentTestCase.name, func(t *testing.T) {
 			validationRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(currentTestCase.putBody))
 			validationResponseRecorder := httptest.NewRecorder()
-			configManager.HandlePutConfig(validationResponseRecorder, validationRequest)
+			controlPlaneHandler.handleUpdateConfig(validationResponseRecorder, validationRequest)
 
 			if validationResponseRecorder.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400 Bad Request, got: %d (%s)", validationResponseRecorder.Code, validationResponseRecorder.Body.String())
@@ -751,6 +760,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 	}
 
 	configManager := NewConfigManager(nil, cryptoKeyManager)
+	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
 
 	// 1. Initial state: disable all methods
 	disableAllBody := `{
@@ -765,7 +775,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 	}`
 	disableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(disableAllBody))
 	disableResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(disableResponseRecorder, disableRequest)
+	controlPlaneHandler.handleUpdateConfig(disableResponseRecorder, disableRequest)
 	if disableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got: %d", disableResponseRecorder.Code)
 	}
@@ -795,7 +805,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 	}`
 	enableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(enableAllBody))
 	enableResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(enableResponseRecorder, enableRequest)
+	controlPlaneHandler.handleUpdateConfig(enableResponseRecorder, enableRequest)
 	if enableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got: %d", enableResponseRecorder.Code)
 	}
@@ -826,7 +836,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 	}`
 	disableMethodRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(disablePassAndOAuth))
 	disableMethodResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(disableMethodResponseRecorder, disableMethodRequest)
+	controlPlaneHandler.handleUpdateConfig(disableMethodResponseRecorder, disableMethodRequest)
 	if disableMethodResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got: %d", disableMethodResponseRecorder.Code)
 	}
@@ -1061,13 +1071,14 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
 	}
 	configManager := NewConfigManager(nil, cryptoKeyManager)
+	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
 	ctx := context.Background()
 
 	// 1. Unsupported provider -> 400
 	unsupportedProviderBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"unknown_captcha","secret_key":"secret123"}}}`
 	unsupportedRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(unsupportedProviderBody))
 	unsupportedResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(unsupportedResponseRecorder, unsupportedRequest)
+	controlPlaneHandler.handleUpdateConfig(unsupportedResponseRecorder, unsupportedRequest)
 	if unsupportedResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on unsupported provider, got: %d", unsupportedResponseRecorder.Code)
 	}
@@ -1076,7 +1087,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 	missingSecretBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":""}}}`
 	missingSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(missingSecretBody))
 	missingSecretResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(missingSecretResponseRecorder, missingSecretRequest)
+	controlPlaneHandler.handleUpdateConfig(missingSecretResponseRecorder, missingSecretRequest)
 	if missingSecretResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing secret key, got: %d", missingSecretResponseRecorder.Code)
 	}
@@ -1085,7 +1096,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 	invalidModeBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"secret123","mode":"invalid_mode"}}}`
 	invalidModeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(invalidModeBody))
 	invalidModeResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(invalidModeResponseRecorder, invalidModeRequest)
+	controlPlaneHandler.handleUpdateConfig(invalidModeResponseRecorder, invalidModeRequest)
 	if invalidModeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid mode, got: %d", invalidModeResponseRecorder.Code)
 	}
@@ -1094,7 +1105,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 	validBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"my-turnstile-secret","mode":"adaptive","adaptive_failed_attempts":7}}}`
 	validRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(validBody))
 	validResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(validResponseRecorder, validRequest)
+	controlPlaneHandler.handleUpdateConfig(validResponseRecorder, validRequest)
 	if validResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on valid threat config update, got: %d (%s)", validResponseRecorder.Code, validResponseRecorder.Body.String())
 	}
@@ -1110,7 +1121,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 	preserveBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"turnstile","secret_key":"","mode":"always"}}}`
 	preserveRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(preserveBody))
 	preserveResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(preserveResponseRecorder, preserveRequest)
+	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 	if preserveResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on preserving threat secret, got: %d", preserveResponseRecorder.Code)
 	}

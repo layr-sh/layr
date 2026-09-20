@@ -26,7 +26,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// 2. Reject DDL on protected schema
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "system",
 		Name:   "hacked_table",
 	}); err == nil {
@@ -35,42 +35,42 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 
 	// 3. Create Valid Table with UUIDv7, columns, and constraints
 	defaultValue := "10"
-	createTableRequest := CreateTableRequest{
+	createTableInput := CreateTableInput{
 		Schema: "public",
 		Name:   "products",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", IsPrimaryKey: true},
 			{Name: "title", Type: "varchar(255)", IsNullable: false, IsUnique: true},
 			{Name: "stock", Type: "int", IsNullable: false, DefaultValue: &defaultValue},
 			{Name: "data", Type: "jsonb", IsNullable: true},
 		},
 	}
-	if err := ddlEngine.CreateTable(ctx, createTableRequest); err != nil {
+	if err := ddlEngine.CreateTable(ctx, createTableInput); err != nil {
 		t.Fatalf("CreateTable failed: %v", err)
 	}
 
 	// Invalid table name
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{Schema: "public", Name: "invalid-name!"}); err == nil {
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Schema: "public", Name: "invalid-name!"}); err == nil {
 		t.Fatal("expected error on invalid table name")
 	}
 	// Invalid column name
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{Schema: "public", Name: "valid_tbl", Columns: []ColumnDefinition{{Name: "invalid-column!"}}}); err == nil {
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Schema: "public", Name: "valid_tbl", Columns: []Column{{Name: "invalid-column!"}}}); err == nil {
 		t.Fatal("expected error on invalid column name")
 	}
 	// Invalid PK name
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{Schema: "public", Name: "valid_tbl2", PrimaryKeyName: "invalid-primary-key!"}); err == nil {
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Schema: "public", Name: "valid_tbl2", PrimaryKeyName: "invalid-primary-key!"}); err == nil {
 		t.Fatal("expected error on invalid primary key name")
 	}
 
 	// 4. Create child table with Foreign Key
-	orderCreateTableRequest := CreateTableRequest{
+	orderCreateTableInput := CreateTableInput{
 		Schema: "public",
 		Name:   "orders",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "product_id", Type: "uuid", IsNullable: false},
 			{Name: "quantity", Type: "int", IsNullable: false},
 		},
-		ForeignKeys: []ForeignKeyDefinition{
+		ForeignKeys: []ForeignKey{
 			{
 				Column:        "product_id",
 				ForeignTable:  "products",
@@ -80,15 +80,15 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 			},
 		},
 	}
-	if err := ddlEngine.CreateTable(ctx, orderCreateTableRequest); err != nil {
+	if err := ddlEngine.CreateTable(ctx, orderCreateTableInput); err != nil {
 		t.Fatalf("CreateTable with FK failed: %v", err)
 	}
 
 	// Invalid FK identifier
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "invalid_fk_tbl",
-		ForeignKeys: []ForeignKeyDefinition{
+		ForeignKeys: []ForeignKey{
 			{Column: "invalid-column!", ForeignTable: "products", ForeignColumn: "id"},
 		},
 	}); err == nil {
@@ -96,12 +96,12 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// 5. GetTable & ListTables
-	tableSummary, getErr := ddlEngine.GetTable(ctx, "public", "products")
+	table, getErr := ddlEngine.GetTable(ctx, "public", "products")
 	if getErr != nil {
 		t.Fatalf("GetTable failed: %v", getErr)
 	}
-	if tableSummary.Name != "products" || tableSummary.PrimaryKey != "id" || len(tableSummary.Columns) != 4 {
-		t.Fatalf("unexpected summary: %+v", tableSummary)
+	if table.Name != "products" || table.PrimaryKey != "id" || len(table.Columns) != 4 {
+		t.Fatalf("unexpected summary: %+v", table)
 	}
 
 	// GetTable error on non-existent or protected
@@ -124,19 +124,19 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// 6. AddColumn
-	newColumnDefinition := ColumnDefinition{
+	newColumn := Column{
 		Name:       "sku",
 		Type:       "text",
 		IsNullable: true,
 	}
-	if err := ddlEngine.AddColumn(ctx, "public", "products", newColumnDefinition); err != nil {
+	if err := ddlEngine.AddColumn(ctx, "public", "products", newColumn); err != nil {
 		t.Fatalf("AddColumn failed: %v", err)
 	}
 	// AddColumn errors
-	if err := ddlEngine.AddColumn(ctx, "auth", "users", newColumnDefinition); err == nil {
+	if err := ddlEngine.AddColumn(ctx, "auth", "users", newColumn); err == nil {
 		t.Fatal("expected error adding column to protected schema")
 	}
-	if err := ddlEngine.AddColumn(ctx, "public", "invalid-table!", newColumnDefinition); err == nil {
+	if err := ddlEngine.AddColumn(ctx, "public", "invalid-table!", newColumn); err == nil {
 		t.Fatal("expected error on invalid table name")
 	}
 
@@ -145,7 +145,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	newType := "varchar(100)"
 	notNull := false
 	newDef := "'UNKNOWN'"
-	if err := ddlEngine.AlterColumn(ctx, "public", "products", "sku", AlterColumnRequest{
+	if err := ddlEngine.AlterColumn(ctx, "public", "products", "sku", UpdateColumnInput{
 		NewName:      &newName,
 		NewType:      &newType,
 		IsNullable:   &notNull,
@@ -157,7 +157,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	// Alter column drop default and set not null
 	emptyDef := ""
 	isNotNull := true
-	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", AlterColumnRequest{
+	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", UpdateColumnInput{
 		DefaultValue: &emptyDef,
 		IsNullable:   &isNotNull,
 	}); err != nil {
@@ -165,47 +165,47 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// AlterColumn errors
-	if err := ddlEngine.AlterColumn(ctx, "auth", "users", "id", AlterColumnRequest{}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "auth", "users", "id", UpdateColumnInput{}); err == nil {
 		t.Fatal("expected error on protected schema")
 	}
-	if err := ddlEngine.AlterColumn(ctx, "public", "invalid-table!", "id", AlterColumnRequest{}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "public", "invalid-table!", "id", UpdateColumnInput{}); err == nil {
 		t.Fatal("expected error on invalid table name")
 	}
-	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", AlterColumnRequest{}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", UpdateColumnInput{}); err == nil {
 		t.Fatal("expected error on empty alter column request")
 	}
 	badNewName := "invalid-new-name!"
-	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", AlterColumnRequest{NewName: &badNewName}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "public", "products", "product_sku", UpdateColumnInput{NewName: &badNewName}); err == nil {
 		t.Fatal("expected error on invalid new column name")
 	}
 
 	// 8. CreateIndex, ListIndexes, DropIndex
-	createIndexRequest := CreateIndexRequest{
+	createIndexInput := CreateIndexInput{
 		IndexName: "idx_products_sku",
 		Columns:   []string{"product_sku"},
 		Type:      "btree",
 		IsUnique:  false,
 	}
-	if err := ddlEngine.CreateIndex(ctx, "public", "products", createIndexRequest); err != nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "products", createIndexInput); err != nil {
 		t.Fatalf("CreateIndex failed: %v", err)
 	}
 
 	// Auto index name
-	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexRequest{Columns: []string{"title"}}); err != nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexInput{Columns: []string{"title"}}); err != nil {
 		t.Fatalf("CreateIndex with auto name failed: %v", err)
 	}
 
 	// CreateIndex errors
-	if err := ddlEngine.CreateIndex(ctx, "auth", "nodes", createIndexRequest); err == nil {
+	if err := ddlEngine.CreateIndex(ctx, "auth", "nodes", createIndexInput); err == nil {
 		t.Fatal("expected error creating index on protected schema")
 	}
-	if err := ddlEngine.CreateIndex(ctx, "public", "invalid-table!", createIndexRequest); err == nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "invalid-table!", createIndexInput); err == nil {
 		t.Fatal("expected error on invalid table name")
 	}
-	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexRequest{Columns: []string{"invalid-column!"}}); err == nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexInput{Columns: []string{"invalid-column!"}}); err == nil {
 		t.Fatal("expected error on invalid column")
 	}
-	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexRequest{Columns: []string{"product_sku"}, Type: "invalid-type"}); err == nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexInput{Columns: []string{"product_sku"}, Type: "invalid-type"}); err == nil {
 		t.Fatal("expected error on invalid index type")
 	}
 
@@ -269,17 +269,17 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// 13. Test empty schema defaults for all DDL operations
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{Name: "default_schema_tbl", Columns: []ColumnDefinition{{Name: "title", Type: "varchar(50)"}}}); err != nil {
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Name: "default_schema_tbl", Columns: []Column{{Name: "title", Type: "varchar(50)"}}}); err != nil {
 		t.Fatalf("CreateTable with default schema failed: %v", err)
 	}
-	if err := ddlEngine.AddColumn(ctx, "", "default_schema_tbl", ColumnDefinition{Name: "num", Type: "numeric(10,2)"}); err != nil {
+	if err := ddlEngine.AddColumn(ctx, "", "default_schema_tbl", Column{Name: "num", Type: "numeric(10,2)"}); err != nil {
 		t.Fatalf("AddColumn with default schema failed: %v", err)
 	}
 	columnRename := "num_renamed"
-	if err := ddlEngine.AlterColumn(ctx, "", "default_schema_tbl", "num", AlterColumnRequest{NewName: &columnRename}); err != nil {
+	if err := ddlEngine.AlterColumn(ctx, "", "default_schema_tbl", "num", UpdateColumnInput{NewName: &columnRename}); err != nil {
 		t.Fatalf("AlterColumn with default schema failed: %v", err)
 	}
-	if err := ddlEngine.CreateIndex(ctx, "", "default_schema_tbl", CreateIndexRequest{Columns: []string{"num_renamed"}, IndexName: "idx_def_num"}); err != nil {
+	if err := ddlEngine.CreateIndex(ctx, "", "default_schema_tbl", CreateIndexInput{Columns: []string{"num_renamed"}, IndexName: "idx_def_num"}); err != nil {
 		t.Fatalf("CreateIndex with default schema failed: %v", err)
 	}
 	if err := ddlEngine.DropIndex(ctx, "", "idx_def_num"); err != nil {
@@ -316,17 +316,17 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 		t.Fatalf("ListTables with protected schema failed: %v", err)
 	}
 
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "unique_idx_tbl",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "code", Type: "text", IsNullable: false},
 		},
 	}); err != nil {
 		t.Fatalf("CreateTable unique_idx_tbl failed: %v", err)
 	}
 
-	if err := ddlEngine.CreateIndex(ctx, "public", "unique_idx_tbl", CreateIndexRequest{
+	if err := ddlEngine.CreateIndex(ctx, "public", "unique_idx_tbl", CreateIndexInput{
 		IndexName: "idx_unique_code",
 		Columns:   []string{"code"},
 		IsUnique:  true,
@@ -335,10 +335,10 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// Failed DDL operations execution paths (e.g. duplicate column name or invalid type alter)
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "dup_cols_tbl",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "title", Type: "text"},
 			{Name: "title", Type: "text"},
 		},
@@ -351,7 +351,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	badDef := "INVALID_SQL_EXPRESSION_HERE"
-	if err := ddlEngine.AlterColumn(ctx, "public", "unique_idx_tbl", "code", AlterColumnRequest{DefaultValue: &badDef}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "public", "unique_idx_tbl", "code", UpdateColumnInput{DefaultValue: &badDef}); err == nil {
 		t.Fatal("expected error on invalid default expression in AlterColumn")
 	}
 
@@ -372,10 +372,10 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 			t.Fatal("expected error on TruncateTable with canceled context")
 		}
 		newTypeName := "int"
-		if err := ddlEngine.AlterColumn(canceledCtx, "public", "test_tbl", "column_name", AlterColumnRequest{NewType: &newTypeName}); err == nil {
+		if err := ddlEngine.AlterColumn(canceledCtx, "public", "test_tbl", "column_name", UpdateColumnInput{NewType: &newTypeName}); err == nil {
 			t.Fatal("expected error on AlterColumn with canceled context")
 		}
-		if err := ddlEngine.AddColumn(canceledCtx, "public", "test_tbl", ColumnDefinition{Name: "column_name", Type: "text"}); err == nil {
+		if err := ddlEngine.AddColumn(canceledCtx, "public", "test_tbl", Column{Name: "column_name", Type: "text"}); err == nil {
 			t.Fatal("expected error on AddColumn with canceled context")
 		}
 		if err := ddlEngine.DropColumn(canceledCtx, "public", "test_tbl", "column_name", false); err == nil {
@@ -384,7 +384,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 		if _, err := ddlEngine.ListIndexes(canceledCtx, "public", "test_tbl"); err == nil {
 			t.Fatal("expected error on ListIndexes with canceled context")
 		}
-		if err := ddlEngine.CreateIndex(canceledCtx, "public", "test_tbl", CreateIndexRequest{Columns: []string{"column_name"}}); err == nil {
+		if err := ddlEngine.CreateIndex(canceledCtx, "public", "test_tbl", CreateIndexInput{Columns: []string{"column_name"}}); err == nil {
 			t.Fatal("expected error on CreateIndex with canceled context")
 		}
 		if err := ddlEngine.DropIndex(canceledCtx, "public", "test_idx"); err == nil {
@@ -394,7 +394,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	if _, err := ddlEngine.ListIndexes(ctx, "", "products"); err != nil {
 		t.Fatalf("ListIndexes with empty schema failed: %v", err)
 	}
-	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexRequest{IndexName: "valid_idx", Columns: []string{"invalid column!"}}); err == nil {
+	if err := ddlEngine.CreateIndex(ctx, "public", "products", CreateIndexInput{IndexName: "valid_idx", Columns: []string{"invalid column!"}}); err == nil {
 		t.Fatal("expected error on invalid column in CreateIndex")
 	}
 	if _, err := ddlEngine.ExecuteSQL(ctx, "   "); err == nil {
@@ -402,10 +402,10 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// 18. RLS and Policy Management Tests
-	if err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "rls_test_tbl",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "user_id", Type: "text", IsNullable: false},
 			{Name: "org_id", Type: "text", IsNullable: false},
 		},
@@ -421,9 +421,9 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 		t.Fatalf("EnableRLS failed: %v", err)
 	}
 	// Verify GetTable reflects RLSEnabled
-	rlsTableSummary, rlsGetErr := ddlEngine.GetTable(ctx, "public", "rls_test_tbl")
-	if rlsGetErr != nil || !rlsTableSummary.RLSEnabled {
-		t.Fatalf("expected RLSEnabled true, got %v, err: %v", rlsTableSummary.RLSEnabled, rlsGetErr)
+	rlsTable, rlsGetErr := ddlEngine.GetTable(ctx, "public", "rls_test_tbl")
+	if rlsGetErr != nil || !rlsTable.RLSEnabled {
+		t.Fatalf("expected RLSEnabled true, got %v, err: %v", rlsTable.RLSEnabled, rlsGetErr)
 	}
 
 	// Force RLS
@@ -435,7 +435,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// Create Policy (Permissive, ALL, public, with USING and CHECK)
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{
 		Name:            "policy_org_isolation",
 		Command:         "ALL",
 		Roles:           []string{"public"},
@@ -447,7 +447,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// Create Policy (Restrictive, SELECT, default roles)
-	if err := ddlEngine.CreatePolicy(ctx, "", "rls_test_tbl", CreatePolicyRequest{
+	if err := ddlEngine.CreatePolicy(ctx, "", "rls_test_tbl", CreatePolicyInput{
 		Name:            "policy_user_select",
 		Command:         "SELECT",
 		Permissive:      "RESTRICTIVE",
@@ -457,7 +457,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// Create Policy with specific role
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{
 		Name:    "policy_authenticated_insert",
 		Command: "INSERT",
 		Roles:   []string{"layr"},
@@ -539,41 +539,41 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	}
 
 	// CreatePolicy error validations
-	if err := ddlEngine.CreatePolicy(ctx, "system", "nodes", CreatePolicyRequest{Name: "p"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "system", "nodes", CreatePolicyInput{Name: "p"}); err == nil {
 		t.Fatal("expected error on CreatePolicy protected schema")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "invalid-table!", CreatePolicyRequest{Name: "p"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "invalid-table!", CreatePolicyInput{Name: "p"}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid table")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "invalid-name!"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "invalid-name!"}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid name")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", Command: "INVALID"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", Command: "INVALID"}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid command")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", Permissive: "INVALID"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", Permissive: "INVALID"}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid permissive")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", Roles: []string{"invalid-role!"}}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", Roles: []string{"invalid-role!"}}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid role")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", UsingExpression: "INVALID SQL SYNTAX HERE;"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", UsingExpression: "INVALID SQL SYNTAX HERE;"}); err == nil {
 		t.Fatal("expected error on CreatePolicy invalid SQL expression")
 	}
 
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", UsingExpression: "invalid syntax $$%"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", UsingExpression: "invalid syntax $$%"}); err == nil {
 		t.Fatal("expected error on CreatePolicy with syntax error in UsingExpression")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", UsingExpression: "true; DROP TABLE"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", UsingExpression: "true; DROP TABLE"}); err == nil {
 		t.Fatal("expected error on CreatePolicy with semicolon in UsingExpression")
 	}
-	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyRequest{Name: "p", CheckExpression: "true -- comment"}); err == nil {
+	if err := ddlEngine.CreatePolicy(ctx, "public", "rls_test_tbl", CreatePolicyInput{Name: "p", CheckExpression: "true -- comment"}); err == nil {
 		t.Fatal("expected error on CreatePolicy with comment in CheckExpression")
 	}
 
 	// AlterColumn bad default value
 	badDefaultValue := "value; DROP TABLE"
-	if err := ddlEngine.AlterColumn(ctx, "public", "rls_test_tbl", "id", AlterColumnRequest{DefaultValue: &badDefaultValue}); err == nil {
+	if err := ddlEngine.AlterColumn(ctx, "public", "rls_test_tbl", "id", UpdateColumnInput{DefaultValue: &badDefaultValue}); err == nil {
 		t.Fatal("expected error on AlterColumn with bad default value")
 	}
 

@@ -30,7 +30,7 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 
 	// 1. Setup Authority HTTP server serving JWKS
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/.well-known/jwks.json", authJWTSigner.HandleJWKS)
+	serveMux.HandleFunc("/.well-known/jwks.json", authJWTSigner.handleGetJWKS)
 
 	authServer := httptest.NewServer(serveMux)
 	defer authServer.Close()

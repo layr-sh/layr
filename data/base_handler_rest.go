@@ -30,8 +30,8 @@ const (
 	pgTypeOIDVoid       uint32 = 2278
 )
 
-// HandleListRecords handles GET /api/v1/data/{schema_name}/{table_name}.
-func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter, request *http.Request) {
+// handleListRecords handles GET /api/v1/data/{schema_name}/{table_name}.
+func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
@@ -158,8 +158,8 @@ func (handler *BaseHandler) HandleListRecords(responseWriter http.ResponseWriter
 	_, _ = responseWriter.Write(responseJSON)
 }
 
-// HandleGetRecord handles GET /api/v1/data/{schema_name}/{table_name}/{record_id}.
-func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetRecord handles GET /api/v1/data/{schema_name}/{table_name}/{record_id}.
+func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
@@ -212,8 +212,8 @@ func (handler *BaseHandler) HandleGetRecord(responseWriter http.ResponseWriter, 
 	_ = json.NewEncoder(responseWriter).Encode(results[0])
 }
 
-// HandleCreateRecords handles POST /api/v1/data/{schema_name}/{table_name}.
-func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWriter, request *http.Request) {
+// handleCreateRecord handles POST /api/v1/data/{schema_name}/{table_name}.
+func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, _, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
@@ -233,9 +233,9 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 			return
 		}
 	} else {
-		var insertRowPayload InsertRowPayload
-		if payloadErr := json.Unmarshal(bodyBytes, &insertRowPayload); payloadErr == nil && len(insertRowPayload.Data) > 0 {
-			for _, rec := range insertRowPayload.Data {
+		var createRecordInput CreateRecordInput
+		if payloadErr := json.Unmarshal(bodyBytes, &createRecordInput); payloadErr == nil && len(createRecordInput.Data) > 0 {
+			for _, rec := range createRecordInput.Data {
 				rowMap := make(map[string]any)
 				if rec.ID != "" {
 					rowMap["id"] = rec.ID
@@ -351,8 +351,8 @@ func (handler *BaseHandler) HandleCreateRecords(responseWriter http.ResponseWrit
 	}
 }
 
-// HandleUpdateRecord handles PATCH/PUT /api/v1/data/{schema_name}/{table_name}/{record_id}.
-func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWriter, request *http.Request) {
+// handleUpdateRecord handles PATCH/PUT /api/v1/data/{schema_name}/{table_name}/{record_id}.
+func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
@@ -369,10 +369,10 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 		return
 	}
 
-	var updateRowPayload UpdateRowPayload
+	var updateRecordInput UpdateRecordInput
 	rowMap := make(map[string]any)
-	if payloadErr := json.Unmarshal(bodyBytes, &updateRowPayload); payloadErr == nil && len(updateRowPayload.Data.Properties) > 0 {
-		for k, v := range updateRowPayload.Data.Properties {
+	if payloadErr := json.Unmarshal(bodyBytes, &updateRecordInput); payloadErr == nil && len(updateRecordInput.Data.Properties) > 0 {
+		for k, v := range updateRecordInput.Data.Properties {
 			rowMap[k] = v
 		}
 	} else {
@@ -458,8 +458,8 @@ func (handler *BaseHandler) HandleUpdateRecord(responseWriter http.ResponseWrite
 	_ = json.NewEncoder(responseWriter).Encode(updatedRow)
 }
 
-// HandleDeleteRecord handles DELETE /api/v1/data/{schema_name}/{table_name}/{record_id}.
-func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWriter, request *http.Request) {
+// handleDeleteRecord handles DELETE /api/v1/data/{schema_name}/{table_name}/{record_id}.
+func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
 	if !ok {
 		return
@@ -524,13 +524,13 @@ func (handler *BaseHandler) HandleDeleteRecord(responseWriter http.ResponseWrite
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-// HandleExecuteFunction handles GET and POST /api/v1/data/{schema_name}/rpc/{function_name}.
+// handleExecuteFunction handles GET and POST /api/v1/data/{schema_name}/rpc/{function_name}.
 // It invokes PostgreSQL stored functions/procedures with the caller's RLS session claims.
 // - GET: Read operation with arguments provided via URL query params.
 // - POST: Mutation operation with arguments provided via flat JSON body.
 // Note: End users execute under Postgres RLS. Service accounts can bypass RLS if granted data:query.read (for GET) or data:query.write (for POST).
 // Responses are unwrapped: raw scalar, array of objects, array of scalars, or 204 No Content for void/empty.
-func (handler *BaseHandler) HandleExecuteFunction(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodGet && request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method not allowed")
 		return

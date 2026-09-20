@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleAddColumn adds a new column to a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleAddColumn(responseWriter http.ResponseWriter, request *http.Request) {
+// handleCreateColumn adds a new column to a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -19,12 +19,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAddColumn(responseWriter h
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns")
 		return
 	}
-	var columnDefinition ColumnDefinition
-	if decodeErr := json.NewDecoder(request.Body).Decode(&columnDefinition); decodeErr != nil {
+	var column Column
+	if decodeErr := json.NewDecoder(request.Body).Decode(&column); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if addErr := controlPlaneHandler.ddlEngine.AddColumn(request.Context(), schema, table, columnDefinition); addErr != nil {
+	if addErr := controlPlaneHandler.ddlEngine.AddColumn(request.Context(), schema, table, column); addErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, addErr.Error())
 		return
 	}
@@ -37,18 +37,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAddColumn(responseWriter h
 			Schema: schema,
 			Table:  table,
 			Action: "add_column",
-			Detail: columnDefinition.Name,
+			Detail: column.Name,
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, AddColumnResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreateColumnResponse{
 		Status: "created",
-		Column: columnDefinition.Name,
+		Column: column.Name,
 	})
 }
 
-// HandleAlterColumn alters a column definition.
-func (controlPlaneHandler *ControlPlaneHandler) HandleAlterColumn(responseWriter http.ResponseWriter, request *http.Request) {
+// handleUpdateColumn alters a column definition.
+func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -59,12 +59,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAlterColumn(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/columns/{column}")
 		return
 	}
-	var alterColumnRequest AlterColumnRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&alterColumnRequest); decodeErr != nil {
+	var updateColumnInput UpdateColumnInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&updateColumnInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if alterErr := controlPlaneHandler.ddlEngine.AlterColumn(request.Context(), schema, table, columnName, alterColumnRequest); alterErr != nil {
+	if alterErr := controlPlaneHandler.ddlEngine.AlterColumn(request.Context(), schema, table, columnName, updateColumnInput); alterErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, alterErr.Error())
 		return
 	}
@@ -81,14 +81,14 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleAlterColumn(responseWriter
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, AlterColumnResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, UpdateColumnResponse{
 		Status: "updated",
 		Column: columnName,
 	})
 }
 
-// HandleDropColumn drops a column from a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleDropColumn(responseWriter http.ResponseWriter, request *http.Request) {
+// handleDeleteColumn drops a column from a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -117,7 +117,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropColumn(responseWriter 
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DropColumnResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeleteColumnResponse{
 		Status: "deleted",
 		Column: columnName,
 	})

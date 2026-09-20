@@ -2,8 +2,8 @@ package data
 
 import "time"
 
-// ColumnDefinition defines a table column in DDL operations.
-type ColumnDefinition struct {
+// Column defines a table column in DDL operations.
+type Column struct {
 	Name         string  `json:"name"`
 	Type         string  `json:"type"`
 	IsNullable   bool    `json:"is_nullable"`
@@ -12,8 +12,8 @@ type ColumnDefinition struct {
 	IsUnique     bool    `json:"is_unique"`
 }
 
-// ForeignKeyDefinition describes a foreign key constraint.
-type ForeignKeyDefinition struct {
+// ForeignKey describes a foreign key constraint.
+type ForeignKey struct {
 	ConstraintName string `json:"constraint_name,omitempty"`
 	Column         string `json:"column"`
 	ForeignSchema  string `json:"foreign_schema"`
@@ -23,16 +23,16 @@ type ForeignKeyDefinition struct {
 	OnUpdate       string `json:"on_update,omitempty"`
 }
 
-// IndexDefinition describes an index on a table.
-type IndexDefinition struct {
+// Index describes an index on a table.
+type Index struct {
 	IndexName string   `json:"index_name"`
 	Columns   []string `json:"columns"`
 	Type      string   `json:"type"` // btree, gin, gist, brin
 	IsUnique  bool     `json:"is_unique"`
 }
 
-// PolicyDefinition describes a Row-Level Security policy on a table.
-type PolicyDefinition struct {
+// Policy describes a Row-Level Security policy on a table.
+type Policy struct {
 	Schema          string   `json:"schema"`
 	Table           string   `json:"table"`
 	Name            string   `json:"name"`
@@ -43,47 +43,47 @@ type PolicyDefinition struct {
 	CheckExpression string   `json:"with_check_expression,omitempty"`
 }
 
-// TableSummary describes a table's schema, constraints, indexes, and statistics.
-type TableSummary struct {
-	Schema            string                 `json:"schema"`
-	Name              string                 `json:"name"`
-	PrimaryKey        string                 `json:"primary_key"`
-	Columns           []ColumnDefinition     `json:"columns"`
-	ForeignKeys       []ForeignKeyDefinition `json:"foreign_keys"`
-	Indexes           []IndexDefinition      `json:"indexes"`
-	RLSEnabled        bool                   `json:"rls_enabled"`
-	RLSForced         bool                   `json:"rls_forced"`
-	EstimatedRowCount int64                  `json:"estimated_row_count"`
-	SizeBytes         int64                  `json:"size_bytes"`
+// Table describes a table's schema, constraints, indexes, and statistics.
+type Table struct {
+	Schema            string       `json:"schema"`
+	Name              string       `json:"name"`
+	PrimaryKey        string       `json:"primary_key"`
+	Columns           []Column     `json:"columns"`
+	ForeignKeys       []ForeignKey `json:"foreign_keys"`
+	Indexes           []Index      `json:"indexes"`
+	RLSEnabled        bool         `json:"rls_enabled"`
+	RLSForced         bool         `json:"rls_forced"`
+	EstimatedRowCount int64        `json:"estimated_row_count"`
+	SizeBytes         int64        `json:"size_bytes"`
 }
 
-// CreateTableRequest describes the schema for creating a new table.
-type CreateTableRequest struct {
-	Schema         string                 `json:"schema"`
-	Name           string                 `json:"name"`
-	PrimaryKeyName string                 `json:"primary_key_name,omitempty"` // defaults to "id" if empty
-	Columns        []ColumnDefinition     `json:"columns"`
-	ForeignKeys    []ForeignKeyDefinition `json:"foreign_keys,omitempty"`
+// CreateTableInput describes the schema for creating a new table.
+type CreateTableInput struct {
+	Schema         string       `json:"schema"`
+	Name           string       `json:"name"`
+	PrimaryKeyName string       `json:"primary_key_name,omitempty"` // defaults to "id" if empty
+	Columns        []Column     `json:"columns"`
+	ForeignKeys    []ForeignKey `json:"foreign_keys,omitempty"`
 }
 
-// AlterColumnRequest describes changes to apply to an existing column.
-type AlterColumnRequest struct {
+// UpdateColumnInput describes changes to apply to an existing column.
+type UpdateColumnInput struct {
 	NewName      *string `json:"new_name,omitempty"`
 	NewType      *string `json:"new_type,omitempty"`
 	IsNullable   *bool   `json:"is_nullable,omitempty"`
 	DefaultValue *string `json:"default_value,omitempty"`
 }
 
-// CreateIndexRequest describes parameters for creating an index.
-type CreateIndexRequest struct {
+// CreateIndexInput describes parameters for creating an index.
+type CreateIndexInput struct {
 	IndexName string   `json:"index_name,omitempty"`
 	Columns   []string `json:"columns"`
 	Type      string   `json:"type"` // btree, gin, gist, brin
 	IsUnique  bool     `json:"is_unique"`
 }
 
-// CreatePolicyRequest describes parameters for creating an RLS policy.
-type CreatePolicyRequest struct {
+// CreatePolicyInput describes parameters for creating an RLS policy.
+type CreatePolicyInput struct {
 	Name            string   `json:"name"`
 	Command         string   `json:"command,omitempty"`    // Default: ALL
 	Roles           []string `json:"roles,omitempty"`      // Default: [PUBLIC]
@@ -92,14 +92,14 @@ type CreatePolicyRequest struct {
 	CheckExpression string   `json:"with_check_expression,omitempty"`
 }
 
-// ToggleTableRLSRequest describes the action to change RLS on a table.
-type ToggleTableRLSRequest struct {
+// ToggleRLSInput describes the action to change RLS on a table.
+type ToggleRLSInput struct {
 	Action string `json:"action,omitempty"`
 	Mode   string `json:"mode,omitempty"` // ENABLE, DISABLE, FORCE, NO FORCE
 }
 
-// InvalidateCacheRequest represents targeted cache invalidation options.
-type InvalidateCacheRequest struct {
+// InvalidateCacheInput represents targeted cache invalidation options.
+type InvalidateCacheInput struct {
 	All     bool   `json:"all,omitempty"`
 	Catalog bool   `json:"catalog,omitempty"`
 	Schema  string `json:"schema,omitempty"`
@@ -107,8 +107,8 @@ type InvalidateCacheRequest struct {
 	Pattern string `json:"pattern,omitempty"`
 }
 
-// ExecuteSQLRequest represents an arbitrary SQL script execution payload.
-type ExecuteSQLRequest struct {
+// ExecuteSQLInput represents an arbitrary SQL script execution payload.
+type ExecuteSQLInput struct {
 	SQL   string `json:"sql,omitempty"`
 	Query string `json:"query,omitempty"`
 }
@@ -121,28 +121,28 @@ type CreateTableResponse struct {
 	Message string `json:"message"`
 }
 
-// DropTableResponse represents the result of dropping a table.
-type DropTableResponse struct {
+// DeleteTableResponse represents the result of dropping a table.
+type DeleteTableResponse struct {
 	Status  string `json:"status"`
 	Schema  string `json:"schema"`
 	Table   string `json:"table"`
 	Message string `json:"message"`
 }
 
-// AddColumnResponse represents the result of adding a column.
-type AddColumnResponse struct {
+// CreateColumnResponse represents the result of adding a column.
+type CreateColumnResponse struct {
 	Status string `json:"status"`
 	Column string `json:"column"`
 }
 
-// AlterColumnResponse represents the result of altering a column.
-type AlterColumnResponse struct {
+// UpdateColumnResponse represents the result of altering a column.
+type UpdateColumnResponse struct {
 	Status string `json:"status"`
 	Column string `json:"column"`
 }
 
-// DropColumnResponse represents the result of dropping a column.
-type DropColumnResponse struct {
+// DeleteColumnResponse represents the result of dropping a column.
+type DeleteColumnResponse struct {
 	Status string `json:"status"`
 	Column string `json:"column"`
 }
@@ -155,12 +155,12 @@ type CreateIndexResponse struct {
 
 // ListIndexesResponse represents a list of index definitions on a table.
 type ListIndexesResponse struct {
-	Indexes []IndexDefinition `json:"indexes"`
-	Count   int               `json:"count"`
+	Indexes []Index `json:"indexes"`
+	Count   int     `json:"count"`
 }
 
-// DropIndexResponse represents the result of dropping an index.
-type DropIndexResponse struct {
+// DeleteIndexResponse represents the result of dropping an index.
+type DeleteIndexResponse struct {
 	Status string `json:"status"`
 	Index  string `json:"index"`
 }
@@ -173,18 +173,18 @@ type CreatePolicyResponse struct {
 
 // ListPoliciesResponse represents a list of RLS policies on a table.
 type ListPoliciesResponse struct {
-	Policies []PolicyDefinition `json:"policies"`
-	Count    int                `json:"count"`
+	Policies []Policy `json:"policies"`
+	Count    int      `json:"count"`
 }
 
-// DropPolicyResponse represents the result of dropping an RLS policy.
-type DropPolicyResponse struct {
+// DeletePolicyResponse represents the result of dropping an RLS policy.
+type DeletePolicyResponse struct {
 	Status string `json:"status"`
 	Policy string `json:"policy"`
 }
 
-// ToggleTableRLSResponse represents the result of toggling RLS on a table.
-type ToggleTableRLSResponse struct {
+// ToggleRLSResponse represents the result of toggling RLS on a table.
+type ToggleRLSResponse struct {
 	Status string `json:"status"`
 	Mode   string `json:"mode"`
 }
@@ -203,8 +203,8 @@ type InvalidateCacheResponse struct {
 
 // ListTablesResponse represents a list of table summaries.
 type ListTablesResponse struct {
-	Tables []TableSummary `json:"tables"`
-	Count  int            `json:"count"`
+	Tables []Table `json:"tables"`
+	Count  int     `json:"count"`
 }
 
 // ExecuteSQLResponse represents execution timing and results from raw SQL queries.

@@ -48,10 +48,12 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 		t.Fatalf("mismatched loaded secondary config: %+v", secondaryConfigManager.Get())
 	}
 
-	// 4. HandlePutConfig with plaintext secrets and event bus
+	// 4. handleUpdateConfig with plaintext secrets and event bus
 	eventBus := core.NewEventBus(db, cryptoKeyManager)
 	defer eventBus.Close()
 	configManager.SetEventBus(eventBus)
+	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
+	controlPlaneHandler.SetEventBus(eventBus)
 
 	var mutex sync.Mutex
 	var receivedEvent core.Event
@@ -86,10 +88,10 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 
 	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedPutPayload))
 	putResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putResponseRecorder, putRequest)
+	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 
 	if putResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandlePutConfig, got: %d (body: %s)", putResponseRecorder.Code, putResponseRecorder.Body.String())
+		t.Fatalf("expected 200 OK from handleUpdateConfig, got: %d (body: %s)", putResponseRecorder.Code, putResponseRecorder.Body.String())
 	}
 
 	// Verify sanitized secrets in PUT response
@@ -147,7 +149,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 
 	secondPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedSecondPut))
 	secondPutResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(secondPutResponseRecorder, secondPutRequest)
+	controlPlaneHandler.handleUpdateConfig(secondPutResponseRecorder, secondPutRequest)
 
 	if secondPutResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from second PUT, got: %d", secondPutResponseRecorder.Code)
@@ -168,7 +170,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	encodedNullDriver, _ := json.Marshal(nullDriverPayload)
 	nullDriverRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", bytes.NewReader(encodedNullDriver))
 	nullDriverResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(nullDriverResponseRecorder, nullDriverRequest)
+	controlPlaneHandler.handleUpdateConfig(nullDriverResponseRecorder, nullDriverRequest)
 
 	if nullDriverResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from null driver PUT, got: %d", nullDriverResponseRecorder.Code)
@@ -217,12 +219,14 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 
 	configManager := NewConfigManager(db, cryptoKeyManager)
 	configManager.SetServiceAccountManager(serviceAccountManager)
+	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
+	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
 	// 1. GET with read scope succeeds
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
 	getRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	getResponseRecorder := httptest.NewRecorder()
-	configManager.HandleGetConfig(getResponseRecorder, getRequest)
+	controlPlaneHandler.handleGetConfig(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on GET with read scope, got: %d", getResponseRecorder.Code)
 	}
@@ -231,7 +235,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{}`))
 	putRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	putResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putResponseRecorder, putRequest)
+	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 	if putResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden on PUT without write scope, got: %d", putResponseRecorder.Code)
 	}
@@ -240,7 +244,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
-	configManager.HandleGetConfig(invalidKeyResponseRecorder, invalidKeyRequest)
+	controlPlaneHandler.handleGetConfig(invalidKeyResponseRecorder, invalidKeyRequest)
 	if invalidKeyResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden on invalid key, got: %d", invalidKeyResponseRecorder.Code)
 	}
@@ -255,6 +259,7 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 
 	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	configManager := NewConfigManager(brokenDB, cryptoKeyManager)
+	controlPlaneHandler := NewControlPlaneHandler(brokenDB, configManager)
 	ctx := context.Background()
 
 	// Load with broken pool returns error
@@ -267,10 +272,10 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 		t.Fatal("expected error saving with broken pool")
 	}
 
-	// HandlePutConfig with broken pool returns 500
+	// handleUpdateConfig with broken pool returns 500
 	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/auth/config", strings.NewReader(`{}`))
 	putResponseRecorder := httptest.NewRecorder()
-	configManager.HandlePutConfig(putResponseRecorder, putRequest)
+	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 	if putResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on broken pool, got: %d", putResponseRecorder.Code)
 	}

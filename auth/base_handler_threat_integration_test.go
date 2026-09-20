@@ -158,12 +158,12 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK from known device sign in, got: %d (%s)", knownDeviceSignInResponseRecorder.Code, knownDeviceSignInResponseRecorder.Body.String())
 	}
 
-	var knownDeviceSessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(knownDeviceSignInResponseRecorder.Body).Decode(&knownDeviceSessionResponse); decodeErr != nil {
+	var knownDeviceAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(knownDeviceSignInResponseRecorder.Body).Decode(&knownDeviceAuthTokenResponse); decodeErr != nil {
 		t.Fatalf("failed to decode known device session response: %v", decodeErr)
 	}
-	if knownDeviceSessionResponse.AccessToken == "" || knownDeviceSessionResponse.User.ID != userAID {
-		t.Fatalf("expected session response without MFA challenge for known device, got: %+v", knownDeviceSessionResponse)
+	if knownDeviceAuthTokenResponse.AccessToken == "" || knownDeviceAuthTokenResponse.User.ID != userAID {
+		t.Fatalf("expected session response without MFA challenge for known device, got: %+v", knownDeviceAuthTokenResponse)
 	}
 
 	// 3b. Sign-in with low risk (known User-Agent, but new IP):
@@ -197,12 +197,12 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	if lowRiskUnmatchedResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from low risk unmatched sign in, got: %d (%s)", lowRiskUnmatchedResponseRecorder.Code, lowRiskUnmatchedResponseRecorder.Body.String())
 	}
-	var lowRiskUnmatchedSessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(lowRiskUnmatchedResponseRecorder.Body).Decode(&lowRiskUnmatchedSessionResponse); decodeErr != nil {
+	var lowRiskUnmatchedAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(lowRiskUnmatchedResponseRecorder.Body).Decode(&lowRiskUnmatchedAuthTokenResponse); decodeErr != nil {
 		t.Fatalf("failed to decode low risk unmatched session response: %v", decodeErr)
 	}
-	if lowRiskUnmatchedSessionResponse.AccessToken == "" {
-		t.Fatalf("expected session response when risk triggers do not match, got: %+v", lowRiskUnmatchedSessionResponse)
+	if lowRiskUnmatchedAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected session response when risk triggers do not match, got: %+v", lowRiskUnmatchedAuthTokenResponse)
 	}
 
 	// 4. Switching MFA Policy to "always" triggers MFA ticket even for known device
@@ -269,7 +269,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		}, nil
 	}
 
-	breachedUpdatePayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	breachedUpdatePayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: userAPassword,
 		NewPassword:     "password",
 	})
@@ -290,7 +290,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		}, nil
 	}
 
-	safeUpdatePayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	safeUpdatePayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: userAPassword,
 		NewPassword:     "NewCleanPassword123!#",
 	})
@@ -320,14 +320,14 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 8a. Wrong OTP code records failed attempt
-	wrongOTPPayload, _ := json.Marshal(OTPVerifyRequest{
+	wrongOTPPayload, _ := json.Marshal(VerifyOTPInput{
 		Recipient: userAEmail,
 		Code:      "999999",
 	})
 	otpVerifyWrongRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(wrongOTPPayload))
 	otpVerifyWrongRequest.Header.Set("X-Forwarded-For", "198.51.100.77")
 	otpVerifyWrongResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyWrongResponseRecorder, otpVerifyWrongRequest)
+	baseHandler.handleVerifyOTP(otpVerifyWrongResponseRecorder, otpVerifyWrongRequest)
 	if otpVerifyWrongResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on wrong otp code, got: %d", otpVerifyWrongResponseRecorder.Code)
 	}
@@ -336,7 +336,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 8b. Valid OTP verification from known device/IP: Adaptive MFA is bypassed
-	validOTPPayload, _ := json.Marshal(OTPVerifyRequest{
+	validOTPPayload, _ := json.Marshal(VerifyOTPInput{
 		Recipient: userAEmail,
 		Code:      otpCode,
 	})
@@ -344,16 +344,16 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	otpVerifyKnownRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	otpVerifyKnownRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	otpVerifyKnownResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyKnownResponseRecorder, otpVerifyKnownRequest)
+	baseHandler.handleVerifyOTP(otpVerifyKnownResponseRecorder, otpVerifyKnownRequest)
 	if otpVerifyKnownResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on valid otp from known device, got: %d (%s)", otpVerifyKnownResponseRecorder.Code, otpVerifyKnownResponseRecorder.Body.String())
 	}
-	var otpVerifyKnownSessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(otpVerifyKnownResponseRecorder.Body).Decode(&otpVerifyKnownSessionResponse); decodeErr != nil {
+	var otpVerifyKnownAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(otpVerifyKnownResponseRecorder.Body).Decode(&otpVerifyKnownAuthTokenResponse); decodeErr != nil {
 		t.Fatalf("failed to decode known device otp session response: %v", decodeErr)
 	}
-	if otpVerifyKnownSessionResponse.AccessToken == "" {
-		t.Fatalf("expected session response without MFA challenge for known device OTP, got: %+v", otpVerifyKnownSessionResponse)
+	if otpVerifyKnownAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected session response without MFA challenge for known device OTP, got: %+v", otpVerifyKnownAuthTokenResponse)
 	}
 
 	// 8c. Valid OTP verification from new device: triggers Adaptive MFA challenge ticket
@@ -369,7 +369,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	otpVerifyNewDeviceRequest.Header.Set("X-Forwarded-For", "203.0.113.88")
 	otpVerifyNewDeviceRequest.Header.Set("User-Agent", "BrandNewOTPBrowser/1.0")
 	otpVerifyNewDeviceResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyNewDeviceResponseRecorder, otpVerifyNewDeviceRequest)
+	baseHandler.handleVerifyOTP(otpVerifyNewDeviceResponseRecorder, otpVerifyNewDeviceRequest)
 	if otpVerifyNewDeviceResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on otp from new device, got: %d (%s)", otpVerifyNewDeviceResponseRecorder.Code, otpVerifyNewDeviceResponseRecorder.Body.String())
 	}
@@ -382,7 +382,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 9. OAuth Flow with threat tracking and adaptive MFA
-	userAUserRecord := UserRecord{
+	targetUser := User{
 		ID:         userAID,
 		Email:      &userAEmail,
 		Role:       "authenticated",
@@ -395,16 +395,16 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	oauthKnownRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	oauthKnownRequest.SetPathValue("provider", "google")
 	oauthKnownResponseRecorder := httptest.NewRecorder()
-	baseHandler.CompleteOAuthFlow(oauthKnownResponseRecorder, oauthKnownRequest, userAUserRecord, OAuthStatePayload{}, false)
+	baseHandler.CompleteOAuthFlow(oauthKnownResponseRecorder, oauthKnownRequest, targetUser, OAuthStatePayload{}, false)
 	if oauthKnownResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on oauth from known device, got: %d (%s)", oauthKnownResponseRecorder.Code, oauthKnownResponseRecorder.Body.String())
 	}
-	var oauthKnownSessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(oauthKnownResponseRecorder.Body).Decode(&oauthKnownSessionResponse); decodeErr != nil {
+	var oauthKnownAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(oauthKnownResponseRecorder.Body).Decode(&oauthKnownAuthTokenResponse); decodeErr != nil {
 		t.Fatalf("failed to decode known device oauth session response: %v", decodeErr)
 	}
-	if oauthKnownSessionResponse.AccessToken == "" {
-		t.Fatalf("expected session response without MFA challenge for known device OAuth, got: %+v", oauthKnownSessionResponse)
+	if oauthKnownAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected session response without MFA challenge for known device OAuth, got: %+v", oauthKnownAuthTokenResponse)
 	}
 
 	// 9b. Direct OAuth callback from new device: triggers Adaptive MFA challenge ticket & alert
@@ -415,7 +415,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	oauthNewDeviceRequest.Header.Set("User-Agent", "BrandNewOAuthBrowser/1.0")
 	oauthNewDeviceRequest.SetPathValue("provider", "google")
 	oauthNewDeviceResponseRecorder := httptest.NewRecorder()
-	baseHandler.CompleteOAuthFlow(oauthNewDeviceResponseRecorder, oauthNewDeviceRequest, userAUserRecord, OAuthStatePayload{}, false)
+	baseHandler.CompleteOAuthFlow(oauthNewDeviceResponseRecorder, oauthNewDeviceRequest, targetUser, OAuthStatePayload{}, false)
 	if oauthNewDeviceResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on oauth from new device, got: %d (%s)", oauthNewDeviceResponseRecorder.Code, oauthNewDeviceResponseRecorder.Body.String())
 	}

@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// UserCreateRequest defines parameters for creating an application user via control plane.
-type UserCreateRequest struct {
+// CreateUserInput defines parameters for creating an application user via control plane.
+type CreateUserInput struct {
 	Email         string         `json:"email"`
 	Phone         string         `json:"phone"`
 	Password      string         `json:"password"`
@@ -15,7 +15,21 @@ type UserCreateRequest struct {
 	Properties    map[string]any `json:"properties"`
 }
 
-// UserLockRequest defines parameters for locking an application user account.
-type UserLockRequest struct {
+// LockUserInput defines parameters for locking an application user account.
+type LockUserInput struct {
 	LockedUntil *time.Time `json:"locked_until"`
+}
+
+// ListUsersResponse represents the paginated list of application users.
+type ListUsersResponse struct {
+	Users  []User `json:"users"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+	Count  int    `json:"count"`
+}
+
+// ListUserSessionsResponse represents the list of active sessions for an application user in the control plane.
+type ListUserSessionsResponse struct {
+	Sessions []Session `json:"sessions"`
+	Count    int       `json:"count"`
 }

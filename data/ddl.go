@@ -48,12 +48,12 @@ func NewDDLEngine(db *core.DatabasePool) *DDLEngine {
 }
 
 // ListTables retrieves metadata for all user tables across the specified schemas.
-func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]TableSummary, error) {
+func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Table, error) {
 	if len(schemas) == 0 {
 		schemas = []string{"public"}
 	}
 
-	var results []TableSummary
+	var results []Table
 	for _, schema := range schemas {
 		if IsProtectedSchema(schema) {
 			continue
@@ -89,11 +89,11 @@ func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Ta
 		rows.Close()
 
 		for _, statsRecord := range tableList {
-			tableSummary, _ := engine.GetTable(ctx, schema, statsRecord.name)
-			if tableSummary != nil {
-				tableSummary.EstimatedRowCount = statsRecord.estRows
-				tableSummary.SizeBytes = statsRecord.sizeBytes
-				results = append(results, *tableSummary)
+			table, _ := engine.GetTable(ctx, schema, statsRecord.name)
+			if table != nil {
+				table.EstimatedRowCount = statsRecord.estRows
+				table.SizeBytes = statsRecord.sizeBytes
+				results = append(results, *table)
 			}
 		}
 	}
@@ -102,7 +102,7 @@ func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Ta
 }
 
 // GetTable retrieves detailed column, foreign key, and index metadata for a table.
-func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*TableSummary, error) {
+func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string) (*Table, error) {
 	if IsProtectedSchema(schema) {
 		return nil, fmt.Errorf("schema '%s' is protected and cannot be managed via DDL", schema)
 	}
@@ -114,17 +114,17 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*T
 			WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'
 		)
 	`
-	scanErr := engine.db.QueryRow(ctx, existsSQLStatement, schema, table).Scan(&exists)
+	scanErr := engine.db.QueryRow(ctx, existsSQLStatement, schema, tableName).Scan(&exists)
 	if scanErr != nil || !exists {
-		return nil, fmt.Errorf("table '%s.%s' not found", schema, table)
+		return nil, fmt.Errorf("table '%s.%s' not found", schema, tableName)
 	}
 
-	tableSummary := &TableSummary{
+	table := &Table{
 		Schema:      schema,
-		Name:        table,
-		Columns:     []ColumnDefinition{},
-		ForeignKeys: []ForeignKeyDefinition{},
-		Indexes:     []IndexDefinition{},
+		Name:        tableName,
+		Columns:     []Column{},
+		ForeignKeys: []ForeignKey{},
+		Indexes:     []Index{},
 	}
 
 	// 1. Fetch Primary Key
@@ -139,7 +139,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*T
 		  AND tc.table_name = $2
 		LIMIT 1
 	`
-	_ = engine.db.QueryRow(ctx, pkSQLStatement, schema, table).Scan(&tableSummary.PrimaryKey)
+	_ = engine.db.QueryRow(ctx, pkSQLStatement, schema, tableName).Scan(&table.PrimaryKey)
 
 	// 2. Fetch Columns
 	const columnSQLStatement = `
@@ -148,19 +148,19 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*T
 		WHERE table_schema = $1 AND table_name = $2
 		ORDER BY ordinal_position ASC
 	`
-	columnRows, queryColumnErr := engine.db.Query(ctx, columnSQLStatement, schema, table)
+	columnRows, queryColumnErr := engine.db.Query(ctx, columnSQLStatement, schema, tableName)
 	if queryColumnErr == nil {
 		defer columnRows.Close()
 		for columnRows.Next() {
 			var columnName, dataType, isNullable string
 			var columnDefault *string
 			if columnScanErr := columnRows.Scan(&columnName, &dataType, &isNullable, &columnDefault); columnScanErr == nil {
-				tableSummary.Columns = append(tableSummary.Columns, ColumnDefinition{
+				table.Columns = append(table.Columns, Column{
 					Name:         columnName,
 					Type:         dataType,
 					IsNullable:   isNullable == "YES",
 					DefaultValue: columnDefault,
-					IsPrimaryKey: columnName == tableSummary.PrimaryKey,
+					IsPrimaryKey: columnName == table.PrimaryKey,
 				})
 			}
 		}
@@ -186,20 +186,20 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*T
 		WHERE tc.constraint_type = 'FOREIGN KEY'
 		  AND tc.table_schema = $1 AND tc.table_name = $2
 	`
-	fkRows, fkErr := engine.db.Query(ctx, fkSQLStatement, schema, table)
+	fkRows, fkErr := engine.db.Query(ctx, fkSQLStatement, schema, tableName)
 	if fkErr == nil {
 		defer fkRows.Close()
 		for fkRows.Next() {
 			var foreignKeyScanResult foreignKeyScanResult
 			if fkScanErr := fkRows.Scan(&foreignKeyScanResult.ConstraintName, &foreignKeyScanResult.Column, &foreignKeyScanResult.ForeignSchema, &foreignKeyScanResult.ForeignTable, &foreignKeyScanResult.ForeignColumn, &foreignKeyScanResult.OnDelete, &foreignKeyScanResult.OnUpdate); fkScanErr == nil {
-				tableSummary.ForeignKeys = append(tableSummary.ForeignKeys, ForeignKeyDefinition(foreignKeyScanResult))
+				table.ForeignKeys = append(table.ForeignKeys, ForeignKey(foreignKeyScanResult))
 			}
 		}
 	}
 
 	// 4. Fetch Indexes
-	indexes, _ := engine.ListIndexes(ctx, schema, table)
-	tableSummary.Indexes = indexes
+	indexes, _ := engine.ListIndexes(ctx, schema, tableName)
+	table.Indexes = indexes
 
 	// 5. Fetch RLS Status
 	const rlsSQLStatement = `
@@ -208,27 +208,27 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, table string) (*T
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = $1 AND c.relname = $2
 	`
-	_ = engine.db.QueryRow(ctx, rlsSQLStatement, schema, table).Scan(&tableSummary.RLSEnabled, &tableSummary.RLSForced)
+	_ = engine.db.QueryRow(ctx, rlsSQLStatement, schema, tableName).Scan(&table.RLSEnabled, &table.RLSForced)
 
-	return tableSummary, nil
+	return table, nil
 }
 
-type foreignKeyScanResult ForeignKeyDefinition
+type foreignKeyScanResult ForeignKey
 
 // CreateTable generates and executes CREATE TABLE with standard UUIDv7 primary key default.
-func (engine *DDLEngine) CreateTable(ctx context.Context, createTableRequest CreateTableRequest) error {
-	schema := createTableRequest.Schema
+func (engine *DDLEngine) CreateTable(ctx context.Context, createTableInput CreateTableInput) error {
+	schema := createTableInput.Schema
 	if schema == "" {
 		schema = "public"
 	}
 	if IsProtectedSchema(schema) {
 		return fmt.Errorf("cannot create tables in protected schema '%s'", schema)
 	}
-	if !common.IsValidIdentifier(createTableRequest.Name) {
-		return fmt.Errorf("invalid table name '%s'", createTableRequest.Name)
+	if !common.IsValidIdentifier(createTableInput.Name) {
+		return fmt.Errorf("invalid table name '%s'", createTableInput.Name)
 	}
 
-	primaryKeyName := createTableRequest.PrimaryKeyName
+	primaryKeyName := createTableInput.PrimaryKeyName
 	if primaryKeyName == "" {
 		primaryKeyName = "id"
 	}
@@ -239,17 +239,17 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableRequest Cre
 	var columnClauses []string
 
 	hasPrimaryKey := false
-	for _, columnDefinition := range createTableRequest.Columns {
-		if !common.IsValidIdentifier(columnDefinition.Name) {
-			return fmt.Errorf("invalid column name '%s'", columnDefinition.Name)
+	for _, column := range createTableInput.Columns {
+		if !common.IsValidIdentifier(column.Name) {
+			return fmt.Errorf("invalid column name '%s'", column.Name)
 		}
-		if columnDefinition.IsPrimaryKey || columnDefinition.Name == primaryKeyName {
+		if column.IsPrimaryKey || column.Name == primaryKeyName {
 			hasPrimaryKey = true
-			columnClauses = append(columnClauses, fmt.Sprintf("%s UUID PRIMARY KEY DEFAULT uuidv7()", quoteIdent(columnDefinition.Name)))
+			columnClauses = append(columnClauses, fmt.Sprintf("%s UUID PRIMARY KEY DEFAULT uuidv7()", quoteIdent(column.Name)))
 			continue
 		}
 
-		clause := buildColumnClause(columnDefinition)
+		clause := buildColumnClause(column)
 		columnClauses = append(columnClauses, clause)
 	}
 
@@ -257,7 +257,7 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableRequest Cre
 		columnClauses = append([]string{fmt.Sprintf("%s UUID PRIMARY KEY DEFAULT uuidv7()", quoteIdent(primaryKeyName))}, columnClauses...)
 	}
 
-	for _, foreignKey := range createTableRequest.ForeignKeys {
+	for _, foreignKey := range createTableInput.ForeignKeys {
 		if !common.IsValidIdentifier(foreignKey.Column) || !common.IsValidIdentifier(foreignKey.ForeignTable) || !common.IsValidIdentifier(foreignKey.ForeignColumn) {
 			return fmt.Errorf("invalid foreign key identifiers")
 		}
@@ -279,9 +279,9 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableRequest Cre
 		))
 	}
 
-	createSQLStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (\n    %s\n);", quoteIdent(schema), quoteIdent(createTableRequest.Name), strings.Join(columnClauses, ",\n    "))
+	createSQLStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (\n    %s\n);", quoteIdent(schema), quoteIdent(createTableInput.Name), strings.Join(columnClauses, ",\n    "))
 	if _, execErr := engine.db.Exec(ctx, createSQLStatement); execErr != nil {
-		return fmt.Errorf("failed to create table %s.%s: %w", schema, createTableRequest.Name, execErr)
+		return fmt.Errorf("failed to create table %s.%s: %w", schema, createTableInput.Name, execErr)
 	}
 
 	return nil
@@ -336,27 +336,27 @@ func (engine *DDLEngine) TruncateTable(ctx context.Context, schema, table string
 }
 
 // AddColumn adds a column to an existing table.
-func (engine *DDLEngine) AddColumn(ctx context.Context, schema, table string, columnDefinition ColumnDefinition) error {
+func (engine *DDLEngine) AddColumn(ctx context.Context, schema, table string, column Column) error {
 	if schema == "" {
 		schema = "public"
 	}
 	if IsProtectedSchema(schema) {
 		return fmt.Errorf("cannot alter tables in protected schema '%s'", schema)
 	}
-	if !common.IsValidIdentifier(table) || !common.IsValidIdentifier(columnDefinition.Name) {
+	if !common.IsValidIdentifier(table) || !common.IsValidIdentifier(column.Name) {
 		return fmt.Errorf("invalid table or column name")
 	}
 
-	clause := buildColumnClause(columnDefinition)
-	alterSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", quoteIdent(schema), quoteIdent(table), clause)
-	if _, execErr := engine.db.Exec(ctx, alterSQLStatement); execErr != nil {
+	clause := buildColumnClause(column)
+	addColumnSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", quoteIdent(schema), quoteIdent(table), clause)
+	if _, execErr := engine.db.Exec(ctx, addColumnSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to add column to %s.%s: %w", schema, table, execErr)
 	}
 	return nil
 }
 
 // AlterColumn alters column type, nullability, default expression, or name.
-func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnName string, alterColumnRequest AlterColumnRequest) error {
+func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnName string, updateColumnInput UpdateColumnInput) error {
 	if schema == "" {
 		schema = "public"
 	}
@@ -370,25 +370,25 @@ func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnN
 	var alterStatements []string
 
 	// Rename column
-	if alterColumnRequest.NewName != nil && *alterColumnRequest.NewName != "" && *alterColumnRequest.NewName != columnName {
-		if !common.IsValidIdentifier(*alterColumnRequest.NewName) {
-			return fmt.Errorf("invalid new column name '%s'", *alterColumnRequest.NewName)
+	if updateColumnInput.NewName != nil && *updateColumnInput.NewName != "" && *updateColumnInput.NewName != columnName {
+		if !common.IsValidIdentifier(*updateColumnInput.NewName) {
+			return fmt.Errorf("invalid new column name '%s'", *updateColumnInput.NewName)
 		}
 		alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s RENAME COLUMN %s TO %s;",
-			quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), quoteIdent(*alterColumnRequest.NewName)))
-		columnName = *alterColumnRequest.NewName
+			quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), quoteIdent(*updateColumnInput.NewName)))
+		columnName = *updateColumnInput.NewName
 	}
 
 	// Change Type
-	if alterColumnRequest.NewType != nil && *alterColumnRequest.NewType != "" {
-		safeType := sanitizeType(*alterColumnRequest.NewType)
+	if updateColumnInput.NewType != nil && *updateColumnInput.NewType != "" {
+		safeType := sanitizeType(*updateColumnInput.NewType)
 		alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s ALTER COLUMN %s TYPE %s USING %s::%s;",
 			quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), safeType, quoteIdent(columnName), safeType))
 	}
 
 	// Change Nullability
-	if alterColumnRequest.IsNullable != nil {
-		if *alterColumnRequest.IsNullable {
+	if updateColumnInput.IsNullable != nil {
+		if *updateColumnInput.IsNullable {
 			alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s ALTER COLUMN %s DROP NOT NULL;",
 				quoteIdent(schema), quoteIdent(table), quoteIdent(columnName)))
 		} else {
@@ -398,14 +398,14 @@ func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnN
 	}
 
 	// Change Default
-	if alterColumnRequest.DefaultValue != nil {
-		if *alterColumnRequest.DefaultValue == "" {
+	if updateColumnInput.DefaultValue != nil {
+		if *updateColumnInput.DefaultValue == "" {
 			alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s ALTER COLUMN %s DROP DEFAULT;",
 				quoteIdent(schema), quoteIdent(table), quoteIdent(columnName)))
 		} else {
-			safeDef, defaultErr := sanitizeDefaultValue(*alterColumnRequest.DefaultValue)
-			if defaultErr != nil {
-				return defaultErr
+			safeDef, err := sanitizeDefaultValue(*updateColumnInput.DefaultValue)
+			if err != nil {
+				return err
 			}
 			alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s ALTER COLUMN %s SET DEFAULT %s;",
 				quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), safeDef))
@@ -456,7 +456,7 @@ func (engine *DDLEngine) DropColumn(ctx context.Context, schema, table, columnNa
 }
 
 // ListIndexes returns all indexes created on the specified table.
-func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) ([]IndexDefinition, error) {
+func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) ([]Index, error) {
 	if schema == "" {
 		schema = "public"
 	}
@@ -489,45 +489,45 @@ func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) 
 	}
 	defer rows.Close()
 
-	var indexes []IndexDefinition
+	var indexes []Index
 	for rows.Next() {
-		var indexDefinition IndexDefinition
-		if scanErr := rows.Scan(&indexDefinition.IndexName, &indexDefinition.Type, &indexDefinition.IsUnique, &indexDefinition.Columns); scanErr == nil {
-			indexes = append(indexes, indexDefinition)
+		var index Index
+		if scanErr := rows.Scan(&index.IndexName, &index.Type, &index.IsUnique, &index.Columns); scanErr == nil {
+			indexes = append(indexes, index)
 		}
 	}
 	return indexes, nil
 }
 
 // CreateIndex creates an index on the table.
-func (engine *DDLEngine) CreateIndex(ctx context.Context, schema, table string, createIndexRequest CreateIndexRequest) error {
+func (engine *DDLEngine) CreateIndex(ctx context.Context, schema, table string, createIndexInput CreateIndexInput) error {
 	if schema == "" {
 		schema = "public"
 	}
 	if IsProtectedSchema(schema) {
 		return fmt.Errorf("cannot create index in protected schema '%s'", schema)
 	}
-	if !common.IsValidIdentifier(table) || len(createIndexRequest.Columns) == 0 {
+	if !common.IsValidIdentifier(table) || len(createIndexInput.Columns) == 0 {
 		return fmt.Errorf("table and at least one column required")
 	}
 
-	indexName := createIndexRequest.IndexName
+	indexName := createIndexInput.IndexName
 	if indexName == "" {
-		indexName = fmt.Sprintf("idx_%s_%s_%s", schema, table, strings.Join(createIndexRequest.Columns, "_"))
+		indexName = fmt.Sprintf("idx_%s_%s_%s", schema, table, strings.Join(createIndexInput.Columns, "_"))
 	}
 	if !common.IsValidIdentifier(indexName) {
 		return fmt.Errorf("invalid index name '%s'", indexName)
 	}
 
 	var quotedColumns []string
-	for _, columnName := range createIndexRequest.Columns {
+	for _, columnName := range createIndexInput.Columns {
 		if !common.IsValidIdentifier(columnName) {
 			return fmt.Errorf("invalid index column '%s'", columnName)
 		}
 		quotedColumns = append(quotedColumns, quoteIdent(columnName))
 	}
 
-	indexType := strings.ToLower(createIndexRequest.Type)
+	indexType := strings.ToLower(createIndexInput.Type)
 	if indexType == "" {
 		indexType = "btree"
 	}
@@ -538,7 +538,7 @@ func (engine *DDLEngine) CreateIndex(ctx context.Context, schema, table string, 
 	}
 
 	uniqueClause := ""
-	if createIndexRequest.IsUnique {
+	if createIndexInput.IsUnique {
 		uniqueClause = "UNIQUE "
 	}
 
@@ -677,7 +677,7 @@ func (engine *DDLEngine) ForceRLS(ctx context.Context, schema, table string, for
 }
 
 // ListPolicies returns all RLS policies for the specified table.
-func (engine *DDLEngine) ListPolicies(ctx context.Context, schema, table string) ([]PolicyDefinition, error) {
+func (engine *DDLEngine) ListPolicies(ctx context.Context, schema, table string) ([]Policy, error) {
 	if schema == "" {
 		schema = "public"
 	}
@@ -706,29 +706,29 @@ func (engine *DDLEngine) ListPolicies(ctx context.Context, schema, table string)
 	}
 	defer rows.Close()
 
-	var policies []PolicyDefinition
+	var policies []Policy
 	for rows.Next() {
-		policyDefinition := PolicyDefinition{Schema: schema, Table: table}
-		if scanErr := rows.Scan(&policyDefinition.Name, &policyDefinition.Permissive, &policyDefinition.Command, &policyDefinition.Roles, &policyDefinition.UsingExpression, &policyDefinition.CheckExpression); scanErr == nil {
-			policies = append(policies, policyDefinition)
+		policy := Policy{Schema: schema, Table: table}
+		if scanErr := rows.Scan(&policy.Name, &policy.Permissive, &policy.Command, &policy.Roles, &policy.UsingExpression, &policy.CheckExpression); scanErr == nil {
+			policies = append(policies, policy)
 		}
 	}
 	return policies, nil
 }
 
 // CreatePolicy creates a Row-Level Security policy on a table.
-func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string, createPolicyRequest CreatePolicyRequest) error {
+func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string, createPolicyInput CreatePolicyInput) error {
 	if schema == "" {
 		schema = "public"
 	}
 	if IsProtectedSchema(schema) {
 		return fmt.Errorf("cannot manage policies in protected schema '%s'", schema)
 	}
-	if !common.IsValidIdentifier(table) || !common.IsValidIdentifier(createPolicyRequest.Name) {
+	if !common.IsValidIdentifier(table) || !common.IsValidIdentifier(createPolicyInput.Name) {
 		return fmt.Errorf("invalid table or policy name")
 	}
 
-	policyCommand := strings.ToUpper(strings.TrimSpace(createPolicyRequest.Command))
+	policyCommand := strings.ToUpper(strings.TrimSpace(createPolicyInput.Command))
 	if policyCommand == "" {
 		policyCommand = "ALL"
 	}
@@ -738,7 +738,7 @@ func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string,
 		return fmt.Errorf("invalid policy command '%s', must be ALL, SELECT, INSERT, UPDATE, or DELETE", policyCommand)
 	}
 
-	permissive := strings.ToUpper(strings.TrimSpace(createPolicyRequest.Permissive))
+	permissive := strings.ToUpper(strings.TrimSpace(createPolicyInput.Permissive))
 	if permissive == "" {
 		permissive = "PERMISSIVE"
 	}
@@ -749,10 +749,10 @@ func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string,
 	}
 
 	var roles []string
-	if len(createPolicyRequest.Roles) == 0 {
+	if len(createPolicyInput.Roles) == 0 {
 		roles = []string{"PUBLIC"}
 	} else {
-		for _, roleName := range createPolicyRequest.Roles {
+		for _, roleName := range createPolicyInput.Roles {
 			trimmed := strings.TrimSpace(roleName)
 			if strings.EqualFold(trimmed, "public") {
 				roles = append(roles, "PUBLIC")
@@ -766,24 +766,24 @@ func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string,
 
 	var clauses []string
 	clauses = append(clauses, fmt.Sprintf("CREATE POLICY %s ON %s.%s AS %s FOR %s TO %s",
-		quoteIdent(createPolicyRequest.Name), quoteIdent(schema), quoteIdent(table), permissive, policyCommand, strings.Join(roles, ", ")))
+		quoteIdent(createPolicyInput.Name), quoteIdent(schema), quoteIdent(table), permissive, policyCommand, strings.Join(roles, ", ")))
 
-	if createPolicyRequest.UsingExpression != "" {
-		if strings.Contains(createPolicyRequest.UsingExpression, ";") || strings.Contains(createPolicyRequest.UsingExpression, "--") || strings.Contains(createPolicyRequest.UsingExpression, "/*") {
+	if createPolicyInput.UsingExpression != "" {
+		if strings.Contains(createPolicyInput.UsingExpression, ";") || strings.Contains(createPolicyInput.UsingExpression, "--") || strings.Contains(createPolicyInput.UsingExpression, "/*") {
 			return fmt.Errorf("using expression contains forbidden characters")
 		}
-		clauses = append(clauses, fmt.Sprintf("USING (%s)", createPolicyRequest.UsingExpression))
+		clauses = append(clauses, fmt.Sprintf("USING (%s)", createPolicyInput.UsingExpression))
 	}
-	if createPolicyRequest.CheckExpression != "" {
-		if strings.Contains(createPolicyRequest.CheckExpression, ";") || strings.Contains(createPolicyRequest.CheckExpression, "--") || strings.Contains(createPolicyRequest.CheckExpression, "/*") {
+	if createPolicyInput.CheckExpression != "" {
+		if strings.Contains(createPolicyInput.CheckExpression, ";") || strings.Contains(createPolicyInput.CheckExpression, "--") || strings.Contains(createPolicyInput.CheckExpression, "/*") {
 			return fmt.Errorf("check expression contains forbidden characters")
 		}
-		clauses = append(clauses, fmt.Sprintf("WITH CHECK (%s)", createPolicyRequest.CheckExpression))
+		clauses = append(clauses, fmt.Sprintf("WITH CHECK (%s)", createPolicyInput.CheckExpression))
 	}
 
 	policySQLStatement := strings.Join(clauses, " ") + ";"
 	if _, execErr := engine.db.Exec(ctx, policySQLStatement); execErr != nil {
-		return fmt.Errorf("failed to create policy '%s' on %s.%s: %w", createPolicyRequest.Name, schema, table, execErr)
+		return fmt.Errorf("failed to create policy '%s' on %s.%s: %w", createPolicyInput.Name, schema, table, execErr)
 	}
 	return nil
 }
@@ -807,20 +807,20 @@ func (engine *DDLEngine) DropPolicy(ctx context.Context, schema, table, policyNa
 	return nil
 }
 
-func buildColumnClause(columnDefinition ColumnDefinition) string {
-	safeType := sanitizeType(columnDefinition.Type)
+func buildColumnClause(column Column) string {
+	safeType := sanitizeType(column.Type)
 	var parts []string
-	parts = append(parts, quoteIdent(columnDefinition.Name), safeType)
+	parts = append(parts, quoteIdent(column.Name), safeType)
 
-	if !columnDefinition.IsNullable {
+	if !column.IsNullable {
 		parts = append(parts, "NOT NULL")
 	}
-	if columnDefinition.DefaultValue != nil && *columnDefinition.DefaultValue != "" {
-		if safeDef, err := sanitizeDefaultValue(*columnDefinition.DefaultValue); err == nil {
+	if column.DefaultValue != nil && *column.DefaultValue != "" {
+		if safeDef, err := sanitizeDefaultValue(*column.DefaultValue); err == nil {
 			parts = append(parts, "DEFAULT "+safeDef)
 		}
 	}
-	if columnDefinition.IsUnique {
+	if column.IsUnique {
 		parts = append(parts, "UNIQUE")
 	}
 

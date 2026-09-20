@@ -26,10 +26,10 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Create table for index testing
-	createTableBody, err := json.Marshal(CreateTableRequest{
+	createTableBody, err := json.Marshal(CreateTableInput{
 		Schema: "public",
 		Name:   "index_test_table",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", IsPrimaryKey: true},
 			{Name: "email", Type: "varchar(200)", IsNullable: false},
 		},
@@ -39,13 +39,13 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	}
 	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createTableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(createTableResponseRecorder, createTableRequest)
+	controlPlaneHandler.handleCreateTable(createTableResponseRecorder, createTableRequest)
 	if createTableResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create table, got %d", createTableResponseRecorder.Code)
 	}
 
 	// 1. Create Index
-	createIndexBody, err := json.Marshal(CreateIndexRequest{
+	createIndexBody, err := json.Marshal(CreateIndexInput{
 		IndexName: "idx_index_test_email",
 		Columns:   []string{"email"},
 		Type:      "btree",
@@ -57,13 +57,13 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	createIndexRequest.SetPathValue("schema_name", "public")
 	createIndexRequest.SetPathValue("table_name", "index_test_table")
 	createIndexResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateIndex(createIndexResponseRecorder, createIndexRequest)
+	controlPlaneHandler.handleCreateIndex(createIndexResponseRecorder, createIndexRequest)
 	if createIndexResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create index, got %d", createIndexResponseRecorder.Code)
 	}
 
 	// Create Index error (invalid column)
-	invalidIndexBody, err := json.Marshal(CreateIndexRequest{
+	invalidIndexBody, err := json.Marshal(CreateIndexInput{
 		IndexName: "idx_invalid",
 		Columns:   []string{"nonexistent_column"},
 	})
@@ -74,7 +74,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	invalidIndexRequest.SetPathValue("schema_name", "public")
 	invalidIndexRequest.SetPathValue("table_name", "index_test_table")
 	invalidIndexResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateIndex(invalidIndexResponseRecorder, invalidIndexRequest)
+	controlPlaneHandler.handleCreateIndex(invalidIndexResponseRecorder, invalidIndexRequest)
 	if invalidIndexResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid column, got %d", invalidIndexResponseRecorder.Code)
 	}
@@ -84,7 +84,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	listRequest.SetPathValue("schema_name", "public")
 	listRequest.SetPathValue("table_name", "index_test_table")
 	listResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListIndexes(listResponseRecorder, listRequest)
+	controlPlaneHandler.handleListIndexes(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list indexes, got %d", listResponseRecorder.Code)
 	}
@@ -94,7 +94,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	invalidListRequest.SetPathValue("schema_name", "core")
 	invalidListRequest.SetPathValue("table_name", "index_test_table")
 	invalidListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListIndexes(invalidListResponseRecorder, invalidListRequest)
+	controlPlaneHandler.handleListIndexes(invalidListResponseRecorder, invalidListRequest)
 	if invalidListResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on protected schema table, got %d", invalidListResponseRecorder.Code)
 	}
@@ -105,7 +105,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	dropRequest.SetPathValue("table_name", "index_test_table")
 	dropRequest.SetPathValue("index_name", "idx_index_test_email")
 	dropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropIndex(dropResponseRecorder, dropRequest)
+	controlPlaneHandler.handleDeleteIndex(dropResponseRecorder, dropRequest)
 	if dropResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on drop index, got %d", dropResponseRecorder.Code)
 	}
@@ -116,7 +116,7 @@ func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
 	invalidDropRequest.SetPathValue("table_name", "index_test_table")
 	invalidDropRequest.SetPathValue("index_name", "idx_index_test_email")
 	invalidDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropIndex(invalidDropResponseRecorder, invalidDropRequest)
+	controlPlaneHandler.handleDeleteIndex(invalidDropResponseRecorder, invalidDropRequest)
 	if invalidDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on drop protected schema index, got %d", invalidDropResponseRecorder.Code)
 	}

@@ -26,10 +26,10 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Create table for policy testing
-	createTableBody, err := json.Marshal(CreateTableRequest{
+	createTableBody, err := json.Marshal(CreateTableInput{
 		Schema: "public",
 		Name:   "policy_test_table",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", IsPrimaryKey: true},
 			{Name: "user_id", Type: "uuid", IsNullable: false},
 		},
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	}
 	createTableRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createTableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(createTableResponseRecorder, createTableRequest)
+	controlPlaneHandler.handleCreateTable(createTableResponseRecorder, createTableRequest)
 	if createTableResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create table, got %d", createTableResponseRecorder.Code)
 	}
@@ -49,7 +49,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	enableRequest.SetPathValue("schema_name", "public")
 	enableRequest.SetPathValue("table_name", "policy_test_table")
 	enableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(enableResponseRecorder, enableRequest)
+	controlPlaneHandler.handleToggleRLS(enableResponseRecorder, enableRequest)
 	if enableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on enable RLS, got %d", enableResponseRecorder.Code)
 	}
@@ -59,7 +59,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	forceRequest.SetPathValue("schema_name", "public")
 	forceRequest.SetPathValue("table_name", "policy_test_table")
 	forceResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(forceResponseRecorder, forceRequest)
+	controlPlaneHandler.handleToggleRLS(forceResponseRecorder, forceRequest)
 	if forceResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on force RLS, got %d", forceResponseRecorder.Code)
 	}
@@ -69,7 +69,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	unforceByFlagRequest.SetPathValue("schema_name", "public")
 	unforceByFlagRequest.SetPathValue("table_name", "policy_test_table")
 	unforceByFlagResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(unforceByFlagResponseRecorder, unforceByFlagRequest)
+	controlPlaneHandler.handleToggleRLS(unforceByFlagResponseRecorder, unforceByFlagRequest)
 	if unforceByFlagResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on unforce by flag RLS, got %d", unforceByFlagResponseRecorder.Code)
 	}
@@ -79,7 +79,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	unforceRequest.SetPathValue("schema_name", "public")
 	unforceRequest.SetPathValue("table_name", "policy_test_table")
 	unforceResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(unforceResponseRecorder, unforceRequest)
+	controlPlaneHandler.handleToggleRLS(unforceResponseRecorder, unforceRequest)
 	if unforceResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on UNFORCE RLS, got %d", unforceResponseRecorder.Code)
 	}
@@ -89,7 +89,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	pathEnableRequest.SetPathValue("schema_name", "public")
 	pathEnableRequest.SetPathValue("table_name", "policy_test_table")
 	pathEnableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(pathEnableResponseRecorder, pathEnableRequest)
+	controlPlaneHandler.handleToggleRLS(pathEnableResponseRecorder, pathEnableRequest)
 	if pathEnableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on path /enable, got %d", pathEnableResponseRecorder.Code)
 	}
@@ -98,7 +98,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	pathForceRequest.SetPathValue("schema_name", "public")
 	pathForceRequest.SetPathValue("table_name", "policy_test_table")
 	pathForceResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(pathForceResponseRecorder, pathForceRequest)
+	controlPlaneHandler.handleToggleRLS(pathForceResponseRecorder, pathForceRequest)
 	if pathForceResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on path /force, got %d", pathForceResponseRecorder.Code)
 	}
@@ -107,7 +107,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	pathDisableRequest.SetPathValue("schema_name", "public")
 	pathDisableRequest.SetPathValue("table_name", "policy_test_table")
 	pathDisableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(pathDisableResponseRecorder, pathDisableRequest)
+	controlPlaneHandler.handleToggleRLS(pathDisableResponseRecorder, pathDisableRequest)
 	if pathDisableResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on path /disable, got %d", pathDisableResponseRecorder.Code)
 	}
@@ -117,7 +117,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	nonExistentRLSRequest.SetPathValue("schema_name", "public")
 	nonExistentRLSRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentRLSResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(nonExistentRLSResponseRecorder, nonExistentRLSRequest)
+	controlPlaneHandler.handleToggleRLS(nonExistentRLSResponseRecorder, nonExistentRLSRequest)
 	if nonExistentRLSResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent table RLS enable, got %d", nonExistentRLSResponseRecorder.Code)
 	}
@@ -126,7 +126,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	nonExistentRLSDisableRequest.SetPathValue("schema_name", "public")
 	nonExistentRLSDisableRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentRLSDisableResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(nonExistentRLSDisableResponseRecorder, nonExistentRLSDisableRequest)
+	controlPlaneHandler.handleToggleRLS(nonExistentRLSDisableResponseRecorder, nonExistentRLSDisableRequest)
 	if nonExistentRLSDisableResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent table RLS disable, got %d", nonExistentRLSDisableResponseRecorder.Code)
 	}
@@ -135,7 +135,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	nonExistentRLSForceRequest.SetPathValue("schema_name", "public")
 	nonExistentRLSForceRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentRLSForceResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(nonExistentRLSForceResponseRecorder, nonExistentRLSForceRequest)
+	controlPlaneHandler.handleToggleRLS(nonExistentRLSForceResponseRecorder, nonExistentRLSForceRequest)
 	if nonExistentRLSForceResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent table RLS force, got %d", nonExistentRLSForceResponseRecorder.Code)
 	}
@@ -144,13 +144,13 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	nonExistentRLSUnforceRequest.SetPathValue("schema_name", "public")
 	nonExistentRLSUnforceRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentRLSUnforceResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(nonExistentRLSUnforceResponseRecorder, nonExistentRLSUnforceRequest)
+	controlPlaneHandler.handleToggleRLS(nonExistentRLSUnforceResponseRecorder, nonExistentRLSUnforceRequest)
 	if nonExistentRLSUnforceResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent table RLS unforce, got %d", nonExistentRLSUnforceResponseRecorder.Code)
 	}
 
 	// 6. Create Policy
-	createPolicyBody, err := json.Marshal(CreatePolicyRequest{
+	createPolicyBody, err := json.Marshal(CreatePolicyInput{
 		Name:            "allow_all_authenticated",
 		Command:         "SELECT",
 		UsingExpression: "true",
@@ -162,13 +162,13 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	createPolicyRequest.SetPathValue("schema_name", "public")
 	createPolicyRequest.SetPathValue("table_name", "policy_test_table")
 	createPolicyResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreatePolicy(createPolicyResponseRecorder, createPolicyRequest)
+	controlPlaneHandler.handleCreatePolicy(createPolicyResponseRecorder, createPolicyRequest)
 	if createPolicyResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create policy, got %d, body: %s", createPolicyResponseRecorder.Code, createPolicyResponseRecorder.Body.String())
 	}
 
 	// Create Policy error (invalid expression)
-	invalidPolicyBody, err := json.Marshal(CreatePolicyRequest{
+	invalidPolicyBody, err := json.Marshal(CreatePolicyInput{
 		Name:            "invalid_policy",
 		Command:         "SELECT",
 		UsingExpression: "syntax error here",
@@ -180,7 +180,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	invalidPolicyRequest.SetPathValue("schema_name", "public")
 	invalidPolicyRequest.SetPathValue("table_name", "policy_test_table")
 	invalidPolicyResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreatePolicy(invalidPolicyResponseRecorder, invalidPolicyRequest)
+	controlPlaneHandler.handleCreatePolicy(invalidPolicyResponseRecorder, invalidPolicyRequest)
 	if invalidPolicyResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid policy syntax, got %d", invalidPolicyResponseRecorder.Code)
 	}
@@ -190,7 +190,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	listRequest.SetPathValue("schema_name", "public")
 	listRequest.SetPathValue("table_name", "policy_test_table")
 	listResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListPolicies(listResponseRecorder, listRequest)
+	controlPlaneHandler.handleListPolicies(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list policies, got %d", listResponseRecorder.Code)
 	}
@@ -200,7 +200,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	invalidListRequest.SetPathValue("schema_name", "core")
 	invalidListRequest.SetPathValue("table_name", "policy_test_table")
 	invalidListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListPolicies(invalidListResponseRecorder, invalidListRequest)
+	controlPlaneHandler.handleListPolicies(invalidListResponseRecorder, invalidListRequest)
 	if invalidListResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on protected schema table policies list, got %d", invalidListResponseRecorder.Code)
 	}
@@ -211,7 +211,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	dropRequest.SetPathValue("table_name", "policy_test_table")
 	dropRequest.SetPathValue("policy_name", "allow_all_authenticated")
 	dropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropPolicy(dropResponseRecorder, dropRequest)
+	controlPlaneHandler.handleDeletePolicy(dropResponseRecorder, dropRequest)
 	if dropResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on drop policy, got %d", dropResponseRecorder.Code)
 	}
@@ -222,7 +222,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	invalidDropRequest.SetPathValue("table_name", "policy_test_table")
 	invalidDropRequest.SetPathValue("policy_name", "allow_all_authenticated")
 	invalidDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropPolicy(invalidDropResponseRecorder, invalidDropRequest)
+	controlPlaneHandler.handleDeletePolicy(invalidDropResponseRecorder, invalidDropRequest)
 	if invalidDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on drop protected schema policy, got %d", invalidDropResponseRecorder.Code)
 	}
@@ -233,7 +233,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	modeRequest.SetPathValue("schema_name", "public")
 	modeRequest.SetPathValue("table_name", "policy_test_table")
 	modeResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(modeResponseRecorder, modeRequest)
+	controlPlaneHandler.handleToggleRLS(modeResponseRecorder, modeRequest)
 	if modeResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on toggle RLS with mode ENABLE, got %d", modeResponseRecorder.Code)
 	}
@@ -243,7 +243,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	unforceBodyRequest.SetPathValue("schema_name", "public")
 	unforceBodyRequest.SetPathValue("table_name", "policy_test_table")
 	unforceBodyResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(unforceBodyResponseRecorder, unforceBodyRequest)
+	controlPlaneHandler.handleToggleRLS(unforceBodyResponseRecorder, unforceBodyRequest)
 	if unforceBodyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on toggle RLS UNFORCE, got %d", unforceBodyResponseRecorder.Code)
 	}
@@ -253,7 +253,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	forceFalseRequest.SetPathValue("schema_name", "public")
 	forceFalseRequest.SetPathValue("table_name", "policy_test_table")
 	forceFalseResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(forceFalseResponseRecorder, forceFalseRequest)
+	controlPlaneHandler.handleToggleRLS(forceFalseResponseRecorder, forceFalseRequest)
 	if forceFalseResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on toggle RLS FORCE false, got %d", forceFalseResponseRecorder.Code)
 	}
@@ -263,7 +263,7 @@ func TestDataControlPlaneHandlerPolicyLifecycleIntegration(t *testing.T) {
 	unknownRequest.SetPathValue("schema_name", "public")
 	unknownRequest.SetPathValue("table_name", "policy_test_table")
 	unknownResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleToggleRLS(unknownResponseRecorder, unknownRequest)
+	controlPlaneHandler.handleToggleRLS(unknownResponseRecorder, unknownRequest)
 	if unknownResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on toggle RLS unknown action, got %d", unknownResponseRecorder.Code)
 	}

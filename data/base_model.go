@@ -15,108 +15,119 @@ type ConfigRecord struct {
 	LastUpdatedAt time.Time       `json:"last_updated_at"`
 }
 
-// TableRecord represents a dynamic row record in a database table.
-type TableRecord struct {
+// Record represents a dynamic row record in a database table.
+type Record struct {
 	ID         string            `json:"id,omitempty"`
 	Properties map[string]string `json:"properties,omitempty"`
 }
 
-// TableRowsResponse represents dynamic row query results.
-type TableRowsResponse struct {
-	Data  []TableRecord `json:"data"`
-	Count *int          `json:"count,omitempty"`
+// ListRecordsResponse represents dynamic row query results.
+type ListRecordsResponse struct {
+	Data  []Record `json:"data"`
+	Count *int     `json:"count,omitempty"`
 }
 
-// TableRowResponse represents a single row result.
-type TableRowResponse struct {
-	Data TableRecord `json:"data"`
+// GetRecordResponse represents a single row result.
+type GetRecordResponse struct {
+	Data Record `json:"data"`
 }
 
-// InsertRowPayload represents single or bulk row insert data.
-type InsertRowPayload struct {
-	Data []TableRecord `json:"data,omitempty"`
+// CreateRecordInput represents single or bulk row insert data.
+type CreateRecordInput struct {
+	Data []Record `json:"data,omitempty"`
 }
 
-// UpdateRowPayload represents row partial update data.
-type UpdateRowPayload struct {
-	Data TableRecord `json:"data,omitempty"`
+// CreateRecordResponse represents single or bulk row insert results.
+type CreateRecordResponse struct {
+	Data  []Record `json:"data"`
+	Count *int     `json:"count,omitempty"`
 }
 
-// ExecuteFunctionRequest represents stored function invocation parameters.
-type ExecuteFunctionRequest map[string]any
+// UpdateRecordInput represents row partial update data.
+type UpdateRecordInput struct {
+	Data Record `json:"data,omitempty"`
+}
+
+// UpdateRecordResponse represents row update results.
+type UpdateRecordResponse struct {
+	Data Record `json:"data"`
+}
+
+// ExecuteFunctionInput represents stored function invocation parameters.
+type ExecuteFunctionInput map[string]any
 
 // ExecuteFunctionResponse represents stored function invocation results.
 type ExecuteFunctionResponse any
 
-// KVGetResponse represents an ephemeral KV retrieval response.
-type KVGetResponse struct {
+// GetKVResponse represents an ephemeral KV retrieval response.
+type GetKVResponse struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
-// KVSetRequest represents an ephemeral KV set payload.
-type KVSetRequest struct {
+// SetKVInput represents an ephemeral KV set payload.
+type SetKVInput struct {
 	Value string `json:"value"`
 	TTL   int    `json:"ttl,omitempty"`
 }
 
-// KVSetResponse represents an ephemeral KV set response.
-type KVSetResponse struct {
+// SetKVResponse represents an ephemeral KV set response.
+type SetKVResponse struct {
 	Key     string `json:"key"`
 	Status  string `json:"status"`
 	Created bool   `json:"created,omitempty"`
 	TTL     int    `json:"ttl,omitempty"`
 }
 
-// KVMGetRequest represents a multi-key get payload.
-type KVMGetRequest struct {
+// GetMultipleKVInput represents a multi-key get payload.
+type GetMultipleKVInput struct {
 	Keys []string `json:"keys"`
 }
 
-// KVMGetResponse represents a multi-key get response.
-type KVMGetResponse struct {
+// GetMultipleKVResponse represents a multi-key get response.
+type GetMultipleKVResponse struct {
 	Values map[string]string `json:"values"`
 }
 
-// KVMSetRequest represents a batch key-value set payload.
-type KVMSetRequest struct {
+// SetMultipleKVInput represents a batch key-value set payload.
+type SetMultipleKVInput struct {
 	Entries map[string]string `json:"entries"`
 	TTL     int               `json:"ttl,omitempty"`
 }
 
-// KVMSetResponse represents a batch key-value set response.
-type KVMSetResponse struct {
+// SetMultipleKVResponse represents a batch key-value set response.
+type SetMultipleKVResponse struct {
 	Status string `json:"status"`
 	Count  int    `json:"count"`
 }
 
-// KVIncrementRequest represents an atomic increment payload.
-type KVIncrementRequest struct {
+// IncrementKVInput represents an atomic increment payload.
+type IncrementKVInput struct {
 	Key  string `json:"key"`
 	Step *int64 `json:"step,omitempty"`
 	TTL  int    `json:"ttl,omitempty"`
 }
 
-// KVIncrementResponse represents an atomic increment response.
-type KVIncrementResponse struct {
+// IncrementKVResponse represents an atomic increment response.
+type IncrementKVResponse struct {
 	Key   string `json:"key"`
 	Value int64  `json:"value"`
 }
 
-// KVTouchRequest represents a TTL refresh payload for PATCH.
-type KVTouchRequest struct {
+// TouchKVInput represents a TTL refresh payload for PATCH.
+type TouchKVInput struct {
 	TTL int `json:"ttl"`
 }
 
-// KVTouchResponse represents a TTL refresh response.
-type KVTouchResponse struct {
+// TouchKVResponse represents a TTL refresh response.
+type TouchKVResponse struct {
 	Key    string `json:"key"`
 	Status string `json:"status"`
 	TTL    int    `json:"ttl"`
 }
 
-// GraphQLRequest represents standard GraphQL HTTP request payload.
-type GraphQLRequest struct {
+// ExecuteGraphQLInput represents standard GraphQL HTTP request payload.
+type ExecuteGraphQLInput struct {
 	Query         string         `json:"query"`
 	OperationName string         `json:"operationName,omitempty"`
 	Variables     map[string]any `json:"variables,omitempty"`
@@ -136,8 +147,8 @@ type GraphQLError struct {
 	Extensions map[string]any    `json:"extensions,omitempty"`
 }
 
-// GraphQLResponse represents standard GraphQL JSON response envelope.
-type GraphQLResponse struct {
+// ExecuteGraphQLResponse represents standard GraphQL JSON response envelope.
+type ExecuteGraphQLResponse struct {
 	Data   any            `json:"data,omitempty"`
 	Errors []GraphQLError `json:"errors,omitempty"`
 }
