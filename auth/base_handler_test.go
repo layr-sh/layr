@@ -184,9 +184,9 @@ func TestAuthHandlerResolveCallerUnit(t *testing.T) {
 
 	// resolveAnonymousCaller with nil db
 	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	resolvedAnonymousUserRecord, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(validRequest)
-	if resolvedAnonymousUserRecord != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected ErrAnonymousSessionNotFound with nil db, got: %+v (err: %v)", resolvedAnonymousUserRecord, resolveAnonymousCallerErr)
+	resolvedAnonymousUser, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(validRequest)
+	if resolvedAnonymousUser != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected ErrAnonymousSessionNotFound with nil db, got: %+v (err: %v)", resolvedAnonymousUser, resolveAnonymousCallerErr)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 
 	testPhone := "+1234567890"
 	testEmail := "user@example.com"
-	userRecord := UserRecord{
+	user := User{
 		ID:    uuid.NewV7().String(),
 		Role:  "authenticated",
 		Email: &testEmail,
@@ -219,7 +219,7 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 
 	responseRecorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
-	baseHandler.issueSessionResponse(responseRecorder, request, userRecord)
+	baseHandler.issueSessionResponse(responseRecorder, request, user)
 
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got: %d", responseRecorder.Code)
@@ -228,7 +228,7 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 	// KVStore Set error branch
 	testKVDriver.setErr = errors.New("simulated kv store set error")
 	kvErrResponseRecorder := httptest.NewRecorder()
-	baseHandler.issueSessionResponse(kvErrResponseRecorder, request, userRecord)
+	baseHandler.issueSessionResponse(kvErrResponseRecorder, request, user)
 	if kvErrResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 even if fast path cache fails, got: %d", kvErrResponseRecorder.Code)
 	}

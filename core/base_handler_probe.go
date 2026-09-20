@@ -9,10 +9,10 @@ import (
 )
 
 // /healthz - Liveness probe
-func (server *Server) handleHealthz(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetHealth(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(HealthResponse{
+	_ = json.NewEncoder(responseWriter).Encode(GetHealthResponse{
 		Status:        "healthy",
 		UptimeSeconds: time.Since(server.uptime).Seconds(),
 		Timestamp:     time.Now().UTC().Format(time.RFC3339),
@@ -20,7 +20,7 @@ func (server *Server) handleHealthz(responseWriter http.ResponseWriter, request 
 }
 
 // /readyz - Readiness probe
-func (server *Server) handleReadyz(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetReadiness(responseWriter http.ResponseWriter, request *http.Request) {
 	ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
 	defer cancel()
 
@@ -40,7 +40,7 @@ func (server *Server) handleReadyz(responseWriter http.ResponseWriter, request *
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(statusCode)
-	_ = json.NewEncoder(responseWriter).Encode(ReadyResponse{
+	_ = json.NewEncoder(responseWriter).Encode(GetReadinessResponse{
 		Status:          statusText,
 		Database:        databaseStatus,
 		EnabledServices: GetConfig().GetEnabledServices(),

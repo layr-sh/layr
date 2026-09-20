@@ -14,7 +14,7 @@ import (
 
 const defaultPasskeyChallengeTTL = 5 * time.Minute
 
-func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleBeginPasskeySignUp(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling passkey sign up initiation request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
@@ -22,46 +22,46 @@ func (handler *BaseHandler) handlePasskeySignUp(responseWriter http.ResponseWrit
 		return
 	}
 
-	var passkeySignUpRequest PasskeySignUpRequest
+	var beginPasskeySignUpInput BeginPasskeySignUpInput
 	if request.Body != nil && request.ContentLength != 0 {
-		if err := json.NewDecoder(request.Body).Decode(&passkeySignUpRequest); err != nil {
+		if err := json.NewDecoder(request.Body).Decode(&beginPasskeySignUpInput); err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 			return
 		}
 	}
 
-	if passkeySignUpRequest.UserID == "" {
+	if beginPasskeySignUpInput.UserID == "" {
 		if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
-			passkeySignUpRequest.UserID = authContext.UserID
+			beginPasskeySignUpInput.UserID = authContext.UserID
 		}
 	}
 
-	if passkeySignUpRequest.UserID == "" {
+	if beginPasskeySignUpInput.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID required")
 		return
 	}
 
-	if passkeySignUpRequest.UserName == "" {
-		passkeySignUpRequest.UserName = "User"
+	if beginPasskeySignUpInput.UserName == "" {
+		beginPasskeySignUpInput.UserName = "User"
 	}
 
-	signUpOptions, err := handler.passkeyManager.BeginSignUp(passkeySignUpRequest.UserID, passkeySignUpRequest.UserName)
+	signUpOptions, err := handler.passkeyManager.BeginSignUp(beginPasskeySignUpInput.UserID, beginPasskeySignUpInput.UserName)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("passkey sign up challenge generation failed: %v", err))
 		return
 	}
 
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signUpOptions.Challenge, passkeySignUpRequest.UserID, defaultPasskeyChallengeTTL)
+		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signUpOptions.Challenge, beginPasskeySignUpInput.UserID, defaultPasskeyChallengeTTL)
 	}
 
-	log.Debugf("passkey sign up ceremony initiated for user %s", passkeySignUpRequest.UserID)
+	log.Debugf("passkey sign up ceremony initiated for user %s", beginPasskeySignUpInput.UserID)
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(signUpOptions)
 }
 
-func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling passkey sign up verification request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
@@ -69,31 +69,31 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		return
 	}
 
-	var passkeySignUpVerifyRequest PasskeySignUpVerifyRequest
-	if err := json.NewDecoder(request.Body).Decode(&passkeySignUpVerifyRequest); err != nil {
+	var verifyPasskeySignUpInput VerifyPasskeySignUpInput
+	if err := json.NewDecoder(request.Body).Decode(&verifyPasskeySignUpInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	if passkeySignUpVerifyRequest.UserID == "" {
+	if verifyPasskeySignUpInput.UserID == "" {
 		if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
-			passkeySignUpVerifyRequest.UserID = authContext.UserID
+			verifyPasskeySignUpInput.UserID = authContext.UserID
 		}
 	}
 
-	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(passkeySignUpVerifyRequest.Challenge)
+	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignUpInput.Challenge)
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+passkeySignUpVerifyRequest.Challenge)
+		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+verifyPasskeySignUpInput.Challenge)
 	}
-	if err != nil || (expectedUserID != "" && expectedUserID != passkeySignUpVerifyRequest.UserID) {
+	if err != nil || (expectedUserID != "" && expectedUserID != verifyPasskeySignUpInput.UserID) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
 
-	credentialIDBytes := []byte(passkeySignUpVerifyRequest.CredentialID)
-	publicKeyBytes := []byte(passkeySignUpVerifyRequest.PublicKey)
-	if passkeySignUpVerifyRequest.FriendlyName == "" {
-		passkeySignUpVerifyRequest.FriendlyName = "Passkey"
+	credentialIDBytes := []byte(verifyPasskeySignUpInput.CredentialID)
+	publicKeyBytes := []byte(verifyPasskeySignUpInput.PublicKey)
+	if verifyPasskeySignUpInput.FriendlyName == "" {
+		verifyPasskeySignUpInput.FriendlyName = "Passkey"
 	}
 
 	if handler.db == nil {
@@ -103,15 +103,15 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 
 	ctx := request.Context()
 
-	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)
-	targetUserID := passkeySignUpVerifyRequest.UserID
+	anonymousUser, _ := handler.resolveAnonymousCaller(request)
+	targetUserID := verifyPasskeySignUpInput.UserID
 	isAnonymousConversion := false
-	if anonymousUserRecord != nil {
-		targetUserID = anonymousUserRecord.ID
+	if anonymousUser != nil {
+		targetUserID = anonymousUser.ID
 		isAnonymousConversion = true
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	if isAnonymousConversion {
 		err = handler.db.QueryRow(ctx, `
@@ -120,10 +120,10 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 			WHERE id = $1
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, targetUserID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 	} else {
 		err = handler.db.QueryRow(ctx, `
@@ -132,10 +132,10 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 			ON CONFLICT (id) DO UPDATE SET last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, targetUserID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 	}
 	if err != nil {
@@ -143,9 +143,9 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	// Insert passkey credential
@@ -154,7 +154,7 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
 		VALUES ($1, $2, $3, $4, 0, $5, $6, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
-	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, passkeySignUpVerifyRequest.Transports, passkeySignUpVerifyRequest.FriendlyName)
+	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, verifyPasskeySignUpInput.Transports, verifyPasskeySignUpInput.FriendlyName)
 	if execErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to insert passkey credential for user %s: %v", targetUserID, execErr))
 		return
@@ -163,22 +163,22 @@ func (handler *BaseHandler) handlePasskeySignUpVerify(responseWriter http.Respon
 	if handler.eventBus != nil {
 		handler.eventBus.Publish(ctx, NewPasskeyCreatedEvent(passkeyID, PasskeyCreatedEventData{
 			ID:           passkeyID,
-			User:         userRecord,
-			FriendlyName: passkeySignUpVerifyRequest.FriendlyName,
-			Transports:   passkeySignUpVerifyRequest.Transports,
+			User:         user,
+			FriendlyName: verifyPasskeySignUpInput.FriendlyName,
+			Transports:   verifyPasskeySignUpInput.Transports,
 		}))
 		if isAnonymousConversion {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 		} else {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 		}
 	}
 
 	log.Debugf("passkey sign up verified and session issued for user %s", targetUserID)
-	handler.issueSessionResponse(responseWriter, request, userRecord, "passkey")
+	handler.issueSessionResponse(responseWriter, request, user, "passkey")
 }
 
-func (handler *BaseHandler) handlePasskeySignIn(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleBeginPasskeySignIn(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling passkey sign-in initiation request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
@@ -202,7 +202,7 @@ func (handler *BaseHandler) handlePasskeySignIn(responseWriter http.ResponseWrit
 	_ = json.NewEncoder(responseWriter).Encode(signInOptions)
 }
 
-func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling passkey sign-in assertion verification request")
 	config := handler.configManager.Get()
 	if !config.Passkeys.Enabled {
@@ -210,21 +210,21 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		return
 	}
 
-	var passkeySignInVerifyRequest PasskeySignInVerifyRequest
-	if err := json.NewDecoder(request.Body).Decode(&passkeySignInVerifyRequest); err != nil {
+	var verifyPasskeySignInInput VerifyPasskeySignInInput
+	if err := json.NewDecoder(request.Body).Decode(&verifyPasskeySignInInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	if _, err := handler.passkeyManager.ConsumeChallenge(passkeySignInVerifyRequest.Challenge); err != nil {
+	if _, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignInInput.Challenge); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
 	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+passkeySignInVerifyRequest.Challenge)
+		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+verifyPasskeySignInInput.Challenge)
 	}
 
-	credentialIDBytes := []byte(passkeySignInVerifyRequest.CredentialID)
+	credentialIDBytes := []byte(verifyPasskeySignInInput.CredentialID)
 	if handler.db == nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "passkey sign-in verify rejected: database pool unavailable")
 		return
@@ -249,10 +249,10 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		return
 	}
 
-	if passkeySignInVerifyRequest.Signature != "" {
-		clientDataBytes := []byte(passkeySignInVerifyRequest.ClientDataJSON)
-		authenticatorDataBytes := []byte(passkeySignInVerifyRequest.AuthenticatorData)
-		signatureBytes := []byte(passkeySignInVerifyRequest.Signature)
+	if verifyPasskeySignInInput.Signature != "" {
+		clientDataBytes := []byte(verifyPasskeySignInInput.ClientDataJSON)
+		authenticatorDataBytes := []byte(verifyPasskeySignInInput.AuthenticatorData)
+		signatureBytes := []byte(verifyPasskeySignInInput.Signature)
 		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
 			if handler.eventBus != nil {
 				clientIP := core.ExtractRequestClientIP(request)
@@ -269,49 +269,49 @@ func (handler *BaseHandler) handlePasskeySignInVerify(responseWriter http.Respon
 		}
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("passkey sign-in verify user lookup failed (userID: %s): %v", userID, err))
 		return
 	}
 
-	if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
+	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
 		if handler.eventBus != nil {
 			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userRecord.ID, UserSignInFailedEventData{
-				Identifier: userRecord.ID,
+			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
+				Identifier: user.ID,
 				AuthMethod: "passkey",
 				Reason:     "account_locked",
 				IPAddress:  clientIP,
 				UserAgent:  request.UserAgent(),
-				User:       &userRecord,
+				User:       &user,
 			}))
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	_, _ = handler.db.Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
-	handler.issueSessionResponse(responseWriter, request, userRecord, "passkey")
+	handler.issueSessionResponse(responseWriter, request, user, "passkey")
 }
 
-func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -337,23 +337,23 @@ func (handler *BaseHandler) handleListUserPasskeys(responseWriter http.ResponseW
 	}
 	defer rows.Close()
 
-	userPasskeyResponses := make([]UserPasskeyResponse, 0)
+	listPasskeysResponse := make(ListPasskeysResponse, 0)
 	for rows.Next() {
-		var userPasskeyResponse UserPasskeyResponse
+		var passkey Passkey
 		_ = rows.Scan(
-			&userPasskeyResponse.ID,
-			&userPasskeyResponse.FriendlyName,
-			&userPasskeyResponse.Transports,
-			&userPasskeyResponse.CreatedAt,
-			&userPasskeyResponse.LastUsedAt,
+			&passkey.ID,
+			&passkey.FriendlyName,
+			&passkey.Transports,
+			&passkey.CreatedAt,
+			&passkey.LastUsedAt,
 		)
-		userPasskeyResponses = append(userPasskeyResponses, userPasskeyResponse)
+		listPasskeysResponse = append(listPasskeysResponse, passkey)
 	}
 
-	handler.writeJSON(responseWriter, userPasskeyResponses)
+	handler.writeJSON(responseWriter, listPasskeysResponse)
 }
 
-func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWriter, request *http.Request) {
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -388,26 +388,26 @@ func (handler *BaseHandler) handleDeleteUserPasskey(responseWriter http.Response
 	}
 
 	if handler.eventBus != nil {
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		fetchErr := handler.db.QueryRow(ctx, `
 			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 			FROM auth.users
 			WHERE id = $1
 		`, userID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if fetchErr == nil {
-			userRecord.Properties = make(map[string]any)
+			user.Properties = make(map[string]any)
 			if len(rawProperties) > 0 {
-				_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+				_ = json.Unmarshal(rawProperties, &user.Properties)
 			}
 			handler.eventBus.Publish(ctx, NewPasskeyDeletedEvent(passkeyID, PasskeyDeletedEventData{
 				ID:   passkeyID,
-				User: userRecord,
+				User: user,
 			}))
 		}
 	}

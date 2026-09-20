@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleExecuteSQL executes raw SQL from the console scratchpad.
-func (controlPlaneHandler *ControlPlaneHandler) HandleExecuteSQL(responseWriter http.ResponseWriter, request *http.Request) {
+// handleExecuteSQL executes raw SQL from the console scratchpad.
+func (controlPlaneHandler *ControlPlaneHandler) handleExecuteSQL(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -20,15 +20,15 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleExecuteSQL(responseWriter 
 		return
 	}
 
-	var executeSQLRequest ExecuteSQLRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&executeSQLRequest); decodeErr != nil {
+	var executeSQLInput ExecuteSQLInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&executeSQLInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty SQL query")
 		return
 	}
 
-	rawSQL := strings.TrimSpace(executeSQLRequest.SQL)
+	rawSQL := strings.TrimSpace(executeSQLInput.SQL)
 	if rawSQL == "" {
-		rawSQL = strings.TrimSpace(executeSQLRequest.Query)
+		rawSQL = strings.TrimSpace(executeSQLInput.Query)
 	}
 	if rawSQL == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty SQL query")

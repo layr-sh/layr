@@ -92,10 +92,10 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 
 	// 1. Password Reset Request via Email -> 204
-	resetEmailRequestPayload, _ := json.Marshal(PasswordResetRequest{Email: resetEmail})
+	resetEmailRequestPayload, _ := json.Marshal(RequestPasswordResetInput{Email: resetEmail})
 	resetEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(resetEmailRequestPayload))
 	resetEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(resetEmailResponseRecorder, resetEmailRequest)
+	baseHandler.handleRequestPasswordReset(resetEmailResponseRecorder, resetEmailRequest)
 	if resetEmailResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on email password reset request, got: %d (%s)", resetEmailResponseRecorder.Code, resetEmailResponseRecorder.Body.String())
 	}
@@ -106,7 +106,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	// 2. Cooldown active -> 429
 	cooldownRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(resetEmailRequestPayload))
 	cooldownResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(cooldownResponseRecorder, cooldownRequest)
+	baseHandler.handleRequestPasswordReset(cooldownResponseRecorder, cooldownRequest)
 	if cooldownResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on cooldown active, got: %d", cooldownResponseRecorder.Code)
 	}
@@ -121,44 +121,44 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 	rateLimitRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(resetEmailRequestPayload))
 	rateLimitResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(rateLimitResponseRecorder, rateLimitRequest)
+	baseHandler.handleRequestPasswordReset(rateLimitResponseRecorder, rateLimitRequest)
 	if rateLimitResponseRecorder.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 on IP rate limit exceeded, got: %d", rateLimitResponseRecorder.Code)
 	}
 	_ = testKVStore.Delete(ctx, ipRateKey)
 
 	// 4. Request for Non-Existent Recipient -> 204 No Content (prevents user enumeration)
-	ghostResetPayload, _ := json.Marshal(PasswordResetRequest{Email: "nonexistent@example.com"})
+	ghostResetPayload, _ := json.Marshal(RequestPasswordResetInput{Email: "nonexistent@example.com"})
 	ghostResetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(ghostResetPayload))
 	ghostResetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(ghostResetResponseRecorder, ghostResetRequest)
+	baseHandler.handleRequestPasswordReset(ghostResetResponseRecorder, ghostResetRequest)
 	if ghostResetResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on non-existent recipient reset request, got: %d", ghostResetResponseRecorder.Code)
 	}
 
 	// 5. Confirm with Wrong Code increments attempts -> 400
-	wrongConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	wrongConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    resetEmail,
 		Code:     "000000",
 		Password: "NewSecurePassword123!@",
 	})
 	wrongConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(wrongConfirmPayload))
 	wrongConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(wrongConfirmResponseRecorder, wrongConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(wrongConfirmResponseRecorder, wrongConfirmRequest)
 	if wrongConfirmResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(wrongConfirmResponseRecorder.Body.String(), "Invalid reset code") {
 		t.Fatalf("expected 400 on invalid reset code, got: %d (%s)", wrongConfirmResponseRecorder.Code, wrongConfirmResponseRecorder.Body.String())
 	}
 
 	// 6. Confirm with Valid Code -> 200 and issues session
 	newPassword := "BrandNewPassword456!#"
-	validConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	validConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    resetEmail,
 		Code:     dispatchedEmailCode,
 		Password: newPassword,
 	})
 	validConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(validConfirmPayload))
 	validConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(validConfirmResponseRecorder, validConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(validConfirmResponseRecorder, validConfirmRequest)
 	if validConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on valid password reset confirm, got: %d (%s)", validConfirmResponseRecorder.Code, validConfirmResponseRecorder.Body.String())
 	}
@@ -172,33 +172,33 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 
 	// 6b. Locked user password reset confirm -> 423
-	lockedResetRequestPayload, _ := json.Marshal(PasswordResetRequest{Email: resetEmail})
+	lockedResetRequestPayload, _ := json.Marshal(RequestPasswordResetInput{Email: resetEmail})
 	lockedResetRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(lockedResetRequestPayload))
 	lockedResetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(lockedResetResponseRecorder, lockedResetRequest)
+	baseHandler.handleRequestPasswordReset(lockedResetResponseRecorder, lockedResetRequest)
 	if lockedResetResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on password reset request, got: %d", lockedResetResponseRecorder.Code)
 	}
 
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", resetUserID)
-	lockedConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	lockedConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    resetEmail,
 		Code:     dispatchedEmailCode,
 		Password: "YetAnotherPassword789!",
 	})
 	lockedConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(lockedConfirmPayload))
 	lockedConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(lockedConfirmResponseRecorder, lockedConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(lockedConfirmResponseRecorder, lockedConfirmRequest)
 	if lockedConfirmResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user password reset confirm, got: %d", lockedConfirmResponseRecorder.Code)
 	}
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", resetUserID)
 
 	// 7. Password Reset Request & Confirm via Phone
-	resetPhoneRequestPayload, _ := json.Marshal(PasswordResetRequest{Phone: resetPhone})
+	resetPhoneRequestPayload, _ := json.Marshal(RequestPasswordResetInput{Phone: resetPhone})
 	resetPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(resetPhoneRequestPayload))
 	resetPhoneResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(resetPhoneResponseRecorder, resetPhoneRequest)
+	baseHandler.handleRequestPasswordReset(resetPhoneResponseRecorder, resetPhoneRequest)
 	if resetPhoneResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on phone reset request, got: %d (%s)", resetPhoneResponseRecorder.Code, resetPhoneResponseRecorder.Body.String())
 	}
@@ -206,14 +206,14 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		t.Fatalf("expected SMS code to be dispatched")
 	}
 
-	phoneConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	phoneConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Phone:    resetPhone,
 		Code:     dispatchedSMSCode,
 		Password: "PhoneUpdatedPassword789!$",
 	})
 	phoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(phoneConfirmPayload))
 	phoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(phoneConfirmResponseRecorder, phoneConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(phoneConfirmResponseRecorder, phoneConfirmRequest)
 	if phoneConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on phone reset confirm, got: %d (%s)", phoneConfirmResponseRecorder.Code, phoneConfirmResponseRecorder.Body.String())
 	}
@@ -225,27 +225,27 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 5, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, resetEmail, maxAttemptsHash)
-	maxAttemptsPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	maxAttemptsPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    resetEmail,
 		Code:     maxAttemptsCode,
 		Password: "AnotherPassword123!",
 	})
 	maxAttemptsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(maxAttemptsPayload))
 	maxAttemptsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(maxAttemptsResponseRecorder, maxAttemptsRequest)
+	baseHandler.handleConfirmPasswordReset(maxAttemptsResponseRecorder, maxAttemptsRequest)
 	if maxAttemptsResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(maxAttemptsResponseRecorder.Body.String(), "Maximum attempts exceeded") {
 		t.Fatalf("expected 400 with Maximum attempts exceeded, got: %d (%s)", maxAttemptsResponseRecorder.Code, maxAttemptsResponseRecorder.Body.String())
 	}
 
 	// 9. Confirm for Expired / Non-Existent OTP -> 400
-	ghostConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	ghostConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    "nobody@example.com",
 		Code:     "123456",
 		Password: "ValidPassword123!",
 	})
 	ghostConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(ghostConfirmPayload))
 	ghostConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(ghostConfirmResponseRecorder, ghostConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(ghostConfirmResponseRecorder, ghostConfirmRequest)
 	if ghostConfirmResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(ghostConfirmResponseRecorder.Body.String(), "Invalid or expired") {
 		t.Fatalf("expected 400 on non-existent OTP confirm, got: %d (%s)", ghostConfirmResponseRecorder.Code, ghostConfirmResponseRecorder.Body.String())
 	}
@@ -258,14 +258,14 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 0, clock_timestamp() + interval '10 minutes', clock_timestamp())
 	`, orphanRecipient, orphanHash)
-	orphanConfirmPayload, _ := json.Marshal(PasswordResetConfirmRequest{
+	orphanConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Email:    orphanRecipient,
 		Code:     orphanCode,
 		Password: "ValidPassword123!",
 	})
 	orphanConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(orphanConfirmPayload))
 	orphanConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(orphanConfirmResponseRecorder, orphanConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(orphanConfirmResponseRecorder, orphanConfirmRequest)
 	if orphanConfirmResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on orphan reset confirm, got: %d (%s)", orphanConfirmResponseRecorder.Code, orphanConfirmResponseRecorder.Body.String())
 	}

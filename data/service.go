@@ -152,28 +152,28 @@ func (service *Service) Stop() error {
 }
 
 // InvalidateCache evicts the specified cache keys from the KVStore and increments version numbers.
-func (service *Service) InvalidateCache(ctx context.Context, invalidateCacheRequest InvalidateCacheRequest) {
+func (service *Service) InvalidateCache(ctx context.Context, invalidateCacheInput InvalidateCacheInput) {
 	if service.kvStore == nil {
 		return
 	}
-	if invalidateCacheRequest.All || invalidateCacheRequest.Catalog {
+	if invalidateCacheInput.All || invalidateCacheInput.Catalog {
 		_ = service.kvStore.Delete(ctx, "cache:catalog")
 		_ = service.kvStore.Delete(ctx, "cache:schema:catalog")
 		_, _ = service.kvStore.Increment(ctx, "cache:v:global", 0)
 		_ = service.kvStore.Delete(ctx, "cache:query_count")
 	}
-	if invalidateCacheRequest.Schema != "" && invalidateCacheRequest.Table != "" {
-		_ = service.kvStore.Delete(ctx, "cache:"+invalidateCacheRequest.Schema+"."+invalidateCacheRequest.Table)
-		_, _ = service.kvStore.Increment(ctx, fmt.Sprintf("cache:v:%s:%s", invalidateCacheRequest.Schema, invalidateCacheRequest.Table), 0)
+	if invalidateCacheInput.Schema != "" && invalidateCacheInput.Table != "" {
+		_ = service.kvStore.Delete(ctx, "cache:"+invalidateCacheInput.Schema+"."+invalidateCacheInput.Table)
+		_, _ = service.kvStore.Increment(ctx, fmt.Sprintf("cache:v:%s:%s", invalidateCacheInput.Schema, invalidateCacheInput.Table), 0)
 	}
-	if invalidateCacheRequest.Pattern != "" {
-		_ = service.kvStore.Delete(ctx, "cache:"+invalidateCacheRequest.Pattern)
+	if invalidateCacheInput.Pattern != "" {
+		_ = service.kvStore.Delete(ctx, "cache:"+invalidateCacheInput.Pattern)
 	}
 }
 
 // InvalidateCatalog purges the schema catalog from cache and triggers GraphQL introspection reload.
 func (service *Service) InvalidateCatalog(ctx context.Context) {
-	service.InvalidateCache(ctx, InvalidateCacheRequest{Catalog: true, All: true})
+	service.InvalidateCache(ctx, InvalidateCacheInput{Catalog: true, All: true})
 	if service.baseHandler != nil && service.baseHandler.GraphQLSchema() != nil && service.db != nil {
 		_ = service.baseHandler.GraphQLSchema().Introspect(ctx, service.configManager.Get().Schemas)
 	}
@@ -312,16 +312,16 @@ func (service *Service) GetRealtimeHub() *realtime.Hub {
 	return service.RealtimeHub()
 }
 
-// HandleFlushCache handles cache flush via the control plane handler.
-func (service *Service) HandleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
+// handleFlushCache handles cache flush via the control plane handler.
+func (service *Service) handleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.HandleFlushCache(responseWriter, request)
+		service.controlPlaneHandler.handleFlushCache(responseWriter, request)
 	}
 }
 
-// HandleInvalidateCache handles cache invalidation via the control plane handler.
-func (service *Service) HandleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
+// handleInvalidateCache handles cache invalidation via the control plane handler.
+func (service *Service) handleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.HandleInvalidateCache(responseWriter, request)
+		service.controlPlaneHandler.handleInvalidateCache(responseWriter, request)
 	}
 }

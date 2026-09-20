@@ -8,7 +8,7 @@ import (
 	"layr.sh/core"
 )
 
-func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleExportUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling user export request")
 	targetUserID := request.PathValue("user_id")
 	if targetUserID == "" {
@@ -32,23 +32,23 @@ func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter,
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, targetUserID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	// Fetch identities
@@ -73,15 +73,15 @@ func (handler *BaseHandler) handleUserExport(responseWriter http.ResponseWriter,
 		}
 	}
 
-	exportUserDataResponse := ExportUserDataResponse{
-		User:       userRecord,
+	exportUserResponse := ExportUserResponse{
+		User:       user,
 		Identities: identities,
 		ExportDate: time.Now().UTC().Format(time.RFC3339),
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserExportedEvent(userRecord.ID, UserExportedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserExportedEvent(user.ID, UserExportedEventData(user)))
 	}
 
-	handler.writeJSON(responseWriter, exportUserDataResponse)
+	handler.writeJSON(responseWriter, exportUserResponse)
 }

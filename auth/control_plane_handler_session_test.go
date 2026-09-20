@@ -30,15 +30,15 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	forbiddenRequest.SetPathValue("user_id", testUserID)
 
 	forbiddenSessionsListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListUserSessions(forbiddenSessionsListResponseRecorder, forbiddenRequest)
+	controlPlaneHandler.handleListUserSessions(forbiddenSessionsListResponseRecorder, forbiddenRequest)
 	if forbiddenSessionsListResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 on HandleListUserSessions, got: %d", forbiddenSessionsListResponseRecorder.Code)
+		t.Fatalf("expected 403 on handleListUserSessions, got: %d", forbiddenSessionsListResponseRecorder.Code)
 	}
 
 	forbiddenRevokeSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(forbiddenRevokeSessionsResponseRecorder, forbiddenRequest)
+	controlPlaneHandler.handleRevokeUserSessions(forbiddenRevokeSessionsResponseRecorder, forbiddenRequest)
 	if forbiddenRevokeSessionsResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 on HandleRevokeUserSessions, got: %d", forbiddenRevokeSessionsResponseRecorder.Code)
+		t.Fatalf("expected 403 on handleRevokeUserSessions, got: %d", forbiddenRevokeSessionsResponseRecorder.Code)
 	}
 
 	// 2. Test Invalid UUIDs on session endpoints (with valid scope)
@@ -48,15 +48,15 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	invalidUUIDRequest.SetPathValue("user_id", invalidUUID)
 
 	invalidUUIDSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListUserSessions(invalidUUIDSessionsResponseRecorder, invalidUUIDRequest)
+	controlPlaneHandler.handleListUserSessions(invalidUUIDSessionsResponseRecorder, invalidUUIDRequest)
 	if invalidUUIDSessionsResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on HandleListUserSessions with bad UUID, got: %d", invalidUUIDSessionsResponseRecorder.Code)
+		t.Fatalf("expected 400 on handleListUserSessions with bad UUID, got: %d", invalidUUIDSessionsResponseRecorder.Code)
 	}
 
 	invalidUUIDRevokeResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(invalidUUIDRevokeResponseRecorder, invalidUUIDRequest)
+	controlPlaneHandler.handleRevokeUserSessions(invalidUUIDRevokeResponseRecorder, invalidUUIDRequest)
 	if invalidUUIDRevokeResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on HandleRevokeUserSessions with bad UUID, got: %d", invalidUUIDRevokeResponseRecorder.Code)
+		t.Fatalf("expected 400 on handleRevokeUserSessions with bad UUID, got: %d", invalidUUIDRevokeResponseRecorder.Code)
 	}
 
 	// 3. Test Nil DB on Session handlers
@@ -64,14 +64,14 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	singleUserRequest.SetPathValue("user_id", testUserID)
 
 	nilDBSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListUserSessions(nilDBSessionsResponseRecorder, singleUserRequest)
+	controlPlaneHandler.handleListUserSessions(nilDBSessionsResponseRecorder, singleUserRequest)
 	if nilDBSessionsResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil db HandleListUserSessions, got: %d", nilDBSessionsResponseRecorder.Code)
+		t.Fatalf("expected 500 on nil db handleListUserSessions, got: %d", nilDBSessionsResponseRecorder.Code)
 	}
 
 	nilDBRevokeResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(nilDBRevokeResponseRecorder, singleUserRequest)
+	controlPlaneHandler.handleRevokeUserSessions(nilDBRevokeResponseRecorder, singleUserRequest)
 	if nilDBRevokeResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil db HandleRevokeUserSessions, got: %d", nilDBRevokeResponseRecorder.Code)
+		t.Fatalf("expected 500 on nil db handleRevokeUserSessions, got: %d", nilDBRevokeResponseRecorder.Code)
 	}
 }

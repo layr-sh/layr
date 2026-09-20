@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleListPolicies lists all Row-Level Security policies on a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
+// handleListPolicies lists all Row-Level Security policies on a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -30,8 +30,8 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListPolicies(responseWrite
 	})
 }
 
-// HandleCreatePolicy creates a new Row-Level Security policy on a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
+// handleCreatePolicy creates a new Row-Level Security policy on a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -41,12 +41,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreatePolicy(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "URL format must be /api/v1/_/data/tables/{schema}/{table}/policies")
 		return
 	}
-	var createPolicyRequest CreatePolicyRequest
-	if decodeErr := json.NewDecoder(request.Body).Decode(&createPolicyRequest); decodeErr != nil {
+	var createPolicyInput CreatePolicyInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&createPolicyInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
-	if createErr := controlPlaneHandler.ddlEngine.CreatePolicy(request.Context(), schema, table, createPolicyRequest); createErr != nil {
+	if createErr := controlPlaneHandler.ddlEngine.CreatePolicy(request.Context(), schema, table, createPolicyInput); createErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
@@ -57,18 +57,18 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreatePolicy(responseWrite
 			Schema: schema,
 			Table:  table,
 			Action: "create_policy",
-			Detail: createPolicyRequest.Name,
+			Detail: createPolicyInput.Name,
 		}))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreatePolicyResponse{
 		Status: "created",
-		Policy: createPolicyRequest.Name,
+		Policy: createPolicyInput.Name,
 	})
 }
 
-// HandleDropPolicy drops a Row-Level Security policy from a table.
-func (controlPlaneHandler *ControlPlaneHandler) HandleDropPolicy(responseWriter http.ResponseWriter, request *http.Request) {
+// handleDeletePolicy drops a Row-Level Security policy from a table.
+func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -94,14 +94,14 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDropPolicy(responseWriter 
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DropPolicyResponse{
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeletePolicyResponse{
 		Status: "deleted",
 		Policy: policyName,
 	})
 }
 
-// HandleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
-func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
+// handleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
+func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -124,12 +124,12 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 		}
 	}
 	if action == "" && request.Body != nil {
-		var toggleTableRLSRequest ToggleTableRLSRequest
-		if decodeErr := json.NewDecoder(request.Body).Decode(&toggleTableRLSRequest); decodeErr == nil {
-			if toggleTableRLSRequest.Action != "" {
-				action = strings.ToUpper(strings.TrimSpace(toggleTableRLSRequest.Action))
-			} else if toggleTableRLSRequest.Mode != "" {
-				action = strings.ToUpper(strings.TrimSpace(toggleTableRLSRequest.Mode))
+		var toggleRLSInput ToggleRLSInput
+		if decodeErr := json.NewDecoder(request.Body).Decode(&toggleRLSInput); decodeErr == nil {
+			if toggleRLSInput.Action != "" {
+				action = strings.ToUpper(strings.TrimSpace(toggleRLSInput.Action))
+			} else if toggleRLSInput.Mode != "" {
+				action = strings.ToUpper(strings.TrimSpace(toggleRLSInput.Mode))
 			}
 		}
 	}
@@ -148,7 +148,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 				Detail: "enabled",
 			}))
 		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleTableRLSResponse{
+		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "enabled",
 			Mode:   "ENABLE",
 		})
@@ -165,7 +165,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 				Detail: "disabled",
 			}))
 		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleTableRLSResponse{
+		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "disabled",
 			Mode:   "DISABLE",
 		})
@@ -187,7 +187,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 				Detail: status,
 			}))
 		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleTableRLSResponse{
+		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: status,
 			Mode:   "FORCE",
 		})
@@ -204,7 +204,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleToggleRLS(responseWriter h
 				Detail: "unforced",
 			}))
 		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleTableRLSResponse{
+		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "unforced",
 			Mode:   "UNFORCE",
 		})

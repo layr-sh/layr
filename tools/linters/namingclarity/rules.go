@@ -345,7 +345,7 @@ var specialTypeRules = map[string]specialTypeRule{
 				name == "logger" || strings.HasSuffix(name, "Logger")
 		},
 	},
-	"core.ServiceAccountWithSecretKey": {
+	"core.CreateServiceAccountResponse": {
 		canonicalName: "serviceAccount",
 		expectedTail:  "ServiceAccount",
 		allowPlural:   false,

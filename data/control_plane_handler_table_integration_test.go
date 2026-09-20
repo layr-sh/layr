@@ -34,7 +34,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	// 1. List Tables
 	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
 	listResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListTables(listResponseRecorder, listRequest)
+	controlPlaneHandler.handleListTables(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list tables, got %d", listResponseRecorder.Code)
 	}
@@ -45,7 +45,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 		cancel()
 		errorListRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/_/data/tables", nil)
 		errorListResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.HandleListTables(errorListResponseRecorder, errorListRequest)
+		controlPlaneHandler.handleListTables(errorListResponseRecorder, errorListRequest)
 		if errorListResponseRecorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500 on canceled context, got %d", errorListResponseRecorder.Code)
 		}
@@ -53,10 +53,10 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 
 	// 2. Create Table
 	defaultValue := "true"
-	createTableBody, _ := json.Marshal(CreateTableRequest{
+	createTableBody, _ := json.Marshal(CreateTableInput{
 		Schema: "public",
 		Name:   "blog_posts",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", IsPrimaryKey: true},
 			{Name: "title", Type: "varchar(200)", IsNullable: false},
 			{Name: "is_published", Type: "bool", IsNullable: false, DefaultValue: &defaultValue},
@@ -64,7 +64,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	})
 	createRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader(createTableBody))
 	createResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(createResponseRecorder, createRequest)
+	controlPlaneHandler.handleCreateTable(createResponseRecorder, createRequest)
 	if createResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 201 on create table, got %d, body: %s", createResponseRecorder.Code, createResponseRecorder.Body.String())
 	}
@@ -74,17 +74,17 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	getRequest.SetPathValue("schema_name", "public")
 	getRequest.SetPathValue("table_name", "blog_posts")
 	getResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetTable(getResponseRecorder, getRequest)
+	controlPlaneHandler.handleGetTable(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on get table, got %d", getResponseRecorder.Code)
 	}
 
-	var tableSummary TableSummary
-	if err := json.NewDecoder(getResponseRecorder.Body).Decode(&tableSummary); err != nil {
-		t.Fatalf("failed to decode table summary: %v", err)
+	var table Table
+	if err := json.NewDecoder(getResponseRecorder.Body).Decode(&table); err != nil {
+		t.Fatalf("failed to decode table: %v", err)
 	}
-	if tableSummary.Name != "blog_posts" {
-		t.Fatalf("expected blog_posts, got %s", tableSummary.Name)
+	if table.Name != "blog_posts" {
+		t.Fatalf("expected blog_posts, got %s", table.Name)
 	}
 
 	// Get non-existent table (404)
@@ -92,7 +92,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	nonExistentGetRequest.SetPathValue("schema_name", "public")
 	nonExistentGetRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentGetResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetTable(nonExistentGetResponseRecorder, nonExistentGetRequest)
+	controlPlaneHandler.handleGetTable(nonExistentGetResponseRecorder, nonExistentGetRequest)
 	if nonExistentGetResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on non-existent table, got %d", nonExistentGetResponseRecorder.Code)
 	}
@@ -102,7 +102,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	truncateRequest.SetPathValue("schema_name", "public")
 	truncateRequest.SetPathValue("table_name", "blog_posts")
 	truncateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleTruncateTable(truncateResponseRecorder, truncateRequest)
+	controlPlaneHandler.handleTruncateTable(truncateResponseRecorder, truncateRequest)
 	if truncateResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on truncate table, got %d", truncateResponseRecorder.Code)
 	}
@@ -112,7 +112,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	nonExistentTruncateRequest.SetPathValue("schema_name", "public")
 	nonExistentTruncateRequest.SetPathValue("table_name", "nonexistent_table")
 	nonExistentTruncateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleTruncateTable(nonExistentTruncateResponseRecorder, nonExistentTruncateRequest)
+	controlPlaneHandler.handleTruncateTable(nonExistentTruncateResponseRecorder, nonExistentTruncateRequest)
 	if nonExistentTruncateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on truncate non-existent table, got %d", nonExistentTruncateResponseRecorder.Code)
 	}
@@ -122,7 +122,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	dropRequest.SetPathValue("schema_name", "public")
 	dropRequest.SetPathValue("table_name", "blog_posts")
 	dropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropTable(dropResponseRecorder, dropRequest)
+	controlPlaneHandler.handleDeleteTable(dropResponseRecorder, dropRequest)
 	if dropResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on drop table, got %d", dropResponseRecorder.Code)
 	}
@@ -132,7 +132,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	protectedDropRequest.SetPathValue("schema_name", "core")
 	protectedDropRequest.SetPathValue("table_name", "nodes")
 	protectedDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropTable(protectedDropResponseRecorder, protectedDropRequest)
+	controlPlaneHandler.handleDeleteTable(protectedDropResponseRecorder, protectedDropRequest)
 	if protectedDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on drop protected table, got %d", protectedDropResponseRecorder.Code)
 	}

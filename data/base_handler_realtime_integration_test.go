@@ -24,7 +24,7 @@ func TestDataBaseHandlerRealtimeIntegration(t *testing.T) {
 	_ = service.Start(ctx)
 	defer func() { _ = service.Stop() }()
 
-	server := httptest.NewServer(http.HandlerFunc(service.BaseHandler().HandleRealtime))
+	server := httptest.NewServer(http.HandlerFunc(service.BaseHandler().handleConnectRealtime))
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")

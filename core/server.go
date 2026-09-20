@@ -86,7 +86,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	}
 
 	// Register Core Routes on Public Router
-	GetRoute[HealthResponse](baseRouter, "/healthz", server.handleHealthz,
+	GetRoute[GetHealthResponse](baseRouter, "/healthz", server.handleGetHealth,
 		RouteTag("Probes"),
 		RouteSummary("Liveness probe"),
 		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
@@ -94,7 +94,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("healthz"),
 	)
-	GetRoute[ReadyResponse](baseRouter, "/readyz", server.handleReadyz,
+	GetRoute[GetReadinessResponse](baseRouter, "/readyz", server.handleGetReadiness,
 		RouteTag("Probes"),
 		RouteSummary("Readiness probe"),
 		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
@@ -102,7 +102,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("readyz"),
 	)
-	GetRoute[string](baseRouter, "/metrics", server.handleMetrics,
+	GetRoute[string](baseRouter, "/metrics", server.handleGetMetrics,
 		RouteTag("Observability"),
 		RouteSummary("Prometheus metrics exposition"),
 		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
@@ -110,7 +110,7 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		RouteSDKGroupName("core"),
 		RouteSDKMethodName("metrics"),
 	)
-	GetRoute[ManifestResponse](baseRouter, "/api/v1/manifest", server.handleManifest,
+	GetRoute[GetManifestResponse](baseRouter, "/api/v1/manifest", server.handleGetManifest,
 		RouteTag("Discovery"),
 		RouteSummary("Get dynamic cluster manifest and enabled services"),
 		RouteDescription("Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization."),
@@ -135,12 +135,12 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 	serveMux.Handle("/console/", baseRouter.Mux())
 
 	// Public OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/spec.json", server.handleBaseSpecJSON)
-	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleBaseSpecYAML)
+	serveMux.HandleFunc("/api/v1/spec.json", server.handleGetBaseSpecJSON)
+	serveMux.HandleFunc("/api/v1/spec.yaml", server.handleGetBaseSpecYAML)
 
 	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleControlPlaneSpecJSON)
-	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleControlPlaneSpecYAML)
+	serveMux.HandleFunc("/api/v1/_/spec.json", server.handleGetControlPlaneSpecJSON)
+	serveMux.HandleFunc("/api/v1/_/spec.yaml", server.handleGetControlPlaneSpecYAML)
 
 	// Mount Control Plane API Router
 	serveMux.Handle("/api/v1/_/", controlPlaneRouter.Mux())

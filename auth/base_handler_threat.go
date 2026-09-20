@@ -106,7 +106,7 @@ func (handler *BaseHandler) checkPasswordBreach(responseWriter http.ResponseWrit
 
 // completeSignInFlow processes post-authentication threat mitigation, risk evaluation, suspicious activity alerts,
 // adaptive MFA enforcement, and session token issuance across all authentication mechanisms.
-func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord, sessionMeta ...string) {
+func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWriter, request *http.Request, user User, sessionMeta ...string) {
 	ctx := request.Context()
 	clientIP := core.ExtractRequestClientIP(request)
 	userAgent := request.UserAgent()
@@ -114,17 +114,17 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 	// Reset failed attempts in KVStore upon successful authentication
 	if handler.kvStore != nil {
 		_ = threat.ResetFailedAttempts(ctx, handler.kvStore, clientIP)
-		_ = threat.ResetFailedAttempts(ctx, handler.kvStore, userRecord.ID)
+		_ = threat.ResetFailedAttempts(ctx, handler.kvStore, user.ID)
 	}
 
-	riskAssessment, _ := threat.EvaluateSignInRisk(ctx, handler.db, handler.kvStore, userRecord.ID, clientIP, userAgent, handler.configManager.Get().Threat.KnownDevicesMaxDays)
+	riskAssessment, _ := threat.EvaluateSignInRisk(ctx, handler.db, handler.kvStore, user.ID, clientIP, userAgent, handler.configManager.Get().Threat.KnownDevicesMaxDays)
 	if riskAssessment != nil && riskAssessment.IsNewDevice && handler.configManager.Get().Threat.NotifyOnNewDevice {
-		if userRecord.Email != nil && *userRecord.Email != "" {
-			_ = handler.emailDispatcher.SendSuspiciousActivity(ctx, *userRecord.Email, userRecord.ID, clientIP, userAgent)
+		if user.Email != nil && *user.Email != "" {
+			_ = handler.emailDispatcher.SendSuspiciousActivity(ctx, *user.Email, user.ID, clientIP, userAgent)
 		}
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewSuspiciousSignInEvent(userRecord.ID, SuspiciousSignInEventData{
-				User:      userRecord,
+			handler.eventBus.Publish(ctx, NewSuspiciousSignInEvent(user.ID, SuspiciousSignInEventData{
+				User:      user,
 				IPAddress: clientIP,
 				UserAgent: userAgent,
 				RiskScore: riskAssessment.Score,
@@ -135,7 +135,7 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 	}
 
 	mfaConfig := handler.configManager.Get().MFA
-	if userRecord.MFAEnabled && mfaConfig.Enabled {
+	if user.MFAEnabled && mfaConfig.Enabled {
 		shouldTriggerMFA := false
 		if mfaConfig.Policy == "always" || mfaConfig.Policy == "" {
 			shouldTriggerMFA = true
@@ -160,7 +160,7 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 		if shouldTriggerMFA {
 			mfaTicket := "mfa_tk_" + uuid.NewV7().String()
 			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, userRecord.ID, mfaTicketTTL)
+				_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, user.ID, mfaTicketTTL)
 			}
 			handler.writeJSON(responseWriter, SignInResponse{
 				MFARequired: true,
@@ -171,5 +171,5 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 		}
 	}
 
-	handler.issueSessionResponse(responseWriter, request, userRecord, sessionMeta...)
+	handler.issueSessionResponse(responseWriter, request, user, sessionMeta...)
 }

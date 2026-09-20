@@ -15,8 +15,8 @@ import (
 	"layr.sh/core"
 )
 
-// HandleOAuthAuthorize initiates the authorization redirection for an OAuth provider.
-func (handler *BaseHandler) HandleOAuthAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
+// handleAuthorizeOAuth initiates the authorization redirection for an OAuth provider.
+func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWriter, request *http.Request) {
 	provider := request.PathValue("provider")
 	log.Debugf("handling OAuth authorize request for provider: %s", provider)
 
@@ -63,9 +63,9 @@ func (handler *BaseHandler) HandleOAuthAuthorize(responseWriter http.ResponseWri
 
 	oidcStateID := request.URL.Query().Get("oidc_state")
 	var anonymousID string
-	if anonymousUserRecord, resolveAnonymousCallerErr := handler.resolveAnonymousCaller(request); resolveAnonymousCallerErr == nil && anonymousUserRecord != nil {
-		anonymousID = anonymousUserRecord.ID
-		log.Tracef("attaching anonymous user %s to OAuth state %s", anonymousUserRecord.ID, state)
+	if anonymousUser, resolveAnonymousCallerErr := handler.resolveAnonymousCaller(request); resolveAnonymousCallerErr == nil && anonymousUser != nil {
+		anonymousID = anonymousUser.ID
+		log.Tracef("attaching anonymous user %s to OAuth state %s", anonymousUser.ID, state)
 	}
 
 	if handler.kvStore != nil {
@@ -91,17 +91,17 @@ func (handler *BaseHandler) HandleOAuthAuthorize(responseWriter http.ResponseWri
 	http.Redirect(responseWriter, request, authURL, http.StatusFound)
 }
 
-// HandleOAuthToken handles token exchange requests.
-func (handler *BaseHandler) HandleOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+// handleExchangeOAuthToken handles token exchange requests.
+func (handler *BaseHandler) handleExchangeOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.FormValue("grant_type") != "" {
-		handler.handleOIDCToken(responseWriter, request)
+		handler.handleIssueOIDCToken(responseWriter, request)
 		return
 	}
-	handler.HandleOAuthCallback(responseWriter, request)
+	handler.handleProcessOAuthCallback(responseWriter, request)
 }
 
-// HandleOAuthCallback processes the incoming OAuth redirect callback.
-func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWriter, request *http.Request) {
+// handleProcessOAuthCallback processes the incoming OAuth redirect callback.
+func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling OAuth callback request")
 	var provider, code, redirectURI, state string
 
@@ -129,18 +129,18 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			state = request.URL.Query().Get("state")
 		}
 	} else {
-		var oauthTokenExchangeRequest OAuthTokenExchangeRequest
-		_ = json.NewDecoder(request.Body).Decode(&oauthTokenExchangeRequest)
-		provider = oauthTokenExchangeRequest.Provider
+		var exchangeOAuthTokenInput ExchangeOAuthTokenInput
+		_ = json.NewDecoder(request.Body).Decode(&exchangeOAuthTokenInput)
+		provider = exchangeOAuthTokenInput.Provider
 		if provider == "" {
 			pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 			if len(pathSegments) >= 5 && pathSegments[4] != "token" && pathSegments[4] != "callback" {
 				provider = pathSegments[4]
 			}
 		}
-		code = oauthTokenExchangeRequest.Code
-		redirectURI = oauthTokenExchangeRequest.RedirectURI
-		state = oauthTokenExchangeRequest.State
+		code = exchangeOAuthTokenInput.Code
+		redirectURI = exchangeOAuthTokenInput.RedirectURI
+		state = exchangeOAuthTokenInput.State
 		if state == "" {
 			state = request.URL.Query().Get("state")
 		}
@@ -244,13 +244,13 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 
-	anonymousUserRecord, _ := handler.resolveAnonymousCaller(request)
-	if anonymousUserRecord != nil {
-		log.Debugf("linking OAuth identity %s:%s to anonymous user %s", provider, userInfo.ProviderUserID, anonymousUserRecord.ID)
-		if err == nil && existingUserID != anonymousUserRecord.ID {
+	anonymousUser, _ := handler.resolveAnonymousCaller(request)
+	if anonymousUser != nil {
+		log.Debugf("linking OAuth identity %s:%s to anonymous user %s", provider, userInfo.ProviderUserID, anonymousUser.ID)
+		if err == nil && existingUserID != anonymousUser.ID {
 			core.WriteOAuthErrorResponse(responseWriter, http.StatusConflict, "invalid_request", "OAuth identity is already linked to another account")
 			return
 		}
@@ -260,7 +260,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			emailPtr = &userInfo.Email
 			var conflictingUserID string
 			conflictErr := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
-			if conflictErr == nil && conflictingUserID != anonymousUserRecord.ID {
+			if conflictErr == nil && conflictingUserID != anonymousUser.ID {
 				core.WriteOAuthErrorResponse(responseWriter, http.StatusConflict, "invalid_request", "Email is already in use by another account")
 				return
 			}
@@ -273,7 +273,7 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET user_id = $1, last_sign_in_at = clock_timestamp(), properties = $4
-		`, anonymousUserRecord.ID, provider, userInfo.ProviderUserID, propertiesJSON)
+		`, anonymousUser.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		// Convert anonymous user to authenticated
 		updateQuery := `
@@ -286,25 +286,25 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			WHERE id = $3
 			RETURNING id, email, phone, role, is_anonymous, properties, created_at, last_updated_at
 		`
-		updateErr := handler.db.QueryRow(ctx, updateQuery, emailPtr, propertiesJSON, anonymousUserRecord.ID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		updateErr := handler.db.QueryRow(ctx, updateQuery, emailPtr, propertiesJSON, anonymousUser.ID).Scan(
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if updateErr != nil {
-			core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUserRecord.ID, updateErr))
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("failed to convert anonymous user %s: %v", anonymousUser.ID, updateErr))
 			return
 		}
 
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 		}
 
-		handler.CompleteOAuthFlow(responseWriter, request, userRecord, parsedOAuthStatePayload, isPayload)
+		handler.CompleteOAuthFlow(responseWriter, request, user, parsedOAuthStatePayload, isPayload)
 		return
 	}
 
@@ -313,13 +313,13 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 		_ = handler.db.QueryRow(ctx, `
 			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 			FROM auth.users WHERE id = $1
-		`, existingUserID).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
-		userRecord.Properties = make(map[string]any)
+		`, existingUserID).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled, &rawProperties, &user.CreatedAt, &user.LastUpdatedAt)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
-		if userRecord.LockedUntil != nil && time.Now().UTC().Before(*userRecord.LockedUntil) {
-			core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account is temporarily locked", fmt.Sprintf("failed OAuth sign in for locked user %s", userRecord.ID))
+		if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account is temporarily locked", fmt.Sprintf("failed OAuth sign in for locked user %s", user.ID))
 			return
 		}
 		_, _ = handler.db.Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
@@ -336,30 +336,30 @@ func (handler *BaseHandler) HandleOAuthCallback(responseWriter http.ResponseWrit
 			VALUES ($1, 'authenticated', clock_timestamp(), $2, clock_timestamp(), clock_timestamp())
 			ON CONFLICT (email) DO UPDATE SET last_updated_at = clock_timestamp()
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-		`, emailPtr, propertiesJSON).Scan(&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous, &userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil, &userRecord.EncryptedMFASecret, &userRecord.MFAEnabled, &rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt)
-		userRecord.Properties = make(map[string]any)
+		`, emailPtr, propertiesJSON).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled, &rawProperties, &user.CreatedAt, &user.LastUpdatedAt)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		_, _ = handler.db.Exec(ctx, `
 			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET last_sign_in_at = clock_timestamp()
-		`, userRecord.ID, provider, userInfo.ProviderUserID, propertiesJSON)
+		`, user.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
-		log.Tracef("created new federated user %s for %s:%s", userRecord.ID, provider, userInfo.ProviderUserID)
+		log.Tracef("created new federated user %s for %s:%s", user.ID, provider, userInfo.ProviderUserID)
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(userRecord.ID, UserSignedUpEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 		}
 	}
 
-	handler.CompleteOAuthFlow(responseWriter, request, userRecord, parsedOAuthStatePayload, isPayload)
+	handler.CompleteOAuthFlow(responseWriter, request, user, parsedOAuthStatePayload, isPayload)
 }
 
 // CompleteOAuthFlow completes the OAuth session flow, redirecting to OIDC client if linked, or issuing session tokens.
-func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter, request *http.Request, userRecord UserRecord, parsedOAuthStatePayload OAuthStatePayload, isPayload bool) {
-	log.Debugf("completing OAuth flow for user %s (isPayload: %t, OIDCStateID: %s)", userRecord.ID, isPayload, parsedOAuthStatePayload.OIDCStateID)
+func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter, request *http.Request, user User, parsedOAuthStatePayload OAuthStatePayload, isPayload bool) {
+	log.Debugf("completing OAuth flow for user %s (isPayload: %t, OIDCStateID: %s)", user.ID, isPayload, parsedOAuthStatePayload.OIDCStateID)
 	if isPayload && parsedOAuthStatePayload.OIDCStateID != "" && handler.kvStore != nil {
 		oidcStateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 		if err == nil && oidcStateJSON != "" {
@@ -367,7 +367,7 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 			if err := json.Unmarshal([]byte(oidcStateJSON), &oidcAuthorizationStatePayload); err == nil {
 				log.Tracef("resolving linked OIDC state %s for client %s", parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload.ClientID)
 				_ = handler.kvStore.Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
-				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, userRecord.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
+				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, user.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
 				refreshToken := handler.jwtSigner.GenerateRefreshToken()
 				refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
 				config := handler.configManager.Get()
@@ -378,11 +378,11 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 				expiresAt := time.Now().Add(time.Duration(refreshTokenExpirySeconds) * time.Second)
 				sessionID := uuid.New().String()
 				if handler.db != nil {
-					log.Tracef("saving session for OIDC flow for user %s", userRecord.ID)
+					log.Tracef("saving session for OIDC flow for user %s", user.ID)
 					_, _ = handler.db.Exec(request.Context(), `
 						INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 						VALUES ($1, $2, $3, $4, clock_timestamp())
-					`, sessionID, userRecord.ID, refreshTokenHash, expiresAt)
+					`, sessionID, user.ID, refreshTokenHash, expiresAt)
 				}
 				core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
@@ -403,11 +403,11 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 	}
 
 	provider := request.PathValue("provider")
-	handler.completeSignInFlow(responseWriter, request, userRecord, "oauth", provider)
+	handler.completeSignInFlow(responseWriter, request, user, "oauth", provider)
 }
 
-// HandleOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
-func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
+func (handler *BaseHandler) handleGetOAuthUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "Bearer token required")
@@ -419,16 +419,16 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := handler.db.QueryRow(request.Context(), `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, authContext.UserID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -438,10 +438,10 @@ func (handler *BaseHandler) HandleOAuthUserInfo(responseWriter http.ResponseWrit
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("OAuth userinfo database query error for ID %s: %v", authContext.UserID, err))
 		return
 	}
-	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	_ = json.Unmarshal(rawProperties, &user.Properties)
 
-	log.Debugf("successfully retrieved OAuth user info for %s", userRecord.ID)
+	log.Debugf("successfully retrieved OAuth user info for %s", user.ID)
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(userRecord)
+	_ = json.NewEncoder(responseWriter).Encode(user)
 }

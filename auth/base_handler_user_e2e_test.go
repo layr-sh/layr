@@ -33,8 +33,8 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleUserEmailVerificationRequest)
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/confirm", baseHandler.handleUserEmailVerificationConfirm)
+	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
+	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/confirm", baseHandler.handleConfirmEmailVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -150,8 +150,8 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleUserPhoneVerificationRequest)
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/confirm", baseHandler.handleUserPhoneVerificationConfirm)
+	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
+	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/confirm", baseHandler.handleConfirmPhoneVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()
@@ -266,8 +266,8 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleUserEmailVerificationRequest)
-	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleUserPhoneVerificationRequest)
+	serveMux.HandleFunc("POST /api/v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
+	serveMux.HandleFunc("POST /api/v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
 
 	testServer := httptest.NewServer(serveMux)
 	defer testServer.Close()

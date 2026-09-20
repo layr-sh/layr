@@ -50,8 +50,8 @@ func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 	assert.Nil(t, emptyService.GetRealtimeHub())
 	emptyService.InvalidateTableCache(ctx, "public", "users")
 	emptyService.ResetTableCacheVersion(ctx, "public", "users")
-	emptyService.HandleFlushCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
-	emptyService.HandleInvalidateCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
+	emptyService.handleFlushCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
+	emptyService.handleInvalidateCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
 
 	dataService.ResetTableCacheVersion(ctx, "public", "users")
 
@@ -82,7 +82,7 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	dataService.SetKVStore(mockKVStore)
 
 	// 1. Invalidate single table cache
-	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Schema: "public", Table: "users"})
+	dataService.InvalidateCache(ctx, InvalidateCacheInput{Schema: "public", Table: "users"})
 	if _, ok := mockDriver.storage["cache:public.users"]; ok {
 		t.Fatal("expected table cache to be deleted")
 	}
@@ -91,48 +91,48 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	}
 
 	// 2. Invalidate Catalog via InvalidateCache
-	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Catalog: true})
+	dataService.InvalidateCache(ctx, InvalidateCacheInput{Catalog: true})
 	if _, ok := mockDriver.storage["cache:catalog"]; ok {
 		t.Fatal("expected catalog cache to be deleted")
 	}
 
-	// 3. HandleFlushCache
+	// 3. handleFlushCache
 	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
 	flushResponseRecorder := httptest.NewRecorder()
-	dataService.HandleFlushCache(flushResponseRecorder, flushRequest)
+	dataService.handleFlushCache(flushResponseRecorder, flushRequest)
 	if flushResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on HandleFlushCache, got %d", flushResponseRecorder.Code)
+		t.Fatalf("expected 200 on handleFlushCache, got %d", flushResponseRecorder.Code)
 	}
 
-	// 4. HandleInvalidateCache with valid JSON body
+	// 4. handleInvalidateCache with valid JSON body
 	invalidationReader := bytes.NewReader([]byte(`{"schema":"public","table":"products"}`))
 	invalidationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", invalidationReader)
 	invalidationResponseRecorder := httptest.NewRecorder()
-	dataService.HandleInvalidateCache(invalidationResponseRecorder, invalidationRequest)
+	dataService.handleInvalidateCache(invalidationResponseRecorder, invalidationRequest)
 	if invalidationResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on HandleInvalidateCache, got %d", invalidationResponseRecorder.Code)
+		t.Fatalf("expected 200 on handleInvalidateCache, got %d", invalidationResponseRecorder.Code)
 	}
 
-	// 5. HandleInvalidateCache with malformed JSON
+	// 5. handleInvalidateCache with malformed JSON
 	malformedReader := bytes.NewReader([]byte(`{bad json`))
 	malformedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", malformedReader)
 	malformedResponseRecorder := httptest.NewRecorder()
-	dataService.HandleInvalidateCache(malformedResponseRecorder, malformedRequest)
+	dataService.handleInvalidateCache(malformedResponseRecorder, malformedRequest)
 	if malformedResponseRecorder.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 on malformed HandleInvalidateCache, got %d", malformedResponseRecorder.Code)
+		t.Fatalf("expected 400 on malformed handleInvalidateCache, got %d", malformedResponseRecorder.Code)
 	}
 
-	// 6. HandleInvalidateCache with nil body (empty)
+	// 6. handleInvalidateCache with nil body (empty)
 	nilBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", nil)
 	nilBodyResponseRecorder := httptest.NewRecorder()
-	dataService.HandleInvalidateCache(nilBodyResponseRecorder, nilBodyRequest)
+	dataService.handleInvalidateCache(nilBodyResponseRecorder, nilBodyRequest)
 	if nilBodyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on nil body HandleInvalidateCache, got %d", nilBodyResponseRecorder.Code)
+		t.Fatalf("expected 200 on nil body handleInvalidateCache, got %d", nilBodyResponseRecorder.Code)
 	}
 
 	// 8. Invalidate by pattern
 	mockDriver.storage["cache:prefix:item"] = "cached"
-	dataService.InvalidateCache(ctx, InvalidateCacheRequest{Pattern: "prefix:*"})
+	dataService.InvalidateCache(ctx, InvalidateCacheInput{Pattern: "prefix:*"})
 	assert.NotContains(t, mockDriver.storage, "cache:prefix:item")
 }
 

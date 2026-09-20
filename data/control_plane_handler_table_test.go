@@ -21,7 +21,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	forbiddenListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
 	forbiddenListRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListTables(forbiddenListResponseRecorder, forbiddenListRequest)
+	controlPlaneHandler.handleListTables(forbiddenListResponseRecorder, forbiddenListRequest)
 	if forbiddenListResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenListResponseRecorder.Code)
 	}
@@ -30,7 +30,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	forbiddenCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte(`{}`)))
 	forbiddenCreateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
+	controlPlaneHandler.handleCreateTable(forbiddenCreateResponseRecorder, forbiddenCreateRequest)
 	if forbiddenCreateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenCreateResponseRecorder.Code)
 	}
@@ -39,7 +39,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	forbiddenGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables/public/users", nil)
 	forbiddenGetRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenGetResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetTable(forbiddenGetResponseRecorder, forbiddenGetRequest)
+	controlPlaneHandler.handleGetTable(forbiddenGetResponseRecorder, forbiddenGetRequest)
 	if forbiddenGetResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenGetResponseRecorder.Code)
 	}
@@ -48,7 +48,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	forbiddenDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables/public/users", nil)
 	forbiddenDropRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropTable(forbiddenDropResponseRecorder, forbiddenDropRequest)
+	controlPlaneHandler.handleDeleteTable(forbiddenDropResponseRecorder, forbiddenDropRequest)
 	if forbiddenDropResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenDropResponseRecorder.Code)
 	}
@@ -57,7 +57,7 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	forbiddenTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public/users/truncate", nil)
 	forbiddenTruncateRequest.Header.Set("Authorization", "Bearer invalid_key")
 	forbiddenTruncateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleTruncateTable(forbiddenTruncateResponseRecorder, forbiddenTruncateRequest)
+	controlPlaneHandler.handleTruncateTable(forbiddenTruncateResponseRecorder, forbiddenTruncateRequest)
 	if forbiddenTruncateResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", forbiddenTruncateResponseRecorder.Code)
 	}
@@ -71,7 +71,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	// Malformed JSON on CreateTable
 	malformedCreateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte("not json")))
 	malformedCreateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(malformedCreateResponseRecorder, malformedCreateRequest)
+	controlPlaneHandler.handleCreateTable(malformedCreateResponseRecorder, malformedCreateRequest)
 	if malformedCreateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on malformed JSON, got %d", malformedCreateResponseRecorder.Code)
 	}
@@ -79,7 +79,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on GetTable
 	missingParamsGetRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/tables", nil)
 	missingParamsGetResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetTable(missingParamsGetResponseRecorder, missingParamsGetRequest)
+	controlPlaneHandler.handleGetTable(missingParamsGetResponseRecorder, missingParamsGetRequest)
 	if missingParamsGetResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingParamsGetResponseRecorder.Code)
 	}
@@ -87,7 +87,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on DropTable
 	missingParamsDropRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/_/data/tables", nil)
 	missingParamsDropResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleDropTable(missingParamsDropResponseRecorder, missingParamsDropRequest)
+	controlPlaneHandler.handleDeleteTable(missingParamsDropResponseRecorder, missingParamsDropRequest)
 	if missingParamsDropResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingParamsDropResponseRecorder.Code)
 	}
@@ -95,7 +95,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	// Missing parameters on TruncateTable
 	missingParamsTruncateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", nil)
 	missingParamsTruncateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleTruncateTable(missingParamsTruncateResponseRecorder, missingParamsTruncateRequest)
+	controlPlaneHandler.handleTruncateTable(missingParamsTruncateResponseRecorder, missingParamsTruncateRequest)
 	if missingParamsTruncateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing params, got %d", missingParamsTruncateResponseRecorder.Code)
 	}
@@ -103,7 +103,7 @@ func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T
 	// CreateTable on protected schema error
 	protectedSchemaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables", bytes.NewReader([]byte(`{"schema":"core","name":"test"}`)))
 	protectedSchemaResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleCreateTable(protectedSchemaResponseRecorder, protectedSchemaRequest)
+	controlPlaneHandler.handleCreateTable(protectedSchemaResponseRecorder, protectedSchemaRequest)
 	if protectedSchemaResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on protected schema, got %d", protectedSchemaResponseRecorder.Code)
 	}

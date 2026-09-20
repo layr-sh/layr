@@ -61,12 +61,12 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 		t.Fatalf("expected readyz 200, got %d", readyResponseRecorder.Code)
 	}
 
-	var readyResponse ReadyResponse
-	if err := json.Unmarshal(readyResponseRecorder.Body.Bytes(), &readyResponse); err != nil {
+	var getReadinessResponse GetReadinessResponse
+	if err := json.Unmarshal(readyResponseRecorder.Body.Bytes(), &getReadinessResponse); err != nil {
 		t.Fatalf("failed to parse readyz response: %v", err)
 	}
-	if readyResponse.Database != "ok" || readyResponse.Status != "ready" {
-		t.Fatalf("expected database: ok and status: ready, got: %+v", readyResponse)
+	if getReadinessResponse.Database != "ok" || getReadinessResponse.Status != "ready" {
+		t.Fatalf("expected database: ok and status: ready, got: %+v", getReadinessResponse)
 	}
 
 	// 2. Ready probe with closed / broken DB

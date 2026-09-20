@@ -48,13 +48,13 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 
 	// 1. Begin Sign-up Flow
 	newUserID := "01918a24-1111-7000-8000-000000000001"
-	signUpPayload, _ := json.Marshal(PasskeySignUpRequest{
+	signUpPayload, _ := json.Marshal(BeginPasskeySignUpInput{
 		UserID:   newUserID,
 		UserName: "Alice",
 	})
 	signUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(signUpPayload))
 	signUpResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUp(signUpResponseRecorder, signUpRequest)
+	baseHandler.handleBeginPasskeySignUp(signUpResponseRecorder, signUpRequest)
 	if signUpResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on passkey sign-up, got: %d (%s)", signUpResponseRecorder.Code, signUpResponseRecorder.Body.String())
 	}
@@ -70,7 +70,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 
 	// 2. Complete Sign-up Flow (New User)
 	credentialID := "credential-alice-12345"
-	verifySignUpPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	verifySignUpPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		UserID:       newUserID,
 		Challenge:    challenge,
 		CredentialID: credentialID,
@@ -80,17 +80,17 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	})
 	verifySignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verifySignUpPayload))
 	verifySignUpResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(verifySignUpResponseRecorder, verifySignUpRequest)
+	baseHandler.handleVerifyPasskeySignUp(verifySignUpResponseRecorder, verifySignUpRequest)
 	if verifySignUpResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on passkey sign-up verify, got: %d (%s)", verifySignUpResponseRecorder.Code, verifySignUpResponseRecorder.Body.String())
 	}
 
-	var signUpSessionResponse SessionResponse
-	if err := json.NewDecoder(verifySignUpResponseRecorder.Body).Decode(&signUpSessionResponse); err != nil || signUpSessionResponse.AccessToken == "" {
-		t.Fatalf("expected valid SessionResponse, got: %+v (err: %v)", signUpSessionResponse, err)
+	var signUpAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(verifySignUpResponseRecorder.Body).Decode(&signUpAuthTokenResponse); err != nil || signUpAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected valid AuthTokenResponse, got: %+v (err: %v)", signUpAuthTokenResponse, err)
 	}
-	if signUpSessionResponse.User.ID != newUserID {
-		t.Fatalf("expected user ID %s, got: %s", newUserID, signUpSessionResponse.User.ID)
+	if signUpAuthTokenResponse.User.ID != newUserID {
+		t.Fatalf("expected user ID %s, got: %s", newUserID, signUpAuthTokenResponse.User.ID)
 	}
 
 	// Verify DB record
@@ -103,7 +103,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	// 3. Begin Sign-in Flow
 	signInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	signInResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignIn(signInResponseRecorder, signInRequest)
+	baseHandler.handleBeginPasskeySignIn(signInResponseRecorder, signInRequest)
 	if signInResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on passkey sign-in, got: %d", signInResponseRecorder.Code)
 	}
@@ -116,31 +116,31 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	}
 
 	// 4. Complete Sign-in Flow
-	verifySignInPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	verifySignInPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:    signInChallenge,
 		CredentialID: credentialID,
 	})
 	verifySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(verifySignInPayload))
 	verifySignInResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(verifySignInResponseRecorder, verifySignInRequest)
+	baseHandler.handleVerifyPasskeySignIn(verifySignInResponseRecorder, verifySignInRequest)
 	if verifySignInResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on passkey sign-in verify, got: %d (%s)", verifySignInResponseRecorder.Code, verifySignInResponseRecorder.Body.String())
 	}
 
-	var signInSessionResponse SessionResponse
-	if err := json.NewDecoder(verifySignInResponseRecorder.Body).Decode(&signInSessionResponse); err != nil || signInSessionResponse.AccessToken == "" {
-		t.Fatalf("expected valid session response on sign-in verify: %+v", signInSessionResponse)
+	var signInAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(verifySignInResponseRecorder.Body).Decode(&signInAuthTokenResponse); err != nil || signInAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected valid session response on sign-in verify: %+v", signInAuthTokenResponse)
 	}
 
 	// 5. Sign-in Verify with Non-existent Credential -> 401
 	ghostChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
-	ghostVerifyPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	ghostVerifyPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:    ghostChallenge,
 		CredentialID: "unknown-credential-id",
 	})
 	ghostVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(ghostVerifyPayload))
 	ghostVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(ghostVerifyResponseRecorder, ghostVerifyRequest)
+	baseHandler.handleVerifyPasskeySignIn(ghostVerifyResponseRecorder, ghostVerifyRequest)
 	if ghostVerifyResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on unknown credential verify, got: %d", ghostVerifyResponseRecorder.Code)
 	}
@@ -159,7 +159,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	anonChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(anonUserID)
-	anonVerifyPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	anonVerifyPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		UserID:       anonUserID,
 		Challenge:    anonChallenge,
 		CredentialID: "credential-anon-999",
@@ -170,7 +170,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	anonVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(anonVerifyPayload))
 	anonVerifyRequest.Header.Set("Authorization", "Bearer "+anonToken)
 	anonVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(anonVerifyResponseRecorder, anonVerifyRequest)
+	baseHandler.handleVerifyPasskeySignUp(anonVerifyResponseRecorder, anonVerifyRequest)
 	if anonVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on anonymous passkey verify conversion, got: %d (%s)", anonVerifyResponseRecorder.Code, anonVerifyResponseRecorder.Body.String())
 	}
@@ -185,7 +185,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	canceledChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(newUserID)
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	canceledPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	canceledPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		UserID:       newUserID,
 		Challenge:    canceledChallenge,
 		CredentialID: "cred-canceled",
@@ -193,7 +193,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	})
 	canceledVerifyRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(canceledPayload))
 	canceledVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(canceledVerifyResponseRecorder, canceledVerifyRequest)
+	baseHandler.handleVerifyPasskeySignUp(canceledVerifyResponseRecorder, canceledVerifyRequest)
 	if canceledVerifyResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on canceled context passkey sign-up verify, got: %d", canceledVerifyResponseRecorder.Code)
 	}
@@ -218,13 +218,13 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	}
 
 	ghostSignInChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
-	ghostSignInPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	ghostSignInPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:    ghostSignInChallenge,
 		CredentialID: ghostUserCredentialID,
 	})
 	ghostSignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(ghostSignInPayload))
 	ghostSignInResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(ghostSignInResponseRecorder, ghostSignInRequest)
+	baseHandler.handleVerifyPasskeySignIn(ghostSignInResponseRecorder, ghostSignInRequest)
 	if ghostSignInResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on orphaned passkey user lookup, got: %d (%s)", ghostSignInResponseRecorder.Code, ghostSignInResponseRecorder.Body.String())
 	}
@@ -244,7 +244,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_passkey_insert_fn();
 	`)
 	failChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(newUserID)
-	failVerifyPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	failVerifyPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		UserID:       newUserID,
 		Challenge:    failChallenge,
 		CredentialID: "cred-fail-insert",
@@ -253,7 +253,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	})
 	failVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(failVerifyPayload))
 	failVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(failVerifyResponseRecorder, failVerifyRequest)
+	baseHandler.handleVerifyPasskeySignUp(failVerifyResponseRecorder, failVerifyRequest)
 	if failVerifyResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on passkey insert trigger failure, got: %d", failVerifyResponseRecorder.Code)
 	}
@@ -315,13 +315,13 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	userAuthContext := core.AuthContext{UserID: userID, JWT: core.JWTClaims{Subject: userID, Role: "authenticated"}}
 
 	// 1. Authenticated caller registers passkey using session token (empty user_id in payload)
-	signUpPayload, _ := json.Marshal(PasskeySignUpRequest{
+	signUpPayload, _ := json.Marshal(BeginPasskeySignUpInput{
 		UserName: "Bob Session",
 	})
 	signUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(signUpPayload))
 	signUpRequest.Header.Set("Authorization", bearerHeader)
 	signUpResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUp(signUpResponseRecorder, signUpRequest)
+	baseHandler.handleBeginPasskeySignUp(signUpResponseRecorder, signUpRequest)
 	if signUpResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on authenticated passkey sign-up, got: %d (%s)", signUpResponseRecorder.Code, signUpResponseRecorder.Body.String())
 	}
@@ -331,7 +331,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	signUpChallenge := signUpResponse["challenge"].(string)
 
 	credentialID1 := "cred-bob-session-1"
-	verifySignUpPayload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	verifySignUpPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		Challenge:    signUpChallenge,
 		CredentialID: credentialID1,
 		PublicKey:    "public-key-blob-1",
@@ -341,7 +341,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	verifySignUpRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verifySignUpPayload))
 	verifySignUpRequest.Header.Set("Authorization", bearerHeader)
 	verifySignUpResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(verifySignUpResponseRecorder, verifySignUpRequest)
+	baseHandler.handleVerifyPasskeySignUp(verifySignUpResponseRecorder, verifySignUpRequest)
 	if verifySignUpResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on authenticated passkey sign-up verify, got: %d (%s)", verifySignUpResponseRecorder.Code, verifySignUpResponseRecorder.Body.String())
 	}
@@ -349,7 +349,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	// 2. Register a second passkey with empty public key (to test VerifySignature false branch)
 	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(userID)
 	credentialID2 := "cred-bob-session-2"
-	verify2Payload, _ := json.Marshal(PasskeySignUpVerifyRequest{
+	verify2Payload, _ := json.Marshal(VerifyPasskeySignUpInput{
 		UserID:       userID,
 		Challenge:    challenge2,
 		CredentialID: credentialID2,
@@ -359,7 +359,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	})
 	verify2Request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(verify2Payload))
 	verify2ResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(verify2ResponseRecorder, verify2Request)
+	baseHandler.handleVerifyPasskeySignUp(verify2ResponseRecorder, verify2Request)
 	if verify2ResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on second passkey verify, got: %d", verify2ResponseRecorder.Code)
 	}
@@ -368,23 +368,23 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	listRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodGet, "/api/v1/auth/user/passkeys", nil)
 	listRequest.Header.Set("Authorization", bearerHeader)
 	listResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleListUserPasskeys(listResponseRecorder, listRequest)
+	baseHandler.handleListPasskeys(listResponseRecorder, listRequest)
 	if listResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list user passkeys, got: %d (%s)", listResponseRecorder.Code, listResponseRecorder.Body.String())
 	}
 
-	var passkeyItems []UserPasskeyResponse
-	if decodeErr := json.NewDecoder(listResponseRecorder.Body).Decode(&passkeyItems); decodeErr != nil {
+	var listPasskeysResponse ListPasskeysResponse
+	if decodeErr := json.NewDecoder(listResponseRecorder.Body).Decode(&listPasskeysResponse); decodeErr != nil {
 		t.Fatalf("failed to decode list passkeys response: %v", decodeErr)
 	}
-	if len(passkeyItems) != 2 {
-		t.Fatalf("expected 2 passkeys, got: %d", len(passkeyItems))
+	if len(listPasskeysResponse) != 2 {
+		t.Fatalf("expected 2 passkeys, got: %d", len(listPasskeysResponse))
 	}
 
 	// 4. Sign-in verify with assertion signature:
 	// 4a. Valid signature over non-empty public key -> 200
 	signInChallenge1, _ := baseHandler.passkeyManager.GenerateChallenge("")
-	verifySigPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	verifySigPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:         signInChallenge1,
 		CredentialID:      credentialID1,
 		ClientDataJSON:    `{"type":"webauthn.get"}`,
@@ -393,14 +393,14 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	})
 	verifySigRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(verifySigPayload))
 	verifySigResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(verifySigResponseRecorder, verifySigRequest)
+	baseHandler.handleVerifyPasskeySignIn(verifySigResponseRecorder, verifySigRequest)
 	if verifySigResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on passkey verify with valid signature, got: %d (%s)", verifySigResponseRecorder.Code, verifySigResponseRecorder.Body.String())
 	}
 
 	// 4b. Signature over credential with empty public key -> 401
 	signInChallenge2, _ := baseHandler.passkeyManager.GenerateChallenge("")
-	invalidSigPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	invalidSigPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:         signInChallenge2,
 		CredentialID:      credentialID2,
 		ClientDataJSON:    `{"type":"webauthn.get"}`,
@@ -409,7 +409,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	})
 	invalidSigRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(invalidSigPayload))
 	invalidSigResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(invalidSigResponseRecorder, invalidSigRequest)
+	baseHandler.handleVerifyPasskeySignIn(invalidSigResponseRecorder, invalidSigRequest)
 	if invalidSigResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on invalid passkey assertion signature, got: %d", invalidSigResponseRecorder.Code)
 	}
@@ -419,25 +419,25 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
 
 	lockedSignInChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
-	lockedPayload, _ := json.Marshal(PasskeySignInVerifyRequest{
+	lockedPayload, _ := json.Marshal(VerifyPasskeySignInInput{
 		Challenge:    lockedSignInChallenge,
 		CredentialID: credentialID1,
 	})
 	lockedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(lockedPayload))
 	lockedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(lockedResponseRecorder, lockedRequest)
+	baseHandler.handleVerifyPasskeySignIn(lockedResponseRecorder, lockedRequest)
 	if lockedResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 on locked user passkey sign-in, got: %d", lockedResponseRecorder.Code)
 	}
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = NULL WHERE id = $1", userID)
 
 	// 6. Delete passkey -> 204 No Content
-	passkeyToDeleteID := passkeyItems[0].ID
+	passkeyToDeleteID := listPasskeysResponse[0].ID
 	deleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
 	deleteRequest.SetPathValue("id", passkeyToDeleteID)
 	deleteRequest.Header.Set("Authorization", bearerHeader)
 	deleteResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleDeleteUserPasskey(deleteResponseRecorder, deleteRequest)
+	baseHandler.handleDeletePasskey(deleteResponseRecorder, deleteRequest)
 	if deleteResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 on delete passkey, got: %d (%s)", deleteResponseRecorder.Code, deleteResponseRecorder.Body.String())
 	}
@@ -476,7 +476,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	delete404Request.SetPathValue("id", passkeyToDeleteID)
 	delete404Request.Header.Set("Authorization", bearerHeader)
 	delete404ResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleDeleteUserPasskey(delete404ResponseRecorder, delete404Request)
+	baseHandler.handleDeletePasskey(delete404ResponseRecorder, delete404Request)
 	if delete404ResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on deleting already deleted passkey, got: %d", delete404ResponseRecorder.Code)
 	}
@@ -493,12 +493,12 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_passkey_delete_fn();
 	`)
 
-	passkeyToFailDeleteID := passkeyItems[1].ID
+	passkeyToFailDeleteID := listPasskeysResponse[1].ID
 	failDeleteRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil), userID, "authenticated", false)
 	failDeleteRequest.SetPathValue("id", passkeyToFailDeleteID)
 	failDeleteRequest.Header.Set("Authorization", bearerHeader)
 	failDeleteResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleDeleteUserPasskey(failDeleteResponseRecorder, failDeleteRequest)
+	baseHandler.handleDeletePasskey(failDeleteResponseRecorder, failDeleteRequest)
 	if failDeleteResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on passkey delete failure trigger, got: %d", failDeleteResponseRecorder.Code)
 	}
@@ -514,7 +514,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	canceledListRequest := withUserAuth(httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/api/v1/auth/user/passkeys", nil), userID, "authenticated", false)
 	canceledListRequest.Header.Set("Authorization", bearerHeader)
 	canceledListResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleListUserPasskeys(canceledListResponseRecorder, canceledListRequest)
+	baseHandler.handleListPasskeys(canceledListResponseRecorder, canceledListRequest)
 	if canceledListResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on canceled context list passkeys, got: %d", canceledListResponseRecorder.Code)
 	}

@@ -123,21 +123,21 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	// 8. Token Refresh validation errors
 	badRefreshJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader([]byte(`bad-json`)))
 	badRefreshJSONResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(badRefreshJSONResponseRecorder, badRefreshJSONRequest)
+	baseHandler.handleRefreshToken(badRefreshJSONResponseRecorder, badRefreshJSONRequest)
 	if badRefreshJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad refresh JSON, got: %d", badRefreshJSONResponseRecorder.Code)
 	}
 
 	missingTokenRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", strings.NewReader(`{}`))
 	missingTokenRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(missingTokenRefreshResponseRecorder, missingTokenRefreshRequest)
+	baseHandler.handleRefreshToken(missingTokenRefreshResponseRecorder, missingTokenRefreshRequest)
 	if missingTokenRefreshResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on missing refresh token, got: %d", missingTokenRefreshResponseRecorder.Code)
 	}
 
 	validRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"valid-refresh-token"}`))
 	validRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(validRefreshResponseRecorder, validRefreshRequest)
+	baseHandler.handleRefreshToken(validRefreshResponseRecorder, validRefreshRequest)
 	if validRefreshResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on refresh nil db pool, got: %d", validRefreshResponseRecorder.Code)
 	}
@@ -151,7 +151,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 
 	futureLockUntil := time.Now().UTC().Add(time.Hour)
 	lockedCachedSession := CachedSession{
-		User: UserRecord{
+		User: User{
 			ID:          "user-locked-123",
 			Role:        "authenticated",
 			LockedUntil: &futureLockUntil,
@@ -164,7 +164,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 
 	lockedCacheRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"cached-locked-token"}`))
 	lockedCacheRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(lockedCacheRefreshResponseRecorder, lockedCacheRefreshRequest)
+	baseHandler.handleRefreshToken(lockedCacheRefreshResponseRecorder, lockedCacheRefreshRequest)
 	if lockedCacheRefreshResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 on locked cached session refresh, got: %d", lockedCacheRefreshResponseRecorder.Code)
 	}

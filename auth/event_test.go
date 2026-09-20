@@ -11,7 +11,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	email := "test@example.com"
 	phone := "+1234567890"
 	encryptedMFASecret := "enc:secret:totp"
-	userRecord := UserRecord{
+	user := User{
 		ID:                 "usr_123",
 		Email:              &email,
 		Phone:              &phone,
@@ -63,7 +63,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	userAgent := "Go-Test"
 	sessionCreatedEvent := NewSessionCreatedEvent("sess_123", SessionCreatedEventData{
 		ID:         "sess_123",
-		User:       userRecord,
+		User:       user,
 		AuthMethod: "password",
 		Provider:   "google",
 		IPAddress:  &clientIP,
@@ -90,7 +90,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	sessionID := "sess_123"
 	revokedCount := 5
 	sessionDeletedEvent := NewSessionDeletedEvent("sess_123", SessionDeletedEventData{
-		User:         userRecord,
+		User:         user,
 		SessionID:    &sessionID,
 		RevokedCount: &revokedCount,
 	})
@@ -109,7 +109,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 4. PasskeyCreated (nested user)
 	passkeyEvent := NewPasskeyCreatedEvent("passkey_123", PasskeyCreatedEventData{
 		ID:           "passkey_123",
-		User:         userRecord,
+		User:         user,
 		FriendlyName: "MacBook Touch ID",
 		Transports:   []string{"internal"},
 	})
@@ -128,7 +128,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 4b. PasskeyDeleted (nested user)
 	passkeyDeletedEvent := NewPasskeyDeletedEvent("passkey_123", PasskeyDeletedEventData{
 		ID:   "passkey_123",
-		User: userRecord,
+		User: user,
 	})
 	if passkeyDeletedEvent.Type != "auth.passkey.deleted" || passkeyDeletedEvent.ResourceType != "auth.passkey" || passkeyDeletedEvent.Action != "deleted" {
 		t.Fatalf("unexpected passkey deleted event: %+v", passkeyDeletedEvent)
@@ -143,7 +143,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(passkeyDeletedUser, "PasskeyDeleted")
 
 	// 5. UserSignedUp (flat user)
-	signedUpEvent := NewUserSignedUpEvent("usr_123", UserSignedUpEventData(userRecord))
+	signedUpEvent := NewUserSignedUpEvent("usr_123", UserSignedUpEventData(user))
 	if signedUpEvent.Type != "auth.user.signed_up" || signedUpEvent.ResourceType != "auth.user" || signedUpEvent.Action != "signed_up" {
 		t.Fatalf("unexpected user signed up event: %+v", signedUpEvent)
 	}
@@ -156,7 +156,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(signedUpEvent.Data, "UserSignedUp")
 
 	// 6. UserConverted (flat user)
-	convertedEvent := NewUserConvertedEvent("usr_123", UserConvertedEventData(userRecord))
+	convertedEvent := NewUserConvertedEvent("usr_123", UserConvertedEventData(user))
 	if convertedEvent.Type != "auth.user.converted" || convertedEvent.ResourceType != "auth.user" || convertedEvent.Action != "converted" {
 		t.Fatalf("unexpected user converted event: %+v", convertedEvent)
 	}
@@ -166,7 +166,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(convertedEvent.Data, "UserConverted")
 
 	// 7. UserEmailVerified (flat user)
-	emailVerifiedEvent := NewUserEmailVerifiedEvent("usr_123", UserEmailVerifiedEventData(userRecord))
+	emailVerifiedEvent := NewUserEmailVerifiedEvent("usr_123", UserEmailVerifiedEventData(user))
 	if emailVerifiedEvent.Type != "auth.user.email_verified" || emailVerifiedEvent.ResourceType != "auth.user" || emailVerifiedEvent.Action != "email_verified" {
 		t.Fatalf("unexpected user email verified event: %+v", emailVerifiedEvent)
 	}
@@ -176,7 +176,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(emailVerifiedEvent.Data, "UserEmailVerified")
 
 	// 8. UserPhoneVerified (flat user)
-	phoneVerifiedEvent := NewUserPhoneVerifiedEvent("usr_123", UserPhoneVerifiedEventData(userRecord))
+	phoneVerifiedEvent := NewUserPhoneVerifiedEvent("usr_123", UserPhoneVerifiedEventData(user))
 	if phoneVerifiedEvent.Type != "auth.user.phone_verified" || phoneVerifiedEvent.ResourceType != "auth.user" || phoneVerifiedEvent.Action != "phone_verified" {
 		t.Fatalf("unexpected user phone verified event: %+v", phoneVerifiedEvent)
 	}
@@ -186,7 +186,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(phoneVerifiedEvent.Data, "UserPhoneVerified")
 
 	// 9. UserUpdated (flat user)
-	updatedEvent := NewUserUpdatedEvent("usr_123", UserUpdatedEventData(userRecord))
+	updatedEvent := NewUserUpdatedEvent("usr_123", UserUpdatedEventData(user))
 	if updatedEvent.Type != "auth.user.updated" || updatedEvent.ResourceType != "auth.user" || updatedEvent.Action != "updated" {
 		t.Fatalf("unexpected user updated event: %+v", updatedEvent)
 	}
@@ -196,7 +196,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(updatedEvent.Data, "UserUpdated")
 
 	// 10. UserDeleted (flat user)
-	deletedEvent := NewUserDeletedEvent("usr_123", UserDeletedEventData(userRecord))
+	deletedEvent := NewUserDeletedEvent("usr_123", UserDeletedEventData(user))
 	if deletedEvent.Type != "auth.user.deleted" || deletedEvent.ResourceType != "auth.user" || deletedEvent.Action != "deleted" {
 		t.Fatalf("unexpected user deleted event: %+v", deletedEvent)
 	}
@@ -211,7 +211,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 11. PasswordResetRequested (nested user)
 	resetRequestedEvent := NewPasswordResetRequestedEvent("usr_123", PasswordResetRequestedEventData{
 		Recipient: "test@example.com",
-		User:      userRecord,
+		User:      user,
 	})
 	if resetRequestedEvent.Type != "auth.password.reset_requested" || resetRequestedEvent.Action != "reset_requested" {
 		t.Fatalf("unexpected password reset requested event: %+v", resetRequestedEvent)
@@ -228,7 +228,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 12. PasswordReset (nested user)
 	resetEvent := NewPasswordResetEvent("usr_123", PasswordResetEventData{
 		Recipient: "test@example.com",
-		User:      userRecord,
+		User:      user,
 	})
 	if resetEvent.Type != "auth.password.reset" || resetEvent.Action != "reset" {
 		t.Fatalf("unexpected password reset event: %+v", resetEvent)
@@ -246,7 +246,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(resetUser, "PasswordReset")
 
 	// 13. PasswordChanged (flat user)
-	changedEvent := NewPasswordChangedEvent("usr_123", PasswordChangedEventData(userRecord))
+	changedEvent := NewPasswordChangedEvent("usr_123", PasswordChangedEventData(user))
 	if changedEvent.Type != "auth.password.changed" || changedEvent.Action != "changed" {
 		t.Fatalf("unexpected password changed event: %+v", changedEvent)
 	}
@@ -259,7 +259,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(changedEvent.Data, "PasswordChanged")
 
 	// 14. MFAEnabled & MFADisabled (flat user)
-	mfaEnabledEvent := NewMFAEnabledEvent("usr_123", MFAEnabledEventData(userRecord))
+	mfaEnabledEvent := NewMFAEnabledEvent("usr_123", MFAEnabledEventData(user))
 	if mfaEnabledEvent.Type != "auth.mfa.enabled" || mfaEnabledEvent.Action != "enabled" || mfaEnabledEvent.ResourceType != "auth.mfa" {
 		t.Fatalf("unexpected mfa enabled event: %+v", mfaEnabledEvent)
 	}
@@ -268,7 +268,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 	assertSanitizedProps(mfaEnabledEvent.Data, "MFAEnabled")
 
-	mfaDisabledEvent := NewMFADisabledEvent("usr_123", MFADisabledEventData(userRecord))
+	mfaDisabledEvent := NewMFADisabledEvent("usr_123", MFADisabledEventData(user))
 	if mfaDisabledEvent.Type != "auth.mfa.disabled" || mfaDisabledEvent.Action != "disabled" || mfaDisabledEvent.ResourceType != "auth.mfa" {
 		t.Fatalf("unexpected mfa disabled event: %+v", mfaDisabledEvent)
 	}
@@ -282,7 +282,7 @@ func TestAuthEventsUnit(t *testing.T) {
 		Recipient: "test@example.com",
 		Purpose:   "email_verification",
 		Channel:   "email",
-		User:      &userRecord,
+		User:      &user,
 	})
 	if otpWithUserEvent.Type != "auth.otp.sent" || otpWithUserEvent.Action != "sent" {
 		t.Fatalf("unexpected otp sent event: %+v", otpWithUserEvent)
@@ -311,7 +311,7 @@ func TestAuthEventsUnit(t *testing.T) {
 		Recipient: "test@example.com",
 		Purpose:   "sign_in",
 		Channel:   "email",
-		User:      &userRecord,
+		User:      &user,
 	})
 	if otpVerifiedEvent.Type != "auth.otp.verified" || otpVerifiedEvent.Action != "verified" {
 		t.Fatalf("unexpected otp verified event: %+v", otpVerifiedEvent)
@@ -336,7 +336,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 
 	// 17. UserCreated (flat user)
-	userCreatedEvent := NewUserCreatedEvent("usr_123", UserCreatedEventData(userRecord))
+	userCreatedEvent := NewUserCreatedEvent("usr_123", UserCreatedEventData(user))
 	if userCreatedEvent.Type != "auth.user.created" || userCreatedEvent.Action != "created" {
 		t.Fatalf("unexpected user created event: %+v", userCreatedEvent)
 	}
@@ -348,7 +348,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	// 18. UserLocked (nested user)
 	lockedUntilTime := now.Add(24 * time.Hour)
 	userLockedEvent := NewUserLockedEvent("usr_123", UserLockedEventData{
-		User:        userRecord,
+		User:        user,
 		LockedUntil: &lockedUntilTime,
 	})
 	if userLockedEvent.Type != "auth.user.locked" || userLockedEvent.Action != "locked" {
@@ -361,7 +361,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(userLockedData, "UserLocked")
 
 	// 19. UserUnlocked (flat user)
-	userUnlockedEvent := NewUserUnlockedEvent("usr_123", UserUnlockedEventData(userRecord))
+	userUnlockedEvent := NewUserUnlockedEvent("usr_123", UserUnlockedEventData(user))
 	if userUnlockedEvent.Type != "auth.user.unlocked" || userUnlockedEvent.Action != "unlocked" {
 		t.Fatalf("unexpected user unlocked event: %+v", userUnlockedEvent)
 	}
@@ -371,8 +371,8 @@ func TestAuthEventsUnit(t *testing.T) {
 	assertSanitizedProps(userUnlockedEvent.Data, "UserUnlocked")
 
 	// 20. Event with nil properties preserved
-	nilPropsUserRecord := UserRecord{ID: "nil_props", Properties: nil}
-	nilPropsEvent := NewUserUnlockedEvent("nil_props", UserUnlockedEventData(nilPropsUserRecord))
+	nilPropsUser := User{ID: "nil_props", Properties: nil}
+	nilPropsEvent := NewUserUnlockedEvent("nil_props", UserUnlockedEventData(nilPropsUser))
 	if nilPropsEvent.Data["properties"] != nil {
 		t.Fatalf("expected nil properties preserved in event, got %v", nilPropsEvent.Data["properties"])
 	}
@@ -410,7 +410,7 @@ func TestAuthEventsUnit(t *testing.T) {
 
 	// 23. SuspiciousSignIn
 	suspiciousSignInEvent := NewSuspiciousSignInEvent("usr_123", SuspiciousSignInEventData{
-		User:      userRecord,
+		User:      user,
 		IPAddress: "203.0.113.195",
 		UserAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
 		RiskScore: 75,
@@ -436,7 +436,7 @@ func TestAuthEventsUnit(t *testing.T) {
 		Reason:     "invalid_credentials",
 		IPAddress:  "192.168.1.50",
 		UserAgent:  "Mozilla/5.0",
-		User:       &userRecord,
+		User:       &user,
 	})
 	if userSignInFailedEvent.Type != "auth.user.sign_in_failed" {
 		t.Fatalf("unexpected sign in failed event type: %s", userSignInFailedEvent.Type)
@@ -454,7 +454,7 @@ func TestAuthEventsUnit(t *testing.T) {
 		Reason:    "invalid_code",
 		IPAddress: "192.168.1.50",
 		UserAgent: "Mozilla/5.0",
-		User:      &userRecord,
+		User:      &user,
 	})
 	if mfaChallengeFailedEvent.Type != "auth.mfa.challenge_failed" {
 		t.Fatalf("unexpected MFA challenge failed event type: %s", mfaChallengeFailedEvent.Type)
@@ -495,7 +495,7 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 
 	// 28. UserExported
-	userExportedEvent := NewUserExportedEvent("usr_123", UserExportedEventData(userRecord))
+	userExportedEvent := NewUserExportedEvent("usr_123", UserExportedEventData(user))
 	if userExportedEvent.Type != "auth.user.exported" {
 		t.Fatalf("unexpected user exported event type: %s", userExportedEvent.Type)
 	}

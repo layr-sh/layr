@@ -102,7 +102,7 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	ddlEngine := NewDDLEngine(nil)
 
 	// CreateTable on protected schema
-	err := ddlEngine.CreateTable(ctx, CreateTableRequest{
+	err := ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "core",
 		Name:   "forbidden_table",
 	})
@@ -111,13 +111,13 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	}
 
 	// AddColumn on protected schema
-	err = ddlEngine.AddColumn(ctx, "layr_auth", "users", ColumnDefinition{Name: "new_column", Type: "text"})
+	err = ddlEngine.AddColumn(ctx, "layr_auth", "users", Column{Name: "new_column", Type: "text"})
 	if err == nil || err.Error() != "cannot alter tables in protected schema 'layr_auth'" {
 		t.Fatalf("expected protected schema error on AddColumn, got: %v", err)
 	}
 
 	// AlterColumn on protected schema
-	err = ddlEngine.AlterColumn(ctx, "layr_auth", "users", "email", AlterColumnRequest{})
+	err = ddlEngine.AlterColumn(ctx, "layr_auth", "users", "email", UpdateColumnInput{})
 	if err == nil || err.Error() != "cannot alter tables in protected schema 'layr_auth'" {
 		t.Fatalf("expected protected schema error on AlterColumn, got: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	}
 
 	// CreatePolicy on protected schema
-	err = ddlEngine.CreatePolicy(ctx, "layr_analytics", "events", CreatePolicyRequest{Name: "p1"})
+	err = ddlEngine.CreatePolicy(ctx, "layr_analytics", "events", CreatePolicyInput{Name: "p1"})
 	if err == nil || err.Error() != "cannot manage policies in protected schema 'layr_analytics'" {
 		t.Fatalf("expected protected schema error on CreatePolicy, got: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	}
 
 	// Invalid identifier validation
-	err = ddlEngine.CreateTable(ctx, CreateTableRequest{
+	err = ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "invalid table name with spaces!",
 	})
@@ -185,10 +185,10 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 		t.Fatal("expected error on invalid table name")
 	}
 
-	err = ddlEngine.CreateTable(ctx, CreateTableRequest{
+	err = ddlEngine.CreateTable(ctx, CreateTableInput{
 		Schema: "public",
 		Name:   "valid_table",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "invalid column!", Type: "text"},
 		},
 	})
@@ -197,7 +197,7 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	}
 
 	// AddColumn invalid identifier
-	err = ddlEngine.AddColumn(ctx, "public", "invalid table!", ColumnDefinition{Name: "column1", Type: "text"})
+	err = ddlEngine.AddColumn(ctx, "public", "invalid table!", Column{Name: "column1", Type: "text"})
 	if err == nil {
 		t.Fatal("expected error on invalid table name in AddColumn")
 	}

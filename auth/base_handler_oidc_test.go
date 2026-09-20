@@ -33,7 +33,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// 1. OIDC Discovery
 	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/openid-configuration", nil)
 	discoveryResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCDiscovery(discoveryResponseRecorder, discoveryRequest)
+	baseHandler.handleGetOIDCDiscovery(discoveryResponseRecorder, discoveryRequest)
 	if discoveryResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from OIDC discovery, got: %d", discoveryResponseRecorder.Code)
 	}
@@ -43,7 +43,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	customConfig.Server.BaseURL = "http://layr.local:8080"
 	core.SetLoadedConfig(customConfig)
 	customResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCDiscovery(customResponseRecorder, discoveryRequest)
+	baseHandler.handleGetOIDCDiscovery(customResponseRecorder, discoveryRequest)
 	if customResponseRecorder.Code != http.StatusOK || !strings.Contains(customResponseRecorder.Body.String(), "http://layr.local:8080") {
 		t.Fatalf("expected custom host in OIDC discovery, got: %s", customResponseRecorder.Body.String())
 	}
@@ -52,7 +52,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// 3. JWKS
 	jwksRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/jwks.json", nil)
 	jwksResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleJWKS(jwksResponseRecorder, jwksRequest)
+	baseHandler.handleGetJWKS(jwksResponseRecorder, jwksRequest)
 	if jwksResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from JWKS, got: %d", jwksResponseRecorder.Code)
 	}
@@ -83,7 +83,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Missing client_id
 	missingClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize", nil)
 	missingClientResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(missingClientResponseRecorder, missingClientRequest)
+	baseHandler.handleAuthorizeOIDC(missingClientResponseRecorder, missingClientRequest)
 	if missingClientResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on missing client_id, got: %d", missingClientResponseRecorder.Code)
 	}
@@ -91,7 +91,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Unknown client_id
 	unknownClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=nonexistent", nil)
 	unknownClientResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(unknownClientResponseRecorder, unknownClientRequest)
+	baseHandler.handleAuthorizeOIDC(unknownClientResponseRecorder, unknownClientRequest)
 	if unknownClientResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on unknown client_id, got: %d", unknownClientResponseRecorder.Code)
 	}
@@ -99,7 +99,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Missing redirect_uri
 	missingRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1", nil)
 	missingRedirectResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(missingRedirectResponseRecorder, missingRedirectRequest)
+	baseHandler.handleAuthorizeOIDC(missingRedirectResponseRecorder, missingRedirectRequest)
 	if missingRedirectResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on missing redirect_uri, got: %d", missingRedirectResponseRecorder.Code)
 	}
@@ -107,7 +107,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Unauthorized redirect_uri
 	unauthorizedRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://evil.com/callback", nil)
 	unauthorizedRedirectResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(unauthorizedRedirectResponseRecorder, unauthorizedRedirectRequest)
+	baseHandler.handleAuthorizeOIDC(unauthorizedRedirectResponseRecorder, unauthorizedRedirectRequest)
 	if unauthorizedRedirectResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on unauthorized redirect_uri, got: %d", unauthorizedRedirectResponseRecorder.Code)
 	}
@@ -115,7 +115,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Unsupported response_type (must redirect to redirect_uri with error)
 	unsupportedResponseTypeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://demo.app/callback&response_type=token&state=teststate", nil)
 	unsupportedResponseTypeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(unsupportedResponseTypeResponseRecorder, unsupportedResponseTypeRequest)
+	baseHandler.handleAuthorizeOIDC(unsupportedResponseTypeResponseRecorder, unsupportedResponseTypeRequest)
 	if unsupportedResponseTypeResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect on unsupported response_type, got: %d", unsupportedResponseTypeResponseRecorder.Code)
 	}
@@ -127,7 +127,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Missing PKCE / invalid method
 	missingPKCERequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://demo.app/callback&response_type=code&state=teststate", nil)
 	missingPKCEResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(missingPKCEResponseRecorder, missingPKCERequest)
+	baseHandler.handleAuthorizeOIDC(missingPKCEResponseRecorder, missingPKCERequest)
 	if missingPKCEResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect on missing PKCE, got: %d", missingPKCEResponseRecorder.Code)
 	}
@@ -139,7 +139,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Valid unauthenticated request -> Renders Hosted Universal Sign-In Page
 	validAuthorizeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://demo.app/callback&response_type=code&state=clientstate123&code_challenge=abc123challenge&code_challenge_method=S256", nil)
 	validAuthorizeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(validAuthorizeResponseRecorder, validAuthorizeRequest)
+	baseHandler.handleAuthorizeOIDC(validAuthorizeResponseRecorder, validAuthorizeRequest)
 	if validAuthorizeResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid authorize GET, got: %d (%s)", validAuthorizeResponseRecorder.Code, validAuthorizeResponseRecorder.Body.String())
 	}
@@ -167,7 +167,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 
 	disabledAuthorizeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://demo.app/callback&response_type=code&state=clientstate123&code_challenge=abc123challenge&code_challenge_method=S256", nil)
 	disabledAuthorizeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(disabledAuthorizeResponseRecorder, disabledAuthorizeRequest)
+	baseHandler.handleAuthorizeOIDC(disabledAuthorizeResponseRecorder, disabledAuthorizeRequest)
 	if disabledAuthorizeResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden on disabled OIDC authorize, got: %d", disabledAuthorizeResponseRecorder.Code)
 	}
@@ -175,7 +175,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	disabledTokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&code=anycode"))
 	disabledTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledTokenResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(disabledTokenResponseRecorder, disabledTokenRequest)
+	baseHandler.handleIssueOIDCToken(disabledTokenResponseRecorder, disabledTokenRequest)
 	if disabledTokenResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 Forbidden on disabled OIDC token, got: %d", disabledTokenResponseRecorder.Code)
 	}
@@ -189,7 +189,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	invalidStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state=nonexistent-state-id&email=test@example.com&password=pass"))
 	invalidStateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(invalidStateResponseRecorder, invalidStateRequest)
+	baseHandler.handleSubmitOIDCAuthorize(invalidStateResponseRecorder, invalidStateRequest)
 	if invalidStateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on invalid state submission, got: %d", invalidStateResponseRecorder.Code)
 	}
@@ -210,7 +210,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCredsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyCredsResponseRecorder, emptyCredsRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyCredsResponseRecorder, emptyCredsRequest)
 	if emptyCredsResponseRecorder.Code != http.StatusOK || !strings.Contains(emptyCredsResponseRecorder.Body.String(), "Email and password are required") {
 		t.Fatalf("expected 200 re-render with validation message, got: %d (%s)", emptyCredsResponseRecorder.Code, emptyCredsResponseRecorder.Body.String())
 	}
@@ -219,7 +219,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	badGrantRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=implicit"))
 	badGrantRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badGrantResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(badGrantResponseRecorder, badGrantRequest)
+	baseHandler.handleIssueOIDCToken(badGrantResponseRecorder, badGrantRequest)
 	if badGrantResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on unsupported grant_type, got: %d", badGrantResponseRecorder.Code)
 	}
@@ -227,7 +227,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	missingCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&code=testcode"))
 	missingCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingCredsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(missingCredsResponseRecorder, missingCredsRequest)
+	baseHandler.handleIssueOIDCToken(missingCredsResponseRecorder, missingCredsRequest)
 	if missingCredsResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized on missing client credentials, got: %d", missingCredsResponseRecorder.Code)
 	}
@@ -235,7 +235,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	badSecretRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-app-1&client_secret=wrongsecret&code=testcode"))
 	badSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badSecretResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(badSecretResponseRecorder, badSecretRequest)
+	baseHandler.handleIssueOIDCToken(badSecretResponseRecorder, badSecretRequest)
 	if badSecretResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 Unauthorized on invalid client_secret, got: %d", badSecretResponseRecorder.Code)
 	}
@@ -243,7 +243,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	missingCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=nonexistent-code&code_verifier=xyz"))
 	missingCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(missingCodeResponseRecorder, missingCodeRequest)
+	baseHandler.handleIssueOIDCToken(missingCodeResponseRecorder, missingCodeRequest)
 	if missingCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on missing authorization code, got: %d", missingCodeResponseRecorder.Code)
 	}
@@ -251,7 +251,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// 7. Userinfo Endpoint Validation (GET /api/v1/auth/oauth/userinfo)
 	missingBearerRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	missingBearerResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCUserInfo(missingBearerResponseRecorder, missingBearerRequest)
+	baseHandler.handleGetOIDCUserInfo(missingBearerResponseRecorder, missingBearerRequest)
 	if missingBearerResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on missing Bearer token, got: %d", missingBearerResponseRecorder.Code)
 	}
@@ -259,7 +259,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	invalidBearerRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/userinfo", nil)
 	invalidBearerRequest.Header.Set("Authorization", "Bearer invalid.token.structure")
 	invalidBearerResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCUserInfo(invalidBearerResponseRecorder, invalidBearerRequest)
+	baseHandler.handleGetOIDCUserInfo(invalidBearerResponseRecorder, invalidBearerRequest)
 	if invalidBearerResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on invalid Bearer token, got: %d", invalidBearerResponseRecorder.Code)
 	}
@@ -267,14 +267,14 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// 8. Sign-Out Endpoint Validation (GET & POST /api/v1/auth/oauth/sign-out)
 	signOutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/sign-out", nil)
 	signOutResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(signOutResponseRecorder, signOutRequest)
+	baseHandler.handleSignOutOIDC(signOutResponseRecorder, signOutRequest)
 	if signOutResponseRecorder.Code != http.StatusOK || !strings.Contains(signOutResponseRecorder.Body.String(), "Signed Out") {
 		t.Fatalf("expected 200 OK HTML on sign-out without redirect, got: %d", signOutResponseRecorder.Code)
 	}
 
 	signOutRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/sign-out?post_sign_out_redirect_uri="+url.QueryEscape("https://demo.app/goodbye"), nil)
 	signOutRedirectResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(signOutRedirectResponseRecorder, signOutRedirectRequest)
+	baseHandler.handleSignOutOIDC(signOutRedirectResponseRecorder, signOutRedirectRequest)
 	if signOutRedirectResponseRecorder.Code != http.StatusFound || signOutRedirectResponseRecorder.Header().Get("Location") != "https://demo.app/goodbye" {
 		t.Fatalf("expected 302 Found redirect to post_sign_out_redirect_uri, got: %d, Location: %s", signOutRedirectResponseRecorder.Code, signOutRedirectResponseRecorder.Header().Get("Location"))
 	}
@@ -316,28 +316,28 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	testKVStore := newInMemoryKVStore()
 	baseHandler.SetKVStore(testKVStore)
 
-	// 1. handleOIDCAuthorizeSubmit when OIDC disabled -> 403
+	// 1. handleSubmitOIDCAuthorize when OIDC disabled -> 403
 	disabledConfig := configManager.Get()
 	disabledConfig.OIDC.Enabled = false
 	configManager.Set(disabledConfig)
 
 	submitRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", nil)
 	submitResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(submitResponseRecorder, submitRequest)
+	baseHandler.handleSubmitOIDCAuthorize(submitResponseRecorder, submitRequest)
 	if submitResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when OIDC disabled on submit, got: %d", submitResponseRecorder.Code)
 	}
 
-	// 2. handleOIDCUserInfo when OIDC disabled -> 403
+	// 2. handleGetOIDCUserInfo when OIDC disabled -> 403
 	userInfoResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCUserInfo(userInfoResponseRecorder, submitRequest)
+	baseHandler.handleGetOIDCUserInfo(userInfoResponseRecorder, submitRequest)
 	if userInfoResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when OIDC disabled on userinfo, got: %d", userInfoResponseRecorder.Code)
 	}
 
-	// 3. handleOIDCSignOut when OIDC disabled -> 403
+	// 3. handleSignOutOIDC when OIDC disabled -> 403
 	signOutResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(signOutResponseRecorder, submitRequest)
+	baseHandler.handleSignOutOIDC(signOutResponseRecorder, submitRequest)
 	if signOutResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when OIDC disabled on sign-out, got: %d", signOutResponseRecorder.Code)
 	}
@@ -346,44 +346,44 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	disabledConfig.OIDC.Enabled = true
 	configManager.Set(disabledConfig)
 
-	// 4. handleOIDCAuthorizeSubmit invalid form data -> 400
+	// 4. handleSubmitOIDCAuthorize invalid form data -> 400
 	badFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("key=%zz"))
 	badFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badFormResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(badFormResponseRecorder, badFormRequest)
+	baseHandler.handleSubmitOIDCAuthorize(badFormResponseRecorder, badFormRequest)
 	if badFormResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad form data, got: %d", badFormResponseRecorder.Code)
 	}
 
-	// 5. handleOIDCAuthorizeSubmit missing state -> 400
+	// 5. handleSubmitOIDCAuthorize missing state -> 400
 	emptyFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="))
 	emptyFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyFormResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyFormResponseRecorder, emptyFormRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyFormResponseRecorder, emptyFormRequest)
 	if emptyFormResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty state, got: %d", emptyFormResponseRecorder.Code)
 	}
 
-	// 6. handleOIDCAuthorizeSubmit nonexistent state in kvStore -> 400
+	// 6. handleSubmitOIDCAuthorize nonexistent state in kvStore -> 400
 	missingStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state=nonexistent_state"))
 	missingStateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(missingStateResponseRecorder, missingStateRequest)
+	baseHandler.handleSubmitOIDCAuthorize(missingStateResponseRecorder, missingStateRequest)
 	if missingStateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing state in kvStore, got: %d", missingStateResponseRecorder.Code)
 	}
 
-	// 7. handleOIDCAuthorizeSubmit corrupt state JSON in kvStore -> 400
+	// 7. handleSubmitOIDCAuthorize corrupt state JSON in kvStore -> 400
 	_ = testKVStore.Set(context.Background(), "auth:oidc:state:corrupt_state", "{invalid_json", 5*time.Minute)
 	corruptStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state=corrupt_state"))
 	corruptStateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(corruptStateResponseRecorder, corruptStateRequest)
+	baseHandler.handleSubmitOIDCAuthorize(corruptStateResponseRecorder, corruptStateRequest)
 	if corruptStateResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on corrupt state JSON, got: %d", corruptStateResponseRecorder.Code)
 	}
 
-	// 8. handleOIDCAuthorizeSubmit empty email/password -> render sign in page error
+	// 8. handleSubmitOIDCAuthorize empty email/password -> render sign in page error
 	validStateID := "valid_state_empty_creds"
 	validStatePayload, _ := json.Marshal(OIDCAuthorizationStatePayload{
 		ClientID:    "client-spa-1",
@@ -393,16 +393,16 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCredsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyCredsResponseRecorder, emptyCredsRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyCredsResponseRecorder, emptyCredsRequest)
 	if !strings.Contains(emptyCredsResponseRecorder.Body.String(), "Email and password are required") {
 		t.Fatalf("expected Email and password required in render, got: %s", emptyCredsResponseRecorder.Body.String())
 	}
 
-	// 9. handleOIDCToken delegation branches (empty grant_type and provider param)
+	// 9. handleIssueOIDCToken delegation branches (empty grant_type and provider param)
 	firstDelegatedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(""))
 	firstDelegatedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	firstDelegatedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(firstDelegatedResponseRecorder, firstDelegatedRequest)
+	baseHandler.handleIssueOIDCToken(firstDelegatedResponseRecorder, firstDelegatedRequest)
 	if firstDelegatedResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on delegated callback without provider/code, got: %d", firstDelegatedResponseRecorder.Code)
 	}
@@ -410,31 +410,31 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	secondDelegatedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&provider=unknown"))
 	secondDelegatedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	secondDelegatedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(secondDelegatedResponseRecorder, secondDelegatedRequest)
+	baseHandler.handleIssueOIDCToken(secondDelegatedResponseRecorder, secondDelegatedRequest)
 	if secondDelegatedResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on delegated callback with provider, got: %d", secondDelegatedResponseRecorder.Code)
 	}
 
-	// 10. handleOIDCTokenAuthorizationCode client not found -> 401
+	// 10. handleIssueOIDCTokenAuthorizationCode client not found -> 401
 	unknownClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=unknown_client"))
 	unknownClientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unknownClientResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(unknownClientResponseRecorder, unknownClientRequest)
+	baseHandler.handleIssueOIDCToken(unknownClientResponseRecorder, unknownClientRequest)
 	if unknownClientResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on unknown client ID, got: %d", unknownClientResponseRecorder.Code)
 	}
 
-	// 11. handleOIDCTokenAuthorizationCode corrupt code JSON in kvStore -> 400
+	// 11. handleIssueOIDCTokenAuthorizationCode corrupt code JSON in kvStore -> 400
 	_ = testKVStore.Set(context.Background(), "auth:code:corrupt_code_123", "{invalid_json", 5*time.Minute)
 	corruptCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=corrupt_code_123"))
 	corruptCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(corruptCodeResponseRecorder, corruptCodeRequest)
+	baseHandler.handleIssueOIDCToken(corruptCodeResponseRecorder, corruptCodeRequest)
 	if corruptCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on corrupt code JSON, got: %d", corruptCodeResponseRecorder.Code)
 	}
 
-	// 12. handleOIDCTokenAuthorizationCode client mismatch -> 400
+	// 12. handleIssueOIDCTokenAuthorizationCode client mismatch -> 400
 	mismatchedClientPayload, _ := json.Marshal(OIDCAuthorizationCodePayload{
 		ClientID: "other-client-id",
 	})
@@ -442,12 +442,12 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	mismatchClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_client_code"))
 	mismatchClientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchClientResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(mismatchClientResponseRecorder, mismatchClientRequest)
+	baseHandler.handleIssueOIDCToken(mismatchClientResponseRecorder, mismatchClientRequest)
 	if mismatchClientResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on client mismatch, got: %d", mismatchClientResponseRecorder.Code)
 	}
 
-	// 13. handleOIDCTokenAuthorizationCode redirect_uri mismatch -> 400
+	// 13. handleIssueOIDCTokenAuthorizationCode redirect_uri mismatch -> 400
 	mismatchedRedirectPayload, _ := json.Marshal(OIDCAuthorizationCodePayload{
 		ClientID:    "client-spa-1",
 		RedirectURI: "https://demo.app/expected_callback",
@@ -456,12 +456,12 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	mismatchRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_redirect_code&redirect_uri=https://demo.app/other_callback"))
 	mismatchRedirectRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchRedirectResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(mismatchRedirectResponseRecorder, mismatchRedirectRequest)
+	baseHandler.handleIssueOIDCToken(mismatchRedirectResponseRecorder, mismatchRedirectRequest)
 	if mismatchRedirectResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on redirect_uri mismatch, got: %d", mismatchRedirectResponseRecorder.Code)
 	}
 
-	// 14. handleOIDCTokenAuthorizationCode PKCE verification failure -> 400
+	// 14. handleIssueOIDCTokenAuthorizationCode PKCE verification failure -> 400
 	badPKCEPayload, _ := json.Marshal(OIDCAuthorizationCodePayload{
 		ClientID:      "client-spa-1",
 		CodeChallenge: "expected_pkce_challenge_hash",
@@ -470,25 +470,25 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	badPKCERequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=bad_pkce_code&code_verifier=invalid_verifier"))
 	badPKCERequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badPKCEResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(badPKCEResponseRecorder, badPKCERequest)
+	baseHandler.handleIssueOIDCToken(badPKCEResponseRecorder, badPKCERequest)
 	if badPKCEResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on PKCE failure, got: %d", badPKCEResponseRecorder.Code)
 	}
 
-	// 15. handleOIDCTokenRefreshToken confidential client invalid secret -> 401
+	// 15. handleIssueOIDCTokenRefreshToken confidential client invalid secret -> 401
 	badConfidentialSecretRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=refresh_token&client_id=client-confidential-1&client_secret=wrong_secret"))
 	badConfidentialSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badConfidentialSecretResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(badConfidentialSecretResponseRecorder, badConfidentialSecretRequest)
+	baseHandler.handleIssueOIDCToken(badConfidentialSecretResponseRecorder, badConfidentialSecretRequest)
 	if badConfidentialSecretResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on bad confidential client secret, got: %d", badConfidentialSecretResponseRecorder.Code)
 	}
 
-	// 16. handleOIDCTokenRefreshToken missing refresh_token -> 400
+	// 16. handleIssueOIDCTokenRefreshToken missing refresh_token -> 400
 	missingRefreshRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=refresh_token&client_id=client-spa-1&refresh_token="))
 	missingRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(missingRefreshResponseRecorder, missingRefreshRequest)
+	baseHandler.handleIssueOIDCToken(missingRefreshResponseRecorder, missingRefreshRequest)
 	if missingRefreshResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing refresh token, got: %d", missingRefreshResponseRecorder.Code)
 	}
@@ -518,11 +518,11 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		t.Fatalf("expected Layr and provider buttons in render, got: %s", renderHTML)
 	}
 
-	// 19. handleOIDCToken missing code -> 400 invalid_grant
+	// 19. handleIssueOIDCToken missing code -> 400 invalid_grant
 	emptyCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code="))
 	emptyCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(emptyCodeResponseRecorder, emptyCodeRequest)
+	baseHandler.handleIssueOIDCToken(emptyCodeResponseRecorder, emptyCodeRequest)
 	if emptyCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing code in token exchange, got: %d", emptyCodeResponseRecorder.Code)
 	}
@@ -536,7 +536,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	missingSecretRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
 	missingSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingSecretResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(missingSecretResponseRecorder, missingSecretRequest)
+	baseHandler.handleIssueOIDCToken(missingSecretResponseRecorder, missingSecretRequest)
 	if missingSecretResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on missing secret, got: %d", missingSecretResponseRecorder.Code)
 	}
@@ -545,7 +545,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	nilManagerRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
 	nilManagerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	nilManagerResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCToken(nilManagerResponseRecorder, nilManagerRequest)
+	baseHandler.handleIssueOIDCToken(nilManagerResponseRecorder, nilManagerRequest)
 	if nilManagerResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on nil serviceAccountManager, got: %d", nilManagerResponseRecorder.Code)
 	}
@@ -556,7 +556,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	authErrorRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
 	authErrorRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	authErrorResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleOIDCToken(authErrorResponseRecorder, authErrorRequest)
+	managerBaseHandler.handleIssueOIDCToken(authErrorResponseRecorder, authErrorRequest)
 	if authErrorResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on auth error, got: %d", authErrorResponseRecorder.Code)
 	}
@@ -566,7 +566,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	jsonRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(jsonRequestBody))
 	jsonRequest.Header.Set("Content-Type", "application/json")
 	jsonResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleOIDCToken(jsonResponseRecorder, jsonRequest)
+	managerBaseHandler.handleIssueOIDCToken(jsonResponseRecorder, jsonRequest)
 	if jsonResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from json request through auth error, got: %d", jsonResponseRecorder.Code)
 	}
@@ -575,7 +575,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	untypedJSONRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"invalid_client_secret"}`
 	untypedJSONRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader(untypedJSONRequestBody))
 	untypedJSONResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)
+	managerBaseHandler.handleIssueOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)
 	if untypedJSONResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from untyped json request, got: %d", untypedJSONResponseRecorder.Code)
 	}
@@ -585,18 +585,18 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	basicAuthRequest.SetBasicAuth("sa-basic", "secret-basic")
 	basicAuthResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
+	managerBaseHandler.handleIssueOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
 	if basicAuthResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from basic auth request through auth error, got: %d", basicAuthResponseRecorder.Code)
 	}
 
-	// 7. handleOAuthToken delegation
+	// 7. handleIssueOAuthToken delegation
 	delegatedRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/api/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
 	delegatedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	delegatedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOAuthToken(delegatedResponseRecorder, delegatedRequest)
+	baseHandler.handleIssueOAuthToken(delegatedResponseRecorder, delegatedRequest)
 	if delegatedResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 from handleOAuthToken, got: %d", delegatedResponseRecorder.Code)
+		t.Fatalf("expected 401 from handleIssueOAuthToken, got: %d", delegatedResponseRecorder.Code)
 	}
 }
 
@@ -651,7 +651,7 @@ func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
 
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/oauth/authorize?state=state-mode-1&mode=sign_up", nil)
 	responseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorize(responseRecorder, request)
+	baseHandler.handleAuthorizeOIDC(responseRecorder, request)
 	if responseRecorder.Code != http.StatusOK || !strings.Contains(responseRecorder.Body.String(), "Create account") {
 		t.Fatalf("expected 200 OK and Create account in body, got: %d", responseRecorder.Code)
 	}
@@ -684,7 +684,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	emptyTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_mfa&mfa_token="))
 	emptyTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyTokenResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyTokenResponseRecorder, emptyTokenRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyTokenResponseRecorder, emptyTokenRequest)
 	if !strings.Contains(emptyTokenResponseRecorder.Body.String(), "MFA session expired") {
 		t.Fatalf("expected MFA session expired, got: %s", emptyTokenResponseRecorder.Body.String())
 	}
@@ -693,7 +693,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	unknownTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_mfa&mfa_token=unknown_tk"))
 	unknownTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unknownTokenResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(unknownTokenResponseRecorder, unknownTokenRequest)
+	baseHandler.handleSubmitOIDCAuthorize(unknownTokenResponseRecorder, unknownTokenRequest)
 	if !strings.Contains(unknownTokenResponseRecorder.Body.String(), "MFA session expired") {
 		t.Fatalf("expected MFA session expired, got: %s", unknownTokenResponseRecorder.Body.String())
 	}
@@ -702,7 +702,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	emptyRecipientRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient="))
 	emptyRecipientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyRecipientResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyRecipientResponseRecorder, emptyRecipientRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyRecipientResponseRecorder, emptyRecipientRequest)
 	if !strings.Contains(emptyRecipientResponseRecorder.Body.String(), "Please enter an email address or phone number") {
 		t.Fatalf("expected Please enter an email address or phone number, got: %s", emptyRecipientResponseRecorder.Body.String())
 	}
@@ -711,7 +711,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	disabledEmailOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient=user@example.com"))
 	disabledEmailOTPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledEmailOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(disabledEmailOTPResponseRecorder, disabledEmailOTPRequest)
+	baseHandler.handleSubmitOIDCAuthorize(disabledEmailOTPResponseRecorder, disabledEmailOTPRequest)
 	if !strings.Contains(disabledEmailOTPResponseRecorder.Body.String(), "Email OTP sign-in is not available") {
 		t.Fatalf("expected Email OTP sign-in is not available, got: %s", disabledEmailOTPResponseRecorder.Body.String())
 	}
@@ -720,7 +720,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	disabledSMSOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=send_otp&recipient=+14155551234"))
 	disabledSMSOTPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledSMSOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(disabledSMSOTPResponseRecorder, disabledSMSOTPRequest)
+	baseHandler.handleSubmitOIDCAuthorize(disabledSMSOTPResponseRecorder, disabledSMSOTPRequest)
 	if !strings.Contains(disabledSMSOTPResponseRecorder.Body.String(), "SMS OTP sign-in is not available") {
 		t.Fatalf("expected SMS OTP sign-in is not available, got: %s", disabledSMSOTPResponseRecorder.Body.String())
 	}
@@ -729,7 +729,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	emptyCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=verify_otp&recipient=user@example.com&otp_code="))
 	emptyCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyCodeResponseRecorder, emptyCodeRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyCodeResponseRecorder, emptyCodeRequest)
 	if !strings.Contains(emptyCodeResponseRecorder.Body.String(), "Verification code is required") {
 		t.Fatalf("expected Verification code is required, got: %s", emptyCodeResponseRecorder.Body.String())
 	}
@@ -738,7 +738,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	disabledSignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=a@b.com&password=pass"))
 	disabledSignUpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledSignUpResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(disabledSignUpResponseRecorder, disabledSignUpRequest)
+	baseHandler.handleSubmitOIDCAuthorize(disabledSignUpResponseRecorder, disabledSignUpRequest)
 	if !strings.Contains(disabledSignUpResponseRecorder.Body.String(), "Sign-up is disabled") {
 		t.Fatalf("expected Sign-up is disabled, got: %s", disabledSignUpResponseRecorder.Body.String())
 	}
@@ -750,7 +750,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	emptyEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=&password=pass"))
 	emptyEmailRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(emptyEmailResponseRecorder, emptyEmailRequest)
+	baseHandler.handleSubmitOIDCAuthorize(emptyEmailResponseRecorder, emptyEmailRequest)
 	if !strings.Contains(emptyEmailResponseRecorder.Body.String(), "Email and password are required") {
 		t.Fatalf("expected Email and password are required, got: %s", emptyEmailResponseRecorder.Body.String())
 	}
@@ -758,7 +758,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	mismatchPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=u@e.com&password=pass1&confirm_password=pass2"))
 	mismatchPasswordRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchPasswordResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(mismatchPasswordResponseRecorder, mismatchPasswordRequest)
+	baseHandler.handleSubmitOIDCAuthorize(mismatchPasswordResponseRecorder, mismatchPasswordRequest)
 	if !strings.Contains(mismatchPasswordResponseRecorder.Body.String(), "Passwords do not match") {
 		t.Fatalf("expected Passwords do not match, got: %s", mismatchPasswordResponseRecorder.Body.String())
 	}
@@ -766,7 +766,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	shortPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=u@e.com&password=p&confirm_password=p"))
 	shortPasswordRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	shortPasswordResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(shortPasswordResponseRecorder, shortPasswordRequest)
+	baseHandler.handleSubmitOIDCAuthorize(shortPasswordResponseRecorder, shortPasswordRequest)
 	if !strings.Contains(shortPasswordResponseRecorder.Body.String(), "Password must be at least") {
 		t.Fatalf("expected Password must be at least, got: %s", shortPasswordResponseRecorder.Body.String())
 	}
@@ -778,7 +778,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	disabledSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_in&email=a@b.com&password=pass"))
 	disabledSignInRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledSignInResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCAuthorizeSubmit(disabledSignInResponseRecorder, disabledSignInRequest)
+	baseHandler.handleSubmitOIDCAuthorize(disabledSignInResponseRecorder, disabledSignInRequest)
 	if !strings.Contains(disabledSignInResponseRecorder.Body.String(), "Password sign-in is disabled") {
 		t.Fatalf("expected Password sign-in is disabled, got: %s", disabledSignInResponseRecorder.Body.String())
 	}
@@ -795,7 +795,7 @@ func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
 
 	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/openid-configuration", nil)
 	discoveryResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCDiscovery(discoveryResponseRecorder, discoveryRequest)
+	baseHandler.handleGetOIDCDiscovery(discoveryResponseRecorder, discoveryRequest)
 
 	if discoveryResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from discovery, got: %d", discoveryResponseRecorder.Code)
@@ -860,7 +860,7 @@ func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 	signOutURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://rp.example.com/signed-out&state=state123"
 	signOutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, signOutURL, nil)
 	signOutResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(signOutResponseRecorder, signOutRequest)
+	baseHandler.handleSignOutOIDC(signOutResponseRecorder, signOutRequest)
 
 	if signOutResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from sign-out with front channel, got: %d", signOutResponseRecorder.Code)
@@ -906,7 +906,7 @@ func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
 	validURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://trusted.example.com/logout-done&state=abc"
 	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, validURL, nil)
 	validResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(validResponseRecorder, validRequest)
+	baseHandler.handleSignOutOIDC(validResponseRecorder, validRequest)
 
 	if validResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected 302 redirect for valid URI, got: %d", validResponseRecorder.Code)
@@ -920,7 +920,7 @@ func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
 	untrustedURL := "/api/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://attacker.example.com/evil"
 	untrustedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, untrustedURL, nil)
 	untrustedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOIDCSignOut(untrustedResponseRecorder, untrustedRequest)
+	baseHandler.handleSignOutOIDC(untrustedResponseRecorder, untrustedRequest)
 
 	if untrustedResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for untrusted redirect URI, got: %d", untrustedResponseRecorder.Code)

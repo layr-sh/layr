@@ -24,8 +24,8 @@ const (
 	maxGraphQLComplexity   = 500
 )
 
-// HandleGraphQL processes POST /api/v1/graphql requests.
-func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
+// handleExecuteGraphQL processes POST /api/v1/graphql requests.
+func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests")
 		return
@@ -37,18 +37,18 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 		return
 	}
 
-	var graphQLRequest GraphQLRequest
-	if err := json.NewDecoder(request.Body).Decode(&graphQLRequest); err != nil {
+	var executeGraphQLInput ExecuteGraphQLInput
+	if err := json.NewDecoder(request.Body).Decode(&executeGraphQLInput); err != nil {
 		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "Invalid JSON request payload")
 		return
 	}
 
-	if strings.TrimSpace(graphQLRequest.Query) == "" {
+	if strings.TrimSpace(executeGraphQLInput.Query) == "" {
 		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL query string cannot be empty")
 		return
 	}
 
-	operationNode, err := graphql.ParseGraphQLWithOperation(graphQLRequest.Query, graphQLRequest.OperationName, graphQLRequest.Variables)
+	operationNode, err := graphql.ParseGraphQLWithOperation(executeGraphQLInput.Query, executeGraphQLInput.OperationName, executeGraphQLInput.Variables)
 	if err != nil {
 		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL syntax error: %v", err))
 		return
@@ -140,7 +140,7 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 		referencedTables := handler.resolveGraphQLTables(operationNode)
 		tableVersion := handler.getGraphQLTableCacheVersion(ctx, referencedTables)
 		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
-		userVisibleKey = datakv.BuildGraphQLQueryKeyWithVersion(graphQLRequest.Query, graphQLRequest.Variables, keySuffix, tableVersion)
+		userVisibleKey = datakv.BuildGraphQLQueryKeyWithVersion(executeGraphQLInput.Query, executeGraphQLInput.Variables, keySuffix, tableVersion)
 		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleKey)
 		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleKey)
 
@@ -208,10 +208,10 @@ func (handler *BaseHandler) HandleGraphQL(responseWriter http.ResponseWriter, re
 		dataValue = json.RawMessage(rawJSON)
 	}
 
-	graphQLResponse := GraphQLResponse{
+	executeGraphQLResponse := ExecuteGraphQLResponse{
 		Data: dataValue,
 	}
-	responseBytes, _ := json.Marshal(graphQLResponse)
+	responseBytes, _ := json.Marshal(executeGraphQLResponse)
 
 	if isCacheActive && cacheTTL > 0 && operationNode.Type == graphql.QueryOperationType && internalCacheKey != "" {
 		maxQueries := config.Cache.MaxCachedQueries
@@ -374,7 +374,7 @@ func (handler *BaseHandler) handleMutationSideEffects(ctx context.Context, opera
 func (handler *BaseHandler) writeGraphQLSuccess(responseWriter http.ResponseWriter, data any) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(GraphQLResponse{
+	_ = json.NewEncoder(responseWriter).Encode(ExecuteGraphQLResponse{
 		Data: data,
 	})
 }
@@ -410,7 +410,7 @@ func (handler *BaseHandler) writeGraphQLDBError(responseWriter http.ResponseWrit
 func (handler *BaseHandler) writeGraphQLError(responseWriter http.ResponseWriter, status int, detail string) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(status)
-	_ = json.NewEncoder(responseWriter).Encode(GraphQLResponse{
+	_ = json.NewEncoder(responseWriter).Encode(ExecuteGraphQLResponse{
 		Errors: []GraphQLError{
 			{
 				Message: detail,

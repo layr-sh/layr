@@ -52,12 +52,12 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected sign up 200/201, got %d (body: %s)", signupResponseRecorder.Code, signupResponseRecorder.Body.String())
 	}
 
-	var signupSessionResponse SessionResponse
-	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupSessionResponse); err != nil {
+	var signupAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode sign up response: %v", err)
 	}
-	if signupSessionResponse.User.ID == "" || signupSessionResponse.AccessToken == "" {
-		t.Fatalf("invalid sign up payload response: %+v", signupSessionResponse)
+	if signupAuthTokenResponse.User.ID == "" || signupAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("invalid sign up payload response: %+v", signupAuthTokenResponse)
 	}
 
 	// 2. User Sign In
@@ -75,14 +75,14 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected login 200 OK, got %d (body: %s)", signinResponseRecorder.Code, signinResponseRecorder.Body.String())
 	}
 
-	var signinSessionResponse SessionResponse
-	if err := json.NewDecoder(signinResponseRecorder.Body).Decode(&signinSessionResponse); err != nil {
+	var signinAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(signinResponseRecorder.Body).Decode(&signinAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode login response: %v", err)
 	}
 
 	// 3. Authenticated Profile Access via User Export
-	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupSessionResponse.User.ID+"/export", nil)
-	exportRequest.Header.Set("Authorization", "Bearer "+signinSessionResponse.AccessToken)
+	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil)
+	exportRequest.Header.Set("Authorization", "Bearer "+signinAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(exportResponseRecorder, exportRequest)
 
@@ -92,7 +92,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 
 	// 4. Token Refresh
 	refreshPayload, _ := json.Marshal(map[string]any{
-		"refresh_token": signinSessionResponse.RefreshToken,
+		"refresh_token": signinAuthTokenResponse.RefreshToken,
 	})
 	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
 	refreshRequest.Header.Set("Content-Type", "application/json")
@@ -104,13 +104,13 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected refresh 200 OK, got %d (body: %s)", refreshResponseRecorder.Code, refreshResponseRecorder.Body.String())
 	}
 
-	var refreshedSessionResponse SessionResponse
-	_ = json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshedSessionResponse)
+	var refreshedAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshedAuthTokenResponse)
 
 	// 5. Sign Out / Session Revocation
 	signoutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", nil)
-	signoutRequest.Header.Set("Authorization", "Bearer "+refreshedSessionResponse.AccessToken)
-	signoutRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: refreshedSessionResponse.RefreshToken})
+	signoutRequest.Header.Set("Authorization", "Bearer "+refreshedAuthTokenResponse.AccessToken)
+	signoutRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: refreshedAuthTokenResponse.RefreshToken})
 	signoutResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signoutResponseRecorder, signoutRequest)
 
@@ -166,10 +166,10 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	if signupResponseRecorder.Code != http.StatusOK && signupResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 200/201 on sign up: %d", signupResponseRecorder.Code)
 	}
-	var firstSessionResponse SessionResponse
-	_ = json.NewDecoder(signupResponseRecorder.Body).Decode(&firstSessionResponse)
+	var firstAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(signupResponseRecorder.Body).Decode(&firstAuthTokenResponse)
 
-	// 2. Sign in from second device
+	// 2. Open secondary session (simulating second device)
 	signInPayload, _ := json.Marshal(map[string]any{
 		"email":    userEmail,
 		"password": userPassword,
@@ -181,30 +181,30 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	signInResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signInResponseRecorder, signInRequest)
 	if signInResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on sign in: %d", signInResponseRecorder.Code)
+		t.Fatalf("expected 200 on second device sign-in, got: %d", signInResponseRecorder.Code)
 	}
-	var secondSessionResponse SessionResponse
-	_ = json.NewDecoder(signInResponseRecorder.Body).Decode(&secondSessionResponse)
+	var secondAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(signInResponseRecorder.Body).Decode(&secondAuthTokenResponse)
 
 	// 3. List active sessions via E2E server mux
 	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/sessions", nil)
-	listSessionsRequest.Header.Set("Authorization", "Bearer "+firstSessionResponse.AccessToken)
-	listSessionsRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstSessionResponse.RefreshToken})
+	listSessionsRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
+	listSessionsRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	listSessionsResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(listSessionsResponseRecorder, listSessionsRequest)
 	if listSessionsResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on list sessions, got: %d", listSessionsResponseRecorder.Code)
 	}
-	var listUserSessionsResponse ListUserSessionsResponse
-	_ = json.NewDecoder(listSessionsResponseRecorder.Body).Decode(&listUserSessionsResponse)
-	if listUserSessionsResponse.Count != 2 {
-		t.Fatalf("expected 2 sessions, got: %d", listUserSessionsResponse.Count)
+	var listSessionsResponse ListSessionsResponse
+	_ = json.NewDecoder(listSessionsResponseRecorder.Body).Decode(&listSessionsResponse)
+	if listSessionsResponse.Count != 2 {
+		t.Fatalf("expected 2 sessions, got: %d", listSessionsResponse.Count)
 	}
 
 	var secondarySessionID string
-	for _, sessionRecord := range listUserSessionsResponse.Sessions {
-		if sessionRecord.UserAgent != nil && *sessionRecord.UserAgent == "Secondary-Device-Tablet" {
-			secondarySessionID = sessionRecord.ID
+	for _, userSession := range listSessionsResponse.Sessions {
+		if userSession.UserAgent != nil && *userSession.UserAgent == "Secondary-Device-Tablet" {
+			secondarySessionID = userSession.ID
 		}
 	}
 	if secondarySessionID == "" {
@@ -213,7 +213,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 
 	// 4. Revoke secondary session via E2E server mux
 	deleteSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/sessions/"+secondarySessionID, nil)
-	deleteSessionRequest.Header.Set("Authorization", "Bearer "+firstSessionResponse.AccessToken)
+	deleteSessionRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	deleteSessionResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(deleteSessionResponseRecorder, deleteSessionRequest)
 	if deleteSessionResponseRecorder.Code != http.StatusNoContent {
@@ -222,8 +222,8 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 
 	// 5. Revoke other sessions via E2E server mux (now only 1 session left)
 	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sessions/revoke-others", nil)
-	revokeOthersRequest.Header.Set("Authorization", "Bearer "+firstSessionResponse.AccessToken)
-	revokeOthersRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstSessionResponse.RefreshToken})
+	revokeOthersRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
+	revokeOthersRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	revokeOthersResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(revokeOthersResponseRecorder, revokeOthersRequest)
 	if revokeOthersResponseRecorder.Code != http.StatusOK {
@@ -282,14 +282,14 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	if initialProfileResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 from profile, got: %d (%s)", initialProfileResponseRecorder.Code, initialProfileResponseRecorder.Body.String())
 	}
-	var initialUserResponse UserResponse
-	_ = json.NewDecoder(initialProfileResponseRecorder.Body).Decode(&initialUserResponse)
-	if !initialUserResponse.IsAnonymous {
+	var initialGetUserResponse GetUserResponse
+	_ = json.NewDecoder(initialProfileResponseRecorder.Body).Decode(&initialGetUserResponse)
+	if !initialGetUserResponse.IsAnonymous {
 		t.Fatalf("expected is_anonymous to be true")
 	}
 
 	// 3. Attempting to set password on anonymous user MUST FAIL (400 Bad Request)
-	forbiddenPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	forbiddenPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: "AttemptedPassword123!",
 	})
 	forbiddenPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(forbiddenPasswordPayload))
@@ -301,7 +301,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	}
 
 	// 4. Update Profile Properties
-	patchPropertiesPayload, _ := json.Marshal(UpdateUserPropertiesRequest{
+	patchPropertiesPayload, _ := json.Marshal(UpdateUserPropertiesInput{
 		Properties: map[string]any{
 			"display_name": "E2E Ghost",
 			"theme":        "dark",
@@ -328,7 +328,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 
 	// 6. Set Initial Password on now-identified user (no previous password needed)
 	initialUserPassword := "ConvertedPassword123!#"
-	initialSetPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	initialSetPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: initialUserPassword,
 	})
 	initialSetPasswordRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(initialSetPasswordPayload))
@@ -341,7 +341,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 
 	// 7. Rotate Password with valid current password
 	rotatedPassword := "BrandNewRotatedPassword123!#"
-	rotatePasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	rotatePasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: initialUserPassword,
 		NewPassword:     rotatedPassword,
 	})
@@ -366,26 +366,26 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	if signinResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK signing in with rotated password, got: %d (%s)", signinResponseRecorder.Code, signinResponseRecorder.Body.String())
 	}
-	var newSessionResponse SessionResponse
-	_ = json.NewDecoder(signinResponseRecorder.Body).Decode(&newSessionResponse)
+	var newAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(signinResponseRecorder.Body).Decode(&newAuthTokenResponse)
 
 	// 9. Inspect profile again - verify is_anonymous is false, properties preserved
 	convertedProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/user", nil)
-	convertedProfileRequest.Header.Set("Authorization", "Bearer "+newSessionResponse.AccessToken)
+	convertedProfileRequest.Header.Set("Authorization", "Bearer "+newAuthTokenResponse.AccessToken)
 	convertedProfileResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(convertedProfileResponseRecorder, convertedProfileRequest)
 	if convertedProfileResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from profile, got: %d", convertedProfileResponseRecorder.Code)
 	}
-	var convertedProfileUserResponse UserResponse
-	_ = json.NewDecoder(convertedProfileResponseRecorder.Body).Decode(&convertedProfileUserResponse)
-	if convertedProfileUserResponse.IsAnonymous || convertedProfileUserResponse.Properties["display_name"] != "E2E Ghost" {
-		t.Fatalf("invalid converted profile state: %+v", convertedProfileUserResponse)
+	var convertedProfileGetUserResponse GetUserResponse
+	_ = json.NewDecoder(convertedProfileResponseRecorder.Body).Decode(&convertedProfileGetUserResponse)
+	if convertedProfileGetUserResponse.IsAnonymous || convertedProfileGetUserResponse.Properties["display_name"] != "E2E Ghost" {
+		t.Fatalf("invalid converted profile state: %+v", convertedProfileGetUserResponse)
 	}
 
 	// 10. Self-Delete Account
 	deleteAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/api/v1/auth/user", nil)
-	deleteAccountRequest.Header.Set("Authorization", "Bearer "+newSessionResponse.AccessToken)
+	deleteAccountRequest.Header.Set("Authorization", "Bearer "+newAuthTokenResponse.AccessToken)
 	deleteAccountResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(deleteAccountResponseRecorder, deleteAccountRequest)
 	if deleteAccountResponseRecorder.Code != http.StatusNoContent {

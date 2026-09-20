@@ -62,10 +62,10 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 	sessionsListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	sessionsListRequest.Header.Set("Authorization", authBearerHeader)
 	sessionsListResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListUserSessions(sessionsListResponseRecorder, sessionsListRequest)
+	controlPlaneHandler.handleListUserSessions(sessionsListResponseRecorder, sessionsListRequest)
 
 	if sessionsListResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandleListUserSessions, got: %d", sessionsListResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleListUserSessions, got: %d", sessionsListResponseRecorder.Code)
 	}
 	if !strings.Contains(sessionsListResponseRecorder.Body.String(), `"count":1`) {
 		t.Fatalf("expected session count 1, got: %s", sessionsListResponseRecorder.Body.String())
@@ -75,10 +75,10 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
+	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 
 	if revokeSessionsResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandleRevokeUserSessions, got: %d", revokeSessionsResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleRevokeUserSessions, got: %d", revokeSessionsResponseRecorder.Code)
 	}
 
 	// Verify sessions are gone
@@ -106,7 +106,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	// 1. List Sessions error
 	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/auth/users/"+randomID+"/sessions", nil)
 	listSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleListUserSessions(listSessionsResponseRecorder, listSessionsRequest)
+	controlPlaneHandler.handleListUserSessions(listSessionsResponseRecorder, listSessionsRequest)
 	if listSessionsResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on broken pool list sessions, got: %d", listSessionsResponseRecorder.Code)
 	}
@@ -114,7 +114,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	// 2. Revoke Sessions error
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+randomID+"/sessions/revoke", nil)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
+	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 	if revokeSessionsResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on broken pool revoke sessions, got: %d", revokeSessionsResponseRecorder.Code)
 	}
@@ -207,10 +207,10 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
+	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 
 	if revokeSessionsResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from HandleRevokeUserSessions, got: %d (%s)", revokeSessionsResponseRecorder.Code, revokeSessionsResponseRecorder.Body.String())
+		t.Fatalf("expected 200 OK from handleRevokeUserSessions, got: %d (%s)", revokeSessionsResponseRecorder.Code, revokeSessionsResponseRecorder.Body.String())
 	}
 
 	var sessionCount int

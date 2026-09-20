@@ -72,21 +72,21 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
 	mfaSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(mfaSetupResponseRecorder, mfaSetupRequest)
+	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
 
 	if mfaSetupResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on MFA setup, got: %d (%s)", mfaSetupResponseRecorder.Code, mfaSetupResponseRecorder.Body.String())
 	}
 
-	var mfaSetupResponse MFASetupResponse
-	if decodeErr := json.NewDecoder(mfaSetupResponseRecorder.Body).Decode(&mfaSetupResponse); decodeErr != nil {
+	var setupMFAResponse SetupMFAResponse
+	if decodeErr := json.NewDecoder(mfaSetupResponseRecorder.Body).Decode(&setupMFAResponse); decodeErr != nil {
 		t.Fatalf("failed to decode MFA setup response: %v", decodeErr)
 	}
-	if mfaSetupResponse.Secret == "" || mfaSetupResponse.AuthURL == "" {
-		t.Fatalf("expected non-empty secret and auth URL, got: %+v", mfaSetupResponse)
+	if setupMFAResponse.Secret == "" || setupMFAResponse.AuthURL == "" {
+		t.Fatalf("expected non-empty secret and auth URL, got: %+v", setupMFAResponse)
 	}
-	if mfaSetupResponse.Issuer != "LayrAuthIntegration" {
-		t.Fatalf("expected issuer LayrAuthIntegration, got: %s", mfaSetupResponse.Issuer)
+	if setupMFAResponse.Issuer != "LayrAuthIntegration" {
+		t.Fatalf("expected issuer LayrAuthIntegration, got: %s", setupMFAResponse.Issuer)
 	}
 
 	// Verify MFA columns in DB
@@ -109,13 +109,13 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	wrongVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedWrongVerify))
 	wrongVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	wrongVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(wrongVerifyResponseRecorder, wrongVerifyRequest)
+	baseHandler.handleVerifyMFA(wrongVerifyResponseRecorder, wrongVerifyRequest)
 	if wrongVerifyResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on wrong MFA code, got: %d", wrongVerifyResponseRecorder.Code)
 	}
 
 	// 3. Verify with valid TOTP code -> 200 OK
-	currentTOTPCode, generateCodeErr := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
+	currentTOTPCode, generateCodeErr := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
 	if generateCodeErr != nil {
 		t.Fatalf("failed to generate TOTP code: %v", generateCodeErr)
 	}
@@ -127,7 +127,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	validVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	validVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	validVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(validVerifyResponseRecorder, validVerifyRequest)
+	baseHandler.handleVerifyMFA(validVerifyResponseRecorder, validVerifyRequest)
 	if validVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid MFA verify, got: %d (%s)", validVerifyResponseRecorder.Code, validVerifyResponseRecorder.Body.String())
 	}
@@ -163,7 +163,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	lockedSetupRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", nil), userID, "authenticated", false)
 	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedSetupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(lockedSetupResponseRecorder, lockedSetupRequest)
+	baseHandler.handleSetupMFA(lockedSetupResponseRecorder, lockedSetupRequest)
 	if lockedSetupResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user setup, got: %d", lockedSetupResponseRecorder.Code)
 	}
@@ -171,7 +171,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	lockedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(lockedVerifyResponseRecorder, lockedVerifyRequest)
+	baseHandler.handleVerifyMFA(lockedVerifyResponseRecorder, lockedVerifyRequest)
 	if lockedVerifyResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user verify, got: %d", lockedVerifyResponseRecorder.Code)
 	}
@@ -182,7 +182,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	corruptedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(corruptedVerifyResponseRecorder, corruptedVerifyRequest)
+	baseHandler.handleVerifyMFA(corruptedVerifyResponseRecorder, corruptedVerifyRequest)
 	if corruptedVerifyResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on corrupted secret decrypt, got: %d", corruptedVerifyResponseRecorder.Code)
 	}
@@ -192,7 +192,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	noSecretVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(noSecretVerifyResponseRecorder, noSecretVerifyRequest)
+	baseHandler.handleVerifyMFA(noSecretVerifyResponseRecorder, noSecretVerifyRequest)
 	if noSecretVerifyResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on MFA not set up, got: %d", noSecretVerifyResponseRecorder.Code)
 	}
@@ -205,7 +205,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	encodedNonExistent, _ := json.Marshal(nonExistentVerifyPayload)
 	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedNonExistent))
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
+	baseHandler.handleVerifyMFA(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
 	if nonExistentVerifyResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on non-existent user verify, got: %d", nonExistentVerifyResponseRecorder.Code)
 	}
@@ -216,7 +216,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	encodedNonExistentSetup, _ := json.Marshal(nonExistentSetupPayload)
 	nonExistentSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedNonExistentSetup))
 	nonExistentSetupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(nonExistentSetupResponseRecorder, nonExistentSetupRequest)
+	baseHandler.handleSetupMFA(nonExistentSetupResponseRecorder, nonExistentSetupRequest)
 	if nonExistentSetupResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on non-existent user setup, got: %d", nonExistentSetupResponseRecorder.Code)
 	}
@@ -242,21 +242,21 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	encodedPhoneSetup, _ := json.Marshal(phoneSetupPayload)
 	phoneSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedPhoneSetup))
 	phoneSetupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(phoneSetupResponseRecorder, phoneSetupRequest)
+	baseHandler.handleSetupMFA(phoneSetupResponseRecorder, phoneSetupRequest)
 	if phoneSetupResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on phone-only user MFA setup, got: %d", phoneSetupResponseRecorder.Code)
 	}
-	var phoneMFASetupResponse MFASetupResponse
-	_ = json.NewDecoder(phoneSetupResponseRecorder.Body).Decode(&phoneMFASetupResponse)
+	var phoneSetupMFAResponse SetupMFAResponse
+	_ = json.NewDecoder(phoneSetupResponseRecorder.Body).Decode(&phoneSetupMFAResponse)
 	expectedIssuer := core.GetConfig().Project.Name
 	if expectedIssuer == "" {
 		expectedIssuer = "Layr Auth"
 	}
-	if phoneMFASetupResponse.Issuer != expectedIssuer {
-		t.Fatalf("expected default issuer %s, got: %s", expectedIssuer, phoneMFASetupResponse.Issuer)
+	if phoneSetupMFAResponse.Issuer != expectedIssuer {
+		t.Fatalf("expected default issuer %s, got: %s", expectedIssuer, phoneSetupMFAResponse.Issuer)
 	}
 
-	phoneTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(phoneMFASetupResponse.Secret, time.Now())
+	phoneTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(phoneSetupMFAResponse.Secret, time.Now())
 	phoneVerifyPayload := map[string]any{
 		"user_id": phoneUserID,
 		"code":    phoneTOTPCode,
@@ -264,12 +264,12 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
 	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	baseHandler.handleVerifyMFA(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on phone-only user MFA verify, got: %d", phoneVerifyResponseRecorder.Code)
 	}
 
-	// 9. Test handleMFADisable
+	// 9. Test handleDisableMFA
 	phoneAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: phoneUserID,
 		Phone:   "+15554321098",
@@ -287,7 +287,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	nonExistentDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: "01918a24-9999-7000-8000-000000000099"}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	nonExistentDisableRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentDisableResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFADisable(nonExistentDisableResponseRecorder, nonExistentDisableRequest)
+	baseHandler.handleDisableMFA(nonExistentDisableResponseRecorder, nonExistentDisableRequest)
 	if nonExistentDisableResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on non-existent user MFA disable, got: %d", nonExistentDisableResponseRecorder.Code)
 	}
@@ -297,7 +297,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	lockedDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	lockedDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	lockedDisableResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFADisable(lockedDisableResponseRecorder, lockedDisableRequest)
+	baseHandler.handleDisableMFA(lockedDisableResponseRecorder, lockedDisableRequest)
 	if lockedDisableResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked user MFA disable, got: %d", lockedDisableResponseRecorder.Code)
 	}
@@ -307,7 +307,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	validDisableRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: phoneUserID}), http.MethodDelete, "/api/v1/auth/mfa", nil)
 	validDisableRequest.Header.Set("Authorization", "Bearer "+phoneAccessToken)
 	validDisableResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFADisable(validDisableResponseRecorder, validDisableRequest)
+	baseHandler.handleDisableMFA(validDisableResponseRecorder, validDisableRequest)
 	if validDisableResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 StatusNoContent on MFA disable, got: %d", validDisableResponseRecorder.Code)
 	}
@@ -378,7 +378,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 1. Password sign-in BEFORE MFA enabled -> issues session directly
-	signInPayload, _ := json.Marshal(SignInRequest{
+	signInPayload, _ := json.Marshal(SignInInput{
 		Email:    userEmail,
 		Password: rawPassword,
 	})
@@ -388,9 +388,9 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	if preMFAResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on pre-MFA sign in, got: %d (%s)", preMFAResponseRecorder.Code, preMFAResponseRecorder.Body.String())
 	}
-	var preMFASessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(preMFAResponseRecorder.Body).Decode(&preMFASessionResponse); decodeErr != nil || preMFASessionResponse.AccessToken == "" {
-		t.Fatalf("expected valid SessionResponse before MFA enabled, got: %+v", preMFASessionResponse)
+	var preMFAAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(preMFAResponseRecorder.Body).Decode(&preMFAAuthTokenResponse); decodeErr != nil || preMFAAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected valid AuthTokenResponse before MFA enabled, got: %+v", preMFAAuthTokenResponse)
 	}
 
 	// 2. Setup and enable MFA on user
@@ -403,20 +403,20 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
 	setupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	setupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(setupResponseRecorder, setupRequest)
+	baseHandler.handleSetupMFA(setupResponseRecorder, setupRequest)
 	if setupResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on MFA setup, got: %d", setupResponseRecorder.Code)
 	}
 
-	var mfaSetupResponse MFASetupResponse
-	_ = json.NewDecoder(setupResponseRecorder.Body).Decode(&mfaSetupResponse)
+	var setupMFAResponse SetupMFAResponse
+	_ = json.NewDecoder(setupResponseRecorder.Body).Decode(&setupMFAResponse)
 
-	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
+	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
 	verifyPayload, _ := json.Marshal(map[string]any{"code": totpCode})
 	verifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
 	verifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	verifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAVerify(verifyResponseRecorder, verifyRequest)
+	baseHandler.handleVerifyMFA(verifyResponseRecorder, verifyRequest)
 	if verifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on MFA verify, got: %d", verifyResponseRecorder.Code)
 	}
@@ -448,34 +448,34 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	baseHandler.SetKVStore(testKVStore)
 
 	// 4. MFA Challenge: Invalid/missing fields -> 400
-	emptyChallengePayload, _ := json.Marshal(MFAChallengeRequest{})
+	emptyChallengePayload, _ := json.Marshal(ChallengeMFAInput{})
 	emptyChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(emptyChallengePayload))
 	emptyChallengeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(emptyChallengeResponseRecorder, emptyChallengeRequest)
+	baseHandler.handleChallengeMFA(emptyChallengeResponseRecorder, emptyChallengeRequest)
 	if emptyChallengeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty MFA challenge, got: %d", emptyChallengeResponseRecorder.Code)
 	}
 
 	// 5. MFA Challenge: Non-existent ticket -> 401
-	ghostChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+	ghostChallengePayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: "mfa_tk_non_existent",
 		Code:      "123456",
 	})
 	ghostChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostChallengePayload))
 	ghostChallengeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(ghostChallengeResponseRecorder, ghostChallengeRequest)
+	baseHandler.handleChallengeMFA(ghostChallengeResponseRecorder, ghostChallengeRequest)
 	if ghostChallengeResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on non-existent MFA ticket, got: %d", ghostChallengeResponseRecorder.Code)
 	}
 
 	// 6. MFA Challenge: Wrong TOTP code -> 401
-	wrongCodePayload, _ := json.Marshal(MFAChallengeRequest{
+	wrongCodePayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: signInResponse.MFATicket,
 		Code:      "000000",
 	})
 	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(wrongCodeResponseRecorder, wrongCodeRequest)
+	baseHandler.handleChallengeMFA(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on wrong TOTP code in MFA challenge, got: %d", wrongCodeResponseRecorder.Code)
 	}
@@ -483,7 +483,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	// 7. Replay attack: The previous ticket was consumed on attempt -> 401
 	replayRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(wrongCodePayload))
 	replayResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(replayResponseRecorder, replayRequest)
+	baseHandler.handleChallengeMFA(replayResponseRecorder, replayRequest)
 	if replayResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on replayed MFA ticket, got: %d", replayResponseRecorder.Code)
 	}
@@ -495,24 +495,24 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	var freshSignInResponse SignInResponse
 	_ = json.NewDecoder(freshSignInResponseRecorder.Body).Decode(&freshSignInResponse)
 
-	currentCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
-	validChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+	currentCode, _ := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
+	validChallengePayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: freshSignInResponse.MFATicket,
 		Code:      currentCode,
 	})
 	validChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(validChallengePayload))
 	validChallengeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(validChallengeResponseRecorder, validChallengeRequest)
+	baseHandler.handleChallengeMFA(validChallengeResponseRecorder, validChallengeRequest)
 	if validChallengeResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid MFA challenge, got: %d (%s)", validChallengeResponseRecorder.Code, validChallengeResponseRecorder.Body.String())
 	}
 
-	var mfaSessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(validChallengeResponseRecorder.Body).Decode(&mfaSessionResponse); decodeErr != nil || mfaSessionResponse.AccessToken == "" {
-		t.Fatalf("expected valid SessionResponse from MFA challenge: %+v", mfaSessionResponse)
+	var mfaAuthTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(validChallengeResponseRecorder.Body).Decode(&mfaAuthTokenResponse); decodeErr != nil || mfaAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("expected valid AuthTokenResponse from MFA challenge: %+v", mfaAuthTokenResponse)
 	}
-	if mfaSessionResponse.User.ID != userID {
-		t.Fatalf("expected user ID %s, got: %s", userID, mfaSessionResponse.User.ID)
+	if mfaAuthTokenResponse.User.ID != userID {
+		t.Fatalf("expected user ID %s, got: %s", userID, mfaAuthTokenResponse.User.ID)
 	}
 
 	// 9. Locked account branch: locked user -> 423
@@ -521,13 +521,13 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
 
-	lockedChallengePayload, _ := json.Marshal(MFAChallengeRequest{
+	lockedChallengePayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: lockedTicket,
 		Code:      currentCode,
 	})
 	lockedChallengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(lockedChallengePayload))
 	lockedChallengeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(lockedChallengeResponseRecorder, lockedChallengeRequest)
+	baseHandler.handleChallengeMFA(lockedChallengeResponseRecorder, lockedChallengeRequest)
 	if lockedChallengeResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 on locked user in MFA challenge, got: %d", lockedChallengeResponseRecorder.Code)
 	}
@@ -540,13 +540,13 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	_ = db.QueryRow(ctx, "SELECT encrypted_mfa_secret FROM auth.users WHERE id = $1", userID).Scan(&backupEncryptedSecret)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", userID)
 
-	noSecretPayload, _ := json.Marshal(MFAChallengeRequest{
+	noSecretPayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: noSecretTicket,
 		Code:      currentCode,
 	})
 	noSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(noSecretPayload))
 	noSecretResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(noSecretResponseRecorder, noSecretRequest)
+	baseHandler.handleChallengeMFA(noSecretResponseRecorder, noSecretRequest)
 	if noSecretResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on missing secret in MFA challenge, got: %d", noSecretResponseRecorder.Code)
 	}
@@ -556,13 +556,13 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+corruptSecretTicket, userID, 5*time.Minute)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupt-secret' WHERE id = $1", userID)
 
-	corruptSecretPayload, _ := json.Marshal(MFAChallengeRequest{
+	corruptSecretPayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: corruptSecretTicket,
 		Code:      currentCode,
 	})
 	corruptSecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(corruptSecretPayload))
 	corruptSecretResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(corruptSecretResponseRecorder, corruptSecretRequest)
+	baseHandler.handleChallengeMFA(corruptSecretResponseRecorder, corruptSecretRequest)
 	if corruptSecretResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on corrupted secret in MFA challenge, got: %d", corruptSecretResponseRecorder.Code)
 	}
@@ -573,13 +573,13 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	ghostUserID := "01918a24-9999-7000-8000-000000000009"
 	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+ghostUserTicket, ghostUserID, 5*time.Minute)
 
-	ghostUserPayload, _ := json.Marshal(MFAChallengeRequest{
+	ghostUserPayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: ghostUserTicket,
 		Code:      currentCode,
 	})
 	ghostUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/challenge", bytes.NewReader(ghostUserPayload))
 	ghostUserResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFAChallenge(ghostUserResponseRecorder, ghostUserRequest)
+	baseHandler.handleChallengeMFA(ghostUserResponseRecorder, ghostUserRequest)
 	if ghostUserResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on non-existent user for MFA ticket, got: %d", ghostUserResponseRecorder.Code)
 	}

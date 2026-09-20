@@ -8,7 +8,7 @@ import (
 )
 
 // /api/v1/spec.json - Client OpenAPI 3.1 JSON
-func (server *Server) handleBaseSpecJSON(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetBaseSpecJSON(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	openAPISpec := server.baseRouter.OutputOpenAPISpec()
@@ -16,7 +16,7 @@ func (server *Server) handleBaseSpecJSON(responseWriter http.ResponseWriter, req
 }
 
 // /api/v1/spec.yaml - Client OpenAPI 3.1 YAML
-func (server *Server) handleBaseSpecYAML(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetBaseSpecYAML(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)
 	openAPISpec := server.baseRouter.OutputOpenAPISpec()

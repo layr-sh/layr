@@ -26,7 +26,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		// restore
@@ -39,7 +39,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "bad-schema")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -48,7 +48,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "private")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
@@ -61,7 +61,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "secret")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		config.REST.ExcludedTables = nil
@@ -73,7 +73,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGetRecord(responseRecorder, request)
+		baseHandler.handleGetRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -82,7 +82,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, request)
+		baseHandler.handleCreateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -91,7 +91,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, request)
+		baseHandler.handleCreateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -100,7 +100,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleUpdateRecord(responseRecorder, request)
+		baseHandler.handleUpdateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -110,7 +110,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("table_name", "users")
 		request.SetPathValue("record_id", "123")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleUpdateRecord(responseRecorder, request)
+		baseHandler.handleUpdateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -120,7 +120,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("table_name", "users")
 		request.SetPathValue("record_id", "123")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleUpdateRecord(responseRecorder, request)
+		baseHandler.handleUpdateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -129,7 +129,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleDeleteRecord(responseRecorder, request)
+		baseHandler.handleDeleteRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -154,19 +154,19 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		}()
 
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleGetRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleGetRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", nil))
+		baseHandler.handleCreateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/users", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleUpdateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleUpdateRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleDeleteRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/users/1", nil))
+		baseHandler.handleDeleteRecord(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/api/v1/data/public/users/1", nil))
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
@@ -176,7 +176,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, request)
+		baseHandler.handleCreateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Bad object json
@@ -184,7 +184,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder = httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, request)
+		baseHandler.handleCreateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -256,14 +256,14 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
 	t.Run("PrepareTableContextInvalidPath", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/invalid", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleListRecords(responseRecorder, request)
+		baseHandler.handleListRecords(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -315,7 +315,7 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("table_name", "users")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleCreateRecords(responseRecorder, request)
+		baseHandler.handleCreateRecord(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -347,7 +347,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "test")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusMethodNotAllowed, responseRecorder.Code)
 	})
 
@@ -364,14 +364,14 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "test")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
 	t.Run("MissingNames", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/data/public/rpc/", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -380,7 +380,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "bad-fn;drop")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -389,7 +389,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "private")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
@@ -398,7 +398,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -407,7 +407,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -416,7 +416,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
@@ -425,14 +425,14 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 
 	t.Run("PathFallback", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/data/public/rpc/my_func", nil)
 		responseRecorder := httptest.NewRecorder()
-		baseHandler.HandleExecuteFunction(responseRecorder, request)
+		baseHandler.handleExecuteFunction(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 	})
 

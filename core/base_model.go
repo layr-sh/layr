@@ -1,14 +1,17 @@
 package core
 
-// HealthResponse represents the /healthz probe response model.
-type HealthResponse struct {
+// Empty represents an empty JSON payload or bodyless response.
+type Empty struct{}
+
+// GetHealthResponse represents the /healthz probe response model.
+type GetHealthResponse struct {
 	Status        string  `json:"status"`
 	UptimeSeconds float64 `json:"uptime_seconds"`
 	Timestamp     string  `json:"timestamp"`
 }
 
-// ReadyResponse represents the /readyz probe response model.
-type ReadyResponse struct {
+// GetReadinessResponse represents the /readyz probe response model.
+type GetReadinessResponse struct {
 	Status          string   `json:"status"`
 	Database        string   `json:"database"`
 	EnabledServices []string `json:"enabled_services,omitempty"`
@@ -26,8 +29,8 @@ type ManifestServerInfo struct {
 	BaseURL    string `json:"base_url"`
 }
 
-// ManifestResponse represents the project manifest discovery model.
-type ManifestResponse struct {
+// GetManifestResponse represents the project manifest discovery model.
+type GetManifestResponse struct {
 	Project         ManifestProjectInfo `json:"project"`
 	EnabledServices []string            `json:"enabled_services"`
 	Server          ManifestServerInfo  `json:"server"`

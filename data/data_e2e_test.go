@@ -48,10 +48,10 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	}
 
 	// 2. User Journey: Create table via Control Plane API
-	createTablePayload, marshalErr := json.Marshal(CreateTableRequest{
+	createTablePayload, marshalErr := json.Marshal(CreateTableInput{
 		Schema: "public",
 		Name:   "books",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", IsPrimaryKey: true},
 			{Name: "title", Type: "text", IsNullable: false},
 			{Name: "author", Type: "text", IsNullable: false},

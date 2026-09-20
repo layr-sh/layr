@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"layr.sh/core"
@@ -279,29 +278,4 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 	configManager.config = config
 	configManager.rwMutex.Unlock()
 	return nil
-}
-
-// HandleGetConfig handles GET /api/v1/_/data/config.
-func (configManager *ConfigManager) HandleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(configManager.Get())
-}
-
-// HandlePutConfig handles PUT /api/v1/_/data/config.
-func (configManager *ConfigManager) HandlePutConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	var config Config
-	if decodeErr := json.NewDecoder(request.Body).Decode(&config); decodeErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
-		return
-	}
-
-	if setErr := configManager.Set(request.Context(), config); setErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
-		return
-	}
-
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(configManager.Get())
 }

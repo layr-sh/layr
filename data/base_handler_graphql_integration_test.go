@@ -33,19 +33,19 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	defer func() { _ = service.Stop() }()
 
 	// 1. Create a test table
-	createTableRequest := CreateTableRequest{
+	createTableInput := CreateTableInput{
 		Name: "posts",
-		Columns: []ColumnDefinition{
+		Columns: []Column{
 			{Name: "id", Type: "uuid", IsPrimaryKey: true},
 			{Name: "title", Type: "text", IsNullable: false},
 			{Name: "body", Type: "text"},
 		},
 	}
-	tableJSONBytes, _ := json.Marshal(createTableRequest)
+	tableJSONBytes, _ := json.Marshal(createTableInput)
 	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/tables/public", bytes.NewReader(tableJSONBytes))
 	request.SetPathValue("schema_name", "public")
 	responseRecorder := httptest.NewRecorder()
-	service.GetControlPlaneHandler().HandleCreateTable(responseRecorder, request)
+	service.GetControlPlaneHandler().handleCreateTable(responseRecorder, request)
 	assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
 	// Introspect schemas
@@ -68,7 +68,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	graphQLQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	graphQLQueryRequest.Header.Set("Content-Type", "application/json")
 	graphQLQueryResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(graphQLQueryResponseRecorder, graphQLQueryRequest)
+	baseHandler.handleExecuteGraphQL(graphQLQueryResponseRecorder, graphQLQueryRequest)
 
 	assert.Equal(t, http.StatusOK, graphQLQueryResponseRecorder.Code)
 	assert.Contains(t, graphQLQueryResponseRecorder.Body.String(), "First Post")
@@ -79,7 +79,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	cachedQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	cachedQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
 	cachedQueryResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(cachedQueryResponseRecorder, cachedQueryRequest)
+	baseHandler.handleExecuteGraphQL(cachedQueryResponseRecorder, cachedQueryRequest)
 
 	assert.Equal(t, http.StatusOK, cachedQueryResponseRecorder.Code)
 	assert.Equal(t, "MISS", cachedQueryResponseRecorder.Header().Get("X-Layr-Cache"))
@@ -90,7 +90,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	hitQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	hitQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
 	hitQueryResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(hitQueryResponseRecorder, hitQueryRequest)
+	baseHandler.handleExecuteGraphQL(hitQueryResponseRecorder, hitQueryRequest)
 	assert.Equal(t, http.StatusOK, hitQueryResponseRecorder.Code)
 	assert.Equal(t, "HIT", hitQueryResponseRecorder.Header().Get("X-Layr-Cache"))
 
@@ -104,18 +104,18 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	capQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
 	capQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "cap-suffix")
 	capQueryResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(capQueryResponseRecorder, capQueryRequest)
+	baseHandler.handleExecuteGraphQL(capQueryResponseRecorder, capQueryRequest)
 	assert.Equal(t, http.StatusOK, capQueryResponseRecorder.Code)
 	appConfig.Cache.MaxCachedQueries = 10000
 	service.GetConfigManager().SetMemoryConfig(appConfig)
 
 	// 5. GraphQL Mutation
 	mutationQuery := `mutation { insert_posts(objects: [{title: "Second Post", body: "Second Body"}]) { id title } }`
-	mutationPayloadBytes, _ := json.Marshal(GraphQLRequest{Query: mutationQuery})
+	mutationPayloadBytes, _ := json.Marshal(ExecuteGraphQLInput{Query: mutationQuery})
 	mutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader(mutationPayloadBytes))
 	mutationRequest.Header.Set("Content-Type", "application/json")
 	mutationResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(mutationResponseRecorder, mutationRequest)
+	baseHandler.handleExecuteGraphQL(mutationResponseRecorder, mutationRequest)
 	assert.Equal(t, http.StatusOK, mutationResponseRecorder.Code)
 	assert.Contains(t, mutationResponseRecorder.Body.String(), "Second Post")
 
@@ -126,7 +126,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	dropQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { temp_gql { id } }"}`)))
 	dropQueryRequest.Header.Set("Content-Type", "application/json")
 	dropQueryResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(dropQueryResponseRecorder, dropQueryRequest)
+	baseHandler.handleExecuteGraphQL(dropQueryResponseRecorder, dropQueryRequest)
 	assert.Equal(t, http.StatusNotFound, dropQueryResponseRecorder.Code)
 
 	// 7. Canceled context on Begin
@@ -135,6 +135,6 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	canceledGraphQLRequest := httptest.NewRequestWithContext(canceledGraphQLCtx, http.MethodPost, "/api/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	canceledGraphQLRequest.Header.Set("Content-Type", "application/json")
 	canceledGraphQLResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleGraphQL(canceledGraphQLResponseRecorder, canceledGraphQLRequest)
+	baseHandler.handleExecuteGraphQL(canceledGraphQLResponseRecorder, canceledGraphQLRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledGraphQLResponseRecorder.Code)
 }

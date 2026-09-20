@@ -8,7 +8,7 @@ import (
 )
 
 // /metrics - Minimal Prometheus exposition
-func (server *Server) handleMetrics(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetMetrics(responseWriter http.ResponseWriter, request *http.Request) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 

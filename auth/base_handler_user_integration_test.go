@@ -62,7 +62,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	requestBodyBytes, _ := json.Marshal(map[string]any{"email": testEmail})
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(requestBodyBytes))
 	responseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(responseRecorder, request)
+	baseHandler.handleRequestEmailVerification(responseRecorder, request)
 
 	if responseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 Internal Server Error when email unconfigured, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
@@ -122,7 +122,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	// 3. Email Verification Request - Success
 	request = httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(requestBodyBytes))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(responseRecorder, request)
+	baseHandler.handleRequestEmailVerification(responseRecorder, request)
 	if responseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on valid email verification request, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -135,7 +135,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	phoneBodyBytes, _ := json.Marshal(map[string]any{"phone": testPhone})
 	phoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", bytes.NewReader(phoneBodyBytes))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, phoneRequest)
+	baseHandler.handleRequestPhoneVerification(responseRecorder, phoneRequest)
 	if responseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on valid phone verification request, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -151,7 +151,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	})
 	confirmEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", bytes.NewReader(confirmEmailPayload))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, confirmEmailRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, confirmEmailRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid email verification confirm, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -170,7 +170,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	})
 	confirmPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", bytes.NewReader(confirmPhonePayload))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, confirmPhoneRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, confirmPhoneRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid phone verification confirm, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -184,14 +184,14 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	// 7. Requesting verification when already verified: unauthenticated returns 204 No Content (prevents enumeration)
 	request = httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(requestBodyBytes))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(responseRecorder, request)
+	baseHandler.handleRequestEmailVerification(responseRecorder, request)
 	if responseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content when email already verified unauthenticated, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
 
 	phoneRequest = httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/user/phone/verification/request", bytes.NewReader(phoneBodyBytes))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, phoneRequest)
+	baseHandler.handleRequestPhoneVerification(responseRecorder, phoneRequest)
 	if responseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content when phone already verified unauthenticated, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -215,7 +215,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	authenticatedRequest := withUserAuthClaims(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{}`)), jwtClaims)
 	authenticatedRequest.Header.Set("Authorization", "Bearer "+userAccessToken)
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(responseRecorder, authenticatedRequest)
+	baseHandler.handleRequestEmailVerification(responseRecorder, authenticatedRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for already verified authenticated email request, got: %d", responseRecorder.Code)
 	}
@@ -223,7 +223,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	authenticatedPhoneRequest := withUserAuthClaims(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{}`)), jwtClaims)
 	authenticatedPhoneRequest.Header.Set("Authorization", "Bearer "+userAccessToken)
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, authenticatedPhoneRequest)
+	baseHandler.handleRequestPhoneVerification(responseRecorder, authenticatedPhoneRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK for already verified authenticated phone request, got: %d", responseRecorder.Code)
 	}
@@ -233,7 +233,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	unverifiedEmailRequest := withUserAuthClaims(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{}`)), jwtClaims)
 	unverifiedEmailRequest.Header.Set("Authorization", "Bearer "+userAccessToken)
 	unverifiedEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(unverifiedEmailResponseRecorder, unverifiedEmailRequest)
+	baseHandler.handleRequestEmailVerification(unverifiedEmailResponseRecorder, unverifiedEmailRequest)
 	if unverifiedEmailResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content for unverified email verification request, got: %d", unverifiedEmailResponseRecorder.Code)
 	}
@@ -241,7 +241,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	unverifiedPhoneRequest := withUserAuthClaims(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{}`)), jwtClaims)
 	unverifiedPhoneRequest.Header.Set("Authorization", "Bearer "+userAccessToken)
 	unverifiedPhoneResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(unverifiedPhoneResponseRecorder, unverifiedPhoneRequest)
+	baseHandler.handleRequestPhoneVerification(unverifiedPhoneResponseRecorder, unverifiedPhoneRequest)
 	if unverifiedPhoneResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content for unverified phone verification request, got: %d", unverifiedPhoneResponseRecorder.Code)
 	}
@@ -281,19 +281,19 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	tokenEmailConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"%s","code":"%s"}`, anonEmail, anonEmailCode))), anonUserID, "authenticated", true)
 	tokenEmailConfirmRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, tokenEmailConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, tokenEmailConfirmRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on authenticated email confirm, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	var sessionResponse SessionResponse
-	if decodeErr := json.NewDecoder(responseRecorder.Body).Decode(&sessionResponse); decodeErr != nil || sessionResponse.AccessToken == "" {
-		t.Fatalf("expected valid SessionResponse issued on authenticated confirm: %v", decodeErr)
+	var authTokenResponse AuthTokenResponse
+	if decodeErr := json.NewDecoder(responseRecorder.Body).Decode(&authTokenResponse); decodeErr != nil || authTokenResponse.AccessToken == "" {
+		t.Fatalf("expected valid AuthTokenResponse issued on authenticated confirm: %v", decodeErr)
 	}
 
 	tokenPhoneConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"%s","code":"%s"}`, anonPhone, anonPhoneCode))), anonUserID, "authenticated", true)
 	tokenPhoneConfirmRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, tokenPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, tokenPhoneConfirmRequest)
 	if responseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on authenticated phone confirm, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -301,42 +301,42 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	// 10. Invalid JSON, Bad Phone formats, Missing codes
 	invalidJSONEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{invalid`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, invalidJSONEmailRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, invalidJSONEmailRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad JSON email confirm, got: %d", responseRecorder.Code)
 	}
 
 	emptyEmailConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"email":""}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, emptyEmailConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, emptyEmailConfirmRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty email confirm, got: %d", responseRecorder.Code)
 	}
 
 	invalidJSONPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{invalid`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, invalidJSONPhoneRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, invalidJSONPhoneRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on bad JSON phone confirm, got: %d", responseRecorder.Code)
 	}
 
 	emptyPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"phone":""}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, emptyPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, emptyPhoneConfirmRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty phone confirm, got: %d", responseRecorder.Code)
 	}
 
 	emptyPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":""}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, emptyPhoneRequest)
+	baseHandler.handleRequestPhoneVerification(responseRecorder, emptyPhoneRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on empty phone verify request, got: %d", responseRecorder.Code)
 	}
 
 	nonExistentPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15550001111"}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(responseRecorder, nonExistentPhoneRequest)
+	baseHandler.handleRequestPhoneVerification(responseRecorder, nonExistentPhoneRequest)
 	if responseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on unauthenticated non-existent phone request, got: %d", responseRecorder.Code)
 	}
@@ -344,14 +344,14 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	// 11. Non-existent OTP code verification -> 400
 	nonExistentOTPConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"email":"nobody@example.com","code":"123456"}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, nonExistentOTPConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, nonExistentOTPConfirmRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent OTP confirm, got: %d", responseRecorder.Code)
 	}
 
 	nonExistentPhoneOTPConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"phone":"+15550001111","code":"123456"}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, nonExistentPhoneOTPConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, nonExistentPhoneOTPConfirmRequest)
 	if responseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent phone OTP confirm, got: %d", responseRecorder.Code)
 	}
@@ -365,7 +365,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, expiredHash)
 	expiredEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"expired@example.com","code":"%s"}`, expiredCode)))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, expiredEmailRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, expiredEmailRequest)
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "expired") {
 		t.Fatalf("expected 400 with expired message on expired OTP, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -376,7 +376,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, expiredHash)
 	expiredPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"+15559992222","code":"%s"}`, expiredCode)))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, expiredPhoneRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, expiredPhoneRequest)
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "expired") {
 		t.Fatalf("expected 400 with expired message on expired phone OTP, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -390,7 +390,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, maxAttemptsHash)
 	maxAttemptsEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"maxattempts@example.com","code":"%s"}`, maxAttemptsCode)))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(responseRecorder, maxAttemptsEmailRequest)
+	baseHandler.handleConfirmEmailVerification(responseRecorder, maxAttemptsEmailRequest)
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "Maximum attempts exceeded") {
 		t.Fatalf("expected 400 with Maximum attempts exceeded, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -401,7 +401,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, maxAttemptsHash)
 	maxAttemptsPhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"+15559993333","code":"%s"}`, maxAttemptsCode)))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, maxAttemptsPhoneRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, maxAttemptsPhoneRequest)
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "Maximum attempts exceeded") {
 		t.Fatalf("expected 400 with Maximum attempts exceeded, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -415,7 +415,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, wrongCodeHash)
 	wrongCodePhoneRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"phone":"+15559994444","code":"999999"}`))
 	responseRecorder = httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(responseRecorder, wrongCodePhoneRequest)
+	baseHandler.handleConfirmPhoneVerification(responseRecorder, wrongCodePhoneRequest)
 	if responseRecorder.Code != http.StatusBadRequest || !strings.Contains(responseRecorder.Body.String(), "Invalid verification code") {
 		t.Fatalf("expected 400 on invalid code, got: %d (%s)", responseRecorder.Code, responseRecorder.Body.String())
 	}
@@ -428,7 +428,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	// 15. Unauthenticated non-existent email verification request -> 204 No Content (prevents enumeration)
 	nonExistentEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"nonexistent.user@example.com"}`))
 	nonExistentEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(nonExistentEmailResponseRecorder, nonExistentEmailRequest)
+	baseHandler.handleRequestEmailVerification(nonExistentEmailResponseRecorder, nonExistentEmailRequest)
 	if nonExistentEmailResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on unauthenticated non-existent email request, got: %d", nonExistentEmailResponseRecorder.Code)
 	}
@@ -442,7 +442,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, wrongEmailHash)
 	wrongCodeEmailRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(`{"email":"wrongcode@example.com","code":"000000"}`))
 	wrongCodeEmailResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(wrongCodeEmailResponseRecorder, wrongCodeEmailRequest)
+	baseHandler.handleConfirmEmailVerification(wrongCodeEmailResponseRecorder, wrongCodeEmailRequest)
 	if wrongCodeEmailResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(wrongCodeEmailResponseRecorder.Body.String(), "Invalid verification code") {
 		t.Fatalf("expected 400 on invalid email verification code, got: %d (%s)", wrongCodeEmailResponseRecorder.Code, wrongCodeEmailResponseRecorder.Body.String())
 	}
@@ -462,7 +462,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, orphanEmail, orphanEmailHash)
 	orphanEmailConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", strings.NewReader(fmt.Sprintf(`{"email":"%s","code":"%s"}`, orphanEmail, orphanEmailCode)))
 	orphanEmailConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(orphanEmailConfirmResponseRecorder, orphanEmailConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(orphanEmailConfirmResponseRecorder, orphanEmailConfirmRequest)
 	if orphanEmailConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unauthenticated email verify confirm for non-existent user, got: %d", orphanEmailConfirmResponseRecorder.Code)
 	}
@@ -477,7 +477,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	`, orphanPhone, orphanPhoneHash)
 	orphanPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"%s","code":"%s"}`, orphanPhone, orphanPhoneCode)))
 	orphanPhoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(orphanPhoneConfirmResponseRecorder, orphanPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(orphanPhoneConfirmResponseRecorder, orphanPhoneConfirmRequest)
 	if orphanPhoneConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on unauthenticated phone verify confirm for non-existent user, got: %d", orphanPhoneConfirmResponseRecorder.Code)
 	}
@@ -508,7 +508,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	anonPhoneConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", strings.NewReader(fmt.Sprintf(`{"phone":"%s","code":"%s"}`, anonPhoneRecipient, anonPhoneConfirmCode))), anonPhoneUserID, "authenticated", true)
 	anonPhoneConfirmRequest.Header.Set("Authorization", "Bearer "+anonPhoneToken)
 	anonPhoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(anonPhoneConfirmResponseRecorder, anonPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(anonPhoneConfirmResponseRecorder, anonPhoneConfirmRequest)
 	if anonPhoneConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on anonymous phone verification confirm, got: %d (%s)", anonPhoneConfirmResponseRecorder.Code, anonPhoneConfirmResponseRecorder.Body.String())
 	}
@@ -594,17 +594,17 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK on get user profile, got: %d (%s)", profileResponseRecorder.Code, profileResponseRecorder.Body.String())
 	}
 
-	var userResponse UserResponse
-	if decodeErr := json.NewDecoder(profileResponseRecorder.Body).Decode(&userResponse); decodeErr != nil {
+	var getUserResponse GetUserResponse
+	if decodeErr := json.NewDecoder(profileResponseRecorder.Body).Decode(&getUserResponse); decodeErr != nil {
 		t.Fatalf("failed to decode user profile: %v", decodeErr)
 	}
-	if userResponse.Email == nil || *userResponse.Email != userEmail {
-		t.Fatalf("expected email %s, got: %v", userEmail, userResponse.Email)
+	if getUserResponse.Email == nil || *getUserResponse.Email != userEmail {
+		t.Fatalf("expected email %s, got: %v", userEmail, getUserResponse.Email)
 	}
-	if userResponse.Properties["company"] != "Layr Inc" || userResponse.Properties["tier"] != "starter" {
-		t.Fatalf("expected custom properties, got: %+v", userResponse.Properties)
+	if getUserResponse.Properties["company"] != "Layr Inc" || getUserResponse.Properties["tier"] != "starter" {
+		t.Fatalf("expected custom properties, got: %+v", getUserResponse.Properties)
 	}
-	if userResponse.MFAEnabled {
+	if getUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be false initially")
 	}
 
@@ -618,14 +618,14 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	mfaRequest.Header.Set("Authorization", "Bearer "+accessToken)
 	mfaResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(mfaResponseRecorder, mfaRequest)
-	var mfaUserResponse UserResponse
-	_ = json.NewDecoder(mfaResponseRecorder.Body).Decode(&mfaUserResponse)
-	if !mfaUserResponse.MFAEnabled {
+	var mfaGetUserResponse GetUserResponse
+	_ = json.NewDecoder(mfaResponseRecorder.Body).Decode(&mfaGetUserResponse)
+	if !mfaGetUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be true after TOTP enrollment")
 	}
 
 	// 4. PATCH /api/v1/auth/user/properties - Merge custom properties
-	patchPayload, _ := json.Marshal(UpdateUserPropertiesRequest{
+	patchPayload, _ := json.Marshal(UpdateUserPropertiesInput{
 		Properties: map[string]any{
 			"theme": "nord",
 			"tier":  "enterprise",
@@ -647,7 +647,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// 5. PATCH /api/v1/auth/user/password - Validations
 	// Wrong current password -> 400
-	wrongPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	wrongPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: "WrongPassword999!",
 		NewPassword:     "BrandNewPassword123!",
 	})
@@ -660,7 +660,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}
 
 	// Missing current password -> 400
-	missingCurrentPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	missingCurrentPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: "BrandNewPassword123!",
 	})
 	missingCurrentPasswordRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(missingCurrentPasswordPayload)), userID, "user", false)
@@ -672,7 +672,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}
 
 	// Weak new password (below min length) -> 400
-	weakPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	weakPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: originalPassword,
 		NewPassword:     "short",
 	})
@@ -686,7 +686,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Successful password update -> 204
 	newValidPassword := "UpdatedSecurePassword456!@"
-	validPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	validPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: originalPassword,
 		NewPassword:     newValidPassword,
 	})
@@ -708,7 +708,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// 5b. Locked user password update -> 423
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", userID)
-	lockedPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	lockedPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: newValidPassword,
 		NewPassword:     "YetAnotherPass999!",
 	})
@@ -733,7 +733,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		IsAnonymous: true,
 	}, 3600)
 
-	anonPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	anonPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: "SomeNewPassword123!",
 	})
 	anonPasswordRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(anonPasswordPayload)), anonUserID, "authenticated", true)
@@ -782,9 +782,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	passkeyRequest.Header.Set("Authorization", "Bearer "+passkeyToken)
 	passkeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(passkeyResponseRecorder, passkeyRequest)
-	var initialPasskeyUserResponse UserResponse
-	_ = json.NewDecoder(passkeyResponseRecorder.Body).Decode(&initialPasskeyUserResponse)
-	if initialPasskeyUserResponse.MFAEnabled {
+	var initialPasskeyGetUserResponse GetUserResponse
+	_ = json.NewDecoder(passkeyResponseRecorder.Body).Decode(&initialPasskeyGetUserResponse)
+	if initialPasskeyGetUserResponse.MFAEnabled {
 		t.Fatalf("expected passkey user to have MFAEnabled=false before enrolling passkey")
 	}
 
@@ -801,9 +801,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	verifyPasskeyRequest.Header.Set("Authorization", "Bearer "+passkeyToken)
 	verifyPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(verifyPasskeyResponseRecorder, verifyPasskeyRequest)
-	var finalPasskeyUserResponse UserResponse
+	var finalPasskeyGetUserResponse GetUserResponse
 	// 8. User with passkey enrolled keeps MFAEnabled = false (passkeys are primary credentials, not 2FA)
-	if finalPasskeyUserResponse.MFAEnabled {
+	if finalPasskeyGetUserResponse.MFAEnabled {
 		t.Fatalf("expected passkey user to have MFAEnabled=false after passkey inserted (passkeys are not MFA)")
 	}
 
@@ -824,7 +824,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		Role:        "user",
 		IsAnonymous: false,
 	}, 3600)
-	initialPasswordPayload, _ := json.Marshal(UpdateUserPasswordRequest{
+	initialPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		NewPassword: "InitialSetPassword123!#",
 	})
 	initialPasswordRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/password", bytes.NewReader(initialPasswordPayload)), convertedUserID, "user", false)
@@ -851,7 +851,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	emailConflictRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/request", bytes.NewReader(emailConflictPayload)), convertedUserID, "user", false)
 	emailConflictRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	emailConflictResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationRequest(emailConflictResponseRecorder, emailConflictRequest)
+	baseHandler.handleRequestEmailVerification(emailConflictResponseRecorder, emailConflictRequest)
 	if emailConflictResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict when requesting already taken email, got: %d (%s)", emailConflictResponseRecorder.Code, emailConflictResponseRecorder.Body.String())
 	}
@@ -860,13 +860,13 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	phoneConflictRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/request", bytes.NewReader(phoneConflictPayload)), convertedUserID, "user", false)
 	phoneConflictRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	phoneConflictResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationRequest(phoneConflictResponseRecorder, phoneConflictRequest)
+	baseHandler.handleRequestPhoneVerification(phoneConflictResponseRecorder, phoneConflictRequest)
 	if phoneConflictResponseRecorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict when requesting already taken phone, got: %d (%s)", phoneConflictResponseRecorder.Code, phoneConflictResponseRecorder.Body.String())
 	}
 
 	// 10b. Update User Email (PATCH /api/v1/auth/user/email) - Conflict and Success
-	updateEmailConflictPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: otherUserEmail})
+	updateEmailConflictPayload, _ := json.Marshal(UpdateUserEmailInput{Email: otherUserEmail})
 	updateEmailConflictRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(updateEmailConflictPayload)), convertedUserID, "user", false)
 	updateEmailConflictRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	updateEmailConflictResponseRecorder := httptest.NewRecorder()
@@ -875,7 +875,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 409 on email update conflict, got: %d (%s)", updateEmailConflictResponseRecorder.Code, updateEmailConflictResponseRecorder.Body.String())
 	}
 
-	updateEmailSuccessPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: "unique.new.email@example.com"})
+	updateEmailSuccessPayload, _ := json.Marshal(UpdateUserEmailInput{Email: "unique.new.email@example.com"})
 	updateEmailSuccessRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(updateEmailSuccessPayload)), convertedUserID, "user", false)
 	updateEmailSuccessRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	updateEmailSuccessResponseRecorder := httptest.NewRecorder()
@@ -885,7 +885,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}
 
 	// 10c. Update User Phone (PATCH /api/v1/auth/user/phone) - Conflict and Success
-	updatePhoneConflictPayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: otherUserPhone})
+	updatePhoneConflictPayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: otherUserPhone})
 	updatePhoneConflictRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(updatePhoneConflictPayload)), convertedUserID, "user", false)
 	updatePhoneConflictRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	updatePhoneConflictResponseRecorder := httptest.NewRecorder()
@@ -894,7 +894,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 409 on phone update conflict, got: %d (%s)", updatePhoneConflictResponseRecorder.Code, updatePhoneConflictResponseRecorder.Body.String())
 	}
 
-	updatePhoneSuccessPayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: "+15558889999"})
+	updatePhoneSuccessPayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: "+15558889999"})
 	updatePhoneSuccessRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(updatePhoneSuccessPayload)), convertedUserID, "user", false)
 	updatePhoneSuccessRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	updatePhoneSuccessResponseRecorder := httptest.NewRecorder()
@@ -921,7 +921,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 
 	// Oversized email (>255 chars) causes UPDATE error -> 500
 	oversizedEmail := strings.Repeat("a", 250) + "@test.com"
-	updateEmailOversizedPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: oversizedEmail})
+	updateEmailOversizedPayload, _ := json.Marshal(UpdateUserEmailInput{Email: oversizedEmail})
 	updateEmailOversizedRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(updateEmailOversizedPayload)), anonFailUserID, "authenticated", true)
 	updateEmailOversizedRequest.Header.Set("Authorization", "Bearer "+anonFailToken)
 	updateEmailOversizedResponseRecorder := httptest.NewRecorder()
@@ -948,7 +948,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("failed to create fail trigger: %v", err)
 	}
 
-	updatePhoneErrPayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: "+15559990000"})
+	updatePhoneErrPayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: "+15559990000"})
 	updatePhoneErrRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(updatePhoneErrPayload)), anonFailUserID, "authenticated", true)
 	updatePhoneErrRequest.Header.Set("Authorization", "Bearer "+anonFailToken)
 	updatePhoneErrResponseRecorder := httptest.NewRecorder()
@@ -1074,7 +1074,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	authEmailConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", bytes.NewReader(authEmailConfirmPayload)), convertedUserID, "user", false)
 	authEmailConfirmRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	authEmailConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(authEmailConfirmResponseRecorder, authEmailConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(authEmailConfirmResponseRecorder, authEmailConfirmRequest)
 	if authEmailConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on authenticated email verification confirm, got: %d (%s)", authEmailConfirmResponseRecorder.Code, authEmailConfirmResponseRecorder.Body.String())
 	}
@@ -1095,7 +1095,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	authPhoneConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", bytes.NewReader(authPhoneConfirmPayload)), convertedUserID, "user", false)
 	authPhoneConfirmRequest.Header.Set("Authorization", "Bearer "+convertedAccessToken)
 	authPhoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(authPhoneConfirmResponseRecorder, authPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(authPhoneConfirmResponseRecorder, authPhoneConfirmRequest)
 	if authPhoneConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on authenticated phone verification confirm, got: %d (%s)", authPhoneConfirmResponseRecorder.Code, authPhoneConfirmResponseRecorder.Body.String())
 	}
@@ -1135,9 +1135,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	mfaSecretOnlyRequest.Header.Set("Authorization", "Bearer "+nullPropsToken)
 	mfaSecretOnlyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(mfaSecretOnlyResponseRecorder, mfaSecretOnlyRequest)
-	var mfaSecretOnlyUserResponse UserResponse
-	_ = json.NewDecoder(mfaSecretOnlyResponseRecorder.Body).Decode(&mfaSecretOnlyUserResponse)
-	if !mfaSecretOnlyUserResponse.MFAEnabled {
+	var mfaSecretOnlyGetUserResponse GetUserResponse
+	_ = json.NewDecoder(mfaSecretOnlyResponseRecorder.Body).Decode(&mfaSecretOnlyGetUserResponse)
+	if !mfaSecretOnlyGetUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be true with mfa_enabled")
 	}
 
@@ -1153,9 +1153,9 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	boolMFARequest.Header.Set("Authorization", "Bearer "+boolMFAToken)
 	boolMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(boolMFAResponseRecorder, boolMFARequest)
-	var boolMFAUserResponse UserResponse
-	_ = json.NewDecoder(boolMFAResponseRecorder.Body).Decode(&boolMFAUserResponse)
-	if !boolMFAUserResponse.MFAEnabled {
+	var boolMFAGetUserResponse GetUserResponse
+	_ = json.NewDecoder(boolMFAResponseRecorder.Body).Decode(&boolMFAGetUserResponse)
+	if !boolMFAGetUserResponse.MFAEnabled {
 		t.Fatalf("expected MFAEnabled to be true for boolean mfa_enabled")
 	}
 
@@ -1198,7 +1198,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	ghostEmailConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/email/verification/confirm", bytes.NewReader(ghostEmailConfirmPayload)), ghostUserID, "user", false)
 	ghostEmailConfirmRequest.Header.Set("Authorization", "Bearer "+ghostToken)
 	ghostEmailConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserEmailVerificationConfirm(ghostEmailConfirmResponseRecorder, ghostEmailConfirmRequest)
+	baseHandler.handleConfirmEmailVerification(ghostEmailConfirmResponseRecorder, ghostEmailConfirmRequest)
 	if ghostEmailConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on authenticated email confirm for non-existent user, got: %d", ghostEmailConfirmResponseRecorder.Code)
 	}
@@ -1216,7 +1216,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	ghostPhoneConfirmRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/user/phone/verification/confirm", bytes.NewReader(ghostPhoneConfirmPayload)), ghostUserID, "user", false)
 	ghostPhoneConfirmRequest.Header.Set("Authorization", "Bearer "+ghostToken)
 	ghostPhoneConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserPhoneVerificationConfirm(ghostPhoneConfirmResponseRecorder, ghostPhoneConfirmRequest)
+	baseHandler.handleConfirmPhoneVerification(ghostPhoneConfirmResponseRecorder, ghostPhoneConfirmRequest)
 	if ghostPhoneConfirmResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on authenticated phone confirm for non-existent user, got: %d", ghostPhoneConfirmResponseRecorder.Code)
 	}
@@ -1259,7 +1259,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 3600)
-	anonPatchEmailPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: "anon.converted.email@example.com"})
+	anonPatchEmailPayload, _ := json.Marshal(UpdateUserEmailInput{Email: "anon.converted.email@example.com"})
 	anonPatchEmailRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(anonPatchEmailPayload)), anonPatchEmailUserID, "authenticated", true)
 	anonPatchEmailRequest.Header.Set("Authorization", "Bearer "+anonPatchEmailToken)
 	anonPatchEmailResponseRecorder := httptest.NewRecorder()
@@ -1278,7 +1278,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 3600)
-	anonPatchPhonePayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: "+15553334444"})
+	anonPatchPhonePayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: "+15553334444"})
 	anonPatchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(anonPatchPhonePayload)), anonPatchPhoneUserID, "authenticated", true)
 	anonPatchPhoneRequest.Header.Set("Authorization", "Bearer "+anonPatchPhoneToken)
 	anonPatchPhoneResponseRecorder := httptest.NewRecorder()
@@ -1320,37 +1320,37 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 	}, 3600)
 	ghostAnonRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/user", nil), "01918a24-0000-7000-8000-000000000000", "authenticated", true)
 	ghostAnonRequest.Header.Set("Authorization", "Bearer "+ghostSubjectToken)
-	ghostAnonUserRecord, ghostAnonUserRecordErr := baseHandler.resolveAnonymousCaller(ghostAnonRequest)
-	if ghostAnonUserRecord != nil || !errors.Is(ghostAnonUserRecordErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected ErrAnonymousSessionNotFound for ghost subject, got: %v", ghostAnonUserRecordErr)
+	ghostAnonUser, ghostAnonUserErr := baseHandler.resolveAnonymousCaller(ghostAnonRequest)
+	if ghostAnonUser != nil || !errors.Is(ghostAnonUserErr, ErrAnonymousSessionNotFound) {
+		t.Fatalf("expected ErrAnonymousSessionNotFound for ghost subject, got: %v", ghostAnonUserErr)
 	}
 
 	// 23. issueSessionResponse with canceled context (DB session insert fails gracefully)
 	{
 		canceledCtx, cancel := context.WithCancel(ctx)
 		cancel()
-		dummyUserRecord := UserRecord{
+		dummyUser := User{
 			ID:   userID,
 			Role: "authenticated",
 		}
 		canceledSessionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil).WithContext(canceledCtx)
 		canceledSessionResponseRecorder := httptest.NewRecorder()
-		baseHandler.issueSessionResponse(canceledSessionResponseRecorder, canceledSessionRequest, dummyUserRecord)
+		baseHandler.issueSessionResponse(canceledSessionResponseRecorder, canceledSessionRequest, dummyUser)
 		if canceledSessionResponseRecorder.Code != http.StatusOK {
 			t.Fatalf("expected 200 even if session db insert fails, got: %d", canceledSessionResponseRecorder.Code)
 		}
 	}
 
-	// 24. fetchUserRecordByID and fetchUserRecordByRecipient error branches
+	// 24. fetchUserByID and fetchUserByRecipient error branches
 	{
-		ghostUserRecord, ghostErr := fetchUserRecordByID(ctx, db, "01918a24-9999-7000-8000-000000000000")
-		if ghostErr == nil || ghostUserRecord.ID != "01918a24-9999-7000-8000-000000000000" {
-			t.Fatalf("expected error and fallback user record for ghost user ID, got: %v, %v", ghostUserRecord, ghostErr)
+		ghostUser, ghostErr := fetchUserByID(ctx, db, "01918a24-9999-7000-8000-000000000000")
+		if ghostErr == nil || ghostUser.ID != "01918a24-9999-7000-8000-000000000000" {
+			t.Fatalf("expected error and fallback user record for ghost user ID, got: %v, %v", ghostUser, ghostErr)
 		}
 
-		ghostRecipientUserRecord, ghostRecipientErr := fetchUserRecordByRecipient(ctx, db, "nonexistent@example.com")
-		if ghostRecipientErr == nil || ghostRecipientUserRecord.ID != "" {
-			t.Fatalf("expected error for nonexistent recipient, got: %v, %v", ghostRecipientUserRecord, ghostRecipientErr)
+		ghostRecipientUser, ghostRecipientErr := fetchUserByRecipient(ctx, db, "nonexistent@example.com")
+		if ghostRecipientErr == nil || ghostRecipientUser.ID != "" {
+			t.Fatalf("expected error for nonexistent recipient, got: %v, %v", ghostRecipientUser, ghostRecipientErr)
 		}
 	}
 }

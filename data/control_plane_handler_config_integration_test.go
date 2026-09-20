@@ -23,7 +23,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	// 1. Get Config
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/_/data/config", nil)
 	getResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleGetConfig(getResponseRecorder, getRequest)
+	controlPlaneHandler.handleGetConfig(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on GET config, got %d", getResponseRecorder.Code)
 	}
@@ -41,15 +41,25 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	}
 	updateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(updatePayload))
 	updateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleUpdateConfig(updateResponseRecorder, updateRequest)
+	controlPlaneHandler.handleUpdateConfig(updateResponseRecorder, updateRequest)
 	if updateResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on PUT config, got %d", updateResponseRecorder.Code)
+	}
+
+	// 2b. Update Config with canceled context causes 500
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	closedContextRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPut, "/api/v1/_/data/config", bytes.NewReader(updatePayload))
+	closedContextResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(closedContextResponseRecorder, closedContextRequest)
+	if closedContextResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on failing DB in handleUpdateConfig, got %d", closedContextResponseRecorder.Code)
 	}
 
 	// 3. Flush Cache
 	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/flush", nil)
 	flushResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleFlushCache(flushResponseRecorder, flushRequest)
+	controlPlaneHandler.handleFlushCache(flushResponseRecorder, flushRequest)
 	if flushResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on cache flush, got %d", flushResponseRecorder.Code)
 	}
@@ -58,7 +68,7 @@ func TestDataControlPlaneHandlerConfigLifecycleIntegration(t *testing.T) {
 	invalidatePayload := `{"schema":"public","table":"users"}`
 	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/_/data/cache/invalidate", bytes.NewReader([]byte(invalidatePayload)))
 	invalidateResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.HandleInvalidateCache(invalidateResponseRecorder, invalidateRequest)
+	controlPlaneHandler.handleInvalidateCache(invalidateResponseRecorder, invalidateRequest)
 	if invalidateResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on cache invalidate, got %d", invalidateResponseRecorder.Code)
 	}

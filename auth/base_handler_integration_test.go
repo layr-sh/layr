@@ -80,12 +80,12 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 200 from /sign-up, got: %d (body: %s)", signupResponseRecorder.Code, signupResponseRecorder.Body.String())
 	}
 
-	var signupSessionResponse SessionResponse
-	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupSessionResponse); err != nil {
+	var signupAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode sign up response: %v", err)
 	}
-	if signupSessionResponse.User.ID == "" || signupSessionResponse.AccessToken == "" {
-		t.Fatalf("invalid sign up response: %+v", signupSessionResponse)
+	if signupAuthTokenResponse.User.ID == "" || signupAuthTokenResponse.AccessToken == "" {
+		t.Fatalf("invalid sign up response: %+v", signupAuthTokenResponse)
 	}
 
 	// 2. Sign In via POST /api/v1/auth/sign-in
@@ -102,24 +102,24 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK from /sign-in, got: %d (body: %s)", loginResponseRecorder.Code, loginResponseRecorder.Body.String())
 	}
 
-	var loginSessionResponse SessionResponse
-	_ = json.NewDecoder(loginResponseRecorder.Body).Decode(&loginSessionResponse)
+	var loginAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(loginResponseRecorder.Body).Decode(&loginAuthTokenResponse)
 
 	// 3. Token Refresh via POST /api/v1/auth/token/refresh
 	refreshPayload := map[string]any{
-		"refresh_token": loginSessionResponse.RefreshToken,
+		"refresh_token": loginAuthTokenResponse.RefreshToken,
 	}
 	encodedRefresh, _ := json.Marshal(refreshPayload)
 	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(encodedRefresh))
 	refreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(refreshResponseRecorder, refreshRequest)
+	baseHandler.handleRefreshToken(refreshResponseRecorder, refreshRequest)
 
 	if refreshResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from /token/refresh, got: %d (body: %s)", refreshResponseRecorder.Code, refreshResponseRecorder.Body.String())
 	}
 
-	var refreshSessionResponse SessionResponse
-	if err := json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshSessionResponse); err != nil {
+	var refreshAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode refresh response: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedOTPSend, _ := json.Marshal(otpSendPayload)
 	otpSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedOTPSend))
 	otpSendResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(otpSendResponseRecorder, otpSendRequest)
+	baseHandler.handleSendOTP(otpSendResponseRecorder, otpSendRequest)
 
 	if otpSendResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content from /otp send, got: %d", otpSendResponseRecorder.Code)
@@ -151,7 +151,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedWrongCode, _ := json.Marshal(wrongCodePayload)
 	wrongCodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedWrongCode))
 	wrongCodeResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(wrongCodeResponseRecorder, wrongCodeRequest)
+	baseHandler.handleVerifyOTP(wrongCodeResponseRecorder, wrongCodeRequest)
 	if wrongCodeResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on wrong OTP code, got: %d", wrongCodeResponseRecorder.Code)
 	}
@@ -165,7 +165,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedOTPVerify, _ := json.Marshal(otpVerifyPayload)
 	otpVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedOTPVerify))
 	otpVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyResponseRecorder, otpVerifyRequest)
+	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
 	if otpVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from /otp/verify, got: %d", otpVerifyResponseRecorder.Code)
 	}
@@ -179,7 +179,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedMissingOTP, _ := json.Marshal(missingOTPPayload)
 	missingOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedMissingOTP))
 	missingOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(missingOTPResponseRecorder, missingOTPRequest)
+	baseHandler.handleVerifyOTP(missingOTPResponseRecorder, missingOTPRequest)
 	if missingOTPResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on non-existent OTP, got: %d", missingOTPResponseRecorder.Code)
 	}
@@ -192,7 +192,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedPhoneOTP, _ := json.Marshal(phoneOTPPayload)
 	phoneOTPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/send", bytes.NewReader(encodedPhoneOTP))
 	phoneOTPResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPSend(phoneOTPResponseRecorder, phoneOTPRequest)
+	baseHandler.handleSendOTP(phoneOTPResponseRecorder, phoneOTPRequest)
 	if phoneOTPResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on phone OTP send: %d", phoneOTPResponseRecorder.Code)
 	}
@@ -209,7 +209,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
 	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(encodedPhoneVerify))
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(phoneVerifyResponseRecorder, phoneVerifyRequest)
+	baseHandler.handleVerifyOTP(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on phone OTP verify: %d", phoneVerifyResponseRecorder.Code)
 	}
@@ -221,7 +221,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedReset, _ := json.Marshal(resetPayload)
 	resetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/request", bytes.NewReader(encodedReset))
 	resetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetRequest(resetResponseRecorder, resetRequest)
+	baseHandler.handleRequestPasswordReset(resetResponseRecorder, resetRequest)
 	if resetResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content from /password-reset/request, got: %d", resetResponseRecorder.Code)
 	}
@@ -240,7 +240,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedWrongConfirm, _ := json.Marshal(wrongConfirmPayload)
 	wrongConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(encodedWrongConfirm))
 	wrongConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(wrongConfirmResponseRecorder, wrongConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(wrongConfirmResponseRecorder, wrongConfirmRequest)
 	if wrongConfirmResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on wrong reset code, got: %d", wrongConfirmResponseRecorder.Code)
 	}
@@ -254,20 +254,20 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedValidConfirm, _ := json.Marshal(validConfirmPayload)
 	validConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/password-reset/confirm", bytes.NewReader(encodedValidConfirm))
 	validConfirmResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasswordResetConfirm(validConfirmResponseRecorder, validConfirmRequest)
+	baseHandler.handleConfirmPasswordReset(validConfirmResponseRecorder, validConfirmRequest)
 	if validConfirmResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid password reset confirm, got: %d (body: %s)", validConfirmResponseRecorder.Code, validConfirmResponseRecorder.Body.String())
 	}
 
 	// 6. Passkey Sign Up & Verify
 	passkeyOptionsPayload := map[string]any{
-		"user_id":   signupSessionResponse.User.ID,
+		"user_id":   signupAuthTokenResponse.User.ID,
 		"user_name": "Alice",
 	}
 	encodedPasskeyOptions, _ := json.Marshal(passkeyOptionsPayload)
 	passkeyOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up", bytes.NewReader(encodedPasskeyOptions))
 	passkeyOptionsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUp(passkeyOptionsResponseRecorder, passkeyOptionsRequest)
+	baseHandler.handleBeginPasskeySignUp(passkeyOptionsResponseRecorder, passkeyOptionsRequest)
 	if passkeyOptionsResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK from /passkeys/sign-up, got: %d", passkeyOptionsResponseRecorder.Code)
 	}
@@ -278,7 +278,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	_ = json.NewDecoder(passkeyOptionsResponseRecorder.Body).Decode(&passkeyOptions)
 
 	passkeyVerifyPayload := map[string]any{
-		"user_id":       signupSessionResponse.User.ID,
+		"user_id":       signupAuthTokenResponse.User.ID,
 		"challenge":     passkeyOptions.Challenge,
 		"credential_id": "cred-id-12345",
 		"public_key":    "public-key-es256",
@@ -287,7 +287,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedPasskeyVerify, _ := json.Marshal(passkeyVerifyPayload)
 	passkeyVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-up/verify", bytes.NewReader(encodedPasskeyVerify))
 	passkeyVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignUpVerify(passkeyVerifyResponseRecorder, passkeyVerifyRequest)
+	baseHandler.handleVerifyPasskeySignUp(passkeyVerifyResponseRecorder, passkeyVerifyRequest)
 	if passkeyVerifyResponseRecorder.Code != http.StatusOK && passkeyVerifyResponseRecorder.Code != http.StatusCreated {
 		t.Fatalf("expected 200/201 on /passkeys/sign-up/verify, got: %d (body: %s)", passkeyVerifyResponseRecorder.Code, passkeyVerifyResponseRecorder.Body.String())
 	}
@@ -295,7 +295,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	// 7. Passkey Sign In Options & Verify
 	passkeySignInOptionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in", strings.NewReader(`{}`))
 	passkeySignInOptionsResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignIn(passkeySignInOptionsResponseRecorder, passkeySignInOptionsRequest)
+	baseHandler.handleBeginPasskeySignIn(passkeySignInOptionsResponseRecorder, passkeySignInOptionsRequest)
 	if passkeySignInOptionsResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on /passkeys/sign-in, got: %d", passkeySignInOptionsResponseRecorder.Code)
 	}
@@ -312,20 +312,20 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	encodedSignInVerify, _ := json.Marshal(passkeySignInVerifyPayload)
 	passkeySignInVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/passkeys/sign-in/verify", bytes.NewReader(encodedSignInVerify))
 	passkeySignInVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePasskeySignInVerify(passkeySignInVerifyResponseRecorder, passkeySignInVerifyRequest)
+	baseHandler.handleVerifyPasskeySignIn(passkeySignInVerifyResponseRecorder, passkeySignInVerifyRequest)
 	if passkeySignInVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on /passkeys/sign-in/verify, got: %d (body: %s)", passkeySignInVerifyResponseRecorder.Code, passkeySignInVerifyResponseRecorder.Body.String())
 	}
 
 	// 8. TOTP MFA Setup & Verify
 	mfaSetupPayload := map[string]any{
-		"user_id": signupSessionResponse.User.ID,
+		"user_id": signupAuthTokenResponse.User.ID,
 	}
 	encodedMFASetup, _ := json.Marshal(mfaSetupPayload)
 	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
-	mfaSetupRequest.Header.Set("Authorization", "Bearer "+loginSessionResponse.AccessToken)
+	mfaSetupRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleMFASetup(mfaSetupResponseRecorder, mfaSetupRequest)
+	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
 
 	if mfaSetupResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on /mfa/setup, got: %d (body: %s)", mfaSetupResponseRecorder.Code, mfaSetupResponseRecorder.Body.String())
@@ -339,14 +339,14 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	currentTOTPCode, err := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
 	if err == nil && currentTOTPCode != "" {
 		mfaVerifyPayload := map[string]any{
-			"user_id": signupSessionResponse.User.ID,
+			"user_id": signupAuthTokenResponse.User.ID,
 			"code":    currentTOTPCode,
 		}
 		encodedMFAVerify, _ := json.Marshal(mfaVerifyPayload)
 		mfaVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/mfa/verify", bytes.NewReader(encodedMFAVerify))
-		mfaVerifyRequest.Header.Set("Authorization", "Bearer "+loginSessionResponse.AccessToken)
+		mfaVerifyRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 		mfaVerifyResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleMFAVerify(mfaVerifyResponseRecorder, mfaVerifyRequest)
+		baseHandler.handleVerifyMFA(mfaVerifyResponseRecorder, mfaVerifyRequest)
 		if mfaVerifyResponseRecorder.Code != http.StatusOK {
 			t.Fatalf("expected 200 OK on /mfa/verify, got: %d (body: %s)", mfaVerifyResponseRecorder.Code, mfaVerifyResponseRecorder.Body.String())
 		}
@@ -381,7 +381,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:8080/callback&state=valid-state", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthAuthorize(oauthAuthResponseRecorder, oauthAuthRequest)
+	baseHandler.handleAuthorizeOAuth(oauthAuthResponseRecorder, oauthAuthRequest)
 	if oauthAuthResponseRecorder.Code != http.StatusFound && oauthAuthResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 302 redirect on /oauth/google/authorize, got: %d", oauthAuthResponseRecorder.Code)
 	}
@@ -389,7 +389,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	oauthCallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/auth/oauth/google/callback?code=valid-code&state=valid-state", nil)
 	oauthCallbackRequest.SetPathValue("provider", "google")
 	oauthCallbackResponseRecorder := httptest.NewRecorder()
-	baseHandler.HandleOAuthCallback(oauthCallbackResponseRecorder, oauthCallbackRequest)
+	baseHandler.handleProcessOAuthCallback(oauthCallbackResponseRecorder, oauthCallbackRequest)
 	if oauthCallbackResponseRecorder.Code != http.StatusOK && oauthCallbackResponseRecorder.Code != http.StatusFound {
 		t.Fatalf("expected successful oauth callback, got: %d (body: %s)", oauthCallbackResponseRecorder.Code, oauthCallbackResponseRecorder.Body.String())
 	}
@@ -398,24 +398,24 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
 		VALUES ($1, 'github', 'gh_user_123', '{"login":"alice"}'::jsonb, clock_timestamp(), clock_timestamp())
-	`, signupSessionResponse.User.ID)
+	`, signupAuthTokenResponse.User.ID)
 	if err != nil {
 		t.Fatalf("failed to insert test identity for export: %v", err)
 	}
 
-	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupSessionResponse.User.ID+"/export", nil), signupSessionResponse.User.ID, "authenticated", false)
-	exportRequest.SetPathValue("user_id", signupSessionResponse.User.ID)
-	exportRequest.Header.Set("Authorization", "Bearer "+loginSessionResponse.AccessToken)
+	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
+	exportRequest.SetPathValue("user_id", signupAuthTokenResponse.User.ID)
+	exportRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserExport(exportResponseRecorder, exportRequest)
+	baseHandler.handleExportUser(exportResponseRecorder, exportRequest)
 	if exportResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on user export, got: %d (body: %s)", exportResponseRecorder.Code, exportResponseRecorder.Body.String())
 	}
-	var exportUserDataResponse ExportUserDataResponse
-	if decodeErr := json.NewDecoder(exportResponseRecorder.Body).Decode(&exportUserDataResponse); decodeErr != nil {
+	var exportUserResponse ExportUserResponse
+	if decodeErr := json.NewDecoder(exportResponseRecorder.Body).Decode(&exportUserResponse); decodeErr != nil {
 		t.Fatalf("failed to decode user export response: %v", decodeErr)
 	}
-	if len(exportUserDataResponse.Identities) == 0 {
+	if len(exportUserResponse.Identities) == 0 {
 		t.Fatal("expected exported identities to be populated")
 	}
 
@@ -439,14 +439,14 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	nonExistentExportRequest.SetPathValue("user_id", nonExistentUserID)
 	nonExistentExportRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentExportResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUserExport(nonExistentExportResponseRecorder, nonExistentExportRequest)
+	baseHandler.handleExportUser(nonExistentExportResponseRecorder, nonExistentExportRequest)
 	if nonExistentExportResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 Not Found on non-existent user export, got: %d", nonExistentExportResponseRecorder.Code)
 	}
 
 	// 11. Sign Out via POST /api/v1/auth/sign-out with active refresh token to trigger SessionDeletedEvent
 	_, _ = db.Exec(ctx, "UPDATE auth.sessions SET client_id = 'client-signout-test'")
-	signOutPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: refreshSessionResponse.RefreshToken})
+	signOutPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: refreshAuthTokenResponse.RefreshToken})
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-out", bytes.NewReader(signOutPayload))
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutResponseRecorder, signOutRequest)
@@ -514,39 +514,39 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	})
 	anonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", bytes.NewReader(anonymousPayload))
 	anonymousResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(anonymousResponseRecorder, anonymousRequest)
+	baseHandler.handleSignInAnonymous(anonymousResponseRecorder, anonymousRequest)
 
 	if anonymousResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on anonymous sign-in, got: %d (%s)", anonymousResponseRecorder.Code, anonymousResponseRecorder.Body.String())
 	}
 
-	var anonymousSessionResponse SessionResponse
-	if err := json.NewDecoder(anonymousResponseRecorder.Body).Decode(&anonymousSessionResponse); err != nil {
+	var anonymousAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(anonymousResponseRecorder.Body).Decode(&anonymousAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode anonymous sign-in response: %v", err)
 	}
 
-	anonymousUserID := anonymousSessionResponse.User.ID
+	anonymousUserID := anonymousAuthTokenResponse.User.ID
 	if anonymousUserID == "" {
 		t.Fatal("expected non-empty anonymous user ID")
 	}
-	if anonymousSessionResponse.User.Email != nil {
-		t.Fatalf("expected nil email for anonymous user, got: %v", *anonymousSessionResponse.User.Email)
+	if anonymousAuthTokenResponse.User.Email != nil {
+		t.Fatalf("expected nil email for anonymous user, got: %v", *anonymousAuthTokenResponse.User.Email)
 	}
-	if anonymousSessionResponse.User.Phone != nil {
-		t.Fatalf("expected nil phone for anonymous user, got: %v", *anonymousSessionResponse.User.Phone)
+	if anonymousAuthTokenResponse.User.Phone != nil {
+		t.Fatalf("expected nil phone for anonymous user, got: %v", *anonymousAuthTokenResponse.User.Phone)
 	}
-	if !anonymousSessionResponse.User.IsAnonymous {
+	if !anonymousAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected user.is_anonymous to be true")
 	}
-	if anonymousSessionResponse.User.Role != "authenticated" {
-		t.Fatalf("expected role authenticated, got: %s", anonymousSessionResponse.User.Role)
+	if anonymousAuthTokenResponse.User.Role != "authenticated" {
+		t.Fatalf("expected role authenticated, got: %s", anonymousAuthTokenResponse.User.Role)
 	}
-	if anonymousSessionResponse.User.Properties["theme"] != "dark" {
-		t.Fatalf("expected theme property 'dark', got: %v", anonymousSessionResponse.User.Properties["theme"])
+	if anonymousAuthTokenResponse.User.Properties["theme"] != "dark" {
+		t.Fatalf("expected theme property 'dark', got: %v", anonymousAuthTokenResponse.User.Properties["theme"])
 	}
 
 	// Verify Ed25519 JWT claims
-	anonymousJWTClaims, claimErr := baseHandler.jwtSigner.VerifyAccessToken(anonymousSessionResponse.AccessToken)
+	anonymousJWTClaims, claimErr := baseHandler.jwtSigner.VerifyAccessToken(anonymousAuthTokenResponse.AccessToken)
 	if claimErr != nil {
 		t.Fatalf("failed to verify anonymous access token: %v", claimErr)
 	}
@@ -585,7 +585,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		},
 	})
 	signupConversionRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
-	signupConversionRequest.Header.Set("Authorization", "Bearer "+anonymousSessionResponse.AccessToken)
+	signupConversionRequest.Header.Set("Authorization", "Bearer "+anonymousAuthTokenResponse.AccessToken)
 	signupConversionResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupConversionResponseRecorder, signupConversionRequest)
 
@@ -593,27 +593,27 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on conversion sign up, got: %d (%s)", signupConversionResponseRecorder.Code, signupConversionResponseRecorder.Body.String())
 	}
 
-	var signupConversionSessionResponse SessionResponse
-	if err := json.NewDecoder(signupConversionResponseRecorder.Body).Decode(&signupConversionSessionResponse); err != nil {
+	var signupConversionAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(signupConversionResponseRecorder.Body).Decode(&signupConversionAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode conversion sign up response: %v", err)
 	}
 
-	if signupConversionSessionResponse.User.ID != anonymousUserID {
-		t.Fatalf("expected user ID to remain %s after conversion, got: %s", anonymousUserID, signupConversionSessionResponse.User.ID)
+	if signupConversionAuthTokenResponse.User.ID != anonymousUserID {
+		t.Fatalf("expected user ID to remain %s after conversion, got: %s", anonymousUserID, signupConversionAuthTokenResponse.User.ID)
 	}
-	if signupConversionSessionResponse.User.IsAnonymous {
+	if signupConversionAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected user.is_anonymous to be false after conversion")
 	}
-	if signupConversionSessionResponse.User.Email == nil || *signupConversionSessionResponse.User.Email != targetEmail {
-		t.Fatalf("expected email %s, got: %v", targetEmail, signupConversionSessionResponse.User.Email)
+	if signupConversionAuthTokenResponse.User.Email == nil || *signupConversionAuthTokenResponse.User.Email != targetEmail {
+		t.Fatalf("expected email %s, got: %v", targetEmail, signupConversionAuthTokenResponse.User.Email)
 	}
 
 	// Asserts properties are preserved and merged
-	if signupConversionSessionResponse.User.Properties["theme"] != "dark" || signupConversionSessionResponse.User.Properties["subscribed"] != true {
-		t.Fatalf("expected merged properties containing both theme and subscribed, got: %+v", signupConversionSessionResponse.User.Properties)
+	if signupConversionAuthTokenResponse.User.Properties["theme"] != "dark" || signupConversionAuthTokenResponse.User.Properties["subscribed"] != true {
+		t.Fatalf("expected merged properties containing both theme and subscribed, got: %+v", signupConversionAuthTokenResponse.User.Properties)
 	}
 
-	convertedJWTClaims, tokenErr := baseHandler.jwtSigner.VerifyAccessToken(signupConversionSessionResponse.AccessToken)
+	convertedJWTClaims, tokenErr := baseHandler.jwtSigner.VerifyAccessToken(signupConversionAuthTokenResponse.AccessToken)
 	if tokenErr != nil {
 		t.Fatalf("failed to verify converted access token: %v", tokenErr)
 	}
@@ -656,34 +656,34 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("expected 200 on brand new sign up, got: %d (%s)", brandNewResponseRecorder.Code, brandNewResponseRecorder.Body.String())
 	}
 
-	var brandNewSessionResponse SessionResponse
-	if err := json.NewDecoder(brandNewResponseRecorder.Body).Decode(&brandNewSessionResponse); err != nil {
+	var brandNewAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(brandNewResponseRecorder.Body).Decode(&brandNewAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode brand new sign up response: %v", err)
 	}
 
-	if brandNewSessionResponse.User.ID == anonymousUserID {
-		t.Fatalf("expected brand new user ID, got same anonymous user ID: %s", brandNewSessionResponse.User.ID)
+	if brandNewAuthTokenResponse.User.ID == anonymousUserID {
+		t.Fatalf("expected brand new user ID, got same anonymous user ID: %s", brandNewAuthTokenResponse.User.ID)
 	}
-	if brandNewSessionResponse.User.IsAnonymous {
+	if brandNewAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected brand new user is_anonymous to be false")
 	}
-	if brandNewSessionResponse.User.Email == nil || *brandNewSessionResponse.User.Email != brandNewEmail {
-		t.Fatalf("expected email %s, got: %v", brandNewEmail, brandNewSessionResponse.User.Email)
+	if brandNewAuthTokenResponse.User.Email == nil || *brandNewAuthTokenResponse.User.Email != brandNewEmail {
+		t.Fatalf("expected email %s, got: %v", brandNewEmail, brandNewAuthTokenResponse.User.Email)
 	}
 
 	// 4. In-Place Auto-Conversion via OTP Verify (POST /api/v1/auth/otp/verify)
 	secondAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	secondAnonymousResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(secondAnonymousResponseRecorder, secondAnonymousRequest)
+	baseHandler.handleSignInAnonymous(secondAnonymousResponseRecorder, secondAnonymousRequest)
 	if secondAnonymousResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on second anonymous sign-in, got: %d", secondAnonymousResponseRecorder.Code)
 	}
 
-	var secondAnonymousSessionResponse SessionResponse
-	if err := json.NewDecoder(secondAnonymousResponseRecorder.Body).Decode(&secondAnonymousSessionResponse); err != nil {
+	var secondAnonymousAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(secondAnonymousResponseRecorder.Body).Decode(&secondAnonymousAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode second anonymous response: %v", err)
 	}
-	secondAnonymousUserID := secondAnonymousSessionResponse.User.ID
+	secondAnonymousUserID := secondAnonymousAuthTokenResponse.User.ID
 
 	otpRecipient := fmt.Sprintf("otp_converted_%d@example.com", time.Now().UnixNano())
 	otpCode := "778899"
@@ -704,27 +704,27 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		"purpose":   "sign_in",
 	})
 	otpVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
-	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousSessionResponse.AccessToken)
+	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousAuthTokenResponse.AccessToken)
 	otpVerifyResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleOTPVerify(otpVerifyResponseRecorder, otpVerifyRequest)
+	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
 
 	if otpVerifyResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on OTP conversion verify, got: %d (%s)", otpVerifyResponseRecorder.Code, otpVerifyResponseRecorder.Body.String())
 	}
 
-	var otpVerifySessionResponse SessionResponse
-	if err := json.NewDecoder(otpVerifyResponseRecorder.Body).Decode(&otpVerifySessionResponse); err != nil {
+	var otpVerifyAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(otpVerifyResponseRecorder.Body).Decode(&otpVerifyAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode OTP conversion verify response: %v", err)
 	}
 
-	if otpVerifySessionResponse.User.ID != secondAnonymousUserID {
-		t.Fatalf("expected user ID %s to remain unchanged on OTP conversion, got: %s", secondAnonymousUserID, otpVerifySessionResponse.User.ID)
+	if otpVerifyAuthTokenResponse.User.ID != secondAnonymousUserID {
+		t.Fatalf("expected user ID %s to remain unchanged on OTP conversion, got: %s", secondAnonymousUserID, otpVerifyAuthTokenResponse.User.ID)
 	}
-	if otpVerifySessionResponse.User.IsAnonymous {
+	if otpVerifyAuthTokenResponse.User.IsAnonymous {
 		t.Fatal("expected user.is_anonymous to be false after OTP conversion")
 	}
-	if otpVerifySessionResponse.User.Email == nil || *otpVerifySessionResponse.User.Email != otpRecipient {
-		t.Fatalf("expected verified email %s, got: %v", otpRecipient, otpVerifySessionResponse.User.Email)
+	if otpVerifyAuthTokenResponse.User.Email == nil || *otpVerifyAuthTokenResponse.User.Email != otpRecipient {
+		t.Fatalf("expected verified email %s, got: %v", otpRecipient, otpVerifyAuthTokenResponse.User.Email)
 	}
 
 	var emailVerifiedAt *time.Time
@@ -736,15 +736,15 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	// 5. Updating User Email converts anonymous user to regular user
 	thirdAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	thirdAnonymousResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(thirdAnonymousResponseRecorder, thirdAnonymousRequest)
-	var thirdAnonymousSessionResponse SessionResponse
-	_ = json.NewDecoder(thirdAnonymousResponseRecorder.Body).Decode(&thirdAnonymousSessionResponse)
-	thirdAnonymousUserID := thirdAnonymousSessionResponse.User.ID
+	baseHandler.handleSignInAnonymous(thirdAnonymousResponseRecorder, thirdAnonymousRequest)
+	var thirdAnonymousAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(thirdAnonymousResponseRecorder.Body).Decode(&thirdAnonymousAuthTokenResponse)
+	thirdAnonymousUserID := thirdAnonymousAuthTokenResponse.User.ID
 
 	updateEmail := fmt.Sprintf("update_email_%d@example.com", time.Now().UnixNano())
-	patchEmailPayload, _ := json.Marshal(UpdateUserEmailRequest{Email: updateEmail})
+	patchEmailPayload, _ := json.Marshal(UpdateUserEmailInput{Email: updateEmail})
 	patchEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
-	patchEmailRequest.Header.Set("Authorization", "Bearer "+thirdAnonymousSessionResponse.AccessToken)
+	patchEmailRequest.Header.Set("Authorization", "Bearer "+thirdAnonymousAuthTokenResponse.AccessToken)
 	patchEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(patchEmailResponseRecorder, patchEmailRequest)
 
@@ -768,15 +768,15 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	// 6. Updating User Phone converts anonymous user to regular user
 	fourthAnonymousRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	fourthAnonymousResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(fourthAnonymousResponseRecorder, fourthAnonymousRequest)
-	var fourthAnonymousSessionResponse SessionResponse
-	_ = json.NewDecoder(fourthAnonymousResponseRecorder.Body).Decode(&fourthAnonymousSessionResponse)
-	fourthAnonymousUserID := fourthAnonymousSessionResponse.User.ID
+	baseHandler.handleSignInAnonymous(fourthAnonymousResponseRecorder, fourthAnonymousRequest)
+	var fourthAnonymousAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(fourthAnonymousResponseRecorder.Body).Decode(&fourthAnonymousAuthTokenResponse)
+	fourthAnonymousUserID := fourthAnonymousAuthTokenResponse.User.ID
 
 	updatePhone := fmt.Sprintf("+1415%07d", time.Now().UnixNano()%10000000)
-	patchPhonePayload, _ := json.Marshal(UpdateUserPhoneRequest{Phone: updatePhone})
+	patchPhonePayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: updatePhone})
 	patchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/api/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
-	patchPhoneRequest.Header.Set("Authorization", "Bearer "+fourthAnonymousSessionResponse.AccessToken)
+	patchPhoneRequest.Header.Set("Authorization", "Bearer "+fourthAnonymousAuthTokenResponse.AccessToken)
 	patchPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(patchPhoneResponseRecorder, patchPhoneRequest)
 
@@ -828,7 +828,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	phoneUser := "+12025550199"
 	phonePassword := "SuperSecretPassword123!"
 
-	phoneSignupPayload, _ := json.Marshal(SignUpRequest{
+	phoneSignupPayload, _ := json.Marshal(SignUpInput{
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
@@ -840,7 +840,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// Sign-in with wrong password -> 401
-	wrongPassPayload, _ := json.Marshal(SignInRequest{
+	wrongPassPayload, _ := json.Marshal(SignInInput{
 		Phone:    phoneUser,
 		Password: "WrongPassword999!",
 	})
@@ -852,7 +852,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// Sign-in with non-existent phone/user -> 401
-	missingUserPayload, _ := json.Marshal(SignInRequest{
+	missingUserPayload, _ := json.Marshal(SignInInput{
 		Phone:    "+12025550100",
 		Password: "Password123!",
 	})
@@ -864,7 +864,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// Sign-in with valid phone and password -> 200
-	validPhonePayload, _ := json.Marshal(SignInRequest{
+	validPhonePayload, _ := json.Marshal(SignInInput{
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
@@ -878,7 +878,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	// 2. Sign-in Rate Limiting (exceed MaxSigninAttempts)
 	rateLimitedEmail := "ratelimited@example.com"
 	for i := 0; i < 2; i++ {
-		rateAttemptPayload, _ := json.Marshal(SignInRequest{
+		rateAttemptPayload, _ := json.Marshal(SignInInput{
 			Email:    rateLimitedEmail,
 			Password: "WrongPassword123!",
 		})
@@ -887,7 +887,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		baseHandler.handleSignIn(rateAttemptResponseRecorder, rateAttemptRequest)
 	}
 	// 3rd attempt exceeds limit of 2
-	rateBlockedPayload, _ := json.Marshal(SignInRequest{
+	rateBlockedPayload, _ := json.Marshal(SignInInput{
 		Email:    rateLimitedEmail,
 		Password: "WrongPassword123!",
 	})
@@ -909,7 +909,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("failed to lock user account: %v", err)
 	}
 
-	lockedSignInPayload, _ := json.Marshal(SignInRequest{
+	lockedSignInPayload, _ := json.Marshal(SignInInput{
 		Phone:    phoneUser,
 		Password: phonePassword,
 	})
@@ -925,7 +925,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	// 4. In-Place Conversion Conflicts (Email & Phone)
 	conflictEmail := "existing_conflict@example.com"
-	conflictSignupPayload, _ := json.Marshal(SignUpRequest{
+	conflictSignupPayload, _ := json.Marshal(SignUpInput{
 		Email:    conflictEmail,
 		Password: "Password123!",
 	})
@@ -936,17 +936,17 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	// Create anonymous user
 	anonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	anonResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(anonResponseRecorder, anonRequest)
-	var anonSessionResponse SessionResponse
-	_ = json.NewDecoder(anonResponseRecorder.Body).Decode(&anonSessionResponse)
+	baseHandler.handleSignInAnonymous(anonResponseRecorder, anonRequest)
+	var anonAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(anonResponseRecorder.Body).Decode(&anonAuthTokenResponse)
 
 	// Try to convert with existing email -> 409 Conflict
-	conflictEmailConvertPayload, _ := json.Marshal(SignUpRequest{
+	conflictEmailConvertPayload, _ := json.Marshal(SignUpInput{
 		Email:    conflictEmail,
 		Password: "NewPassword123!",
 	})
-	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonSessionResponse.User.ID, "anon", true)
-	conflictEmailRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
+	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictEmailRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictEmailResponseRecorder, conflictEmailRequest)
 	if conflictEmailResponseRecorder.Code != http.StatusConflict {
@@ -954,12 +954,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// Try to convert with existing phone -> 409 Conflict
-	conflictPhoneConvertPayload, _ := json.Marshal(SignUpRequest{
+	conflictPhoneConvertPayload, _ := json.Marshal(SignUpInput{
 		Phone:    phoneUser,
 		Password: "NewPassword123!",
 	})
-	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonSessionResponse.User.ID, "anon", true)
-	conflictPhoneRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
+	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictPhoneRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictPhoneResponseRecorder, conflictPhoneRequest)
 	if conflictPhoneResponseRecorder.Code != http.StatusConflict {
@@ -975,12 +975,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		_, _ = db.Exec(context.Background(), "ALTER TABLE auth.users DROP CONSTRAINT IF EXISTS layr_test_block_convert")
 	}()
 
-	blockConvertPayload, _ := json.Marshal(SignUpRequest{
+	blockConvertPayload, _ := json.Marshal(SignUpInput{
 		Email:    "block_convert@example.com",
 		Password: "Password123!",
 	})
-	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonSessionResponse.User.ID, "anon", true)
-	blockConvertRequest.Header.Set("Authorization", "Bearer "+anonSessionResponse.AccessToken)
+	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	blockConvertRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	blockConvertResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(blockConvertResponseRecorder, blockConvertRequest)
 	if blockConvertResponseRecorder.Code != http.StatusInternalServerError {
@@ -994,12 +994,12 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	canceledAnonRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPost, "/api/v1/auth/anonymous", nil)
 	canceledAnonResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleAnonymousSignIn(canceledAnonResponseRecorder, canceledAnonRequest)
+	baseHandler.handleSignInAnonymous(canceledAnonResponseRecorder, canceledAnonRequest)
 	if canceledAnonResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on canceled anonymous sign-in, got: %d", canceledAnonResponseRecorder.Code)
 	}
 
-	canceledSignupPayload, _ := json.Marshal(SignUpRequest{
+	canceledSignupPayload, _ := json.Marshal(SignUpInput{
 		Email:    "canceled_signup@example.com",
 		Password: "Password123!",
 	})
@@ -1017,10 +1017,10 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 
 	// A) Missing / revoked refresh token in DB -> 401
-	revokedRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: "revoked-or-missing-token"})
+	revokedRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: "revoked-or-missing-token"})
 	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(revokedRefreshPayload))
 	revokedRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(revokedRefreshResponseRecorder, revokedRefreshRequest)
+	baseHandler.handleRefreshToken(revokedRefreshResponseRecorder, revokedRefreshRequest)
 	if revokedRefreshResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on missing/revoked token refresh in DB, got: %d (%s)", revokedRefreshResponseRecorder.Code, revokedRefreshResponseRecorder.Body.String())
 	}
@@ -1039,10 +1039,10 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("failed to insert expired session: %v", err)
 	}
 
-	expiredRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: expiredToken})
+	expiredRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: expiredToken})
 	expiredRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(expiredRefreshPayload))
 	expiredRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(expiredRefreshResponseRecorder, expiredRefreshRequest)
+	baseHandler.handleRefreshToken(expiredRefreshResponseRecorder, expiredRefreshRequest)
 	if expiredRefreshResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on expired token refresh in DB, got: %d (%s)", expiredRefreshResponseRecorder.Code, expiredRefreshResponseRecorder.Body.String())
 	}
@@ -1070,10 +1070,10 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("failed to insert session for non-existent user: %v", err)
 	}
 
-	deletedUserRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: deletedUserToken})
+	deletedUserRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: deletedUserToken})
 	deletedUserRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(deletedUserRefreshPayload))
 	deletedUserRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(deletedUserRefreshResponseRecorder, deletedUserRefreshRequest)
+	baseHandler.handleRefreshToken(deletedUserRefreshResponseRecorder, deletedUserRefreshRequest)
 	if deletedUserRefreshResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on non-existent user token refresh in DB, got: %d (%s)", deletedUserRefreshResponseRecorder.Code, deletedUserRefreshResponseRecorder.Body.String())
 	}
@@ -1085,7 +1085,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	`)
 
 	// D) Valid DB session refresh -> 200 OK
-	validDBSignInPayload, _ := json.Marshal(SignInRequest{
+	validDBSignInPayload, _ := json.Marshal(SignInInput{
 		Email:    conflictEmail,
 		Password: "Password123!",
 	})
@@ -1096,28 +1096,28 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("expected 200 OK on sign-in before DB refresh, got: %d", validDBSignInRecCode)
 	}
 
-	var validDBSessionResponse SessionResponse
-	if err := json.NewDecoder(validDBSignInResponseRecorder.Body).Decode(&validDBSessionResponse); err != nil {
+	var validDBAuthTokenResponse AuthTokenResponse
+	if err := json.NewDecoder(validDBSignInResponseRecorder.Body).Decode(&validDBAuthTokenResponse); err != nil {
 		t.Fatalf("failed to decode sign-in response: %v", err)
 	}
 
-	validDBRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: validDBSessionResponse.RefreshToken})
+	validDBRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: validDBAuthTokenResponse.RefreshToken})
 	validDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(validDBRefreshPayload))
 	validDBRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(validDBRefreshResponseRecorder, validDBRefreshRequest)
+	baseHandler.handleRefreshToken(validDBRefreshResponseRecorder, validDBRefreshRequest)
 	if validDBRefreshResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on valid DB token refresh, got: %d (%s)", validDBRefreshResponseRecorder.Code, validDBRefreshResponseRecorder.Body.String())
 	}
 
-	var rotatedSessionResponse SessionResponse
-	_ = json.NewDecoder(validDBRefreshResponseRecorder.Body).Decode(&rotatedSessionResponse)
+	var rotatedAuthTokenResponse AuthTokenResponse
+	_ = json.NewDecoder(validDBRefreshResponseRecorder.Body).Decode(&rotatedAuthTokenResponse)
 
 	// Locked user DB token refresh -> 423
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE email = $1", conflictEmail)
-	lockedDBRefreshPayload, _ := json.Marshal(RefreshTokenRequest{RefreshToken: rotatedSessionResponse.RefreshToken})
+	lockedDBRefreshPayload, _ := json.Marshal(RefreshTokenInput{RefreshToken: rotatedAuthTokenResponse.RefreshToken})
 	lockedDBRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/api/v1/auth/token/refresh", bytes.NewReader(lockedDBRefreshPayload))
 	lockedDBRefreshResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleTokenRefresh(lockedDBRefreshResponseRecorder, lockedDBRefreshRequest)
+	baseHandler.handleRefreshToken(lockedDBRefreshResponseRecorder, lockedDBRefreshRequest)
 	if lockedDBRefreshResponseRecorder.Code != http.StatusLocked {
 		t.Fatalf("expected 423 StatusLocked on locked DB token refresh, got: %d (%s)", lockedDBRefreshResponseRecorder.Code, lockedDBRefreshResponseRecorder.Body.String())
 	}

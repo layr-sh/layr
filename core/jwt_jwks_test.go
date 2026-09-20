@@ -35,10 +35,10 @@ func TestCoreJWTJWKSUnit(t *testing.T) {
 		t.Fatalf("unexpected JWK fields: %+v", jwk)
 	}
 
-	// 2. HandleJWKS HTTP handler validation
+	// 2. handleGetJWKS HTTP handler validation
 	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/jwks.json", nil)
 	discoveryResponseRecorder := httptest.NewRecorder()
-	jwtSigner.HandleJWKS(discoveryResponseRecorder, discoveryRequest)
+	jwtSigner.handleGetJWKS(discoveryResponseRecorder, discoveryRequest)
 	if discoveryResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on JWKS, got %d", discoveryResponseRecorder.Code)
 	}

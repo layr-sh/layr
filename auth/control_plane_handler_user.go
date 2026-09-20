@@ -14,9 +14,9 @@ import (
 	"layr.sh/core"
 )
 
-// HandleListUsers lists registered application users with filtering and pagination (auth:user.read).
-func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleListUsers invoked")
+// handleListUsers lists registered application users with filtering and pagination (auth:user.read).
+func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListUsers invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
@@ -78,56 +78,56 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleListUsers(responseWriter h
 	}
 	defer rows.Close()
 
-	userRecords := make([]UserRecord, 0)
+	users := make([]User, 0)
 	for rows.Next() {
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		_ = rows.Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
-		userRecords = append(userRecords, userRecord)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
+		users = append(users, user)
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]any{
-		"users":  userRecords,
-		"limit":  limit,
-		"offset": offset,
-		"count":  len(userRecords),
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListUsersResponse{
+		Users:  users,
+		Limit:  limit,
+		Offset: offset,
+		Count:  len(users),
 	})
 }
 
-// HandleCreateUser creates an application user via control plane (auth:user.write).
-func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleCreateUser invoked")
+// handleCreateUser creates an application user via control plane (auth:user.write).
+func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreateUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
 		return
 	}
 
-	var userCreateRequest UserCreateRequest
-	if err := json.NewDecoder(request.Body).Decode(&userCreateRequest); err != nil {
+	var createUserInput CreateUserInput
+	if err := json.NewDecoder(request.Body).Decode(&createUserInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	userCreateRequest.Email = strings.TrimSpace(strings.ToLower(userCreateRequest.Email))
-	userCreateRequest.Phone = strings.TrimSpace(userCreateRequest.Phone)
+	createUserInput.Email = strings.TrimSpace(strings.ToLower(createUserInput.Email))
+	createUserInput.Phone = strings.TrimSpace(createUserInput.Phone)
 
-	if userCreateRequest.Phone != "" {
-		normalizedPhone, err := NormalizePhone(userCreateRequest.Phone)
+	if createUserInput.Phone != "" {
+		normalizedPhone, err := NormalizePhone(createUserInput.Phone)
 		if err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
 			return
 		}
-		userCreateRequest.Phone = normalizedPhone
+		createUserInput.Phone = normalizedPhone
 	}
 
-	if userCreateRequest.Email == "" && userCreateRequest.Phone == "" {
+	if createUserInput.Email == "" && createUserInput.Phone == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
@@ -138,41 +138,41 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 	}
 
 	var passwordHash *string
-	if userCreateRequest.Password != "" && controlPlaneHandler.hasher != nil {
-		hash, _ := controlPlaneHandler.hasher.Hash(userCreateRequest.Password)
+	if createUserInput.Password != "" && controlPlaneHandler.hasher != nil {
+		hash, _ := controlPlaneHandler.hasher.Hash(createUserInput.Password)
 		passwordHash = &hash
 	}
 
 	role := "authenticated"
-	if userCreateRequest.Role != "" {
-		role = userCreateRequest.Role
+	if createUserInput.Role != "" {
+		role = createUserInput.Role
 	}
 
 	var emailVerifiedAt, phoneVerifiedAt *time.Time
 	now := time.Now().UTC()
-	if userCreateRequest.EmailVerified {
+	if createUserInput.EmailVerified {
 		emailVerifiedAt = &now
 	}
-	if userCreateRequest.PhoneVerified {
+	if createUserInput.PhoneVerified {
 		phoneVerifiedAt = &now
 	}
 
-	properties := userCreateRequest.Properties
+	properties := createUserInput.Properties
 	if properties == nil {
 		properties = make(map[string]any)
 	}
 	propertiesJSON, _ := json.Marshal(properties)
 
 	var emailPointer, phonePointer *string
-	if userCreateRequest.Email != "" {
-		emailPointer = &userCreateRequest.Email
+	if createUserInput.Email != "" {
+		emailPointer = &createUserInput.Email
 	}
-	if userCreateRequest.Phone != "" {
-		phonePointer = &userCreateRequest.Phone
+	if createUserInput.Phone != "" {
+		phonePointer = &createUserInput.Phone
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		INSERT INTO auth.users (email, phone, password_hash, role, email_verified_at, phone_verified_at, properties, created_at, last_updated_at)
@@ -180,27 +180,27 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleCreateUser(responseWriter 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, emailPointer, phonePointer, passwordHash, role, emailVerifiedAt, phoneVerifiedAt, propertiesJSON).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	_ = json.Unmarshal(rawProperties, &user.Properties)
 
 	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserCreatedEvent(userRecord.ID, UserCreatedEventData(userRecord)))
+		controlPlaneHandler.eventBus.Publish(ctx, NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, userRecord)
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, user)
 }
 
-// HandleGetUser retrieves a specific user by UUID (auth:user.read).
-func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleGetUser invoked")
+// handleGetUser retrieves a specific user by UUID (auth:user.read).
+func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleGetUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
@@ -219,7 +219,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
@@ -227,10 +227,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 		WHERE id = $1
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -240,14 +240,14 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleGetUser(responseWriter htt
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	_ = json.Unmarshal(rawProperties, &user.Properties)
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, userRecord)
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
 }
 
-// HandleDeleteUser deletes a user and cascades sessions, passkeys, identities (auth:user.write).
-func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleDeleteUser invoked")
+// handleDeleteUser deletes a user and cascades sessions, passkeys, identities (auth:user.write).
+func (controlPlaneHandler *ControlPlaneHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeleteUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
@@ -266,17 +266,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err := controlPlaneHandler.db.QueryRow(ctx, `
 		DELETE FROM auth.users
 		WHERE id = $1
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -287,21 +287,21 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleDeleteUser(responseWriter 
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserDeletedEvent(userRecord.ID, UserDeletedEventData(userRecord)))
+		controlPlaneHandler.eventBus.Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 	}
 
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// HandleLockUser locks a user account and immediately invalidates all active sessions (auth:user.write).
-func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleLockUser invoked")
+// handleLockUser locks a user account and immediately invalidates all active sessions (auth:user.write).
+func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleLockUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
@@ -319,16 +319,16 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 		return
 	}
 
-	var userLockRequest UserLockRequest
-	_ = json.NewDecoder(request.Body).Decode(&userLockRequest)
+	var lockUserInput LockUserInput
+	_ = json.NewDecoder(request.Body).Decode(&lockUserInput)
 
 	lockedUntil := time.Now().UTC().AddDate(100, 0, 0)
-	if userLockRequest.LockedUntil != nil {
-		lockedUntil = userLockRequest.LockedUntil.UTC()
+	if lockUserInput.LockedUntil != nil {
+		lockedUntil = lockUserInput.LockedUntil.UTC()
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		UPDATE auth.users
@@ -337,10 +337,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, lockedUntil, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -350,7 +350,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	_ = json.Unmarshal(rawProperties, &user.Properties)
 
 	// Revoke active sessions and invalidate cache
 	if deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID); deleteErr == nil {
@@ -382,17 +382,17 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleLockUser(responseWriter ht
 
 	if controlPlaneHandler.eventBus != nil {
 		controlPlaneHandler.eventBus.Publish(ctx, NewUserLockedEvent(userID, UserLockedEventData{
-			User:        userRecord,
+			User:        user,
 			LockedUntil: &lockedUntil,
 		}))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, userRecord)
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
 }
 
-// HandleUnlockUser lifts lock restrictions on a user account (auth:user.write).
-func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("HandleUnlockUser invoked")
+// handleUnlockUser lifts lock restrictions on a user account (auth:user.write).
+func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleUnlockUser invoked")
 
 	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
@@ -411,7 +411,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 	}
 
 	ctx := request.Context()
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	query := `
 		UPDATE auth.users
@@ -420,10 +420,10 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
 	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -433,11 +433,11 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUnlockUser(responseWriter 
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+	_ = json.Unmarshal(rawProperties, &user.Properties)
 
 	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(userRecord)))
+		controlPlaneHandler.eventBus.Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(user)))
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, userRecord)
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
 }

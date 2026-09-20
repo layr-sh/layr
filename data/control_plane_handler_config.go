@@ -8,21 +8,21 @@ import (
 	"layr.sh/core"
 )
 
-// HandleGetConfig handles GET /api/v1/_/data/config.
-func (controlPlaneHandler *ControlPlaneHandler) HandleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetConfig handles GET /api/v1/_/data/config.
+func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.read") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
 	}
 	if controlPlaneHandler.configManager != nil {
-		controlPlaneHandler.configManager.HandleGetConfig(responseWriter, request)
+		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
 		return
 	}
 	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DefaultConfig())
 }
 
-// HandleUpdateConfig handles PUT /api/v1/_/data/config.
-func (controlPlaneHandler *ControlPlaneHandler) HandleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
+// handleUpdateConfig handles PUT /api/v1/_/data/config.
+func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	if !controlPlaneHandler.checkScope(request, "data:config.write") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
 		return
@@ -32,15 +32,26 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleUpdateConfig(responseWrite
 		return
 	}
 
-	controlPlaneHandler.configManager.HandlePutConfig(responseWriter, request)
+	var config Config
+	if decodeErr := json.NewDecoder(request.Body).Decode(&config); decodeErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	if setErr := controlPlaneHandler.configManager.Set(request.Context(), config); setErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
+		return
+	}
+
+	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
 
 	if controlPlaneHandler.eventBus != nil {
 		controlPlaneHandler.eventBus.Publish(request.Context(), NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(controlPlaneHandler.configManager.Get())))
 	}
 }
 
-// HandleFlushCache handles POST /api/v1/_/data/cache/flush.
-func (controlPlaneHandler *ControlPlaneHandler) HandleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
+// handleFlushCache handles POST /api/v1/_/data/cache/flush.
+func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
@@ -51,7 +62,7 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleFlushCache(responseWriter 
 	}
 
 	if controlPlaneHandler.service != nil {
-		controlPlaneHandler.service.InvalidateCache(request.Context(), InvalidateCacheRequest{All: true, Catalog: true})
+		controlPlaneHandler.service.InvalidateCache(request.Context(), InvalidateCacheInput{All: true, Catalog: true})
 	}
 
 	now := time.Now().UTC()
@@ -68,8 +79,8 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleFlushCache(responseWriter 
 	})
 }
 
-// HandleInvalidateCache handles POST /api/v1/_/data/cache/invalidate.
-func (controlPlaneHandler *ControlPlaneHandler) HandleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
+// handleInvalidateCache handles POST /api/v1/_/data/cache/invalidate.
+func (controlPlaneHandler *ControlPlaneHandler) handleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
@@ -79,23 +90,23 @@ func (controlPlaneHandler *ControlPlaneHandler) HandleInvalidateCache(responseWr
 		return
 	}
 
-	var invalidateCacheRequest InvalidateCacheRequest
+	var invalidateCacheInput InvalidateCacheInput
 	if request.Body != nil {
-		if decodeErr := json.NewDecoder(request.Body).Decode(&invalidateCacheRequest); decodeErr != nil && decodeErr.Error() != "EOF" {
+		if decodeErr := json.NewDecoder(request.Body).Decode(&invalidateCacheInput); decodeErr != nil && decodeErr.Error() != "EOF" {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 			return
 		}
 	}
 
 	pattern := "*"
-	if invalidateCacheRequest.Schema != "" && invalidateCacheRequest.Table != "" {
-		pattern = invalidateCacheRequest.Schema + "." + invalidateCacheRequest.Table
-	} else if invalidateCacheRequest.Pattern != "" {
-		pattern = invalidateCacheRequest.Pattern
+	if invalidateCacheInput.Schema != "" && invalidateCacheInput.Table != "" {
+		pattern = invalidateCacheInput.Schema + "." + invalidateCacheInput.Table
+	} else if invalidateCacheInput.Pattern != "" {
+		pattern = invalidateCacheInput.Pattern
 	}
 
 	if controlPlaneHandler.service != nil {
-		controlPlaneHandler.service.InvalidateCache(request.Context(), invalidateCacheRequest)
+		controlPlaneHandler.service.InvalidateCache(request.Context(), invalidateCacheInput)
 	}
 
 	if controlPlaneHandler.eventBus != nil {

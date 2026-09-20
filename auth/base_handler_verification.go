@@ -12,12 +12,12 @@ import (
 	"layr.sh/core"
 )
 
-func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling user email verification request")
-	var userEmailVerificationRequest UserEmailVerificationRequest
-	_ = json.NewDecoder(request.Body).Decode(&userEmailVerificationRequest)
+	var requestEmailVerificationInput RequestEmailVerificationInput
+	_ = json.NewDecoder(request.Body).Decode(&requestEmailVerificationInput)
 
-	recipientEmail := strings.TrimSpace(strings.ToLower(userEmailVerificationRequest.Email))
+	recipientEmail := strings.TrimSpace(strings.ToLower(requestEmailVerificationInput.Email))
 	authContext := core.GetAuthContext(request.Context())
 	authUserID := authContext.UserID
 
@@ -87,35 +87,35 @@ func (handler *BaseHandler) handleUserEmailVerificationRequest(responseWriter ht
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
 	if handler.eventBus != nil {
-		var userRecord *UserRecord
+		var targetUser *User
 		if authUserID != "" {
-			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, authUserID); fetchErr == nil {
-				userRecord = &fetchedUserRecord
+			if user, fetchErr := fetchUserByID(ctx, handler.db, authUserID); fetchErr == nil {
+				targetUser = &user
 			}
 		} else if existingUserID != "" {
-			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, existingUserID); fetchErr == nil {
-				userRecord = &fetchedUserRecord
+			if user, fetchErr := fetchUserByID(ctx, handler.db, existingUserID); fetchErr == nil {
+				targetUser = &user
 			}
 		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
 			Recipient: recipientEmail,
 			Purpose:   "email_verification",
 			Channel:   "email",
-			User:      userRecord,
+			User:      targetUser,
 		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter http.ResponseWriter, request *http.Request) {
-	var userEmailVerificationConfirmRequest UserEmailVerificationConfirmRequest
-	if err := json.NewDecoder(request.Body).Decode(&userEmailVerificationConfirmRequest); err != nil {
+func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.ResponseWriter, request *http.Request) {
+	var confirmEmailVerificationInput ConfirmEmailVerificationInput
+	if err := json.NewDecoder(request.Body).Decode(&confirmEmailVerificationInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	recipientEmail := strings.TrimSpace(strings.ToLower(userEmailVerificationConfirmRequest.Email))
+	recipientEmail := strings.TrimSpace(strings.ToLower(confirmEmailVerificationInput.Email))
 	authContext := core.GetAuthContext(request.Context())
 	if recipientEmail == "" {
 		if authContext.JWT.Email != "" {
@@ -123,7 +123,7 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		}
 	}
 
-	code := strings.TrimSpace(userEmailVerificationConfirmRequest.Code)
+	code := strings.TrimSpace(confirmEmailVerificationInput.Code)
 	if recipientEmail == "" || code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email and verification code are required")
 		return
@@ -181,7 +181,7 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		isCallerAnonymous := false
 		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		err = handler.db.QueryRow(ctx, `
 			UPDATE auth.users 
@@ -189,34 +189,34 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 			WHERE id = $2
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, recipientEmail, authUserID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user email verification for %s: %v", authUserID, err))
 			return
 		}
 
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
-			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
+			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+				handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 			}
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
+		handler.issueSessionResponse(responseWriter, request, user, "otp")
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE auth.users 
@@ -224,24 +224,24 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 		WHERE email = $1 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, recipientEmail).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update unauthenticated user email verification for %s: %v", recipientEmail, err))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(userRecord.ID, UserEmailVerifiedEventData(userRecord)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -253,12 +253,12 @@ func (handler *BaseHandler) handleUserEmailVerificationConfirm(responseWriter ht
 	})
 }
 
-func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter http.ResponseWriter, request *http.Request) {
+func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Debug("handling user phone verification request")
-	var userPhoneVerificationRequest UserPhoneVerificationRequest
-	_ = json.NewDecoder(request.Body).Decode(&userPhoneVerificationRequest)
+	var requestPhoneVerificationInput RequestPhoneVerificationInput
+	_ = json.NewDecoder(request.Body).Decode(&requestPhoneVerificationInput)
 
-	recipientPhone := strings.TrimSpace(userPhoneVerificationRequest.Phone)
+	recipientPhone := strings.TrimSpace(requestPhoneVerificationInput.Phone)
 	authContext := core.GetAuthContext(request.Context())
 	authUserID := authContext.UserID
 
@@ -338,35 +338,35 @@ func (handler *BaseHandler) handleUserPhoneVerificationRequest(responseWriter ht
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
 	if handler.eventBus != nil {
-		var userRecord *UserRecord
+		var targetUser *User
 		if authUserID != "" {
-			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, authUserID); fetchErr == nil {
-				userRecord = &fetchedUserRecord
+			if user, fetchErr := fetchUserByID(ctx, handler.db, authUserID); fetchErr == nil {
+				targetUser = &user
 			}
 		} else if existingUserID != "" {
-			if fetchedUserRecord, fetchErr := fetchUserRecordByID(ctx, handler.db, existingUserID); fetchErr == nil {
-				userRecord = &fetchedUserRecord
+			if user, fetchErr := fetchUserByID(ctx, handler.db, existingUserID); fetchErr == nil {
+				targetUser = &user
 			}
 		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
 			Recipient: recipientPhone,
 			Purpose:   "phone_verification",
 			Channel:   "sms",
-			User:      userRecord,
+			User:      targetUser,
 		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter http.ResponseWriter, request *http.Request) {
-	var userPhoneVerificationConfirmRequest UserPhoneVerificationConfirmRequest
-	if err := json.NewDecoder(request.Body).Decode(&userPhoneVerificationConfirmRequest); err != nil {
+func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.ResponseWriter, request *http.Request) {
+	var confirmPhoneVerificationInput ConfirmPhoneVerificationInput
+	if err := json.NewDecoder(request.Body).Decode(&confirmPhoneVerificationInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
 		return
 	}
 
-	recipientPhone := strings.TrimSpace(userPhoneVerificationConfirmRequest.Phone)
+	recipientPhone := strings.TrimSpace(confirmPhoneVerificationInput.Phone)
 	authContext := core.GetAuthContext(request.Context())
 	if recipientPhone == "" {
 		if authContext.JWT.Phone != "" {
@@ -374,7 +374,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		}
 	}
 
-	code := strings.TrimSpace(userPhoneVerificationConfirmRequest.Code)
+	code := strings.TrimSpace(confirmPhoneVerificationInput.Code)
 	if recipientPhone == "" || code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number and verification code are required")
 		return
@@ -439,7 +439,7 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		isCallerAnonymous := false
 		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
-		var userRecord UserRecord
+		var user User
 		var rawProperties []byte
 		err = handler.db.QueryRow(ctx, `
 			UPDATE auth.users 
@@ -447,34 +447,34 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 			WHERE id = $2
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`, recipientPhone, authUserID).Scan(
-			&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-			&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-			&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-			&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+			&user.EncryptedMFASecret, &user.MFAEnabled,
+			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 		if err != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update user phone verification for %s: %v", authUserID, err))
 			return
 		}
 
-		userRecord.Properties = make(map[string]any)
+		user.Properties = make(map[string]any)
 		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
-			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+			handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
+			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, NewUserConvertedEvent(userRecord.ID, UserConvertedEventData(userRecord)))
+				handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 			}
 		}
 
-		handler.issueSessionResponse(responseWriter, request, userRecord, "otp")
+		handler.issueSessionResponse(responseWriter, request, user, "otp")
 		return
 	}
 
-	var userRecord UserRecord
+	var user User
 	var rawProperties []byte
 	err = handler.db.QueryRow(ctx, `
 		UPDATE auth.users 
@@ -482,24 +482,24 @@ func (handler *BaseHandler) handleUserPhoneVerificationConfirm(responseWriter ht
 		WHERE phone = $1 
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, recipientPhone).Scan(
-		&userRecord.ID, &userRecord.Email, &userRecord.Phone, &userRecord.Role, &userRecord.IsAnonymous,
-		&userRecord.EmailVerifiedAt, &userRecord.PhoneVerifiedAt, &userRecord.LockedUntil,
-		&userRecord.EncryptedMFASecret, &userRecord.MFAEnabled,
-		&rawProperties, &userRecord.CreatedAt, &userRecord.LastUpdatedAt,
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update unauthenticated user phone verification for %s: %v", recipientPhone, err))
 		return
 	}
 
-	userRecord.Properties = make(map[string]any)
+	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
-		_ = json.Unmarshal(rawProperties, &userRecord.Properties)
+		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
 	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(userRecord.ID, UserPhoneVerifiedEventData(userRecord)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(userRecord.ID, UserUpdatedEventData(userRecord)))
+		handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
+		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -519,13 +519,13 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 	}
 	authUserID := authContext.UserID
 
-	var updateUpdateUserEmailRequest UpdateUserEmailRequest
-	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserEmailRequest); err != nil {
+	var updateUserEmailInput UpdateUserEmailInput
+	if err := json.NewDecoder(request.Body).Decode(&updateUserEmailInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
-	recipientEmail := strings.TrimSpace(strings.ToLower(updateUpdateUserEmailRequest.Email))
+	recipientEmail := strings.TrimSpace(strings.ToLower(updateUserEmailInput.Email))
 	if recipientEmail == "" || !strings.Contains(recipientEmail, "@") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Valid email address is required")
 		return
@@ -548,29 +548,29 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 		return
 	}
 
-	anonymousUserRecord, resolveErr := handler.resolveAnonymousCaller(request)
+	anonymousUser, resolveErr := handler.resolveAnonymousCaller(request)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to resolve anonymous caller: %v", resolveErr))
 		return
 	}
 
-	if anonymousUserRecord != nil {
-		log.Debugf("converting anonymous user %s with email %s", anonymousUserRecord.ID, recipientEmail)
+	if anonymousUser != nil {
+		log.Debugf("converting anonymous user %s with email %s", anonymousUser.ID, recipientEmail)
 		_, updateErr := handler.db.Exec(ctx, `
 			UPDATE auth.users
 			SET email = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
-		`, recipientEmail, anonymousUserRecord.ID)
+		`, recipientEmail, anonymousUser.ID)
 		if updateErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update anonymous user email: %v", updateErr))
 			return
 		}
 
-		anonymousUserRecord.Email = &recipientEmail
-		anonymousUserRecord.IsAnonymous = false
-		anonymousUserRecord.LastUpdatedAt = time.Now().UTC()
+		anonymousUser.Email = &recipientEmail
+		anonymousUser.IsAnonymous = false
+		anonymousUser.LastUpdatedAt = time.Now().UTC()
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUserRecord.ID, UserConvertedEventData(*anonymousUserRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
 		}
 	}
 
@@ -591,17 +591,17 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
 	if handler.eventBus != nil {
-		var targetUserRecord *UserRecord
-		if anonymousUserRecord != nil {
-			targetUserRecord = anonymousUserRecord
-		} else if userRecord, err := fetchUserRecordByID(ctx, handler.db, authUserID); err == nil {
-			targetUserRecord = &userRecord
+		var targetUser *User
+		if anonymousUser != nil {
+			targetUser = anonymousUser
+		} else if user, err := fetchUserByID(ctx, handler.db, authUserID); err == nil {
+			targetUser = &user
 		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
 			Recipient: recipientEmail,
 			Purpose:   "email_verification",
 			Channel:   "email",
-			User:      targetUserRecord,
+			User:      targetUser,
 		}))
 	}
 
@@ -616,13 +616,13 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 	}
 	authUserID := authContext.UserID
 
-	var updateUpdateUserPhoneRequest UpdateUserPhoneRequest
-	if err := json.NewDecoder(request.Body).Decode(&updateUpdateUserPhoneRequest); err != nil {
+	var updateUserPhoneInput UpdateUserPhoneInput
+	if err := json.NewDecoder(request.Body).Decode(&updateUserPhoneInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
-	recipientPhone := strings.TrimSpace(updateUpdateUserPhoneRequest.Phone)
+	recipientPhone := strings.TrimSpace(updateUserPhoneInput.Phone)
 	if recipientPhone == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Phone number is required")
 		return
@@ -652,29 +652,29 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 		return
 	}
 
-	anonymousUserRecord, resolveErr := handler.resolveAnonymousCaller(request)
+	anonymousUser, resolveErr := handler.resolveAnonymousCaller(request)
 	if resolveErr != nil && !errors.Is(resolveErr, ErrAnonymousSessionNotFound) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to resolve anonymous caller: %v", resolveErr))
 		return
 	}
 
-	if anonymousUserRecord != nil {
-		log.Debugf("converting anonymous user %s with phone %s", anonymousUserRecord.ID, recipientPhone)
+	if anonymousUser != nil {
+		log.Debugf("converting anonymous user %s with phone %s", anonymousUser.ID, recipientPhone)
 		_, updateErr := handler.db.Exec(ctx, `
 			UPDATE auth.users
 			SET phone = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
-		`, recipientPhone, anonymousUserRecord.ID)
+		`, recipientPhone, anonymousUser.ID)
 		if updateErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to update anonymous user phone: %v", updateErr))
 			return
 		}
 
-		anonymousUserRecord.Phone = &recipientPhone
-		anonymousUserRecord.IsAnonymous = false
-		anonymousUserRecord.LastUpdatedAt = time.Now().UTC()
+		anonymousUser.Phone = &recipientPhone
+		anonymousUser.IsAnonymous = false
+		anonymousUser.LastUpdatedAt = time.Now().UTC()
 		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUserRecord.ID, UserConvertedEventData(*anonymousUserRecord)))
+			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
 		}
 	}
 
@@ -695,17 +695,17 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
 
 	if handler.eventBus != nil {
-		var targetUserRecord *UserRecord
-		if anonymousUserRecord != nil {
-			targetUserRecord = anonymousUserRecord
-		} else if userRecord, err := fetchUserRecordByID(ctx, handler.db, authUserID); err == nil {
-			targetUserRecord = &userRecord
+		var targetUser *User
+		if anonymousUser != nil {
+			targetUser = anonymousUser
+		} else if user, err := fetchUserByID(ctx, handler.db, authUserID); err == nil {
+			targetUser = &user
 		}
 		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
 			Recipient: recipientPhone,
 			Purpose:   "phone_verification",
 			Channel:   "sms",
-			User:      targetUserRecord,
+			User:      targetUser,
 		}))
 	}
 
