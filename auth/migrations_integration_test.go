@@ -3,11 +3,14 @@ package auth
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestAuthMigrationsExecutionIntegration(t *testing.T) {
-	db, _, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
 

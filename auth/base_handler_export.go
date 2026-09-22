@@ -26,15 +26,10 @@ func (handler *BaseHandler) handleExportUser(responseWriter http.ResponseWriter,
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "user export rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, targetUserID).Scan(
@@ -53,7 +48,7 @@ func (handler *BaseHandler) handleExportUser(responseWriter http.ResponseWriter,
 
 	// Fetch identities
 	identities := make([]ExportIdentityRecord, 0)
-	identityRows, queryErr := handler.db.Query(ctx, `
+	identityRows, queryErr := handler.kernel.DB().Query(ctx, `
 		SELECT provider, provider_user_id, properties, created_at, last_sign_in_at 
 		FROM auth.identities 
 		WHERE user_id = $1
@@ -79,9 +74,7 @@ func (handler *BaseHandler) handleExportUser(responseWriter http.ResponseWriter,
 		ExportDate: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserExportedEvent(user.ID, UserExportedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserExportedEvent(user.ID, UserExportedEventData(user)))
 
-	handler.writeJSON(responseWriter, exportUserResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, exportUserResponse)
 }

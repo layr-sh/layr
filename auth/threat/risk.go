@@ -44,7 +44,7 @@ type RiskAssessment struct {
 }
 
 // EvaluateSignInRisk evaluates whether an authentication attempt presents anomalous risk.
-func EvaluateSignInRisk(ctx context.Context, db *core.DatabasePool, kvStore *core.KVStore, userID string, clientIP string, userAgent string, windowDays int) (*RiskAssessment, error) {
+func EvaluateSignInRisk(ctx context.Context, db *core.DatabasePool, kvStore *core.KVStore, userID string, clientIP string, userAgent string, windowDays int) *RiskAssessment {
 	if windowDays <= 0 {
 		windowDays = defaultRiskWindowDays
 	}
@@ -114,7 +114,7 @@ func EvaluateSignInRisk(ctx context.Context, db *core.DatabasePool, kvStore *cor
 		riskAssessment.Level = RiskLevelLow
 	}
 
-	return riskAssessment, nil
+	return riskAssessment
 }
 
 // RecordFailedAttempt records an authentication failure for the given identifier (IP or user ID).

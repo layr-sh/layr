@@ -10,8 +10,7 @@ import (
 
 // handleListIndexes lists all indexes on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -24,7 +23,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListIndexesResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, ListIndexesResponse{
 		Indexes: indexes,
 		Count:   len(indexes),
 	})
@@ -32,8 +31,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 
 // handleCreateIndex creates a new index on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -50,20 +48,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, createErr.Error())
 		return
 	}
-	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.invalidateTableCache(request.Context(), schema, table)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
+	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", schema, table)
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "create_index",
-			Detail: createIndexInput.IndexName,
-		}))
-	}
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "create_index",
+		Detail: createIndexInput.IndexName,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreateIndexResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreateIndexResponse{
 		Status: "created",
 		Index:  createIndexInput.IndexName,
 	})
@@ -71,8 +67,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 
 // handleDeleteIndex drops an index from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -85,22 +80,20 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
-	controlPlaneHandler.invalidateCache(request.Context())
+	controlPlaneHandler.InvalidateCatalog(request.Context())
 	if table != "" {
-		controlPlaneHandler.invalidateTableCache(request.Context(), schema, table)
+		controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", schema, table)
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "drop_index",
-			Detail: indexName,
-		}))
-	}
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "drop_index",
+		Detail: indexName,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeleteIndexResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, DeleteIndexResponse{
 		Status: "deleted",
 		Index:  indexName,
 	})

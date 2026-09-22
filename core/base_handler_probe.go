@@ -26,11 +26,9 @@ func (server *Server) handleGetReadiness(responseWriter http.ResponseWriter, req
 
 	databaseStatus := "ok"
 	statusCode := http.StatusOK
-	if server.db != nil {
-		if err := server.db.Ping(ctx); err != nil {
-			databaseStatus = fmt.Sprintf("error: %v", err)
-			statusCode = http.StatusServiceUnavailable
-		}
+	if err := server.kernel.DB().Ping(ctx); err != nil {
+		databaseStatus = fmt.Sprintf("error: %v", err)
+		statusCode = http.StatusServiceUnavailable
 	}
 
 	statusText := "ready"

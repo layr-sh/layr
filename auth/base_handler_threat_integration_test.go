@@ -16,11 +16,14 @@ import (
 )
 
 func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
+	cryptoKeyManager := kernel.CryptoKeyManager()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if loadErr := configManager.Load(ctx); loadErr != nil {
 		t.Fatalf("failed to load initial auth config: %v", loadErr)
 	}
@@ -58,19 +61,11 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 	configManager.Set(activeConfig)
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	testKVStore := kernel.KVStore()
+	baseHandler := service.baseHandler
 	mockHTTPClient := &threatMockHTTPClient{}
-	baseHandler.SetHTTPClient(mockHTTPClient)
-	baseHandler.SetEmailDispatcher(NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := activeConfig.EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager))
+	baseHandler.httpClient = mockHTTPClient
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
 
 	// Seed User A with MFA enabled and a valid TOTP secret
 	userAID := "01918a24-1111-7000-8000-000000000001"
@@ -274,7 +269,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		NewPassword:     "password",
 	})
 	breachedUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/auth/user/password", bytes.NewReader(breachedUpdatePayload))
-	breachedUpdateRequest = withUserAuth(breachedUpdateRequest, userAID, "authenticated", false)
+	breachedUpdateRequest = core.WithTestAuthContext(breachedUpdateRequest, userAID, "authenticated", false)
 	breachedUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(breachedUpdateResponseRecorder, breachedUpdateRequest)
 	if breachedUpdateResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(breachedUpdateResponseRecorder.Body.String(), "breach") {
@@ -295,7 +290,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		NewPassword:     "NewCleanPassword123!#",
 	})
 	safeUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/auth/user/password", bytes.NewReader(safeUpdatePayload))
-	safeUpdateRequest = withUserAuth(safeUpdateRequest, userAID, "authenticated", false)
+	safeUpdateRequest = core.WithTestAuthContext(safeUpdateRequest, userAID, "authenticated", false)
 	safeUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(safeUpdateResponseRecorder, safeUpdateRequest)
 	if safeUpdateResponseRecorder.Code != http.StatusNoContent {

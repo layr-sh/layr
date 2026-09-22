@@ -12,16 +12,13 @@ import (
 )
 
 func TestDataControlPlaneHandlerIndexLifecycleIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	eventBus := core.NewEventBus(db, nil)
-	defer eventBus.Close()
-	service := NewService(db)
-	service.SetEventBus(eventBus)
+	service := NewService(kernel)
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	controlPlaneHandler := service.controlPlaneHandler
 

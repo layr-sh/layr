@@ -18,10 +18,10 @@ import (
 )
 
 func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
-	inMemoryKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(inMemoryKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	t.Run("MethodNotAllowed", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/graphql", nil)
@@ -107,7 +107,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		userVisibleKey := datakv.BuildGraphQLQueryKey(query, nil, "")
 		internalKey := datakv.BuildInternalKey(authContext, userVisibleKey)
 
-		_ = inMemoryKVStore.Set(context.Background(), internalKey, `{"data":{"users":[{"id":"1"}]}}`, time.Hour)
+		_ = kernel.KVStore().Set(context.Background(), internalKey, `{"data":{"users":[{"id":"1"}]}}`, time.Hour)
 
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+query+`"}`)))
 		responseRecorder := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Database connection is not initialized")
+		assert.Contains(t, responseRecorder.Body.String(), "closed pool")
 	})
 
 	t.Run("writeGraphQLDBError", func(t *testing.T) {
@@ -229,11 +229,6 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 	})
 
 	t.Run("handleMutationSideEffects", func(t *testing.T) {
-		eventBus := core.NewEventBus(nil, nil)
-		defer eventBus.Close()
-		baseHandler.SetEventBus(eventBus)
-		defer baseHandler.SetEventBus(nil)
-
 		operationNode := &graphql.OperationNode{
 			Type: graphql.MutationOperationType,
 			SelectionSet: []graphql.FieldNode{
@@ -260,7 +255,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Database connection is not initialized")
+		assert.Contains(t, responseRecorder.Body.String(), "closed pool")
 	})
 
 	t.Run("DefaultAndMaxLimitEnforcement", func(t *testing.T) {
@@ -364,12 +359,5 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		// 5. Multi-table composite version
 		compositeVersion := baseHandler.getGraphQLTableCacheVersion(context.Background(), tables)
 		assert.NotZero(t, compositeVersion)
-
-		// 6. Without introspector
-		savedSchemaIntrospector := baseHandler.schemaIntrospector
-		baseHandler.schemaIntrospector = nil
-		tablesNoIntro := baseHandler.resolveGraphQLTables(operationNode)
-		assert.NotEmpty(t, tablesNoIntro)
-		baseHandler.schemaIntrospector = savedSchemaIntrospector
 	})
 }

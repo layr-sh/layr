@@ -14,23 +14,19 @@ import (
 )
 
 func TestAuthSessionHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
+	testKVStore := kernel.KVStore()
+	jwtSigner := kernel.JWTSigner()
 	ctx := context.Background()
 
-	validAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validAccessToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: "user-123",
 		Email:   "user@example.com",
 		Role:    "authenticated",
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	authedCtx := core.WithAuthContext(ctx, core.AuthContext{
 		UserID: "user-123",
@@ -65,8 +61,8 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	revokeRequest.SetPathValue("session_id", "01918a3f-1234-7000-8000-000000000001")
 	revokeRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	baseHandler.handleRevokeSession(revokeRequestResponseRecorder, revokeRequest)
-	if revokeRequestResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool revoke session, got: %d", revokeRequestResponseRecorder.Code)
+	if revokeRequestResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on revoke session not found, got: %d", revokeRequestResponseRecorder.Code)
 	}
 
 	// 4. handleRevokeSession unauthorized -> 401
@@ -138,13 +134,11 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	validRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"valid-refresh-token"}`))
 	validRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(validRefreshResponseRecorder, validRefreshRequest)
-	if validRefreshResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on refresh nil db pool, got: %d", validRefreshResponseRecorder.Code)
+	if validRefreshResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on refresh non-existent session, got: %d", validRefreshResponseRecorder.Code)
 	}
 
 	// Fast-path session cache hit with locked user -> 423
-	sessionKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(sessionKVStore)
 	fastPathConfig := DefaultConfig()
 	fastPathConfig.Cache.FastPathSessionsEnabled = true
 	configManager.Set(fastPathConfig)
@@ -159,8 +153,8 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	}
 	lockedCachedBytes, _ := json.Marshal(lockedCachedSession)
 	lockedRefreshToken := "cached-locked-token"
-	lockedTokenHash := baseHandler.jwtSigner.HashRefreshToken(lockedRefreshToken)
-	_ = sessionKVStore.Set(ctx, "auth:session:"+lockedTokenHash, string(lockedCachedBytes), time.Hour)
+	lockedTokenHash := jwtSigner.HashRefreshToken(lockedRefreshToken)
+	_ = testKVStore.Set(ctx, "auth:session:"+lockedTokenHash, string(lockedCachedBytes), time.Hour)
 
 	lockedCacheRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"cached-locked-token"}`))
 	lockedCacheRefreshResponseRecorder := httptest.NewRecorder()
@@ -173,14 +167,14 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", nil)
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutResponseRecorder, signOutRequest)
-	if signOutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on sign out, got: %d", signOutResponseRecorder.Code)
+	if signOutResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content on sign out, got: %d", signOutResponseRecorder.Code)
 	}
 
 	signOutWithBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", strings.NewReader(`{"refresh_token":"dummy-refresh-token"}`))
 	signOutWithBodyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutWithBodyResponseRecorder, signOutWithBodyRequest)
-	if signOutWithBodyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on sign out with body, got: %d", signOutWithBodyResponseRecorder.Code)
+	if signOutWithBodyResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content on sign out with body, got: %d", signOutWithBodyResponseRecorder.Code)
 	}
 }

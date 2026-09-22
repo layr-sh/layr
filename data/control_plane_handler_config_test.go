@@ -12,7 +12,8 @@ import (
 
 func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. handleGetConfig success
@@ -23,36 +24,19 @@ func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 		t.Fatalf("expected 200, got %d", getResponseRecorder.Code)
 	}
 
-	// 2. handleGetConfig with nil configManager
-	handlerNoConfigControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
-	nilConfigResponseRecorder := httptest.NewRecorder()
-	handlerNoConfigControlPlaneHandler.handleGetConfig(nilConfigResponseRecorder, getRequest)
-	if nilConfigResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", nilConfigResponseRecorder.Code)
-	}
-
-	// 3. handleUpdateConfig invalid JSON
+	// 2. handleUpdateConfig invalid JSON
 	invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte("{invalid")))
 	invalidJSONResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidJSONResponseRecorder, invalidJSONRequest)
 	if invalidJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid JSON, got %d", invalidJSONResponseRecorder.Code)
 	}
-
-	// 4. handleUpdateConfig with nil configManager
-	validJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"schemas":["public"]}`)))
-	nilConfigUpdateResponseRecorder := httptest.NewRecorder()
-	handlerNoConfigControlPlaneHandler.handleUpdateConfig(nilConfigUpdateResponseRecorder, validJSONRequest)
-	if nilConfigUpdateResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 when configManager is nil, got %d", nilConfigUpdateResponseRecorder.Code)
-	}
 }
 
 func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	service := NewService(nil)
-	service.SetServiceAccountManager(serviceAccountManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden Get
@@ -94,7 +78,8 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Flush Cache wrong method
@@ -135,19 +120,5 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 	controlPlaneHandler.handleInvalidateCache(patternInvalidateResponseRecorder, patternInvalidateRequest)
 	if patternInvalidateResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on POST /cache/invalidate with pattern, got %d", patternInvalidateResponseRecorder.Code)
-	}
-
-	// Flush and Invalidate with nil service
-	handlerNoServiceControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
-	noServiceFlushResponseRecorder := httptest.NewRecorder()
-	handlerNoServiceControlPlaneHandler.handleFlushCache(noServiceFlushResponseRecorder, validFlushRequest)
-	if noServiceFlushResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with nil service, got %d", noServiceFlushResponseRecorder.Code)
-	}
-
-	noServiceInvalidateResponseRecorder := httptest.NewRecorder()
-	handlerNoServiceControlPlaneHandler.handleInvalidateCache(noServiceInvalidateResponseRecorder, validInvalidateRequest)
-	if noServiceInvalidateResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with nil service, got %d", noServiceInvalidateResponseRecorder.Code)
 	}
 }

@@ -13,15 +13,10 @@ import (
 )
 
 func TestAuthPasswordHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 	ctx := context.Background()
 
 	// 1. Password disabled -> 403 on sign up, sign in, and password reset
@@ -114,15 +109,15 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	phoneSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", strings.NewReader(`{"phone":"+1234567890","password":"Password123!"}`))
 	phoneSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(phoneSignInResponseRecorder, phoneSignInRequest)
-	if phoneSignInResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on phone sign in nil db pool, got: %d", phoneSignInResponseRecorder.Code)
+	if phoneSignInResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on phone sign in non-existent user, got: %d", phoneSignInResponseRecorder.Code)
 	}
 
 	emailSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", strings.NewReader(`{"email":"alice@example.com","password":"Password123!"}`))
 	emailSignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignIn(emailSignInResponseRecorder, emailSignInRequest)
-	if emailSignInResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on email sign in nil db pool, got: %d", emailSignInResponseRecorder.Code)
+	if emailSignInResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on email sign in non-existent user, got: %d", emailSignInResponseRecorder.Code)
 	}
 
 	// 5. Unconfigured email/SMS delivery -> 422
@@ -155,14 +150,8 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 		Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost:9999/dummy"},
 	}
 	configManager.Set(activeConfig)
-	baseHandler.SetEmailDispatcher(NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := activeConfig.EmailDispatcher
-		return &emailDispatcherConfig
-	}, nil))
-	baseHandler.SetSMSDispatcher(NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := activeConfig.SMSDispatcher
-		return &smsDispatcherConfig
-	}, nil))
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
 	// 7. Validation errors on Password Reset Request
 	badResetJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/request", strings.NewReader(`{invalid`))
@@ -186,12 +175,12 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on invalid phone in password reset request, got: %d", invalidPhoneResetResponseRecorder.Code)
 	}
 
-	// Nil pool on valid request -> 500
+	// Non-existent user on valid request -> 204
 	validResetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/request", strings.NewReader(`{"email":"valid@example.com"}`))
 	validResetResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRequestPasswordReset(validResetResponseRecorder, validResetRequest)
-	if validResetResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool password reset request, got: %d", validResetResponseRecorder.Code)
+	if validResetResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on unregistered password reset request, got: %d", validResetResponseRecorder.Code)
 	}
 
 	// 8. Validation errors on Confirm
@@ -227,23 +216,18 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	validConfirmRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/confirm", strings.NewReader(`{"email":"test@example.com","code":"123456","password":"ValidPassword123!"}`))
 	validConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmPasswordReset(validConfirmResponseRecorder, validConfirmRequest)
-	if validConfirmResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool confirm, got: %d", validConfirmResponseRecorder.Code)
+	if validConfirmResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on nil pool confirm with non-existent code, got: %d", validConfirmResponseRecorder.Code)
 	}
 }
 
 func TestAuthPasswordThreatValidationUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 	mockClient := &threatMockHTTPClient{}
-	baseHandler.SetHTTPClient(mockClient)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler.httpClient = mockClient
 
 	ctx := context.Background()
 

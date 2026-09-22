@@ -16,8 +16,10 @@ import (
 )
 
 func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	t.Run("DisabledREST", func(t *testing.T) {
 		config := configManager.Get()
@@ -213,15 +215,11 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("InvalidateTableCache", func(t *testing.T) {
-		inMemoryKVDriver := newInMemoryKVDriver()
-		inMemoryKVStore := core.NewKVStoreFromDriver(inMemoryKVDriver)
-		baseHandler.SetKVStore(inMemoryKVStore)
-
 		// getTableCacheVersion coverage
 		assert.Equal(t, int64(0), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
-		inMemoryKVDriver.storage["cache:v:public:users"] = "bad_num"
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:users", "bad_num", 0)
 		assert.Equal(t, int64(0), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
-		inMemoryKVDriver.storage["cache:v:public:users"] = "42"
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:users", "42", 0)
 		assert.Equal(t, int64(42), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
 
 		// invalidateTableCache
@@ -232,23 +230,17 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		tableConfig := configManager.Get()
 		tableConfig.Cache.InvalidateOnMutation = false
 		configManager.SetMemoryConfig(tableConfig)
-		baseHandler.invalidateTableCache(context.Background(), "public", "users")
+		baseHandler.InvalidateTableCache(context.Background(), "public", "users")
 
 		// with Cache disabled
 		tableConfig.Cache.Enabled = false
 		configManager.SetMemoryConfig(tableConfig)
-		baseHandler.invalidateTableCache(context.Background(), "public", "users")
+		baseHandler.InvalidateTableCache(context.Background(), "public", "users")
 
 		// restore
 		tableConfig.Cache.Enabled = true
 		tableConfig.Cache.InvalidateOnMutation = true
 		configManager.SetMemoryConfig(tableConfig)
-
-		// nil kvStore
-		baseHandler.SetKVStore(nil)
-		assert.Equal(t, int64(0), baseHandler.getTableCacheVersion(context.Background(), "public", "users"))
-		baseHandler.invalidateTableCache(context.Background(), "public", "users")
-		baseHandler.SetKVStore(inMemoryKVStore)
 	})
 
 	t.Run("ListRecordsInvalidQueryParams", func(t *testing.T) {
@@ -268,10 +260,6 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	})
 
 	t.Run("CompositeAndResetTableCacheVersion", func(t *testing.T) {
-		inMemoryKVDriver := newInMemoryKVDriver()
-		inMemoryKVStore := core.NewKVStoreFromDriver(inMemoryKVDriver)
-		baseHandler.SetKVStore(inMemoryKVStore)
-
 		// 1. collectEmbeddedRelations with children
 		embedded := []rest.EmbeddedField{
 			{
@@ -285,9 +273,9 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		assert.Equal(t, []string{"orders", "items"}, relations)
 
 		// 2. getCompositeTableCacheVersion with relations
-		inMemoryKVDriver.storage["cache:v:public:users"] = "1"
-		inMemoryKVDriver.storage["cache:v:public:orders"] = "2"
-		inMemoryKVDriver.storage["cache:v:public:items"] = "3"
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:users", "1", 0)
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:orders", "2", 0)
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:items", "3", 0)
 		compositeVersion := baseHandler.getCompositeTableCacheVersion(context.Background(), "public", "users", relations)
 		assert.NotZero(t, compositeVersion)
 
@@ -296,18 +284,15 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 		assert.Equal(t, int64(1), singleVersion)
 
 		// 4. Invalidate rollover guard
-		inMemoryKVDriver.storage["cache:v:public:rollover"] = "9000000000000000"
+		_ = baseHandler.kernel.KVStore().Set(context.Background(), "cache:v:public:rollover", "9000000000000000", 0)
 		baseHandler.InvalidateTableCache(context.Background(), "public", "rollover")
-		assert.Equal(t, "1", inMemoryKVDriver.storage["cache:v:public:rollover"])
+		rolloverValue, _ := baseHandler.kernel.KVStore().Get(context.Background(), "cache:v:public:rollover")
+		assert.Equal(t, "1", rolloverValue)
 
 		// 5. ResetTableCacheVersion
 		baseHandler.ResetTableCacheVersion(context.Background(), "public", "users")
-		assert.NotContains(t, inMemoryKVDriver.storage, "cache:v:public:users")
-
-		// 6. ResetTableCacheVersion with nil kvStore
-		baseHandler.SetKVStore(nil)
-		baseHandler.ResetTableCacheVersion(context.Background(), "public", "users")
-		baseHandler.SetKVStore(inMemoryKVStore)
+		usersValue, _ := baseHandler.kernel.KVStore().Get(context.Background(), "cache:v:public:users")
+		assert.Empty(t, usersValue)
 	})
 
 	t.Run("CreateRecordInvalidOnConflict", func(t *testing.T) {
@@ -339,8 +324,10 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 }
 
 func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	t.Run("MethodNotAllowed", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/data/public/rpc/test", nil)
@@ -420,7 +407,7 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
-	t.Run("DatabaseNil", func(t *testing.T) {
+	t.Run("DatabaseUnavailable", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/data/public/rpc/my_func", bytes.NewReader([]byte(`{"a":1}`)))
 		request.SetPathValue("schema_name", "public")
 		request.SetPathValue("function_name", "my_func")

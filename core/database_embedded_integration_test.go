@@ -12,9 +12,6 @@ func TestCoreEmbeddedDatabaseFullLifecycleAndMigrationsIntegration(t *testing.T)
 	dataDirectory := filepath.Join(temporaryDirectory, "data")
 
 	embeddedDatabase := NewEmbeddedDatabase(dataDirectory)
-	if embeddedDatabase == nil {
-		t.Fatal("expected non-nil embeddedDatabase")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -45,13 +42,13 @@ func TestCoreEmbeddedDatabaseFullLifecycleAndMigrationsIntegration(t *testing.T)
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// 4. Test NodeRegistry Register and Heartbeat
-	nodeRegistry := NewNodeRegistry(db, "test-node", []string{"data", "auth"})
-	if err := nodeRegistry.Register(ctx); err != nil {
-		t.Fatalf("NodeRegistry Register failed: %v", err)
+	// 4. Test Node Register and Heartbeat
+	node := NewNode(db, "test-node", []string{"data", "auth"})
+	if err := node.Register(ctx); err != nil {
+		t.Fatalf("Node Register failed: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	nodeRegistry.Close()
+	node.Close()
 
 	// 5. Test MigrateDown (Rollback to 0)
 	if err := db.MigrateDown(ctx, SystemDatabaseMigrations, 0); err != nil {

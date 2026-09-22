@@ -111,19 +111,17 @@ type SMSDispatcherMessage struct {
 
 // SMSDispatcher handles sending transactional SMS messages via Twilio or Webhook.
 type SMSDispatcher struct {
-	db               *core.DatabasePool
-	resolveConfig    func() *SMSDispatcherConfig
-	cryptoKeyManager *core.CryptoKeyManager
-	httpClient       *http.Client
+	kernel        *core.Kernel
+	resolveConfig func() *SMSDispatcherConfig
+	httpClient    *http.Client
 }
 
-// NewSMSDispatcher initializes an SMSDispatcher with the provided database pool, configuration resolver, and key manager.
-func NewSMSDispatcher(db *core.DatabasePool, resolveConfig func() *SMSDispatcherConfig, cryptoKeyManager *core.CryptoKeyManager) *SMSDispatcher {
+// NewSMSDispatcher initializes an SMSDispatcher with the kernel and configuration resolver.
+func NewSMSDispatcher(kernel *core.Kernel, resolveConfig func() *SMSDispatcherConfig) *SMSDispatcher {
 	return &SMSDispatcher{
-		db:               db,
-		resolveConfig:    resolveConfig,
-		cryptoKeyManager: cryptoKeyManager,
-		httpClient:       &http.Client{Timeout: defaultSMSHTTPTimeout},
+		kernel:        kernel,
+		resolveConfig: resolveConfig,
+		httpClient:    &http.Client{Timeout: defaultSMSHTTPTimeout},
 	}
 }
 
@@ -151,7 +149,7 @@ func IsSMSDeliveryReady(smsDispatcherConfig SMSDispatcherConfig) bool {
 
 // IsConfigured returns whether SMS delivery is ready.
 func (dispatcher *SMSDispatcher) IsConfigured() bool {
-	if dispatcher.resolveConfig == nil {
+	if dispatcher == nil || dispatcher.resolveConfig == nil {
 		return false
 	}
 	smsDispatcherConfig := dispatcher.resolveConfig()
@@ -225,11 +223,8 @@ func (dispatcher *SMSDispatcher) SendPasswordReset(ctx context.Context, toPhone,
 }
 
 func (dispatcher *SMSDispatcher) queryDBSMSTemplate(ctx context.Context, smsDispatcherMessageKind SMSDispatcherMessageKind, recipient, code, userID string) (string, bool) {
-	if dispatcher.db == nil {
-		return "", false
-	}
 	var procedureName *string
-	_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_sms_template(text,text,text,uuid)')::text").Scan(&procedureName)
+	_ = dispatcher.kernel.DB().QueryRow(ctx, "SELECT to_regprocedure('public.auth_sms_template(text,text,text,uuid)')::text").Scan(&procedureName)
 	if procedureName == nil || *procedureName == "" {
 		return "", false
 	}
@@ -238,7 +233,7 @@ func (dispatcher *SMSDispatcher) queryDBSMSTemplate(ctx context.Context, smsDisp
 		userIDParam = userID
 	}
 	var templateJSON []byte
-	err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_sms_template($1, $2, $3, $4::uuid)", string(smsDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
+	err := dispatcher.kernel.DB().QueryRow(ctx, "SELECT public.auth_sms_template($1, $2, $3, $4::uuid)", string(smsDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
 	if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
 		var hookResult struct {
 			Text string `json:"text"`
@@ -383,8 +378,8 @@ func (dispatcher *SMSDispatcher) sendViaTwilio(ctx context.Context, smsDispatche
 	smsDispatcherTwilioConfig := smsDispatcherConfig.Twilio
 
 	authToken := smsDispatcherTwilioConfig.AuthToken
-	if authToken != "" && strings.HasPrefix(authToken, "enc:v1:") && dispatcher.cryptoKeyManager != nil {
-		decrypted, err := dispatcher.cryptoKeyManager.DecryptField(authToken)
+	if authToken != "" && strings.HasPrefix(authToken, "enc:v1:") {
+		decrypted, err := dispatcher.kernel.CryptoKeyManager().DecryptField(authToken)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt twilio auth token: %w", err)
 		}
@@ -435,8 +430,8 @@ func (dispatcher *SMSDispatcher) sendViaWebhook(ctx context.Context, smsDispatch
 	}
 
 	signingSecret := smsDispatcherWebhookConfig.SigningSecret
-	if signingSecret != "" && strings.HasPrefix(signingSecret, "enc:v1:") && dispatcher.cryptoKeyManager != nil {
-		decrypted, err := dispatcher.cryptoKeyManager.DecryptField(signingSecret)
+	if signingSecret != "" && strings.HasPrefix(signingSecret, "enc:v1:") {
+		decrypted, err := dispatcher.kernel.CryptoKeyManager().DecryptField(signingSecret)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt webhook signing secret: %w", err)
 		}

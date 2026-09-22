@@ -4,18 +4,16 @@ import (
 	"context"
 	"testing"
 
+	"layr.sh/core"
 	"layr.sh/data/common"
 )
 
 func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	ddlEngine := NewDDLEngine(db)
+	ddlEngine := NewDDLEngine(kernel)
 
 	// 1. IsProtectedSchema
 	if !IsProtectedSchema("system") || !IsProtectedSchema("auth") || !IsProtectedSchema("information_schema") {

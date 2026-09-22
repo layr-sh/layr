@@ -7,16 +7,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestDataControlPlaneHandlerSQLExecutionIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	service := NewService(db)
+	service := NewService(kernel)
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	controlPlaneHandler := service.controlPlaneHandler
 

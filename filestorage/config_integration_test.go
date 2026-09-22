@@ -3,17 +3,19 @@ package filestorage
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestFilestorageConfigPostgresIntegration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
-	if db == nil {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	if kernel == nil {
 		return
 	}
 	defer cleanup()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db)
+	configManager := NewConfigManager(kernel)
 
 	// 1. Initial Load when key 'runtime' does not exist -> seeds DefaultConfig
 	if err := configManager.Load(ctx); err != nil {
@@ -34,7 +36,7 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 		t.Fatalf("failed to set custom config: %v", err)
 	}
 
-	freshConfigManager := NewConfigManager(db)
+	freshConfigManager := NewConfigManager(kernel)
 	if err := freshConfigManager.Load(ctx); err != nil {
 		t.Fatalf("failed fresh Load: %v", err)
 	}
@@ -45,16 +47,16 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 
 	// 3. Corrupt JSON in database causes Load to return error
 	const corruptSQLStatement = `UPDATE file_storage.config SET value = '"invalid json string not object"'::jsonb WHERE key = 'runtime'`
-	if _, execErr := db.Exec(ctx, corruptSQLStatement); execErr != nil {
+	if _, execErr := kernel.DB().Exec(ctx, corruptSQLStatement); execErr != nil {
 		t.Fatalf("failed to corrupt config JSON: %v", execErr)
 	}
 
-	corruptedConfigManager := NewConfigManager(db)
+	corruptedConfigManager := NewConfigManager(kernel)
 	if err := corruptedConfigManager.Load(ctx); err == nil {
 		t.Fatal("expected error on Load with corrupted config JSON")
 	}
 
-	corruptService := NewService(db, nil)
+	corruptService := NewService(kernel)
 	if serviceStartErr := corruptService.Start(ctx); serviceStartErr == nil {
 		t.Fatal("expected error on service Start with corrupted config JSON")
 	}

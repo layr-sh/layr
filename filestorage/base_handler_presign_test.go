@@ -13,13 +13,9 @@ import (
 )
 
 func TestFilestorageBaseHandlerPresignUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	t.Run("invalid json body", func(t *testing.T) {
@@ -62,49 +58,6 @@ func TestFilestorageBaseHandlerPresignUnit(t *testing.T) {
 		baseHandler.handlePresignURL(unauthorizedResponseRecorder, unauthorizedRequest)
 		if unauthorizedResponseRecorder.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for unauthorized caller, got %d", unauthorizedResponseRecorder.Code)
-		}
-	})
-
-	t.Run("authorized caller with nil database pool", func(t *testing.T) {
-		authenticatedAuthContext := core.AuthContext{
-			UserID: "user-test",
-			JWT: core.JWTClaims{
-				Subject: "user-test",
-				Role:    "authenticated",
-			},
-		}
-		authenticatedRequest := httptest.NewRequestWithContext(
-			core.WithAuthContext(ctx, authenticatedAuthContext),
-			http.MethodPost,
-			"/v1/file-storage/presign",
-			bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)),
-		)
-		authenticatedResponseRecorder := httptest.NewRecorder()
-		baseHandler.handlePresignURL(authenticatedResponseRecorder, authenticatedRequest)
-		if authenticatedResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", authenticatedResponseRecorder.Code)
-		}
-	})
-
-	t.Run("service account auth context caller", func(t *testing.T) {
-		serviceAccountAuthContext := core.AuthContext{
-			ServiceAccountID: "sa-test",
-			JWT: core.JWTClaims{
-				Subject: "sa-test",
-				Role:    "service_role",
-				Scope:   core.ScopeFileStorageObjectRead,
-			},
-		}
-		serviceAccountRequest := httptest.NewRequestWithContext(
-			core.WithAuthContext(ctx, serviceAccountAuthContext),
-			http.MethodPost,
-			"/v1/file-storage/presign",
-			bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)),
-		)
-		serviceAccountResponseRecorder := httptest.NewRecorder()
-		baseHandler.handlePresignURL(serviceAccountResponseRecorder, serviceAccountRequest)
-		if serviceAccountResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", serviceAccountResponseRecorder.Code)
 		}
 	})
 
@@ -157,9 +110,9 @@ func TestFilestorageBaseHandlerPresignUnit(t *testing.T) {
 	})
 
 	t.Run("disabled filestorage configuration returns 403 on presign", func(t *testing.T) {
-		disabledConfigManager := NewConfigManager(nil)
-		disabledConfigManager.SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := NewBaseHandler(nil, disabledConfigManager, cryptoKeyManager)
+		disabledService := NewService(kernel)
+		disabledService.ConfigManager().SetMemoryConfig(Config{Enabled: false})
+		disabledBaseHandler := disabledService.BaseHandler()
 
 		disabledRequest := httptest.NewRequestWithContext(
 			ctx,

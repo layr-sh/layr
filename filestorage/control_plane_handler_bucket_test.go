@@ -11,13 +11,9 @@ import (
 )
 
 func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
 
 	privilegedAuthContext := core.AuthContext{
 		ServiceAccountID: "sa-test",
@@ -59,14 +55,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		controlPlaneHandler.handleListBuckets(noScopeResponseRecorder, noScopeRequest)
 		if noScopeResponseRecorder.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for missing scope, got %d", noScopeResponseRecorder.Code)
-		}
-
-		// Nil DB -> 500
-		authedRequest := httptest.NewRequestWithContext(readOnlyCtx, http.MethodGet, "/v1/_/file-storage/buckets", nil)
-		authedResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleListBuckets(authedResponseRecorder, authedRequest)
-		if authedResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", authedResponseRecorder.Code)
 		}
 	})
 
@@ -118,14 +106,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		if badBackendResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for unsupported backend, got %d", badBackendResponseRecorder.Code)
 		}
-
-		// Nil DB -> 500
-		validInputRequest := httptest.NewRequestWithContext(privilegedCtx, http.MethodPost, "/v1/_/file-storage/buckets", bytes.NewReader([]byte(`{"name":"valid-bucket"}`)))
-		validInputResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleCreateBucket(validInputResponseRecorder, validInputRequest)
-		if validInputResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", validInputResponseRecorder.Code)
-		}
 	})
 
 	t.Run("handle get bucket unit", func(t *testing.T) {
@@ -145,15 +125,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		controlPlaneHandler.handleGetBucket(emptyNameResponseRecorder, emptyNameRequest)
 		if emptyNameResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for empty bucket name, got %d", emptyNameResponseRecorder.Code)
-		}
-
-		// Nil DB -> 500
-		validNameGetRequest := httptest.NewRequestWithContext(readOnlyCtx, http.MethodGet, "/v1/_/file-storage/buckets/test-bucket", nil)
-		validNameGetRequest.SetPathValue("bucket", "test-bucket")
-		validNameGetResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleGetBucket(validNameGetResponseRecorder, validNameGetRequest)
-		if validNameGetResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", validNameGetResponseRecorder.Code)
 		}
 	})
 
@@ -184,15 +155,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		if badJSONResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for invalid JSON, got %d", badJSONResponseRecorder.Code)
 		}
-
-		// Nil DB -> 500
-		validNameUpdateRequest := httptest.NewRequestWithContext(privilegedCtx, http.MethodPatch, "/v1/_/file-storage/buckets/test-bucket", bytes.NewReader([]byte(`{}`)))
-		validNameUpdateRequest.SetPathValue("bucket", "test-bucket")
-		validNameUpdateResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleUpdateBucket(validNameUpdateResponseRecorder, validNameUpdateRequest)
-		if validNameUpdateResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", validNameUpdateResponseRecorder.Code)
-		}
 	})
 
 	t.Run("handle delete bucket unit", func(t *testing.T) {
@@ -213,15 +175,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		if emptyNameResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for empty bucket name, got %d", emptyNameResponseRecorder.Code)
 		}
-
-		// Nil DB -> 500
-		validNameDeleteRequest := httptest.NewRequestWithContext(privilegedCtx, http.MethodDelete, "/v1/_/file-storage/buckets/test-bucket", nil)
-		validNameDeleteRequest.SetPathValue("bucket", "test-bucket")
-		validNameDeleteResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleDeleteBucket(validNameDeleteResponseRecorder, validNameDeleteRequest)
-		if validNameDeleteResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", validNameDeleteResponseRecorder.Code)
-		}
 	})
 
 	t.Run("handle list bucket objects unit", func(t *testing.T) {
@@ -241,15 +194,6 @@ func TestFilestorageControlPlaneHandlerBucketUnit(t *testing.T) {
 		controlPlaneHandler.handleListBucketObjects(emptyNameResponseRecorder, emptyNameRequest)
 		if emptyNameResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for empty bucket name, got %d", emptyNameResponseRecorder.Code)
-		}
-
-		// Nil DB -> 500
-		validNameRequest := httptest.NewRequestWithContext(readOnlyCtx, http.MethodGet, "/v1/_/file-storage/buckets/test-bucket/objects", nil)
-		validNameRequest.SetPathValue("bucket", "test-bucket")
-		validNameResponseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.handleListBucketObjects(validNameResponseRecorder, validNameRequest)
-		if validNameResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", validNameResponseRecorder.Code)
 		}
 	})
 }

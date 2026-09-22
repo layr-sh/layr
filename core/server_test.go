@@ -23,24 +23,10 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	server := NewServer(nil, cryptoKeyManager)
-	if server.Mux() == nil {
-		t.Fatal("expected non-nil Mux")
-	}
-	if server.BaseRouter() == nil {
-		t.Fatal("expected non-nil Router")
-	}
-	if server.ControlPlaneRouter() == nil {
-		t.Fatal("expected non-nil ControlPlaneRouter")
-	}
-	if server.Handler() == nil {
-		t.Fatal("expected non-nil Handler")
-	}
-	if server.JWTSigner() == nil {
-		t.Fatal("expected non-nil JWTSigner initially")
-	}
-	if server.ServiceAccountManager() != nil {
-		t.Fatal("expected nil ServiceAccountManager initially")
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
+	if server.Kernel() == nil {
+		t.Fatal("expected non-nil Kernel from server.Kernel()")
 	}
 
 	// Test /healthz
@@ -58,15 +44,6 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 	if healthResponse["status"] != "healthy" {
 		t.Fatalf("expected healthy status, got %v", healthResponse["status"])
-	}
-
-	// Test /readyz without DB pool (standalone check)
-	readyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
-	readyResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(readyResponseRecorder, readyRequest)
-
-	if readyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected /readyz 200, got %d", readyResponseRecorder.Code)
 	}
 
 	// Test /metrics
@@ -115,13 +92,10 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	}
 
 	// Test base client endpoint with valid authenticated JWT in Authorization header -> 200
-	validJWTToken, err := server.JWTSigner().GenerateAccessToken(JWTClaims{
+	validJWTToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: "01918a24-7777-7000-8000-000000000001",
 		Role:    "authenticated",
 	})
-	if err != nil {
-		t.Fatalf("failed to sign access token: %v", err)
-	}
 	clientAuthHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer "+validJWTToken)
 	clientAuthHeaderResponseRecorder := httptest.NewRecorder()
@@ -143,29 +117,11 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 
 	// Test base client endpoint with invalid Authorization header -> 401 Unauthorized
 	clientInvalidAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
-	clientInvalidAuthRequest.Header.Set("Authorization", "Bearer invalid_signature_token")
+	clientInvalidAuthRequest.Header.Set("Authorization", "Bearer invalid.signature.token")
 	clientInvalidAuthResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientInvalidAuthResponseRecorder, clientInvalidAuthRequest)
 	if clientInvalidAuthResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected client endpoint 401 with invalid auth header, got %d", clientInvalidAuthResponseRecorder.Code)
-	}
-
-	// Test base client endpoint with unauthenticated service account key -> 401 Unauthorized
-	clientUnauthKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
-	clientUnauthKeyRequest.Header.Set("X-Layr-Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	clientUnauthKeyResponseRecorder := httptest.NewRecorder()
-	server.server.Handler.ServeHTTP(clientUnauthKeyResponseRecorder, clientUnauthKeyRequest)
-	if clientUnauthKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected client endpoint 401 with unauthenticated service account key, got %d", clientUnauthKeyResponseRecorder.Code)
-	}
-
-	// Test PublishableKeyMiddleware with nil CryptoKeyManager -> passes through
-	nilCryptoKeyManagerHttpServer := NewServer(nil, nil)
-	nilCryptoKeyManagerClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/manifest", nil)
-	nilCryptoKeyManagerClientResponseRecorder := httptest.NewRecorder()
-	nilCryptoKeyManagerHttpServer.server.Handler.ServeHTTP(nilCryptoKeyManagerClientResponseRecorder, nilCryptoKeyManagerClientRequest)
-	if nilCryptoKeyManagerClientResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected manifest 200 with nil key manager, got %d", nilCryptoKeyManagerClientResponseRecorder.Code)
 	}
 
 	// Test Public OpenAPI /v1/spec.json
@@ -214,15 +170,18 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 }
 
 func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
+	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+
 	// 1. Test Start() error with invalid listen address
-	invalidAddressServer := NewServer(nil, nil)
+	invalidAddressServer := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 	invalidAddressServer.server.Addr = "invalid:address:too:many:colons"
 	if err := invalidAddressServer.Start(); err == nil {
 		t.Fatal("expected error from Start with invalid listen address, got nil")
 	}
 
 	// 2. Test Shutdown() error when context expires with in-flight connection
-	drainServer := NewServer(nil, nil)
+	drainServer := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 	handlerStartedChannel := make(chan struct{})
 	unblockHandlerChannel := make(chan struct{})
 
@@ -245,6 +204,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 	go func() {
 		inFlightRequest, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+tcpListener.Addr().String()+"/v1/blocking-test", nil)
 		if requestErr == nil {
+			inFlightRequest.Header.Set("X-Layr-Client-Publishable-Key", cryptoKeyManager.DerivePublishableKey())
 			response, clientErr := http.DefaultClient.Do(inFlightRequest)
 			if clientErr == nil {
 				_ = response.Body.Close()
@@ -267,12 +227,15 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 }
 
 func TestCoreServerPanicRecoveryUnit(t *testing.T) {
-	server := NewServer(nil, nil)
+	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 	GetRoute[string](server.BaseRouter(), "/v1/panic-endpoint", func(responseWriter http.ResponseWriter, request *http.Request) {
 		panic("simulated unhandled panic in handler")
 	})
 
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/panic-endpoint", nil)
+	request.Header.Set("X-Layr-Client-Publishable-Key", cryptoKeyManager.DerivePublishableKey())
 	responseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(responseRecorder, request)
 
@@ -290,19 +253,8 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	server := NewServer(nil, cryptoKeyManager)
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create jwt signer: %v", err)
-	}
-	server.SetJWTSigner(jwtSigner)
-	server.SetServiceAccountManager(nil)
-	if server.JWTSigner() != jwtSigner {
-		t.Fatal("expected matching JWTSigner")
-	}
-	if server.ServiceAccountManager() != nil {
-		t.Fatal("expected nil ServiceAccountManager")
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 
 	var capturedAuthContext AuthContext
 	var capturedEventActor EventActor
@@ -329,13 +281,10 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	// 2. User Access Token via Bearer
 	userID := uuid.NewV7().String()
-	userToken, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	userToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: userID,
 		Role:    "authenticated",
 	}, 600)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	userRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	userRequest.Header.Set("Authorization", "Bearer "+userToken)
@@ -439,7 +388,7 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	// 4. Invalid JWT fallback to unauthenticated
 	badRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-	badRequest.Header.Set("Authorization", "Bearer invalid-jwt-token")
+	badRequest.Header.Set("Authorization", "Bearer invalid.jwt.token")
 	badResponseRecorder := httptest.NewRecorder()
 	middlewareHandler.ServeHTTP(badResponseRecorder, badRequest)
 
@@ -452,14 +401,11 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	// 5. Authenticated Anonymous User Account (user with is_anonymous = true)
 	anonUserID := uuid.NewV7().String()
-	anonToken, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	anonToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 600)
-	if err != nil {
-		t.Fatalf("failed to generate anon access token: %v", err)
-	}
 
 	anonUserRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	anonUserRequest.Header.Set("Authorization", "Bearer "+anonToken)
@@ -471,26 +417,26 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 	if capturedEventActor.Type != "user" || capturedEventActor.ID == nil || capturedEventActor.ID.String() != anonUserID {
 		t.Fatalf("expected user event actor for anonymous user, got: %+v", capturedEventActor)
 	}
+}
 
-	// 6. Refresh token fallback branches with nil DB
-	cookieNilDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-	cookieNilDBRequest.AddCookie(&http.Cookie{Name: SessionCookieNameSecure, Value: "refresh-cookie-no-db"})
-	middlewareHandler.ServeHTTP(httptest.NewRecorder(), cookieNilDBRequest)
-	if capturedAuthContext.UserID != "" {
-		t.Fatalf("expected unauthenticated with nil db and secure cookie, got: %+v", capturedAuthContext)
+func TestCoreWriteJSONResponseUnit(t *testing.T) {
+	// Test WriteJSONResponse
+	jsonResponseRecorder := httptest.NewRecorder()
+	payload := map[string]string{"message": "hello world"}
+	WriteJSONResponse(jsonResponseRecorder, http.StatusCreated, payload)
+
+	if jsonResponseRecorder.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", jsonResponseRecorder.Code)
+	}
+	if contentType := jsonResponseRecorder.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %s", contentType)
 	}
 
-	insecureCookieNilDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-	insecureCookieNilDBRequest.AddCookie(&http.Cookie{Name: SessionCookieNameInsecure, Value: "insecure-refresh-cookie-no-db"})
-	middlewareHandler.ServeHTTP(httptest.NewRecorder(), insecureCookieNilDBRequest)
-	if capturedAuthContext.UserID != "" {
-		t.Fatalf("expected unauthenticated with nil db and insecure cookie, got: %+v", capturedAuthContext)
+	var decoded map[string]string
+	if err := json.Unmarshal(jsonResponseRecorder.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
-
-	refreshHeaderNilDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-	refreshHeaderNilDBRequest.Header.Set("X-Refresh-Token", "refresh-header-no-db")
-	middlewareHandler.ServeHTTP(httptest.NewRecorder(), refreshHeaderNilDBRequest)
-	if capturedAuthContext.UserID != "" {
-		t.Fatalf("expected unauthenticated with nil db and X-Refresh-Token, got: %+v", capturedAuthContext)
+	if decoded["message"] != "hello world" {
+		t.Fatalf("expected hello world, got %s", decoded["message"])
 	}
 }

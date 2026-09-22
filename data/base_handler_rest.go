@@ -76,13 +76,13 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 
 	embeddedRelations := collectEmbeddedRelations(queryParams.Embedded)
 	tableVersion := handler.getCompositeTableCacheVersion(ctx, schema, table, embeddedRelations)
-	if cacheTTL > 0 && handler.kvStore != nil {
+	if cacheTTL > 0 {
 		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 		userVisibleCacheKey = rest.GenerateUserVisibleRESTKeyWithVersion(schema, table, queryParams, keySuffix, tableVersion)
 		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleCacheKey)
 		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleCacheKey)
 
-		if cached, cacheGetErr := handler.kvStore.Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("X-Layr-Cache", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
@@ -91,14 +91,14 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		}
 	}
 
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	if !handler.isRLSBypassed(request, "data:query.read") {
+	if !handler.isRLSBypassed(request, core.ScopeDataQueryRead) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
@@ -107,7 +107,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 
 	rows, err := tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
@@ -132,23 +132,23 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 
 	responseJSON, _ := json.Marshal(results)
 
-	if cacheTTL > 0 && handler.kvStore != nil && internalCacheKey != "" {
+	if cacheTTL > 0 && internalCacheKey != "" {
 		maxQueries := handler.configManager.Get().Cache.MaxCachedQueries
 		shouldCache := true
 		if maxQueries > 0 {
-			if currentCountString, countErr := handler.kvStore.Get(ctx, "cache:query_count"); countErr == nil && currentCountString != "" {
+			if currentCountString, countErr := handler.kernel.KVStore().Get(ctx, "cache:query_count"); countErr == nil && currentCountString != "" {
 				if currentCount, parseCountErr := strconv.ParseInt(currentCountString, 10, 64); parseCountErr == nil && currentCount >= int64(maxQueries) {
 					shouldCache = false
 				}
 			}
 		}
 		if shouldCache {
-			_ = handler.kvStore.Set(ctx, internalCacheKey, string(responseJSON), time.Duration(cacheTTL)*time.Second)
+			_ = handler.kernel.KVStore().Set(ctx, internalCacheKey, string(responseJSON), time.Duration(cacheTTL)*time.Second)
 			counterExpiry := time.Duration(handler.configManager.Get().Cache.QueryTTLSeconds*2) * time.Second
 			if counterExpiry < 5*time.Minute {
 				counterExpiry = 5 * time.Minute
 			}
-			_, _ = handler.kvStore.Increment(ctx, "cache:query_count", counterExpiry)
+			_, _ = handler.kernel.KVStore().Increment(ctx, "cache:query_count", counterExpiry)
 			responseWriter.Header().Set("X-Layr-Cache", "MISS")
 		}
 	}
@@ -170,14 +170,14 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 	}
 
 	ctx := request.Context()
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	if !handler.isRLSBypassed(request, "data:query.read") {
+	if !handler.isRLSBypassed(request, core.ScopeDataQueryRead) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
@@ -191,7 +191,7 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 
 	rows, err := tx.Query(ctx, query, recordID)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
@@ -267,14 +267,14 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	}
 
 	ctx := request.Context()
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	if !handler.isRLSBypassed(request, "data:query.write") {
+	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
@@ -293,7 +293,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	var rows pgx.Rows
 	rows, err = tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
@@ -301,12 +301,12 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	insertedRows := handler.scanRowsToJSONMaps(rows)
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		handler.writeDBError(responseWriter, request, commitErr)
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
 		return
 	}
 	tx = nil
 
-	handler.invalidateTableCache(ctx, schema, table)
+	handler.InvalidateTableCache(ctx, schema, table)
 
 	for _, rawRow := range insertedRows {
 		rowID := ""
@@ -320,15 +320,13 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 			}
 		}
 
-		if handler.eventBus != nil {
-			eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, rowID)
-			handler.eventBus.Publish(ctx, NewRowCreatedEvent(eventResourceID, RowCreatedEventData{
-				Schema:     schema,
-				Table:      table,
-				ID:         rowID,
-				Properties: props,
-			}))
-		}
+		eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, rowID)
+		handler.kernel.EventBus().Publish(ctx, NewRowCreatedEvent(eventResourceID, RowCreatedEventData{
+			Schema:     schema,
+			Table:      table,
+			ID:         rowID,
+			Properties: props,
+		}))
 	}
 
 	if isReturnMinimal(request) {
@@ -385,14 +383,14 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 	}
 
 	ctx := request.Context()
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	if !handler.isRLSBypassed(request, "data:query.write") {
+	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
@@ -411,7 +409,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 
 	rows, err := tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
@@ -423,13 +421,13 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		handler.writeDBError(responseWriter, request, commitErr)
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
 		return
 	}
 	tx = nil
 
 	updatedRow := updatedRows[0]
-	handler.invalidateTableCache(ctx, schema, table)
+	handler.InvalidateTableCache(ctx, schema, table)
 
 	props := make(map[string]string)
 	for k, v := range updatedRow {
@@ -438,15 +436,13 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 		}
 	}
 
-	if handler.eventBus != nil {
-		eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, recordID)
-		handler.eventBus.Publish(ctx, NewRowUpdatedEvent(eventResourceID, RowUpdatedEventData{
-			Schema:     schema,
-			Table:      table,
-			ID:         recordID,
-			Properties: props,
-		}))
-	}
+	eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, recordID)
+	handler.kernel.EventBus().Publish(ctx, NewRowUpdatedEvent(eventResourceID, RowUpdatedEventData{
+		Schema:     schema,
+		Table:      table,
+		ID:         recordID,
+		Properties: props,
+	}))
 
 	if isReturnMinimal(request) {
 		responseWriter.WriteHeader(http.StatusNoContent)
@@ -470,14 +466,14 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 	}
 
 	ctx := request.Context()
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	if !handler.isRLSBypassed(request, "data:query.write") {
+	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
 	}
 
@@ -496,7 +492,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 
 	result, err := tx.Exec(ctx, sqlStatement.SQL, sqlStatement.Args...)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	if result.RowsAffected() == 0 {
@@ -505,21 +501,19 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		handler.writeDBError(responseWriter, request, commitErr)
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
 		return
 	}
 	tx = nil
 
-	handler.invalidateTableCache(ctx, schema, table)
+	handler.InvalidateTableCache(ctx, schema, table)
 
-	if handler.eventBus != nil {
-		eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, recordID)
-		handler.eventBus.Publish(ctx, NewRowDeletedEvent(eventResourceID, RowDeletedEventData{
-			Schema: schema,
-			Table:  table,
-			ID:     recordID,
-		}))
-	}
+	eventResourceID := fmt.Sprintf("%s.%s:%s", schema, table, recordID)
+	handler.kernel.EventBus().Publish(ctx, NewRowDeletedEvent(eventResourceID, RowDeletedEventData{
+		Schema: schema,
+		Table:  table,
+		ID:     recordID,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -577,9 +571,9 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 
 	// Service accounts can bypass RLS if granted data:query.read (on GET) or data:query.write (on POST).
 	// Regular end-users do not have service account scopes and are always evaluated under PostgreSQL RLS.
-	rlsBypassScope := "data:query.read"
+	rlsBypassScope := core.ScopeDataQueryRead
 	if request.Method == http.MethodPost {
-		rlsBypassScope = "data:query.write"
+		rlsBypassScope = core.ScopeDataQueryWrite
 	}
 
 	args := make(map[string]any)
@@ -614,15 +608,10 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 		}
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "execute function rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
@@ -653,7 +642,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 
 	rows, err := tx.Query(ctx, query, queryArgs...)
 	if err != nil {
-		handler.writeDBError(responseWriter, request, err)
+		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
@@ -664,7 +653,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 	results := handler.scanRowsToJSONMaps(rows)
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		handler.writeDBError(responseWriter, request, commitErr)
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
 		return
 	}
 	tx = nil
@@ -684,7 +673,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 					targetSchema = parts[0]
 					targetTable = parts[1]
 				}
-				handler.invalidateTableCache(ctx, targetSchema, targetTable)
+				handler.InvalidateTableCache(ctx, targetSchema, targetTable)
 			}
 		}
 	}
@@ -879,51 +868,6 @@ func (handler *BaseHandler) getCompositeTableCacheVersion(ctx context.Context, s
 		_, _ = fmt.Fprintf(fnvHash64, ";%s:%d", rel, relVersion)
 	}
 	return int64(fnvHash64.Sum64() & uint64(math.MaxInt64))
-}
-
-func (handler *BaseHandler) getTableCacheVersion(ctx context.Context, schema, table string) int64 {
-	if handler.kvStore == nil {
-		return 0
-	}
-	versionString, getErr := handler.kvStore.Get(ctx, fmt.Sprintf("cache:v:%s:%s", schema, table))
-	if getErr != nil || versionString == "" {
-		return 0
-	}
-	versionNumber, parseErr := strconv.ParseInt(versionString, 10, 64)
-	if parseErr != nil {
-		return 0
-	}
-	return versionNumber
-}
-
-func (handler *BaseHandler) invalidateTableCache(ctx context.Context, schema, table string) {
-	if handler.kvStore == nil {
-		return
-	}
-	cacheConfig := handler.configManager.Get().Cache
-	if !cacheConfig.Enabled || !cacheConfig.InvalidateOnMutation {
-		return
-	}
-	versionKey := fmt.Sprintf("cache:v:%s:%s", schema, table)
-	newVersion, err := handler.kvStore.Increment(ctx, versionKey, 0)
-	const maxSafeVersion int64 = 9_000_000_000_000_000
-	if err != nil || newVersion >= maxSafeVersion {
-		_ = handler.kvStore.Set(ctx, versionKey, "1", 0)
-	}
-}
-
-// InvalidateTableCache invalidates cached query results for a specific table.
-func (handler *BaseHandler) InvalidateTableCache(ctx context.Context, schema, table string) {
-	handler.invalidateTableCache(ctx, schema, table)
-}
-
-// ResetTableCacheVersion explicitly resets the table cache version back to zero.
-func (handler *BaseHandler) ResetTableCacheVersion(ctx context.Context, schema, table string) {
-	if handler.kvStore == nil {
-		return
-	}
-	versionKey := fmt.Sprintf("cache:v:%s:%s", schema, table)
-	_ = handler.kvStore.Delete(ctx, versionKey)
 }
 
 func isReturnMinimal(request *http.Request) bool {

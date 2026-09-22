@@ -15,7 +15,7 @@ import (
 
 func TestAuthSMSUnconfiguredOTPSendE2E(t *testing.T) {
 	ctx := context.Background()
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil }, nil)
+	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil })
 
 	err := smsDispatcher.SendSignInOTP(ctx, "+1234567890", "123456", "user-uuid")
 	if err != ErrSMSDispatcherNotConfigured {
@@ -62,7 +62,7 @@ func TestAuthSMSSignInOTPDispatchTwilioE2E(t *testing.T) {
 	}
 
 	driverTwilio := "twilio"
-	smsDispatcherConfig := &SMSDispatcherConfig{
+	smsDispatcherConfig := SMSDispatcherConfig{
 		Driver: &driverTwilio,
 		Twilio: SMSDispatcherTwilioConfig{
 			AccountSID: "AC1234567890",
@@ -71,7 +71,8 @@ func TestAuthSMSSignInOTPDispatchTwilioE2E(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &smsDispatcherConfig })
 	smsDispatcher.httpClient = mockTwilioServer.Client()
 
 	// Intercept Twilio default URL by pointing test to mock server URL
@@ -137,7 +138,7 @@ func TestAuthSMSSignInOTPDispatchWebhookE2E(t *testing.T) {
 	}
 
 	driverWebhook := "webhook"
-	smsDispatcherConfig := &SMSDispatcherConfig{
+	smsDispatcherConfig := SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
 			URL:            webhookServer.URL,
@@ -146,7 +147,8 @@ func TestAuthSMSSignInOTPDispatchWebhookE2E(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &smsDispatcherConfig })
 	sendErr := smsDispatcher.SendPhoneVerification(ctx, "+1234567890", "888999", "user-uuid")
 	if sendErr != nil {
 		t.Fatalf("failed to dispatch phone verification via webhook: %v", sendErr)

@@ -35,15 +35,13 @@ var (
 
 // Validator validates AWS Signature Version 4 on incoming HTTP requests.
 type Validator struct {
-	db               *core.DatabasePool
-	cryptoKeyManager *core.CryptoKeyManager
+	kernel *core.Kernel
 }
 
 // NewValidator initializes a new SigV4 validator.
-func NewValidator(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) *Validator {
+func NewValidator(kernel *core.Kernel) *Validator {
 	return &Validator{
-		db:               db,
-		cryptoKeyManager: cryptoKeyManager,
+		kernel: kernel,
 	}
 }
 
@@ -245,10 +243,6 @@ func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccoun
 		return nil, ErrRequestExpired
 	}
 
-	if validator.db == nil {
-		return nil, errors.New("database pool unavailable")
-	}
-
 	// 2. Query S3 credential from file_storage.s3_credentials
 	ctx := request.Context()
 	const selectCredentialSQL = `
@@ -258,7 +252,7 @@ func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccoun
 	`
 	var serviceAccountID uuid.UUID
 	var encryptedSecretKey string
-	scanErr := validator.db.QueryRow(ctx, selectCredentialSQL, credentials.AccessKeyID).Scan(&serviceAccountID, &encryptedSecretKey)
+	scanErr := validator.kernel.DB().QueryRow(ctx, selectCredentialSQL, credentials.AccessKeyID).Scan(&serviceAccountID, &encryptedSecretKey)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
 			return nil, ErrInvalidAccessKeyID
@@ -267,10 +261,7 @@ func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccoun
 	}
 
 	// 3. Decrypt secret key
-	if validator.cryptoKeyManager == nil {
-		return nil, fmt.Errorf("crypto key manager unavailable for secret decryption")
-	}
-	decryptedBytes, decryptErr := validator.cryptoKeyManager.DecryptField(encryptedSecretKey)
+	decryptedBytes, decryptErr := validator.kernel.CryptoKeyManager().DecryptField(encryptedSecretKey)
 	if decryptErr != nil {
 		return nil, fmt.Errorf("failed to decrypt s3 secret access key: %w", decryptErr)
 	}
@@ -338,7 +329,7 @@ func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccoun
 	`
 	var serviceAccount core.ServiceAccount
 	var rawScopes []byte
-	serviceAccountScanErr := validator.db.QueryRow(ctx, selectServiceAccountSQL, serviceAccountID).Scan(
+	serviceAccountScanErr := validator.kernel.DB().QueryRow(ctx, selectServiceAccountSQL, serviceAccountID).Scan(
 		&serviceAccount.ID,
 		&serviceAccount.Name,
 		&serviceAccount.Description,

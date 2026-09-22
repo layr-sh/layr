@@ -11,18 +11,10 @@ import (
 )
 
 func TestCoreServerLifecycleAndProbeFlowE2E(t *testing.T) {
-	config := DefaultConfig()
-	config.Data.Enabled = true
-	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	SetLoadedConfig(config)
-	defer UnloadConfig()
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
 
-	cryptoKeyManager, err := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	server := NewServer(nil, cryptoKeyManager)
+	server := kernel.Server()
 
 	// 1. Health Probe Flow
 	healthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)

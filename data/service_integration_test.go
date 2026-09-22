@@ -14,22 +14,18 @@ import (
 )
 
 func TestDataServiceLifecycleIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
+	db := kernel.DB()
+	serviceAccountManager := kernel.ServiceAccountManager()
 
-	dataService := NewService(db)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, nil)
-	defer eventBus.Close()
-
-	dataService.SetServiceAccountManager(serviceAccountManager)
-	dataService.SetEventBus(eventBus)
+	dataService := NewService(kernel)
 	if startErr := dataService.Start(ctx); startErr != nil {
 		t.Fatalf("failed to start data service: %v", startErr)
 	}
-	defer func() { _ = dataService.Stop() }()
+	defer func() { dataService.Stop() }()
 
 	// 1. Verify default dynamic configurations accessor values
 	if !dataService.IsRESTEnabled() || dataService.GetRESTMaxLimit() <= 0 ||
@@ -143,7 +139,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	{
 		canceledCtx, cancel := context.WithCancel(ctx)
 		cancel()
-		brokenService := NewService(db)
+		brokenService := NewService(kernel)
 		if startErr := brokenService.Start(canceledCtx); startErr == nil {
 			t.Fatal("expected error starting service on canceled context")
 		}
@@ -151,15 +147,9 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 
 	// 9. Test ServiceAccountManager, EventBus, and Cache Flush
 	dummyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
-	if !dataService.CheckScope(dummyRequest, "data:config.read") {
+	dummyResponseRecorder := httptest.NewRecorder()
+	if !serviceAccountManager.RequireScope(dummyResponseRecorder, dummyRequest, core.ScopeDataConfigRead) {
 		t.Fatal("expected true when no service account key provided (internal/session allowed)")
-	}
-
-	// Test checkScope with nil service account manager
-	nilManagerService := NewService(db)
-	nilManagerService.SetServiceAccountManager(nil)
-	if !nilManagerService.CheckScope(dummyRequest, "data:config.read") {
-		t.Fatal("expected true when serviceAccountManager is nil")
 	}
 	if dataService.GetControlPlaneHandler() == nil {
 		t.Fatal("expected non-nil control plane handler")
@@ -168,7 +158,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	// Create a Service Account with data:cache.write
 	controlPlaneCacheServiceAccount, createErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Cache Control Plane",
-		Scopes: []string{"data:cache.write"},
+		Scopes: []string{core.ScopeDataCacheWrite},
 	})
 	if createErr != nil {
 		t.Fatalf("failed to create service account: %v", createErr)
@@ -186,7 +176,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	// Invalidate Cache with insufficient scope
 	readOnlyServiceAccount, readOnlyErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Read Only SA",
-		Scopes: []string{"data:query.read"},
+		Scopes: []string{core.ScopeDataQueryRead},
 	})
 	if readOnlyErr != nil {
 		t.Fatalf("failed to create read-only service account: %v", readOnlyErr)
@@ -236,22 +226,19 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 }
 
 func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
+	serviceAccountManager := kernel.ServiceAccountManager()
 
-	dataService := NewService(db)
-	mockKVStore := newInMemoryKVStore()
-	dataService.SetKVStore(mockKVStore)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	dataService.SetServiceAccountManager(serviceAccountManager)
+	dataService := NewService(kernel)
 
 	if startErr := dataService.Start(ctx); startErr != nil {
 		t.Fatalf("failed to start data service: %v", startErr)
 	}
 	defer func() {
-		_ = dataService.Stop()
+		dataService.Stop()
 	}()
 
 	baseRouter := core.NewRouter(fuego.NewServer())
@@ -285,7 +272,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	// Test invoking control plane config handler via OpenAPI router with scope check
 	controlPlaneServiceAccount, createErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Config Control Plane",
-		Scopes: []string{"data:config.read", "data:config.write", "data:cache.write"},
+		Scopes: []string{core.ScopeDataConfigRead, core.ScopeDataConfigWrite, core.ScopeDataCacheWrite},
 	})
 	if createErr != nil {
 		t.Fatalf("failed to create control plane service account: %v", createErr)
@@ -357,16 +344,15 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	}
 
 	// 6. Test Start failure when configManager.Load fails on closed database pool
-	closedDB, closedCleanup := setupTestDataDatabase(t)
-	closedCleanup()
-	failingService := NewService(closedDB)
+	failingKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	failingService := NewService(failingKernel)
 	if err := failingService.Start(ctx); err == nil {
 		t.Fatal("expected error starting service with closed database pool")
 	}
 }
 
 func TestDataServiceSeedErrorIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -374,11 +360,11 @@ func TestDataServiceSeedErrorIntegration(t *testing.T) {
 	defer restore()
 
 	// Truncate reference_data.countries so fast-path check doesn't skip
-	_, _ = db.Exec(ctx, "TRUNCATE reference_data.countries CASCADE")
+	_, _ = kernel.DB().Exec(ctx, "TRUNCATE reference_data.countries CASCADE")
 
-	dataService := NewService(db)
+	dataService := NewService(kernel)
 	if err := dataService.Start(ctx); err != nil {
 		t.Fatalf("expected service.Start not to fail on seed error: %v", err)
 	}
-	defer func() { _ = dataService.Stop() }()
+	defer func() { dataService.Stop() }()
 }

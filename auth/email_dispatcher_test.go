@@ -23,13 +23,13 @@ func stringPointer(value string) *string {
 
 func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 	// 1. Nil config provider
-	nilEmailDispatcher := NewEmailDispatcher(nil, nil, nil)
+	var nilEmailDispatcher *EmailDispatcher
 	if nilEmailDispatcher.IsConfigured() {
-		t.Fatal("expected IsConfigured() to be false when configProvider is nil")
+		t.Fatal("expected IsConfigured() to be false when dispatcher is nil")
 	}
 
 	// 2. Returns nil config
-	nilConfigEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil }, nil)
+	nilConfigEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil })
 	if nilConfigEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when config is nil")
 	}
@@ -37,7 +37,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 	// 3. Driver is nil
 	nilDriverEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
 		return &EmailDispatcherConfig{Driver: nil}
-	}, nil)
+	})
 	if nilDriverEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when Driver is nil")
 	}
@@ -48,7 +48,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "", Port: 587, Username: "user", Password: "pwd"},
 		}
-	}, nil)
+	})
 	if smtpEmptyHostEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when SMTP host is empty")
 	}
@@ -58,7 +58,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "smtp.example.com", Port: 0, Username: "user", Password: "pwd"},
 		}
-	}, nil)
+	})
 	if smtpZeroPortEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when SMTP port is 0")
 	}
@@ -68,7 +68,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "smtp.example.com", Port: 587, Username: "", Password: "pwd"},
 		}
-	}, nil)
+	})
 	if emtpEmptyUserEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when SMTP username is empty")
 	}
@@ -78,7 +78,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "smtp.example.com", Port: 587, Username: "user", Password: ""},
 		}
-	}, nil)
+	})
 	if smtpEmptyPasswordEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when SMTP password is empty and not configured")
 	}
@@ -89,7 +89,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "smtp.example.com", Port: 587, Username: "user", Password: "pwd"},
 		}
-	}, nil)
+	})
 	if !smtpEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete SMTP config with Password")
 	}
@@ -100,7 +100,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: stringPointer("smtp"),
 			SMTP:   EmailDispatcherSMTPConfig{Host: "smtp.example.com", Port: 587, Username: "user", PasswordConfigured: true},
 		}
-	}, nil)
+	})
 	if !smtpPasswordConfiguredEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete SMTP config with PasswordConfigured")
 	}
@@ -111,7 +111,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver:  stringPointer("webhook"),
 			Webhook: EmailDispatcherWebhookConfig{URL: ""},
 		}
-	}, nil)
+	})
 	if emptyWebhookEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when Webhook URL is empty")
 	}
@@ -122,7 +122,7 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver:  stringPointer("webhook"),
 			Webhook: EmailDispatcherWebhookConfig{URL: "https://example.com/webhook"},
 		}
-	}, nil)
+	})
 	if !webhookEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete Webhook config")
 	}
@@ -132,14 +132,14 @@ func TestAuthEmailDispatcherIsConfiguredUnit(t *testing.T) {
 		return &EmailDispatcherConfig{
 			Driver: stringPointer("unknown"),
 		}
-	}, nil)
+	})
 	if unknownDriverEmailDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false for unknown driver")
 	}
 }
 
 func TestAuthEmailSendUnconfiguredUnit(t *testing.T) {
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil })
 	ctx := context.Background()
 
 	if err := emailDispatcher.Send(ctx, EmailDispatcherMessage{To: "user@example.com", Subject: "Hi", Text: "Hello"}); !errors.Is(err, ErrEmailDispatcherNotConfigured) {
@@ -167,7 +167,7 @@ func TestAuthEmailValidationErrorsUnit(t *testing.T) {
 			Password: "pwd",
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	ctx := context.Background()
 
 	// Empty recipient
@@ -232,7 +232,8 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	ctx := context.Background()
 
 	// 1. Password Reset custom template
@@ -252,6 +253,17 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 	if resolvedSubject != "Reset for alice@example.com on CustomProject" {
 		t.Fatalf("expected AppName to interpolate CustomProject, got: %s", resolvedSubject)
 	}
+	core.SetLoadedConfig(nil)
+
+	// Fallback when Project.Name is empty
+	emptyNameProjectConfig := core.DefaultConfig()
+	emptyNameProjectConfig.Project.Name = ""
+	core.SetLoadedConfig(emptyNameProjectConfig)
+	fallbackSubject, _, _ := emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
+	if fallbackSubject != "Reset for alice@example.com on layr-app" {
+		t.Fatalf("expected AppName to fallback to layr-app, got: %s", fallbackSubject)
+	}
+	emailDispatcher.resolveEmailVerificationTemplate(ctx, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
 	core.SetLoadedConfig(nil)
 
 	// 2. Sign In OTP custom template
@@ -345,10 +357,8 @@ func TestAuthEmailFormatMIMEUnit(t *testing.T) {
 }
 
 func TestAuthEmailWebhookDeliveryUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create KeyManager: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	cryptoKeyManager := kernel.CryptoKeyManager()
 
 	var receivedBody string
 	var receivedSignature string
@@ -372,10 +382,10 @@ func TestAuthEmailWebhookDeliveryUnit(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	ctx := context.Background()
 
-	err = emailDispatcher.Send(ctx, EmailDispatcherMessage{
+	err := emailDispatcher.Send(ctx, EmailDispatcherMessage{
 		Kind:    EmailDispatcherMessageKindSignInOTP,
 		To:      "bob@example.com",
 		Code:    "654321",
@@ -419,10 +429,8 @@ func TestAuthEmailWebhookDeliveryUnit(t *testing.T) {
 }
 
 func TestAuthEmailSMTPSendUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create KeyManager: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	cryptoKeyManager := kernel.CryptoKeyManager()
 
 	encryptedPassword, _ := cryptoKeyManager.EncryptField([]byte("secret-smtp-password"))
 
@@ -439,7 +447,7 @@ func TestAuthEmailSMTPSendUnit(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 
 	// Mock SMTP Server
 	var listenConfig net.ListenConfig
@@ -540,7 +548,7 @@ func TestAuthEmailTLSAutoResolutionAndStartTLSUnit(t *testing.T) {
 			TLSMode:            "auto",
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 
 	// Inject mock dialTLS that verifies tlsMode is resolved to direct TLS on port 465
 	dialTLSCalled := false
@@ -579,7 +587,8 @@ func TestAuthEmailSendWithEmailDispatcherTemplateConfiguredSenderUnit(t *testing
 	}
 
 	var sentEmailDispatcherMessage EmailDispatcherMessage
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	// Use mock client to capture sent message
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
@@ -613,7 +622,7 @@ func TestAuthEmailSMTPExtendedErrorsUnit(t *testing.T) {
 			TLSMode:            "none",
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	ctx := context.Background()
 
 	// 1. Client creation failure (server returns bad greeting)
@@ -778,7 +787,7 @@ func TestAuthEmailWebhookRequestConstructionErrorUnit(t *testing.T) {
 			URL: "http://[::1]:namedport", // invalid port format causes http.NewRequestWithContext to fail
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	ctx := context.Background()
 	if err := emailDispatcher.Send(ctx, EmailDispatcherMessage{To: "a@b.com", Subject: "s", Text: "t"}); err == nil {
 		t.Fatal("expected error constructing request with invalid URL")
@@ -794,7 +803,8 @@ func TestAuthEmailSendWithTemplateDefaultSenderUnit(t *testing.T) {
 			URL: "http://localhost:9999/dummy",
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	var receivedPayload map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		_ = json.NewDecoder(request.Body).Decode(&receivedPayload)
@@ -862,7 +872,7 @@ func TestAuthEmailSMTPSendDefaultFallbackSenderUnit(t *testing.T) {
 			TLSMode:            "none",
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	mockAddress, cleanup := createMockSMTPListener(t, func(serverConnection net.Conn) {
 		_, _ = serverConnection.Write([]byte("220 smtp.layr.local\r\n"))
 		readBuffer := make([]byte, 1024)
@@ -912,7 +922,7 @@ func TestAuthEmailWebhookMissingURLAndDefaultTimeoutUnit(t *testing.T) {
 			URL: "",
 		},
 	}
-	webhookMissingURLEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return webhookMissingURLEmailDispatcherConfig }, nil)
+	webhookMissingURLEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return webhookMissingURLEmailDispatcherConfig })
 	err := webhookMissingURLEmailDispatcher.Send(ctx, EmailDispatcherMessage{
 		To:      "user@example.com",
 		Subject: "Test",
@@ -937,7 +947,7 @@ func TestAuthEmailWebhookMissingURLAndDefaultTimeoutUnit(t *testing.T) {
 			TimeoutSeconds: 0, // Triggers timeout <= 0 branch
 		},
 	}
-	webhookZeroTimeoutEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return webhookZeroTimeoutEmailDispatcherConfig }, nil)
+	webhookZeroTimeoutEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return webhookZeroTimeoutEmailDispatcherConfig })
 	webhookZeroTimeoutEmailDispatcher.httpClient = nil // Triggers client == nil branch
 
 	err = webhookZeroTimeoutEmailDispatcher.Send(ctx, EmailDispatcherMessage{
@@ -964,7 +974,7 @@ func TestAuthEmailDefaultTLSContextAndHostPortFallbacksUnit(t *testing.T) {
 			PasswordConfigured: true,
 		},
 	}
-	smtpEmptyHostEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return smtpEmptyHostEmailDispatcherConfig }, nil)
+	smtpEmptyHostEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return smtpEmptyHostEmailDispatcherConfig })
 	if smtpEmptyHostEmailDispatcher.IsConfigured() {
 		t.Fatal("expected empty host/port to be unconfigured")
 	}
@@ -1001,7 +1011,7 @@ func TestAuthEmailDefaultTLSContextAndHostPortFallbacksUnit(t *testing.T) {
 			InsecureSkipVerify: true,
 		},
 	}
-	tlsEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return mockTLSEmailDispatcherConfig }, nil)
+	tlsEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return mockTLSEmailDispatcherConfig })
 	// tlsEmailDispatcher.dialTLS is nil, so it will execute the default dialTLSContext function and hit line 322!
 	tlsEmailDispatcherSendErr := tlsEmailDispatcher.Send(ctx, EmailDispatcherMessage{
 		To:      "user@example.com",
@@ -1023,7 +1033,7 @@ func TestAuthEmailDefaultTLSContextAndHostPortFallbacksUnit(t *testing.T) {
 			InsecureSkipVerify: true,
 		},
 	}
-	closedTLSEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return closedTLSEmailDispatcherConfig }, nil)
+	closedTLSEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return closedTLSEmailDispatcherConfig })
 	closedTLSEmailDispatcherSendErr := closedTLSEmailDispatcher.Send(ctx, EmailDispatcherMessage{
 		To:      "user@example.com",
 		Subject: "Test",
@@ -1043,7 +1053,7 @@ func TestAuthEmailWebhookClientDoErrorUnit(t *testing.T) {
 			TimeoutSeconds: 1,
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 	err := emailDispatcher.Send(ctx, EmailDispatcherMessage{
 		To:      "user@example.com",
 		Subject: "Test",
@@ -1105,7 +1115,7 @@ func TestAuthEmailSMTPDataWriteErrorUnit(t *testing.T) {
 			InsecureSkipVerify: true,
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 
 	ctx := context.Background()
 	sendErr := emailDispatcher.Send(ctx, EmailDispatcherMessage{
@@ -1149,7 +1159,7 @@ func TestAuthEmailSuspiciousActivityUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Unconfigured dispatcher returns ErrEmailDispatcherNotConfigured
-	unconfiguredEmailDispatcher := NewEmailDispatcher(nil, nil, nil)
+	unconfiguredEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil })
 	unconfErr := unconfiguredEmailDispatcher.SendSuspiciousActivity(ctx, "user@example.com", "usr_1", "127.0.0.1", "curl")
 	if !errors.Is(unconfErr, ErrEmailDispatcherNotConfigured) {
 		t.Fatalf("expected ErrEmailDispatcherNotConfigured, got: %v", unconfErr)
@@ -1171,7 +1181,8 @@ func TestAuthEmailSuspiciousActivityUnit(t *testing.T) {
 			URL: webhookServer.URL,
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 
 	// App name is empty -> defaults to "layr-app"
 	core.SetLoadedConfig(&core.Config{Project: core.ProjectConfig{Name: ""}})

@@ -46,7 +46,8 @@ func CheckPwnedPassword(ctx context.Context, httpClient HTTPClient, kvStore *cor
 	if kvStore != nil {
 		cachedContent, getErr := kvStore.Get(ctx, cacheKey)
 		if getErr == nil && cachedContent != "" {
-			return searchSuffix(cachedContent, suffix)
+			isBreached, count := searchSuffix(cachedContent, suffix)
+			return isBreached, count, nil
 		}
 	}
 
@@ -99,10 +100,11 @@ func CheckPwnedPassword(ctx context.Context, httpClient HTTPClient, kvStore *cor
 		_ = kvStore.Set(ctx, cacheKey, responseString, defaultCacheTTL)
 	}
 
-	return searchSuffix(responseString, suffix)
+	isBreached, count := searchSuffix(responseString, suffix)
+	return isBreached, count, nil
 }
 
-func searchSuffix(content string, suffix string) (bool, int64, error) {
+func searchSuffix(content string, suffix string) (bool, int64) {
 	lines := strings.Split(content, "\n")
 	for _, rawLine := range lines {
 		trimmedLine := strings.TrimSpace(rawLine)
@@ -115,8 +117,8 @@ func searchSuffix(content string, suffix string) (bool, int64, error) {
 			if parseErr != nil {
 				count = 1
 			}
-			return true, count, nil
+			return true, count
 		}
 	}
-	return false, 0, nil
+	return false, 0
 }

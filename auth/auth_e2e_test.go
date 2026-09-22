@@ -12,7 +12,7 @@ import (
 )
 
 func TestAuthAppUserLifecycleE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -21,15 +21,15 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 
-	service := NewService(db, cryptoKeyManager)
+	service := NewService(kernel)
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
-	coreServer := core.NewServer(db, cryptoKeyManager)
+	coreServer := core.NewServer(kernel)
 	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
+	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	userEmail := "e2e-app-user@example.com"
 	userPassword := "StrongSecurePassword123!#"
@@ -114,8 +114,8 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	signoutResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signoutResponseRecorder, signoutRequest)
 
-	if signoutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected logout 200 OK, got %d (body: %s)", signoutResponseRecorder.Code, signoutResponseRecorder.Body.String())
+	if signoutResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected logout 204 No Content, got %d (body: %s)", signoutResponseRecorder.Code, signoutResponseRecorder.Body.String())
 	}
 
 	// 6. Old Refresh Token Must Now Fail
@@ -131,7 +131,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 }
 
 func TestAuthSelfServiceSessionsE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -140,15 +140,15 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 
-	service := NewService(db, cryptoKeyManager)
+	service := NewService(kernel)
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
-	coreServer := core.NewServer(db, cryptoKeyManager)
+	coreServer := core.NewServer(kernel)
 	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
+	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	userEmail := "e2e-sessions-user@example.com"
 	userPassword := "SessionStrongPassword123!"
@@ -232,7 +232,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 }
 
 func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
@@ -241,23 +241,23 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 
-	service := NewService(db, cryptoKeyManager)
+	service := NewService(kernel)
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	activeConfig := service.configManager.Get()
 	activeConfig.Anonymous.Enabled = true
 	service.configManager.Set(activeConfig)
 
-	coreServer := core.NewServer(db, cryptoKeyManager)
+	coreServer := core.NewServer(kernel)
 	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
-	publishableKey := cryptoKeyManager.DerivePublishableKey()
+	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	// 1. Anonymous User Setup
 	anonUserID := "01918a24-7777-7000-8000-000000000007"
-	_, err := db.Exec(ctx, `
+	_, err := kernel.DB().Exec(ctx, `
 		INSERT INTO auth.users (id, email, phone, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}', clock_timestamp(), clock_timestamp())
 	`, anonUserID)
@@ -265,14 +265,11 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to insert anonymous test user: %v", err)
 	}
 
-	currentAccessToken, err := service.baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	currentAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	// 2. Inspect Anonymous Profile
 	initialProfileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user", nil)
@@ -317,7 +314,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 
 	// 5. Convert Anonymous User to Verified User by inserting/linking an email
 	claimedEmail := "e2e.converted@example.com"
-	_, err = db.Exec(ctx, `
+	_, err = kernel.DB().Exec(ctx, `
 		UPDATE auth.users
 		SET email = $1, is_anonymous = false, email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp()
 		WHERE id = $2

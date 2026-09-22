@@ -14,55 +14,13 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/testcontainers/testcontainers-go"
-	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"layr.sh/core"
 )
 
-const testMasterEncryptionKeyHex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-func setupTestDatabase(t *testing.T) (*core.DatabasePool, func()) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	postgresContainer, startErr := tcpostgres.Run(ctx,
-		"postgres:18-alpine",
-		tcpostgres.WithDatabase("layr_s3sigv4_test"),
-		tcpostgres.WithUsername("layr"),
-		tcpostgres.WithPassword("layr"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
-		),
-	)
-	if startErr != nil {
-		t.Skipf("failed to start postgres container: %v", startErr)
-		return nil, func() {}
-	}
-
-	databaseURL, connErr := postgresContainer.ConnectionString(ctx, "sslmode=disable")
-	if connErr != nil {
-		_ = postgresContainer.Terminate(context.Background())
-		t.Fatalf("failed to get connection string: %v", connErr)
-	}
-
-	db, dbErr := core.NewDatabasePool(ctx, databaseURL)
-	if dbErr != nil {
-		_ = postgresContainer.Terminate(context.Background())
-		t.Fatalf("failed to create database pool: %v", dbErr)
-	}
-
-	if migrateErr := db.RunMigrations(ctx, core.SystemDatabaseMigrations); migrateErr != nil {
-		db.Close()
-		_ = postgresContainer.Terminate(context.Background())
-		t.Fatalf("failed to run system migrations: %v", migrateErr)
-	}
-
-	const createS3CredentialsTableSQL = `
-		CREATE SCHEMA IF NOT EXISTS file_storage;
+var s3CredentialDatabaseMigration = core.DatabaseMigration{
+	Version:     300,
+	Description: "create_s3_credentials",
+	UpSQL: `CREATE SCHEMA IF NOT EXISTS file_storage;
 		CREATE TABLE IF NOT EXISTS file_storage.s3_credentials (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			service_account_id UUID NOT NULL REFERENCES core.service_accounts(id) ON DELETE CASCADE,
@@ -70,20 +28,8 @@ func setupTestDatabase(t *testing.T) (*core.DatabasePool, func()) {
 			encrypted_secret_key TEXT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 			last_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		);
-	`
-	if _, createSchemaErr := db.Exec(ctx, createS3CredentialsTableSQL); createSchemaErr != nil {
-		db.Close()
-		_ = postgresContainer.Terminate(context.Background())
-		t.Fatalf("failed to create s3_credentials table: %v", createSchemaErr)
-	}
-
-	cleanup := func() {
-		db.Close()
-		_ = postgresContainer.Terminate(context.Background())
-	}
-
-	return db, cleanup
+		);`,
+	DownSQL: `DROP TABLE IF EXISTS file_storage.s3_credentials;`,
 }
 
 func signTestRequest(
@@ -189,21 +135,15 @@ func signTestRequest(
 }
 
 func TestS3sigv4ValidationIntegration(t *testing.T) {
-	db, cleanup := setupTestDatabase(t)
-	if db == nil {
+	kernel, cleanup := core.SetupTestKernel(t, []core.DatabaseMigration{s3CredentialDatabaseMigration})
+	if kernel == nil {
 		return
 	}
 	defer cleanup()
 
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
 
-	createdServiceAccount, createErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+	createdServiceAccount, createErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name:   "sigv4-test-sa",
 		Scopes: []string{core.ScopeFileStorageBucketRead, core.ScopeFileStorageObjectRead},
 	})
@@ -218,7 +158,7 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 
 	accessKeyID := "AKIALAYRTEST12345678"
 	secretAccessKey := createdServiceAccount.SecretKey
-	encryptedSecretKey, encryptErr := cryptoKeyManager.EncryptField([]byte(secretAccessKey))
+	encryptedSecretKey, encryptErr := kernel.CryptoKeyManager().EncryptField([]byte(secretAccessKey))
 	if encryptErr != nil {
 		t.Fatalf("failed to encrypt secret key: %v", encryptErr)
 	}
@@ -228,11 +168,11 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 			service_account_id, access_key_id, encrypted_secret_key
 		) VALUES ($1, $2, $3);
 	`
-	if _, insertErr := db.Exec(ctx, insertCredentialSQL, serviceAccountUUID, accessKeyID, encryptedSecretKey); insertErr != nil {
+	if _, insertErr := kernel.DB().Exec(ctx, insertCredentialSQL, serviceAccountUUID, accessKeyID, encryptedSecretKey); insertErr != nil {
 		t.Fatalf("failed to insert s3 credential: %v", insertErr)
 	}
 
-	validator := NewValidator(db, cryptoKeyManager)
+	validator := NewValidator(kernel)
 
 	// 1. Valid Header Authentication
 	validHeaderRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
@@ -283,15 +223,9 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 		t.Fatalf("expected ErrSignatureDoesNotMatch, got: %v", mismatchErr)
 	}
 
-	// 6. Nil CryptoKeyManager
-	nilCryptoValidator := NewValidator(db, nil)
-	if _, nilCryptoErr := nilCryptoValidator.Validate(validHeaderRequest); nilCryptoErr == nil || !strings.Contains(nilCryptoErr.Error(), "crypto key manager unavailable") {
-		t.Fatalf("expected crypto key manager unavailable error, got: %v", nilCryptoErr)
-	}
-
 	// 7. Decrypt Error (corrupted encrypted secret key in database)
 	corruptedAccessKeyID := "AKIALAYRCORRUPTED001"
-	_, _ = db.Exec(ctx, insertCredentialSQL, serviceAccountUUID, corruptedAccessKeyID, "corrupted:cipher:payload")
+	_, _ = kernel.DB().Exec(ctx, insertCredentialSQL, serviceAccountUUID, corruptedAccessKeyID, "corrupted:cipher:payload")
 	corruptedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
 	signTestRequest(corruptedRequest, corruptedAccessKeyID, secretAccessKey, time.Now().UTC(), false)
 	if _, decryptErr := validator.Validate(corruptedRequest); decryptErr == nil || !strings.Contains(decryptErr.Error(), "failed to decrypt") {
@@ -300,7 +234,7 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 
 	// 8. Service Account Disabled
 	const disableSQL = `UPDATE core.service_accounts SET is_enabled = false WHERE id = $1;`
-	if _, disableErr := db.Exec(ctx, disableSQL, serviceAccountUUID); disableErr != nil {
+	if _, disableErr := kernel.DB().Exec(ctx, disableSQL, serviceAccountUUID); disableErr != nil {
 		t.Fatalf("failed to disable service account: %v", disableErr)
 	}
 	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
@@ -311,7 +245,7 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 
 	// 9. Service Account Expired
 	const expireSQL = `UPDATE core.service_accounts SET is_enabled = true, expires_at = now() - interval '1 hour' WHERE id = $1;`
-	if _, expireErr := db.Exec(ctx, expireSQL, serviceAccountUUID); expireErr != nil {
+	if _, expireErr := kernel.DB().Exec(ctx, expireSQL, serviceAccountUUID); expireErr != nil {
 		t.Fatalf("failed to expire service account: %v", expireErr)
 	}
 	expiredRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
@@ -322,7 +256,7 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 
 	// 10. Service Account IP Blocked & Allowed
 	const ipSQL = `UPDATE core.service_accounts SET expires_at = NULL, allowed_ips = '{"198.51.100.10"}' WHERE id = $1;`
-	if _, updateIPErr := db.Exec(ctx, ipSQL, serviceAccountUUID); updateIPErr != nil {
+	if _, updateIPErr := kernel.DB().Exec(ctx, ipSQL, serviceAccountUUID); updateIPErr != nil {
 		t.Fatalf("failed to update allowed_ips: %v", updateIPErr)
 	}
 	blockedIPRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
@@ -345,7 +279,7 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 
 	// 11. Service Account Deleted from DB (cascading credential delete)
 	const deleteSQL = `DELETE FROM core.service_accounts WHERE id = $1;`
-	if _, deleteAccountErr := db.Exec(ctx, deleteSQL, serviceAccountUUID); deleteAccountErr != nil {
+	if _, deleteAccountErr := kernel.DB().Exec(ctx, deleteSQL, serviceAccountUUID); deleteAccountErr != nil {
 		t.Fatalf("failed to delete service account: %v", deleteAccountErr)
 	}
 	deletedAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
@@ -355,11 +289,11 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 	}
 
 	// 12. Orphan S3 Credential (Service Account row not found in DB)
-	_, _ = db.Exec(ctx, "ALTER TABLE file_storage.s3_credentials DROP CONSTRAINT IF EXISTS s3_credentials_service_account_id_fkey;")
+	_, _ = kernel.DB().Exec(ctx, "ALTER TABLE file_storage.s3_credentials DROP CONSTRAINT IF EXISTS s3_credentials_service_account_id_fkey;")
 	orphanAccountUUID := uuid.NewV7()
 	orphanAccessKeyID := "AKIALAYRORPHAN12345"
-	encryptedOrphanSecret, _ := cryptoKeyManager.EncryptField([]byte("orphan-secret-key-12345678"))
-	_, _ = db.Exec(ctx, insertCredentialSQL, orphanAccountUUID, orphanAccessKeyID, encryptedOrphanSecret)
+	encryptedOrphanSecret, _ := kernel.CryptoKeyManager().EncryptField([]byte("orphan-secret-key-12345678"))
+	_, _ = kernel.DB().Exec(ctx, insertCredentialSQL, orphanAccountUUID, orphanAccessKeyID, encryptedOrphanSecret)
 	orphanRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/my-bucket/file.txt", nil)
 	signTestRequest(orphanRequest, orphanAccessKeyID, "orphan-secret-key-12345678", time.Now().UTC(), false)
 	if _, orphanErr := validator.Validate(orphanRequest); !errors.Is(orphanErr, core.ErrServiceAccountNotFound) {
@@ -376,15 +310,15 @@ func TestS3sigv4ValidationIntegration(t *testing.T) {
 	}
 
 	// 14. Empty canonical URI and nil body without X-Amz-Content-Sha256
-	secondServiceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+	secondServiceAccount, _ := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name:   "sigv4-second-sa",
 		Scopes: []string{core.ScopeFileStorageBucketRead},
 	})
 	secondServiceAccountUUID, _ := uuid.Parse(secondServiceAccount.ID)
 	secondAccessKeyID := "AKIALAYRSECOND12345"
 	secondSecret := secondServiceAccount.SecretKey
-	encryptedSecondSecret, _ := cryptoKeyManager.EncryptField([]byte(secondSecret))
-	_, _ = db.Exec(ctx, insertCredentialSQL, secondServiceAccountUUID, secondAccessKeyID, encryptedSecondSecret)
+	encryptedSecondSecret, _ := kernel.CryptoKeyManager().EncryptField([]byte(secondSecret))
+	_, _ = kernel.DB().Exec(ctx, insertCredentialSQL, secondServiceAccountUUID, secondAccessKeyID, encryptedSecondSecret)
 
 	emptyURIRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "http://example.com", nil)
 	emptyURIRequest.URL.Path = ""

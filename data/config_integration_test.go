@@ -3,17 +3,16 @@ package data
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestDataConfigPostgresIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db)
+	configManager := NewConfigManager(kernel)
 
 	// 1. Initial Load when key 'runtime' does not exist -> seeds DefaultConfig
 	if err := configManager.Load(ctx); err != nil {
@@ -35,7 +34,7 @@ func TestDataConfigPostgresIntegration(t *testing.T) {
 		t.Fatalf("failed to set custom config: %v", err)
 	}
 
-	freshConfigManager := NewConfigManager(db)
+	freshConfigManager := NewConfigManager(kernel)
 	if err := freshConfigManager.Load(ctx); err != nil {
 		t.Fatalf("failed fresh Load: %v", err)
 	}
@@ -56,7 +55,7 @@ func TestDataConfigPostgresIntegration(t *testing.T) {
 
 	// 4. Corrupt JSON in database causes Load to return error
 	const corruptSQLStatement = `UPDATE data.config SET value = '"invalid json string not object"'::jsonb WHERE key = 'runtime'`
-	if _, execErr := db.Exec(ctx, corruptSQLStatement); execErr != nil {
+	if _, execErr := kernel.DB().Exec(ctx, corruptSQLStatement); execErr != nil {
 		t.Fatalf("failed to corrupt config JSON: %v", execErr)
 	}
 	if err := configManager.Load(ctx); err == nil {

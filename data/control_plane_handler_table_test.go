@@ -12,9 +12,8 @@ import (
 
 func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	service := NewService(nil)
-	service.SetServiceAccountManager(serviceAccountManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden ListTables
@@ -65,7 +64,8 @@ func TestDataControlPlaneHandlerTableScopeForbiddenUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerTableValidationAndMissingParamsUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Malformed JSON on CreateTable

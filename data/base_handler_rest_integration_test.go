@@ -15,24 +15,16 @@ import (
 )
 
 func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, nil)
-	defer eventBus.Close()
+	db := kernel.DB()
+	serviceAccountManager := kernel.ServiceAccountManager()
 
-	service := NewService(db)
-	inMemoryKVStore := newInMemoryKVStore()
-	service.SetKVStore(inMemoryKVStore)
-	service.SetServiceAccountManager(serviceAccountManager)
-	service.SetEventBus(eventBus)
+	service := NewService(kernel)
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	baseHandler := service.BaseHandler()
 
@@ -103,7 +95,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	tableConfig := service.GetConfigManager().Get()
 	tableConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(tableConfig)
-	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
+	_ = kernel.KVStore().Set(ctx, "cache:query_count", "5", 0)
 	capListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?limit=2", nil)
 	capListRequest.SetPathValue("schema_name", "public")
 	capListRequest.SetPathValue("table_name", "items")
@@ -248,27 +240,27 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	// 14. Service account RLS bypass
 	serviceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Bypass SA",
-		Scopes: []string{"data:query.read", "data:query.write"},
+		Scopes: []string{core.ScopeDataQueryRead, core.ScopeDataQueryWrite},
 	})
 	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountRequest.SetPathValue("schema_name", "public")
 	serviceAccountRequest.SetPathValue("table_name", "items")
 	serviceAccountRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
-	assert.True(t, baseHandler.isRLSBypassed(serviceAccountRequest, "data:query.read"))
+	assert.True(t, baseHandler.isRLSBypassed(serviceAccountRequest, core.ScopeDataQueryRead))
 
 	// SA without scope
 	noScopeServiceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "No Read Scope",
-		Scopes: []string{"auth:users.read"},
+		Scopes: []string{core.ScopeAuthUserRead},
 	})
 	serviceAccountNoScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountNoScopeRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
-	assert.False(t, baseHandler.isRLSBypassed(serviceAccountNoScopeRequest, "data:query.read"))
+	assert.False(t, baseHandler.isRLSBypassed(serviceAccountNoScopeRequest, core.ScopeDataQueryRead))
 
 	// SA invalid key
 	serviceAccountBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountBadRequest.Header.Set("Authorization", "Bearer invalid_secret_key_12345678901234567890")
-	assert.False(t, baseHandler.isRLSBypassed(serviceAccountBadRequest, "data:query.read"))
+	assert.False(t, baseHandler.isRLSBypassed(serviceAccountBadRequest, core.ScopeDataQueryRead))
 
 	// 15. resolveTransaction rollback
 	tx, err := db.Begin(ctx)
@@ -568,26 +560,17 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 }
 
 func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, nil)
-	defer eventBus.Close()
 
-	service := NewService(db)
-	inMemoryKVStore := newInMemoryKVStore()
-	service.SetKVStore(inMemoryKVStore)
-	service.SetServiceAccountManager(serviceAccountManager)
-	service.SetEventBus(eventBus)
+	service := NewService(kernel)
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	baseHandler := service.BaseHandler()
+	db := kernel.DB()
 
 	// 1. Scalar echo function via POST (flat JSON payload)
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.echo_test(msg text) RETURNS text LANGUAGE sql AS $$ SELECT msg $$;`)

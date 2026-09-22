@@ -102,9 +102,61 @@ func TestCoreServiceAccountExtractRequestKeyUnit(t *testing.T) {
 		t.Fatalf("expected 0123456789abcdef0123456789abcdef, got %s", key)
 	}
 
+	// ExtractRequestServiceAccountKey ignores JWT bearer tokens (2 dots)
+	jwtBearerHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	jwtBearerHeaderRequest.Header.Set("Authorization", "Bearer header.payload.signature")
+	if key := ExtractRequestServiceAccountKey(jwtBearerHeaderRequest); key != "" {
+		t.Fatalf("expected empty key for JWT bearer header, got %s", key)
+	}
+
 	// ExtractRequestServiceAccountKey with no headers
 	noHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	if key := ExtractRequestServiceAccountKey(noHeaderRequest); key != "" {
 		t.Fatalf("expected empty key, got %s", key)
+	}
+}
+
+func TestCoreServiceAccountCheckScopeAndRequireScopeUnit(t *testing.T) {
+	serviceAccountManager := &ServiceAccountManager{}
+
+	// 1. AuthContext is service account and has scope -> true
+	serviceAccountCtx := WithAuthContext(context.Background(), AuthContext{
+		ServiceAccountID: "sa-1",
+		JWT: JWTClaims{
+			Scope: ScopeAuthUserRead,
+		},
+	})
+	serviceAccountRequest := httptest.NewRequestWithContext(serviceAccountCtx, http.MethodGet, "/", nil)
+	if !serviceAccountManager.CheckScope(serviceAccountRequest, ScopeAuthUserRead) {
+		t.Fatal("expected CheckScope to pass when auth context has scope")
+	}
+	serviceAccountResponseRecorder := httptest.NewRecorder()
+	if !serviceAccountManager.RequireScope(serviceAccountResponseRecorder, serviceAccountRequest, ScopeAuthUserRead) {
+		t.Fatal("expected RequireScope to pass when auth context has scope")
+	}
+	if serviceAccountResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 (recorder unchanged), got %d", serviceAccountResponseRecorder.Code)
+	}
+
+	// 2. AuthContext is service account and lacks scope -> false
+	if serviceAccountManager.CheckScope(serviceAccountRequest, ScopeAuthUserWrite) {
+		t.Fatal("expected CheckScope to fail when auth context lacks scope")
+	}
+	failResponseRecorder := httptest.NewRecorder()
+	if serviceAccountManager.RequireScope(failResponseRecorder, serviceAccountRequest, ScopeAuthUserWrite) {
+		t.Fatal("expected RequireScope to fail when auth context lacks scope")
+	}
+	if failResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", failResponseRecorder.Code)
+	}
+
+	// 3. No secret key extracted -> returns true
+	noKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	if !serviceAccountManager.CheckScope(noKeyRequest, "any:scope") {
+		t.Fatal("expected CheckScope to return true when no secret key in request")
+	}
+	noKeyResponseRecorder := httptest.NewRecorder()
+	if !serviceAccountManager.RequireScope(noKeyResponseRecorder, noKeyRequest, "any:scope") {
+		t.Fatal("expected RequireScope to return true when no secret key in request")
 	}
 }

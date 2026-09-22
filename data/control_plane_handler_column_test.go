@@ -12,9 +12,8 @@ import (
 
 func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	service := NewService(nil)
-	service.SetServiceAccountManager(serviceAccountManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden AddColumn
@@ -47,7 +46,7 @@ func TestDataControlPlaneHandlerColumnScopeForbiddenUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerColumnValidationAndMissingParamsUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	service := NewService(core.NewTestKernel(nil))
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Missing parameters on AddColumn

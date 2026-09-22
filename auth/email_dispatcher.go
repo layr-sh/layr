@@ -144,21 +144,19 @@ type EmailDispatcherMessage struct {
 
 // EmailDispatcher handles sending transactional emails via SMTP or Webhook.
 type EmailDispatcher struct {
-	db               *core.DatabasePool
-	resolveConfig    func() *EmailDispatcherConfig
-	cryptoKeyManager *core.CryptoKeyManager
-	httpClient       *http.Client
-	dialTCP          func(ctx context.Context, network, address string) (net.Conn, error)
-	dialTLS          func(ctx context.Context, network, address string, tlsConfig *tls.Config) (*tls.Conn, error)
+	kernel        *core.Kernel
+	resolveConfig func() *EmailDispatcherConfig
+	httpClient    *http.Client
+	dialTCP       func(ctx context.Context, network, address string) (net.Conn, error)
+	dialTLS       func(ctx context.Context, network, address string, tlsConfig *tls.Config) (*tls.Conn, error)
 }
 
-// NewEmailDispatcher initializes an EmailDispatcher with the provided database pool, configuration resolver, and key manager.
-func NewEmailDispatcher(db *core.DatabasePool, resolveConfig func() *EmailDispatcherConfig, cryptoKeyManager *core.CryptoKeyManager) *EmailDispatcher {
+// NewEmailDispatcher initializes an EmailDispatcher with the kernel and configuration resolver.
+func NewEmailDispatcher(kernel *core.Kernel, resolveConfig func() *EmailDispatcherConfig) *EmailDispatcher {
 	return &EmailDispatcher{
-		db:               db,
-		resolveConfig:    resolveConfig,
-		cryptoKeyManager: cryptoKeyManager,
-		httpClient:       &http.Client{Timeout: defaultEmailHTTPTimeout},
+		kernel:        kernel,
+		resolveConfig: resolveConfig,
+		httpClient:    &http.Client{Timeout: defaultEmailHTTPTimeout},
 	}
 }
 
@@ -186,7 +184,7 @@ func IsEmailDeliveryReady(emailDispatcherConfig EmailDispatcherConfig) bool {
 
 // IsConfigured returns whether email delivery is ready.
 func (dispatcher *EmailDispatcher) IsConfigured() bool {
-	if dispatcher.resolveConfig == nil {
+	if dispatcher == nil || dispatcher.resolveConfig == nil {
 		return false
 	}
 	emailDispatcherConfig := dispatcher.resolveConfig()
@@ -316,11 +314,8 @@ func (dispatcher *EmailDispatcher) SendSuspiciousActivity(ctx context.Context, t
 }
 
 func (dispatcher *EmailDispatcher) queryDBEmailTemplate(ctx context.Context, emailDispatcherMessageKind EmailDispatcherMessageKind, recipient, code, userID string) (string, string, string, bool) {
-	if dispatcher.db == nil {
-		return "", "", "", false
-	}
 	var procedureName *string
-	_ = dispatcher.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_email_template(text,text,text,uuid)')::text").Scan(&procedureName)
+	_ = dispatcher.kernel.DB().QueryRow(ctx, "SELECT to_regprocedure('public.auth_email_template(text,text,text,uuid)')::text").Scan(&procedureName)
 	if procedureName == nil || *procedureName == "" {
 		return "", "", "", false
 	}
@@ -329,7 +324,7 @@ func (dispatcher *EmailDispatcher) queryDBEmailTemplate(ctx context.Context, ema
 		userIDParam = userID
 	}
 	var templateJSON []byte
-	err := dispatcher.db.QueryRow(ctx, "SELECT public.auth_email_template($1, $2, $3, $4::uuid)", string(emailDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
+	err := dispatcher.kernel.DB().QueryRow(ctx, "SELECT public.auth_email_template($1, $2, $3, $4::uuid)", string(emailDispatcherMessageKind), recipient, code, userIDParam).Scan(&templateJSON)
 	if err == nil && len(templateJSON) > 0 && !bytes.Equal(templateJSON, []byte("null")) {
 		var hookResult struct {
 			Subject string `json:"subject"`
@@ -527,7 +522,7 @@ func (dispatcher *EmailDispatcher) Send(ctx context.Context, emailDispatcherMess
 	}
 
 	if emailDispatcherMessage.SenderName == "" {
-		if emailDispatcherConfig != nil && emailDispatcherConfig.SenderName != "" {
+		if emailDispatcherConfig.SenderName != "" {
 			emailDispatcherMessage.SenderName = emailDispatcherConfig.SenderName
 		} else {
 			appName := core.GetConfig().Project.Name
@@ -625,10 +620,9 @@ func (dispatcher *EmailDispatcher) sendViaSMTP(ctx context.Context, emailDispatc
 		}
 	}
 
-	// Authenticate if credentials provided
 	password := emailDispatcherSMTPConfig.Password
-	if password != "" && strings.HasPrefix(password, "enc:v1:") && dispatcher.cryptoKeyManager != nil {
-		decrypted, decryptErr := dispatcher.cryptoKeyManager.DecryptField(password)
+	if password != "" && strings.HasPrefix(password, "enc:v1:") {
+		decrypted, decryptErr := dispatcher.kernel.CryptoKeyManager().DecryptField(password)
 		if decryptErr != nil {
 			return fmt.Errorf("failed to decrypt smtp password: %w", decryptErr)
 		}
@@ -715,8 +709,8 @@ func (dispatcher *EmailDispatcher) sendViaWebhook(ctx context.Context, emailDisp
 	}
 
 	signingSecret := emailDispatcherWebhookConfig.SigningSecret
-	if signingSecret != "" && strings.HasPrefix(signingSecret, "enc:v1:") && dispatcher.cryptoKeyManager != nil {
-		decrypted, err := dispatcher.cryptoKeyManager.DecryptField(signingSecret)
+	if signingSecret != "" && strings.HasPrefix(signingSecret, "enc:v1:") {
+		decrypted, err := dispatcher.kernel.CryptoKeyManager().DecryptField(signingSecret)
 		if err != nil {
 			return fmt.Errorf("failed to decrypt webhook signing secret: %w", err)
 		}

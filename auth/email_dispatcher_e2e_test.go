@@ -16,7 +16,7 @@ import (
 
 func TestAuthEmailUnconfiguredPasswordResetE2E(t *testing.T) {
 	ctx := context.Background()
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil }, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil })
 
 	err := emailDispatcher.SendPasswordReset(ctx, "recipient@example.com", "123456", "user-uuid")
 	if err != ErrEmailDispatcherNotConfigured {
@@ -26,9 +26,7 @@ func TestAuthEmailUnconfiguredPasswordResetE2E(t *testing.T) {
 
 func TestAuthEmailUnconfiguredOTPSendE2E(t *testing.T) {
 	ctx := context.Background()
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		return &EmailDispatcherConfig{Driver: nil}
-	}, nil)
+	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return nil })
 
 	err := emailDispatcher.SendSignInOTP(ctx, "recipient@example.com", "123456", "user-uuid")
 	if err != ErrEmailDispatcherNotConfigured {
@@ -110,7 +108,7 @@ func TestAuthEmailPasswordResetDispatchE2E(t *testing.T) {
 	}
 
 	smtpPort := listener.Addr().(*net.TCPAddr).Port
-	emailDispatcherConfig := &EmailDispatcherConfig{
+	emailDispatcherConfig := EmailDispatcherConfig{
 		Driver:      stringPointer("smtp"),
 		SenderEmail: "system@layr.sh",
 		SenderName:  "Layr Security",
@@ -124,7 +122,8 @@ func TestAuthEmailPasswordResetDispatchE2E(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &emailDispatcherConfig })
 	sendErr := emailDispatcher.SendPasswordReset(ctx, "user@example.com", "987654", "user-uuid")
 	if sendErr != nil {
 		t.Fatalf("failed to send password reset: %v", sendErr)
@@ -213,7 +212,7 @@ func TestAuthEmailSignInOTPDispatchE2E(t *testing.T) {
 	}
 
 	smtpPort := listener.Addr().(*net.TCPAddr).Port
-	emailDispatcherConfig := &EmailDispatcherConfig{
+	emailDispatcherConfig := EmailDispatcherConfig{
 		Driver:      stringPointer("smtp"),
 		SenderEmail: "system@layr.sh",
 		SMTP: EmailDispatcherSMTPConfig{
@@ -226,7 +225,8 @@ func TestAuthEmailSignInOTPDispatchE2E(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &emailDispatcherConfig })
 	sendErr := emailDispatcher.SendSignInOTP(ctx, "user@example.com", "555123", "user-uuid")
 	if sendErr != nil {
 		t.Fatalf("failed to send sign-in otp: %v", sendErr)
@@ -279,7 +279,7 @@ func TestAuthEmailWebhookDispatchE2E(t *testing.T) {
 		t.Fatalf("failed to encrypt signing secret: %v", err)
 	}
 
-	emailDispatcherConfig := &EmailDispatcherConfig{
+	emailDispatcherConfig := EmailDispatcherConfig{
 		Driver:      stringPointer("webhook"),
 		SenderEmail: "system@layr.sh",
 		Webhook: EmailDispatcherWebhookConfig{
@@ -289,7 +289,8 @@ func TestAuthEmailWebhookDispatchE2E(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &emailDispatcherConfig })
 	sendErr := emailDispatcher.SendEmailVerification(ctx, "verify-user@example.com", "777888", "user-uuid")
 	if sendErr != nil {
 		t.Fatalf("failed to dispatch email verification via webhook: %v", sendErr)
@@ -321,7 +322,7 @@ func TestAuthEmailDeliveryFailureErrorE2E(t *testing.T) {
 	}
 
 	// Unroutable blackhole TCP port to trigger dial failure
-	emailDispatcherConfig := &EmailDispatcherConfig{
+	emailDispatcherConfig := EmailDispatcherConfig{
 		Driver:      stringPointer("smtp"),
 		SenderEmail: "system@layr.sh",
 		SMTP: EmailDispatcherSMTPConfig{
@@ -334,7 +335,8 @@ func TestAuthEmailDeliveryFailureErrorE2E(t *testing.T) {
 		},
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &emailDispatcherConfig })
 	err = emailDispatcher.SendPasswordReset(ctx, "user@example.com", "123456", "user-uuid")
 	if err == nil {
 		t.Fatal("expected delivery failure error when SMTP server is unreachable")

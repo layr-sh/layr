@@ -13,7 +13,7 @@ import (
 
 // handleDownloadObject handles GET /v1/file-storage/objects/{bucket}/{key...}.
 func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.ResponseWriter, request *http.Request) {
-	if baseHandler.configManager != nil && !baseHandler.configManager.Get().Enabled {
+	if !baseHandler.configManager.Get().Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "download object rejected: file storage is disabled in configuration")
 		return
 	}
@@ -84,7 +84,7 @@ func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.Respons
 
 // handleHeadObject handles HEAD /v1/file-storage/objects/{bucket}/{key...}.
 func (baseHandler *BaseHandler) handleHeadObject(responseWriter http.ResponseWriter, request *http.Request) {
-	if baseHandler.configManager != nil && !baseHandler.configManager.Get().Enabled {
+	if !baseHandler.configManager.Get().Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "head object rejected: file storage is disabled in configuration")
 		return
 	}
@@ -138,7 +138,7 @@ func (baseHandler *BaseHandler) handleHeadObject(responseWriter http.ResponseWri
 
 // handleUploadObject handles PUT/POST /v1/file-storage/objects/{bucket}/{key...}.
 func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseWriter, request *http.Request) {
-	if baseHandler.configManager != nil && !baseHandler.configManager.Get().Enabled {
+	if !baseHandler.configManager.Get().Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "upload object rejected: file storage is disabled in configuration")
 		return
 	}
@@ -203,12 +203,12 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 		return
 	}
 
-	baseHandler.writeJSON(responseWriter, http.StatusCreated, uploadedObject)
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, uploadedObject)
 }
 
 // handleDeleteObject handles DELETE /v1/file-storage/objects/{bucket}/{key...}.
 func (baseHandler *BaseHandler) handleDeleteObject(responseWriter http.ResponseWriter, request *http.Request) {
-	if baseHandler.configManager != nil && !baseHandler.configManager.Get().Enabled {
+	if !baseHandler.configManager.Get().Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "delete object rejected: file storage is disabled in configuration")
 		return
 	}

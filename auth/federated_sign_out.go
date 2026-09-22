@@ -32,7 +32,7 @@ func dispatchBackChannelSignOut(
 	clients []OIDCClientConfig,
 	targets []ClientSessionInfo,
 ) {
-	if httpClient == nil || jwtSigner == nil || len(targets) == 0 {
+	if httpClient == nil || len(targets) == 0 {
 		return
 	}
 

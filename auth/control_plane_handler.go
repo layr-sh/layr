@@ -1,104 +1,13 @@
 package auth
 
-import (
-	"encoding/json"
-	"net/http"
-	"strings"
-	"time"
-
-	"layr.sh/auth/password"
-	"layr.sh/core"
-)
-
 // ControlPlaneHandler exposes protected user and session management endpoints for the control plane.
 type ControlPlaneHandler struct {
-	db                    *core.DatabasePool
-	configManager         *ConfigManager
-	hasher                *password.Hasher
-	kvStore               *core.KVStore
-	serviceAccountManager *core.ServiceAccountManager
-	eventBus              *core.EventBus
-	jwtSigner             *core.JWTSigner
-	httpClient            HTTPClient
+	*Service
 }
 
-// NewControlPlaneHandler creates a control plane handler for auth endpoints.
-func NewControlPlaneHandler(db *core.DatabasePool, configManager *ConfigManager) *ControlPlaneHandler {
+// NewControlPlaneHandler creates a control plane handler for auth endpoints extending Service.
+func NewControlPlaneHandler(service *Service) *ControlPlaneHandler {
 	return &ControlPlaneHandler{
-		db:            db,
-		configManager: configManager,
-		hasher:        password.NewHasher(),
-		httpClient:    &http.Client{Timeout: 5 * time.Second},
+		Service: service,
 	}
-}
-
-// SetJWTSigner sets the JWT signer for generating sign-out tokens.
-func (controlPlaneHandler *ControlPlaneHandler) SetJWTSigner(jwtSigner *core.JWTSigner) {
-	controlPlaneHandler.jwtSigner = jwtSigner
-}
-
-// SetHTTPClient sets the HTTP client for outbound federated sign-out notifications.
-func (controlPlaneHandler *ControlPlaneHandler) SetHTTPClient(httpClient HTTPClient) {
-	controlPlaneHandler.httpClient = httpClient
-}
-
-// SetKVStore sets the KV store for session cache invalidation.
-func (controlPlaneHandler *ControlPlaneHandler) SetKVStore(kvStore *core.KVStore) {
-	controlPlaneHandler.kvStore = kvStore
-}
-
-// SetServiceAccountManager sets the service account manager for scope authorization.
-func (controlPlaneHandler *ControlPlaneHandler) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	controlPlaneHandler.serviceAccountManager = serviceAccountManager
-}
-
-// SetEventBus sets the system event bus.
-func (controlPlaneHandler *ControlPlaneHandler) SetEventBus(eventBus *core.EventBus) {
-	controlPlaneHandler.eventBus = eventBus
-}
-
-// SetHasher sets the password hasher.
-func (controlPlaneHandler *ControlPlaneHandler) SetHasher(hasher *password.Hasher) {
-	controlPlaneHandler.hasher = hasher
-}
-
-// checkScope verifies if the incoming request satisfies the required permission scope.
-func (controlPlaneHandler *ControlPlaneHandler) checkScope(request *http.Request, requiredScope string) bool {
-	authContext := core.GetAuthContext(request.Context())
-	if authContext.IsServiceAccount() {
-		return authContext.HasScope(requiredScope)
-	}
-	if controlPlaneHandler.serviceAccountManager == nil {
-		return true
-	}
-	secretKey := core.ExtractRequestServiceAccountKey(request)
-	if secretKey == "" {
-		return true
-	}
-	clientIP := core.ExtractRequestClientIP(request)
-	serviceAccount, err := controlPlaneHandler.serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
-	if err != nil {
-		return false
-	}
-	return core.HasScope(serviceAccount.Scopes, requiredScope)
-}
-
-func (controlPlaneHandler *ControlPlaneHandler) writeJSON(responseWriter http.ResponseWriter, statusCode int, payload any) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(statusCode)
-	_ = json.NewEncoder(responseWriter).Encode(payload)
-}
-
-func (controlPlaneHandler *ControlPlaneHandler) extractUserID(request *http.Request) string {
-	userID := request.PathValue("user_id")
-	if userID != "" {
-		return userID
-	}
-	pathSegments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
-	for i, segment := range pathSegments {
-		if segment == "users" && i+1 < len(pathSegments) {
-			return pathSegments[i+1]
-		}
-	}
-	return ""
 }

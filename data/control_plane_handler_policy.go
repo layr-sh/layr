@@ -10,8 +10,7 @@ import (
 
 // handleListPolicies lists all Row-Level Security policies on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -24,7 +23,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListPoliciesResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, ListPoliciesResponse{
 		Policies: policies,
 		Count:    len(policies),
 	})
@@ -32,8 +31,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 
 // handleCreatePolicy creates a new Row-Level Security policy on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -51,17 +49,15 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := schema + "." + table
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "create_policy",
-			Detail: createPolicyInput.Name,
-		}))
-	}
+	tableID := schema + "." + table
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "create_policy",
+		Detail: createPolicyInput.Name,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreatePolicyResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreatePolicyResponse{
 		Status: "created",
 		Policy: createPolicyInput.Name,
 	})
@@ -69,8 +65,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 
 // handleDeletePolicy drops a Row-Level Security policy from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -84,17 +79,15 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := schema + "." + table
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "drop_policy",
-			Detail: policyName,
-		}))
-	}
+	tableID := schema + "." + table
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "drop_policy",
+		Detail: policyName,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeletePolicyResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, DeletePolicyResponse{
 		Status: "deleted",
 		Policy: policyName,
 	})
@@ -102,8 +95,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 
 // handleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
 func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -140,15 +132,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, enableErr.Error())
 			return
 		}
-		if controlPlaneHandler.eventBus != nil {
-			controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
-				Schema: schema,
-				Table:  table,
-				Action: "toggle_rls",
-				Detail: "enabled",
-			}))
-		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
+		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
+			Schema: schema,
+			Table:  table,
+			Action: "toggle_rls",
+			Detail: "enabled",
+		}))
+		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "enabled",
 			Mode:   "ENABLE",
 		})
@@ -157,15 +147,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, disableErr.Error())
 			return
 		}
-		if controlPlaneHandler.eventBus != nil {
-			controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
-				Schema: schema,
-				Table:  table,
-				Action: "toggle_rls",
-				Detail: "disabled",
-			}))
-		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
+		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
+			Schema: schema,
+			Table:  table,
+			Action: "toggle_rls",
+			Detail: "disabled",
+		}))
+		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "disabled",
 			Mode:   "DISABLE",
 		})
@@ -179,15 +167,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 		if !force {
 			status = "unforced"
 		}
-		if controlPlaneHandler.eventBus != nil {
-			controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
-				Schema: schema,
-				Table:  table,
-				Action: "toggle_rls",
-				Detail: status,
-			}))
-		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
+		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
+			Schema: schema,
+			Table:  table,
+			Action: "toggle_rls",
+			Detail: status,
+		}))
+		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: status,
 			Mode:   "FORCE",
 		})
@@ -196,15 +182,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, unforceErr.Error())
 			return
 		}
-		if controlPlaneHandler.eventBus != nil {
-			controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
-				Schema: schema,
-				Table:  table,
-				Action: "toggle_rls",
-				Detail: "unforced",
-			}))
-		}
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ToggleRLSResponse{
+		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
+			Schema: schema,
+			Table:  table,
+			Action: "toggle_rls",
+			Detail: "unforced",
+		}))
+		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "unforced",
 			Mode:   "UNFORCE",
 		})

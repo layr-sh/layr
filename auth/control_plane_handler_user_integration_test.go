@@ -16,13 +16,14 @@ import (
 )
 
 func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
+	serviceAccountManager := kernel.ServiceAccountManager()
+	service := NewService(kernel)
+	kvStore := kernel.KVStore()
+	db := kernel.DB()
 
 	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Auth Control Plane Service Account",
@@ -32,16 +33,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 		t.Fatalf("failed to create service account: %v", err)
 	}
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	controlPlaneHandler.SetKVStore(kvStore)
-	controlPlaneHandler.SetEventBus(eventBus)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	jwtSigner, signerErr := core.NewJWTSigner(cryptoKeyManager)
-	if signerErr != nil {
-		t.Fatalf("failed to create jwt signer: %v", signerErr)
-	}
-	controlPlaneHandler.SetJWTSigner(jwtSigner)
+	controlPlaneHandler := service.controlPlaneHandler
 
 	authBearerHeader := "Bearer " + createdServiceAccount.SecretKey
 
@@ -104,6 +96,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 
 	// 4. Get User by ID
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+createdUser.ID, nil)
+	getRequest.SetPathValue("user_id", createdUser.ID)
 	getRequest.Header.Set("Authorization", authBearerHeader)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(getResponseRecorder, getRequest)
@@ -115,6 +108,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	// Get non-existent user returns 404
 	randomID := uuid.NewV7().String()
 	notFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID, nil)
+	notFoundRequest.SetPathValue("user_id", randomID)
 	notFoundRequest.Header.Set("Authorization", authBearerHeader)
 	notFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(notFoundResponseRecorder, notFoundRequest)
@@ -132,6 +126,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	futureLockTime := time.Now().Add(48 * time.Hour).UTC()
 	lockPayload, _ := json.Marshal(map[string]any{"locked_until": futureLockTime.Format(time.RFC3339)})
 	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+createdUser.ID+"/lock", bytes.NewReader(lockPayload))
+	lockRequest.SetPathValue("user_id", createdUser.ID)
 	lockRequest.Header.Set("Authorization", authBearerHeader)
 	lockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockResponseRecorder, lockRequest)
@@ -141,6 +136,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+createdUser.ID+"/lock", nil)
+	unlockRequest.SetPathValue("user_id", createdUser.ID)
 	unlockRequest.Header.Set("Authorization", authBearerHeader)
 	unlockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockResponseRecorder, unlockRequest)
@@ -151,18 +147,20 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 
 	// 6. Delete User
 	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+createdUser.ID, nil)
+	deleteRequest.SetPathValue("user_id", createdUser.ID)
 	deleteRequest.Header.Set("Authorization", authBearerHeader)
 	deleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteResponseRecorder, deleteRequest)
 
-	if deleteResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from handleDeleteUser, got: %d", deleteResponseRecorder.Code)
+	if deleteResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content from handleDeleteUser, got: %d", deleteResponseRecorder.Code)
 	}
 
 	// 7. Non-existent User Operations (Delete, Lock, Unlock -> 404)
 	nonExistentUUID := uuid.NewV7().String()
 
 	deleteNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+nonExistentUUID, nil)
+	deleteNotFoundRequest.SetPathValue("user_id", nonExistentUUID)
 	deleteNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	deleteNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteNotFoundResponseRecorder, deleteNotFoundRequest)
@@ -171,6 +169,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	lockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+nonExistentUUID+"/lock", strings.NewReader(`{}`))
+	lockNotFoundRequest.SetPathValue("user_id", nonExistentUUID)
 	lockNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	lockNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockNotFoundResponseRecorder, lockNotFoundRequest)
@@ -179,6 +178,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	}
 
 	unlockNotFoundRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+nonExistentUUID+"/lock", nil)
+	unlockNotFoundRequest.SetPathValue("user_id", nonExistentUUID)
 	unlockNotFoundRequest.Header.Set("Authorization", authBearerHeader)
 	unlockNotFoundResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockNotFoundResponseRecorder, unlockNotFoundRequest)
@@ -223,15 +223,9 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 }
 
 func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
-	brokenDB := createBrokenPool(t)
-	if brokenDB == nil {
-		t.Skip("skipping broken pool test")
-		return
-	}
-
-	cryptoKeyManager, _ := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	configManager := NewConfigManager(brokenDB, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(brokenDB, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 	randomID := uuid.NewV7().String()
 
 	ctx := context.Background()
@@ -254,6 +248,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 
 	// 3. Get User error
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID, nil)
+	getRequest.SetPathValue("user_id", randomID)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetUser(getResponseRecorder, getRequest)
 	if getResponseRecorder.Code != http.StatusInternalServerError {
@@ -262,6 +257,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 
 	// 4. Delete User error
 	deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+randomID, nil)
+	deleteRequest.SetPathValue("user_id", randomID)
 	deleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteUser(deleteResponseRecorder, deleteRequest)
 	if deleteResponseRecorder.Code != http.StatusInternalServerError {
@@ -270,6 +266,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 
 	// 5. Lock User error
 	lockRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+randomID+"/lock", nil)
+	lockRequest.SetPathValue("user_id", randomID)
 	lockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleLockUser(lockResponseRecorder, lockRequest)
 	if lockResponseRecorder.Code != http.StatusInternalServerError {
@@ -278,6 +275,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 
 	// 6. Unlock User error
 	unlockRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/auth/users/"+randomID+"/lock", nil)
+	unlockRequest.SetPathValue("user_id", randomID)
 	unlockResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUnlockUser(unlockResponseRecorder, unlockRequest)
 	if unlockResponseRecorder.Code != http.StatusInternalServerError {

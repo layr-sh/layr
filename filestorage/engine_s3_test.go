@@ -9,22 +9,17 @@ import (
 	"layr.sh/core"
 )
 
-const testHexMasterKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
 func TestFilestorageS3ConstructorUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testHexMasterKey)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	s3Engine := NewS3Engine(cryptoKeyManager)
+	kernel := core.NewTestKernel(nil)
+	s3Engine := NewS3Engine(kernel)
 	if s3Engine == nil {
 		t.Fatal("expected non-nil s3 engine")
 	}
 }
 
 func TestFilestorageS3MissingBackendConfigUnit(t *testing.T) {
-	s3Engine := NewS3Engine(nil)
+	kernel := core.NewTestKernel(nil)
+	s3Engine := NewS3Engine(kernel)
 	ctx := context.Background()
 	testBucket := Bucket{
 		ID:            uuid.NewV7(),
@@ -55,18 +50,14 @@ func TestFilestorageS3MissingBackendConfigUnit(t *testing.T) {
 }
 
 func TestFilestorageS3EncryptedSecretHandlingUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testHexMasterKey)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
+	kernel := core.NewTestKernel(nil)
 	plainSecret := "my-aws-secret-access-key-12345"
-	encryptedSecret, err := cryptoKeyManager.EncryptField([]byte(plainSecret))
+	encryptedSecret, err := kernel.CryptoKeyManager().EncryptField([]byte(plainSecret))
 	if err != nil {
 		t.Fatalf("failed to encrypt secret: %v", err)
 	}
 
-	cryptoS3Engine := NewS3Engine(cryptoKeyManager)
+	cryptoS3Engine := NewS3Engine(kernel)
 	testBucket := Bucket{
 		ID:      uuid.NewV7(),
 		Name:    "s3-bucket",
@@ -86,13 +77,6 @@ func TestFilestorageS3EncryptedSecretHandlingUnit(t *testing.T) {
 	}
 	if s3UpstreamConfiguration.SecretAccessKey != plainSecret {
 		t.Fatalf("expected decrypted secret %q, got %q", plainSecret, s3UpstreamConfiguration.SecretAccessKey)
-	}
-
-	// Engine without crypto key manager fails on encrypted secret
-	plainS3Engine := NewS3Engine(nil)
-	_, parseFailErr := plainS3Engine.parseUpstreamConfiguration(testBucket)
-	if parseFailErr == nil || !strings.Contains(parseFailErr.Error(), "crypto key manager unavailable") {
-		t.Fatalf("expected crypto key manager unavailable error, got: %v", parseFailErr)
 	}
 
 	// Invalid encrypted secret fails to decrypt

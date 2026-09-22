@@ -27,11 +27,6 @@ func (handler *BaseHandler) handleSignInAnonymous(responseWriter http.ResponseWr
 	}
 	propertiesJSON, _ := json.Marshal(inputProperties)
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "anonymous sign-in rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
@@ -40,7 +35,7 @@ func (handler *BaseHandler) handleSignInAnonymous(responseWriter http.ResponseWr
 		VALUES ('authenticated', true, $1, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
-	err := handler.db.QueryRow(ctx, query, propertiesJSON).Scan(
+	err := handler.kernel.DB().QueryRow(ctx, query, propertiesJSON).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -56,9 +51,7 @@ func (handler *BaseHandler) handleSignInAnonymous(responseWriter http.ResponseWr
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 
 	handler.issueSessionResponse(responseWriter, request, user, "anonymous")
 }

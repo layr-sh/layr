@@ -3,10 +3,12 @@ package graphql
 import (
 	"strings"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestGraphqlCompilerQueryAndMutationUnit(t *testing.T) {
-	schemaIntrospector := NewSchemaIntrospector(nil)
+	schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(nil))
 	schemaIntrospector.tables["public.users"] = &TableInfo{
 		Schema:     "public",
 		Name:       "users",

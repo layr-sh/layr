@@ -11,15 +11,10 @@ import (
 )
 
 func TestFilestorageControlPlaneHandlerConfigUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager, cryptoKeyManager)
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	controlPlaneHandler.SetEventBus(eventBus)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
 
 	readConfigAuthContext := core.AuthContext{
 		ServiceAccountID: "sa-test",
@@ -70,15 +65,6 @@ func TestFilestorageControlPlaneHandlerConfigUnit(t *testing.T) {
 		if authedResponseRecorder.Code != http.StatusOK {
 			t.Fatalf("expected 200 for valid scope, got %d", authedResponseRecorder.Code)
 		}
-
-		// Nil config manager -> 500
-		unconfiguredControlPlaneHandler := NewControlPlaneHandler(nil, nil, cryptoKeyManager)
-		nilConfigRequest := httptest.NewRequestWithContext(readConfigCtx, http.MethodGet, "/v1/_/file-storage/config", nil)
-		nilConfigResponseRecorder := httptest.NewRecorder()
-		unconfiguredControlPlaneHandler.handleGetConfig(nilConfigResponseRecorder, nilConfigRequest)
-		if nilConfigResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil config manager, got %d", nilConfigResponseRecorder.Code)
-		}
 	})
 
 	t.Run("handle update config unit", func(t *testing.T) {
@@ -113,15 +99,6 @@ func TestFilestorageControlPlaneHandlerConfigUnit(t *testing.T) {
 		controlPlaneHandler.handleUpdateConfig(invalidConfigResponseRecorder, invalidConfigRequest)
 		if invalidConfigResponseRecorder.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500 for invalid config validation failure, got %d", invalidConfigResponseRecorder.Code)
-		}
-
-		// Nil config manager -> 500
-		unconfiguredControlPlaneHandler := NewControlPlaneHandler(nil, nil, cryptoKeyManager)
-		nilConfigRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/file-storage/config", bytes.NewReader([]byte(`{}`)))
-		nilConfigResponseRecorder := httptest.NewRecorder()
-		unconfiguredControlPlaneHandler.handleUpdateConfig(nilConfigResponseRecorder, nilConfigRequest)
-		if nilConfigResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil config manager, got %d", nilConfigResponseRecorder.Code)
 		}
 	})
 }

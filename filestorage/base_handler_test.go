@@ -13,55 +13,33 @@ import (
 func TestFilestorageBaseHandlerUnit(t *testing.T) {
 	t.Parallel()
 
-	cryptoKeyManager, keyErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	require.NoError(t, keyErr)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-
-	t.Run("resolveEngine error branches", func(t *testing.T) {
+	t.Run("resolveEngine branches", func(t *testing.T) {
 		t.Parallel()
-		nilEngineBaseHandler := &BaseHandler{}
-
-		// Database backend with nil engine
-		_, dbErr := nilEngineBaseHandler.resolveEngine(Bucket{Backend: "database"})
-		require.Error(t, dbErr)
-		require.Contains(t, dbErr.Error(), "database file storage engine unavailable")
-
-		// S3 backend with nil engine
-		_, s3Err := nilEngineBaseHandler.resolveEngine(Bucket{Backend: "s3"})
-		require.Error(t, s3Err)
-		require.Contains(t, s3Err.Error(), "s3 file storage engine unavailable")
 
 		// Unsupported backend
-		_, unsupportedErr := nilEngineBaseHandler.resolveEngine(Bucket{Backend: "gcs"})
+		_, unsupportedErr := baseHandler.resolveEngine(Bucket{Backend: "gcs"})
 		require.Error(t, unsupportedErr)
 		require.Contains(t, unsupportedErr.Error(), "unsupported file storage backend")
 
 		// Database backend with valid engine
-		dbBaseHandler := &BaseHandler{databaseEngine: NewDatabaseFileStorageEngine(nil, 0)}
-		dbEngine, validDBErr := dbBaseHandler.resolveEngine(Bucket{Backend: "database"})
+		dbEngine, validDBErr := baseHandler.resolveEngine(Bucket{Backend: "database"})
 		require.NoError(t, validDBErr)
 		require.NotNil(t, dbEngine)
 
 		// S3 backend with valid engine
-		s3BaseHandler := &BaseHandler{s3Engine: NewS3FileStorageEngine(nil)}
-		s3Engine, validS3Err := s3BaseHandler.resolveEngine(Bucket{Backend: "s3"})
+		s3Engine, validS3Err := baseHandler.resolveEngine(Bucket{Backend: "s3"})
 		require.NoError(t, validS3Err)
 		require.NotNil(t, s3Engine)
 	})
 
-	t.Run("resolveBucket returns error when database is nil", func(t *testing.T) {
+	t.Run("presignSecretKey derived from kernel crypto key manager", func(t *testing.T) {
 		t.Parallel()
-		_, bucketErr := baseHandler.resolveBucket(context.Background(), "test-bucket")
-		require.Error(t, bucketErr)
-	})
-
-	t.Run("presignSecretKey fallback when crypto key manager is nil", func(t *testing.T) {
-		t.Parallel()
-		nilCryptoBaseHandler := NewBaseHandler(nil, configManager, nil)
-		signingKey := nilCryptoBaseHandler.presignSecretKey()
-		require.Equal(t, []byte("layr-default-presign-secret-salt-key-32b"), signingKey)
+		signingKey := baseHandler.presignSecretKey()
+		require.NotEmpty(t, signingKey)
 	})
 
 	t.Run("authorizeRESTRequest branches", func(t *testing.T) {

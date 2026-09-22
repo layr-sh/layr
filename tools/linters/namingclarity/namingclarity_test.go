@@ -232,8 +232,8 @@ func TestNamingclarityShouldReportUnclearNameUnit(t *testing.T) {
 		{"oAuthStatePayload", "OAuthStatePayload", "", false},
 		{"oAuthProviderConfig", "OAuthProviderConfig", "", false},
 
-		// 20. NodeRegistry & EmbeddedDatabase
-		{"nodeRegistryPrimary", "NodeRegistry", "\"nodeRegistryPrimary\" should be named \"nodeRegistry\" or suffixed with \"NodeRegistry\"", true},
+		// 20. Node & EmbeddedDatabase
+		{"nodePrimary", "Node", "\"nodePrimary\" should be named \"node\" or suffixed with \"Node\"", true},
 		{"embeddedRestart", "EmbeddedDatabase", "\"embeddedRestart\" should be named \"embeddedDatabase\" or suffixed with \"EmbeddedDatabase\"", true},
 		{"db", "sql.DB", "", false},
 		{"serviceAccount", "core.CreateServiceAccountResponse", "", false},

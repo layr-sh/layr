@@ -15,11 +15,13 @@ import (
 )
 
 func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
@@ -28,13 +30,9 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	activeConfig.Passkeys.Enabled = true
 	configManager.Set(activeConfig)
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	eventBus := kernel.EventBus()
+	jwtSigner := kernel.JWTSigner()
+	baseHandler := service.baseHandler
 
 	emittedEvents := make([]core.Event, 0)
 	eventBus.Subscribe("auth.passkey.created", func(eventCtx context.Context, event core.Event) error {
@@ -151,7 +149,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, properties, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, '{"tier":"free"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
-	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -264,11 +262,13 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 }
 
 func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
@@ -277,13 +277,9 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	activeConfig.Passkeys.Enabled = true
 	configManager.Set(activeConfig)
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	eventBus := kernel.EventBus()
+	jwtSigner := kernel.JWTSigner()
+	baseHandler := service.baseHandler
 
 	var emittedEvents []core.Event
 	var eventsMutex sync.Mutex
@@ -304,13 +300,10 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
 
-	userToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	userToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Role:    "authenticated",
 	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 	bearerHeader := "Bearer " + userToken
 	userAuthContext := core.AuthContext{UserID: userID, JWT: core.JWTClaims{Subject: userID, Role: "authenticated"}}
 
@@ -472,7 +465,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	}
 
 	// 7. Delete non-existent passkey -> 404
-	delete404Request := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToDeleteID, nil), userID, "authenticated", false)
+	delete404Request := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToDeleteID, nil), userID, "authenticated", false)
 	delete404Request.SetPathValue("id", passkeyToDeleteID)
 	delete404Request.Header.Set("Authorization", bearerHeader)
 	delete404ResponseRecorder := httptest.NewRecorder()
@@ -494,7 +487,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	`)
 
 	passkeyToFailDeleteID := listPasskeysResponse[1].ID
-	failDeleteRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil), userID, "authenticated", false)
+	failDeleteRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil), userID, "authenticated", false)
 	failDeleteRequest.SetPathValue("id", passkeyToFailDeleteID)
 	failDeleteRequest.Header.Set("Authorization", bearerHeader)
 	failDeleteResponseRecorder := httptest.NewRecorder()
@@ -511,7 +504,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	// 9. List passkeys with canceled context -> 500
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	canceledListRequest := withUserAuth(httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/auth/user/passkeys", nil), userID, "authenticated", false)
+	canceledListRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/auth/user/passkeys", nil), userID, "authenticated", false)
 	canceledListRequest.Header.Set("Authorization", bearerHeader)
 	canceledListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListPasskeys(canceledListResponseRecorder, canceledListRequest)

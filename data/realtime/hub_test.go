@@ -55,17 +55,12 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. NewHub initialization
-	hub := NewHub(nil)
+	hub := NewHub(core.NewTestKernel(nil))
 	if hub == nil {
 		t.Fatal("expected non-nil Hub")
 	}
 	if hub.presenceTTL != 60*time.Second {
 		t.Fatalf("expected default presenceTTL 60s, got %v", hub.presenceTTL)
-	}
-
-	// 1b. Start with nil db
-	if err := hub.Start(ctx); err == nil {
-		t.Fatal("expected error starting hub with nil db")
 	}
 
 	// 2. SetPresenceTTL custom and fallback
@@ -78,14 +73,9 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 		t.Fatalf("expected 60s fallback presenceTTL, got %v", hub.presenceTTL)
 	}
 
-	// 3. SetPresence and RemovePresence with nil and mock store
-	// nil store early return
-	hub.SetPresence(ctx, "room_1", "client_1")
-	hub.RemovePresence(ctx, "room_1", "client_1")
-
-	// attach mock KV store
+	// attach mock KV store via kernel
 	mockKV := &unitMockKV{data: make(map[string]string)}
-	hub.SetKVStore(core.NewKVStoreFromDriver(mockKV))
+	hub = NewHub(core.NewTestKernel(nil, core.WithKVStore(core.NewKVStoreFromDriver(mockKV))))
 
 	// empty inputs early return
 	hub.SetPresence(ctx, "", "client_1")
@@ -170,7 +160,7 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 	}
 
 	// 6. Stop on unstarted hub
-	unstartedHub := NewHub(nil)
+	unstartedHub := NewHub(core.NewTestKernel(nil))
 	unstartedHub.Stop()
 	unstartedHub.Stop() // idempotent
 

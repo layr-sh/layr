@@ -13,24 +13,14 @@ import (
 )
 
 func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	service := NewService(db)
-	inMemoryKVStore := newInMemoryKVStore()
-	service.SetKVStore(inMemoryKVStore)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	service.SetServiceAccountManager(serviceAccountManager)
-	eventBus := core.NewEventBus(db, nil)
-	defer eventBus.Close()
-	service.SetEventBus(eventBus)
+	service := NewService(kernel)
 
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	// 1. Create a test table
 	createTableInput := CreateTableInput{
@@ -52,12 +42,12 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	_ = service.IntrospectSchemas(ctx)
 
 	// 2. Insert a row via SQL
-	_, err := db.Exec(ctx, `INSERT INTO public.posts (title, body) VALUES ('First Post', 'Hello World');`)
+	_, err := kernel.DB().Exec(ctx, `INSERT INTO public.posts (title, body) VALUES ('First Post', 'Hello World');`)
 	assert.NoError(t, err)
 
 	baseHandler := service.BaseHandler()
 
-	_ = inMemoryKVStore.Delete(ctx, "cache:schema:catalog")
+	_ = kernel.KVStore().Delete(ctx, "cache:schema:catalog")
 	canceledSchemaCtx, schemaCancel := context.WithCancel(ctx)
 	schemaCancel()
 	assert.Error(t, baseHandler.IntrospectSchemas(canceledSchemaCtx))
@@ -98,7 +88,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	appConfig := service.GetConfigManager().Get()
 	appConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(appConfig)
-	_ = inMemoryKVStore.Set(ctx, "cache:query_count", "5", 0)
+	_ = kernel.KVStore().Set(ctx, "cache:query_count", "5", 0)
 	capQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	capQueryRequest.Header.Set("Content-Type", "application/json")
 	capQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
@@ -120,9 +110,9 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	assert.Contains(t, mutationResponseRecorder.Body.String(), "Second Post")
 
 	// 6. DB execution error
-	_, _ = db.Exec(ctx, `CREATE TABLE public.temp_gql (id uuid primary key default uuidv7(), name text);`)
+	_, _ = kernel.DB().Exec(ctx, `CREATE TABLE public.temp_gql (id uuid primary key default uuidv7(), name text);`)
 	_ = service.IntrospectSchemas(ctx)
-	_, _ = db.Exec(ctx, `DROP TABLE public.temp_gql;`)
+	_, _ = kernel.DB().Exec(ctx, `DROP TABLE public.temp_gql;`)
 	dropQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { temp_gql { id } }"}`)))
 	dropQueryRequest.Header.Set("Content-Type", "application/json")
 	dropQueryResponseRecorder := httptest.NewRecorder()

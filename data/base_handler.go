@@ -2,154 +2,29 @@ package data
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"layr.sh/core"
-	"layr.sh/data/graphql"
-	"layr.sh/data/realtime"
-	"layr.sh/data/rest"
 )
 
 // BaseHandler coordinates all public data plane HTTP routes (REST, Ephemeral KV, GraphQL, and Realtime CDC).
 type BaseHandler struct {
-	db                    *core.DatabasePool
-	configManager         *ConfigManager
-	kvStore               *core.KVStore
-	eventBus              *core.EventBus
-	realtimeHub           *realtime.Hub
-	graphqlCompiler       *graphql.Compiler
-	schemaIntrospector    *graphql.SchemaIntrospector
-	serviceAccountManager *core.ServiceAccountManager
-	tablesRWMutex         sync.RWMutex
-	tables                map[string]rest.TableMetadata // key: "schema.table"
-	saltSecret            string
+	*Service
 }
 
-// NewBaseHandler initializes the BaseHandler with database pool and configuration manager.
-func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager) *BaseHandler {
-	log.Debug("initializing data base handler")
-	schemaIntrospector := graphql.NewSchemaIntrospector(db)
-	compiler := graphql.NewCompiler(schemaIntrospector, "public")
-
-	hub := realtime.NewHub(db)
-
-	baseHandler := &BaseHandler{
-		db:                    db,
-		configManager:         configManager,
-		realtimeHub:           hub,
-		graphqlCompiler:       compiler,
-		schemaIntrospector:    schemaIntrospector,
-		serviceAccountManager: core.NewServiceAccountManager(db),
-		tables:                make(map[string]rest.TableMetadata),
-	}
-
-	return baseHandler
-}
-
-// SetKVStore attaches the key-value store for caching and ephemeral KV operations.
-func (handler *BaseHandler) SetKVStore(kvStore *core.KVStore) {
-	handler.kvStore = kvStore
-	if handler.schemaIntrospector != nil {
-		handler.schemaIntrospector.SetKVStore(kvStore)
-	}
-	if handler.realtimeHub != nil {
-		handler.realtimeHub.SetKVStore(kvStore)
+// NewBaseHandler initializes the BaseHandler with service coordinator.
+func NewBaseHandler(service *Service) *BaseHandler {
+	return &BaseHandler{
+		Service: service,
 	}
 }
 
-// SetEventBus attaches the platform event bus for domain event dispatching.
-func (handler *BaseHandler) SetEventBus(eventBus *core.EventBus) {
-	handler.eventBus = eventBus
-}
-
-// SetRealtimeHub sets the realtime CDC hub.
-func (handler *BaseHandler) SetRealtimeHub(hub *realtime.Hub) {
-	handler.realtimeHub = hub
-}
-
-// SetSaltSecret configures the salt secret used for visitor hashing.
-func (handler *BaseHandler) SetSaltSecret(saltSecret string) {
-	handler.saltSecret = saltSecret
-}
-
-// SetServiceAccountManager attaches the service account manager for RLS bypass checking.
-func (handler *BaseHandler) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	handler.serviceAccountManager = serviceAccountManager
-}
-
-// SetTableMetadata registers cached table metadata for joins and primary keys.
-func (handler *BaseHandler) SetTableMetadata(tableMetadata rest.TableMetadata) {
-	handler.tablesRWMutex.Lock()
-	defer handler.tablesRWMutex.Unlock()
-	tableKey := fmt.Sprintf("%s.%s", tableMetadata.Schema, tableMetadata.Table)
-	handler.tables[tableKey] = tableMetadata
-}
-
-// RealtimeHub returns the underlying Realtime CDC hub.
-func (handler *BaseHandler) RealtimeHub() *realtime.Hub {
-	return handler.realtimeHub
-}
-
-// GraphQLSchema returns the underlying GraphQL schema introspector.
-func (handler *BaseHandler) GraphQLSchema() *graphql.SchemaIntrospector {
-	return handler.schemaIntrospector
-}
-
-// IntrospectSchemas refreshes the GraphQL schema introspection.
-func (handler *BaseHandler) IntrospectSchemas(ctx context.Context, schemas ...string) error {
-	if handler.schemaIntrospector != nil && handler.db != nil {
-		if len(schemas) == 0 && handler.configManager != nil {
-			schemas = handler.configManager.Get().Schemas
-		}
-		if err := handler.schemaIntrospector.Introspect(ctx, schemas); err != nil {
-			return fmt.Errorf("failed to introspect schemas: %w", err)
-		}
-
-		handler.tablesRWMutex.Lock()
-		for _, tableInfo := range handler.schemaIntrospector.Tables() {
-			columns := make([]string, 0, len(tableInfo.Columns))
-			for columnName := range tableInfo.Columns {
-				columns = append(columns, columnName)
-			}
-			foreignKeys := make(map[string]rest.RelationForeignKey, len(tableInfo.ForeignKeys))
-			for relName, relInfo := range tableInfo.ForeignKeys {
-				foreignKeys[relName] = rest.RelationForeignKey{
-					FromColumn: relInfo.LocalColumn,
-					ToTable:    relInfo.ForeignTable,
-					ToColumn:   relInfo.TargetColumn,
-				}
-			}
-			tableKey := fmt.Sprintf("%s.%s", tableInfo.Schema, tableInfo.Name)
-			handler.tables[tableKey] = rest.TableMetadata{
-				Schema:      tableInfo.Schema,
-				Table:       tableInfo.Name,
-				PrimaryKey:  tableInfo.PrimaryKey,
-				Columns:     columns,
-				ForeignKeys: foreignKeys,
-			}
-		}
-		handler.tablesRWMutex.Unlock()
-		return nil
-	}
-	return nil
-}
-
-// writeJSON writes a successful JSON response with status code.
-func (handler *BaseHandler) writeJSON(responseWriter http.ResponseWriter, statusCode int, payload any) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(statusCode)
-	_ = json.NewEncoder(responseWriter).Encode(payload)
-}
-
-// writeDBError maps PostgreSQL errors to appropriate RFC 9457 HTTP responses.
-func (handler *BaseHandler) writeDBError(responseWriter http.ResponseWriter, request *http.Request, err error) {
+// writeDBErrorResponse maps PostgreSQL errors to appropriate RFC 9457 HTTP responses.
+func (handler *BaseHandler) writeDBErrorResponse(responseWriter http.ResponseWriter, request *http.Request, err error) {
 	statusCode := http.StatusInternalServerError
 	message := "Service temporarily unavailable"
 	debugLog := err.Error()
@@ -184,15 +59,12 @@ func (handler *BaseHandler) isRLSBypassed(request *http.Request, requiredScope s
 	if authContext.IsServiceAccount() && authContext.HasScope(requiredScope) {
 		return true
 	}
-	if handler.serviceAccountManager == nil {
-		return false
-	}
 	secretKey := core.ExtractRequestServiceAccountKey(request)
 	if secretKey == "" {
 		return false
 	}
 	clientIP := core.ExtractRequestClientIP(request)
-	serviceAccount, err := handler.serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
+	serviceAccount, err := handler.kernel.ServiceAccountManager().Authenticate(request.Context(), secretKey, clientIP)
 	if err != nil {
 		return false
 	}

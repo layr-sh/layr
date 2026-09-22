@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"layr.sh/core"
 )
 
 func TestRealtimeClientDispatchAndMessageUnit(t *testing.T) {
-	hub := NewHub(nil)
+	hub := NewHub(core.NewTestKernel(nil))
 	hub.installedTables["public.orders"] = true
 
 	// 1. NewClient defaults and custom channel limit

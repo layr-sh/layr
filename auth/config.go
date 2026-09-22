@@ -1,3 +1,4 @@
+// Package auth provides authentication engines, credential verification, and session lifecycle management.
 package auth
 
 import (
@@ -332,31 +333,17 @@ func DefaultConfig() Config {
 
 // ConfigManager handles loading, validating, caching, and envelope encryption of auth.config.
 type ConfigManager struct {
-	db                    *core.DatabasePool
-	cryptoKeyManager      *core.CryptoKeyManager
-	serviceAccountManager *core.ServiceAccountManager
-	eventBus              *core.EventBus
-	rwMutex               sync.RWMutex
-	config                Config
+	kernel  *core.Kernel
+	rwMutex sync.RWMutex
+	config  Config
 }
 
 // NewConfigManager initializes a new ConfigManager.
-func NewConfigManager(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) *ConfigManager {
+func NewConfigManager(kernel *core.Kernel) *ConfigManager {
 	return &ConfigManager{
-		db:               db,
-		cryptoKeyManager: cryptoKeyManager,
-		config:           DefaultConfig(),
+		kernel: kernel,
+		config: DefaultConfig(),
 	}
-}
-
-// SetServiceAccountManager configures the service account manager for scope authorization.
-func (configManager *ConfigManager) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	configManager.serviceAccountManager = serviceAccountManager
-}
-
-// SetEventBus configures the platform event bus.
-func (configManager *ConfigManager) SetEventBus(eventBus *core.EventBus) {
-	configManager.eventBus = eventBus
 }
 
 // Get returns a copy of the active in-memory configuration.
@@ -561,11 +548,8 @@ func (configManager *ConfigManager) Set(updatedConfig Config) {
 func (configManager *ConfigManager) Load(ctx context.Context) error {
 	log.Tracef("loading auth configuration from database")
 
-	if configManager.db == nil {
-		return nil
-	}
 	var rawJSON []byte
-	err := configManager.db.QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawJSON)
+	err := configManager.kernel.DB().QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawJSON)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			defaultConfig := DefaultConfig()
@@ -590,10 +574,6 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Config) error {
 	log.Tracef("saving auth configuration to database")
 
-	if configManager.db == nil {
-		configManager.Set(updatedConfig)
-		return nil
-	}
 	rawJSON, _ := json.Marshal(updatedConfig)
 
 	query := `
@@ -602,7 +582,7 @@ func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Conf
 		ON CONFLICT (key) DO UPDATE
 		SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
 	`
-	if _, err := configManager.db.Exec(ctx, query, ConfigKey, rawJSON); err != nil {
+	if _, err := configManager.kernel.DB().Exec(ctx, query, ConfigKey, rawJSON); err != nil {
 		return fmt.Errorf("failed to persist auth.config: %w", err)
 	}
 
@@ -710,10 +690,7 @@ func (configManager *ConfigManager) DecryptSecret(encrypted string) (string, err
 	if encrypted == "" {
 		return "", nil
 	}
-	if configManager.cryptoKeyManager == nil {
-		return "", errors.New("key manager is unavailable")
-	}
-	decryptedSecret, err := configManager.cryptoKeyManager.DecryptField(encrypted)
+	decryptedSecret, err := configManager.kernel.CryptoKeyManager().DecryptField(encrypted)
 	if err != nil {
 		return "", fmt.Errorf("failed to decrypt field: %w", err)
 	}

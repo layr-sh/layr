@@ -80,9 +80,6 @@ func HashSecretKey(secretKey string) string {
 // Create creates a new Service Account and returns the plaintext key once.
 func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, createServiceAccountInput CreateServiceAccountInput) (*CreateServiceAccountResponse, error) {
 	log.Debugf("creating service account %q", createServiceAccountInput.Name)
-	if serviceAccountManager.db == nil {
-		return nil, fmt.Errorf("db connection pool not available")
-	}
 	if strings.TrimSpace(createServiceAccountInput.Name) == "" {
 		return nil, fmt.Errorf("name is required")
 	}
@@ -133,9 +130,6 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 
 // Authenticate validates a presented secret key against core.service_accounts.
 func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Context, secretKey, clientIP string) (*ServiceAccount, error) {
-	if serviceAccountManager.db == nil {
-		return nil, fmt.Errorf("db connection pool not available")
-	}
 	secretKey = strings.TrimSpace(secretKey)
 	if len(secretKey) < minimumSecretKeyLength {
 		log.Tracef("service account key length %d is below minimum %d", len(secretKey), minimumSecretKeyLength)
@@ -217,9 +211,6 @@ func (serviceAccountManager *ServiceAccountManager) updateLastUsedAt(ctx context
 // List returns all service accounts.
 func (serviceAccountManager *ServiceAccountManager) List(ctx context.Context) ([]ServiceAccount, error) {
 	log.Trace("listing service accounts from database")
-	if serviceAccountManager.db == nil {
-		return nil, fmt.Errorf("db connection pool not available")
-	}
 	query := `
 		SELECT id, name, description, key_prefix, scopes, is_enabled, allowed_ips, expires_at, console_user_id, last_used_at, created_at, last_updated_at
 		FROM core.service_accounts
@@ -248,9 +239,6 @@ func (serviceAccountManager *ServiceAccountManager) List(ctx context.Context) ([
 // Get returns a service account by UUID.
 func (serviceAccountManager *ServiceAccountManager) Get(ctx context.Context, serviceAccountID string) (*ServiceAccount, error) {
 	log.Tracef("retrieving service account %s", serviceAccountID)
-	if serviceAccountManager.db == nil {
-		return nil, fmt.Errorf("db connection pool not available")
-	}
 	query := `
 		SELECT id, name, description, key_prefix, scopes, is_enabled, allowed_ips, expires_at, console_user_id, last_used_at, created_at, last_updated_at
 		FROM core.service_accounts
@@ -407,88 +395,38 @@ func ExtractRequestServiceAccountKey(request *http.Request) string {
 	}
 	authHeader := request.Header.Get("Authorization")
 	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-		return strings.TrimSpace(authHeader[7:])
+		candidate := strings.TrimSpace(authHeader[7:])
+		if strings.Count(candidate, ".") != 2 {
+			return candidate
+		}
 	}
 	return ""
 }
 
-// ServiceAccountAuthMiddleware authenticates service account keys and injects the account into request context.
-func ServiceAccountAuthMiddleware(serviceAccountManager *ServiceAccountManager) func(http.Handler) http.Handler {
-	return func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			if serviceAccountManager == nil {
-				handler.ServeHTTP(responseWriter, request)
-				return
-			}
-			secretKey := ExtractRequestServiceAccountKey(request)
-			if secretKey == "" {
-				handler.ServeHTTP(responseWriter, request)
-				return
-			}
-			log.Tracef("evaluating service account authentication for request %s", request.URL.Path)
-			clientIP := ExtractRequestClientIP(request)
-			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
-			if err != nil {
-				// Invalid service account key
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error())
-				return
-			}
-			ctx := WithServiceAccount(request.Context(), serviceAccount)
-			handler.ServeHTTP(responseWriter, request.WithContext(ctx))
-		})
+// CheckScope verifies if the request has the required scope permission.
+func (serviceAccountManager *ServiceAccountManager) CheckScope(request *http.Request, requiredScope string) bool {
+	authContext := GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() {
+		return authContext.HasScope(requiredScope)
 	}
+	secretKey := ExtractRequestServiceAccountKey(request)
+	if secretKey == "" {
+		return true
+	}
+	clientIP := ExtractRequestClientIP(request)
+	serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
+	if err != nil {
+		return false
+	}
+	return HasScope(serviceAccount.Scopes, requiredScope)
 }
 
-// RequireServiceAccountMiddleware enforces valid service account authentication on protected routes.
-func RequireServiceAccountMiddleware(serviceAccountManager *ServiceAccountManager) func(http.Handler) http.Handler {
-	return func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			if serviceAccountManager == nil {
-				handler.ServeHTTP(responseWriter, request)
-				return
-			}
-			secretKey := ExtractRequestServiceAccountKey(request)
-			if secretKey == "" {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required")
-				return
-			}
-			clientIP := ExtractRequestClientIP(request)
-			serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
-			if err != nil {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, err.Error())
-				return
-			}
-			ctx := WithServiceAccount(request.Context(), serviceAccount)
-			handler.ServeHTTP(responseWriter, request.WithContext(ctx))
-		})
+// RequireScope verifies if the request has the required scope permission.
+// If the check fails, it writes an RFC 9457 HTTP 403 Forbidden error response and returns false.
+func (serviceAccountManager *ServiceAccountManager) RequireScope(responseWriter http.ResponseWriter, request *http.Request, requiredScope string) bool {
+	if !serviceAccountManager.CheckScope(request, requiredScope) {
+		WriteErrorResponse(responseWriter, request, http.StatusForbidden, fmt.Sprintf("Forbidden: scope %s required", requiredScope))
+		return false
 	}
-}
-
-// RequireScopeMiddleware enforces that the request has a service account with the required scope.
-func RequireScopeMiddleware(requiredScope string) func(http.Handler) http.Handler {
-	return func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			serviceAccount := GetServiceAccount(request.Context())
-			authContext := GetAuthContext(request.Context())
-
-			if serviceAccount == nil && !authContext.IsServiceAccount() {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "service account authentication required")
-				return
-			}
-
-			if serviceAccount != nil {
-				if !HasScope(serviceAccount.Scopes, requiredScope) {
-					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error())
-					return
-				}
-			} else {
-				if !authContext.HasScope(requiredScope) {
-					WriteErrorResponse(responseWriter, request, http.StatusForbidden, ErrInsufficientPermissions.Error())
-					return
-				}
-			}
-
-			handler.ServeHTTP(responseWriter, request)
-		})
-	}
+	return true
 }

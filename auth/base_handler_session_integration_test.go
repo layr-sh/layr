@@ -12,22 +12,20 @@ import (
 )
 
 func TestAuthSessionSelfServiceIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	testKVStore := newInMemoryKVStore()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(testKVStore)
-	baseHandler.SetEventBus(eventBus)
+	testKVStore := kernel.KVStore()
+	jwtSigner := kernel.JWTSigner()
+	baseHandler := service.baseHandler
 
 	userID := "01918a24-3333-7000-8000-000000000001"
 	userEmail := "sessions.user@example.com"
@@ -39,15 +37,15 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	// Seed 3 active sessions for this user
 	session1ID := "01918a24-4444-7000-8000-000000000001"
 	session1Refresh := "session1_refresh_token_12345678901234567890"
-	session1Hash := baseHandler.jwtSigner.HashRefreshToken(session1Refresh)
+	session1Hash := jwtSigner.HashRefreshToken(session1Refresh)
 
 	session2ID := "01918a24-4444-7000-8000-000000000002"
 	session2Refresh := "session2_refresh_token_12345678901234567890"
-	session2Hash := baseHandler.jwtSigner.HashRefreshToken(session2Refresh)
+	session2Hash := jwtSigner.HashRefreshToken(session2Refresh)
 
 	session3ID := "01918a24-4444-7000-8000-000000000003"
 	session3Refresh := "session3_refresh_token_12345678901234567890"
-	session3Hash := baseHandler.jwtSigner.HashRefreshToken(session3Refresh)
+	session3Hash := jwtSigner.HashRefreshToken(session3Refresh)
 
 	device1UA := "Chrome macOS"
 	device2UA := "Mobile Safari iOS"
@@ -65,7 +63,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	_ = testKVStore.Set(ctx, "auth:session:"+session2Hash, "active2", time.Hour)
 	_ = testKVStore.Set(ctx, "auth:session:"+session3Hash, "active3", time.Hour)
 
-	userToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	userToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     userID,
 		Email:       userEmail,
 		Role:        "authenticated",
@@ -132,7 +130,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		Role:      "authenticated",
 		SessionID: session3ID,
 	}
-	session3Token, _ := baseHandler.jwtSigner.GenerateAccessToken(session3JWTClaims, 3600)
+	session3Token := jwtSigner.GenerateAccessToken(session3JWTClaims, 3600)
 	session3Ctx := core.WithAuthContext(context.Background(), core.AuthContext{
 		UserID: userID,
 		JWT:    session3JWTClaims,
@@ -164,7 +162,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, 'singlehash', clock_timestamp() + interval '1 hour', clock_timestamp())
 	`, singleSessionID, singleUserID)
-	singleToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	singleToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: singleUserID,
 		Role:    "authenticated",
 	}, 3600)
@@ -229,7 +227,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	// 7. Revoke Other Sessions with JWT Session ID -> 200
 	session4ID := "01918a24-5555-7000-8000-000000000004"
 	session4Refresh := "test_refresh_token_4"
-	session4Hash := baseHandler.jwtSigner.HashRefreshToken(session4Refresh)
+	session4Hash := jwtSigner.HashRefreshToken(session4Refresh)
 	_, _ = db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
@@ -240,7 +238,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 		Role:      "authenticated",
 		SessionID: session4ID,
 	}
-	session4Token, _ := baseHandler.jwtSigner.GenerateAccessToken(session4JWTClaims, 3600)
+	session4Token := jwtSigner.GenerateAccessToken(session4JWTClaims, 3600)
 	session4Ctx := core.WithAuthContext(context.Background(), core.AuthContext{
 		UserID: userID,
 		JWT:    session4JWTClaims,
@@ -263,7 +261,7 @@ func TestAuthSessionSelfServiceIntegration(t *testing.T) {
 	// Insert session 5 so we have 2 sessions (session 4 and session 5)
 	session5ID := "01918a24-5555-7000-8000-000000000005"
 	session5Refresh := "test_refresh_token_5"
-	session5Hash := baseHandler.jwtSigner.HashRefreshToken(session5Refresh)
+	session5Hash := jwtSigner.HashRefreshToken(session5Refresh)
 	_, _ = db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())

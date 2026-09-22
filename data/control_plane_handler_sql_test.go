@@ -12,9 +12,8 @@ import (
 
 func TestDataControlPlaneHandlerSQLScopeForbiddenUnit(t *testing.T) {
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	service := NewService(nil)
-	service.SetServiceAccountManager(serviceAccountManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	forbiddenSQLRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/sql", bytes.NewReader([]byte(`{"sql":"SELECT 1"}`)))
@@ -28,7 +27,7 @@ func TestDataControlPlaneHandlerSQLScopeForbiddenUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerSQLValidationUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	service := NewService(core.NewTestKernel(nil))
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Method Not Allowed

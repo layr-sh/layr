@@ -16,11 +16,13 @@ import (
 )
 
 func TestAuthPasswordResetFlowIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
@@ -60,21 +62,10 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 	}
 	configManager.Set(activeConfig)
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
-	baseHandler.SetEmailDispatcher(NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := activeConfig.EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager))
-	baseHandler.SetSMSDispatcher(NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := activeConfig.SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager))
+	testKVStore := kernel.KVStore()
+	baseHandler := service.baseHandler
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
 	// Seed test user with email and phone
 	resetUserID := "01918a24-2222-7000-8000-000000000002"

@@ -13,9 +13,9 @@ import (
 type dummyServiceWithRegistrar struct{}
 
 func (service *dummyServiceWithRegistrar) Start(ctx context.Context) error { return nil }
-func (service *dummyServiceWithRegistrar) Stop() error                     { return nil }
-func (service *dummyServiceWithRegistrar) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
-	GetRoute[string](router, "/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
+func (service *dummyServiceWithRegistrar) Stop()                           {}
+func (service *dummyServiceWithRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+	GetRoute[string](baseRouter, "/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
 		RouteTag("Dummy"),
 		RouteSummary("Dummy route"),
 		RouteOperationID("getDummy"),
@@ -25,8 +25,8 @@ func (service *dummyServiceWithRegistrar) RegisterRoutes(router *Router, control
 type dummyServiceWithoutRegistrar struct{}
 
 func (service *dummyServiceWithoutRegistrar) Start(ctx context.Context) error { return nil }
-func (service *dummyServiceWithoutRegistrar) Stop() error                     { return nil }
-func (service *dummyServiceWithoutRegistrar) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
+func (service *dummyServiceWithoutRegistrar) Stop()                           {}
+func (service *dummyServiceWithoutRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
 }
 
 func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
@@ -40,8 +40,7 @@ func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
 		return nil, assert.AnError
 	})
 
-	openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpecs, err := ExportOpenAPISpecs()
-	require.NoError(t, err)
+	openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpecs := ExportOpenAPISpecs()
 	require.NotNil(t, openAPISpec)
 	require.NotNil(t, controlPlaneOpenAPISpec)
 	require.NotNil(t, unifiedOpenAPISpecs)

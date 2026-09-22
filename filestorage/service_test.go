@@ -18,7 +18,7 @@ func TestFilestorageServiceUnit(t *testing.T) {
 		require.True(t, ok)
 		require.NotNil(t, serviceFactory)
 
-		serviceRunner, createErr := serviceFactory(&core.Kernel{})
+		serviceRunner, createErr := serviceFactory(core.NewTestKernel(nil))
 		require.NoError(t, createErr)
 		require.NotNil(t, serviceRunner)
 
@@ -27,6 +27,10 @@ func TestFilestorageServiceUnit(t *testing.T) {
 		require.NotNil(t, constructedService.BaseHandler())
 		require.NotNil(t, constructedService.ControlPlaneHandler())
 		require.NotNil(t, constructedService.ConfigManager())
+		require.NotNil(t, constructedService.Kernel())
+		require.NotNil(t, constructedService.DatabaseEngine())
+		require.NotNil(t, constructedService.S3Engine())
+		require.NotNil(t, constructedService.SigV4Validator())
 	})
 
 	t.Run("file_storage alias factory registered", func(t *testing.T) {
@@ -38,7 +42,7 @@ func TestFilestorageServiceUnit(t *testing.T) {
 
 	t.Run("start returns error when context is canceled", func(t *testing.T) {
 		t.Parallel()
-		service := NewService(nil, nil)
+		service := NewService(core.NewTestKernel(nil))
 		require.NotNil(t, service)
 
 		canceledCtx, cancel := context.WithCancel(context.Background())
@@ -48,26 +52,22 @@ func TestFilestorageServiceUnit(t *testing.T) {
 		require.Error(t, startErr)
 		require.Contains(t, startErr.Error(), "context canceled before start")
 
-		stopErr := service.Stop()
-		require.NoError(t, stopErr)
+		service.Stop()
 	})
 
-	t.Run("start succeeds without database connection", func(t *testing.T) {
+	t.Run("start returns error with broken database", func(t *testing.T) {
 		t.Parallel()
-		service := NewService(nil, nil)
+		kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+		service := NewService(kernel)
 		require.NotNil(t, service)
 
-		service.SetServiceAccountManager(nil)
-		service.SetEventBus(nil)
-		service.SetKVStore(nil)
-
 		startErr := service.Start(context.Background())
-		require.NoError(t, startErr)
+		require.Error(t, startErr)
 	})
 
 	t.Run("register routes with routers", func(t *testing.T) {
 		t.Parallel()
-		service := NewService(nil, nil)
+		service := NewService(core.NewTestKernel(nil))
 		require.NotNil(t, service)
 
 		service.RegisterRoutes(nil, nil)

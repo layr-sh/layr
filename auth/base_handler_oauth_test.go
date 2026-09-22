@@ -14,16 +14,19 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthHandlerOAuthUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
+type mockOAuthClient struct {
+	doFunc func(request *http.Request) (*http.Response, error)
+}
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+func (mock *mockOAuthClient) Do(request *http.Request) (*http.Response, error) {
+	return mock.doFunc(request)
+}
+
+func TestAuthHandlerOAuthUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 
 	// 1. Unknown provider -> 404
 	unknownProviderOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/unknown_provider/authorize", nil)
@@ -84,10 +87,11 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	brokenOAuthConfig.OAuthProviders["broken"] = OAuthProviderConfig{
 		Enabled: true,
 	}
-	brokenOAuthConfigManager := NewConfigManager(nil, cryptoKeyManager)
+	brokenOAuthConfigManager := NewConfigManager(kernel)
 	brokenOAuthConfigManager.Set(brokenOAuthConfig)
-	brokenOAuthBaseHandler := NewBaseHandler(nil, brokenOAuthConfigManager, cryptoKeyManager)
-	brokenOAuthBaseHandler.SetKVStore(testKVStore)
+	brokenService := NewService(kernel)
+	brokenService.configManager = brokenOAuthConfigManager
+	brokenOAuthBaseHandler := brokenService.baseHandler
 
 	brokenOAuthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/broken/authorize", nil)
 	brokenOAuthAuthRequest.SetPathValue("provider", "broken")
@@ -97,7 +101,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 400 on broken oauth authorize, got: %d", brokenOAuthAuthResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:broken-state", "broken-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:broken-state", "broken-state", 10*time.Minute)
 	brokenOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/broken/callback?code=mock_code&state=broken-state", nil)
 	brokenOAuthCallbackRequest.SetPathValue("provider", "broken")
 	brokenOAuthCallbackResponseRecorder := httptest.NewRecorder()
@@ -107,7 +111,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 5. Token form & JSON endpoints
-	_ = testKVStore.Set(context.Background(), "auth:pkce:form-state", "form-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:form-state", "form-state", 10*time.Minute)
 	oauthTokenFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/google/token", strings.NewReader("code=authcode123&redirect_uri=http://localhost:3000/callback&state=form-state"))
 	oauthTokenFormRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	oauthTokenFormResponseRecorder := httptest.NewRecorder()
@@ -116,7 +120,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 400 on fake code exchange, got: %d", oauthTokenFormResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:json-state", "json-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:json-state", "json-state", 10*time.Minute)
 	oauthTokenJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(`{"provider":"google","code":"authcode123","state":"json-state"}`))
 	oauthTokenJSONResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExchangeOAuthToken(oauthTokenJSONResponseRecorder, oauthTokenJSONRequest)
@@ -133,7 +137,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 6. Callback provider error parameter -> 400
-	_ = testKVStore.Set(context.Background(), "auth:pkce:err-state", "err-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:err-state", "err-state", 10*time.Minute)
 	oauthErrorCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?error=access_denied&error_description=user_cancelled&state=err-state", nil)
 	oauthErrorCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthErrorCallbackResponseRecorder, oauthErrorCallbackRequest)
@@ -142,7 +146,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 7. Callback with code and state -> 400 (mock code fails live exchange)
-	_ = testKVStore.Set(context.Background(), "auth:pkce:mock-state", "mock-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:mock-state", "mock-state", 10*time.Minute)
 	oauthGetCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=mock-code&state=mock-state", nil)
 	oauthGetCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthGetCallbackResponseRecorder, oauthGetCallbackRequest)
@@ -151,7 +155,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 8. Callback with disabled provider -> 404
-	_ = testKVStore.Set(context.Background(), "auth:pkce:disabled-provider-state", "disabled-provider-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:disabled-provider-state", "disabled-provider-state", 10*time.Minute)
 	oauthDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/unknown_disabled_provider/callback?code=123&state=disabled-provider-state", nil)
 	oauthDisabledCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthDisabledCallbackResponseRecorder, oauthDisabledCallbackRequest)
@@ -165,7 +169,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		ClientID: "disabled-id",
 	}
 	configManager.Set(oauthConfig)
-	_ = testKVStore.Set(context.Background(), "auth:pkce:disabled-provider-state-2", "disabled-provider-state-2", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:disabled-provider-state-2", "disabled-provider-state-2", 10*time.Minute)
 	oauthConfiguredDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/disabled_provider/callback?code=123&state=disabled-provider-state-2", nil)
 	oauthConfiguredDisabledCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthConfiguredDisabledCallbackResponseRecorder, oauthConfiguredDisabledCallbackRequest)
@@ -203,7 +207,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 403 access_denied on fake state GET, got: %d", fakeStateGetResponseRecorder.Code)
 	}
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:mismatched-state", "different-stored-value", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:mismatched-state", "different-stored-value", 10*time.Minute)
 	mismatchedStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=any-code&state=mismatched-state", nil)
 	mismatchedStateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(mismatchedStateResponseRecorder, mismatchedStateRequest)
@@ -211,16 +215,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		t.Fatalf("expected 403 on mismatched state value, got: %d", mismatchedStateResponseRecorder.Code)
 	}
 
-	baseHandler.SetKVStore(nil)
-	nilKVStoreStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=any-code&state=valid-looking-state", nil)
-	nilKVStoreStateResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleProcessOAuthCallback(nilKVStoreStateResponseRecorder, nilKVStoreStateRequest)
-	if nilKVStoreStateResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 with nil kvstore, got: %d", nilKVStoreStateResponseRecorder.Code)
-	}
-	baseHandler.SetKVStore(testKVStore)
-
-	_ = testKVStore.Set(context.Background(), "auth:pkce:missing-code-state", "missing-code-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:missing-code-state", "missing-code-state", 10*time.Minute)
 	missingCodeStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?state=missing-code-state", nil)
 	missingCodeStateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(missingCodeStateResponseRecorder, missingCodeStateRequest)
@@ -246,14 +241,11 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	testUserUUID := "018f2234-5678-789a-bcde-f0123456789a"
-	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Email:   "test@example.com",
 		Role:    "authenticated",
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to sign access token: %v", err)
-	}
 	bearerHeader := "Bearer " + validToken
 
 	validTokenUserInfoCtx := core.WithAuthContext(context.Background(), core.AuthContext{
@@ -289,7 +281,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	})
 	defer oauth.SetHTTPClient(nil)
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:mock_state", "mock_state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:mock_state", "mock_state", 10*time.Minute)
 	nilDBOAuthCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=mock_code&state=mock_state", nil)
 	nilDBOAuthCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(nilDBOAuthCallbackResponseRecorder, nilDBOAuthCallbackRequest)
@@ -298,7 +290,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 
 	// 12. Authorize with anonymous user linking
-	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     "018f2234-5678-789a-bcde-f0123456789b",
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -317,7 +309,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		StateID:  "different_state_id",
 		Provider: "google",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:pkce:mismatch_state", string(mismatchedPayloadJSON), 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:mismatch_state", string(mismatchedPayloadJSON), 10*time.Minute)
 	mismatchRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=mock_code&state=mismatch_state", nil)
 	mismatchRequest.SetPathValue("provider", "google")
 	mismatchResponseRecorder := httptest.NewRecorder()
@@ -335,7 +327,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		CodeChallenge: "challenge123",
 		ClientState:   "client_state_abc",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
 
 	oAuthStatePayload := OAuthStatePayload{
 		StateID:     "oauth_state_123",
@@ -375,11 +367,10 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 }
 
 func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
-	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 
 	authConfig := configManager.Get()
 	authConfig.OAuthProviders = map[string]OAuthProviderConfig{
@@ -391,7 +382,7 @@ func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 	}
 	configManager.Set(authConfig)
 
-	anonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     "018f2234-5678-789a-bcde-f0123456789a",
 		Role:        "authenticated",
 		IsAnonymous: true,

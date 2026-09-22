@@ -121,7 +121,7 @@ func (handler *BaseHandler) handleGetOIDCDiscovery(responseWriter http.ResponseW
 }
 
 func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, request *http.Request) {
-	jwks := handler.jwtSigner.BuildJWKS()
+	jwks := handler.kernel.JWTSigner().BuildJWKS()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(jwks)
@@ -138,8 +138,8 @@ func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWrit
 
 	stateIDParam := request.URL.Query().Get("state")
 	modeParam := request.URL.Query().Get("mode")
-	if stateIDParam != "" && modeParam != "" && handler.kvStore != nil {
-		stateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+stateIDParam)
+	if stateIDParam != "" && modeParam != "" {
+		stateJSON, err := handler.kernel.KVStore().Get(request.Context(), "auth:oidc:state:"+stateIDParam)
 		if err == nil && stateJSON != "" {
 			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 			if json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload) == nil {
@@ -228,10 +228,8 @@ func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWrit
 		CreatedAt:           time.Now().UTC(),
 	}
 
-	if handler.kvStore != nil {
-		payloadJSON, _ := json.Marshal(oidcAuthorizationStatePayload)
-		_ = handler.kvStore.Set(request.Context(), "auth:oidc:state:"+stateID, string(payloadJSON), 10*time.Minute)
-	}
+	payloadJSON, _ := json.Marshal(oidcAuthorizationStatePayload)
+	_ = handler.kernel.KVStore().Set(request.Context(), "auth:oidc:state:"+stateID, string(payloadJSON), 10*time.Minute)
 
 	handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "")
 }
@@ -247,9 +245,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	config := handler.configManager.Get()
 
 	// Delete state payload to prevent replay / CSRF fixation
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, "auth:oidc:state:"+stateID)
-	}
+	_ = handler.kernel.KVStore().Delete(ctx, "auth:oidc:state:"+stateID)
 
 	// Issue authorization code
 	code := handler.issueOIDCAuthorizationCode(
@@ -264,25 +260,23 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	)
 
 	// Set browser session cookie for SSO
-	refreshToken := handler.jwtSigner.GenerateRefreshToken()
-	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
+	refreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
+	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Sessions.RefreshTokenExpirySeconds) * time.Second)
 	sessionID := uuid.NewV7().String()
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, clock_timestamp())
 	`, sessionID, user.ID, refreshTokenHash, expiresAt)
 
 	core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
-			ID:        sessionID,
-			User:      user,
-			ExpiresAt: expiresAt,
-			CreatedAt: time.Now().UTC(),
-		}))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+		ID:        sessionID,
+		User:      user,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now().UTC(),
+	}))
 
 	// 302 Found redirect back to client redirect_uri
 	targetURL, parseErr := url.Parse(oidcAuthorizationStatePayload.RedirectURI)
@@ -314,13 +308,13 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 	}
 
 	stateID := request.FormValue("state")
-	if stateID == "" || handler.kvStore == nil {
+	if stateID == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Authorization session expired or invalid")
 		return
 	}
 
 	ctx := request.Context()
-	stateJSON, err := handler.kvStore.Get(ctx, "auth:oidc:state:"+stateID)
+	stateJSON, err := handler.kernel.KVStore().Get(ctx, "auth:oidc:state:"+stateID)
 	if err != nil || stateJSON == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Authorization session expired or invalid")
 		return
@@ -349,10 +343,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
 		}
-		var mfaUserID string
-		if handler.kvStore != nil {
-			mfaUserID, _ = handler.kvStore.Get(ctx, "auth:oidc:mfa:"+mfaToken)
-		}
+		mfaUserID, _ := handler.kernel.KVStore().Get(ctx, "auth:oidc:mfa:"+mfaToken)
 		if mfaUserID == "" {
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
@@ -369,7 +360,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			FROM auth.users
 			WHERE id = $1
 		`
-		scanErr := handler.db.QueryRow(ctx, query, mfaUserID).Scan(
+		scanErr := handler.kernel.DB().QueryRow(ctx, query, mfaUserID).Scan(
 			&user.ID, &user.Email, &user.Phone, &user.PasswordHash,
 			&user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt,
 			&user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled,
@@ -384,7 +375,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error", "", mfaToken)
 			return
 		}
-		secretBytes, decryptErr := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
+		secretBytes, decryptErr := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
 		if decryptErr != nil {
 			log.Errorf("failed to decrypt MFA secret for user %s: %v", user.ID, decryptErr)
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication", "", mfaToken)
@@ -396,9 +387,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			return
 		}
 
-		if handler.kvStore != nil {
-			_ = handler.kvStore.Delete(ctx, "auth:oidc:mfa:"+mfaToken)
-		}
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:oidc:mfa:"+mfaToken)
 		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
@@ -414,14 +403,14 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		isEmail := strings.Contains(recipient, "@")
 		var expiryMinutes int
 		if isEmail {
-			if !config.EmailOTP.Enabled || !config.OIDC.UI.ShowEmailOTP || handler.emailDispatcher == nil || !handler.emailDispatcher.IsConfigured() {
+			if !config.EmailOTP.Enabled || !config.OIDC.UI.ShowEmailOTP || !handler.emailDispatcher.IsConfigured() {
 				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Email OTP sign-in is not available", "")
 				return
 			}
 			recipient = strings.ToLower(recipient)
 			expiryMinutes = config.EmailOTP.TokenExpiryMinutes
 		} else {
-			if !config.SMSOTP.Enabled || !config.OIDC.UI.ShowSMSOTP || handler.smsDispatcher == nil || !handler.smsDispatcher.IsConfigured() {
+			if !config.SMSOTP.Enabled || !config.OIDC.UI.ShowSMSOTP || !handler.smsDispatcher.IsConfigured() {
 				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "SMS OTP sign-in is not available", "")
 				return
 			}
@@ -434,19 +423,17 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			expiryMinutes = config.SMSOTP.TokenExpiryMinutes
 		}
 
-		if handler.kvStore != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
-			if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
-				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Rate limit exceeded. Too many requests from this IP address.", recipient)
-				return
-			}
+		clientIP := core.ExtractRequestClientIP(request)
+		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
+		if count, err := handler.kernel.KVStore().Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
+			handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Rate limit exceeded. Too many requests from this IP address.", recipient)
+			return
+		}
 
-			cooldownKey := fmt.Sprintf("auth:cooldown:sign_in:%s", recipient)
-			if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
-				handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Please wait 60 seconds before requesting another code", recipient)
-				return
-			}
+		cooldownKey := fmt.Sprintf("auth:cooldown:sign_in:%s", recipient)
+		if _, err := handler.kernel.KVStore().Get(ctx, cooldownKey); err == nil {
+			handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Please wait 60 seconds before requesting another code", recipient)
+			return
 		}
 
 		codeTTL := time.Duration(expiryMinutes) * time.Minute
@@ -458,11 +445,9 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			VALUES ($1, $2, 'sign_in', 0, $3, clock_timestamp())
 		`
 		expiresAt := time.Now().UTC().Add(codeTTL)
-		_, _ = handler.db.Exec(ctx, query, recipient, codeHash, expiresAt)
-		if handler.kvStore != nil {
-			_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient), code, codeTTL)
-			_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", recipient), "1", defaultOTPCooldown)
-		}
+		_, _ = handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt)
+		_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient), code, codeTTL)
+		_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", recipient), "1", defaultOTPCooldown)
 
 		channel := "sms"
 		if isEmail {
@@ -472,18 +457,16 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
 		}
 
-		if handler.eventBus != nil {
-			var targetUser *User
-			if fetchedUser, fetchErr := fetchUserByRecipient(ctx, handler.db, recipient); fetchErr == nil {
-				targetUser = &fetchedUser
-			}
-			handler.eventBus.Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
-				Recipient: recipient,
-				Purpose:   "sign_in",
-				Channel:   channel,
-				User:      targetUser,
-			}))
+		var targetUser *User
+		if fetchedUser, fetchErr := fetchUserByRecipient(ctx, handler.kernel.DB(), recipient); fetchErr == nil {
+			targetUser = &fetchedUser
 		}
+		handler.kernel.EventBus().Publish(ctx, NewOTPSentEvent(recipient, OTPSentEventData{
+			Recipient: recipient,
+			Purpose:   "sign_in",
+			Channel:   channel,
+			User:      targetUser,
+		}))
 
 		handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "", "Verification code sent!", recipient)
 		return
@@ -510,7 +493,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		var otpID, storedHash string
 		var attempts int
 		var expiresAt time.Time
-		err := handler.db.QueryRow(ctx, `
+		err := handler.kernel.DB().QueryRow(ctx, `
 			SELECT id, code_hash, attempts, expires_at 
 			FROM auth.otps 
 			WHERE recipient = $1 AND purpose = 'sign_in' AND expires_at > clock_timestamp()
@@ -523,21 +506,19 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		}
 
 		if !otp.VerifyCode(otpCode, storedHash) {
-			_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+			_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
 			return
 		}
 
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
-		if handler.kvStore != nil {
-			_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient))
-		}
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient))
 
 		var user User
 		var rawProperties []byte
 		var isNewUser bool
 		if isEmail {
-			_ = handler.db.QueryRow(ctx, `
+			_ = handler.kernel.DB().QueryRow(ctx, `
 				INSERT INTO auth.users (email, role, email_verified_at, created_at, last_updated_at)
 				VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
 				ON CONFLICT (email) DO UPDATE SET email_verified_at = COALESCE(auth.users.email_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
@@ -549,7 +530,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 				&rawProperties, &user.CreatedAt, &user.LastUpdatedAt, &isNewUser,
 			)
 		} else {
-			_ = handler.db.QueryRow(ctx, `
+			_ = handler.kernel.DB().QueryRow(ctx, `
 				INSERT INTO auth.users (phone, role, phone_verified_at, created_at, last_updated_at)
 				VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp(), clock_timestamp())
 				ON CONFLICT (phone) DO UPDATE SET phone_verified_at = COALESCE(auth.users.phone_verified_at, clock_timestamp()), last_updated_at = clock_timestamp()
@@ -571,23 +552,19 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		if isEmail {
 			channel = "email"
 		}
-		if handler.eventBus != nil {
-			if isNewUser {
-				handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-			}
-			handler.eventBus.Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
-				Recipient: recipient,
-				Purpose:   "sign_in",
-				Channel:   channel,
-				User:      &user,
-			}))
+		if isNewUser {
+			handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 		}
+		handler.kernel.EventBus().Publish(ctx, NewOTPVerifiedEvent(recipient, OTPVerifiedEventData{
+			Recipient: recipient,
+			Purpose:   "sign_in",
+			Channel:   channel,
+			User:      &user,
+		}))
 
 		if user.MFAEnabled {
 			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
-			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
-			}
+			_ = handler.kernel.KVStore().Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
 			return
 		}
@@ -621,7 +598,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		}
 
 		var existingID string
-		err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", email).Scan(&existingID)
+		err := handler.kernel.DB().QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", email).Scan(&existingID)
 		if err == nil {
 			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "An account with this email already exists")
 			return
@@ -636,7 +613,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			VALUES ($1, $2, $3, 'authenticated', false, clock_timestamp(), clock_timestamp())
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`
-		err = handler.db.QueryRow(ctx, query, userID, email, passHash).Scan(
+		err = handler.kernel.DB().QueryRow(ctx, query, userID, email, passHash).Scan(
 			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 			&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -648,9 +625,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			return
 		}
 
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 
 		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
@@ -677,7 +652,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		FROM auth.users
 		WHERE email = $1
 	`
-	scanErr := handler.db.QueryRow(ctx, query, email).Scan(
+	scanErr := handler.kernel.DB().QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.PasswordHash,
 		&user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt,
 		&user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled,
@@ -707,7 +682,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
 				return
 			}
-			secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
+			secretBytes, err := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
 			if err != nil {
 				log.Errorf("failed to decrypt MFA secret for user %s: %v", user.ID, err)
 				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
@@ -720,9 +695,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			}
 		} else {
 			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
-			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
-			}
+			_ = handler.kernel.KVStore().Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
 			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
 			return
 		}
@@ -835,13 +808,8 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 		return
 	}
 
-	if handler.serviceAccountManager == nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
-		return
-	}
-
 	clientIP := core.ExtractRequestClientIP(request)
-	serviceAccount, authErr := handler.serviceAccountManager.Authenticate(request.Context(), clientSecret, clientIP)
+	serviceAccount, authErr := handler.kernel.ServiceAccountManager().Authenticate(request.Context(), clientSecret, clientIP)
 	if authErr != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
 		return
@@ -866,14 +834,12 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 	layrAudience := handle + ":service_account"
 
 	var matchingResourceServerConfig *ResourceServerConfig
-	if handler.configManager != nil {
-		config := handler.configManager.Get()
-		for _, rs := range config.OIDC.ResourceServers {
-			if rs.Identifier == targetAudience {
-				resourceServerConfig := rs
-				matchingResourceServerConfig = &resourceServerConfig
-				break
-			}
+	config := handler.configManager.Get()
+	for _, rs := range config.OIDC.ResourceServers {
+		if rs.Identifier == targetAudience {
+			resourceServerConfig := rs
+			matchingResourceServerConfig = &resourceServerConfig
+			break
 		}
 	}
 
@@ -928,12 +894,7 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 		}
 	}
 
-	if handler.jwtSigner == nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OIDC token generation failed: JWT signer unavailable")
-		return
-	}
-
-	accessToken, tokenErr := handler.jwtSigner.GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds, targetAudience)
+	accessToken, tokenErr := handler.kernel.JWTSigner().GenerateM2MToken(serviceAccount.ID, grantedScopes, defaultM2MTokenExpirySeconds, targetAudience)
 	if tokenErr != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("Failed to generate M2M access token: %v", tokenErr))
 		return
@@ -989,19 +950,19 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 	redirectURI := request.FormValue("redirect_uri")
 	codeVerifier := request.FormValue("code_verifier")
 
-	if code == "" || handler.kvStore == nil {
+	if code == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authorization code invalid or expired")
 		return
 	}
 
-	codeJSON, err := handler.kvStore.Get(request.Context(), "auth:code:"+code)
+	codeJSON, err := handler.kernel.KVStore().Get(request.Context(), "auth:code:"+code)
 	if err != nil || codeJSON == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Authorization code invalid or expired")
 		return
 	}
 
 	// Delete code immediately (single-use)
-	_ = handler.kvStore.Delete(request.Context(), "auth:code:"+code)
+	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:code:"+code)
 
 	var oidcAuthorizationCodePayload OIDCAuthorizationCodePayload
 	if unmarshalErr := json.Unmarshal([]byte(codeJSON), &oidcAuthorizationCodePayload); unmarshalErr != nil {
@@ -1036,7 +997,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 		FROM auth.users
 		WHERE id = $1
 	`
-	scanErr := handler.db.QueryRow(ctx, query, oidcAuthorizationCodePayload.UserID).Scan(
+	scanErr := handler.kernel.DB().QueryRow(ctx, query, oidcAuthorizationCodePayload.UserID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &rawProperties,
 		&user.CreatedAt, &user.LastUpdatedAt,
@@ -1065,7 +1026,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 
 	sessionID := uuid.NewV7().String()
 	customClaims := handler.resolveCustomClaims(ctx, user.ID)
-	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	accessToken := handler.kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     user.ID,
 		SessionID:   sessionID,
 		Email:       userEmail,
@@ -1075,26 +1036,24 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 		Claims:      customClaims,
 	}, accessExpiry)
 
-	refreshToken := handler.jwtSigner.GenerateRefreshToken()
-	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
+	refreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
+	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	expiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
 	`, sessionID, user.ID, clientID, refreshTokenHash, expiresAt)
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
-			ID:        sessionID,
-			User:      user,
-			ExpiresAt: expiresAt,
-			CreatedAt: time.Now().UTC(),
-		}))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+		ID:        sessionID,
+		User:      user,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now().UTC(),
+	}))
 
 	baseURL := core.GetConfig().ServerBaseURL()
-	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
+	idToken := handler.kernel.JWTSigner().GenerateIDToken(core.JWTClaims{
 		Issuer:        baseURL,
 		Subject:       user.ID,
 		SessionID:     sessionID,
@@ -1148,10 +1107,10 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	}
 
 	ctx := request.Context()
-	refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
+	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 
 	var sessionID, userID string
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, user_id FROM auth.sessions
 		WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
 	`, refreshTokenHash).Scan(&sessionID, &userID)
@@ -1161,7 +1120,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	}
 
 	var user User
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil)
@@ -1171,19 +1130,19 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	}
 
 	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.sessions WHERE id = $1", sessionID)
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Account is temporarily locked")
 		return
 	}
 
 	// Rotate refresh token
-	newRefreshToken := handler.jwtSigner.GenerateRefreshToken()
-	newRefreshTokenHash := handler.jwtSigner.HashRefreshToken(newRefreshToken)
+	newRefreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
+	newRefreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(newRefreshToken)
 	config := handler.configManager.Get()
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	newExpiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
 
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		UPDATE auth.sessions
 		SET refresh_token_hash = $1, expires_at = $2
 		WHERE id = $3
@@ -1201,7 +1160,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	}
 
 	customClaims := handler.resolveCustomClaims(ctx, user.ID)
-	accessToken, _ := handler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	accessToken := handler.kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     user.ID,
 		SessionID:   sessionID,
 		Email:       userEmail,
@@ -1212,7 +1171,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	}, accessExpiry)
 
 	baseURL := core.GetConfig().ServerBaseURL()
-	idToken, _ := handler.jwtSigner.GenerateIDToken(core.JWTClaims{
+	idToken := handler.kernel.JWTSigner().GenerateIDToken(core.JWTClaims{
 		Issuer:        baseURL,
 		Subject:       user.ID,
 		SessionID:     sessionID,
@@ -1261,7 +1220,7 @@ func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWr
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`
-	scanErr := handler.db.QueryRow(ctx, query, authContext.UserID).Scan(
+	scanErr := handler.kernel.DB().QueryRow(ctx, query, authContext.UserID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &rawProperties,
 		&user.CreatedAt, &user.LastUpdatedAt,
@@ -1319,8 +1278,8 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 		_ = request.ParseForm()
 		idTokenHint = request.FormValue("id_token_hint")
 	}
-	if idTokenHint != "" && handler.jwtSigner != nil {
-		jwtClaims, err := handler.jwtSigner.VerifyAccessToken(idTokenHint)
+	if idTokenHint != "" {
+		jwtClaims, err := handler.kernel.JWTSigner().VerifyAccessToken(idTokenHint)
 		if err == nil && jwtClaims != nil {
 			callerUserID = jwtClaims.Subject
 			callerSessionID = jwtClaims.SessionID
@@ -1330,9 +1289,9 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 
 	// 2. Check active session cookie if user not yet resolved
 	sessionToken := core.ExtractRequestSessionToken(request)
-	if callerUserID == "" && sessionToken != "" && handler.jwtSigner != nil && handler.db != nil {
-		tokenHash := handler.jwtSigner.HashRefreshToken(sessionToken)
-		_ = handler.db.QueryRow(ctx, `
+	if callerUserID == "" && sessionToken != "" {
+		tokenHash := handler.kernel.JWTSigner().HashRefreshToken(sessionToken)
+		_ = handler.kernel.DB().QueryRow(ctx, `
 			SELECT id, user_id FROM auth.sessions WHERE refresh_token_hash = $1
 		`, tokenHash).Scan(&callerSessionID, &callerUserID)
 	}
@@ -1347,8 +1306,8 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 
 	// 4. Query active downstream client sessions for this user
 	targetSessions := make([]ClientSessionInfo, 0)
-	if callerUserID != "" && handler.db != nil {
-		rows, err := handler.db.Query(ctx, `
+	if callerUserID != "" {
+		rows, err := handler.kernel.DB().Query(ctx, `
 			SELECT id, client_id, refresh_token_hash
 			FROM auth.sessions
 			WHERE user_id = $1 AND client_id IS NOT NULL
@@ -1363,15 +1322,15 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 						SessionID: targetSessionID,
 						UserID:    callerUserID,
 					})
-					if handler.kvStore != nil && tokenHash != "" {
-						_ = handler.kvStore.Delete(ctx, "auth:session:"+tokenHash)
+					if tokenHash != "" {
+						_ = handler.kernel.KVStore().Delete(ctx, "auth:session:"+tokenHash)
 					}
 				}
 			}
 		}
 
 		// Delete all active sessions for this user
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.sessions WHERE user_id = $1", callerUserID)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.sessions WHERE user_id = $1", callerUserID)
 	}
 
 	if clientID != "" && (callerUserID != "" || callerSessionID != "") {
@@ -1396,7 +1355,7 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 
 	// 6. Dispatch Back-Channel Sign-Out to active clients
 	if len(targetSessions) > 0 {
-		dispatchBackChannelSignOut(ctx, handler.httpClient, handler.jwtSigner, config.OIDC.Clients, targetSessions)
+		dispatchBackChannelSignOut(ctx, handler.httpClient, handler.kernel.JWTSigner(), config.OIDC.Clients, targetSessions)
 	}
 
 	// 7. Validate post_sign_out_redirect_uri
@@ -1584,8 +1543,8 @@ func (handler *BaseHandler) renderOIDCPage(
 	showPassword := config.Password.Enabled && config.OIDC.UI.ShowPassword
 	showSignUp := config.Password.Enabled && config.OIDC.UI.ShowSignUp
 	showPasskeys := config.Passkeys.Enabled && config.OIDC.UI.ShowPasskeys
-	showEmailOTP := config.EmailOTP.Enabled && config.OIDC.UI.ShowEmailOTP && (handler.emailDispatcher != nil && handler.emailDispatcher.IsConfigured())
-	showSMSOTP := config.SMSOTP.Enabled && config.OIDC.UI.ShowSMSOTP && (handler.smsDispatcher != nil && handler.smsDispatcher.IsConfigured())
+	showEmailOTP := config.EmailOTP.Enabled && config.OIDC.UI.ShowEmailOTP && handler.emailDispatcher.IsConfigured()
+	showSMSOTP := config.SMSOTP.Enabled && config.OIDC.UI.ShowSMSOTP && handler.smsDispatcher.IsConfigured()
 
 	var providers []providerButtonData
 	if config.OIDC.UI.ShowOAuth {

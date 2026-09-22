@@ -50,9 +50,9 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 	// Verify caller identity and scope permissions
 	authorized := false
 	serviceAccountKey := core.ExtractRequestServiceAccountKey(request)
-	if serviceAccountKey != "" && baseHandler.serviceAccountManager != nil {
+	if serviceAccountKey != "" {
 		clientIP := core.ExtractRequestClientIP(request)
-		serviceAccount, authErr := baseHandler.serviceAccountManager.Authenticate(request.Context(), serviceAccountKey, clientIP)
+		serviceAccount, authErr := baseHandler.kernel.ServiceAccountManager().Authenticate(request.Context(), serviceAccountKey, clientIP)
 		if authErr == nil && core.HasScope(serviceAccount.Scopes, requiredScope) {
 			authorized = true
 		}
@@ -103,5 +103,5 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 		ExpiresAt: expiresAtTime,
 	}
 
-	baseHandler.writeJSON(responseWriter, http.StatusOK, presignURLResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, presignURLResponse)
 }

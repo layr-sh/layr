@@ -45,10 +45,7 @@ func TestDataServiceFactoryUnit(t *testing.T) {
 		t.Fatalf("expected *Service runner, got %T", serviceRunner)
 	}
 
-	dependenciesKernel := &core.Kernel{}
-	dependenciesKernel.SetKVStore(newInMemoryKVStore())
-	dependenciesKernel.SetServiceAccountManager(core.NewServiceAccountManager(nil))
-	dependenciesKernel.SetEventBus(core.NewEventBus(nil, nil))
+	dependenciesKernel := core.NewTestKernel(nil)
 	dependenciesServiceRunner, err := serviceFactory(dependenciesKernel)
 	if err != nil {
 		t.Fatalf("unexpected error creating data service from kernel with deps: %v", err)

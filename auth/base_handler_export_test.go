@@ -10,13 +10,9 @@ import (
 )
 
 func TestAuthHandlerExportUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
 	ctx := context.Background()
 
 	// 1. Missing user_id path parameter -> 400
@@ -55,12 +51,12 @@ func TestAuthHandlerExportUnit(t *testing.T) {
 		t.Fatalf("expected 401 on mismatched subject export, got: %d", mismatchedResponseRecorder.Code)
 	}
 
-	// 4. Matched subject on nil db pool -> 500
+	// 4. Matched subject on broken db pool / non-existent user -> 404
 	matchedRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/users/"+testUserUUID+"/export", nil)
 	matchedRequest.SetPathValue("user_id", testUserUUID)
 	matchedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(matchedResponseRecorder, matchedRequest)
-	if matchedResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on matched export with nil db pool, got: %d", matchedResponseRecorder.Code)
+	if matchedResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on matched export with non-existent user, got: %d", matchedResponseRecorder.Code)
 	}
 }

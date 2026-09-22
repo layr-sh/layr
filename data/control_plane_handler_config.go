@@ -10,25 +10,15 @@ import (
 
 // handleGetConfig handles GET /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:config.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataConfigRead) {
 		return
 	}
-	if controlPlaneHandler.configManager != nil {
-		controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
-		return
-	}
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DefaultConfig())
+	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
 }
 
 // handleUpdateConfig handles PUT /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:config.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
-		return
-	}
-	if controlPlaneHandler.configManager == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Config manager not initialized")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataConfigWrite) {
 		return
 	}
 
@@ -43,11 +33,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
-
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(controlPlaneHandler.configManager.Get())))
-	}
+	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(controlPlaneHandler.configManager.Get())))
 }
 
 // handleFlushCache handles POST /v1/_/data/cache/flush.
@@ -56,24 +43,19 @@ func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter 
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
-	if !controlPlaneHandler.checkScope(request, "data:cache.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataCacheWrite) {
 		return
 	}
 
-	if controlPlaneHandler.service != nil {
-		controlPlaneHandler.service.InvalidateCache(request.Context(), InvalidateCacheInput{All: true, Catalog: true})
-	}
+	controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true, Catalog: true})
 
 	now := time.Now().UTC()
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewCacheFlushedEvent("*", CacheFlushedEventData{
-			Pattern:   "*",
-			FlushedAt: now,
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewCacheFlushedEvent("*", CacheFlushedEventData{
+		Pattern:   "*",
+		FlushedAt: now,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, FlushCacheResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, FlushCacheResponse{
 		Status:    "ok",
 		FlushedAt: now,
 	})
@@ -85,8 +67,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleInvalidateCache(responseWr
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
 		return
 	}
-	if !controlPlaneHandler.checkScope(request, "data:cache.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataCacheWrite) {
 		return
 	}
 
@@ -105,17 +86,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleInvalidateCache(responseWr
 		pattern = invalidateCacheInput.Pattern
 	}
 
-	if controlPlaneHandler.service != nil {
-		controlPlaneHandler.service.InvalidateCache(request.Context(), invalidateCacheInput)
-	}
+	controlPlaneHandler.InvalidateCache(request.Context(), invalidateCacheInput)
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewCacheInvalidatedEvent(pattern, CacheInvalidatedEventData{
-			Pattern: pattern,
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewCacheInvalidatedEvent(pattern, CacheInvalidatedEventData{
+		Pattern: pattern,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, InvalidateCacheResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, InvalidateCacheResponse{
 		Status:  "ok",
 		Pattern: pattern,
 	})

@@ -143,10 +143,10 @@ func NewRouter(engine *fuego.Server) *Router {
 }
 
 // GetRoute registers an http.HandlerFunc on GET with strongly-typed response type T for OpenAPI.
-func GetRoute[T any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, any, any](http.MethodGet, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
-		server:     router.engine,
+func GetRoute[T any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, any, any](http.MethodGet, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -154,10 +154,10 @@ func GetRoute[T any](router *Router, path string, handler func(http.ResponseWrit
 }
 
 // HeadRoute registers an http.HandlerFunc on HEAD with strongly-typed response type T for OpenAPI.
-func HeadRoute[T any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, any, any](http.MethodHead, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
-		server:     router.engine,
+func HeadRoute[T any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, any, any](http.MethodHead, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -165,10 +165,10 @@ func HeadRoute[T any](router *Router, path string, handler func(http.ResponseWri
 }
 
 // PostRoute registers an http.HandlerFunc on POST with strongly-typed response type T and request body B for OpenAPI.
-func PostRoute[T any, B any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, B, any](http.MethodPost, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
-		server:     router.engine,
+func PostRoute[T any, B any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, B, any](http.MethodPost, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -176,10 +176,10 @@ func PostRoute[T any, B any](router *Router, path string, handler func(http.Resp
 }
 
 // PutRoute registers an http.HandlerFunc on PUT with strongly-typed response type T and request body B for OpenAPI.
-func PutRoute[T any, B any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, B, any](http.MethodPut, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
-		server:     router.engine,
+func PutRoute[T any, B any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, B, any](http.MethodPut, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -187,10 +187,10 @@ func PutRoute[T any, B any](router *Router, path string, handler func(http.Respo
 }
 
 // DeleteRoute registers an http.HandlerFunc on DELETE with strongly-typed response type T for OpenAPI.
-func DeleteRoute[T any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, any, any](http.MethodDelete, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
-		server:     router.engine,
+func DeleteRoute[T any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, any, any](http.MethodDelete, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, any, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -198,10 +198,10 @@ func DeleteRoute[T any](router *Router, path string, handler func(http.ResponseW
 }
 
 // PatchRoute registers an http.HandlerFunc on PATCH with strongly-typed response type T and request body B for OpenAPI.
-func PatchRoute[T any, B any](router *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
-	route := fuego.NewRoute[T, B, any](http.MethodPatch, path, handler, router.engine.Engine, options...)
-	fuego.Registers(router.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
-		server:     router.engine,
+func PatchRoute[T any, B any](baseRouter *Router, path string, handler func(http.ResponseWriter, *http.Request), options ...RouteOption) {
+	route := fuego.NewRoute[T, B, any](http.MethodPatch, path, handler, baseRouter.engine.Engine, options...)
+	fuego.Registers(baseRouter.engine.Engine, netHTTPRouteRegisterer[T, B, any]{
+		server:     baseRouter.engine,
 		route:      route,
 		controller: http.HandlerFunc(handler),
 		options:    options,
@@ -209,19 +209,19 @@ func PatchRoute[T any, B any](router *Router, path string, handler func(http.Res
 }
 
 // OutputOpenAPISpec returns the OpenAPI 3.1 specification.
-func (router *Router) OutputOpenAPISpec() *openapi3.T {
-	if router.engine != nil && router.engine.OpenAPI != nil {
-		return router.engine.OpenAPI.Description()
+func (baseRouter *Router) OutputOpenAPISpec() *openapi3.T {
+	if baseRouter.engine != nil && baseRouter.engine.OpenAPI != nil {
+		return baseRouter.engine.OpenAPI.Description()
 	}
 	return nil
 }
 
 // Engine returns the underlying fuego.Server engine.
-func (router *Router) Engine() *fuego.Server {
-	return router.engine
+func (baseRouter *Router) Engine() *fuego.Server {
+	return baseRouter.engine
 }
 
 // Mux returns the underlying http.ServeMux.
-func (router *Router) Mux() *http.ServeMux {
-	return router.engine.Mux
+func (baseRouter *Router) Mux() *http.ServeMux {
+	return baseRouter.engine.Mux
 }

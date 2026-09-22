@@ -104,10 +104,6 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 		return Event{}, err
 	}
 
-	if eventManager.db == nil {
-		return Event{}, fmt.Errorf("database pool is not available")
-	}
-
 	metadataJSON, err := json.Marshal(preparedEvent.Metadata)
 	if err != nil {
 		metadataJSON = []byte("{}")
@@ -179,10 +175,6 @@ func (eventManager *EventManager) Record(ctx context.Context, event Event) (Even
 
 // Get retrieves an event by its UUID from core.events.
 func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) (Event, error) {
-	if eventManager.db == nil {
-		return Event{}, fmt.Errorf("database pool is not available")
-	}
-
 	query := `
 		SELECT id, type, actor_id, actor_type, ip_address::text, user_agent, action, resource_type, resource_id, metadata, data, created_at
 		FROM core.events
@@ -227,10 +219,6 @@ func (eventManager *EventManager) Get(ctx context.Context, eventUUID uuid.UUID) 
 
 // List returns a list of events matching the provided filter criteria.
 func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFilter) ([]Event, error) {
-	if eventManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
-
 	limit := eventFilter.Limit
 	if limit <= 0 {
 		limit = defaultEventListLimit
@@ -374,7 +362,7 @@ func NewEventBus(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *EventBus
 
 	if db != nil {
 		eventBus.eventManager = NewEventManager(db)
-		eventBus.eventHookManager = NewEventHookManager(db, cryptoKeyManager, eventBus)
+		eventBus.eventHookManager = NewEventHookManager(db, cryptoKeyManager)
 	}
 
 	for index := 0; index < defaultEventWorkerCount; index++ {
@@ -385,18 +373,18 @@ func NewEventBus(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *EventBus
 	return eventBus
 }
 
-// SetEventManager overrides the EventManager instance.
-func (eventBus *EventBus) SetEventManager(eventManager *EventManager) {
-	eventBus.rwMutex.Lock()
-	defer eventBus.rwMutex.Unlock()
-	eventBus.eventManager = eventManager
+// EventManager returns the underlying EventManager instance.
+func (eventBus *EventBus) EventManager() *EventManager {
+	eventBus.rwMutex.RLock()
+	defer eventBus.rwMutex.RUnlock()
+	return eventBus.eventManager
 }
 
-// SetEventHookManager overrides the EventHookManager instance.
-func (eventBus *EventBus) SetEventHookManager(eventHookManager *EventHookManager) {
-	eventBus.rwMutex.Lock()
-	defer eventBus.rwMutex.Unlock()
-	eventBus.eventHookManager = eventHookManager
+// EventHookManager returns the underlying EventHookManager instance.
+func (eventBus *EventBus) EventHookManager() *EventHookManager {
+	eventBus.rwMutex.RLock()
+	defer eventBus.rwMutex.RUnlock()
+	return eventBus.eventHookManager
 }
 
 // Subscribe registers an in-memory handler for an event pattern.

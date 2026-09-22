@@ -13,13 +13,14 @@ import (
 func TestFilestorageControlPlaneHandlerUnit(t *testing.T) {
 	t.Parallel()
 
-	cryptoKeyManager, keyErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	require.NoError(t, keyErr)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
+	require.NotNil(t, controlPlaneHandler)
 
-	configManager := NewConfigManager(nil)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager, cryptoKeyManager)
+	serviceAccountManager := controlPlaneHandler.kernel.ServiceAccountManager()
 
-	t.Run("checkScope with service account auth context", func(t *testing.T) {
+	t.Run("RequireScope with service account auth context", func(t *testing.T) {
 		t.Parallel()
 		matchingAuthContext := core.AuthContext{
 			ServiceAccountID: "sa-1",
@@ -32,37 +33,25 @@ func TestFilestorageControlPlaneHandlerUnit(t *testing.T) {
 		}
 		matchingCtx := core.WithAuthContext(context.Background(), matchingAuthContext)
 		matchingRequest := httptest.NewRequestWithContext(matchingCtx, http.MethodGet, "/test", nil)
-		require.True(t, controlPlaneHandler.checkScope(matchingRequest, core.ScopeFileStorageBucketRead))
-		require.False(t, controlPlaneHandler.checkScope(matchingRequest, core.ScopeFileStorageBucketWrite))
+		matchingResponseRecorder := httptest.NewRecorder()
+		require.True(t, serviceAccountManager.RequireScope(matchingResponseRecorder, matchingRequest, core.ScopeFileStorageBucketRead))
+
+		failingResponseRecorder := httptest.NewRecorder()
+		require.False(t, serviceAccountManager.RequireScope(failingResponseRecorder, matchingRequest, core.ScopeFileStorageBucketWrite))
 	})
 
-	t.Run("checkScope with nil service account manager", func(t *testing.T) {
-		t.Parallel()
-		nilManagerControlPlaneHandler := NewControlPlaneHandler(nil, configManager, cryptoKeyManager)
-		nilManagerControlPlaneHandler.SetServiceAccountManager(nil)
-
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-		require.True(t, nilManagerControlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead))
-	})
-
-	t.Run("checkScope without service account key header", func(t *testing.T) {
+	t.Run("RequireScope without service account key header", func(t *testing.T) {
 		t.Parallel()
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-		require.True(t, controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead))
+		responseRecorder := httptest.NewRecorder()
+		require.True(t, serviceAccountManager.RequireScope(responseRecorder, request, core.ScopeFileStorageBucketRead))
 	})
 
-	t.Run("checkScope with invalid service account key", func(t *testing.T) {
+	t.Run("RequireScope with invalid service account key", func(t *testing.T) {
 		t.Parallel()
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 		request.Header.Set("Authorization", "Bearer invalid-sa-key")
-		require.False(t, controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead))
-	})
-
-	t.Run("writeJSON writes valid json", func(t *testing.T) {
-		t.Parallel()
 		responseRecorder := httptest.NewRecorder()
-		controlPlaneHandler.writeJSON(responseRecorder, http.StatusOK, map[string]string{"status": "ok"})
-		require.Equal(t, http.StatusOK, responseRecorder.Code)
-		require.Contains(t, responseRecorder.Body.String(), `"status":"ok"`)
+		require.False(t, serviceAccountManager.RequireScope(responseRecorder, request, core.ScopeFileStorageBucketRead))
 	})
 }

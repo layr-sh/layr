@@ -18,7 +18,7 @@ const DefaultDatabaseChunkSize = 524288
 
 // DatabaseEngine implements Driver using PostgreSQL BYTEA chunks.
 type DatabaseEngine struct {
-	db             *core.DatabasePool
+	kernel         *core.Kernel
 	chunkSizeBytes int
 }
 
@@ -26,20 +26,20 @@ type DatabaseEngine struct {
 type DatabaseDriver = DatabaseEngine
 
 // NewDatabaseEngine initializes a database chunk streaming driver.
-func NewDatabaseEngine(db *core.DatabasePool, chunkSizeBytes ...int) *DatabaseEngine {
+func NewDatabaseEngine(kernel *core.Kernel, chunkSizeBytes ...int) *DatabaseEngine {
 	size := DefaultDatabaseChunkSize
 	if len(chunkSizeBytes) > 0 && chunkSizeBytes[0] > 0 {
 		size = chunkSizeBytes[0]
 	}
 	return &DatabaseEngine{
-		db:             db,
+		kernel:         kernel,
 		chunkSizeBytes: size,
 	}
 }
 
 // NewDatabaseFileStorageEngine initializes an Engine backed by PostgreSQL BYTEA chunks.
-func NewDatabaseFileStorageEngine(db *core.DatabasePool, chunkSizeBytes ...int) *Engine {
-	return NewEngine(NewDatabaseEngine(db, chunkSizeBytes...))
+func NewDatabaseFileStorageEngine(kernel *core.Kernel, chunkSizeBytes ...int) *Engine {
+	return NewEngine(NewDatabaseEngine(kernel, chunkSizeBytes...))
 }
 
 // Upload streams binary payload into 512KB chunks within a database transaction.
@@ -51,10 +51,6 @@ func (databaseEngine *DatabaseEngine) Upload(
 	sizeBytes int64,
 	contentType string,
 ) (*Object, error) {
-	if databaseEngine.db == nil {
-		return nil, fmt.Errorf("database pool unavailable")
-	}
-
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -68,7 +64,7 @@ func (databaseEngine *DatabaseEngine) Upload(
 
 	chunkBuffer := make([]byte, databaseEngine.chunkSizeBytes)
 
-	tx, txErr := databaseEngine.db.Begin(ctx)
+	tx, txErr := databaseEngine.kernel.DB().Begin(ctx)
 	if txErr != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", txErr)
 	}
@@ -163,10 +159,6 @@ func (databaseEngine *DatabaseEngine) Head(
 	bucket Bucket,
 	key string,
 ) (*Object, error) {
-	if databaseEngine.db == nil {
-		return nil, fmt.Errorf("database pool unavailable")
-	}
-
 	const selectObjectSQL = `
 		SELECT id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata, created_at, last_updated_at
 		FROM file_storage.objects
@@ -174,7 +166,7 @@ func (databaseEngine *DatabaseEngine) Head(
 	`
 
 	var object Object
-	scanErr := databaseEngine.db.QueryRow(ctx, selectObjectSQL, bucket.ID, key).Scan(
+	scanErr := databaseEngine.kernel.DB().QueryRow(ctx, selectObjectSQL, bucket.ID, key).Scan(
 		&object.ID,
 		&object.BucketID,
 		&object.ObjectKey,
@@ -201,15 +193,11 @@ func (databaseEngine *DatabaseEngine) Delete(
 	bucket Bucket,
 	key string,
 ) error {
-	if databaseEngine.db == nil {
-		return fmt.Errorf("database pool unavailable")
-	}
-
 	const deleteObjectSQL = `
 		DELETE FROM file_storage.objects
 		WHERE bucket_id = $1 AND object_key = $2;
 	`
-	deleteResult, execErr := databaseEngine.db.Exec(ctx, deleteObjectSQL, bucket.ID, key)
+	deleteResult, execErr := databaseEngine.kernel.DB().Exec(ctx, deleteObjectSQL, bucket.ID, key)
 	if execErr != nil {
 		return fmt.Errorf("failed to delete object: %w", execErr)
 	}
@@ -265,7 +253,7 @@ func (databaseEngine *DatabaseEngine) Download(
 			ORDER BY chunk_index ASC;
 		`
 
-		rows, queryErr := databaseEngine.db.Query(ctx, selectChunksSQL, object.ID, startChunkIndex, endChunkIndex)
+		rows, queryErr := databaseEngine.kernel.DB().Query(ctx, selectChunksSQL, object.ID, startChunkIndex, endChunkIndex)
 		if queryErr == nil {
 			defer rows.Close()
 

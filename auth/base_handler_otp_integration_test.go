@@ -10,18 +10,20 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 	"uuid"
 
 	"layr.sh/core"
 )
 
 func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	_ = kernel.DB()
+	_ = kernel.CryptoKeyManager()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -48,21 +50,13 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
+	_ = kernel.KVStore()
+	baseHandler := service.baseHandler
 
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := configManager.Get().EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager)
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := configManager.Get().SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(emailDispatcher)
-	baseHandler.SetSMSDispatcher(smsDispatcher)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
+	baseHandler.emailDispatcher = emailDispatcher
+	baseHandler.smsDispatcher = smsDispatcher
 
 	targetEmail := "cooldown.user@example.com"
 
@@ -95,13 +89,8 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 		t.Fatalf("expected cooldown message, got: %s", secondOTPResponseRecorder.Body.String())
 	}
 
-	// 3. Fast-forward cooldown key expiration in database to simulate 60s passing -> request succeeds
-	_, err := db.Exec(ctx, `
-		UPDATE core.kv_store 
-		SET expires_at = clock_timestamp() - interval '1 second' 
-		WHERE key = $1
-	`, fmt.Sprintf("auth:cooldown:sign_in:%s", targetEmail))
-	if err != nil {
+	// 3. Fast-forward cooldown key by removing it from KV store to simulate 60s passing -> request succeeds
+	if err := kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", targetEmail)); err != nil {
 		t.Fatalf("failed to expire cooldown key: %v", err)
 	}
 
@@ -153,11 +142,14 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 }
 
 func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
+	_ = kernel.CryptoKeyManager()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -185,9 +177,9 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
+	eventBus := kernel.EventBus()
+	databaseKVStore := kernel.KVStore()
+	jwtSigner := kernel.JWTSigner()
 
 	var capturedEvents []core.Event
 	var eventsMutex sync.Mutex
@@ -198,19 +190,9 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		return nil
 	})
 
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := configManager.Get().EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager)
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := configManager.Get().SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(emailDispatcher)
-	baseHandler.SetSMSDispatcher(smsDispatcher)
+	baseHandler := service.baseHandler
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
 
 	userEmail := "otp.user@example.com"
 
@@ -335,7 +317,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID)
-	anonAccessToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonAccessToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -404,7 +386,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, conflictAnonID)
-	conflictAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	conflictAnonToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     conflictAnonID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -469,7 +451,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, phoneAnonID)
-	phoneAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	phoneAnonToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     phoneAnonID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -527,11 +509,15 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 }
 
 func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
+	cryptoKeyManager := kernel.CryptoKeyManager()
+	databaseKVStore := kernel.KVStore()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -558,22 +544,9 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := configManager.Get().EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(emailDispatcher)
-
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := configManager.Get().SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetSMSDispatcher(smsDispatcher)
+	baseHandler := service.baseHandler
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
 
 	// 1. Email user with MFA enabled
 	emailMFAUser := "mfa.email@example.com"

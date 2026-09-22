@@ -39,12 +39,12 @@ func IsProtectedSchema(schema string) bool {
 
 // DDLEngine executes schema introspection and DDL commands.
 type DDLEngine struct {
-	db *core.DatabasePool
+	kernel *core.Kernel
 }
 
 // NewDDLEngine initializes the DDL schema engine.
-func NewDDLEngine(db *core.DatabasePool) *DDLEngine {
-	return &DDLEngine{db: db}
+func NewDDLEngine(kernel *core.Kernel) *DDLEngine {
+	return &DDLEngine{kernel: kernel}
 }
 
 // ListTables retrieves metadata for all user tables across the specified schemas.
@@ -69,7 +69,7 @@ func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Ta
 			WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE'
 			ORDER BY t.table_name ASC
 		`
-		rows, queryErr := engine.db.Query(ctx, listSQLStatement, schema)
+		rows, queryErr := engine.kernel.DB().Query(ctx, listSQLStatement, schema)
 		if queryErr != nil {
 			return nil, fmt.Errorf("failed to list tables for schema %s: %w", schema, queryErr)
 		}
@@ -114,7 +114,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 			WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'
 		)
 	`
-	scanErr := engine.db.QueryRow(ctx, existsSQLStatement, schema, tableName).Scan(&exists)
+	scanErr := engine.kernel.DB().QueryRow(ctx, existsSQLStatement, schema, tableName).Scan(&exists)
 	if scanErr != nil || !exists {
 		return nil, fmt.Errorf("table '%s.%s' not found", schema, tableName)
 	}
@@ -139,7 +139,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 		  AND tc.table_name = $2
 		LIMIT 1
 	`
-	_ = engine.db.QueryRow(ctx, pkSQLStatement, schema, tableName).Scan(&table.PrimaryKey)
+	_ = engine.kernel.DB().QueryRow(ctx, pkSQLStatement, schema, tableName).Scan(&table.PrimaryKey)
 
 	// 2. Fetch Columns
 	const columnSQLStatement = `
@@ -148,7 +148,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 		WHERE table_schema = $1 AND table_name = $2
 		ORDER BY ordinal_position ASC
 	`
-	columnRows, queryColumnErr := engine.db.Query(ctx, columnSQLStatement, schema, tableName)
+	columnRows, queryColumnErr := engine.kernel.DB().Query(ctx, columnSQLStatement, schema, tableName)
 	if queryColumnErr == nil {
 		defer columnRows.Close()
 		for columnRows.Next() {
@@ -186,7 +186,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 		WHERE tc.constraint_type = 'FOREIGN KEY'
 		  AND tc.table_schema = $1 AND tc.table_name = $2
 	`
-	fkRows, fkErr := engine.db.Query(ctx, fkSQLStatement, schema, tableName)
+	fkRows, fkErr := engine.kernel.DB().Query(ctx, fkSQLStatement, schema, tableName)
 	if fkErr == nil {
 		defer fkRows.Close()
 		for fkRows.Next() {
@@ -208,7 +208,7 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = $1 AND c.relname = $2
 	`
-	_ = engine.db.QueryRow(ctx, rlsSQLStatement, schema, tableName).Scan(&table.RLSEnabled, &table.RLSForced)
+	_ = engine.kernel.DB().QueryRow(ctx, rlsSQLStatement, schema, tableName).Scan(&table.RLSEnabled, &table.RLSForced)
 
 	return table, nil
 }
@@ -280,7 +280,7 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableInput Creat
 	}
 
 	createSQLStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (\n    %s\n);", quoteIdent(schema), quoteIdent(createTableInput.Name), strings.Join(columnClauses, ",\n    "))
-	if _, execErr := engine.db.Exec(ctx, createSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, createSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to create table %s.%s: %w", schema, createTableInput.Name, execErr)
 	}
 
@@ -305,7 +305,7 @@ func (engine *DDLEngine) DropTable(ctx context.Context, schema, table string, ca
 	}
 
 	dropSQLStatement := fmt.Sprintf("DROP TABLE IF EXISTS %s.%s%s;", quoteIdent(schema), quoteIdent(table), cascadeAction)
-	if _, execErr := engine.db.Exec(ctx, dropSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, dropSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to drop table %s.%s: %w", schema, table, execErr)
 	}
 	return nil
@@ -329,7 +329,7 @@ func (engine *DDLEngine) TruncateTable(ctx context.Context, schema, table string
 	}
 
 	truncateSQLStatement := fmt.Sprintf("TRUNCATE TABLE %s.%s%s;", quoteIdent(schema), quoteIdent(table), cascadeAction)
-	if _, execErr := engine.db.Exec(ctx, truncateSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, truncateSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to truncate table %s.%s: %w", schema, table, execErr)
 	}
 	return nil
@@ -349,7 +349,7 @@ func (engine *DDLEngine) AddColumn(ctx context.Context, schema, table string, co
 
 	clause := buildColumnClause(column)
 	addColumnSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", quoteIdent(schema), quoteIdent(table), clause)
-	if _, execErr := engine.db.Exec(ctx, addColumnSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, addColumnSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to add column to %s.%s: %w", schema, table, execErr)
 	}
 	return nil
@@ -416,7 +416,7 @@ func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnN
 		return errors.New("no modifications provided in alter column request")
 	}
 
-	tx, txErr := engine.db.Begin(ctx)
+	tx, txErr := engine.kernel.DB().Begin(ctx)
 	if txErr != nil {
 		return txErr
 	}
@@ -449,7 +449,7 @@ func (engine *DDLEngine) DropColumn(ctx context.Context, schema, table, columnNa
 	}
 
 	dropSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s DROP COLUMN IF EXISTS %s%s;", quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), cascadeAction)
-	if _, execErr := engine.db.Exec(ctx, dropSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, dropSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to drop column %s from %s.%s: %w", columnName, schema, table, execErr)
 	}
 	return nil
@@ -483,7 +483,7 @@ func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) 
 		GROUP BY i.relname, am.amname, ix.indisunique
 		ORDER BY i.relname ASC
 	`
-	rows, queryErr := engine.db.Query(ctx, indexesSQLStatement, schema, table)
+	rows, queryErr := engine.kernel.DB().Query(ctx, indexesSQLStatement, schema, table)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to list indexes: %w", queryErr)
 	}
@@ -544,7 +544,7 @@ func (engine *DDLEngine) CreateIndex(ctx context.Context, schema, table string, 
 
 	createIndexSQLStatement := fmt.Sprintf("CREATE %sINDEX IF NOT EXISTS %s ON %s.%s USING %s (%s);",
 		uniqueClause, quoteIdent(indexName), quoteIdent(schema), quoteIdent(table), indexType, strings.Join(quotedColumns, ", "))
-	if _, execErr := engine.db.Exec(ctx, createIndexSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, createIndexSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to create index %s: %w", indexName, execErr)
 	}
 	return nil
@@ -563,7 +563,7 @@ func (engine *DDLEngine) DropIndex(ctx context.Context, schema, indexName string
 	}
 
 	dropIndexSQLStatement := fmt.Sprintf("DROP INDEX IF EXISTS %s.%s;", quoteIdent(schema), quoteIdent(indexName))
-	if _, execErr := engine.db.Exec(ctx, dropIndexSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, dropIndexSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to drop index %s: %w", indexName, execErr)
 	}
 	return nil
@@ -577,7 +577,7 @@ func (engine *DDLEngine) ExecuteSQL(ctx context.Context, sqlQuery string) (*Exec
 	}
 
 	start := time.Now()
-	rows, queryErr := engine.db.Query(ctx, trimmed)
+	rows, queryErr := engine.kernel.DB().Query(ctx, trimmed)
 	if queryErr != nil {
 		return nil, fmt.Errorf("SQL execution error: %w", queryErr)
 	}
@@ -628,7 +628,7 @@ func (engine *DDLEngine) EnableRLS(ctx context.Context, schema, table string) er
 	}
 
 	enableRLSSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s ENABLE ROW LEVEL SECURITY;", quoteIdent(schema), quoteIdent(table))
-	if _, execErr := engine.db.Exec(ctx, enableRLSSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, enableRLSSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to enable RLS on %s.%s: %w", schema, table, execErr)
 	}
 	return nil
@@ -647,7 +647,7 @@ func (engine *DDLEngine) DisableRLS(ctx context.Context, schema, table string) e
 	}
 
 	disableRLSSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s DISABLE ROW LEVEL SECURITY;", quoteIdent(schema), quoteIdent(table))
-	if _, execErr := engine.db.Exec(ctx, disableRLSSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, disableRLSSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to disable RLS on %s.%s: %w", schema, table, execErr)
 	}
 	return nil
@@ -670,7 +670,7 @@ func (engine *DDLEngine) ForceRLS(ctx context.Context, schema, table string, for
 		action = "NO FORCE"
 	}
 	forceRLSSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s %s ROW LEVEL SECURITY;", quoteIdent(schema), quoteIdent(table), action)
-	if _, execErr := engine.db.Exec(ctx, forceRLSSQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, forceRLSSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to set %s ROW LEVEL SECURITY on %s.%s: %w", action, schema, table, execErr)
 	}
 	return nil
@@ -700,7 +700,7 @@ func (engine *DDLEngine) ListPolicies(ctx context.Context, schema, table string)
 		WHERE schemaname = $1 AND tablename = $2
 		ORDER BY policyname ASC
 	`
-	rows, queryErr := engine.db.Query(ctx, policiesSQLStatement, schema, table)
+	rows, queryErr := engine.kernel.DB().Query(ctx, policiesSQLStatement, schema, table)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to list policies: %w", queryErr)
 	}
@@ -782,7 +782,7 @@ func (engine *DDLEngine) CreatePolicy(ctx context.Context, schema, table string,
 	}
 
 	policySQLStatement := strings.Join(clauses, " ") + ";"
-	if _, execErr := engine.db.Exec(ctx, policySQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, policySQLStatement); execErr != nil {
 		return fmt.Errorf("failed to create policy '%s' on %s.%s: %w", createPolicyInput.Name, schema, table, execErr)
 	}
 	return nil
@@ -801,7 +801,7 @@ func (engine *DDLEngine) DropPolicy(ctx context.Context, schema, table, policyNa
 	}
 
 	dropPolicySQLStatement := fmt.Sprintf("DROP POLICY IF EXISTS %s ON %s.%s;", quoteIdent(policyName), quoteIdent(schema), quoteIdent(table))
-	if _, execErr := engine.db.Exec(ctx, dropPolicySQLStatement); execErr != nil {
+	if _, execErr := engine.kernel.DB().Exec(ctx, dropPolicySQLStatement); execErr != nil {
 		return fmt.Errorf("failed to drop policy '%s' on %s.%s: %w", policyName, schema, table, execErr)
 	}
 	return nil

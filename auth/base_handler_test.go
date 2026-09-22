@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,65 +14,62 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthHandlerInitializationUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
+type failingTestKVDriver struct {
+	core.TestInMemoryKVDriver
+	setErr error
+}
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+func (driver *failingTestKVDriver) Set(ctx context.Context, key string, value string, expiry time.Duration) error {
+	if driver.setErr != nil {
+		return driver.setErr
+	}
+	if err := driver.TestInMemoryKVDriver.Set(ctx, key, value, expiry); err != nil {
+		return fmt.Errorf("failed to set in test kv driver: %w", err)
+	}
+	return nil
+}
+
+func TestAuthHandlerInitializationUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+
 	if baseHandler == nil {
 		t.Fatal("expected non-nil baseHandler")
 	}
-
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
-	if baseHandler.kvStore != testKVStore {
-		t.Fatal("expected KVStore to be set")
+	if baseHandler.kernel.KVStore() != kernel.KVStore() {
+		t.Fatal("expected KVStore to match kernel")
+	}
+	if baseHandler.kernel.ServiceAccountManager() != kernel.ServiceAccountManager() {
+		t.Fatal("expected ServiceAccountManager to match kernel")
+	}
+	if baseHandler.kernel.EventBus() != kernel.EventBus() {
+		t.Fatal("expected EventBus to match kernel")
 	}
 
-	emailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		return &EmailDispatcherConfig{}
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(emailDispatcher)
-	if baseHandler.emailDispatcher != emailDispatcher {
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return nil })
+	service.emailDispatcher = emailDispatcher
+	if service.emailDispatcher != emailDispatcher {
 		t.Fatal("expected EmailDispatcher to be set")
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
-		return &SMSDispatcherConfig{}
-	}, cryptoKeyManager)
-	baseHandler.SetSMSDispatcher(smsDispatcher)
-	if baseHandler.smsDispatcher != smsDispatcher {
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return nil })
+	service.smsDispatcher = smsDispatcher
+	if service.smsDispatcher != smsDispatcher {
 		t.Fatal("expected SMSDispatcher to be set")
 	}
 
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
-	if baseHandler.serviceAccountManager != serviceAccountManager {
-		t.Fatal("expected ServiceAccountManager to be set")
-	}
-
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	defer eventBus.Close()
-	baseHandler.SetEventBus(eventBus)
-	if baseHandler.eventBus != eventBus {
-		t.Fatal("expected EventBus to be set")
-	}
-
-	totpManager := baseHandler.GetTOTPManager()
+	totpManager := baseHandler.totpManager
 	if totpManager == nil {
 		t.Fatal("expected non-nil TOTPManager")
 	}
 
-	// Test NewBaseHandler fallback when MFA.Issuer is empty
-	emptyIssuerConfigManager := NewConfigManager(nil, cryptoKeyManager)
-	emptyIssuerConfigManager.rwMutex.Lock()
-	emptyIssuerConfigManager.config.MFA.Issuer = ""
-	emptyIssuerConfigManager.rwMutex.Unlock()
-	emptyBaseHandler := NewBaseHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
-	if emptyBaseHandler == nil {
+	// Test fallback when MFA.Issuer is empty
+	service.configManager.rwMutex.Lock()
+	service.configManager.config.MFA.Issuer = ""
+	service.configManager.rwMutex.Unlock()
+	emptyService := NewService(kernel)
+	if emptyService.baseHandler == nil {
 		t.Fatal("expected non-nil baseHandler with empty issuer")
 	}
 
@@ -119,9 +117,9 @@ func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
 }
 
 func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
-	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
 
 	responseRecorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil)
@@ -145,68 +143,64 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 
 	// Configured email dispatcher
 	webhookDriver := "webhook"
-	configuredEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
+	configuredEmailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig {
 		return &EmailDispatcherConfig{
 			Driver:  &webhookDriver,
 			Webhook: EmailDispatcherWebhookConfig{URL: "https://example.com/webhook"},
 		}
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(configuredEmailDispatcher)
+	})
+	service.emailDispatcher = configuredEmailDispatcher
 	if !baseHandler.assertEmailDeliveryReady(responseRecorder, request) {
 		t.Fatal("expected assertEmailDeliveryReady to return true when configured")
 	}
 
 	// Configured SMS dispatcher
-	configuredSMSDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
+	configuredSMSDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig {
 		return &SMSDispatcherConfig{
 			Driver:  &webhookDriver,
 			Webhook: SMSDispatcherWebhookConfig{URL: "https://example.com/sms"},
 		}
-	}, cryptoKeyManager)
-	baseHandler.SetSMSDispatcher(configuredSMSDispatcher)
+	})
+	service.smsDispatcher = configuredSMSDispatcher
 	if !baseHandler.assertSMSDeliveryReady(smsResponseRecorder, request) {
 		t.Fatal("expected assertSMSDeliveryReady to return true when configured")
 	}
 }
 
 func TestAuthHandlerResolveCallerUnit(t *testing.T) {
-	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
 
 	testUserID := uuid.NewV7().String()
 
-	// resolveCustomClaims with nil db
+	// resolveCustomClaims with broken db
 	customClaims := baseHandler.resolveCustomClaims(context.Background(), testUserID)
 	if customClaims != nil {
-		t.Fatalf("expected nil custom claims with nil db, got: %+v", customClaims)
+		t.Fatalf("expected nil custom claims with broken db, got: %+v", customClaims)
 	}
 
-	// resolveAnonymousCaller with nil db
+	// resolveAnonymousCaller with broken db
 	validRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	resolvedAnonymousUser, resolveAnonymousCallerErr := baseHandler.resolveAnonymousCaller(validRequest)
 	if resolvedAnonymousUser != nil || !errors.Is(resolveAnonymousCallerErr, ErrAnonymousSessionNotFound) {
-		t.Fatalf("expected ErrAnonymousSessionNotFound with nil db, got: %+v (err: %v)", resolvedAnonymousUser, resolveAnonymousCallerErr)
+		t.Fatalf("expected ErrAnonymousSessionNotFound with broken db, got: %+v (err: %v)", resolvedAnonymousUser, resolveAnonymousCallerErr)
 	}
 }
 
 func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
+	failingDriver := &failingTestKVDriver{TestInMemoryKVDriver: *core.NewTestInMemoryKVDriver()}
+	kvStore := core.NewKVStoreFromDriver(failingDriver)
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	configManager.rwMutex.Lock()
-	configManager.config.Sessions.RefreshTokenExpirySeconds = -1
-	configManager.config.Cache.FastPathSessionsEnabled = true
-	configManager.config.Cache.SessionTTLSeconds = -1
-	configManager.rwMutex.Unlock()
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations, core.WithKVStore(kvStore))
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
 
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVDriver := newInMemoryKVDriver()
-	testKVStore := core.NewKVStoreFromDriver(testKVDriver)
-	baseHandler.SetKVStore(testKVStore)
+	service.configManager.rwMutex.Lock()
+	service.configManager.config.Sessions.RefreshTokenExpirySeconds = -1
+	service.configManager.config.Cache.FastPathSessionsEnabled = true
+	service.configManager.config.Cache.SessionTTLSeconds = -1
+	service.configManager.rwMutex.Unlock()
 
 	testPhone := "+1234567890"
 	testEmail := "user@example.com"
@@ -226,11 +220,11 @@ func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
 	}
 
 	// KVStore Set error branch
-	testKVDriver.setErr = errors.New("simulated kv store set error")
+	failingDriver.setErr = errors.New("simulated kv store set error")
 	kvErrResponseRecorder := httptest.NewRecorder()
 	baseHandler.issueSessionResponse(kvErrResponseRecorder, request, user)
 	if kvErrResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 even if fast path cache fails, got: %d", kvErrResponseRecorder.Code)
 	}
-	testKVDriver.setErr = nil
+	failingDriver.setErr = nil
 }

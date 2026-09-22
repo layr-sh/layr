@@ -1,19 +1,21 @@
-package core
+package totp
 
 import (
 	"strings"
 	"testing"
 	"time"
+
+	"layr.sh/core"
 )
 
-func TestCoreTOTPEncryptionLifecycleIntegration(t *testing.T) {
+func TestTOTPEncryptionLifecycleIntegration(t *testing.T) {
 	encryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	cryptoKeyManager, err := NewCryptoKeyManager(encryptionKeyHex)
+	cryptoKeyManager, err := core.NewCryptoKeyManager(encryptionKeyHex)
 	if err != nil {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	totpManager := NewTOTPManager("Layr Console")
+	totpManager := NewManager("Layr Console")
 
 	// 1. Generate TOTP secret during console user setup
 	totpSecret, err := totpManager.GenerateSecret()

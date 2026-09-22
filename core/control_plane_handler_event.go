@@ -6,7 +6,7 @@ import (
 	"uuid"
 )
 
-func (kernel *Kernel) handleListEvents(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleListEvents(responseWriter http.ResponseWriter, request *http.Request) {
 	queryValues := request.URL.Query()
 	eventFilter := EventFilter{}
 	if typeQueryParam := queryValues.Get("type"); typeQueryParam != "" {
@@ -37,24 +37,24 @@ func (kernel *Kernel) handleListEvents(responseWriter http.ResponseWriter, reque
 		}
 	}
 
-	events, err := kernel.eventManager.List(request.Context(), eventFilter)
+	events, err := server.kernel.eventManager.List(request.Context(), eventFilter)
 	if err != nil {
 		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
-	kernel.writeJSON(responseWriter, events)
+	WriteJSONResponse(responseWriter, http.StatusOK, events)
 }
 
-func (kernel *Kernel) handleGetEvent(responseWriter http.ResponseWriter, request *http.Request) {
+func (server *Server) handleGetEvent(responseWriter http.ResponseWriter, request *http.Request) {
 	eventID, err := uuid.Parse(request.PathValue("event_id"))
 	if err != nil {
 		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
-	event, err := kernel.eventManager.Get(request.Context(), eventID)
+	event, err := server.kernel.eventManager.Get(request.Context(), eventID)
 	if err != nil {
 		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
-	kernel.writeJSON(responseWriter, event)
+	WriteJSONResponse(responseWriter, http.StatusOK, event)
 }

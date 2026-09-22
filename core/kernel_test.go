@@ -20,14 +20,13 @@ func (mock *mockServiceRunner) Start(ctx context.Context) error {
 	return mock.startErr
 }
 
-func (mock *mockServiceRunner) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
+func (mock *mockServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
 	mock.registered = true
 	mock.openAPIRegistered = true
 }
 
-func (mock *mockServiceRunner) Stop() error {
+func (mock *mockServiceRunner) Stop() {
 	mock.stopped = true
-	return nil
 }
 
 func TestCoreKernelValidationUnit(t *testing.T) {
@@ -40,7 +39,7 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 	SetLoadedConfig(invalidConfig)
 	defer UnloadConfig()
 
-	_, err := NewKernel()
+	_, err := NewKernel(nil)
 	if err == nil {
 		t.Fatal("expected NewKernel to fail on invalid config (zero functional services)")
 	}
@@ -51,7 +50,7 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 	invalidMasterEncryptionKeyConfig.Security.MasterEncryptionKey = "short"
 	SetLoadedConfig(invalidMasterEncryptionKeyConfig)
 
-	_, err = NewKernel()
+	_, err = NewKernel(nil)
 	if err == nil {
 		t.Fatal("expected NewKernel to fail on invalid master encryption key")
 	}
@@ -62,27 +61,17 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 	validConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(validConfig)
 
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(nil)
 	if err != nil {
 		t.Fatalf("unexpected NewKernel error: %v", err)
-	}
-	if kernel == nil {
-		t.Fatal("expected non-nil Kernel instance")
 	}
 
 	if publishableKey := kernel.PublishableKey(); len(publishableKey) != 64 {
 		t.Fatalf("expected 64-char hex publishable key, got %s", publishableKey)
 	}
 
-	nilKeyKernel := &Kernel{}
-	if publishableKey := nilKeyKernel.PublishableKey(); publishableKey != "" {
-		t.Fatalf("expected empty key for nil cryptoCryptoKeyManager, got %s", publishableKey)
-	}
-
 	// Clean stop on unstarted kernel (all nil subsystems)
-	if err := kernel.Stop(context.Background()); err != nil {
-		t.Fatalf("expected clean stop, got: %v", err)
-	}
+	kernel.Stop(context.Background())
 }
 
 func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
@@ -105,7 +94,7 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 	SetLoadedConfig(validConfig)
 	defer UnloadConfig()
 
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(nil)
 	if err != nil {
 		t.Fatalf("unexpected NewKernel error: %v", err)
 	}
@@ -132,49 +121,17 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 	if kernel.ServiceAccountManager() != nil {
 		t.Error("expected nil ServiceAccountManager before start")
 	}
-
-	// Test nil kernel accessor coverage
-	var nilKernel *Kernel
-	if nilKernel.DB() != nil {
-		t.Error("expected nil pool from nil kernel")
+	if kernel.JWTSigner() == nil {
+		t.Error("expected non-nil JWTSigner before start")
 	}
-	if nilKernel.CryptoKeyManager() != nil {
-		t.Error("expected nil cryptoCryptoKeyManager from nil kernel")
-	}
-	if nilKernel.KVStore() != nil {
-		t.Error("expected nil kvStore from nil kernel")
-	}
-	if nilKernel.EventBus() != nil {
-		t.Error("expected nil eventBus from nil kernel")
-	}
-	if nilKernel.EventManager() != nil {
-		t.Error("expected nil eventManager from nil kernel")
-	}
-	if nilKernel.EventHookManager() != nil {
-		t.Error("expected nil eventHookManager from nil kernel")
-	}
-	if nilKernel.ServiceAccountManager() != nil {
-		t.Error("expected nil serviceAccountManager from nil kernel")
+	if kernel.Server() != nil {
+		t.Error("expected nil Server before start")
 	}
 
-	// Test Setters with nil and non-nil kernels
-	var nilDB *DatabasePool
-	nilKernel.SetDB(nilDB)
-	nilKernel.SetKVStore(nil)
-	nilKernel.SetEventBus(nil)
-	nilKernel.SetEventManager(nil)
-	nilKernel.SetEventHookManager(nil)
-	nilKernel.SetServiceAccountManager(nil)
-
-	kernel.SetDB(nilDB)
-	kernel.SetKVStore(nil)
-	kernel.SetEventBus(nil)
-	kernel.SetEventManager(nil)
-	kernel.SetEventHookManager(nil)
-	kernel.SetServiceAccountManager(nil)
-
-	if kernel.DB() != nil {
-		t.Error("expected nil pool after SetDB(nil)")
+	// Test SetServer on kernel
+	kernel.SetServer(nil)
+	if kernel.Server() != nil {
+		t.Error("expected nil server after SetServer(nil)")
 	}
 }
 
@@ -227,5 +184,99 @@ func TestCoreKernelEventHookHelpersUnit(t *testing.T) {
 	}
 	if MatchEventPattern("data.*", "auth.user.created") {
 		t.Fatal("expected prefix mismatch")
+	}
+}
+
+func TestCoreKernelValidateSubsystemsUnit(t *testing.T) {
+	var nilKernel *Kernel
+	if nilErr := nilKernel.ValidateSubsystems(); nilErr == nil {
+		t.Fatal("expected error on nil kernel")
+	}
+
+	kernel := &Kernel{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized kernel db")
+	}
+
+	kernel.db = &DatabasePool{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized crypto key manager")
+	}
+
+	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	kernel.cryptoKeyManager = cryptoKeyManager
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized node registry")
+	}
+
+	kernel.node = &Node{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized kv store")
+	}
+
+	kernel.kvStore = &KVStore{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized event bus")
+	}
+
+	kernel.eventBus = &EventBus{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized event manager")
+	}
+
+	kernel.eventManager = &EventManager{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized event hook manager")
+	}
+
+	kernel.eventHookManager = &EventHookManager{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized service account manager")
+	}
+
+	kernel.serviceAccountManager = &ServiceAccountManager{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized jwt signer")
+	}
+
+	kernel.jwtSigner = &JWTSigner{}
+	if err := kernel.ValidateSubsystems(); err == nil {
+		t.Fatal("expected error on uninitialized server")
+	}
+
+	kernel.server = &Server{}
+	if err := kernel.ValidateSubsystems(); err != nil {
+		t.Fatalf("expected nil error on fully initialized kernel, got: %v", err)
+	}
+}
+
+func TestCoreKernelWithDBUnit(t *testing.T) {
+	validConfig := DefaultConfig()
+	validConfig.Data.Enabled = true
+	validConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	SetLoadedConfig(validConfig)
+	defer UnloadConfig()
+
+	mockDB := &DatabasePool{}
+	kernel, err := NewKernel(mockDB)
+	if err != nil {
+		t.Fatalf("unexpected NewKernel error: %v", err)
+	}
+	defer kernel.eventBus.Close()
+
+	if kernel.DB() != mockDB {
+		t.Errorf("expected DB %v, got %v", mockDB, kernel.DB())
+	}
+	if kernel.ServiceAccountManager() == nil {
+		t.Error("expected non-nil ServiceAccountManager")
+	}
+	if kernel.EventBus() == nil {
+		t.Error("expected non-nil EventBus")
+	}
+	if kernel.EventManager() == nil {
+		t.Error("expected non-nil EventManager")
+	}
+	if kernel.EventHookManager() == nil {
+		t.Error("expected non-nil EventHookManager")
 	}
 }

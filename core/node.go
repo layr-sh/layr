@@ -8,8 +8,8 @@ import (
 	"uuid"
 )
 
-// NodeRegistry handles cluster heartbeats and active nodes.
-type NodeRegistry struct {
+// Node handles cluster heartbeats and active nodes.
+type Node struct {
 	db                *DatabasePool
 	nodeID            uuid.UUID
 	nodeName          string
@@ -21,9 +21,9 @@ type NodeRegistry struct {
 	reaperInterval    time.Duration // configurable for testing; default 60s
 }
 
-// NewNodeRegistry initializes node in core.nodes.
-func NewNodeRegistry(db *DatabasePool, nodeName string, services []string) *NodeRegistry {
-	return &NodeRegistry{
+// NewNode initializes node in core.nodes.
+func NewNode(db *DatabasePool, nodeName string, services []string) *Node {
+	return &Node{
 		db:                db,
 		nodeName:          nodeName,
 		services:          services,
@@ -39,28 +39,28 @@ const (
 )
 
 // Register registers this node and starts background heartbeat.
-func (nodeRegistry *NodeRegistry) Register(ctx context.Context) error {
-	log.Debugf("registering node %s in cluster", nodeRegistry.nodeName)
+func (node *Node) Register(ctx context.Context) error {
+	log.Debugf("registering node %s in cluster", node.nodeName)
 	var nodeID uuid.UUID
-	err := nodeRegistry.db.QueryRow(ctx, `
+	err := node.db.QueryRow(ctx, `
 		INSERT INTO core.nodes (node_name, enabled_services, last_heartbeat_at)
 		VALUES ($1, $2, clock_timestamp())
 		RETURNING id
-	`, nodeRegistry.nodeName, nodeRegistry.services).Scan(&nodeID)
+	`, node.nodeName, node.services).Scan(&nodeID)
 	if err != nil {
 		return fmt.Errorf("failed to register node in core.nodes: %w", err)
 	}
-	nodeRegistry.nodeID = nodeID
+	node.nodeID = nodeID
 
-	log.Tracef("node %s registered with id %s", nodeRegistry.nodeName, nodeID)
-	nodeRegistry.waitGroup.Add(1)
-	go nodeRegistry.startHeartbeatLoop(ctx)
+	log.Tracef("node %s registered with id %s", node.nodeName, nodeID)
+	node.waitGroup.Add(1)
+	go node.startHeartbeatLoop(ctx)
 	return nil
 }
 
-func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
-	defer nodeRegistry.waitGroup.Done()
-	ticker := time.NewTicker(nodeRegistry.heartbeatInterval)
+func (node *Node) startHeartbeatLoop(ctx context.Context) {
+	defer node.waitGroup.Done()
+	ticker := time.NewTicker(node.heartbeatInterval)
 	defer ticker.Stop()
 	lastReapedAt := time.Now()
 
@@ -70,23 +70,23 @@ func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
 			// Heartbeats must outlive transient request cancellation; detach but keep values.
 			{
 				heartbeatCtx, heartbeatCancel := context.WithTimeout(context.WithoutCancel(ctx), heartbeatTimeoutDuration)
-				if _, err := nodeRegistry.db.Exec(heartbeatCtx, "UPDATE core.nodes SET last_heartbeat_at = clock_timestamp() WHERE id = $1", nodeRegistry.nodeID); err != nil {
+				if _, err := node.db.Exec(heartbeatCtx, "UPDATE core.nodes SET last_heartbeat_at = clock_timestamp() WHERE id = $1", node.nodeID); err != nil {
 					log.Warnf("failed to update node heartbeat: %v", err)
 				}
-				if time.Since(lastReapedAt) >= nodeRegistry.reaperInterval {
+				if time.Since(lastReapedAt) >= node.reaperInterval {
 					lastReapedAt = time.Now()
-					if _, err := nodeRegistry.db.Exec(heartbeatCtx, "DELETE FROM core.nodes WHERE last_heartbeat_at < clock_timestamp() - INTERVAL '60 seconds'"); err != nil {
+					if _, err := node.db.Exec(heartbeatCtx, "DELETE FROM core.nodes WHERE last_heartbeat_at < clock_timestamp() - INTERVAL '60 seconds'"); err != nil {
 						log.Warnf("failed to reap stale nodes: %v", err)
 					}
 				}
 				heartbeatCancel()
 			}
 
-		case <-nodeRegistry.stopChannel:
+		case <-node.stopChannel:
 			// Unregister must run even though stopChannel closed; detach from ctx.
 			{
 				unregisterCtx, unregisterCancel := context.WithTimeout(context.WithoutCancel(ctx), unregisterTimeoutDuration)
-				if _, err := nodeRegistry.db.Exec(unregisterCtx, "DELETE FROM core.nodes WHERE id = $1", nodeRegistry.nodeID); err != nil {
+				if _, err := node.db.Exec(unregisterCtx, "DELETE FROM core.nodes WHERE id = $1", node.nodeID); err != nil {
 					log.Warnf("failed to unregister node: %v", err)
 				}
 				unregisterCancel()
@@ -97,11 +97,11 @@ func (nodeRegistry *NodeRegistry) startHeartbeatLoop(ctx context.Context) {
 }
 
 // Close stops heartbeat and unregisters the node.
-func (nodeRegistry *NodeRegistry) Close() {
-	nodeRegistry.closeOnce.Do(func() {
-		log.Debugf("closing node registry for node %s", nodeRegistry.nodeName)
-		close(nodeRegistry.stopChannel)
-		nodeRegistry.waitGroup.Wait()
-		log.Tracef("node registry closed for node %s", nodeRegistry.nodeName)
+func (node *Node) Close() {
+	node.closeOnce.Do(func() {
+		log.Debugf("closing node registry for node %s", node.nodeName)
+		close(node.stopChannel)
+		node.waitGroup.Wait()
+		log.Tracef("node registry closed for node %s", node.nodeName)
 	})
 }

@@ -14,15 +14,11 @@ import (
 )
 
 func TestAuthPasskeyHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
+	testKVStore := kernel.KVStore()
 
 	// 1. Passkeys disabled -> 403
 	disabledConfig := configManager.Get()
@@ -137,20 +133,20 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on bad JSON in passkey sign-in verify, got: %d", badJSONPasskeySignInResponseRecorder.Code)
 	}
 
-	// 9. Passkey SignIn Verify Valid Challenge on Nil Pool -> 500
+	// 9. Passkey SignIn Verify Valid Challenge on non-existent credential -> 401
 	validSignInChallenge, _ := baseHandler.passkeyManager.GenerateChallenge("")
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+validSignInChallenge, "", 0)
 	nilDBPasskeySignInRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-in/verify", strings.NewReader(`{"challenge":"`+validSignInChallenge+`","credential_id":"cred_123"}`))
 	nilDBPasskeySignInResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(nilDBPasskeySignInResponseRecorder, nilDBPasskeySignInRequest)
-	if nilDBPasskeySignInResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on passkey sign-in verify with nil pool, got: %d", nilDBPasskeySignInResponseRecorder.Code)
+	if nilDBPasskeySignInResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on passkey sign-in verify with non-existent credential, got: %d", nilDBPasskeySignInResponseRecorder.Code)
 	}
 
 	// 10. Entropy failure branches -> 500
 	failingPasskeyManager := passkey.NewManager("localhost", "Layr")
 	failingPasskeyManager.SetRandomReader(errEntropyReader{})
-	baseHandler.SetPasskeyManager(failingPasskeyManager)
+	baseHandler.passkeyManager = failingPasskeyManager
 
 	failingSignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u-entropy"}`))
 	failingSignUpResponseRecorder := httptest.NewRecorder()
@@ -174,18 +170,14 @@ func (errEntropyReader) Read(_ []byte) (int, error) {
 }
 
 func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	testKVStore := kernel.KVStore()
+	jwtSigner := kernel.JWTSigner()
 
 	testUserUUID := "01918a24-5678-789a-bcde-f0123456789a"
-	validToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Role:    "authenticated",
 	}, 3600)

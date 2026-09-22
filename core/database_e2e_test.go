@@ -118,14 +118,14 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Multi-node cluster topology and worker lifecycle
-	nodeRegistry := NewNodeRegistry(db, "primary-node-1", []string{"data", "auth", "storage", "console"})
-	err = nodeRegistry.Register(ctx)
+	node := NewNode(db, "primary-node-1", []string{"data", "auth", "storage", "console"})
+	err = node.Register(ctx)
 	if err != nil {
 		t.Fatalf("primary node registration failed: %v", err)
 	}
 
-	secondNodeRegistry := NewNodeRegistry(db, "worker-node-2", []string{"scheduler", "notification"})
-	err = secondNodeRegistry.Register(ctx)
+	secondNode := NewNode(db, "worker-node-2", []string{"scheduler", "notification"})
+	err = secondNode.Register(ctx)
 	if err != nil {
 		t.Fatalf("worker node registration failed: %v", err)
 	}
@@ -137,8 +137,8 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Graceful node worker decommissioning
-	secondNodeRegistry.Close()
-	secondNodeRegistry.Close() // Idempotent double close check
+	secondNode.Close()
+	secondNode.Close() // Idempotent double close check
 
 	err = db.QueryRow(ctx, "SELECT count(*) FROM core.nodes").Scan(&registeredNodeCount)
 	if err != nil || registeredNodeCount != 1 {
@@ -193,7 +193,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Server shutdown, restart and data persistence verification
-	nodeRegistry.Close()
+	node.Close()
 	db.Close()
 
 	err = embeddedDatabase.Stop()

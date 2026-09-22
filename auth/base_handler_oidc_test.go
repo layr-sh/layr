@@ -15,20 +15,15 @@ import (
 )
 
 func TestAuthOIDCHandlerUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	layrConfig := core.DefaultConfig()
 	layrConfig.Project.Name = "TestLayrApp"
 	core.SetLoadedConfig(layrConfig)
 	t.Cleanup(core.UnloadConfig)
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	// 1. OIDC Discovery
 	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/openid-configuration", nil)
@@ -205,7 +200,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 		CreatedAt:           time.Now().UTC(),
 	}
 	stateBytes, _ := json.Marshal(oidcAuthorizationStatePayload)
-	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+validStateID, string(stateBytes), 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:oidc:state:"+validStateID, string(stateBytes), 10*time.Minute)
 
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -281,17 +276,15 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 }
 
 func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	layrConfig := core.DefaultConfig()
 	layrConfig.Project.Name = "TestLayrApp"
 	core.SetLoadedConfig(layrConfig)
 	t.Cleanup(core.UnloadConfig)
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	cryptoKeyManager := kernel.CryptoKeyManager()
+	service := NewService(kernel)
+	configManager := service.configManager
 	baseConfig := configManager.Get()
 	baseConfig.OIDC.Enabled = true
 	encryptedSecret, _ := cryptoKeyManager.EncryptField([]byte("secret-confidential-123"))
@@ -312,9 +305,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 	configManager.Set(baseConfig)
 
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler := service.baseHandler
 
 	// 1. handleSubmitOIDCAuthorize when OIDC disabled -> 403
 	disabledConfig := configManager.Get()
@@ -374,7 +365,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 
 	// 7. handleSubmitOIDCAuthorize corrupt state JSON in kvStore -> 400
-	_ = testKVStore.Set(context.Background(), "auth:oidc:state:corrupt_state", "{invalid_json", 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:oidc:state:corrupt_state", "{invalid_json", 5*time.Minute)
 	corruptStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state=corrupt_state"))
 	corruptStateRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptStateResponseRecorder := httptest.NewRecorder()
@@ -389,7 +380,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:    "client-spa-1",
 		RedirectURI: "https://demo.app/callback",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+validStateID, string(validStatePayload), 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:oidc:state:"+validStateID, string(validStatePayload), 5*time.Minute)
 	emptyCredsRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state="+validStateID+"&email=&password="))
 	emptyCredsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyCredsResponseRecorder := httptest.NewRecorder()
@@ -425,7 +416,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 
 	// 11. handleIssueOIDCTokenAuthorizationCode corrupt code JSON in kvStore -> 400
-	_ = testKVStore.Set(context.Background(), "auth:code:corrupt_code_123", "{invalid_json", 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:code:corrupt_code_123", "{invalid_json", 5*time.Minute)
 	corruptCodeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=corrupt_code_123"))
 	corruptCodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptCodeResponseRecorder := httptest.NewRecorder()
@@ -438,7 +429,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	mismatchedClientPayload, _ := json.Marshal(OIDCAuthorizationCodePayload{
 		ClientID: "other-client-id",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:code:mismatch_client_code", string(mismatchedClientPayload), 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:code:mismatch_client_code", string(mismatchedClientPayload), 5*time.Minute)
 	mismatchClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_client_code"))
 	mismatchClientRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchClientResponseRecorder := httptest.NewRecorder()
@@ -452,7 +443,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:    "client-spa-1",
 		RedirectURI: "https://demo.app/expected_callback",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:code:mismatch_redirect_code", string(mismatchedRedirectPayload), 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:code:mismatch_redirect_code", string(mismatchedRedirectPayload), 5*time.Minute)
 	mismatchRedirectRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=mismatch_redirect_code&redirect_uri=https://demo.app/other_callback"))
 	mismatchRedirectRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchRedirectResponseRecorder := httptest.NewRecorder()
@@ -466,7 +457,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 		ClientID:      "client-spa-1",
 		CodeChallenge: "expected_pkce_challenge_hash",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:code:bad_pkce_code", string(badPKCEPayload), 5*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:code:bad_pkce_code", string(badPKCEPayload), 5*time.Minute)
 	badPKCERequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=authorization_code&client_id=client-spa-1&code=bad_pkce_code&code_verifier=invalid_verifier"))
 	badPKCERequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badPKCEResponseRecorder := httptest.NewRecorder()
@@ -531,8 +522,11 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	testCtx := context.Background()
 
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+
 	// 1. Missing secret
-	baseHandler := &BaseHandler{}
 	missingSecretRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1"))
 	missingSecretRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingSecretResponseRecorder := httptest.NewRecorder()
@@ -541,22 +535,11 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 		t.Fatalf("expected 401 on missing secret, got: %d", missingSecretResponseRecorder.Code)
 	}
 
-	// 2. Nil ServiceAccountManager
-	nilManagerRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
-	nilManagerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	nilManagerResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleIssueOIDCToken(nilManagerResponseRecorder, nilManagerRequest)
-	if nilManagerResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on nil serviceAccountManager, got: %d", nilManagerResponseRecorder.Code)
-	}
-
-	// 3. ServiceAccountManager Authenticate error (e.g. nil database pool)
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	managerBaseHandler := &BaseHandler{serviceAccountManager: serviceAccountManager}
+	// 2. ServiceAccountManager Authenticate error (e.g. invalid credentials)
 	authErrorRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader("grant_type=client_credentials&client_id=sa-1&client_secret=secret123"))
 	authErrorRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	authErrorResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleIssueOIDCToken(authErrorResponseRecorder, authErrorRequest)
+	baseHandler.handleIssueOIDCToken(authErrorResponseRecorder, authErrorRequest)
 	if authErrorResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 on auth error, got: %d", authErrorResponseRecorder.Code)
 	}
@@ -566,7 +549,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	jsonRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(jsonRequestBody))
 	jsonRequest.Header.Set("Content-Type", "application/json")
 	jsonResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleIssueOIDCToken(jsonResponseRecorder, jsonRequest)
+	baseHandler.handleIssueOIDCToken(jsonResponseRecorder, jsonRequest)
 	if jsonResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from json request through auth error, got: %d", jsonResponseRecorder.Code)
 	}
@@ -575,7 +558,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	untypedJSONRequestBody := `{"grant_type":"client_credentials","client_id":"sa-1","client_secret":"invalid_client_secret"}`
 	untypedJSONRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(untypedJSONRequestBody))
 	untypedJSONResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleIssueOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)
+	baseHandler.handleIssueOIDCToken(untypedJSONResponseRecorder, untypedJSONRequest)
 	if untypedJSONResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from untyped json request, got: %d", untypedJSONResponseRecorder.Code)
 	}
@@ -585,7 +568,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	basicAuthRequest.SetBasicAuth("sa-basic", "secret-basic")
 	basicAuthResponseRecorder := httptest.NewRecorder()
-	managerBaseHandler.handleIssueOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
+	baseHandler.handleIssueOIDCToken(basicAuthResponseRecorder, basicAuthRequest)
 	if basicAuthResponseRecorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from basic auth request through auth error, got: %d", basicAuthResponseRecorder.Code)
 	}
@@ -601,14 +584,14 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 }
 
 func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
-	configManager := NewConfigManager(nil, nil)
-	config := configManager.Get()
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	config := service.configManager.Get()
 	config.OIDC.Enabled = true
 	config.OIDC.UI.ShowSignUp = true
 	config.OIDC.UI.ShowEmailOTP = true
-	configManager.Set(config)
-
-	baseHandler := &BaseHandler{configManager: configManager}
+	service.configManager.Set(config)
+	baseHandler := service.baseHandler
 
 	signUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.renderOIDCSignUpPage(signUpResponseRecorder, "st-1", &OIDCClientConfig{Name: "App"}, "sign up error")
@@ -630,19 +613,16 @@ func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
 }
 
 func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
-	configManager := NewConfigManager(nil, nil)
-	config := configManager.Get()
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	config := service.configManager.Get()
 	config.OIDC.Enabled = true
 	config.OIDC.Clients = []OIDCClientConfig{
 		{ClientID: "client-1", Name: "Client One"},
 	}
-	configManager.Set(config)
-
-	kvStore := newInMemoryKVStore()
-	baseHandler := &BaseHandler{
-		configManager: configManager,
-		kvStore:       kvStore,
-	}
+	service.configManager.Set(config)
+	baseHandler := service.baseHandler
+	kvStore := kernel.KVStore()
 
 	statePayload, _ := json.Marshal(OIDCAuthorizationStatePayload{
 		ClientID: "client-1",
@@ -659,19 +639,17 @@ func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
 
 func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	ctx := context.Background()
-	configManager := NewConfigManager(nil, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	configManager := service.configManager
 	config := configManager.Get()
 	config.OIDC.Enabled = true
 	config.OIDC.Clients = []OIDCClientConfig{
 		{ClientID: "client-sub-1", Name: "Submit Client"},
 	}
 	configManager.Set(config)
-
-	kvStore := newInMemoryKVStore()
-	baseHandler := &BaseHandler{
-		configManager: configManager,
-		kvStore:       kvStore,
-	}
+	baseHandler := service.baseHandler
+	kvStore := kernel.KVStore()
 
 	stateID := "sub-state-1"
 	statePayload, _ := json.Marshal(OIDCAuthorizationStatePayload{
@@ -785,13 +763,9 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 }
 
 func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
 
 	discoveryRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/openid-configuration", nil)
 	discoveryResponseRecorder := httptest.NewRecorder()
@@ -821,16 +795,11 @@ func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
 }
 
 func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-	jwtSigner, err := core.NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create jwt signer: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	jwtSigner := kernel.JWTSigner()
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	config := DefaultConfig()
 	config.OIDC.Enabled = true
 	config.OIDC.Clients = []OIDCClientConfig{
@@ -843,18 +812,14 @@ func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 		},
 	}
 	configManager.Set(config)
-
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	baseHandler := service.baseHandler
 
 	// Create valid ID token hint for user and session
-	idTokenHint, generateErr := jwtSigner.GenerateIDToken(core.JWTClaims{
+	idTokenHint := jwtSigner.GenerateIDToken(core.JWTClaims{
 		Subject:   "user-front-123",
 		SessionID: "sess-front-456",
 		Audience:  "client-front-channel",
 	})
-	if generateErr != nil {
-		t.Fatalf("failed to generate id token hint: %v", generateErr)
-	}
 
 	// Sign out request with front-channel client and post_sign_out_redirect_uri
 	signOutURL := "/v1/auth/oauth/sign-out?id_token_hint=" + idTokenHint + "&post_sign_out_redirect_uri=https://rp.example.com/signed-out&state=state123"
@@ -875,16 +840,11 @@ func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 }
 
 func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-	jwtSigner, err := core.NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create jwt signer: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	jwtSigner := kernel.JWTSigner()
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	config := DefaultConfig()
 	config.OIDC.Enabled = true
 	config.OIDC.Clients = []OIDCClientConfig{
@@ -894,10 +854,9 @@ func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
 		},
 	}
 	configManager.Set(config)
+	baseHandler := service.baseHandler
 
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-
-	idTokenHint, _ := jwtSigner.GenerateIDToken(core.JWTClaims{
+	idTokenHint := jwtSigner.GenerateIDToken(core.JWTClaims{
 		Subject:  "user-trusted",
 		Audience: "trusted-client",
 	})

@@ -5,15 +5,12 @@ import (
 	"fmt"
 
 	"layr.sh/core"
+	"layr.sh/filestorage/s3sigv4"
 )
 
 func init() {
 	factory := func(kernel *core.Kernel) (core.ServiceRunner, error) {
-		service := NewService(kernel.DB(), kernel.CryptoKeyManager())
-		service.SetKVStore(kernel.KVStore())
-		service.SetEventBus(kernel.EventBus())
-		service.SetServiceAccountManager(kernel.ServiceAccountManager())
-		return service, nil
+		return NewService(kernel), nil
 	}
 
 	core.RegisterServiceFactory("file_storage", factory)
@@ -22,62 +19,38 @@ func init() {
 
 // Service encapsulates the File Storage service coordinator and handlers.
 type Service struct {
-	db                    *core.DatabasePool
-	cryptoKeyManager      *core.CryptoKeyManager
-	configManager         *ConfigManager
-	baseHandler           *BaseHandler
-	controlPlaneHandler   *ControlPlaneHandler
-	serviceAccountManager *core.ServiceAccountManager
-	eventBus              *core.EventBus
-	kvStore               *core.KVStore
+	kernel              *core.Kernel
+	configManager       *ConfigManager
+	databaseEngine      *Engine
+	s3Engine            *Engine
+	sigv4Validator      *s3sigv4.Validator
+	baseHandler         *BaseHandler
+	controlPlaneHandler *ControlPlaneHandler
 }
 
 // NewService initializes the File Storage service coordinator.
-func NewService(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) *Service {
-	configManager := NewConfigManager(db)
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager, cryptoKeyManager)
+func NewService(kernel *core.Kernel) *Service {
+	configManager := NewConfigManager(kernel)
+	databaseEngine := NewDatabaseFileStorageEngine(kernel)
+	s3Engine := NewS3FileStorageEngine(kernel)
+	sigv4Validator := s3sigv4.NewValidator(kernel)
 
-	return &Service{
-		db:                  db,
-		cryptoKeyManager:    cryptoKeyManager,
-		configManager:       configManager,
-		baseHandler:         baseHandler,
-		controlPlaneHandler: controlPlaneHandler,
+	service := &Service{
+		kernel:         kernel,
+		configManager:  configManager,
+		databaseEngine: databaseEngine,
+		s3Engine:       s3Engine,
+		sigv4Validator: sigv4Validator,
 	}
+	service.baseHandler = NewBaseHandler(service)
+	service.controlPlaneHandler = NewControlPlaneHandler(service)
+
+	return service
 }
 
-// SetServiceAccountManager attaches the service account manager.
-func (service *Service) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	service.serviceAccountManager = serviceAccountManager
-	if service.baseHandler != nil {
-		service.baseHandler.SetServiceAccountManager(serviceAccountManager)
-	}
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	}
-}
-
-// SetEventBus attaches the platform event bus.
-func (service *Service) SetEventBus(eventBus *core.EventBus) {
-	service.eventBus = eventBus
-	if service.baseHandler != nil {
-		service.baseHandler.SetEventBus(eventBus)
-	}
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetEventBus(eventBus)
-	}
-}
-
-// SetKVStore attaches the pluggable KVStore instance.
-func (service *Service) SetKVStore(kvStore *core.KVStore) {
-	service.kvStore = kvStore
-	if service.baseHandler != nil {
-		service.baseHandler.SetKVStore(kvStore)
-	}
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetKVStore(kvStore)
-	}
+// Kernel returns the parent kernel instance.
+func (service *Service) Kernel() *core.Kernel {
+	return service.kernel
 }
 
 // Start loads runtime configuration from PostgreSQL.
@@ -86,18 +59,11 @@ func (service *Service) Start(ctx context.Context) error {
 		return fmt.Errorf("context canceled before start: %w", err)
 	}
 
-	if service.configManager != nil && service.db != nil {
-		if err := service.configManager.Load(ctx); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return service.configManager.Load(ctx)
 }
 
 // Stop gracefully shuts down active workers or resources.
-func (service *Service) Stop() error {
-	return nil
+func (service *Service) Stop() {
 }
 
 // BaseHandler returns the underlying public HTTP base handler.
@@ -113,4 +79,19 @@ func (service *Service) ControlPlaneHandler() *ControlPlaneHandler {
 // ConfigManager returns the dynamic runtime configuration manager.
 func (service *Service) ConfigManager() *ConfigManager {
 	return service.configManager
+}
+
+// DatabaseEngine returns the underlying database file storage engine.
+func (service *Service) DatabaseEngine() *Engine {
+	return service.databaseEngine
+}
+
+// S3Engine returns the underlying S3 file storage engine.
+func (service *Service) S3Engine() *Engine {
+	return service.s3Engine
+}
+
+// SigV4Validator returns the underlying S3 SigV4 validator.
+func (service *Service) SigV4Validator() *s3sigv4.Validator {
+	return service.sigv4Validator
 }

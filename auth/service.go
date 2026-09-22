@@ -4,115 +4,69 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
+	"layr.sh/auth/passkey"
+	"layr.sh/auth/password"
+	"layr.sh/auth/totp"
 	"layr.sh/core"
 )
 
 func init() {
 	core.RegisterServiceFactory("auth", func(kernel *core.Kernel) (core.ServiceRunner, error) {
-		service := NewService(kernel.DB(), kernel.CryptoKeyManager())
-		if kvStore := kernel.KVStore(); kvStore != nil {
-			service.SetKVStore(kvStore)
-		}
-		if serviceAccountManager := kernel.ServiceAccountManager(); serviceAccountManager != nil {
-			service.SetServiceAccountManager(serviceAccountManager)
-		}
-		if eventBus := kernel.EventBus(); eventBus != nil {
-			service.SetEventBus(eventBus)
-		}
-		return service, nil
+		return NewService(kernel), nil
 	})
 }
 
 // Service coordinates all authentication engines (OIDC, passwords, passkeys, OTP, OAuth).
 type Service struct {
-	db                    *core.DatabasePool
-	cryptoKeyManager      *core.CryptoKeyManager
-	configManager         *ConfigManager
-	baseHandler           *BaseHandler
-	controlPlaneHandler   *ControlPlaneHandler
-	kvStore               *core.KVStore
-	serviceAccountManager *core.ServiceAccountManager
-	eventBus              *core.EventBus
+	kernel              *core.Kernel
+	configManager       *ConfigManager
+	passkeyManager      *passkey.Manager
+	totpManager         *totp.Manager
+	hasher              *password.Hasher
+	emailDispatcher     *EmailDispatcher
+	smsDispatcher       *SMSDispatcher
+	baseHandler         *BaseHandler
+	controlPlaneHandler *ControlPlaneHandler
+	httpClient          HTTPClient
+	dummyPasswordHash   string
 }
 
-// NewService initializes the layr/auth service.
-func NewService(db *core.DatabasePool, cryptoKeyManager *core.CryptoKeyManager) *Service {
-	configManager := NewConfigManager(db, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	var baseHandler *BaseHandler
-	if cryptoKeyManager != nil {
-		baseHandler = NewBaseHandler(db, configManager, cryptoKeyManager)
-		jwtSigner, _ := core.NewJWTSigner(cryptoKeyManager)
-		controlPlaneHandler.SetJWTSigner(jwtSigner)
-	}
-	return &Service{
-		db:                  db,
-		cryptoKeyManager:    cryptoKeyManager,
-		configManager:       configManager,
-		controlPlaneHandler: controlPlaneHandler,
-		baseHandler:         baseHandler,
-	}
-}
+// NewService initializes the layr/auth service with the active kernel.
+func NewService(kernel *core.Kernel) *Service {
+	configManager := NewConfigManager(kernel)
+	config := configManager.Get()
 
-// SetKVStore configures the pluggable KVStore for the auth service.
-func (service *Service) SetKVStore(kvStore *core.KVStore) {
-	service.kvStore = kvStore
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetKVStore(kvStore)
-	}
-	if service.baseHandler != nil {
-		service.baseHandler.SetKVStore(kvStore)
-	}
-}
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig {
+		emailDispatcherConfig := configManager.Get().EmailDispatcher
+		return &emailDispatcherConfig
+	})
 
-// SetServiceAccountManager sets the service account manager for the auth service.
-func (service *Service) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	service.serviceAccountManager = serviceAccountManager
-	if service.configManager != nil {
-		service.configManager.SetServiceAccountManager(serviceAccountManager)
-	}
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	}
-	if service.baseHandler != nil {
-		service.baseHandler.SetServiceAccountManager(serviceAccountManager)
-	}
-}
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig {
+		smsDispatcherConfig := configManager.Get().SMSDispatcher
+		return &smsDispatcherConfig
+	})
 
-// SetEventBus sets the platform event bus for broadcasting auth events.
-func (service *Service) SetEventBus(eventBus *core.EventBus) {
-	service.eventBus = eventBus
-	if service.configManager != nil {
-		service.configManager.SetEventBus(eventBus)
-	}
-	if service.controlPlaneHandler != nil {
-		service.controlPlaneHandler.SetEventBus(eventBus)
-	}
-	if service.baseHandler != nil {
-		service.baseHandler.SetEventBus(eventBus)
-	}
-}
+	hasher := password.NewHasher()
+	dummyHash, _ := hasher.Hash("antigravity_timing_dummy_password")
 
-// CheckScope verifies if the request has the required scope permission.
-func (service *Service) CheckScope(request *http.Request, requiredScope string) bool {
-	authContext := core.GetAuthContext(request.Context())
-	if authContext.IsServiceAccount() {
-		return authContext.HasScope(requiredScope)
+	service := &Service{
+		kernel:            kernel,
+		configManager:     configManager,
+		hasher:            hasher,
+		passkeyManager:    passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
+		totpManager:       totp.NewManager(config.MFA.Issuer),
+		emailDispatcher:   emailDispatcher,
+		smsDispatcher:     smsDispatcher,
+		httpClient:        &http.Client{Timeout: 5 * time.Second},
+		dummyPasswordHash: dummyHash,
 	}
-	if service.serviceAccountManager == nil {
-		return true
-	}
-	secretKey := core.ExtractRequestServiceAccountKey(request)
-	if secretKey == "" {
-		return true
-	}
-	clientIP := core.ExtractRequestClientIP(request)
-	serviceAccount, err := service.serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)
-	if err != nil {
-		return false
-	}
-	return core.HasScope(serviceAccount.Scopes, requiredScope)
+
+	service.baseHandler = NewBaseHandler(service)
+	service.controlPlaneHandler = NewControlPlaneHandler(service)
+
+	return service
 }
 
 // Start loads dynamic configuration and initializes HTTP handlers.
@@ -120,38 +74,62 @@ func (service *Service) Start(ctx context.Context) error {
 	if err := service.configManager.Load(ctx); err != nil {
 		return fmt.Errorf("failed to load auth config: %w", err)
 	}
-
-	if service.cryptoKeyManager != nil {
-		service.baseHandler = NewBaseHandler(service.db, service.configManager, service.cryptoKeyManager)
-		if service.kvStore != nil {
-			service.baseHandler.SetKVStore(service.kvStore)
-		}
-		if service.serviceAccountManager != nil {
-			service.baseHandler.SetServiceAccountManager(service.serviceAccountManager)
-		}
-		if service.eventBus != nil {
-			service.baseHandler.SetEventBus(service.eventBus)
-		}
-	}
+	config := service.configManager.Get()
+	service.passkeyManager = passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName)
+	service.totpManager = totp.NewManager(config.MFA.Issuer)
 	return nil
 }
 
 // Stop terminates active service routines.
-func (service *Service) Stop() error {
-	return nil
+func (service *Service) Stop() {
 }
 
-// GetConfigManager returns the dynamic config manager.
-func (service *Service) GetConfigManager() *ConfigManager {
+// Kernel returns the parent kernel instance.
+func (service *Service) Kernel() *core.Kernel {
+	return service.kernel
+}
+
+// ConfigManager returns the dynamic runtime configuration manager.
+func (service *Service) ConfigManager() *ConfigManager {
 	return service.configManager
 }
 
-// GetHandler returns the active auth base handler.
-func (service *Service) GetHandler() *BaseHandler {
+// BaseHandler returns the underlying public HTTP base handler.
+func (service *Service) BaseHandler() *BaseHandler {
 	return service.baseHandler
 }
 
-// GetControlPlaneHandler returns the control plane handler.
-func (service *Service) GetControlPlaneHandler() *ControlPlaneHandler {
+// ControlPlaneHandler returns the underlying administrative control plane handler.
+func (service *Service) ControlPlaneHandler() *ControlPlaneHandler {
 	return service.controlPlaneHandler
+}
+
+// Hasher returns the password hasher.
+func (service *Service) Hasher() *password.Hasher {
+	return service.hasher
+}
+
+// PasskeyManager returns the WebAuthn passkey manager.
+func (service *Service) PasskeyManager() *passkey.Manager {
+	return service.passkeyManager
+}
+
+// TOTPManager returns the TOTP manager.
+func (service *Service) TOTPManager() *totp.Manager {
+	return service.totpManager
+}
+
+// EmailDispatcher returns the transactional email dispatcher.
+func (service *Service) EmailDispatcher() *EmailDispatcher {
+	return service.emailDispatcher
+}
+
+// SMSDispatcher returns the SMS dispatcher.
+func (service *Service) SMSDispatcher() *SMSDispatcher {
+	return service.smsDispatcher
+}
+
+// HTTPClient returns the outbound HTTP client.
+func (service *Service) HTTPClient() HTTPClient {
+	return service.httpClient
 }

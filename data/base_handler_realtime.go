@@ -19,11 +19,6 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 		return
 	}
 
-	if handler.realtimeHub == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", "realtime connection rejected: realtime hub is not initialized")
-		return
-	}
-
 	maxConnections := config.Realtime.MaxConnections
 	if maxConnections <= 0 {
 		maxConnections = 10000

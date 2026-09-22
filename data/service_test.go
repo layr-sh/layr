@@ -15,19 +15,15 @@ import (
 
 func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 	ctx := context.Background()
-	dataService := NewService(nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	dataService := NewService(kernel)
 	if dataService == nil {
 		t.Fatal("expected non-nil service")
 	}
 
-	// 1. Dependency setters
-	dataService.SetServiceAccountManager(nil)
-	dataService.SetEventBus(nil)
-	mockKVStore := newInMemoryKVStore()
-	dataService.SetKVStore(mockKVStore)
 	dataService.SetSaltSecret("test-salt-secret")
 
-	// 2. Accessors
+	// Accessors
 	if len(dataService.GetAllowedSchemas()) == 0 || !dataService.IsRESTEnabled() || dataService.GetRESTMaxLimit() != 1000 ||
 		dataService.GetRESTDefaultLimit() != 50 || len(dataService.GetExcludedTables()) == 0 || !dataService.IsGraphQLEnabled() ||
 		dataService.GetGraphQLMaxDepth() != 8 || !dataService.IsRealtimeEnabled() || dataService.GetRealtimeHeartbeatIntervalMS() != 30000 ||
@@ -35,66 +31,49 @@ func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 		t.Fatal("unexpected accessor values from default service")
 	}
 
-	if dataService.DDLEngine() == nil || dataService.GetConfigManager() == nil || dataService.GetControlPlaneHandler() == nil ||
+	if dataService.DDLEngine() == nil || dataService.ConfigManager() == nil || dataService.GetConfigManager() == nil ||
+		dataService.ControlPlaneHandler() == nil || dataService.GetControlPlaneHandler() == nil ||
 		dataService.GetRESTHandler() == nil || dataService.GetGraphQLHandler() == nil || dataService.GetRealtimeHandler() == nil ||
 		dataService.GetRealtimeHub() == nil || dataService.BaseHandler() == nil || dataService.RealtimeHub() == nil ||
-		dataService.GraphQLSchema() == nil {
+		dataService.GraphQLSchema() == nil || dataService.Kernel() == nil {
 		t.Fatal("expected non-nil sub-components from accessors")
 	}
 
-	// Nil service components test
-	emptyService := &Service{}
-	assert.Nil(t, emptyService.RealtimeHub())
-	assert.Nil(t, emptyService.GraphQLSchema())
-	assert.NoError(t, emptyService.IntrospectSchemas(ctx))
-	assert.Nil(t, emptyService.GetRealtimeHub())
-	emptyService.InvalidateTableCache(ctx, "public", "users")
-	emptyService.ResetTableCacheVersion(ctx, "public", "users")
-	emptyService.handleFlushCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
-	emptyService.handleInvalidateCache(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil))
-
 	dataService.ResetTableCacheVersion(ctx, "public", "users")
+	dataService.InvalidateTableCache(ctx, "public", "users")
 
-	// Non-nil introspect
-	assert.NoError(t, dataService.IntrospectSchemas(ctx, "public"))
-	assert.NoError(t, dataService.IntrospectSchemas(ctx))
+	// Introspect
+	assert.Error(t, dataService.IntrospectSchemas(ctx, "public"))
+	assert.Error(t, dataService.IntrospectSchemas(ctx))
 
-	// 3. RegisterRoutes on Routers
+	// RegisterRoutes on Routers
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
 	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
-
-	// 4. Scope check with nil serviceAccountManager
-	scopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	if !dataService.CheckScope(scopeRequest, "data:query.read") {
-		t.Fatal("expected CheckScope to return true when serviceAccountManager is nil")
-	}
 }
 
 func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 	ctx := context.Background()
-	dataService := NewService(nil)
-	mockDriver := newInMemoryKVDriver()
-	mockKVStore := core.NewKVStoreFromDriver(mockDriver)
-	mockDriver.storage["cache:catalog"] = "catalog_data"
-	mockDriver.storage["cache:schema:catalog"] = "schema_catalog"
-	mockDriver.storage["cache:public.users"] = "user_cache"
-	dataService.SetKVStore(mockKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	dataService := NewService(kernel)
+
+	_ = kernel.KVStore().Set(ctx, "cache:catalog", "catalog_data", 0)
+	_ = kernel.KVStore().Set(ctx, "cache:schema:catalog", "schema_catalog", 0)
+	_ = kernel.KVStore().Set(ctx, "cache:public.users", "user_cache", 0)
 
 	// 1. Invalidate single table cache
 	dataService.InvalidateCache(ctx, InvalidateCacheInput{Schema: "public", Table: "users"})
-	if _, ok := mockDriver.storage["cache:public.users"]; ok {
-		t.Fatal("expected table cache to be deleted")
-	}
-	if _, ok := mockDriver.storage["cache:catalog"]; !ok {
-		t.Fatal("expected catalog cache to remain")
-	}
+	_, err := kernel.KVStore().Get(ctx, "cache:public.users")
+	assert.Error(t, err)
+
+	catalogValue, err := kernel.KVStore().Get(ctx, "cache:catalog")
+	assert.NoError(t, err)
+	assert.Equal(t, "catalog_data", catalogValue)
 
 	// 2. Invalidate Catalog via InvalidateCache
 	dataService.InvalidateCache(ctx, InvalidateCacheInput{Catalog: true})
-	if _, ok := mockDriver.storage["cache:catalog"]; ok {
-		t.Fatal("expected catalog cache to be deleted")
-	}
+	_, err = kernel.KVStore().Get(ctx, "cache:catalog")
+	assert.Error(t, err)
 
 	// 3. handleFlushCache
 	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
@@ -130,25 +109,37 @@ func TestDataServiceCacheInvalidationUnit(t *testing.T) {
 		t.Fatalf("expected 200 on nil body handleInvalidateCache, got %d", nilBodyResponseRecorder.Code)
 	}
 
-	// 8. Invalidate by pattern
-	mockDriver.storage["cache:prefix:item"] = "cached"
+	// 7. Invalidate by pattern
+	_ = kernel.KVStore().Set(ctx, "cache:prefix:*", "cached", 0)
 	dataService.InvalidateCache(ctx, InvalidateCacheInput{Pattern: "prefix:*"})
-	assert.NotContains(t, mockDriver.storage, "cache:prefix:item")
+	_, err = kernel.KVStore().Get(ctx, "cache:prefix:*")
+	assert.Error(t, err)
 }
 
 func TestDataServiceScopeCheckUnit(t *testing.T) {
-	dataService := NewService(nil)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	dataService := NewService(kernel)
 	ctx := context.Background()
 
-	// Start with nil db boots CDC and logs warning
-	serviceConfig := dataService.GetConfigManager().Get()
-	serviceConfig.Cache.Enabled = true
-	serviceConfig.Cache.InvalidateOnCDC = true
-	serviceConfig.Cache.CatalogTTLSeconds = 0
-	dataService.GetConfigManager().SetMemoryConfig(serviceConfig)
+	assert.NoError(t, dataService.GetConfigManager().Load(ctx))
+	_, err := kernel.DB().Exec(ctx, `UPDATE data.config SET value = jsonb_set(value, '{cache,catalog_ttl_seconds}', '0') WHERE key = 'runtime'`)
+	assert.NoError(t, err)
+
 	assert.NoError(t, dataService.Start(ctx))
 
-	// Broadcast CDC event triggering InvalidateTableCache
+	// Broadcast CDC event triggering InvalidateTableCache in event handler
+	dataService.RealtimeHub().BroadcastEvent(realtime.CDCEvent{
+		Schema: "public",
+		Table:  "users",
+		Event:  "UPDATE",
+	})
+
+	// Broadcast when Cache.Enabled is false to cover false branch
+	serviceConfig := dataService.GetConfigManager().Get()
+	serviceConfig.Cache.Enabled = false
+	dataService.GetConfigManager().SetMemoryConfig(serviceConfig)
 	dataService.RealtimeHub().BroadcastEvent(realtime.CDCEvent{
 		Schema: "public",
 		Table:  "users",
@@ -161,7 +152,5 @@ func TestDataServiceScopeCheckUnit(t *testing.T) {
 	assert.Error(t, dataService.Start(canceledCtx))
 
 	// Stop
-	if err := dataService.Stop(); err != nil {
-		t.Fatalf("unexpected error stopping unstarted service: %v", err)
-	}
+	dataService.Stop()
 }

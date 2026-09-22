@@ -19,27 +19,17 @@ import (
 )
 
 func TestFilestorageS3Integration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(db)
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(kvStore)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	// 1. Create Service Account with full S3 permissions
 	serviceAccountID, accessKeyID, secretAccessKey := createTestServiceAccountWithS3Credentials(
 		t,
-		db,
-		cryptoKeyManager,
+		kernel,
 		"s3-standard-client-sa",
 		[]string{
 			core.ScopeFileStorageBucketRead,
@@ -55,7 +45,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 			id, name, is_public, backend, allowed_mime_types, max_file_size_bytes
 		) VALUES ($1, $2, $3, $4, $5, $6);
 	`
-	_, insertErr := db.Exec(ctx, insertBucketSQL, bucketID, "test-s3-bucket", false, "database", []string{"text/plain", "application/octet-stream"}, 104857600)
+	_, insertErr := kernel.DB().Exec(ctx, insertBucketSQL, bucketID, "test-s3-bucket", false, "database", []string{"text/plain", "application/octet-stream"}, 104857600)
 	if insertErr != nil {
 		t.Fatalf("failed to insert test bucket: %v", insertErr)
 	}
@@ -385,8 +375,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 	// 12. S3 Permissions & Scopes Verification: Read-Only Client
 	_, readOnlyAccessKeyID, readOnlySecretAccessKey := createTestServiceAccountWithS3Credentials(
 		t,
-		db,
-		cryptoKeyManager,
+		kernel,
 		"s3-readonly-sa",
 		[]string{
 			core.ScopeFileStorageObjectRead,
@@ -415,7 +404,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	// 13. Disable service account in database and verify rejection
 	const disableServiceAccountSQL = `UPDATE core.service_accounts SET is_enabled = false WHERE id = $1;`
-	_, updateDisabledErr := db.Exec(ctx, disableServiceAccountSQL, serviceAccountID)
+	_, updateDisabledErr := kernel.DB().Exec(ctx, disableServiceAccountSQL, serviceAccountID)
 	if updateDisabledErr != nil {
 		t.Fatalf("failed to disable service account: %v", updateDisabledErr)
 	}
@@ -430,7 +419,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	// 14. Expired service account rejection
 	const expireServiceAccountSQL = `UPDATE core.service_accounts SET is_enabled = true, expires_at = NOW() - INTERVAL '1 hour' WHERE id = $1;`
-	_, updateExpiredErr := db.Exec(ctx, expireServiceAccountSQL, serviceAccountID)
+	_, updateExpiredErr := kernel.DB().Exec(ctx, expireServiceAccountSQL, serviceAccountID)
 	if updateExpiredErr != nil {
 		t.Fatalf("failed to expire service account: %v", updateExpiredErr)
 	}
@@ -444,7 +433,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	// 15. IP blocked service account rejection
 	const blockIPServiceAccountSQL = `UPDATE core.service_accounts SET expires_at = NULL, allowed_ips = '{"10.0.0.1/32"}' WHERE id = $1;`
-	_, updateIPErr := db.Exec(ctx, blockIPServiceAccountSQL, serviceAccountID)
+	_, updateIPErr := kernel.DB().Exec(ctx, blockIPServiceAccountSQL, serviceAccountID)
 	if updateIPErr != nil {
 		t.Fatalf("failed to update service account allowed_ips: %v", updateIPErr)
 	}
@@ -458,7 +447,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	// Restore service account permissions for parameter edge case tests
 	const restoreServiceAccountSQL = `UPDATE core.service_accounts SET allowed_ips = '{}' WHERE id = $1;`
-	_, _ = db.Exec(ctx, restoreServiceAccountSQL, serviceAccountID)
+	_, _ = kernel.DB().Exec(ctx, restoreServiceAccountSQL, serviceAccountID)
 
 	// 16. Multipart parameter validation errors
 	// UploadPart invalid uploadId
@@ -566,7 +555,7 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	// 17.5 Oversized PUT payload -> 400
 	oversizedBucketID := uuid.NewV7()
-	_, _ = db.Exec(ctx, insertBucketSQL, oversizedBucketID, "test-oversized-bucket", false, "database", []string{"text/plain"}, 10)
+	_, _ = kernel.DB().Exec(ctx, insertBucketSQL, oversizedBucketID, "test-oversized-bucket", false, "database", []string{"text/plain"}, 10)
 	oversizedPutRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPut, "/v1/file-storage/s3/test-oversized-bucket/large.txt", bytes.NewReader([]byte("this payload exceeds ten bytes")))
 	oversizedPutRequest.SetPathValue("bucket", "test-oversized-bucket")
 	oversizedPutRequest.SetPathValue("key", "large.txt")
@@ -576,9 +565,9 @@ func TestFilestorageS3Integration(t *testing.T) {
 		t.Fatalf("expected 400 on oversized PUT, got %d", oversizedPutResponseRecorder.Code)
 	}
 
-	// 17.6 Nil engine errors -> 500
+	// 17.6 Unsupported backend engine errors -> 500
 	savedEngine := baseHandler.databaseEngine
-	baseHandler.databaseEngine = nil
+	_, _ = kernel.DB().Exec(ctx, "UPDATE file_storage.buckets SET backend = 'unsupported' WHERE name = 'test-s3-bucket'")
 
 	nilEngineGetRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/v1/file-storage/s3/test-s3-bucket/file.txt", nil)
 	nilEngineGetRequest.SetPathValue("bucket", "test-s3-bucket")
@@ -615,6 +604,14 @@ func TestFilestorageS3Integration(t *testing.T) {
 		t.Fatalf("expected 500 on nil engine multi delete, got %d", nilEngineMultiDeleteResponseRecorder.Code)
 	}
 
+	missingBucketMultiDeleteRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/file-storage/s3/non-existent-bucket?delete", bytes.NewReader([]byte("<Delete><Object><Key>file.txt</Key></Object></Delete>")))
+	missingBucketMultiDeleteRequest.SetPathValue("bucket", "non-existent-bucket")
+	missingBucketMultiDeleteResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteMultipleS3Objects(missingBucketMultiDeleteResponseRecorder, missingBucketMultiDeleteRequest)
+	if missingBucketMultiDeleteResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on missing bucket multi delete, got %d", missingBucketMultiDeleteResponseRecorder.Code)
+	}
+
 	nilEngineCompleteRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/file-storage/s3/test-s3-bucket/file.txt?uploadId="+uuid.NewV7().String(), nil)
 	nilEngineCompleteRequest.SetPathValue("bucket", "test-s3-bucket")
 	nilEngineCompleteRequest.SetPathValue("key", "file.txt")
@@ -632,6 +629,8 @@ func TestFilestorageS3Integration(t *testing.T) {
 	if nilEngineHeadResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on nil engine head, got %d", nilEngineHeadResponseRecorder.Code)
 	}
+
+	_, _ = kernel.DB().Exec(ctx, "UPDATE file_storage.buckets SET backend = 'database' WHERE name = 'test-s3-bucket'")
 
 	// 17.7 Failing driver errors -> 500
 	baseHandler.databaseEngine = NewEngine(&mockFailingDriver{})
@@ -682,9 +681,9 @@ func TestFilestorageS3Integration(t *testing.T) {
 
 	failingUploadID := uuid.NewV7()
 	const insertFailingUploadSQL = `INSERT INTO file_storage.multipart_uploads (id, bucket_id, object_key, content_type) VALUES ($1, $2, $3, $4);`
-	_, _ = db.Exec(ctx, insertFailingUploadSQL, failingUploadID, bucketID, "file.txt", "text/plain")
+	_, _ = kernel.DB().Exec(ctx, insertFailingUploadSQL, failingUploadID, bucketID, "file.txt", "text/plain")
 	const insertFailingPartSQL = `INSERT INTO file_storage.multipart_parts (upload_id, part_number, etag, size_bytes, chunk_data) VALUES ($1, $2, $3, $4, $5);`
-	_, _ = db.Exec(ctx, insertFailingPartSQL, failingUploadID, 1, "etag1", 4, []byte("part"))
+	_, _ = kernel.DB().Exec(ctx, insertFailingPartSQL, failingUploadID, 1, "etag1", 4, []byte("part"))
 
 	failingCompleteRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/file-storage/s3/test-s3-bucket/file.txt?uploadId="+failingUploadID.String(), nil)
 	failingCompleteRequest.SetPathValue("bucket", "test-s3-bucket")
