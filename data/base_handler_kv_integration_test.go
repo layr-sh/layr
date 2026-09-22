@@ -7,27 +7,20 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"layr.sh/core"
 )
 
 func TestDataBaseHandlerKVIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	service := NewService(db)
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	service.SetKVStore(databaseKVStore)
+	service := NewService(kernel)
 
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	baseHandler := service.BaseHandler()
 

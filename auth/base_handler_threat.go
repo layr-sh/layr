@@ -25,7 +25,7 @@ func (handler *BaseHandler) checkCaptcha(responseWriter http.ResponseWriter, req
 	} else {
 		// Adaptive mode: challenge if failed attempts exceed configured threshold
 		threshold := int64(botProtectionConfig.AdaptiveFailedAttempts)
-		if threat.GetFailedAttempts(ctx, handler.kvStore, clientIP) >= threshold {
+		if threat.GetFailedAttempts(ctx, handler.kernel.KVStore(), clientIP) >= threshold {
 			requiresChallenge = true
 		}
 	}
@@ -36,13 +36,11 @@ func (handler *BaseHandler) checkCaptcha(responseWriter http.ResponseWriter, req
 
 	trimmedToken := strings.TrimSpace(token)
 	if trimmedToken == "" {
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewBotChallengeFailedEvent(clientIP, BotChallengeFailedEventData{
-				IPAddress: clientIP,
-				Provider:  botProtectionConfig.Provider,
-				Endpoint:  endpoint,
-			}))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewBotChallengeFailedEvent(clientIP, BotChallengeFailedEventData{
+			IPAddress: clientIP,
+			Provider:  botProtectionConfig.Provider,
+			Endpoint:  endpoint,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification required")
 		return false
 	}
@@ -61,13 +59,11 @@ func (handler *BaseHandler) checkCaptcha(responseWriter http.ResponseWriter, req
 
 	isValid, verifyErr := captchaVerifier.Verify(ctx, trimmedToken, clientIP)
 	if verifyErr != nil || !isValid {
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewBotChallengeFailedEvent(clientIP, BotChallengeFailedEventData{
-				IPAddress: clientIP,
-				Provider:  botProtectionConfig.Provider,
-				Endpoint:  endpoint,
-			}))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewBotChallengeFailedEvent(clientIP, BotChallengeFailedEventData{
+			IPAddress: clientIP,
+			Provider:  botProtectionConfig.Provider,
+			Endpoint:  endpoint,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "CAPTCHA verification failed")
 		return false
 	}
@@ -84,19 +80,17 @@ func (handler *BaseHandler) checkPasswordBreach(responseWriter http.ResponseWrit
 	}
 
 	ctx := request.Context()
-	isBreached, breachCount, breachErr := threat.CheckPwnedPassword(ctx, handler.httpClient, handler.kvStore, prospectivePassword, passwordBreachConfig.FailOpen)
+	isBreached, breachCount, breachErr := threat.CheckPwnedPassword(ctx, handler.httpClient, handler.kernel.KVStore(), prospectivePassword, passwordBreachConfig.FailOpen)
 	if breachErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", fmt.Sprintf("password breach check failed: %v", breachErr))
 		return false
 	}
 
 	if isBreached {
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewPasswordBreachBlockedEvent(email, PasswordBreachBlockedEventData{
-				Email: email,
-				Count: breachCount,
-			}))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewPasswordBreachBlockedEvent(email, PasswordBreachBlockedEventData{
+			Email: email,
+			Count: breachCount,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "This password has appeared in a known data breach. Please choose a different, more secure password.")
 		return false
 	}
@@ -111,27 +105,22 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 	clientIP := core.ExtractRequestClientIP(request)
 	userAgent := request.UserAgent()
 
-	// Reset failed attempts in KVStore upon successful authentication
-	if handler.kvStore != nil {
-		_ = threat.ResetFailedAttempts(ctx, handler.kvStore, clientIP)
-		_ = threat.ResetFailedAttempts(ctx, handler.kvStore, user.ID)
-	}
+	_ = threat.ResetFailedAttempts(ctx, handler.kernel.KVStore(), clientIP)
+	_ = threat.ResetFailedAttempts(ctx, handler.kernel.KVStore(), user.ID)
 
-	riskAssessment, _ := threat.EvaluateSignInRisk(ctx, handler.db, handler.kvStore, user.ID, clientIP, userAgent, handler.configManager.Get().Threat.KnownDevicesMaxDays)
+	riskAssessment := threat.EvaluateSignInRisk(ctx, handler.kernel.DB(), handler.kernel.KVStore(), user.ID, clientIP, userAgent, handler.configManager.Get().Threat.KnownDevicesMaxDays)
 	if riskAssessment != nil && riskAssessment.IsNewDevice && handler.configManager.Get().Threat.NotifyOnNewDevice {
 		if user.Email != nil && *user.Email != "" {
 			_ = handler.emailDispatcher.SendSuspiciousActivity(ctx, *user.Email, user.ID, clientIP, userAgent)
 		}
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewSuspiciousSignInEvent(user.ID, SuspiciousSignInEventData{
-				User:      user,
-				IPAddress: clientIP,
-				UserAgent: userAgent,
-				RiskScore: riskAssessment.Score,
-				RiskLevel: riskAssessment.Level,
-				Reasons:   riskAssessment.Reasons,
-			}))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewSuspiciousSignInEvent(user.ID, SuspiciousSignInEventData{
+			User:      user,
+			IPAddress: clientIP,
+			UserAgent: userAgent,
+			RiskScore: riskAssessment.Score,
+			RiskLevel: riskAssessment.Level,
+			Reasons:   riskAssessment.Reasons,
+		}))
 	}
 
 	mfaConfig := handler.configManager.Get().MFA
@@ -159,10 +148,8 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 
 		if shouldTriggerMFA {
 			mfaTicket := "mfa_tk_" + uuid.NewV7().String()
-			if handler.kvStore != nil {
-				_ = handler.kvStore.Set(ctx, "auth:mfa_ticket:"+mfaTicket, user.ID, mfaTicketTTL)
-			}
-			handler.writeJSON(responseWriter, SignInResponse{
+			_ = handler.kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+mfaTicket, user.ID, mfaTicketTTL)
+			core.WriteJSONResponse(responseWriter, http.StatusOK, SignInResponse{
 				MFARequired: true,
 				MFATicket:   mfaTicket,
 				Factor:      "totp",

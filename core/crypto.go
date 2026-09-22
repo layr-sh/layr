@@ -61,15 +61,15 @@ func NewCryptoKeyManager(encryptionKeyHex string) (*CryptoKeyManager, error) {
 	}
 
 	cryptoKeyManager := &CryptoKeyManager{encryptionKey: decodedKey, randomReader: rand.Reader}
-	cryptoKeyManager.publishableKey = hex.EncodeToString(cryptoKeyManager.deriveSubkey(CryptoContextPublishableKey))
+	cryptoKeyManager.publishableKey = hex.EncodeToString(cryptoKeyManager.DeriveSubkey(CryptoContextPublishableKey))
 
 	log.Debugf("initialized CryptoKeyManager")
 	return cryptoKeyManager, nil
 }
 
-// deriveSubkey derives a deterministic 32-byte subkey using HKDF-SHA256.
+// DeriveSubkey derives a deterministic 32-byte subkey using HKDF-SHA256.
 // HKDF-SHA256 with a valid 32-byte key cannot fail, so this is infallible.
-func (cryptoKeyManager *CryptoKeyManager) deriveSubkey(derivationContext string) []byte {
+func (cryptoKeyManager *CryptoKeyManager) DeriveSubkey(derivationContext string) []byte {
 	log.Tracef("deriving crypto subkey for context %s", derivationContext)
 	hkdfReader := hkdf.New(sha256.New, cryptoKeyManager.encryptionKey, nil, []byte(derivationContext))
 	subkey := make([]byte, subkeyByteLength)
@@ -77,16 +77,11 @@ func (cryptoKeyManager *CryptoKeyManager) deriveSubkey(derivationContext string)
 	return subkey
 }
 
-// DeriveSubkey is the public API for subkey derivation (returns error for interface compatibility).
-func (cryptoKeyManager *CryptoKeyManager) DeriveSubkey(derivationContext string) ([]byte, error) {
-	return cryptoKeyManager.deriveSubkey(derivationContext), nil
-}
-
 // EncryptField encrypts plaintext using the DB secrets subkey in AES-256-GCM.
 // Output format: enc:v1:aes256gcm:<base64-iv>:<base64-ciphertext>:<base64-tag>
 func (cryptoKeyManager *CryptoKeyManager) EncryptField(plaintext []byte) (string, error) {
 	log.Debugf("encrypting field with AES-256-GCM")
-	subkey := cryptoKeyManager.deriveSubkey(CryptoContextDBEnvelopeAES256GCM)
+	subkey := cryptoKeyManager.DeriveSubkey(CryptoContextDBEnvelopeAES256GCM)
 
 	// AES-256 with exactly 32-byte key and GCM with valid AES block cannot fail
 	block, _ := aes.NewCipher(subkey)
@@ -138,7 +133,7 @@ func (cryptoKeyManager *CryptoKeyManager) DecryptField(encrypted string) ([]byte
 		return nil, fmt.Errorf("invalid tag base64: %w", err)
 	}
 
-	subkey := cryptoKeyManager.deriveSubkey(CryptoContextDBEnvelopeAES256GCM)
+	subkey := cryptoKeyManager.DeriveSubkey(CryptoContextDBEnvelopeAES256GCM)
 	block, _ := aes.NewCipher(subkey)
 	gcm, _ := cipher.NewGCM(block)
 

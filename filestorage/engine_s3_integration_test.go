@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/testcontainers/testcontainers-go/modules/localstack"
+	"layr.sh/core"
 )
 
 func TestFilestorageS3LocalStackIntegration(t *testing.T) {
@@ -59,7 +60,8 @@ func TestFilestorageS3LocalStackIntegration(t *testing.T) {
 		t.Fatalf("failed to create upstream bucket: %v", createErr)
 	}
 
-	s3Engine := NewS3Engine(nil)
+	kernel := core.NewTestKernel(nil)
+	s3Engine := NewS3Engine(kernel)
 	testBucket := Bucket{
 		ID:      uuid.NewV7(),
 		Name:    "external-s3",

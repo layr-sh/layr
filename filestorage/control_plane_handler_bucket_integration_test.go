@@ -13,18 +13,11 @@ import (
 )
 
 func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(db)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
 
 	privilegedAuthContext := core.AuthContext{
 		ServiceAccountID: "sa-integration",
@@ -214,7 +207,7 @@ func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
 		INSERT INTO file_storage.objects (id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata)
 		VALUES ($1, $2, 'folder/sample.txt', 'text/plain', 12, 'fake-checksum', '{"author":"test"}'::jsonb);
 	`
-	_, insertObjectErr := db.Exec(context.Background(), insertObjectSQL, sampleObjectID, updatedBucket.ID)
+	_, insertObjectErr := kernel.DB().Exec(context.Background(), insertObjectSQL, sampleObjectID, updatedBucket.ID)
 	if insertObjectErr != nil {
 		t.Fatalf("failed to insert test object: %v", insertObjectErr)
 	}
@@ -254,7 +247,7 @@ func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
 	}
 
 	// Test checkScope with raw X-Service-Account-Key header (without AuthContext)
-	createdServiceAccount, createAccountErr := serviceAccountManager.Create(privilegedCtx, core.CreateServiceAccountInput{
+	createdServiceAccount, createAccountErr := kernel.ServiceAccountManager().Create(privilegedCtx, core.CreateServiceAccountInput{
 		Name:   "cp-test-service-account",
 		Scopes: []string{core.ScopeFileStorageBucketRead, core.ScopeFileStorageBucketWrite},
 	})

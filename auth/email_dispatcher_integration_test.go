@@ -3,11 +3,14 @@ package auth
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
 
@@ -73,7 +76,7 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 			},
 		},
 	}
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig { return emailDispatcherConfig }, cryptoKeyManager)
+	emailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
 
 	// 1. Test template resolution using the hook with user_id (SQL hook takes priority over runtime config)
 	subject, html, text := emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "456789", "01918a24-1234-7000-8000-000000000001", emailDispatcherConfig)

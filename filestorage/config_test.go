@@ -3,6 +3,8 @@ package filestorage
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestFilestorageConfigDefaultsUnit(t *testing.T) {
@@ -54,7 +56,8 @@ func TestFilestorageConfigValidationUnit(t *testing.T) {
 }
 
 func TestFilestorageConfigManagerMemoryUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
+	kernel := core.NewTestKernel(nil)
+	configManager := NewConfigManager(kernel)
 	if configManager == nil {
 		t.Fatal("expected non-nil config manager")
 	}
@@ -72,21 +75,10 @@ func TestFilestorageConfigManagerMemoryUnit(t *testing.T) {
 		t.Fatalf("expected updated chunk size 1048576, got %d", configManager.Get().ChunkSizeBytes)
 	}
 
-	// Test Set with nil db
-	setErr := configManager.Set(context.Background(), updatedConfig)
-	if setErr != nil {
-		t.Fatalf("expected nil error when updating memory config, got: %v", setErr)
-	}
-
 	// Test Set with invalid config
 	invalidConfig := updatedConfig
 	invalidConfig.ChunkSizeBytes = -1
 	if err := configManager.Set(context.Background(), invalidConfig); err == nil {
 		t.Fatal("expected error when setting invalid config")
-	}
-
-	// Test Load with nil db
-	if err := configManager.Load(context.Background()); err == nil {
-		t.Fatal("expected error when loading with nil database pool")
 	}
 }

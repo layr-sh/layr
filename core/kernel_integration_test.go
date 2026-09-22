@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"uuid"
+
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"uuid"
 )
 
 func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
@@ -31,7 +32,7 @@ func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(nil)
 	if err != nil {
 		t.Fatalf("NewKernel failed: %v", err)
 	}
@@ -86,7 +87,7 @@ func TestCoreKernelFailureEmbeddedBadPathIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := kernel.Start(ctx); err == nil {
@@ -102,7 +103,7 @@ func TestCoreKernelFailureExternalBadURLIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := kernel.Start(ctx); err == nil {
@@ -146,7 +147,7 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(nil)
 	if err != nil {
 		t.Fatalf("NewKernel failed: %v", err)
 	}
@@ -212,7 +213,7 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(nil)
 	if err != nil {
 		t.Fatalf("NewKernel failed: %v", err)
 	}
@@ -234,7 +235,7 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 			t.Fatalf("kernel signal shutdown exited with error: %v", err)
 		}
 	case <-time.After(10 * time.Second):
-		_ = kernel.Stop(ctx)
+		kernel.Stop(ctx)
 	}
 }
 
@@ -276,7 +277,7 @@ func TestCoreKernelServerErrorIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 	if err := kernel.Start(ctx); err == nil {
 		t.Fatal("expected kernel start failure on occupied port")
 	}
@@ -311,7 +312,7 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 
 	// Pre-create incompatible table to trigger migration error
 	setupDB, dbErr := NewDatabasePool(ctx, databaseURL, DatabasePoolOptions{})
@@ -342,7 +343,7 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 	badKVConfig.KVStore.URL = "redis://invalid-host:9999"
 	SetLoadedConfig(badKVConfig)
 	defer UnloadConfig()
-	badKVKernel, _ := NewKernel()
+	badKVKernel, _ := NewKernel(nil)
 	if err := badKVKernel.Start(ctx); err == nil {
 		t.Fatal("expected kv store initialization error on invalid redis")
 	}
@@ -353,9 +354,9 @@ type failingServiceRunner struct{}
 func (failingRunner *failingServiceRunner) Start(ctx context.Context) error {
 	return errors.New("mock service start failed")
 }
-func (failingRunner *failingServiceRunner) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
+func (failingRunner *failingServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
 }
-func (failingRunner *failingServiceRunner) Stop() error { return nil }
+func (failingRunner *failingServiceRunner) Stop() {}
 
 func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -386,7 +387,7 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 	kernel.RegisterService(&failingServiceRunner{})
 
 	err = kernel.Start(ctx)
@@ -397,7 +398,7 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	// Test successful service runner
 	successRunner := &mockServiceRunner{}
 	plainRunner := &plainMockRunner{}
-	runnerKernel, _ := NewKernel()
+	runnerKernel, _ := NewKernel(nil)
 	runnerKernel.RegisterService(successRunner)
 	runnerKernel.RegisterService(plainRunner)
 	runnerCtx, runnerCancel := context.WithCancel(ctx)
@@ -413,7 +414,7 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 	}
 	runnerCancel()
 	<-errChannel
-	_ = runnerKernel.Stop(context.Background())
+	runnerKernel.Stop(context.Background())
 	if !successRunner.started || !successRunner.registered || !successRunner.openAPIRegistered {
 		t.Fatalf("expected service runner to be started and registered, got: %+v", successRunner)
 	}
@@ -422,9 +423,9 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 type plainMockRunner struct{}
 
 func (plainRunner *plainMockRunner) Start(ctx context.Context) error { return nil }
-func (plainRunner *plainMockRunner) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
+func (plainRunner *plainMockRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
 }
-func (plainRunner *plainMockRunner) Stop() error { return nil }
+func (plainRunner *plainMockRunner) Stop() {}
 
 func TestCoreKernelStopWithFullSubsystemsIntegration(t *testing.T) {
 	config := DefaultConfig()
@@ -433,10 +434,8 @@ func TestCoreKernelStopWithFullSubsystemsIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
-	if err := kernel.Stop(context.Background()); err != nil {
-		t.Fatalf("Stop failed: %v", err)
-	}
+	kernel, _ := NewKernel(nil)
+	kernel.Stop(context.Background())
 }
 
 type failingService struct {
@@ -447,11 +446,10 @@ func (failingService *failingService) Start(ctx context.Context) error {
 	return failingService.err
 }
 
-func (failingService *failingService) Stop() error {
-	return nil
+func (failingService *failingService) Stop() {
 }
 
-func (failingService *failingService) RegisterRoutes(router *Router, controlPlaneRouter *Router) {
+func (failingService *failingService) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
 }
 
 func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
@@ -483,7 +481,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
-	kernel, _ := NewKernel()
+	kernel, _ := NewKernel(nil)
 	kernel.RegisterService(&failingService{err: errors.New("modular service failed to start")})
 	if err := kernel.Start(ctx); err == nil {
 		t.Fatal("expected kernel start failure on failing modular service")
@@ -500,7 +498,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 		}
 	}()
 
-	failingFactoryKernel, _ := NewKernel()
+	failingFactoryKernel, _ := NewKernel(nil)
 	if err := failingFactoryKernel.Start(ctx); err == nil {
 		t.Fatal("expected kernel start failure on failing service factory")
 	}
@@ -512,7 +510,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	}
 
 	defaultPasswordHasher.SetRandomReader(&coreErrReader{})
-	failingBootstrapKernel, _ := NewKernel()
+	failingBootstrapKernel, _ := NewKernel(nil)
 	if err := failingBootstrapKernel.Start(ctx); err == nil {
 		t.Fatal("expected kernel start failure on failing bootstrap user")
 	}
@@ -525,7 +523,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 		cleanupDB.Close()
 	}
 
-	failingServiceAccountBootstrapKernel, _ := NewKernel()
+	failingServiceAccountBootstrapKernel, _ := NewKernel(nil)
 	if err := failingServiceAccountBootstrapKernel.Start(ctx); err == nil {
 		t.Fatal("expected kernel start failure on failing bootstrap service account")
 	}
@@ -540,7 +538,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	RegisterServiceFactory("data", func(kernel *Kernel) (ServiceRunner, error) {
 		return successAutoRunner, nil
 	})
-	successFactoryKernel, _ := NewKernel()
+	successFactoryKernel, _ := NewKernel(nil)
 	factoryCtx, factoryCancel := context.WithCancel(ctx)
 	autoErrorChannel := make(chan error, 1)
 	go func() {
@@ -554,7 +552,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 	}
 	factoryCancel()
 	<-autoErrorChannel
-	_ = successFactoryKernel.Stop(context.Background())
+	successFactoryKernel.Stop(context.Background())
 	if !successAutoRunner.started || !successAutoRunner.registered {
 		t.Fatalf("expected auto-instantiated service to start and register, got: %+v", successAutoRunner)
 	}
@@ -597,20 +595,13 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
-
-	kernel, err := NewKernel()
+	kernel, err := NewKernel(db)
 	if err != nil {
 		t.Fatalf("failed to create kernel: %v", err)
 	}
-	kernel.db = db
-	kernel.serviceAccountManager = NewServiceAccountManager(db)
-	kernel.eventBus = NewEventBus(db, kernel.cryptoKeyManager)
 	defer kernel.eventBus.Close()
-	kernel.eventHookManager = NewEventHookManager(db, kernel.cryptoKeyManager, kernel.eventBus)
-	kernel.eventManager = NewEventManager(db)
-
-	server := NewServer(db, kernel.cryptoKeyManager)
-	kernel.registerCoreRoutes(server)
+	server := NewServer(kernel)
+	kernel.server = server
 
 	// 1. Service Accounts HTTP API
 	// POST /v1/_/core/service-accounts
@@ -992,12 +983,13 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		db:                    db,
 		eventBus:              NewEventBus(db, cryptoKeyManager),
 		serviceAccountManager: NewServiceAccountManager(db),
-		eventHookManager:      NewEventHookManager(db, cryptoKeyManager, nil),
+		eventHookManager:      NewEventHookManager(db, cryptoKeyManager),
 		eventManager:          NewEventManager(db),
 	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	kernel.jwtSigner = jwtSigner
 
-	server := NewServer(db, cryptoKeyManager)
-	kernel.registerCoreRoutes(server)
+	server := NewServer(kernel)
 
 	// Test 1: List Service Accounts via Control Plane Router
 	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/core/service-accounts", nil)
@@ -1241,7 +1233,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("expected 404 for delete not found event hook, got %d", deleteNotFoundHookResponseRecorder.Code)
 	}
 
-	// Test ServiceAccountAuthMiddleware & RequireScopeMiddleware
+	// Test CheckScope & RequireScope on ServiceAccountManager
 	serviceAccount, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		Name:   "Middleware Service Account",
 		Scopes: []string{ScopeRoot},
@@ -1250,169 +1242,84 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 		t.Fatalf("failed to create middleware service account: %v", err)
 	}
 
-	testHandler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		serviceAccount := GetServiceAccount(request.Context())
-		if serviceAccount == nil {
-			http.Error(responseWriter, "no service account in context", http.StatusUnauthorized)
-			return
-		}
-		responseWriter.WriteHeader(http.StatusOK)
-		_, _ = responseWriter.Write([]byte(serviceAccount.ID))
-	})
-
-	// 1. Nil manager pass-through
-	nilServiceAccountManagerHandler := ServiceAccountAuthMiddleware(nil)(testHandler)
-	nilServiceAccountManagerRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	nilServiceAccountManagerResponseRecorder := httptest.NewRecorder()
-	nilServiceAccountManagerHandler.ServeHTTP(nilServiceAccountManagerResponseRecorder, nilServiceAccountManagerRequest)
-	if nilServiceAccountManagerResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 when serviceAccount not in context, got %d", nilServiceAccountManagerResponseRecorder.Code)
-	}
-
-	// 2. Empty key pass-through
-	handler := ServiceAccountAuthMiddleware(kernel.serviceAccountManager)(testHandler)
-	noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	noKeyResponseRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(noKeyResponseRecorder, noKeyRequest)
-	if noKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on empty key pass through, got %d", noKeyResponseRecorder.Code)
-	}
-
-	// 3. Invalid key -> 401
-	badKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	badKeyRequest.Header.Set("X-Layr-Service-Account-Key", "invalid_short_key")
-	badKeyResponseRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(badKeyResponseRecorder, badKeyRequest)
-	if badKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on invalid key, got %d", badKeyResponseRecorder.Code)
-	}
-
-	// 4. Valid Service Account Key via X-Forwarded-For IP & Bearer Header
-	validKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	validKeyRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
-	validKeyRequest.Header.Set("X-Forwarded-For", "192.168.1.1, 10.0.0.1")
-	validKeyResponseRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(validKeyResponseRecorder, validKeyRequest)
-	if validKeyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key, got %d", validKeyResponseRecorder.Code)
-	}
-
-	// 5. Valid Service Account Key via X-Real-IP
-	validXRealRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	validXRealRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
-	validXRealRequest.Header.Set("X-Real-IP", "127.0.0.1")
-	validXRealResponseRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(validXRealResponseRecorder, validXRealRequest)
-	if validXRealResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key with X-Real-IP, got %d", validXRealResponseRecorder.Code)
-	}
-
-	// 5b. Valid Service Account Key with plain RemoteAddr
-	plainRemoteRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	plainRemoteRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
-	plainRemoteRequest.RemoteAddr = "127.0.0.1" // no port, tests SplitHostPort fallback
-	plainRemoteResponseRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(plainRemoteResponseRecorder, plainRemoteRequest)
-	if plainRemoteResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid service account key with plain RemoteAddr, got %d", plainRemoteResponseRecorder.Code)
-	}
-
-	// 6. Test RequireScopeMiddleware
-	scopeGuardedHandler := RequireScopeMiddleware("core:service-account.read")(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		responseWriter.WriteHeader(http.StatusOK)
-	}))
-
-	// Without service account in context -> 401
+	// 6. Test CheckScope on ServiceAccountManager
+	// Without service account or secret key -> true (empty key returns true)
 	unauthScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	unauthScopeResponseRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(unauthScopeResponseRecorder, unauthScopeRequest)
-	if unauthScopeResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without service account in context, got %d", unauthScopeResponseRecorder.Code)
+	if !kernel.serviceAccountManager.CheckScope(unauthScopeRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return true when no secret key is present")
 	}
 
-	// With service account lacking scope -> 403
-	scopedServiceAccount := &ServiceAccount{ID: "test", Scopes: []string{"data:query.read"}}
-	insufficientCtx := WithServiceAccount(ctx, scopedServiceAccount)
-	insufficientRequest := httptest.NewRequestWithContext(insufficientCtx, http.MethodGet, "/test", nil)
-	insufficientResponseRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(insufficientResponseRecorder, insufficientRequest)
-	if insufficientResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 on insufficient scope, got %d", insufficientResponseRecorder.Code)
-	}
-
-	// With service account holding wildcard scope -> 200
-	rootServiceAccount := &ServiceAccount{ID: "root", Scopes: []string{ScopeRoot}}
-	rootCtx := WithServiceAccount(ctx, rootServiceAccount)
-	rootRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/test", nil)
-	rootResponseRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(rootResponseRecorder, rootRequest)
-	if rootResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with root service account, got %d", rootResponseRecorder.Code)
-	}
-
-	// With M2M AuthContext holding required scope -> 200
+	// With M2M AuthContext holding required scope -> true
 	m2mValidCtx := WithAuthContext(ctx, AuthContext{
 		ServiceAccountID: "sa_m2m",
 		JWT: JWTClaims{
 			Subject: "sa_m2m",
 			Role:    "service_role",
-			Scope:   "core:service-account.read",
+			Scope:   ScopeCoreServiceAccountRead,
 		},
 	})
 	m2mValidRequest := httptest.NewRequestWithContext(m2mValidCtx, http.MethodGet, "/test", nil)
-	m2mValidResponseRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(m2mValidResponseRecorder, m2mValidRequest)
-	if m2mValidResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with valid M2M AuthContext, got %d", m2mValidResponseRecorder.Code)
+	if !kernel.serviceAccountManager.CheckScope(m2mValidRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return true with valid M2M AuthContext")
 	}
 
-	// With M2M AuthContext lacking required scope -> 403
+	// With M2M AuthContext lacking required scope -> false
 	m2mInvalidCtx := WithAuthContext(ctx, AuthContext{
 		ServiceAccountID: "sa_m2m",
 		JWT: JWTClaims{
 			Subject: "sa_m2m",
 			Role:    "service_role",
-			Scope:   "data:query.read",
+			Scope:   ScopeDataQueryRead,
 		},
 	})
 	m2mInvalidRequest := httptest.NewRequestWithContext(m2mInvalidCtx, http.MethodGet, "/test", nil)
-	m2mInvalidResponseRecorder := httptest.NewRecorder()
-	scopeGuardedHandler.ServeHTTP(m2mInvalidResponseRecorder, m2mInvalidRequest)
-	if m2mInvalidResponseRecorder.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 with M2M AuthContext lacking scope, got %d", m2mInvalidResponseRecorder.Code)
+	if kernel.serviceAccountManager.CheckScope(m2mInvalidRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return false with M2M AuthContext lacking scope")
 	}
 
-	// 7. Test RequireServiceAccountMiddleware
-	nilRequireServiceAccountHandler := RequireServiceAccountMiddleware(nil)(testHandler)
-	nilRequireRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	nilRequireResponseRecorder := httptest.NewRecorder()
-	nilRequireServiceAccountHandler.ServeHTTP(nilRequireResponseRecorder, nilRequireRequest)
-	if nilRequireResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on nil manager handler, got %d", nilRequireResponseRecorder.Code)
+	// With valid service account holding wildcard scope -> true
+	serviceAccountKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	serviceAccountKeyRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+	if !kernel.serviceAccountManager.CheckScope(serviceAccountKeyRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return true for root service account")
 	}
 
-	requireHandler := RequireServiceAccountMiddleware(kernel.serviceAccountManager)(testHandler)
-	emptyKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	emptyKeyResponseRecorder := httptest.NewRecorder()
-	requireHandler.ServeHTTP(emptyKeyResponseRecorder, emptyKeyRequest)
-	if emptyKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on empty key with RequireServiceAccountMiddleware, got %d", emptyKeyResponseRecorder.Code)
+	// With valid service account lacking scope -> false
+	limitedServiceAccount, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+		Name:   "Limited SA",
+		Scopes: []string{ScopeDataQueryRead},
+	})
+	if err != nil {
+		t.Fatalf("failed to create limited SA: %v", err)
+	}
+	limitedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	limitedRequest.Header.Set("Authorization", "Bearer "+limitedServiceAccount.SecretKey)
+	if kernel.serviceAccountManager.CheckScope(limitedRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return false when service account lacks scope")
 	}
 
-	badRequireKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	badRequireKeyRequest.Header.Set("X-Layr-Service-Account-Key", "invalid_short_key")
-	badRequireKeyResponseRecorder := httptest.NewRecorder()
-	requireHandler.ServeHTTP(badRequireKeyResponseRecorder, badRequireKeyRequest)
-	if badRequireKeyResponseRecorder.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 on invalid key with RequireServiceAccountMiddleware, got %d", badRequireKeyResponseRecorder.Code)
+	// With invalid secret key -> false
+	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid-key-secret-key-prefix-123456789")
+	if kernel.serviceAccountManager.CheckScope(invalidKeyRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to return false with invalid secret key")
 	}
 
-	validRequireKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	validRequireKeyRequest.Header.Set("X-Layr-Service-Account-Key", serviceAccount.SecretKey)
-	validRequireKeyResponseRecorder := httptest.NewRecorder()
-	requireHandler.ServeHTTP(validRequireKeyResponseRecorder, validRequireKeyRequest)
-	if validRequireKeyResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on valid key with RequireServiceAccountMiddleware, got %d", validRequireKeyResponseRecorder.Code)
+	// Test RequireScope on ServiceAccountManager
+	validRequireResponseRecorder := httptest.NewRecorder()
+	if !kernel.serviceAccountManager.RequireScope(validRequireResponseRecorder, serviceAccountKeyRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected RequireScope to return true for root service account")
+	}
+	if validRequireResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on validRequireResponseRecorder, got %d", validRequireResponseRecorder.Code)
+	}
+
+	forbiddenRequireResponseRecorder := httptest.NewRecorder()
+	if kernel.serviceAccountManager.RequireScope(forbiddenRequireResponseRecorder, limitedRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected RequireScope to return false when service account lacks scope")
+	}
+	if forbiddenRequireResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 on forbiddenRequireResponseRecorder, got %d", forbiddenRequireResponseRecorder.Code)
 	}
 }
 
@@ -1485,7 +1392,7 @@ func TestCoreKernelExtraCoreErrorBranchesIntegration(t *testing.T) {
 	defer eventBus.Close()
 
 	serviceAccountManager := NewServiceAccountManager(db)
-	eventHookManager := NewEventHookManager(db, cryptoKeyManager, eventBus)
+	eventHookManager := NewEventHookManager(db, cryptoKeyManager)
 	eventManager := NewEventManager(db)
 
 	serviceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "Target Service Account"})
@@ -1597,13 +1504,7 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 
 	serviceAccountManager := NewServiceAccountManager(db)
 
-	// 1. Nil pool or nil manager error
-	nilKernel := &Kernel{}
-	if err := nilKernel.bootstrapRootAccount(ctx); err == nil {
-		t.Fatal("expected error on nil db connection pool bootstrapRootAccount")
-	}
-
-	// 2. Count error on closed pool
+	// 1. Count error on closed pool
 	closedDB, _ := NewDatabasePool(ctx, databaseURL)
 	closedDB.Close()
 	closedKernel := &Kernel{db: closedDB, serviceAccountManager: NewServiceAccountManager(closedDB)}

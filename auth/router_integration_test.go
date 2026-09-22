@@ -12,11 +12,11 @@ import (
 )
 
 func TestAuthRouterIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	service := NewService(db, cryptoKeyManager)
+	service := NewService(kernel)
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("failed to start service: %v", err)
 	}

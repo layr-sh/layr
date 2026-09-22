@@ -11,9 +11,6 @@ func TestCoreDatabaseKVStoreUnit(t *testing.T) {
 
 	// 1. Initialize with zero sweep interval (defaults to 60s)
 	zeroKVStore := NewDatabaseKVStore(ctx, nil, 0)
-	if zeroKVStore == nil {
-		t.Fatal("expected non-nil DatabaseKVStore")
-	}
 	zeroDatabaseKVStore, ok := zeroKVStore.Driver().(*DatabaseKVStore)
 	if !ok || zeroDatabaseKVStore.sweepInterval != 60*time.Second {
 		t.Errorf("expected default sweep interval 60s, got %v", zeroDatabaseKVStore.sweepInterval)

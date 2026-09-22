@@ -15,8 +15,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleExecuteSQL(responseWriter 
 		return
 	}
 
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 
@@ -41,6 +40,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleExecuteSQL(responseWriter 
 		return
 	}
 
-	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, executeSQLResponse)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
+	core.WriteJSONResponse(responseWriter, http.StatusOK, executeSQLResponse)
 }

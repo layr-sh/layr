@@ -8,7 +8,7 @@ import (
 )
 
 func TestDataRouterUnit(t *testing.T) {
-	service := NewService(nil)
+	service := NewService(core.NewTestKernel(nil))
 
 	// 1. Test nil safety
 	service.RegisterRoutes(nil, nil)

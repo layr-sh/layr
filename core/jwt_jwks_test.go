@@ -20,10 +20,7 @@ func TestCoreJWTJWKSUnit(t *testing.T) {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	// 1. BuildJWKS validation
 	jwks := jwtSigner.BuildJWKS()
@@ -55,13 +52,10 @@ func TestCoreJWTJWKSUnit(t *testing.T) {
 	}
 
 	// 3. VerifyJWT with valid JWKS
-	token, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	token := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: "usr_test_jwks",
 		Role:    "authenticated",
 	}, 300)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	jwtClaims, err := jwks.VerifyJWT(token)
 	if err != nil {

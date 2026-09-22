@@ -19,11 +19,13 @@ import (
 )
 
 func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -50,15 +52,10 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	baseHandler := service.baseHandler
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
+	databaseKVStore := kernel.KVStore()
 
 	userEmail := "alice.handler@example.com"
 	userPassword := "SuperStrongPassword123!"
@@ -81,8 +78,8 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	var signupAuthTokenResponse AuthTokenResponse
-	if err := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupAuthTokenResponse); err != nil {
-		t.Fatalf("failed to decode sign up response: %v", err)
+	if decodeErr := json.NewDecoder(signupResponseRecorder.Body).Decode(&signupAuthTokenResponse); decodeErr != nil {
+		t.Fatalf("failed to decode sign up response: %v", decodeErr)
 	}
 	if signupAuthTokenResponse.User.ID == "" || signupAuthTokenResponse.AccessToken == "" {
 		t.Fatalf("invalid sign up response: %+v", signupAuthTokenResponse)
@@ -119,8 +116,8 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	var refreshAuthTokenResponse AuthTokenResponse
-	if err := json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshAuthTokenResponse); err != nil {
-		t.Fatalf("failed to decode refresh response: %v", err)
+	if decodeErr := json.NewDecoder(refreshResponseRecorder.Body).Decode(&refreshAuthTokenResponse); decodeErr != nil {
+		t.Fatalf("failed to decode refresh response: %v", decodeErr)
 	}
 
 	// 4. OTP Send & Verify (Email & Phone)
@@ -336,7 +333,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 	_ = json.NewDecoder(mfaSetupResponseRecorder.Body).Decode(&mfaSetupResponse)
 
-	currentTOTPCode, err := baseHandler.GetTOTPManager().GenerateCode(mfaSetupResponse.Secret, time.Now())
+	currentTOTPCode, err := baseHandler.totpManager.GenerateCode(mfaSetupResponse.Secret, time.Now())
 	if err == nil && currentTOTPCode != "" {
 		mfaVerifyPayload := map[string]any{
 			"user_id": signupAuthTokenResponse.User.ID,
@@ -403,7 +400,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test identity for export: %v", err)
 	}
 
-	exportRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
+	exportRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
 	exportRequest.SetPathValue("user_id", signupAuthTokenResponse.User.ID)
 	exportRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
@@ -421,13 +418,10 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 
 	// Test non-existent user export -> 404 Not Found
 	nonExistentUserID := "018f2234-5678-789a-bcde-f0123456789a"
-	nonExistentToken, tokenErr := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	nonExistentToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: nonExistentUserID,
 		Role:    "authenticated",
 	}, 900)
-	if tokenErr != nil {
-		t.Fatalf("failed to generate non-existent user access token: %v", tokenErr)
-	}
 	nonExistentCtx := core.WithAuthContext(ctx, core.AuthContext{
 		UserID: nonExistentUserID,
 		JWT: core.JWTClaims{
@@ -450,17 +444,19 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", bytes.NewReader(signOutPayload))
 	signOutResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutResponseRecorder, signOutRequest)
-	if signOutResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from /sign-out, got: %d", signOutResponseRecorder.Code)
+	if signOutResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content from /sign-out, got: %d", signOutResponseRecorder.Code)
 	}
 }
 
 func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -488,22 +484,18 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-
 	var capturedEvents []core.Event
 	var eventsMutex sync.Mutex
-	eventBus.Subscribe("auth.user.*", func(eventCtx context.Context, event core.Event) error {
+	kernel.EventBus().Subscribe("auth.user.*", func(eventCtx context.Context, event core.Event) error {
 		eventsMutex.Lock()
 		defer eventsMutex.Unlock()
 		capturedEvents = append(capturedEvents, event)
 		return nil
 	})
 
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
+	baseHandler := service.baseHandler
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
 
 	// 1. Anonymous Sign-In (POST /v1/auth/anonymous)
 	anonymousPayload, _ := json.Marshal(map[string]any{
@@ -546,7 +538,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 
 	// Verify Ed25519 JWT claims
-	anonymousJWTClaims, claimErr := baseHandler.jwtSigner.VerifyAccessToken(anonymousAuthTokenResponse.AccessToken)
+	anonymousJWTClaims, claimErr := kernel.JWTSigner().VerifyAccessToken(anonymousAuthTokenResponse.AccessToken)
 	if claimErr != nil {
 		t.Fatalf("failed to verify anonymous access token: %v", claimErr)
 	}
@@ -584,7 +576,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 			"subscribed": true,
 		},
 	})
-	signupConversionRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
+	signupConversionRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupConversionPayload)), anonymousUserID, "anon", true)
 	signupConversionRequest.Header.Set("Authorization", "Bearer "+anonymousAuthTokenResponse.AccessToken)
 	signupConversionResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(signupConversionResponseRecorder, signupConversionRequest)
@@ -613,7 +605,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		t.Fatalf("expected merged properties containing both theme and subscribed, got: %+v", signupConversionAuthTokenResponse.User.Properties)
 	}
 
-	convertedJWTClaims, tokenErr := baseHandler.jwtSigner.VerifyAccessToken(signupConversionAuthTokenResponse.AccessToken)
+	convertedJWTClaims, tokenErr := kernel.JWTSigner().VerifyAccessToken(signupConversionAuthTokenResponse.AccessToken)
 	if tokenErr != nil {
 		t.Fatalf("failed to verify converted access token: %v", tokenErr)
 	}
@@ -703,7 +695,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 		"code":      otpCode,
 		"purpose":   "sign_in",
 	})
-	otpVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
+	otpVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", bytes.NewReader(otpVerifyPayload)), secondAnonymousUserID, "anon", true)
 	otpVerifyRequest.Header.Set("Authorization", "Bearer "+secondAnonymousAuthTokenResponse.AccessToken)
 	otpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpVerifyResponseRecorder, otpVerifyRequest)
@@ -743,7 +735,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updateEmail := fmt.Sprintf("update_email_%d@example.com", time.Now().UnixNano())
 	patchEmailPayload, _ := json.Marshal(UpdateUserEmailInput{Email: updateEmail})
-	patchEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
+	patchEmailRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/email", bytes.NewReader(patchEmailPayload)), thirdAnonymousUserID, "anon", true)
 	patchEmailRequest.Header.Set("Authorization", "Bearer "+thirdAnonymousAuthTokenResponse.AccessToken)
 	patchEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserEmail(patchEmailResponseRecorder, patchEmailRequest)
@@ -775,7 +767,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 
 	updatePhone := fmt.Sprintf("+1415%07d", time.Now().UnixNano()%10000000)
 	patchPhonePayload, _ := json.Marshal(UpdateUserPhoneInput{Phone: updatePhone})
-	patchPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
+	patchPhoneRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/auth/user/phone", bytes.NewReader(patchPhonePayload)), fourthAnonymousUserID, "anon", true)
 	patchPhoneRequest.Header.Set("Authorization", "Bearer "+fourthAnonymousAuthTokenResponse.AccessToken)
 	patchPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPhone(patchPhoneResponseRecorder, patchPhoneRequest)
@@ -799,11 +791,13 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 }
 
 func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -816,13 +810,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
+	baseHandler := service.baseHandler
 
 	// 1. Phone Sign-Up and Phone Sign-In
 	phoneUser := "+12025550199"
@@ -945,7 +933,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    conflictEmail,
 		Password: "NewPassword123!",
 	})
-	conflictEmailRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictEmailRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictEmailConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	conflictEmailRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictEmailResponseRecorder, conflictEmailRequest)
@@ -958,7 +946,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Phone:    phoneUser,
 		Password: "NewPassword123!",
 	})
-	conflictPhoneRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	conflictPhoneRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(conflictPhoneConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	conflictPhoneRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	conflictPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(conflictPhoneResponseRecorder, conflictPhoneRequest)
@@ -979,7 +967,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 		Email:    "block_convert@example.com",
 		Password: "Password123!",
 	})
-	blockConvertRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
+	blockConvertRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(blockConvertPayload)), anonAuthTokenResponse.User.ID, "anon", true)
 	blockConvertRequest.Header.Set("Authorization", "Bearer "+anonAuthTokenResponse.AccessToken)
 	blockConvertResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignUp(blockConvertResponseRecorder, blockConvertRequest)
@@ -1030,7 +1018,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", conflictEmail).Scan(&conflictUserID)
 
 	expiredToken := "expired-token-val"
-	expiredHash := baseHandler.jwtSigner.HashRefreshToken(expiredToken)
+	expiredHash := kernel.JWTSigner().HashRefreshToken(expiredToken)
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)
 		VALUES ($1, $2, clock_timestamp() - interval '10 minutes', clock_timestamp() - interval '1 hour')
@@ -1060,7 +1048,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}()
 
 	deletedUserToken := "deleted-user-refresh-token"
-	deletedUserHash := baseHandler.jwtSigner.HashRefreshToken(deletedUserToken)
+	deletedUserHash := kernel.JWTSigner().HashRefreshToken(deletedUserToken)
 	nonExistentUserID := "018f2234-5678-789a-bcde-f0123456789b"
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at, created_at)

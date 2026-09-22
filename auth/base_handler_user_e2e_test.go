@@ -15,22 +15,18 @@ import (
 )
 
 func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler := service.baseHandler
 
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("POST /v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)
@@ -46,8 +42,8 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 		INSERT INTO auth.users (id, email, role, email_verified_at, created_at, last_updated_at)
 		VALUES (uuidv7(), $1, 'user', NULL, clock_timestamp(), clock_timestamp())
 	`
-	if _, err := db.Exec(ctx, insertUserQuery, userEmail); err != nil {
-		t.Fatalf("failed to insert user: %v", err)
+	if _, execErr := db.Exec(ctx, insertUserQuery, userEmail); execErr != nil {
+		t.Fatalf("failed to insert user: %v", execErr)
 	}
 
 	// 2. Mock Email Webhook Server
@@ -74,6 +70,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 		},
 	}
 	configManager.Set(activeConfig)
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
 
 	// 3. Request Email Verification
 	verifyRequestPayload, _ := json.Marshal(map[string]any{
@@ -132,22 +129,18 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 }
 
 func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler := service.baseHandler
 
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("POST /v1/auth/user/phone/verification/request", baseHandler.handleRequestPhoneVerification)
@@ -163,8 +156,8 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 		INSERT INTO auth.users (id, email, phone, role, email_verified_at, phone_verified_at, created_at, last_updated_at)
 		VALUES (uuidv7(), 'phone-e2e@example.com', $1, 'user', NULL, NULL, clock_timestamp(), clock_timestamp())
 	`
-	if _, err := db.Exec(ctx, insertUserQuery, testPhoneNumber); err != nil {
-		t.Fatalf("failed to insert user with phone: %v", err)
+	if _, execErr := db.Exec(ctx, insertUserQuery, testPhoneNumber); execErr != nil {
+		t.Fatalf("failed to insert user with phone: %v", execErr)
 	}
 
 	// Mock SMS Webhook Server
@@ -190,6 +183,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 		},
 	}
 	configManager.Set(activeConfig)
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
 	// 1. Request Phone Verification
 	verifyRequestPayload, _ := json.Marshal(map[string]any{
@@ -248,22 +242,17 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 }
 
 func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
-	db, cryptoKeyManager, cleanupDatabase := setupTestDatabase(t)
+	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load initial auth config: %v", err)
 	}
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	testKVStore := newInMemoryKVStore()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler := service.baseHandler
 
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("POST /v1/auth/user/email/verification/request", baseHandler.handleRequestEmailVerification)

@@ -10,48 +10,32 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"layr.sh/core"
-	"layr.sh/data/realtime"
 	"layr.sh/data/rest"
 )
 
 func TestDataBaseHandlerInitializationUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	baseHandler := NewBaseHandler(service)
 	assert.NotNil(t, baseHandler)
 	assert.NotNil(t, baseHandler.RealtimeHub())
 	assert.NotNil(t, baseHandler.GraphQLSchema())
 
-	inMemoryKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(inMemoryKVStore)
-	assert.Equal(t, inMemoryKVStore, baseHandler.kvStore)
+	service.SetSaltSecret("test-salt")
+	assert.Equal(t, "test-salt", service.saltSecret)
 
-	eventBus := core.NewEventBus(nil, nil)
-	defer eventBus.Close()
-	baseHandler.SetEventBus(eventBus)
-	assert.Equal(t, eventBus, baseHandler.eventBus)
-
-	newHub := realtime.NewHub(nil)
-	baseHandler.SetRealtimeHub(newHub)
-	assert.Equal(t, newHub, baseHandler.realtimeHub)
-
-	baseHandler.SetSaltSecret("test-salt")
-	assert.Equal(t, "test-salt", baseHandler.saltSecret)
-
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
-	assert.Equal(t, serviceAccountManager, baseHandler.serviceAccountManager)
-
-	baseHandler.SetTableMetadata(rest.TableMetadata{
+	service.SetTableMetadata(rest.TableMetadata{
 		Schema:     "public",
 		Table:      "users",
 		PrimaryKey: "id",
 	})
-	assert.Contains(t, baseHandler.tables, "public.users")
+	assert.Contains(t, service.tables, "public.users")
 }
 
 func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := NewBaseHandler(service)
 
 	t.Run("parsePath", func(t *testing.T) {
 		schema, table, recordID, err := baseHandler.parsePath("/v1/data/public/users/123")
@@ -70,17 +54,6 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("writeJSON", func(t *testing.T) {
-		responseRecorder := httptest.NewRecorder()
-		baseHandler.writeJSON(responseRecorder, http.StatusOK, map[string]string{"status": "ok"})
-		assert.Equal(t, http.StatusOK, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), `"status":"ok"`)
-
-		createdResponseRecorder := httptest.NewRecorder()
-		baseHandler.writeJSON(createdResponseRecorder, http.StatusCreated, map[string]string{"status": "created"})
-		assert.Equal(t, http.StatusCreated, createdResponseRecorder.Code)
-	})
-
 	t.Run("writeError", func(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
@@ -88,7 +61,7 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 	})
 
-	t.Run("writeDBError", func(t *testing.T) {
+	t.Run("writeDBErrorResponse", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 
 		codes := []string{"42501", "23505", "23503", "42P01", "42703", "unknown"}
@@ -104,10 +77,10 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 		for index, code := range codes {
 			responseRecorder := httptest.NewRecorder()
 			if code == "unknown" {
-				baseHandler.writeDBError(responseRecorder, request, errors.New("generic db error"))
+				baseHandler.writeDBErrorResponse(responseRecorder, request, errors.New("generic db error"))
 			} else {
 				pgError := &pgconn.PgError{Code: code, Message: "test", Detail: "detail"}
-				baseHandler.writeDBError(responseRecorder, request, pgError)
+				baseHandler.writeDBErrorResponse(responseRecorder, request, pgError)
 			}
 			assert.Equal(t, expectedStatuses[index], responseRecorder.Code, "code %s failed", code)
 		}
@@ -115,15 +88,15 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 
 	t.Run("isRLSBypassed", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
-		assert.False(t, baseHandler.isRLSBypassed(request, "data:query.read"))
+		assert.False(t, baseHandler.isRLSBypassed(request, core.ScopeDataQueryRead))
 
 		jwtRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{
 			JWT: core.JWTClaims{
 				Role:  "service_role",
-				Scope: "data:query.read",
+				Scope: core.ScopeDataQueryRead,
 			},
 		}), http.MethodGet, "/test", nil)
-		assert.True(t, baseHandler.isRLSBypassed(jwtRequest, "data:query.read"))
+		assert.True(t, baseHandler.isRLSBypassed(jwtRequest, core.ScopeDataQueryRead))
 
 		noScopeRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{
 			JWT: core.JWTClaims{
@@ -131,10 +104,11 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 				Scope: "other:scope",
 			},
 		}), http.MethodGet, "/test", nil)
-		assert.False(t, baseHandler.isRLSBypassed(noScopeRequest, "data:query.read"))
+		assert.False(t, baseHandler.isRLSBypassed(noScopeRequest, core.ScopeDataQueryRead))
 
-		baseHandler.SetServiceAccountManager(nil)
-		assert.False(t, baseHandler.isRLSBypassed(request, "data:query.read"))
+		badKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+		badKeyRequest.Header.Set("Authorization", "Bearer invalid_key")
+		assert.False(t, baseHandler.isRLSBypassed(badKeyRequest, core.ScopeDataQueryRead))
 	})
 
 	t.Run("resolveTransaction", func(t *testing.T) {
@@ -145,17 +119,6 @@ func TestDataBaseHandlerHelperMethodsUnit(t *testing.T) {
 
 	t.Run("IntrospectSchemasHelper", func(t *testing.T) {
 		ctx := context.Background()
-		assert.NoError(t, baseHandler.IntrospectSchemas(ctx))
-
-		emptyBaseHandler := &BaseHandler{}
-		assert.NoError(t, emptyBaseHandler.IntrospectSchemas(ctx))
-	})
-
-	t.Run("SettersNilSafety", func(t *testing.T) {
-		emptyBaseHandler := &BaseHandler{tables: make(map[string]rest.TableMetadata)}
-		emptyBaseHandler.SetKVStore(nil)
-		emptyBaseHandler.SetRealtimeHub(nil)
-		assert.Nil(t, emptyBaseHandler.RealtimeHub())
-		assert.Nil(t, emptyBaseHandler.GraphQLSchema())
+		assert.Error(t, baseHandler.IntrospectSchemas(ctx))
 	})
 }

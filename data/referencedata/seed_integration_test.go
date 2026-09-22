@@ -70,7 +70,8 @@ func TestReferencedataSeedLifecycleIntegration(t *testing.T) {
 	}
 
 	// 1. Initial Seeding
-	if err := referencedata.Seed(ctx, db); err != nil {
+	kernel := core.NewTestKernel(db)
+	if err := referencedata.Seed(ctx, kernel); err != nil {
 		t.Fatalf("Seed failed: %v", err)
 	}
 
@@ -106,7 +107,7 @@ func TestReferencedataSeedLifecycleIntegration(t *testing.T) {
 	}
 
 	// 3. Idempotent Second Seed (should not duplicate or fail)
-	if err := referencedata.Seed(ctx, db); err != nil {
+	if err := referencedata.Seed(ctx, kernel); err != nil {
 		t.Fatalf("idempotent Seed failed: %v", err)
 	}
 
@@ -232,7 +233,8 @@ func TestReferencedataSeedBranchesAndErrorsIntegration(t *testing.T) {
 		},
 	}
 
-	if err := referencedata.SeedWithData(ctx, db, customCountries, customCurrencies); err != nil {
+	kernel := core.NewTestKernel(db)
+	if err := referencedata.SeedWithData(ctx, kernel, customCountries, customCurrencies); err != nil {
 		t.Fatalf("failed to seed custom data: %v", err)
 	}
 
@@ -242,7 +244,8 @@ func TestReferencedataSeedBranchesAndErrorsIntegration(t *testing.T) {
 		t.Fatalf("failed to create pool to close: %v", err)
 	}
 	closedDB.Close()
-	if err := referencedata.SeedWithData(ctx, closedDB, customCountries, customCurrencies); err == nil {
+	closedKernel := core.NewTestKernel(closedDB)
+	if err := referencedata.SeedWithData(ctx, closedKernel, customCountries, customCurrencies); err == nil {
 		t.Fatalf("expected error on closed pool")
 	}
 
@@ -284,7 +287,7 @@ func TestReferencedataSeedBranchesAndErrorsIntegration(t *testing.T) {
 			t.Fatalf("failed to add constraint on %s (test %d): %v", testCase.table, constraintIndex, err)
 		}
 
-		if err := referencedata.SeedWithData(ctx, db, customCountries, customCurrencies); err == nil {
+		if err := referencedata.SeedWithData(ctx, kernel, customCountries, customCurrencies); err == nil {
 			t.Fatalf("expected error on %s constraint (%s)", testCase.table, testCase.constraint)
 		}
 
@@ -321,7 +324,8 @@ func TestReferencedataSeedCountryCurrencyErrorIntegration(t *testing.T) {
 			},
 		},
 	}
-	if err := referencedata.SeedWithData(ctx, db, overflowCountry, nil); err == nil {
+	kernel := core.NewTestKernel(db)
+	if err := referencedata.SeedWithData(ctx, kernel, overflowCountry, nil); err == nil {
 		t.Fatalf("expected error on currency code overflow")
 	}
 }

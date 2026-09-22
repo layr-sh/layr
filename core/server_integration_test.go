@@ -50,7 +50,15 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 	defer UnloadConfig()
 
 	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
-	server := NewServer(db, cryptoKeyManager)
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	serviceAccountManager := NewServiceAccountManager(db)
+	kernel := &Kernel{
+		db:                    db,
+		cryptoKeyManager:      cryptoKeyManager,
+		serviceAccountManager: serviceAccountManager,
+		jwtSigner:             jwtSigner,
+	}
+	server := NewServer(kernel)
 
 	// 1. Ready probe with healthy DB
 	readyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
@@ -124,7 +132,15 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	server := NewServer(db, cryptoKeyManager)
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	serviceAccountManager := NewServiceAccountManager(db)
+	kernel := &Kernel{
+		db:                    db,
+		cryptoKeyManager:      cryptoKeyManager,
+		serviceAccountManager: serviceAccountManager,
+		jwtSigner:             jwtSigner,
+	}
+	server := NewServer(kernel)
 
 	// Register a public endpoint that queries the live PostgreSQL database
 	GetRoute[string](server.BaseRouter(), "/v1/db-check", func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -171,7 +187,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	// 4. With Service Account key fallback -> 200 OK
-	createdServiceAccount, createErr := server.ServiceAccountManager().Create(ctx, CreateServiceAccountInput{
+	createdServiceAccount, createErr := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		Name: "test-server-integration-sa",
 	})
 	if createErr != nil {
@@ -184,6 +200,15 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	if serviceAccountResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 with service account header fallback, got %d", serviceAccountResponseRecorder.Code)
+	}
+
+	// 4b. With unauthenticated service account key -> 401 Unauthorized
+	unauthServiceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
+	unauthServiceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	unauthServiceAccountResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(unauthServiceAccountResponseRecorder, unauthServiceAccountRequest)
+	if unauthServiceAccountResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 with unauthenticated service account key, got %d", unauthServiceAccountResponseRecorder.Code)
 	}
 
 	// 5. Database Session Lookup via session cookie and X-Refresh-Token
@@ -208,7 +233,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	testUserID := "01918a24-7777-7000-8000-000000000001"
 	testEmail := "session.user@example.com"
 	liveRefreshToken := "live_test_refresh_token_1234567890"
-	liveRefreshHash := server.jwtSigner.HashRefreshToken(liveRefreshToken)
+	liveRefreshHash := jwtSigner.HashRefreshToken(liveRefreshToken)
 
 	_, _ = db.Exec(ctx, `
 		INSERT INTO auth.users (id, email, role, is_anonymous)
@@ -282,7 +307,8 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	defer UnloadConfig()
 
 	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
-	server := NewServer(nil, cryptoKeyManager)
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 
 	// Register operations on BaseRouter
 	GetRoute[string](server.BaseRouter(), "/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -336,15 +362,10 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 }
 
 func TestCoreServerMiddlewareMetricsAndProbesIntegration(t *testing.T) {
-	config := DefaultConfig()
-	config.Data.Enabled = true
-	config.FileStorage.Enabled = true
-	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	SetLoadedConfig(config)
-	defer UnloadConfig()
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
 
-	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
-	server := NewServer(nil, cryptoKeyManager)
+	server := kernel.Server()
 
 	// Concurrent request load to verify middleware request counters and probes
 	var waitGroup sync.WaitGroup

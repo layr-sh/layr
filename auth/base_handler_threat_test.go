@@ -29,17 +29,14 @@ func (client *threatMockHTTPClient) Do(request *http.Request) (*http.Response, e
 }
 
 func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
+	testKVStore := kernel.KVStore()
+	cryptoKeyManager := kernel.CryptoKeyManager()
 	mockClient := &threatMockHTTPClient{}
-	baseHandler.SetHTTPClient(mockClient)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler.httpClient = mockClient
 
 	ctx := context.Background()
 
@@ -85,9 +82,6 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	}
 
 	// 4. Always mode with empty token and event bus configured -> publishes event and returns false (400)
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	defer eventBus.Close()
-	baseHandler.SetEventBus(eventBus)
 
 	alwaysConfig := DefaultConfig()
 	alwaysConfig.Threat.BotProtection.Enabled = true
@@ -165,14 +159,6 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 		t.Fatalf("expected 400 Bad Request, got: %d", verifyFailResponseRecorder.Code)
 	}
 
-	// Also test without event bus (nil event bus branch)
-	baseHandler.SetEventBus(nil)
-	nilBusVerifyFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
-	nilBusVerifyFailResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkCaptcha(nilBusVerifyFailResponseRecorder, nilBusVerifyFailRequest, "192.168.1.7", "invalid-token", "/v1/auth/sign-in") {
-		t.Fatal("expected checkCaptcha to return false without event bus")
-	}
-
 	// 8. Verification succeeds -> returns true
 	mockClient.doFunc = func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
@@ -190,17 +176,12 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 }
 
 func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 	mockClient := &threatMockHTTPClient{}
-	baseHandler.SetHTTPClient(mockClient)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler.httpClient = mockClient
 
 	ctx := context.Background()
 
@@ -234,9 +215,6 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	}
 
 	// 3. Password breached -> returns false (400) and publishes event
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	defer eventBus.Close()
-	baseHandler.SetEventBus(eventBus)
 
 	// SHA-1 of "password" is 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8
 	// prefix: 5BAA6, suffix: 1E4C9B93F3F0682250B6CF8331B7EE68FD8
@@ -255,14 +233,6 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	}
 	if breachedResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request, got: %d", breachedResponseRecorder.Code)
-	}
-
-	// Also test without event bus (nil event bus branch)
-	baseHandler.SetEventBus(nil)
-	nilBusBreachedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
-	nilBusBreachedResponseRecorder := httptest.NewRecorder()
-	if baseHandler.checkPasswordBreach(nilBusBreachedResponseRecorder, nilBusBreachedRequest, "password", "victim@example.com") {
-		t.Fatal("expected checkPasswordBreach to return false for breached password without event bus")
 	}
 
 	// 4. Password not breached -> returns true

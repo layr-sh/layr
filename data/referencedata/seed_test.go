@@ -3,6 +3,8 @@ package referencedata
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestReferencedataLoadSeedDataUnit(t *testing.T) {
@@ -32,10 +34,13 @@ func TestReferencedataLoadSeedDataUnit(t *testing.T) {
 }
 
 func TestReferencedataSeedLoadErrorUnit(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, core.GetRegisteredDatabaseMigrations())
+	defer cleanup()
+
 	restore := SetEmbeddedJSONForTesting([]byte("invalid"), nil)
 	defer restore()
 
-	if err := Seed(context.Background(), nil); err == nil {
+	if err := Seed(context.Background(), kernel); err == nil {
 		t.Fatalf("expected error on Seed with invalid JSON")
 	}
 }

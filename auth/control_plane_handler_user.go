@@ -18,12 +18,7 @@ import (
 func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleListUsers invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
-		return
-	}
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
 	}
 
@@ -71,7 +66,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 	baseQuery += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argumentIndex, argumentIndex+1)
 	arguments = append(arguments, limit, offset)
 
-	rows, err = controlPlaneHandler.db.Query(ctx, baseQuery, arguments...)
+	rows, err = controlPlaneHandler.kernel.DB().Query(ctx, baseQuery, arguments...)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
@@ -92,7 +87,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 		users = append(users, user)
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListUsersResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUsersResponse{
 		Users:  users,
 		Limit:  limit,
 		Offset: offset,
@@ -104,8 +99,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleCreateUser invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
 	}
 
@@ -132,13 +126,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter 
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	var passwordHash *string
-	if createUserInput.Password != "" && controlPlaneHandler.hasher != nil {
+	if createUserInput.Password != "" {
 		hash, _ := controlPlaneHandler.hasher.Hash(createUserInput.Password)
 		passwordHash = &hash
 	}
@@ -179,7 +168,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
-	err := controlPlaneHandler.db.QueryRow(ctx, query, emailPointer, phonePointer, passwordHash, role, emailVerifiedAt, phoneVerifiedAt, propertiesJSON).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, query, emailPointer, phonePointer, passwordHash, role, emailVerifiedAt, phoneVerifiedAt, propertiesJSON).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -191,30 +180,22 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter 
 	}
 	_ = json.Unmarshal(rawProperties, &user.Properties)
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, user)
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, user)
 }
 
 // handleGetUser retrieves a specific user by UUID (auth:user.read).
 func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleGetUser invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
-		return
-	}
-
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -226,7 +207,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter htt
 		FROM auth.users
 		WHERE id = $1
 	`
-	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, query, userID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -242,33 +223,27 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter htt
 	}
 	_ = json.Unmarshal(rawProperties, &user.Properties)
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }
 
 // handleDeleteUser deletes a user and cascades sessions, passkeys, identities (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleDeleteUser invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
-		return
-	}
-
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := controlPlaneHandler.db.QueryRow(ctx, `
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, `
 		DELETE FROM auth.users
 		WHERE id = $1
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
@@ -292,30 +267,22 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteUser(responseWriter 
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]bool{"ok": true})
+	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
 // handleLockUser locks a user account and immediately invalidates all active sessions (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleLockUser invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
-		return
-	}
-
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -336,7 +303,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter ht
 		WHERE id = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
-	err := controlPlaneHandler.db.QueryRow(ctx, query, lockedUntil, userID).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, query, lockedUntil, userID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -353,15 +320,15 @@ func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter ht
 	_ = json.Unmarshal(rawProperties, &user.Properties)
 
 	// Revoke active sessions and invalidate cache
-	if deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID); deleteErr == nil {
+	if deletedSessionRows, deleteErr := controlPlaneHandler.kernel.DB().Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID); deleteErr == nil {
 		targetSessions := make([]ClientSessionInfo, 0)
 		for deletedSessionRows.Next() {
 			var targetSessionID string
 			var targetClientID *string
 			var refreshTokenHash string
 			if scanErr := deletedSessionRows.Scan(&targetSessionID, &targetClientID, &refreshTokenHash); scanErr == nil {
-				if controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
-					_ = controlPlaneHandler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
+				if refreshTokenHash != "" {
+					_ = controlPlaneHandler.kernel.KVStore().Delete(ctx, "auth:session:"+refreshTokenHash)
 				}
 				if targetClientID != nil && *targetClientID != "" {
 					targetSessions = append(targetSessions, ClientSessionInfo{
@@ -374,39 +341,31 @@ func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter ht
 		}
 		deletedSessionRows.Close()
 
-		if len(targetSessions) > 0 && controlPlaneHandler.jwtSigner != nil {
+		if len(targetSessions) > 0 {
 			config := controlPlaneHandler.configManager.Get()
-			dispatchBackChannelSignOut(ctx, controlPlaneHandler.httpClient, controlPlaneHandler.jwtSigner, config.OIDC.Clients, targetSessions)
+			dispatchBackChannelSignOut(ctx, controlPlaneHandler.httpClient, controlPlaneHandler.kernel.JWTSigner(), config.OIDC.Clients, targetSessions)
 		}
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserLockedEvent(userID, UserLockedEventData{
-			User:        user,
-			LockedUntil: &lockedUntil,
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserLockedEvent(userID, UserLockedEventData{
+		User:        user,
+		LockedUntil: &lockedUntil,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }
 
 // handleUnlockUser lifts lock restrictions on a user account (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleUnlockUser invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
-		return
-	}
-
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
 		return
 	}
 
@@ -419,7 +378,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter 
 		WHERE id = $1
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
-	err := controlPlaneHandler.db.QueryRow(ctx, query, userID).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, query, userID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -435,9 +394,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter 
 	}
 	_ = json.Unmarshal(rawProperties, &user.Properties)
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(user)))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(user)))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, user)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }

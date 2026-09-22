@@ -18,15 +18,8 @@ func TestCoreJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 		t.Fatalf("failed to create secondary CryptoKeyManager: %v", err)
 	}
 
-	primaryJWTSigner, err := NewJWTSigner(primaryCryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create primary Signer: %v", err)
-	}
-
-	secondaryJWTSigner, err := NewJWTSigner(secondaryCryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create secondary Signer: %v", err)
-	}
+	primaryJWTSigner := NewJWTSigner(primaryCryptoKeyManager)
+	secondaryJWTSigner := NewJWTSigner(secondaryCryptoKeyManager)
 
 	// 1. Both signers derived from the same master key must have identical public keys
 	if !bytes.Equal(primaryJWTSigner.PublicKey(), secondaryJWTSigner.PublicKey()) {
@@ -39,15 +32,12 @@ func TestCoreJWTSignerCryptoKeyManagerDerivationIntegration(t *testing.T) {
 		"tier":        "enterprise",
 		"permissions": []any{"read:documents", "write:documents"},
 	}
-	signedToken, generateErr := primaryJWTSigner.GenerateAccessToken(JWTClaims{
+	signedToken := primaryJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "alice@example.com",
 		Phone:   "+10000000000",
 		Claims:  userClaims,
 	}, 600)
-	if generateErr != nil {
-		t.Fatalf("failed to generate access token: %v", generateErr)
-	}
 
 	jwtClaims, verifyErr := secondaryJWTSigner.VerifyAccessToken(signedToken)
 	if verifyErr != nil {
@@ -76,15 +66,8 @@ func TestCoreJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
 		t.Fatalf("failed to create tenant 2 key manager: %v", err)
 	}
 
-	tenantOneJWTSigner, err := NewJWTSigner(tenantOneCryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create tenant 1 signer: %v", err)
-	}
-
-	tenantTwoJWTSigner, err := NewJWTSigner(tenantTwoCryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create tenant 2 signer: %v", err)
-	}
+	tenantOneJWTSigner := NewJWTSigner(tenantOneCryptoKeyManager)
+	tenantTwoJWTSigner := NewJWTSigner(tenantTwoCryptoKeyManager)
 
 	// 1. Different master keys produce distinct public keys
 	if bytes.Equal(tenantOneJWTSigner.PublicKey(), tenantTwoJWTSigner.PublicKey()) {
@@ -93,13 +76,10 @@ func TestCoreJWTSignerCrossTenantIsolationIntegration(t *testing.T) {
 
 	// 2. Token signed by tenant 1 must fail verification on tenant 2
 	applicationUserID := uuid.NewV7().String()
-	tokenTenantOne, generateErr := tenantOneJWTSigner.GenerateAccessToken(JWTClaims{
+	tokenTenantOne := tenantOneJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "bob@example.com",
 	}, 600)
-	if generateErr != nil {
-		t.Fatalf("failed to generate token: %v", generateErr)
-	}
 
 	if _, verifyErr := tenantTwoJWTSigner.VerifyAccessToken(tokenTenantOne); verifyErr == nil {
 		t.Fatal("expected signature verification failure when tenant 2 verifies tenant 1 token")
@@ -118,10 +98,7 @@ func TestCoreJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create CryptoKeyManager: %v", err)
 	}
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	applicationUserID := uuid.NewV7().String()
 	userClaims := map[string]any{
@@ -131,16 +108,13 @@ func TestCoreJWTSignerClaimsRoundtripIntegration(t *testing.T) {
 		},
 	}
 
-	token, generateErr := jwtSigner.GenerateAccessToken(JWTClaims{
+	token := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "charlie@example.com",
 		Phone:   "+19876543210",
 		Role:    "developer",
 		Claims:  userClaims,
 	}, 1200)
-	if generateErr != nil {
-		t.Fatalf("failed to generate token: %v", generateErr)
-	}
 
 	jwtClaims, verifyErr := jwtSigner.VerifyAccessToken(token)
 	if verifyErr != nil {
@@ -187,14 +161,8 @@ func TestCoreJWTProjectIsolationIntegration(t *testing.T) {
 		t.Fatalf("failed to create CryptoKeyManager: %v", err)
 	}
 
-	appJWTSigner, appSignerErr := NewJWTSigner(cryptoKeyManager, "portal-key-v1")
-	if appSignerErr != nil {
-		t.Fatalf("failed to create app signer: %v", appSignerErr)
-	}
-	consoleUserJWTSigner, consoleUserSignerErr := NewJWTSigner(cryptoKeyManager, "admin-key-v1")
-	if consoleUserSignerErr != nil {
-		t.Fatalf("failed to create admin signer: %v", consoleUserSignerErr)
-	}
+	appJWTSigner := NewJWTSigner(cryptoKeyManager, "portal-key-v1")
+	consoleUserJWTSigner := NewJWTSigner(cryptoKeyManager, "admin-key-v1")
 
 	// 1. Both share the same underlying key derivation
 	if !bytes.Equal(appJWTSigner.PublicKey(), consoleUserJWTSigner.PublicKey()) {
@@ -203,15 +171,12 @@ func TestCoreJWTProjectIsolationIntegration(t *testing.T) {
 
 	// 2. Generate token with appSigner for Customer Portal audience and issuer
 	userID := uuid.NewV7().String()
-	appToken, portalTokenErr := appJWTSigner.GenerateAccessToken(JWTClaims{
+	appToken := appJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject:  userID,
 		Email:    "user@portal.com",
 		Audience: "customer-portal:user",
 		Issuer:   "customer-portal",
 	}, 600)
-	if portalTokenErr != nil {
-		t.Fatalf("failed to generate portal token: %v", portalTokenErr)
-	}
 
 	// 3. appSigner successfully verifies token with matching audience and issuer
 	verifiedJWTClaims, verifyPortalTokenErr := appJWTSigner.VerifyAccessToken(appToken)
@@ -242,10 +207,7 @@ func TestCoreJWTM2MTokenIntegration(t *testing.T) {
 		t.Fatalf("failed to create crypto key manager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager, "layr-ed25519-v1")
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager, "layr-ed25519-v1")
 
 	serviceAccountID := uuid.NewV7().String()
 	scopes := []string{"auth:read", "data:write"}

@@ -12,18 +12,12 @@ import (
 
 func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	ctx := context.Background()
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 	testUserID := uuid.NewV7().String()
 
 	// 1. Test Forbidden Scope on session handlers
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
 	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
@@ -42,7 +36,6 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 	}
 
 	// 2. Test Invalid UUIDs on session endpoints (with valid scope)
-	controlPlaneHandler.SetServiceAccountManager(nil)
 	invalidUUID := "not-a-valid-uuid"
 	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+invalidUUID+"/sessions", nil)
 	invalidUUIDRequest.SetPathValue("user_id", invalidUUID)

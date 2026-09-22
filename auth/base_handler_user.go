@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -18,15 +17,10 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 	}
 	userID := authContext.UserID
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "get user profile rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -61,7 +55,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 	}
 
 	log.Debugf("user profile successfully retrieved for %s", userID)
-	handler.writeJSON(responseWriter, getUserResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getUserResponse)
 }
 
 func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
@@ -78,17 +72,12 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user properties rejected: database pool unavailable")
-		return
-	}
-
 	propertiesJSON, _ := json.Marshal(updateUserPropertiesInput.Properties)
 
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		UPDATE auth.users
 		SET properties = COALESCE(properties, '{}'::jsonb) || $1::jsonb,
 		    last_updated_at = clock_timestamp()
@@ -110,12 +99,10 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 
 	log.Debugf("user properties successfully updated for %s", userID)
-	handler.writeJSON(responseWriter, UpdateUserPropertiesResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, UpdateUserPropertiesResponse{
 		Properties: user.Properties,
 	})
 }
@@ -128,16 +115,11 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 	}
 	userID := authContext.UserID
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "delete user account rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 
 	var user User
 	var rawProperties []byte
-	_ = handler.db.QueryRow(ctx, `
+	_ = handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
@@ -151,44 +133,39 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	sessionRows, err := handler.db.Query(ctx, "SELECT refresh_token_hash FROM auth.sessions WHERE user_id = $1", userID)
+	sessionRows, err := handler.kernel.DB().Query(ctx, "SELECT refresh_token_hash FROM auth.sessions WHERE user_id = $1", userID)
 	if err == nil {
 		for sessionRows.Next() {
 			var refreshTokenHash string
-			if scanErr := sessionRows.Scan(&refreshTokenHash); scanErr == nil && handler.kvStore != nil {
-				_ = handler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
+			if scanErr := sessionRows.Scan(&refreshTokenHash); scanErr == nil {
+				_ = handler.kernel.KVStore().Delete(ctx, "auth:session:"+refreshTokenHash)
 			}
 		}
 		sessionRows.Close()
 	}
 
-	_, err = handler.db.Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
+	_, err = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.users WHERE id = $1", userID)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to delete user account %s: %v", userID, err))
 		return
 	}
 
 	if user.Email != nil && *user.Email != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Email)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Email)
 	}
 	if user.Phone != nil && *user.Phone != "" {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Phone)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1", *user.Phone)
 	}
 
 	core.ClearSessionCookie(responseWriter, request)
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 
 	log.Debugf("user account %s deleted successfully", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
 func fetchUserByID(ctx context.Context, db *core.DatabasePool, userID string) (User, error) {
-	if db == nil {
-		return User{ID: userID}, errors.New("database pool unavailable")
-	}
 	var user User
 	var rawProperties []byte
 	err := db.QueryRow(ctx, `
@@ -212,9 +189,6 @@ func fetchUserByID(ctx context.Context, db *core.DatabasePool, userID string) (U
 }
 
 func fetchUserByRecipient(ctx context.Context, db *core.DatabasePool, recipient string) (User, error) {
-	if db == nil {
-		return User{}, errors.New("database pool unavailable")
-	}
 	var user User
 	var rawProperties []byte
 	err := db.QueryRow(ctx, `

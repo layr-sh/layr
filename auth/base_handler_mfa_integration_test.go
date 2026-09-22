@@ -14,11 +14,13 @@ import (
 )
 
 func TestAuthMFAFlowIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -30,18 +32,16 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
 	var capturedEvents []core.Event
 	var eventsMutex sync.Mutex
-	eventBus.Subscribe("auth.*", func(eventCtx context.Context, event core.Event) error {
+	kernel.EventBus().Subscribe("auth.*", func(eventCtx context.Context, event core.Event) error {
 		eventsMutex.Lock()
 		defer eventsMutex.Unlock()
 		capturedEvents = append(capturedEvents, event)
 		return nil
 	})
 
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
+	baseHandler := service.baseHandler
 
 	// Create test user
 	userEmail := "mfa.user@example.com"
@@ -55,14 +55,11 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test user: %v", err)
 	}
 
-	validAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Email:   userEmail,
 		Role:    "authenticated",
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	// 1. Setup MFA
 	mfaSetupPayload := map[string]any{
@@ -115,7 +112,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 
 	// 3. Verify with valid TOTP code -> 200 OK
-	currentTOTPCode, generateCodeErr := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
+	currentTOTPCode, generateCodeErr := baseHandler.totpManager.GenerateCode(setupMFAResponse.Secret, time.Now())
 	if generateCodeErr != nil {
 		t.Fatalf("failed to generate TOTP code: %v", generateCodeErr)
 	}
@@ -124,7 +121,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		"code": currentTOTPCode,
 	}
 	encodedValidVerify, _ := json.Marshal(validVerifyPayload)
-	validVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	validVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	validVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	validVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(validVerifyResponseRecorder, validVerifyRequest)
@@ -160,7 +157,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
-	lockedSetupRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", nil), userID, "authenticated", false)
+	lockedSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", nil), userID, "authenticated", false)
 	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(lockedSetupResponseRecorder, lockedSetupRequest)
@@ -168,7 +165,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected 423 StatusLocked on locked user setup, got: %d", lockedSetupResponseRecorder.Code)
 	}
 
-	lockedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	lockedVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	lockedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(lockedVerifyResponseRecorder, lockedVerifyRequest)
@@ -179,7 +176,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 5. Test corrupted encrypted secret -> 500
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'invalid-secret' WHERE id = $1", userID)
-	corruptedVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	corruptedVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	corruptedVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	corruptedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(corruptedVerifyResponseRecorder, corruptedVerifyRequest)
@@ -189,7 +186,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 
 	// 6. Test missing MFA secret in DB -> 400
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL, mfa_enabled = false WHERE id = $1", userID)
-	noSecretVerifyRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
+	noSecretVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedValidVerify)), userID, "authenticated", false)
 	noSecretVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	noSecretVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(noSecretVerifyResponseRecorder, noSecretVerifyRequest)
@@ -256,7 +253,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("expected default issuer %s, got: %s", expectedIssuer, phoneSetupMFAResponse.Issuer)
 	}
 
-	phoneTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(phoneSetupMFAResponse.Secret, time.Now())
+	phoneTOTPCode, _ := baseHandler.totpManager.GenerateCode(phoneSetupMFAResponse.Secret, time.Now())
 	phoneVerifyPayload := map[string]any{
 		"user_id": phoneUserID,
 		"code":    phoneTOTPCode,
@@ -270,17 +267,14 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 
 	// 9. Test handleDisableMFA
-	phoneAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	phoneAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: phoneUserID,
 		Phone:   "+15554321098",
 		Role:    "authenticated",
 	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to generate access token for phone user: %v", err)
-	}
 
 	// Non-existent user -> 404
-	nonExistentToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	nonExistentToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: "01918a24-9999-7000-8000-000000000099",
 		Role:    "authenticated",
 	}, 3600)
@@ -335,11 +329,13 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 }
 
 func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -351,13 +347,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	testKVStore := newInMemoryKVStore()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetKVStore(testKVStore)
+	baseHandler := service.baseHandler
 
 	// Create user with password
 	userEmail := "mfa.challenge.user@example.com"
@@ -394,7 +384,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	}
 
 	// 2. Setup and enable MFA on user
-	validAccessToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: userID,
 		Email:   userEmail,
 		Role:    "authenticated",
@@ -411,7 +401,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	var setupMFAResponse SetupMFAResponse
 	_ = json.NewDecoder(setupResponseRecorder.Body).Decode(&setupMFAResponse)
 
-	totpCode, _ := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
+	totpCode, _ := baseHandler.totpManager.GenerateCode(setupMFAResponse.Secret, time.Now())
 	verifyPayload, _ := json.Marshal(map[string]any{"code": totpCode})
 	verifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(verifyPayload))
 	verifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
@@ -436,16 +426,6 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	if !signInResponse.MFARequired || signInResponse.MFATicket == "" || signInResponse.Factor != "totp" {
 		t.Fatalf("expected MFA required with ticket, got: %+v", signInResponse)
 	}
-
-	// Sign-in with nil KV store when MFA enabled -> 200
-	baseHandler.SetKVStore(nil)
-	nilKVRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
-	nilKVResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleSignIn(nilKVResponseRecorder, nilKVRequest)
-	if nilKVResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 on sign-in with nil kvStore, got: %d", nilKVResponseRecorder.Code)
-	}
-	baseHandler.SetKVStore(testKVStore)
 
 	// 4. MFA Challenge: Invalid/missing fields -> 400
 	emptyChallengePayload, _ := json.Marshal(ChallengeMFAInput{})
@@ -495,7 +475,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	var freshSignInResponse SignInResponse
 	_ = json.NewDecoder(freshSignInResponseRecorder.Body).Decode(&freshSignInResponse)
 
-	currentCode, _ := baseHandler.GetTOTPManager().GenerateCode(setupMFAResponse.Secret, time.Now())
+	currentCode, _ := baseHandler.totpManager.GenerateCode(setupMFAResponse.Secret, time.Now())
 	validChallengePayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: freshSignInResponse.MFATicket,
 		Code:      currentCode,
@@ -517,7 +497,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	// 9. Locked account branch: locked user -> 423
 	lockedTicket := "mfa_tk_locked"
-	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+lockedTicket, userID, 5*time.Minute)
+	_ = kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+lockedTicket, userID, 5*time.Minute)
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
 
@@ -535,7 +515,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	// 10. Missing MFA secret branch -> 400
 	noSecretTicket := "mfa_tk_no_secret"
-	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+noSecretTicket, userID, 5*time.Minute)
+	_ = kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+noSecretTicket, userID, 5*time.Minute)
 	var backupEncryptedSecret string
 	_ = db.QueryRow(ctx, "SELECT encrypted_mfa_secret FROM auth.users WHERE id = $1", userID).Scan(&backupEncryptedSecret)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", userID)
@@ -553,7 +533,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 
 	// 11. Corrupted MFA secret branch -> 500
 	corruptSecretTicket := "mfa_tk_corrupt_secret"
-	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+corruptSecretTicket, userID, 5*time.Minute)
+	_ = kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+corruptSecretTicket, userID, 5*time.Minute)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupt-secret' WHERE id = $1", userID)
 
 	corruptSecretPayload, _ := json.Marshal(ChallengeMFAInput{
@@ -571,7 +551,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	// 12. Orphaned ticket for deleted user -> 401
 	ghostUserTicket := "mfa_tk_ghost_user"
 	ghostUserID := "01918a24-9999-7000-8000-000000000009"
-	_ = testKVStore.Set(ctx, "auth:mfa_ticket:"+ghostUserTicket, ghostUserID, 5*time.Minute)
+	_ = kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+ghostUserTicket, ghostUserID, 5*time.Minute)
 
 	ghostUserPayload, _ := json.Marshal(ChallengeMFAInput{
 		MFATicket: ghostUserTicket,

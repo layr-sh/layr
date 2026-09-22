@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"layr.sh/auth/passkey"
+	"layr.sh/auth/totp"
 	"layr.sh/core"
 )
 
@@ -14,33 +16,19 @@ import (
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handleGetConfig invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:config.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.read required")
-		return
-	}
-
-	if controlPlaneHandler.configManager == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Config manager not initialized")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthConfigRead) {
 		return
 	}
 
 	sanitizedConfig := controlPlaneHandler.configManager.GetUnencrypted()
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(sanitizedConfig)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, sanitizedConfig)
 }
 
 // handleUpdateConfig handles PUT /v1/_/auth/config updating runtime config with envelope encryption.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Tracef("handleUpdateConfig invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:config.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:config.write required")
-		return
-	}
-
-	if controlPlaneHandler.configManager == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Config manager not initialized")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthConfigWrite) {
 		return
 	}
 
@@ -81,10 +69,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 			secret := strings.TrimSpace(provider.ClientSecret)
 
 			if secret != "" && !strings.HasPrefix(secret, "enc:v1:") {
-				if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-					encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(secret))
-					provider.ClientSecret = encryptedSecret
-				}
+				encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(secret))
+				provider.ClientSecret = encryptedSecret
 			} else if secret == "" {
 				provider.ClientSecret = currentOAuthProviderConfig.ClientSecret
 			}
@@ -106,10 +92,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 			secret := strings.TrimSpace(client.ClientSecret)
 
 			if secret != "" && !strings.HasPrefix(secret, "enc:v1:") {
-				if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-					encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(secret))
-					client.ClientSecret = encryptedSecret
-				}
+				encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(secret))
+				client.ClientSecret = encryptedSecret
 			} else if secret == "" {
 				client.ClientSecret = currentOIDCClientConfig.ClientSecret
 			}
@@ -129,20 +113,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	}
 	emailSMTPPassword := strings.TrimSpace(inputConfig.EmailDispatcher.SMTP.Password)
 	if emailSMTPPassword != "" && !strings.HasPrefix(emailSMTPPassword, "enc:v1:") {
-		if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-			encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(emailSMTPPassword))
-			inputConfig.EmailDispatcher.SMTP.Password = encryptedSecret
-		}
+		encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(emailSMTPPassword))
+		inputConfig.EmailDispatcher.SMTP.Password = encryptedSecret
 	} else if emailSMTPPassword == "" {
 		inputConfig.EmailDispatcher.SMTP.Password = currentConfig.EmailDispatcher.SMTP.Password
 	}
 
 	emailWebhookSigningSecret := strings.TrimSpace(inputConfig.EmailDispatcher.Webhook.SigningSecret)
 	if emailWebhookSigningSecret != "" && !strings.HasPrefix(emailWebhookSigningSecret, "enc:v1:") {
-		if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-			encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(emailWebhookSigningSecret))
-			inputConfig.EmailDispatcher.Webhook.SigningSecret = encryptedSecret
-		}
+		encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(emailWebhookSigningSecret))
+		inputConfig.EmailDispatcher.Webhook.SigningSecret = encryptedSecret
 	} else if emailWebhookSigningSecret == "" {
 		inputConfig.EmailDispatcher.Webhook.SigningSecret = currentConfig.EmailDispatcher.Webhook.SigningSecret
 	}
@@ -153,20 +133,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	}
 	smsTwilioAuthToken := strings.TrimSpace(inputConfig.SMSDispatcher.Twilio.AuthToken)
 	if smsTwilioAuthToken != "" && !strings.HasPrefix(smsTwilioAuthToken, "enc:v1:") {
-		if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-			encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(smsTwilioAuthToken))
-			inputConfig.SMSDispatcher.Twilio.AuthToken = encryptedSecret
-		}
+		encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(smsTwilioAuthToken))
+		inputConfig.SMSDispatcher.Twilio.AuthToken = encryptedSecret
 	} else if smsTwilioAuthToken == "" {
 		inputConfig.SMSDispatcher.Twilio.AuthToken = currentConfig.SMSDispatcher.Twilio.AuthToken
 	}
 
 	smsWebhookSigningSecret := strings.TrimSpace(inputConfig.SMSDispatcher.Webhook.SigningSecret)
 	if smsWebhookSigningSecret != "" && !strings.HasPrefix(smsWebhookSigningSecret, "enc:v1:") {
-		if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-			encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(smsWebhookSigningSecret))
-			inputConfig.SMSDispatcher.Webhook.SigningSecret = encryptedSecret
-		}
+		encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(smsWebhookSigningSecret))
+		inputConfig.SMSDispatcher.Webhook.SigningSecret = encryptedSecret
 	} else if smsWebhookSigningSecret == "" {
 		inputConfig.SMSDispatcher.Webhook.SigningSecret = currentConfig.SMSDispatcher.Webhook.SigningSecret
 	}
@@ -174,10 +150,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	// Handle CAPTCHA secrets: if new plaintext provided, envelope-encrypt; if omitted, preserve current
 	captchaSecret := strings.TrimSpace(inputConfig.Threat.BotProtection.SecretKey)
 	if captchaSecret != "" && !strings.HasPrefix(captchaSecret, "enc:v1:") {
-		if controlPlaneHandler.configManager.cryptoKeyManager != nil {
-			encryptedSecret, _ := controlPlaneHandler.configManager.cryptoKeyManager.EncryptField([]byte(captchaSecret))
-			inputConfig.Threat.BotProtection.SecretKey = encryptedSecret
-		}
+		encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(captchaSecret))
+		inputConfig.Threat.BotProtection.SecretKey = encryptedSecret
 	} else if captchaSecret == "" {
 		inputConfig.Threat.BotProtection.SecretKey = currentConfig.Threat.BotProtection.SecretKey
 	}
@@ -291,12 +265,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewConfigUpdatedEvent(ConfigKey, ConfigUpdatedEventData(controlPlaneHandler.configManager.GetUnencrypted())))
-	}
+	controlPlaneHandler.passkeyManager = passkey.NewManager(inputConfig.Passkeys.RelyingPartyID, inputConfig.Passkeys.RelyingPartyName)
+	controlPlaneHandler.totpManager = totp.NewManager(inputConfig.MFA.Issuer)
+
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewConfigUpdatedEvent(ConfigKey, ConfigUpdatedEventData(controlPlaneHandler.configManager.GetUnencrypted())))
 
 	log.Debugf("handleUpdateConfig successfully saved and sanitized configuration")
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(controlPlaneHandler.configManager.GetUnencrypted())
+	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.GetUnencrypted())
 }

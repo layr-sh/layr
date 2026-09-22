@@ -11,20 +11,7 @@ func TestCoreKVStoreFactoryValidationUnit(t *testing.T) {
 	ctx := context.Background()
 	defer UnloadConfig()
 
-	// 1. Missing connection pool on database backend
 	config := DefaultConfig()
-	config.KVStore = KVStoreConfig{Backend: "database"}
-	SetLoadedConfig(config)
-	if _, err := NewKVStore(ctx, nil); err == nil {
-		t.Fatal("expected error on nil db connection pool with database backend")
-	}
-
-	// 2. Missing connection pool on default empty backend
-	config.KVStore = KVStoreConfig{Backend: ""}
-	SetLoadedConfig(config)
-	if _, err := NewKVStore(ctx, nil); err == nil {
-		t.Fatal("expected error on nil db connection pool with default empty backend")
-	}
 
 	// 3. Unsupported backend
 	config.KVStore = KVStoreConfig{Backend: "unsupported"}
@@ -183,99 +170,10 @@ func (driver *mockUnitTestSweeperDriver) Sweep(ctx context.Context) (int64, erro
 func TestCoreKVStoreWrapperUnit(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. NewKVStoreFromDriver with nil driver
-	if nilKVStore := NewKVStoreFromDriver(nil); nilKVStore != nil {
-		t.Fatal("expected nil KVStore when driver is nil")
-	}
-
-	// 2. Methods on nil *KVStore receiver
-	var nilReceiverKVStore *KVStore
-	if nilReceiverKVStore.Driver() != nil {
-		t.Fatal("expected nil driver from nil KVStore receiver")
-	}
-	if _, err := nilReceiverKVStore.Get(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilReceiverKVStore.MGet(ctx, []string{"k"}); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.Set(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.MSet(ctx, map[string]string{"k": "v"}, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilReceiverKVStore.SetNX(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.Delete(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilReceiverKVStore.Increment(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilReceiverKVStore.IncrementBy(ctx, "k", 5, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.Expire(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.Ping(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilReceiverKVStore.Close(); err != nil {
-		t.Fatalf("expected nil error on Close on nil receiver, got %v", err)
-	}
-	if _, err := nilReceiverKVStore.Sweep(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-
-	// 3. Methods on *KVStore with nil driver field
-	nilDriverKVStore := &KVStore{kvDriver: nil}
-	if nilDriverKVStore.Driver() != nil {
-		t.Fatal("expected nil driver")
-	}
-	if _, err := nilDriverKVStore.Get(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilDriverKVStore.MGet(ctx, []string{"k"}); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.Set(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.MSet(ctx, map[string]string{"k": "v"}, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilDriverKVStore.SetNX(ctx, "k", "v", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.Delete(ctx, "k"); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilDriverKVStore.Increment(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if _, err := nilDriverKVStore.IncrementBy(ctx, "k", 5, 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.Expire(ctx, "k", 0); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.Ping(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-	if err := nilDriverKVStore.Close(); err != nil {
-		t.Fatalf("expected nil error on Close with nil driver, got %v", err)
-	}
-	if _, err := nilDriverKVStore.Sweep(ctx); !errors.Is(err, ErrKVStoreNotInitialized) {
-		t.Fatalf("expected ErrKVStoreNotInitialized, got %v", err)
-	}
-
 	// 4. Valid driver without Sweeper
 	mockDriver := &mockUnitTestKVDriver{storage: make(map[string]string)}
 	kvStore := NewKVStoreFromDriver(mockDriver)
-	if kvStore == nil || kvStore.Driver() != mockDriver {
+	if kvStore.Driver() != mockDriver {
 		t.Fatal("expected store with mock driver")
 	}
 	if err := kvStore.Set(ctx, "key1", "val1", 0); err != nil {
@@ -327,12 +225,12 @@ func TestCoreKVStoreWrapperUnit(t *testing.T) {
 
 	// 6. DatabaseKVStore.KVStore() and RedisKVStore.KVStore() helper methods
 	databaseKVStore := &DatabaseKVStore{}
-	if dbKVStore := databaseKVStore.KVStore(); dbKVStore == nil || dbKVStore.Driver() != databaseKVStore {
+	if dbKVStore := databaseKVStore.KVStore(); dbKVStore.Driver() != databaseKVStore {
 		t.Fatal("expected DatabaseKVStore.KVStore() to wrap databaseKVStore")
 	}
 
 	redisKVStore := &RedisKVStore{}
-	if rKVStore := redisKVStore.KVStore(); rKVStore == nil || rKVStore.Driver() != redisKVStore {
+	if rKVStore := redisKVStore.KVStore(); rKVStore.Driver() != redisKVStore {
 		t.Fatal("expected RedisKVStore.KVStore() to wrap redisKVStore")
 	}
 	if kvStore.KVStore() != kvStore {

@@ -20,10 +20,7 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	if len(jwtSigner.PublicKey()) == 0 {
 		t.Fatalf("expected non-empty public key")
@@ -31,16 +28,13 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 
 	userID := uuid.NewV7().String()
 	sessionID := uuid.NewV7().String()
-	token, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	token := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject:   userID,
 		SessionID: sessionID,
 		Email:     "user@example.com",
 		Phone:     "+123456789",
 		Claims:    map[string]any{"plan": "pro", "level": 3, "active": true},
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	jwtClaims, err := jwtSigner.VerifyAccessToken(token)
 	if err != nil {
@@ -122,13 +116,10 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 	}
 
 	// Anonymous token verification
-	anonymousToken, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	anonymousToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject:     userID,
 		IsAnonymous: true,
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate anonymous token: %v", err)
-	}
 	anonymousJWTClaims, err := jwtSigner.VerifyAccessToken(anonymousToken)
 	if err != nil || !anonymousJWTClaims.IsAnonymous {
 		t.Fatalf("expected anonymous claims with IsAnonymous=true, got: %+v", anonymousJWTClaims)
@@ -142,12 +133,9 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 	}
 
 	// Fallback role and expiry
-	fallbackToken, err := jwtSigner.GenerateAccessToken(JWTClaims{
+	fallbackToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: userID,
 	})
-	if err != nil {
-		t.Fatalf("failed to generate fallback token: %v", err)
-	}
 	fallbackJWTClaims, err := jwtSigner.VerifyAccessToken(fallbackToken)
 	if err != nil || fallbackJWTClaims.Role != "authenticated" {
 		t.Fatalf("expected authenticated role, got: %+v", fallbackJWTClaims)
@@ -181,7 +169,7 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 	}
 
 	// Expired token test
-	expiredToken, _ := jwtSigner.GenerateAccessToken(JWTClaims{
+	expiredToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject:   userID,
 		Email:     "exp@example.com",
 		ExpiresAt: time.Now().Unix() - 10,
@@ -195,10 +183,7 @@ func TestCoreJWTSignerAndVerifierUnit(t *testing.T) {
 		privateKey: jwtSigner.privateKey,
 		publicKey:  jwtSigner.publicKey,
 	}
-	emptyKeyIDToken, emptyKeyIDErr := emptyKeyIDJWTSigner.GenerateAccessToken(JWTClaims{Subject: userID})
-	if emptyKeyIDErr != nil {
-		t.Fatalf("failed to generate token with empty keyID: %v", emptyKeyIDErr)
-	}
+	emptyKeyIDToken := emptyKeyIDJWTSigner.GenerateAccessToken(JWTClaims{Subject: userID})
 	if _, emptyKeyIDVerifyErr := emptyKeyIDJWTSigner.VerifyAccessToken(emptyKeyIDToken); emptyKeyIDVerifyErr != nil {
 		t.Fatalf("failed to verify token from empty keyID signer: %v", emptyKeyIDVerifyErr)
 	}
@@ -259,10 +244,7 @@ func TestCoreJWTRefreshTokenAndHMACUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	refreshToken := jwtSigner.GenerateRefreshToken()
 	if len(refreshToken) != 64 {
@@ -289,13 +271,10 @@ func TestCoreJWTGenerateIDTokenUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	userID := uuid.NewV7().String()
-	idToken, tokenGenerateErr := jwtSigner.GenerateIDToken(JWTClaims{
+	idToken := jwtSigner.GenerateIDToken(JWTClaims{
 		Issuer:        "https://auth.example.com",
 		Audience:      "client-123",
 		Subject:       userID,
@@ -305,9 +284,6 @@ func TestCoreJWTGenerateIDTokenUnit(t *testing.T) {
 		Role:          "user",
 		Nonce:         "nonce-xyz",
 	}, 3600)
-	if tokenGenerateErr != nil {
-		t.Fatalf("failed to generate ID token: %v", tokenGenerateErr)
-	}
 
 	segments := strings.Split(idToken, ".")
 	if len(segments) != 3 {
@@ -341,13 +317,10 @@ func TestCoreJWTGenerateIDTokenUnit(t *testing.T) {
 	}
 
 	// Test GenerateIDToken with empty role, empty issuer (fallback to GetConfig().Project.Slug()), and expiry 0
-	defaultIDToken, defaultTokenGenerateErr := jwtSigner.GenerateIDToken(JWTClaims{
+	defaultIDToken := jwtSigner.GenerateIDToken(JWTClaims{
 		Audience: "client-default",
 		Subject:  userID,
 	})
-	if defaultTokenGenerateErr != nil {
-		t.Fatalf("failed to generate default id token: %v", defaultTokenGenerateErr)
-	}
 	if defaultIDToken == "" {
 		t.Fatal("expected non-empty default id token")
 	}
@@ -378,40 +351,28 @@ func TestCoreJWTProjectHandleConfigurationUnit(t *testing.T) {
 	expectedDefaultAudience := "layr-app:user"
 	expectedDefaultKeyID := "layr-app-ed25519-v1"
 
-	defaultJWTSigner, defaultSignerErr := NewJWTSigner(cryptoKeyManager)
-	if defaultSignerErr != nil {
-		t.Fatalf("failed to create default Signer: %v", defaultSignerErr)
-	}
+	defaultJWTSigner := NewJWTSigner(cryptoKeyManager)
 	if defaultJWTSigner.KeyID() != expectedDefaultKeyID {
 		t.Fatalf("expected default key ID %s, got: %s", expectedDefaultKeyID, defaultJWTSigner.KeyID())
 	}
 
 	// 2. Verify custom key ID and fallback when empty string passed
-	customKeyJWTSigner, customKeySignerErr := NewJWTSigner(cryptoKeyManager, "custom-key-v2")
-	if customKeySignerErr != nil {
-		t.Fatalf("failed to create Signer with custom key ID: %v", customKeySignerErr)
-	}
+	customKeyJWTSigner := NewJWTSigner(cryptoKeyManager, "custom-key-v2")
 	if customKeyJWTSigner.KeyID() != "custom-key-v2" {
 		t.Fatalf("expected custom key ID custom-key-v2, got: %s", customKeyJWTSigner.KeyID())
 	}
 
-	fallbackKeyJWTSigner, fallbackKeySignerErr := NewJWTSigner(cryptoKeyManager, "")
-	if fallbackKeySignerErr != nil {
-		t.Fatalf("failed to create Signer with empty key ID: %v", fallbackKeySignerErr)
-	}
+	fallbackKeyJWTSigner := NewJWTSigner(cryptoKeyManager, "")
 	if fallbackKeyJWTSigner.KeyID() != expectedDefaultKeyID {
 		t.Fatalf("expected fallback key ID %s, got: %s", expectedDefaultKeyID, fallbackKeyJWTSigner.KeyID())
 	}
 
 	// 3. Verify token issuance and verification with default audience/issuer
 	testUserID := uuid.NewV7().String()
-	defaultToken, defaultTokenErr := defaultJWTSigner.GenerateAccessToken(JWTClaims{
+	defaultToken := defaultJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: testUserID,
 		Email:   "user@example.com",
 	}, 600)
-	if defaultTokenErr != nil {
-		t.Fatalf("failed to generate default token: %v", defaultTokenErr)
-	}
 	defaultVerifiedJWTClaims, verifyDefaultErr := defaultJWTSigner.VerifyAccessToken(defaultToken)
 	if verifyDefaultErr != nil {
 		t.Fatalf("failed to verify default token: %v", verifyDefaultErr)
@@ -426,16 +387,13 @@ func TestCoreJWTProjectHandleConfigurationUnit(t *testing.T) {
 	// 4. Verify token issuance and verification with custom audience and issuer parameters
 	customAudience := "custom-audience:admin"
 	customIssuer := "custom-auth-service"
-	customToken, customTokenErr := defaultJWTSigner.GenerateAccessToken(JWTClaims{
+	customToken := defaultJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject:  testUserID,
 		Email:    "admin@example.com",
 		Role:     "admin",
 		Audience: customAudience,
 		Issuer:   customIssuer,
 	}, 600)
-	if customTokenErr != nil {
-		t.Fatalf("failed to generate custom token: %v", customTokenErr)
-	}
 	customVerifiedJWTClaims, verifyCustomErr := defaultJWTSigner.VerifyAccessToken(customToken)
 	if verifyCustomErr != nil {
 		t.Fatalf("failed to verify custom token: %v", verifyCustomErr)
@@ -467,20 +425,14 @@ func TestCoreJWTProjectHandleConfigurationUnit(t *testing.T) {
 	})
 	expectedConfiguredIssuer := "production-gateway"
 
-	dynamicJWTSigner, dynamicSignerErr := NewJWTSigner(cryptoKeyManager)
-	if dynamicSignerErr != nil {
-		t.Fatalf("failed to create dynamic Signer: %v", dynamicSignerErr)
-	}
+	dynamicJWTSigner := NewJWTSigner(cryptoKeyManager)
 	if dynamicJWTSigner.KeyID() != expectedConfiguredIssuer+"-ed25519-v1" {
 		t.Fatalf("expected dynamic key ID %s-ed25519-v1, got: %s", expectedConfiguredIssuer, dynamicJWTSigner.KeyID())
 	}
-	dynamicToken, dynamicTokenErr := dynamicJWTSigner.GenerateAccessToken(JWTClaims{
+	dynamicToken := dynamicJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: testUserID,
 		Email:   "dyn@example.com",
 	}, 600)
-	if dynamicTokenErr != nil {
-		t.Fatalf("failed to generate dynamic token: %v", dynamicTokenErr)
-	}
 	dynamicJWTClaims, verifyDynamicErr := dynamicJWTSigner.VerifyAccessToken(dynamicToken)
 	if verifyDynamicErr != nil {
 		t.Fatalf("failed to verify dynamic token: %v", verifyDynamicErr)
@@ -498,17 +450,11 @@ func TestCoreJWTProjectHandleConfigurationUnit(t *testing.T) {
 			Name: "",
 		},
 	})
-	emptyJWTSigner, emptySignerErr := NewJWTSigner(cryptoKeyManager)
-	if emptySignerErr != nil {
-		t.Fatalf("failed to create Signer with empty project config: %v", emptySignerErr)
-	}
+	emptyJWTSigner := NewJWTSigner(cryptoKeyManager)
 	if emptyJWTSigner.KeyID() != "layr-app-ed25519-v1" {
 		t.Fatalf("expected fallback key ID layr-app-ed25519-v1, got: %s", emptyJWTSigner.KeyID())
 	}
-	emptyToken, emptyTokenErr := emptyJWTSigner.GenerateAccessToken(JWTClaims{Subject: "u1"})
-	if emptyTokenErr != nil {
-		t.Fatalf("failed to generate access token with empty config: %v", emptyTokenErr)
-	}
+	emptyToken := emptyJWTSigner.GenerateAccessToken(JWTClaims{Subject: "u1"})
 	emptyVerifiedJWTClaims, verifyEmptyErr := emptyJWTSigner.VerifyAccessToken(emptyToken)
 	if verifyEmptyErr != nil {
 		t.Fatalf("failed to verify access token: %v", verifyEmptyErr)
@@ -516,10 +462,7 @@ func TestCoreJWTProjectHandleConfigurationUnit(t *testing.T) {
 	if assertErr := emptyVerifiedJWTClaims.Assert("iss", "layr-app"); assertErr != nil {
 		t.Fatalf("expected fallback issuer 'layr-app', got err: %v", assertErr)
 	}
-	emptyIDToken, emptyIDErr := emptyJWTSigner.GenerateIDToken(JWTClaims{Subject: "u1"})
-	if emptyIDErr != nil {
-		t.Fatalf("failed to generate id token with empty config: %v", emptyIDErr)
-	}
+	emptyIDToken := emptyJWTSigner.GenerateIDToken(JWTClaims{Subject: "u1"})
 	if emptyIDToken == "" {
 		t.Fatal("expected non-empty id token")
 	}
@@ -555,15 +498,9 @@ func TestCoreJWTSignerAutomaticLoggingScopeUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
-	token, err := jwtSigner.GenerateAccessToken(JWTClaims{Subject: "user-123"}, 300)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
+	token := jwtSigner.GenerateAccessToken(JWTClaims{Subject: "user-123"}, 300)
 
 	output := buffer.String()
 	expectedLog := "issued access token for subject user-123"
@@ -590,10 +527,7 @@ func TestCoreJWTM2MTokenSuccessUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager, "layr-ed25519-v1")
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager, "layr-ed25519-v1")
 
 	// 1. Default expiry and nil scopes
 	serviceAccountID := uuid.NewV7().String()
@@ -687,10 +621,7 @@ func TestCoreJWTM2MTokenFailureUnit(t *testing.T) {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	// 0. Empty service account ID and uninitialized private key
 	if _, emptyIDErr := jwtSigner.GenerateM2MToken("", nil, 3600, "layr:service_account"); emptyIDErr == nil {
@@ -757,10 +688,7 @@ func TestCoreJWTSignerSignOutTokenUnit(t *testing.T) {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	userID := uuid.NewV7().String()
 	sessionID := uuid.NewV7().String()

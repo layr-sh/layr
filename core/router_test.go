@@ -12,13 +12,10 @@ import (
 )
 
 func TestCoreRouterWrapperMethodsUnit(t *testing.T) {
-	server := NewServer(nil, nil)
+	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 	router := server.BaseRouter()
-
-	// Test nil engine router creation
-	if nilRouter := NewRouter(nil); nilRouter.Engine() != nil {
-		t.Fatal("expected nil Engine() from NewRouter(nil)")
-	}
 
 	if router.Engine() == nil {
 		t.Fatal("expected non-nil Engine()")

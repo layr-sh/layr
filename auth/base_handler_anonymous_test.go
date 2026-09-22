@@ -11,13 +11,10 @@ import (
 )
 
 func TestAuthHandlerAnonymousUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 	ctx := context.Background()
 
 	// 1. Anonymous auth disabled -> 403
@@ -32,12 +29,12 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 		t.Fatalf("expected 403 on disabled anonymous auth, got: %d (%s)", anonymousDisabledResponseRecorder.Code, anonymousDisabledResponseRecorder.Body.String())
 	}
 
-	// 2. Anonymous auth enabled with nil database pool -> 500
+	// 2. Anonymous auth enabled with broken database pool -> 500
 	configManager.Set(DefaultConfig())
-	anonymousNilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
-	anonymousNilDBResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleSignInAnonymous(anonymousNilDBResponseRecorder, anonymousNilDBRequest)
-	if anonymousNilDBResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on anonymous sign in with nil db, got: %d", anonymousNilDBResponseRecorder.Code)
+	anonymousBrokenDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
+	anonymousBrokenDBResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignInAnonymous(anonymousBrokenDBResponseRecorder, anonymousBrokenDBRequest)
+	if anonymousBrokenDBResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on anonymous sign in with broken db, got: %d", anonymousBrokenDBResponseRecorder.Code)
 	}
 }

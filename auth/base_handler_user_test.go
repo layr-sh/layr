@@ -12,12 +12,11 @@ import (
 )
 
 func TestAuthHandlerUserUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	jwtSigner := kernel.JWTSigner()
+	brokenDB := kernel.DB()
 
 	// 1. Unauthenticated / Invalid / Expired Tokens on Guarded User Endpoints
 	userEndpoints := []struct {
@@ -52,7 +51,7 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		}
 
 		// Expired bearer token
-		expiredToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+		expiredToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 			Subject:     "user-expired",
 			Email:       "user@example.com",
 			Role:        "authenticated",
@@ -68,15 +67,12 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// 2. Valid token for profile tests
-	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
 		Subject:     "user-unit-123",
 		Email:       "unit@example.com",
 		Role:        "user",
 		IsAnonymous: false,
 	}, 3600)
-	if err != nil {
-		t.Fatalf("failed to generate access token: %v", err)
-	}
 
 	authedCtx := core.WithAuthContext(context.Background(), core.AuthContext{
 		UserID: "user-unit-123",
@@ -93,8 +89,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	getUserRequest.Header.Set("Authorization", "Bearer "+validToken)
 	getUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetUser(getUserResponseRecorder, getUserRequest)
-	if getUserResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool GET user, got: %d", getUserResponseRecorder.Code)
+	if getUserResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on GET user not found, got: %d", getUserResponseRecorder.Code)
 	}
 
 	// PATCH /v1/auth/user/properties bad JSON -> 400
@@ -124,13 +120,13 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on bad JSON PATCH user password, got: %d", badJSONPasswordResponseRecorder.Code)
 	}
 
-	// PATCH /v1/auth/user/password on nil pool -> 500
+	// PATCH /v1/auth/user/password on non-existent user -> 404
 	validPasswordRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/v1/auth/user/password", strings.NewReader(`{"new_password":"NewValidPassword123!"}`))
 	validPasswordRequest.Header.Set("Authorization", "Bearer "+validToken)
 	validPasswordResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateUserPassword(validPasswordResponseRecorder, validPasswordRequest)
-	if validPasswordResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool PATCH user password, got: %d", validPasswordResponseRecorder.Code)
+	if validPasswordResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on non-existent user PATCH user password, got: %d", validPasswordResponseRecorder.Code)
 	}
 
 	// DELETE /v1/auth/user on nil pool -> 500
@@ -171,10 +167,12 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 
 	// PATCH /v1/auth/user/email delivery ready on nil pool -> 500
 	driverWebhook := "webhook"
-	mockEmailDispatcher := NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		return &EmailDispatcherConfig{Driver: &driverWebhook, Webhook: EmailDispatcherWebhookConfig{URL: "http://localhost"}}
-	}, nil)
-	baseHandler.SetEmailDispatcher(mockEmailDispatcher)
+	emailDispatcherConfig := &EmailDispatcherConfig{
+		Driver:  &driverWebhook,
+		Webhook: EmailDispatcherWebhookConfig{URL: "http://localhost"},
+	}
+	mockEmailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return emailDispatcherConfig })
+	baseHandler.emailDispatcher = mockEmailDispatcher
 
 	nilDBEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/v1/auth/user/email", strings.NewReader(`{"email":"valid@example.com"}`))
 	nilDBEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
@@ -221,10 +219,13 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// PATCH /v1/auth/user/phone delivery ready on nil pool -> 500
-	mockSMSDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
-		return &SMSDispatcherConfig{Driver: &driverWebhook, Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost"}}
-	}, nil)
-	baseHandler.SetSMSDispatcher(mockSMSDispatcher)
+	mockSMSDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig {
+		return &SMSDispatcherConfig{
+			Driver:  &driverWebhook,
+			Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost"},
+		}
+	})
+	baseHandler.smsDispatcher = mockSMSDispatcher
 
 	nilDBPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPatch, "/v1/auth/user/phone", strings.NewReader(`{"phone":"+1234567890"}`))
 	nilDBPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
@@ -242,8 +243,9 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on missing email, got: %d", missingEmailResponseRecorder.Code)
 	}
 
-	// Reset email dispatcher to nil to test unconfigured
-	baseHandler.SetEmailDispatcher(nil)
+	// Set unconfigured email dispatcher to test readiness check
+	unconfiguredEmailDispatcher := NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &EmailDispatcherConfig{} })
+	baseHandler.emailDispatcher = unconfiguredEmailDispatcher
 	unconfiguredEmailRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"new@example.com"}`))
 	unconfiguredEmailRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredEmailResponseRecorder := httptest.NewRecorder()
@@ -268,7 +270,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 		t.Fatalf("expected 400 on invalid phone format, got: %d", invalidPhoneVerificationResponseRecorder.Code)
 	}
 
-	baseHandler.SetSMSDispatcher(nil)
+	unconfiguredSMSDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &SMSDispatcherConfig{} })
+	baseHandler.smsDispatcher = unconfiguredSMSDispatcher
 	unconfiguredPhoneRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15551234567"}`))
 	unconfiguredPhoneRequest.Header.Set("Authorization", "Bearer "+validToken)
 	unconfiguredPhoneResponseRecorder := httptest.NewRecorder()
@@ -278,21 +281,21 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	// Restore dispatchers for nil pool verification tests
-	baseHandler.SetEmailDispatcher(mockEmailDispatcher)
-	baseHandler.SetSMSDispatcher(mockSMSDispatcher)
+	baseHandler.emailDispatcher = mockEmailDispatcher
+	baseHandler.smsDispatcher = mockSMSDispatcher
 
 	emailVerificationRequestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/email/verification/request", strings.NewReader(`{"email":"test@example.com"}`))
 	emailVerificationRequestResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRequestEmailVerification(emailVerificationRequestResponseRecorder, emailVerificationRequestRequest)
-	if emailVerificationRequestResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool email verify request, got: %d", emailVerificationRequestResponseRecorder.Code)
+	if emailVerificationRequestResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on email verify request with non-existent user, got: %d", emailVerificationRequestResponseRecorder.Code)
 	}
 
 	phoneVerificationRequestRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/phone/verification/request", strings.NewReader(`{"phone":"+15551234567"}`))
 	phoneVerificationRequestResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRequestPhoneVerification(phoneVerificationRequestResponseRecorder, phoneVerificationRequestRequest)
-	if phoneVerificationRequestResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool phone verify request, got: %d", phoneVerificationRequestResponseRecorder.Code)
+	if phoneVerificationRequestResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on phone verify request with non-existent user, got: %d", phoneVerificationRequestResponseRecorder.Code)
 	}
 
 	// Verification Confirm Unit Tests
@@ -313,8 +316,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	validEmailConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/email/verification/confirm", strings.NewReader(`{"email":"user@example.com","code":"123456"}`))
 	validEmailConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmEmailVerification(validEmailConfirmResponseRecorder, validEmailConfirmRequest)
-	if validEmailConfirmResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool email confirm, got: %d", validEmailConfirmResponseRecorder.Code)
+	if validEmailConfirmResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on email confirm with non-existent code, got: %d", validEmailConfirmResponseRecorder.Code)
 	}
 
 	badJSONPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/phone/verification/confirm", strings.NewReader(`{bad`))
@@ -341,8 +344,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	validPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"phone":"+15551234567","code":"123456"}`))
 	validPhoneConfirmResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmPhoneVerification(validPhoneConfirmResponseRecorder, validPhoneConfirmRequest)
-	if validPhoneConfirmResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool phone confirm, got: %d", validPhoneConfirmResponseRecorder.Code)
+	if validPhoneConfirmResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on phone confirm with non-existent code, got: %d", validPhoneConfirmResponseRecorder.Code)
 	}
 
 	// 4. User Properties Preservation Test
@@ -377,8 +380,8 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	claimsEmailRequest := httptest.NewRequestWithContext(claimsEmailCtx, http.MethodPost, "/v1/auth/user/email/verification/confirm", strings.NewReader(`{"code":"123456"}`))
 	claimsEmailResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmEmailVerification(claimsEmailResponseRecorder, claimsEmailRequest)
-	if claimsEmailResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool claims email confirm, got: %d", claimsEmailResponseRecorder.Code)
+	if claimsEmailResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on claims email confirm with non-existent code, got: %d", claimsEmailResponseRecorder.Code)
 	}
 
 	claimsPhoneCtx := core.WithAuthContext(context.Background(), core.AuthContext{
@@ -393,19 +396,19 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	claimsPhoneRequest := httptest.NewRequestWithContext(claimsPhoneCtx, http.MethodPost, "/v1/auth/user/phone/verification/confirm", strings.NewReader(`{"code":"123456"}`))
 	claimsPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleConfirmPhoneVerification(claimsPhoneResponseRecorder, claimsPhoneRequest)
-	if claimsPhoneResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil pool claims phone confirm, got: %d", claimsPhoneResponseRecorder.Code)
+	if claimsPhoneResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on claims phone confirm with non-existent code, got: %d", claimsPhoneResponseRecorder.Code)
 	}
 
-	// 6. Nil database pool error handling in fetchUserByID and fetchUserByRecipient
-	nilDBUser, nilDBErr := fetchUserByID(context.Background(), nil, "user-nil-db")
-	if nilDBErr == nil || nilDBUser.ID != "user-nil-db" {
-		t.Fatalf("expected error and fallback user record with nil DB, got: %v, %v", nilDBUser, nilDBErr)
+	// 6. Database error handling in fetchUserByID and fetchUserByRecipient
+	brokenDBUser, brokenDBErr := fetchUserByID(context.Background(), brokenDB, "user-nil-db")
+	if brokenDBErr == nil || brokenDBUser.ID != "user-nil-db" {
+		t.Fatalf("expected error and fallback user record with broken DB, got: %v, %v", brokenDBUser, brokenDBErr)
 	}
 
-	nilDBRecipientUser, nilDBRecipientErr := fetchUserByRecipient(context.Background(), nil, "user@example.com")
-	if nilDBRecipientErr == nil || nilDBRecipientUser.ID != "" {
-		t.Fatalf("expected error and empty user record with nil DB, got: %v, %v", nilDBRecipientUser, nilDBRecipientErr)
+	brokenDBRecipientUser, brokenDBRecipientErr := fetchUserByRecipient(context.Background(), brokenDB, "user@example.com")
+	if brokenDBRecipientErr == nil || brokenDBRecipientUser.ID != "" {
+		t.Fatalf("expected error and empty user record with broken DB, got: %v, %v", brokenDBRecipientUser, brokenDBRecipientErr)
 	}
 
 	// 7. Verification that arbitrary developer properties are preserved without filtering

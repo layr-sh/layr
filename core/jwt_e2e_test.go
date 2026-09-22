@@ -23,10 +23,7 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	authJWTSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	authJWTSigner := NewJWTSigner(cryptoKeyManager)
 
 	// 1. Setup Authority HTTP server serving JWKS
 	serveMux := http.NewServeMux()
@@ -45,7 +42,7 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 		"features":          []any{"analytics", "storage"},
 	}
 
-	accessToken, tokenGenerateErr := authJWTSigner.GenerateAccessToken(JWTClaims{
+	accessToken := authJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject:   applicationUserID,
 		SessionID: sessionID,
 		Email:     userEmail,
@@ -53,9 +50,6 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 		Role:      userRole,
 		Claims:    userCustomClaims,
 	}, 3600)
-	if tokenGenerateErr != nil {
-		t.Fatalf("failed to generate access token: %v", tokenGenerateErr)
-	}
 
 	refreshToken := authJWTSigner.GenerateRefreshToken()
 	storedRefreshTokenHash := authJWTSigner.HashRefreshToken(refreshToken)
@@ -198,8 +192,8 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 
 	// C. Forged token signed with different key
 	adversaryCryptoKeyManager, _ := NewCryptoKeyManager("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-	adversaryJWTSigner, _ := NewJWTSigner(adversaryCryptoKeyManager)
-	adversaryToken, _ := adversaryJWTSigner.GenerateAccessToken(JWTClaims{
+	adversaryJWTSigner := NewJWTSigner(adversaryCryptoKeyManager)
+	adversaryToken := adversaryJWTSigner.GenerateAccessToken(JWTClaims{
 		Subject: applicationUserID,
 		Email:   "forged@example.com",
 	}, 600)

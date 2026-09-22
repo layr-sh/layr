@@ -12,13 +12,9 @@ import (
 )
 
 func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	t.Run("download object parameter validation", func(t *testing.T) {
@@ -28,16 +24,6 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 		baseHandler.handleDownloadObject(missingParametersResponseRecorder, missingParametersRequest)
 		if missingParametersResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing parameters, got %d", missingParametersResponseRecorder.Code)
-		}
-
-		// Nil DB
-		nilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/objects/test-bucket/test-key", nil)
-		nilDBRequest.SetPathValue("bucket", "test-bucket")
-		nilDBRequest.SetPathValue("key", "test-key")
-		nilDBResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleDownloadObject(nilDBResponseRecorder, nilDBRequest)
-		if nilDBResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", nilDBResponseRecorder.Code)
 		}
 	})
 
@@ -49,16 +35,6 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 		if missingParametersResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing parameters, got %d", missingParametersResponseRecorder.Code)
 		}
-
-		// Nil DB
-		nilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodHead, "/v1/file-storage/objects/test-bucket/test-key", nil)
-		nilDBRequest.SetPathValue("bucket", "test-bucket")
-		nilDBRequest.SetPathValue("key", "test-key")
-		nilDBResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleHeadObject(nilDBResponseRecorder, nilDBRequest)
-		if nilDBResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", nilDBResponseRecorder.Code)
-		}
 	})
 
 	t.Run("upload object parameter validation", func(t *testing.T) {
@@ -69,16 +45,6 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 		if missingParametersResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing parameters, got %d", missingParametersResponseRecorder.Code)
 		}
-
-		// Nil DB
-		nilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/file-storage/objects/test-bucket/test-key", bytes.NewReader([]byte("data")))
-		nilDBRequest.SetPathValue("bucket", "test-bucket")
-		nilDBRequest.SetPathValue("key", "test-key")
-		nilDBResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleUploadObject(nilDBResponseRecorder, nilDBRequest)
-		if nilDBResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", nilDBResponseRecorder.Code)
-		}
 	})
 
 	t.Run("delete object parameter validation", func(t *testing.T) {
@@ -88,16 +54,6 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 		baseHandler.handleDeleteObject(missingParametersResponseRecorder, missingParametersRequest)
 		if missingParametersResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing parameters, got %d", missingParametersResponseRecorder.Code)
-		}
-
-		// Nil DB
-		nilDBRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/file-storage/objects/test-bucket/test-key", nil)
-		nilDBRequest.SetPathValue("bucket", "test-bucket")
-		nilDBRequest.SetPathValue("key", "test-key")
-		nilDBResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleDeleteObject(nilDBResponseRecorder, nilDBRequest)
-		if nilDBResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for nil db, got %d", nilDBResponseRecorder.Code)
 		}
 	})
 
@@ -186,9 +142,9 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 	})
 
 	t.Run("disabled filestorage configuration returns 403", func(t *testing.T) {
-		disabledConfigManager := NewConfigManager(nil)
-		disabledConfigManager.SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := NewBaseHandler(nil, disabledConfigManager, cryptoKeyManager)
+		disabledService := NewService(kernel)
+		disabledService.configManager.SetMemoryConfig(Config{Enabled: false})
+		disabledBaseHandler := disabledService.BaseHandler()
 
 		disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/objects/b/k", nil)
 		disabledRequest.SetPathValue("bucket", "b")

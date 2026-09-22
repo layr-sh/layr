@@ -8,8 +8,8 @@ import (
 )
 
 func TestAuthRouterUnit(t *testing.T) {
-	cryptoKeyManager, _ := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	service := NewService(nil, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
 
 	// 1. Test nil safety
 	service.RegisterRoutes(nil, nil)

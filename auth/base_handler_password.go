@@ -68,11 +68,6 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	}
 	propertiesJSON, _ := json.Marshal(inputProperties)
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sign-up rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var emailPtr, phonePtr *string
 	if signUpInput.Email != "" {
@@ -85,7 +80,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	anonymousUser, _ := handler.resolveAnonymousCaller(request)
 	if anonymousUser != nil {
 		var existingUserID string
-		err := handler.db.QueryRow(ctx, `
+		err := handler.kernel.DB().QueryRow(ctx, `
 			SELECT id FROM auth.users 
 			WHERE (email IS NOT NULL AND email = $1) 
 			   OR (phone IS NOT NULL AND phone = $2)
@@ -110,7 +105,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			WHERE id = $5
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		`
-		err = handler.db.QueryRow(ctx, updateQuery, emailPtr, phonePtr, passHash, propertiesJSON, anonymousUser.ID).Scan(
+		err = handler.kernel.DB().QueryRow(ctx, updateQuery, emailPtr, phonePtr, passHash, propertiesJSON, anonymousUser.ID).Scan(
 			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 			&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -126,9 +121,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 
 		handler.issueSessionResponse(responseWriter, request, user, "password")
 		return
@@ -141,7 +134,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		VALUES ($1, $2, $3, 'authenticated', $4, clock_timestamp(), clock_timestamp())
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`
-	err := handler.db.QueryRow(ctx, query, emailPtr, phonePtr, passHash, propertiesJSON).Scan(
+	err := handler.kernel.DB().QueryRow(ctx, query, emailPtr, phonePtr, passHash, propertiesJSON).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -157,9 +150,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 
 	handler.issueSessionResponse(responseWriter, request, user, "password")
 }
@@ -194,27 +185,20 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		return
 	}
 
-	if config.RateLimiting.Enabled && handler.kvStore != nil && identifier != "" {
+	if config.RateLimiting.Enabled && identifier != "" {
 		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
 		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
-		if count, err := handler.kvStore.Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
-			if handler.eventBus != nil {
-				handler.eventBus.Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
-					Identifier:   identifier,
-					Endpoint:     "/v1/auth/sign-in",
-					AttemptCount: count,
-					IPAddress:    clientIP,
-					UserAgent:    request.UserAgent(),
-				}))
-			}
+		if count, err := handler.kernel.KVStore().Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
+			handler.kernel.EventBus().Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
+				Identifier:   identifier,
+				Endpoint:     "/v1/auth/sign-in",
+				AttemptCount: count,
+				IPAddress:    clientIP,
+				UserAgent:    request.UserAgent(),
+			}))
 			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
 			return
 		}
-	}
-
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sign-in rejected: database pool unavailable")
-		return
 	}
 
 	var user User
@@ -226,7 +210,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		FROM auth.users
 		WHERE email = $1 OR phone = $1
 	`
-	err := handler.db.QueryRow(ctx, query, identifier).Scan(
+	err := handler.kernel.DB().QueryRow(ctx, query, identifier).Scan(
 		&user.ID, &user.Email, &user.Phone, &passHash, &user.Role, &user.IsAnonymous,
 		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 		&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -234,57 +218,45 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	)
 	if err != nil {
 		handler.verifyDummyPassword(signInInput.Password)
-		if handler.kvStore != nil {
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
-		}
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(identifier, UserSignInFailedEventData{
-				Identifier: identifier,
-				AuthMethod: "password",
-				Reason:     "user_not_found",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-			}))
-		}
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), clientIP, 0)
+		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(identifier, UserSignInFailedEventData{
+			Identifier: identifier,
+			AuthMethod: "password",
+			Reason:     "user_not_found",
+			IPAddress:  clientIP,
+			UserAgent:  request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
 
 	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
-		if handler.kvStore != nil {
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, user.ID, 0)
-		}
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
-				Identifier: identifier,
-				AuthMethod: "password",
-				Reason:     "account_locked",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-				User:       &user,
-			}))
-		}
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), clientIP, 0)
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), user.ID, 0)
+		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
+			Identifier: identifier,
+			AuthMethod: "password",
+			Reason:     "account_locked",
+			IPAddress:  clientIP,
+			UserAgent:  request.UserAgent(),
+			User:       &user,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
 
 	ok, err := handler.hasher.Verify(signInInput.Password, passHash)
 	if err != nil || !ok {
-		if handler.kvStore != nil {
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, clientIP, 0)
-			_, _ = threat.RecordFailedAttempt(ctx, handler.kvStore, user.ID, 0)
-		}
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
-				Identifier: identifier,
-				AuthMethod: "password",
-				Reason:     "invalid_credentials",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-				User:       &user,
-			}))
-		}
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), clientIP, 0)
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), user.ID, 0)
+		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
+			Identifier: identifier,
+			AuthMethod: "password",
+			Reason:     "invalid_credentials",
+			IPAddress:  clientIP,
+			UserAgent:  request.UserAgent(),
+			User:       &user,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -295,9 +267,9 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	}
 
 	// Reset rate limit on successful authentication
-	if handler.kvStore != nil && identifier != "" {
+	if identifier != "" {
 		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
-		_ = handler.kvStore.Delete(ctx, rateKey)
+		_ = handler.kernel.KVStore().Delete(ctx, rateKey)
 	}
 
 	handler.completeSignInFlow(responseWriter, request, user, "password")
@@ -353,27 +325,19 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 
 	ctx := request.Context()
 
-	if handler.kvStore != nil {
-		clientIP := core.ExtractRequestClientIP(request)
-		ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
-		if count, err := handler.kvStore.Increment(ctx, ipRateKey, time.Hour); err == nil && count > ipPasswordResetLimit {
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.")
-			return
-		}
-
-		cooldownKey := fmt.Sprintf("auth:cooldown:password_reset:%s", recipient)
-		if _, err := handler.kvStore.Get(ctx, cooldownKey); err == nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code")
-			return
-		}
-	}
-
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "password reset request rejected: database pool unavailable")
+	ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
+	if count, err := handler.kernel.KVStore().Increment(ctx, ipRateKey, time.Hour); err == nil && count > ipPasswordResetLimit {
+		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.")
 		return
 	}
 
-	user, err := fetchUserByRecipient(ctx, handler.db, recipient)
+	cooldownKey := fmt.Sprintf("auth:cooldown:password_reset:%s", recipient)
+	if _, err := handler.kernel.KVStore().Get(ctx, cooldownKey); err == nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Please wait 60 seconds before requesting another code")
+		return
+	}
+
+	user, err := fetchUserByRecipient(ctx, handler.kernel.DB(), recipient)
 	if err != nil {
 		log.Debugf("password reset requested for unregistered recipient %s", recipient)
 		responseWriter.WriteHeader(http.StatusNoContent)
@@ -389,11 +353,9 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.db.Exec(ctx, query, recipient, codeHash, expiresAt)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient), code, otp.CodeTTL)
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:cooldown:password_reset:%s", recipient), "1", passwordResetCooldownTTL)
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient), code, otp.CodeTTL)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:cooldown:password_reset:%s", recipient), "1", passwordResetCooldownTTL)
 
 	if isEmail {
 		_ = handler.emailDispatcher.SendPasswordReset(ctx, recipient, code, userID)
@@ -401,12 +363,10 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 		_ = handler.smsDispatcher.SendPasswordReset(ctx, recipient, code, userID)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasswordResetRequestedEvent(user.ID, PasswordResetRequestedEventData{
-			Recipient: recipient,
-			User:      user,
-		}))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewPasswordResetRequestedEvent(user.ID, PasswordResetRequestedEventData{
+		Recipient: recipient,
+		User:      user,
+	}))
 
 	log.Debugf("password reset code dispatched to %s", recipient)
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -456,17 +416,12 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "password reset confirmation rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var otpID, storedHash string
 	var attempts int
 	var expiresAt time.Time
 
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, code_hash, attempts, expires_at 
 		FROM auth.otps 
 		WHERE recipient = $1 AND purpose = 'password_reset' AND expires_at > clock_timestamp()
@@ -479,28 +434,26 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 	}
 
 	if attempts >= maxPasswordResetAttempts {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(confirmPasswordResetInput.Code, storedHash) {
-		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code")
 		return
 	}
 
 	// Delete used OTP
-	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient))
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+	_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient))
 
 	passHash, _ := handler.hasher.Hash(confirmPasswordResetInput.Password)
 
 	var user User
 	var rawProps []byte
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		UPDATE auth.users 
 		SET password_hash = $1, last_updated_at = clock_timestamp() 
 		WHERE email = $2 OR phone = $2
@@ -526,12 +479,10 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 		return
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasswordResetEvent(user.ID, PasswordResetEventData{
-			Recipient: recipient,
-			User:      user,
-		}))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewPasswordResetEvent(user.ID, PasswordResetEventData{
+		Recipient: recipient,
+		User:      user,
+	}))
 
 	log.Debugf("password reset successful for user %s", user.ID)
 	handler.issueSessionResponse(responseWriter, request, user, "password_reset")
@@ -551,11 +502,6 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user password rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var isCallerAnonymous bool
 	var email *string
@@ -563,7 +509,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	var existingPasswordHash *string
 
 	var lockedUntil *time.Time
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT is_anonymous, email, phone, password_hash, locked_until
 		FROM auth.users
 		WHERE id = $1
@@ -613,7 +559,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 
 	var user User
 	var rawProperties []byte
-	queryErr := handler.db.QueryRow(ctx, `
+	queryErr := handler.kernel.DB().QueryRow(ctx, `
 		UPDATE auth.users
 		SET password_hash = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2
@@ -629,9 +575,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		if len(rawProperties) > 0 {
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewPasswordChangedEvent(user.ID, PasswordChangedEventData(user)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewPasswordChangedEvent(user.ID, PasswordChangedEventData(user)))
 	}
 
 	log.Debugf("user password successfully updated for %s", userID)

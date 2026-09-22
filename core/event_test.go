@@ -119,32 +119,6 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 	}
 }
 
-func TestCoreEventManagerNilDBUnit(t *testing.T) {
-	eventManager := NewEventManager(nil)
-	ctx := context.Background()
-
-	resourceID := "res_1"
-	_, err := eventManager.Record(ctx, Event{
-		Type:         "test.event",
-		ResourceType: "test",
-		Action:       "create",
-		ResourceID:   &resourceID,
-	})
-	if err == nil {
-		t.Fatal("expected error on nil DB pool")
-	}
-
-	_, err = eventManager.Get(ctx, uuid.NewV7())
-	if err == nil {
-		t.Fatal("expected error on nil DB pool")
-	}
-
-	_, err = eventManager.List(ctx, EventFilter{})
-	if err == nil {
-		t.Fatal("expected error on nil DB pool")
-	}
-}
-
 func TestCoreEventManagerRecordInvalidEventUnit(t *testing.T) {
 	eventManager := NewEventManager(nil)
 	ctx := context.Background()
@@ -208,9 +182,9 @@ func TestCoreEventBusLifecycleUnit(t *testing.T) {
 	eventBus.Publish(ctx, Event{})
 	eventBus.PublishSync(ctx, Event{})
 
-	// Test Setters
-	eventBus.SetEventManager(nil)
-	eventBus.SetEventHookManager(nil)
+	// Test Getters
+	_ = eventBus.EventManager()
+	_ = eventBus.EventHookManager()
 
 	// Test buffer full branch
 	fullEventBus := &EventBus{

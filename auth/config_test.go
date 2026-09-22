@@ -61,7 +61,8 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 	}
 
 	// Test template fallback in ConfigManager
-	configManager := NewConfigManager(nil, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	configManager := NewConfigManager(kernel)
 
 	emptyTemplateConfig := authConfig
 	emptyTemplateConfig.EmailDispatcher.Templates = EmailDispatcherTemplatesConfig{}
@@ -73,22 +74,22 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 }
 
 func TestAuthConfigManagerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	cryptoKeyManager := kernel.CryptoKeyManager()
+
+	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	brokenConfigManager := NewConfigManager(brokenKernel)
+
+	// Test Load and Save on broken pool (should return error)
+	if loadErr := brokenConfigManager.Load(context.Background()); loadErr == nil {
+		t.Fatal("expected error on broken pool Load")
+	}
+	if saveErr := brokenConfigManager.Save(context.Background(), DefaultConfig()); saveErr == nil {
+		t.Fatal("expected error on broken pool Save")
 	}
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	configManager.SetServiceAccountManager(nil)
-	configManager.SetEventBus(nil)
-
-	// Test Load and Save on nil pool (should return nil without panic)
-	if loadErr := configManager.Load(context.Background()); loadErr != nil {
-		t.Fatalf("expected nil error on nil pool Load: %v", loadErr)
-	}
-	if saveErr := configManager.Save(context.Background(), DefaultConfig()); saveErr != nil {
-		t.Fatalf("expected nil error on nil pool Save: %v", saveErr)
-	}
+	configManager := NewConfigManager(kernel)
 
 	initialConfig := configManager.Get()
 	if initialConfig.Password.MinLength != 8 {
@@ -166,20 +167,19 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatal("expected error on invalid encrypted format")
 	}
 
-	// Test DecryptSecret with nil key manager
-	nilKeyManagerConfigManager := NewConfigManager(nil, nil)
-	if _, err := nilKeyManagerConfigManager.DecryptSecret("some-value"); err == nil {
-		t.Fatal("expected error decrypting secret with nil key manager")
+	if _, err := configManager.DecryptSecret("enc:v1:aes256gcm:invalid:format:extra:extra"); err == nil {
+		t.Fatal("expected error on invalid encrypted format")
 	}
 
 	// Test checkScope with invalid secret key
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
+	configManager = service.configManager
+	controlPlaneHandler := service.controlPlaneHandler
+	serviceAccountManager := kernel.ServiceAccountManager()
 	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid-sec-key")
-	if controlPlaneHandler.checkScope(invalidKeyRequest, "auth:config.read") {
-		t.Fatal("expected checkScope to fail on invalid secret key")
+	if serviceAccountManager.CheckScope(invalidKeyRequest, core.ScopeAuthConfigRead) {
+		t.Fatal("expected CheckScope to fail on invalid secret key")
 	}
 
 	// Test checkScope forbidden on handleGetConfig
@@ -196,14 +196,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden on handleUpdateConfig, got: %d", forbiddenPutResponseRecorder.Code)
 	}
 
-	// Reset serviceAccountManager so later calls pass scope checks
-	controlPlaneHandler.SetServiceAccountManager(nil)
-
 	// Test handleUpdateConfig success and event bus publish
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	defer eventBus.Close()
-	configManager.SetEventBus(eventBus)
-	controlPlaneHandler.SetEventBus(eventBus)
 
 	validPutBody := `{"password":{"enabled":true,"min_length":10},"smtp":{"password":"new-smtp-password"}}`
 	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(validPutBody))
@@ -426,9 +419,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatal("expected sms templates to be preserved when payload sends null sms")
 	}
 
-	// Test handleUpdateConfig without keyManager
-	nilCryptoKeyManagerConfigManager := NewConfigManager(nil, nil)
-	nilCryptoKeyManagerControlPlaneHandler := NewControlPlaneHandler(nil, nilCryptoKeyManagerConfigManager)
+	// Test handleUpdateConfig with plaintext secrets
 	plainSecretBody := `{
 		"email_dispatcher": {
 			"smtp": {"password": "plain-password"},
@@ -441,9 +432,13 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}`
 	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(plainSecretBody))
 	plainResponseRecorder := httptest.NewRecorder()
-	nilCryptoKeyManagerControlPlaneHandler.handleUpdateConfig(plainResponseRecorder, plainRequest)
+	controlPlaneHandler.handleUpdateConfig(plainResponseRecorder, plainRequest)
 	if plainResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from handleUpdateConfig without keyManager, got: %d", plainResponseRecorder.Code)
+		t.Fatalf("expected 200 OK from handleUpdateConfig with plaintext secrets, got: %d", plainResponseRecorder.Code)
+	}
+	updatedPlainSecretsConfig := configManager.Get()
+	if !strings.HasPrefix(updatedPlainSecretsConfig.EmailDispatcher.SMTP.Password, "enc:v1:") {
+		t.Fatalf("expected encrypted SMTP password, got: %s", updatedPlainSecretsConfig.EmailDispatcher.SMTP.Password)
 	}
 
 	// Test handleUpdateConfig rejecting email_otp.enabled without active SMTP -> 422
@@ -502,12 +497,12 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 }
 
 func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
+	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. Check defaults
 	defaultConfig := configManager.Get()
@@ -555,7 +550,6 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		}
 	}`
 
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
 	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(oidcPutBody))
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
@@ -678,12 +672,8 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 }
 
 func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	configManager := NewConfigManager(kernel)
 
 	// Ensure base config has everything disabled initially
 	initialConfig := configManager.Get()
@@ -735,7 +725,8 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 		},
 	}
 
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 
 	for _, currentTestCase := range testCases {
 		t.Run(currentTestCase.name, func(t *testing.T) {
@@ -754,13 +745,12 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 }
 
 func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
 
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+	service := NewService(kernel)
+	configManager := service.configManager
+	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. Initial state: disable all methods
 	disableAllBody := `{
@@ -854,6 +844,11 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 }
 
 func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	configManager := NewConfigManager(kernel)
+
+	defer core.SetLoadedConfig(core.DefaultConfig())
+
 	// Case 1: Custom project name
 	customProjectConfig := core.DefaultConfig()
 	customProjectConfig.Project.Name = "Custom Company"
@@ -871,8 +866,6 @@ func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
 	var inputConfig Config
 	inputConfig.Passkeys.RelyingPartyName = ""
 	inputConfig.MFA.Issuer = ""
-	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	configManager := NewConfigManager(nil, cryptoKeyManager)
 	configManager.Set(inputConfig)
 	if configManager.Get().Passkeys.RelyingPartyName != "Custom Company" {
 		t.Fatalf("expected Set() to fallback to 'Custom Company', got: %s", configManager.Get().Passkeys.RelyingPartyName)
@@ -906,12 +899,7 @@ func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
 }
 
 func TestAuthConfigOIDCClientSignOutFieldsUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	configManager := NewConfigManager(core.SetupTestKernelWithBrokenDB(t, Migrations))
 
 	// 1. JSON unmarshal using standard sign-out keys
 	signOutJSON := []byte(`{
@@ -997,11 +985,7 @@ func TestAuthConfigOIDCClientSignOutFieldsUnit(t *testing.T) {
 }
 
 func TestAuthConfigThreatUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-	configManager := NewConfigManager(nil, cryptoKeyManager)
+	configManager := NewConfigManager(core.SetupTestKernelWithBrokenDB(t, Migrations))
 
 	// 1. Default config assertions
 	defaultConfig := DefaultConfig()
@@ -1066,12 +1050,12 @@ func TestAuthConfigThreatUnit(t *testing.T) {
 }
 
 func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	service := NewService(kernel)
+	configManager := service.configManager
+	controlPlaneHandler := service.controlPlaneHandler
 	ctx := context.Background()
 
 	// 1. Unsupported provider -> 400

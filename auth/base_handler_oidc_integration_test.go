@@ -21,25 +21,21 @@ import (
 )
 
 func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
+	cryptoKeyManager := kernel.CryptoKeyManager()
+	databaseKVStore := kernel.KVStore()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-
 	baseURL := core.GetConfig().ServerBaseURL()
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	baseHandler := service.baseHandler
 
 	// 1. Create a registered test user directly in database
 	testUserEmail := "user.oidc@example.com"
@@ -301,7 +297,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// 6. Valid MFA code -> 302 Found redirect
-	validTOTPCode, _ := baseHandler.GetTOTPManager().GenerateCode(mfaSecret, time.Now())
+	validTOTPCode, _ := baseHandler.totpManager.GenerateCode(mfaSecret, time.Now())
 	validMFACodeValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {validTOTPCode}}
 	validMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(validMFACodeValues.Encode()))
 	validMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -459,8 +455,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// 8. UserInfo Endpoint (GET /v1/auth/oauth/userinfo)
-	tokenJWTClaims, _ := baseHandler.jwtSigner.VerifyAccessToken(tokenResponse.AccessToken)
-	userinfoRequest := withUserAuthClaims(httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/userinfo", nil), *tokenJWTClaims)
+	tokenJWTClaims, _ := kernel.JWTSigner().VerifyAccessToken(tokenResponse.AccessToken)
+	userinfoRequest := core.WithTestAuthClaims(httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/userinfo", nil), *tokenJWTClaims)
 	userinfoRequest.Header.Set("Authorization", "Bearer "+tokenResponse.AccessToken)
 	userinfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetOIDCUserInfo(userinfoResponseRecorder, userinfoRequest)
@@ -497,7 +493,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		url.QueryEscape("mobile-client-state-789"),
 		url.QueryEscape(mobileChallenge),
 	)
-	ssoAuthorizeRequest := withUserAuth(httptest.NewRequestWithContext(ctx, http.MethodGet, ssoAuthorizeURL, nil), testUserID, "authenticated", false)
+	ssoAuthorizeRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodGet, ssoAuthorizeURL, nil), testUserID, "authenticated", false)
 	ssoAuthorizeRequest.AddCookie(sessionCookie)
 	ssoAuthorizeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAuthorizeOIDC(ssoAuthorizeResponseRecorder, ssoAuthorizeRequest)
@@ -595,8 +591,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// a1. Locked user during refresh token exchange -> 400 invalid_grant
-	lockedUserRefreshToken := baseHandler.jwtSigner.GenerateRefreshToken()
-	lockedUserRefreshHash := baseHandler.jwtSigner.HashRefreshToken(lockedUserRefreshToken)
+	lockedUserRefreshToken := kernel.JWTSigner().GenerateRefreshToken()
+	lockedUserRefreshHash := kernel.JWTSigner().HashRefreshToken(lockedUserRefreshToken)
 	var lockedUserID string
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = 'locked.user@example.com'").Scan(&lockedUserID)
 	_, _ = db.Exec(ctx, `
@@ -624,8 +620,8 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 		t.Fatalf("failed to drop foreign key constraint: %v", err)
 	}
 
-	ghostRefreshToken := baseHandler.jwtSigner.GenerateRefreshToken()
-	ghostRefreshHash := baseHandler.jwtSigner.HashRefreshToken(ghostRefreshToken)
+	ghostRefreshToken := kernel.JWTSigner().GenerateRefreshToken()
+	ghostRefreshHash := kernel.JWTSigner().HashRefreshToken(ghostRefreshToken)
 	ghostUserID := uuid.NewV7().String()
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
@@ -673,7 +669,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 
 	// c. Deleted/nonexistent user in userinfo -> 401 invalid_token
-	ghostToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	ghostToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: "01918a24-8888-7000-8000-000000000088",
 		Email:   "ghost@example.com",
 		Role:    "authenticated",
@@ -725,18 +721,19 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 }
 
 func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	_ = kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	serviceAccountManager := kernel.ServiceAccountManager()
+	baseHandler := service.baseHandler
 
 	activeServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "M2M Worker Service",
@@ -782,7 +779,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Errorf("expected no refresh token or id token in M2M response, got %+v", basicIssueOIDCTokenResponse)
 	}
 
-	m2mJWTClaims, verifyErr := baseHandler.jwtSigner.VerifyM2MToken(basicIssueOIDCTokenResponse.AccessToken)
+	m2mJWTClaims, verifyErr := kernel.JWTSigner().VerifyM2MToken(basicIssueOIDCTokenResponse.AccessToken)
 	if verifyErr != nil {
 		t.Fatalf("failed to verify M2M token: %v", verifyErr)
 	}
@@ -911,7 +908,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	if rsIssueOIDCTokenResponse.Scope != "invoices:read" {
 		t.Fatalf("expected scope invoices:read, got %s", rsIssueOIDCTokenResponse.Scope)
 	}
-	rsJWTClaims, rsVerifyErr := baseHandler.jwtSigner.VerifyM2MToken(rsIssueOIDCTokenResponse.AccessToken)
+	rsJWTClaims, rsVerifyErr := kernel.JWTSigner().VerifyM2MToken(rsIssueOIDCTokenResponse.AccessToken)
 	if rsVerifyErr != nil || rsJWTClaims.Audience != "https://billing.example.com" || !rsJWTClaims.HasScope("invoices:read") {
 		t.Fatalf("unexpected RS token claims: %+v, err: %v", rsJWTClaims, rsVerifyErr)
 	}
@@ -932,7 +929,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	}
 	var rsAllIssueOIDCTokenResponse IssueOIDCTokenResponse
 	_ = json.Unmarshal(rsAllResponseRecorder.Body.Bytes(), &rsAllIssueOIDCTokenResponse)
-	rsAllJWTClaims, _ := baseHandler.jwtSigner.VerifyM2MToken(rsAllIssueOIDCTokenResponse.AccessToken)
+	rsAllJWTClaims, _ := kernel.JWTSigner().VerifyM2MToken(rsAllIssueOIDCTokenResponse.AccessToken)
 	if len(rsAllJWTClaims.Scopes()) != 3 {
 		t.Fatalf("expected 3 RS scopes inherited, got: %v", rsAllJWTClaims.Scopes())
 	}
@@ -1053,32 +1050,10 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 		t.Fatalf("expected 401 on blocked IP, got %d", ipResponseRecorder.Code)
 	}
 
-	// 9. BaseHandler with nil signer -> 500
-	nilSignerBaseHandler := &BaseHandler{
-		serviceAccountManager: serviceAccountManager,
-		configManager:         configManager,
-		jwtSigner:             nil,
-	}
-	nilSignerValues := url.Values{
-		"grant_type":    {"client_credentials"},
-		"client_secret": {activeServiceAccount.SecretKey},
-		"audience":      {layrAudience},
-	}
-	nilSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(nilSignerValues.Encode()))
-	nilSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	nilSignerResponseRecorder := httptest.NewRecorder()
-	nilSignerBaseHandler.handleIssueOIDCToken(nilSignerResponseRecorder, nilSignerRequest)
-
-	if nilSignerResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil signer, got %d", nilSignerResponseRecorder.Code)
-	}
-
 	// 10. BaseHandler with uninitialized signer -> 500
-	uninitSignerBaseHandler := &BaseHandler{
-		serviceAccountManager: serviceAccountManager,
-		configManager:         configManager,
-		jwtSigner:             &core.JWTSigner{},
-	}
+	uninitKernel := core.NewTestKernel(kernel.DB(), core.WithJWTSigner(&core.JWTSigner{}))
+	uninitService := NewService(uninitKernel)
+	uninitSignerBaseHandler := uninitService.baseHandler
 	uninitSignerValues := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_secret": {activeServiceAccount.SecretKey},
@@ -1095,11 +1070,15 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 }
 
 func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
+	cryptoKeyManager := kernel.CryptoKeyManager()
+	databaseKVStore := kernel.KVStore()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	if err := configManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
@@ -1140,34 +1119,18 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := configManager.Get().EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetEmailDispatcher(emailDispatcher)
-
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := configManager.Get().SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager)
-	baseHandler.SetSMSDispatcher(smsDispatcher)
-
 	var capturedEvents []core.Event
 	var eventsMutex sync.Mutex
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	eventBus.Subscribe("*", func(_ context.Context, event core.Event) error {
+	kernel.EventBus().Subscribe("*", func(_ context.Context, event core.Event) error {
 		eventsMutex.Lock()
 		capturedEvents = append(capturedEvents, event)
 		eventsMutex.Unlock()
 		return nil
 	})
-	baseHandler.SetEventBus(eventBus)
+
+	baseHandler := service.baseHandler
+	service.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &authConfig.EmailDispatcher })
+	service.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &authConfig.SMSDispatcher })
 
 	// Helper to create valid OIDC state
 	createState := func(stateID string) {
@@ -1469,14 +1432,11 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 }
 
 func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 60*time.Second)
-	defer func() { _ = databaseKVStore.Close() }()
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
 
 	var receivedTokenMutex sync.Mutex
 	var receivedSignOutToken string
@@ -1498,7 +1458,8 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 	}))
 	defer mockRPServer.Close()
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	service := NewService(kernel)
+	configManager := service.configManager
 	authConfig := configManager.Get()
 	authConfig.OIDC.Enabled = true
 	authConfig.OIDC.Clients = []OIDCClientConfig{
@@ -1519,11 +1480,8 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 		t.Fatalf("failed to save config: %v", saveErr)
 	}
 
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	baseHandler.SetKVStore(databaseKVStore)
-	baseHandler.SetEventBus(eventBus)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
-	baseHandler.SetHTTPClient(mockRPServer.Client())
+	baseHandler := service.baseHandler
+	baseHandler.httpClient = mockRPServer.Client()
 
 	var testUserID string
 	err := db.QueryRow(ctx, `
@@ -1536,7 +1494,7 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 	}
 
 	rawSessionToken := "federated-raw-session-token-abc"
-	hashedToken := baseHandler.jwtSigner.HashRefreshToken(rawSessionToken)
+	hashedToken := kernel.JWTSigner().HashRefreshToken(rawSessionToken)
 	var sessionID string
 	err = db.QueryRow(ctx, `
 		INSERT INTO auth.sessions (user_id, client_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
@@ -1577,7 +1535,7 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 		t.Fatal("expected mock RP to receive back-channel sign-out request with logout_token")
 	}
 
-	verifiedSignOutJWTClaims, verifyErr := baseHandler.jwtSigner.VerifySignOutToken(capturedToken)
+	verifiedSignOutJWTClaims, verifyErr := kernel.JWTSigner().VerifySignOutToken(capturedToken)
 	if verifyErr != nil {
 		t.Fatalf("failed to verify received sign-out token: %v", verifyErr)
 	}

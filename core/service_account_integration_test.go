@@ -122,6 +122,11 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected ErrServiceAccountNotFound, got: %v", err)
 	}
 
+	// 8b. Attempt deleting a non-existent service account -> error
+	if nonExistentDeleteErr := serviceAccountManager.Delete(ctx, "00000000-0000-0000-0000-000000000000"); nonExistentDeleteErr == nil {
+		t.Fatal("expected error when deleting non-existent service account")
+	}
+
 	// 9. Root Account Protection: Attempt deleting the ONLY root account -> ErrRootAccountProtected
 	err = serviceAccountManager.Delete(ctx, rootServiceAccount.ID)
 	if !errors.Is(err, ErrRootAccountProtected) {
@@ -224,10 +229,9 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create crypto key manager: %v", err)
 	}
-	server := NewServer(db, serverCryptoKeyManager)
-	if server.ServiceAccountManager() == nil {
-		t.Fatal("expected non-nil ServiceAccountManager on server")
-	}
+	jwtSigner := NewJWTSigner(serverCryptoKeyManager)
+	server := NewServer(&Kernel{db: db, cryptoKeyManager: serverCryptoKeyManager, serviceAccountManager: serviceAccountManager, jwtSigner: jwtSigner})
+	_ = server
 
 	authTestServiceAccount, err := serviceAccountManager.Create(ctx, CreateServiceAccountInput{
 		Name:   "Auth Test Account",
@@ -257,28 +261,7 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to delete auth test account: %v", deleteAuthTestErr)
 	}
 
-	// 17. Nil db connection pool checks
-	nilServiceAccountManager := NewServiceAccountManager(nil)
-	if _, nilCreateErr := nilServiceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "X"}); nilCreateErr == nil {
-		t.Fatal("expected error on nil db connection pool Create")
-	}
-	if _, nilListErr := nilServiceAccountManager.List(ctx); nilListErr == nil {
-		t.Fatal("expected error on nil db connection pool List")
-	}
-	if _, nilGetErr := nilServiceAccountManager.Get(ctx, "00000000-0000-0000-0000-000000000000"); nilGetErr == nil {
-		t.Fatal("expected error on nil db connection pool Get")
-	}
-	if _, nilUpdateErr := nilServiceAccountManager.Update(ctx, "00000000-0000-0000-0000-000000000000", UpdateServiceAccountInput{}); nilUpdateErr == nil {
-		t.Fatal("expected error on nil db connection pool Update")
-	}
-	if nilDeleteErr := nilServiceAccountManager.Delete(ctx, "00000000-0000-0000-0000-000000000000"); nilDeleteErr == nil {
-		t.Fatal("expected error on nil db connection pool Delete")
-	}
-	if _, nilAuthErr := nilServiceAccountManager.Authenticate(ctx, "01234567890123456789", "127.0.0.1"); nilAuthErr == nil {
-		t.Fatal("expected error on nil db connection pool Authenticate")
-	}
-
-	// 18. Empty name validation on Create
+	// 17. Empty name validation on Create
 	if _, emptyCreateErr := serviceAccountManager.Create(ctx, CreateServiceAccountInput{Name: "   "}); emptyCreateErr == nil {
 		t.Fatal("expected error on empty name Create")
 	}

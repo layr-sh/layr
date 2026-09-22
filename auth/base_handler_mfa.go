@@ -32,15 +32,10 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 		userID = authContext.UserID
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "mfa setup rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -66,12 +61,12 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 	}
 
 	secretBase32, _ := handler.totpManager.GenerateSecret()
-	encryptedSecret, _ := handler.cryptoKeyManager.EncryptField([]byte(secretBase32))
+	encryptedSecret, _ := handler.kernel.CryptoKeyManager().EncryptField([]byte(secretBase32))
 
 	user.EncryptedMFASecret = &encryptedSecret
 	user.MFAEnabled = false
 
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		UPDATE auth.users
 		SET encrypted_mfa_secret = $1, mfa_enabled = false, last_updated_at = clock_timestamp()
 		WHERE id = $2
@@ -86,7 +81,7 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 
 	authURL := handler.totpManager.BuildAuthURL(accountName, secretBase32)
 
-	handler.writeJSON(responseWriter, SetupMFAResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, SetupMFAResponse{
 		Secret:        secretBase32,
 		AuthURL:       authURL,
 		Issuer:        config.MFA.Issuer,
@@ -122,15 +117,10 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "mfa verify rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -160,7 +150,7 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
+	secretBytes, err := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("mfa verify rejected: failed to decrypt MFA secret for user %s: %v", user.ID, err))
 		return
@@ -173,16 +163,14 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 
 	user.MFAEnabled = true
 
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		UPDATE auth.users
 		SET mfa_enabled = true, last_updated_at = clock_timestamp()
 		WHERE id = $1
 	`, user.ID)
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewMFAEnabledEvent(user.ID, MFAEnabledEventData(user)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewMFAEnabledEvent(user.ID, MFAEnabledEventData(user)))
+	handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 
 	handler.issueSessionResponse(responseWriter, request, user, "mfa")
 }
@@ -210,37 +198,25 @@ func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWrite
 		return
 	}
 
-	if handler.kvStore == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "mfa challenge rejected: KV store unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	ticketKey := "auth:mfa_ticket:" + ticket
-	userID, err := handler.kvStore.Get(ctx, ticketKey)
+	userID, err := handler.kernel.KVStore().Get(ctx, ticketKey)
 	if err != nil || userID == "" {
-		if handler.eventBus != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(ticket, MFAChallengeFailedEventData{
-				Reason:    "invalid_ticket",
-				IPAddress: clientIP,
-				UserAgent: request.UserAgent(),
-			}))
-		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewMFAChallengeFailedEvent(ticket, MFAChallengeFailedEventData{
+			Reason:    "invalid_ticket",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
 		return
 	}
 
-	_ = handler.kvStore.Delete(ctx, ticketKey)
-
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "mfa challenge rejected: database pool unavailable")
-		return
-	}
+	_ = handler.kernel.KVStore().Delete(ctx, ticketKey)
 
 	var user User
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -261,16 +237,14 @@ func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWrite
 	}
 
 	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
-		if handler.eventBus != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
-				UserID:    user.ID,
-				Reason:    "account_locked",
-				IPAddress: clientIP,
-				UserAgent: request.UserAgent(),
-				User:      &user,
-			}))
-		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
+			UserID:    user.ID,
+			Reason:    "account_locked",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+			User:      &user,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
@@ -280,23 +254,21 @@ func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWrite
 		return
 	}
 
-	secretBytes, err := handler.cryptoKeyManager.DecryptField(*user.EncryptedMFASecret)
+	secretBytes, err := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("MFA challenge rejected: failed to decrypt MFA secret for user %s: %v", user.ID, err))
 		return
 	}
 
 	if !handler.totpManager.ValidateCode(string(secretBytes), code, time.Now().UTC(), 1) {
-		if handler.eventBus != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
-				UserID:    user.ID,
-				Reason:    "invalid_code",
-				IPAddress: clientIP,
-				UserAgent: request.UserAgent(),
-				User:      &user,
-			}))
-		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewMFAChallengeFailedEvent(user.ID, MFAChallengeFailedEventData{
+			UserID:    user.ID,
+			Reason:    "invalid_code",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+			User:      &user,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
 		return
 	}
@@ -320,15 +292,10 @@ func (handler *BaseHandler) handleDisableMFA(responseWriter http.ResponseWriter,
 	}
 	userID := authContext.UserID
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "mfa disable rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1
@@ -356,16 +323,14 @@ func (handler *BaseHandler) handleDisableMFA(responseWriter http.ResponseWriter,
 	user.MFAEnabled = false
 	user.EncryptedMFASecret = nil
 
-	_, _ = handler.db.Exec(ctx, `
+	_, _ = handler.kernel.DB().Exec(ctx, `
 		UPDATE auth.users
 		SET mfa_enabled = false, encrypted_mfa_secret = NULL, last_updated_at = clock_timestamp()
 		WHERE id = $1
 	`, user.ID)
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewMFADisabledEvent(user.ID, MFADisabledEventData(user)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewMFADisabledEvent(user.ID, MFADisabledEventData(user)))
+	handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 
 	log.Debugf("MFA successfully disabled for user %s", user.ID)
 	responseWriter.WriteHeader(http.StatusNoContent)

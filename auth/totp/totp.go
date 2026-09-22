@@ -1,4 +1,5 @@
-package core
+// Package totp provides RFC 6238 Time-based One-Time Password generation and verification.
+package totp
 
 import (
 	"crypto/hmac"
@@ -19,20 +20,20 @@ const (
 	totpCounterByteLength = 8
 )
 
-// TOTPManager generates and validates RFC 6238 Time-based One-Time Passwords.
-type TOTPManager struct {
+// Manager generates and validates RFC 6238 Time-based One-Time Passwords.
+type Manager struct {
 	issuer        string
 	periodSeconds int64
 	digits        int
 	randomReader  io.Reader
 }
 
-// NewTOTPManager initializes a TOTP manager with default 30-second intervals and 6 digits.
-func NewTOTPManager(issuer string) *TOTPManager {
+// NewManager initializes a TOTP manager with default 30-second intervals and 6 digits.
+func NewManager(issuer string) *Manager {
 	if issuer == "" {
 		issuer = "Layr"
 	}
-	return &TOTPManager{
+	return &Manager{
 		issuer:        issuer,
 		periodSeconds: 30,
 		digits:        6,
@@ -41,33 +42,33 @@ func NewTOTPManager(issuer string) *TOTPManager {
 }
 
 // SetRandomReader sets the random reader (for testing).
-func (totpManager *TOTPManager) SetRandomReader(reader io.Reader) {
+func (manager *Manager) SetRandomReader(reader io.Reader) {
 	if reader == nil {
-		totpManager.randomReader = rand.Reader
+		manager.randomReader = rand.Reader
 		return
 	}
-	totpManager.randomReader = reader
+	manager.randomReader = reader
 }
 
 // GenerateSecret creates a 20-byte random base32 encoded TOTP secret without padding.
-func (totpManager *TOTPManager) GenerateSecret() (string, error) {
+func (manager *Manager) GenerateSecret() (string, error) {
 	log.Debugf("generating random TOTP secret")
 	secretBytes := make([]byte, totpSecretByteLength)
-	if _, err := io.ReadFull(totpManager.randomReader, secretBytes); err != nil {
+	if _, err := io.ReadFull(manager.randomReader, secretBytes); err != nil {
 		return "", fmt.Errorf("failed to generate random TOTP secret: %w", err)
 	}
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(secretBytes), nil
 }
 
 // GenerateCode calculates the 6-digit TOTP code for a secret at a specific time.
-func (totpManager *TOTPManager) GenerateCode(secretBase32 string, atTime time.Time) (string, error) {
+func (manager *Manager) GenerateCode(secretBase32 string, atTime time.Time) (string, error) {
 	log.Tracef("generating TOTP code at %s", atTime.Format(time.RFC3339))
 	secretKey, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secretBase32)))
 	if err != nil {
 		return "", fmt.Errorf("invalid base32 secret: %w", err)
 	}
 
-	counter := uint64(atTime.Unix() / totpManager.periodSeconds)
+	counter := uint64(atTime.Unix() / manager.periodSeconds)
 	counterBytes := make([]byte, totpCounterByteLength)
 	binary.BigEndian.PutUint64(counterBytes, counter)
 
@@ -82,20 +83,20 @@ func (totpManager *TOTPManager) GenerateCode(secretBase32 string, atTime time.Ti
 }
 
 // ValidateCode verifies a TOTP code within a window of [-skew, +skew] intervals.
-func (totpManager *TOTPManager) ValidateCode(secretBase32 string, code string, atTime time.Time, skewSteps int) bool {
+func (manager *Manager) ValidateCode(secretBase32 string, code string, atTime time.Time, skewSteps int) bool {
 	log.Tracef("validating TOTP code at %s with skew %d", atTime.Format(time.RFC3339), skewSteps)
 	code = strings.TrimSpace(code)
-	if len(code) != totpManager.digits {
+	if len(code) != manager.digits {
 		return false
 	}
 	if skewSteps < 0 {
 		skewSteps = 1
 	}
 
-	currentStep := atTime.Unix() / totpManager.periodSeconds
+	currentStep := atTime.Unix() / manager.periodSeconds
 	for step := -skewSteps; step <= skewSteps; step++ {
-		targetTime := time.Unix((currentStep+int64(step))*totpManager.periodSeconds, 0)
-		expectedCode, err := totpManager.GenerateCode(secretBase32, targetTime)
+		targetTime := time.Unix((currentStep+int64(step))*manager.periodSeconds, 0)
+		expectedCode, err := manager.GenerateCode(secretBase32, targetTime)
 		if err != nil {
 			return false
 		}
@@ -107,14 +108,14 @@ func (totpManager *TOTPManager) ValidateCode(secretBase32 string, code string, a
 }
 
 // BuildAuthURL constructs a standard otpauth:// URL for authenticator apps.
-func (totpManager *TOTPManager) BuildAuthURL(account, secretBase32 string) string {
-	label := fmt.Sprintf("%s:%s", totpManager.issuer, account)
+func (manager *Manager) BuildAuthURL(account, secretBase32 string) string {
+	label := fmt.Sprintf("%s:%s", manager.issuer, account)
 	values := url.Values{}
 	values.Set("secret", secretBase32)
-	values.Set("issuer", totpManager.issuer)
+	values.Set("issuer", manager.issuer)
 	values.Set("algorithm", "SHA1")
-	values.Set("digits", fmt.Sprintf("%d", totpManager.digits))
-	values.Set("period", fmt.Sprintf("%d", totpManager.periodSeconds))
+	values.Set("digits", fmt.Sprintf("%d", manager.digits))
+	values.Set("period", fmt.Sprintf("%d", manager.periodSeconds))
 
 	return fmt.Sprintf("otpauth://totp/%s?%s", url.PathEscape(label), values.Encode())
 }

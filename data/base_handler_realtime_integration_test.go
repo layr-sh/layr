@@ -10,19 +10,17 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
 )
 
 func TestDataBaseHandlerRealtimeIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
-	if db == nil {
-		return
-	}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	service := NewService(db)
+	service := NewService(kernel)
 	_ = service.Start(ctx)
-	defer func() { _ = service.Stop() }()
+	defer func() { service.Stop() }()
 
 	server := httptest.NewServer(http.HandlerFunc(service.BaseHandler().handleConnectRealtime))
 	defer server.Close()

@@ -16,10 +16,6 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {
-	if service.baseHandler == nil {
-		return
-	}
-
 	// 1. OIDC Discovery & JWKS
 	core.GetRoute[OIDCConfiguration](router, "/.well-known/openid-configuration", service.baseHandler.handleGetOIDCDiscovery,
 		core.RouteTag("OpenID Connect"),
@@ -388,10 +384,6 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
-	if service.controlPlaneHandler == nil || service.configManager == nil {
-		return
-	}
-
 	// 1. Dynamic Runtime Configuration
 	core.GetRoute[Config](router, "/v1/_/auth/config", service.controlPlaneHandler.handleGetConfig,
 		core.RouteTag("Auth Control Plane"),
@@ -446,21 +438,18 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 3. User Lock Management
-	core.PostRoute[core.Empty, LockUserInput](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleLockUser,
+	core.PostRoute[User, LockUserInput](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleLockUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Lock application user and revoke active sessions"),
 		core.RouteDescription("Locks user account to prevent authentication and revokes all active sessions immediately."),
-		core.RouteNoRequestBody(),
-		core.RouteNoContentResponse("User locked"),
 		core.RouteOperationID("auth__users__lock"),
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("lock"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleUnlockUser,
+	core.DeleteRoute[User](router, "/v1/_/auth/users/{user_id}/lock", service.controlPlaneHandler.handleUnlockUser,
 		core.RouteTag("Auth User Management"),
 		core.RouteSummary("Unlock application user and restore access"),
 		core.RouteDescription("Unlocks user account and restores login capabilities."),
-		core.RouteNoContentResponse("User unlocked"),
 		core.RouteOperationID("auth__users__unlock"),
 		core.RouteSDKGroupName("auth", "users"),
 		core.RouteSDKMethodName("unlock"),

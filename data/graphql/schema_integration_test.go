@@ -68,7 +68,7 @@ func TestGraphqlSchemaIntrospectionIntegration(t *testing.T) {
 	}
 
 	// 3. Introspect schema without KVStore cache
-	schemaIntrospector := NewSchemaIntrospector(db)
+	schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(db))
 	if err := schemaIntrospector.Introspect(ctx, []string{"public"}); err != nil {
 		t.Fatalf("failed to introspect public schema: %v", err)
 	}
@@ -108,15 +108,15 @@ func TestGraphqlSchemaIntrospectionIntegration(t *testing.T) {
 	databaseKVStore := core.NewDatabaseKVStore(ctx, db, 0)
 	defer func() { _ = databaseKVStore.Close() }()
 
-	schemaIntrospector.SetKVStore(databaseKVStore)
-	// Second introspection writes/reads from KVStore cache
-	if err := schemaIntrospector.Introspect(ctx, []string{"public"}); err != nil {
+	cachedKernel := core.NewTestKernel(db, core.WithKVStore(databaseKVStore))
+	cachingSchemaIntrospector := NewSchemaIntrospector(cachedKernel)
+	// Second introspection writes to KVStore cache
+	if err := cachingSchemaIntrospector.Introspect(ctx, []string{"public"}); err != nil {
 		t.Fatalf("failed to introspect with KVStore: %v", err)
 	}
 
 	// A new introspector with KVStore should load from cache directly
-	cachedSchemaIntrospector := NewSchemaIntrospector(db)
-	cachedSchemaIntrospector.SetKVStore(databaseKVStore)
+	cachedSchemaIntrospector := NewSchemaIntrospector(cachedKernel)
 	if err := cachedSchemaIntrospector.Introspect(ctx, []string{"public"}); err != nil {
 		t.Fatalf("failed to introspect from cache: %v", err)
 	}
@@ -135,7 +135,8 @@ func TestGraphqlSchemaIntrospectionIntegration(t *testing.T) {
 	// 6. Introspect failure with canceled context
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	if err := schemaIntrospector.Introspect(canceledCtx, []string{"public"}); err == nil {
+	canceledSchemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(db))
+	if err := canceledSchemaIntrospector.Introspect(canceledCtx, []string{"public"}); err == nil {
 		t.Fatal("expected error introspecting with canceled context")
 	}
 }

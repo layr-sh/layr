@@ -26,10 +26,7 @@ func TestAuthFederatedSignOutUnit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create crypto key manager: %v", err)
 	}
-	jwtSigner, err := core.NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create jwt signer: %v", err)
-	}
+	jwtSigner := core.NewJWTSigner(cryptoKeyManager)
 
 	clients := []OIDCClientConfig{
 		{
@@ -83,7 +80,6 @@ func TestAuthFederatedSignOutUnit(t *testing.T) {
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("OK"))}, nil
 		},
 	}
-	dispatchBackChannelSignOut(ctx, mockClient, nil, clients, targets)
 	dispatchBackChannelSignOut(ctx, mockClient, jwtSigner, clients, nil)
 
 	// 2. Dispatch back-channel with mock responses

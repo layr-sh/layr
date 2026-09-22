@@ -7,7 +7,7 @@ import (
 )
 
 // ExportOpenAPISpecs builds and returns the Public, Control Plane, and Unified OpenAPI 3.1 specifications.
-func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
+func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
 	log.Debug("exporting OpenAPI 3.1 specifications")
 	config := DefaultConfig()
 	config.Data.Enabled = true
@@ -19,15 +19,15 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 	config.Image.Enabled = true
 	config.Console.Enabled = true
 
-	cryptoKeyManager, _ := NewCryptoKeyManager(config.Security.MasterEncryptionKey)
-	server := NewServer(nil, cryptoKeyManager)
-
-	kernel := &Kernel{
-		cryptoKeyManager: cryptoKeyManager,
-		server:           server,
+	if config.Security.MasterEncryptionKey == "" {
+		config.Security.MasterEncryptionKey, _ = GenerateRandomCryptoEncryptionKeyHex()
 	}
+	SetLoadedConfig(config)
+	defer UnloadConfig()
 
-	kernel.registerCoreRoutes(server)
+	kernel, _ := NewKernel(nil)
+	server := NewServer(kernel)
+	kernel.server = server
 
 	serviceFactoriesRWMutex.RLock()
 	serviceNames := make([]string, 0, len(serviceFactories))
@@ -53,7 +53,7 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T, error) {
 	unifiedOpenAPISpec := MergeOpenAPISpecs(openAPISpec, controlPlaneOpenAPISpec)
 	log.Trace("synthesized public, control plane, and unified OpenAPI specifications")
 
-	return openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec, nil
+	return openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec
 }
 
 // MergeOpenAPISpecs combines public and control plane OpenAPI 3.1 specifications into a single unified specification.

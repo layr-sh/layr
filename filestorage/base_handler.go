@@ -17,61 +17,23 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
-	"layr.sh/filestorage/s3sigv4"
 )
 
 // BaseHandler coordinates all public data plane HTTP routes (REST, S3-compatible, and presigned URLs).
 type BaseHandler struct {
-	db                    *core.DatabasePool
-	configManager         *ConfigManager
-	cryptoKeyManager      *core.CryptoKeyManager
-	serviceAccountManager *core.ServiceAccountManager
-	databaseEngine        *Engine
-	s3Engine              *Engine
-	sigv4Validator        *s3sigv4.Validator
-	kvStore               *core.KVStore
-	eventBus              *core.EventBus
+	*Service
 }
 
-// NewBaseHandler initializes the BaseHandler with engines and validator.
-func NewBaseHandler(
-	db *core.DatabasePool,
-	configManager *ConfigManager,
-	cryptoKeyManager *core.CryptoKeyManager,
-) *BaseHandler {
+// NewBaseHandler initializes the BaseHandler extending Service.
+func NewBaseHandler(service *Service) *BaseHandler {
 	log.Debug("initializing filestorage base handler")
 	return &BaseHandler{
-		db:                    db,
-		configManager:         configManager,
-		cryptoKeyManager:      cryptoKeyManager,
-		serviceAccountManager: core.NewServiceAccountManager(db),
-		databaseEngine:        NewDatabaseFileStorageEngine(db),
-		s3Engine:              NewS3FileStorageEngine(cryptoKeyManager),
-		sigv4Validator:        s3sigv4.NewValidator(db, cryptoKeyManager),
+		Service: service,
 	}
-}
-
-// SetKVStore attaches the KV store reference.
-func (baseHandler *BaseHandler) SetKVStore(kvStore *core.KVStore) {
-	baseHandler.kvStore = kvStore
-}
-
-// SetEventBus attaches the platform event bus.
-func (baseHandler *BaseHandler) SetEventBus(eventBus *core.EventBus) {
-	baseHandler.eventBus = eventBus
-}
-
-// SetServiceAccountManager attaches the service account manager.
-func (baseHandler *BaseHandler) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	baseHandler.serviceAccountManager = serviceAccountManager
 }
 
 // resolveBucket queries bucket metadata by unique bucket name.
 func (baseHandler *BaseHandler) resolveBucket(ctx context.Context, bucketName string) (*Bucket, error) {
-	if baseHandler.db == nil {
-		return nil, fmt.Errorf("database pool unavailable")
-	}
-
 	const querySQL = `
 		SELECT id, name, is_public, backend, backend_config, allowed_mime_types, max_file_size_bytes, created_at, last_updated_at
 		FROM file_storage.buckets
@@ -80,7 +42,7 @@ func (baseHandler *BaseHandler) resolveBucket(ctx context.Context, bucketName st
 
 	var bucket Bucket
 	var rawBackendConfig []byte
-	queryErr := baseHandler.db.QueryRow(ctx, querySQL, bucketName).Scan(
+	queryErr := baseHandler.kernel.DB().QueryRow(ctx, querySQL, bucketName).Scan(
 		&bucket.ID,
 		&bucket.Name,
 		&bucket.IsPublic,
@@ -110,14 +72,8 @@ func (baseHandler *BaseHandler) resolveBucket(ctx context.Context, bucketName st
 func (baseHandler *BaseHandler) resolveEngine(bucket Bucket) (*Engine, error) {
 	switch bucket.Backend {
 	case "database", "":
-		if baseHandler.databaseEngine == nil {
-			return nil, fmt.Errorf("database file storage engine unavailable")
-		}
 		return baseHandler.databaseEngine, nil
 	case "s3":
-		if baseHandler.s3Engine == nil {
-			return nil, fmt.Errorf("s3 file storage engine unavailable")
-		}
 		return baseHandler.s3Engine, nil
 	default:
 		return nil, fmt.Errorf("unsupported file storage backend %q", bucket.Backend)
@@ -146,13 +102,7 @@ func (baseHandler *BaseHandler) verifyPresignedToken(bucketName string, objectKe
 }
 
 func (baseHandler *BaseHandler) presignSecretKey() []byte {
-	if baseHandler.cryptoKeyManager != nil {
-		subkey, err := baseHandler.cryptoKeyManager.DeriveSubkey("layr-presign-signing-key")
-		if err == nil && len(subkey) > 0 {
-			return subkey
-		}
-	}
-	return []byte("layr-default-presign-secret-salt-key-32b")
+	return baseHandler.kernel.CryptoKeyManager().DeriveSubkey("layr-presign-signing-key")
 }
 
 func (baseHandler *BaseHandler) computePresignSignature(signingKey []byte, bucketName string, objectKey string, operation string, expiresUnix int64) string {
@@ -181,9 +131,9 @@ func (baseHandler *BaseHandler) authorizeRESTRequest(request *http.Request, buck
 
 	// 2. Check Service Account Key (X-Service-Account-Key or Bearer lak_...)
 	serviceAccountKey := core.ExtractRequestServiceAccountKey(request)
-	if serviceAccountKey != "" && baseHandler.serviceAccountManager != nil {
+	if serviceAccountKey != "" {
 		clientIP := core.ExtractRequestClientIP(request)
-		serviceAccount, authErr := baseHandler.serviceAccountManager.Authenticate(request.Context(), serviceAccountKey, clientIP)
+		serviceAccount, authErr := baseHandler.kernel.ServiceAccountManager().Authenticate(request.Context(), serviceAccountKey, clientIP)
 		if authErr == nil && core.HasScope(serviceAccount.Scopes, requiredScope) {
 			return true
 		}
@@ -206,13 +156,6 @@ func (baseHandler *BaseHandler) authorizeRESTRequest(request *http.Request, buck
 	}
 
 	return false
-}
-
-// writeJSON writes a successful JSON response.
-func (baseHandler *BaseHandler) writeJSON(responseWriter http.ResponseWriter, statusCode int, payload any) {
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(statusCode)
-	_ = json.NewEncoder(responseWriter).Encode(payload)
 }
 
 // writeXML writes an XML response.

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,20 +17,17 @@ import (
 
 // Server coordinates the Layr HTTP gateway, probes, and API dispatch.
 type Server struct {
-	db                    *DatabasePool
-	cryptoKeyManager      *CryptoKeyManager
-	jwtSigner             *JWTSigner
-	serviceAccountManager *ServiceAccountManager
-	baseRouter            *Router
-	controlPlaneRouter    *Router
-	serveMux              *http.ServeMux
-	server                *http.Server
-	uptime                time.Time     //nolint:namingclarity
-	requestCount          atomic.Uint64 //nolint:namingclarity
+	kernel             *Kernel
+	baseRouter         *Router
+	controlPlaneRouter *Router
+	serveMux           *http.ServeMux
+	server             *http.Server
+	uptime             time.Time     //nolint:namingclarity
+	requestCount       atomic.Uint64 //nolint:namingclarity
 }
 
 // NewServer initializes the HTTP gateway with type-safe OpenAPI route controllers.
-func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
+func NewServer(kernel *Kernel) *Server {
 	serveMux := http.NewServeMux()
 	config := GetConfig()
 
@@ -63,61 +61,17 @@ func NewServer(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *Server {
 		),
 	))
 
-	var jwtSigner *JWTSigner
-	if cryptoKeyManager != nil {
-		jwtSigner, _ = NewJWTSigner(cryptoKeyManager)
-	}
-
-	var serviceAccountManager *ServiceAccountManager
-	if db != nil {
-		serviceAccountManager = NewServiceAccountManager(db)
-	}
-
 	log.Debugf("initializing Server gateway")
 	server := &Server{
-		db:                    db,
-		cryptoKeyManager:      cryptoKeyManager,
-		jwtSigner:             jwtSigner,
-		serviceAccountManager: serviceAccountManager,
-		baseRouter:            baseRouter,
-		controlPlaneRouter:    controlPlaneRouter,
-		serveMux:              serveMux,
-		uptime:                time.Now(),
+		kernel:             kernel,
+		baseRouter:         baseRouter,
+		controlPlaneRouter: controlPlaneRouter,
+		serveMux:           serveMux,
+		uptime:             time.Now(),
 	}
 
-	// Register Core Routes on Public Router
-	GetRoute[GetHealthResponse](baseRouter, "/healthz", server.handleGetHealth,
-		RouteTag("Probes"),
-		RouteSummary("Liveness probe"),
-		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
-		RouteOperationID("core__healthz"),
-		RouteSDKGroupName("core"),
-		RouteSDKMethodName("healthz"),
-	)
-	GetRoute[GetReadinessResponse](baseRouter, "/readyz", server.handleGetReadiness,
-		RouteTag("Probes"),
-		RouteSummary("Readiness probe"),
-		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
-		RouteOperationID("core__readyz"),
-		RouteSDKGroupName("core"),
-		RouteSDKMethodName("readyz"),
-	)
-	GetRoute[string](baseRouter, "/metrics", server.handleGetMetrics,
-		RouteTag("Observability"),
-		RouteSummary("Prometheus metrics exposition"),
-		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
-		RouteOperationID("core__metrics"),
-		RouteSDKGroupName("core"),
-		RouteSDKMethodName("metrics"),
-	)
-	GetRoute[GetManifestResponse](baseRouter, "/v1/manifest", server.handleGetManifest,
-		RouteTag("Discovery"),
-		RouteSummary("Get dynamic cluster manifest and enabled services"),
-		RouteDescription("Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization."),
-		RouteOperationID("core__manifest"),
-		RouteSDKGroupName("core"),
-		RouteSDKMethodName("manifest"),
-	)
+	server.registerBaseRoutes()
+	server.registerControlPlaneRoutes()
 
 	// Mount Public Probe Routes directly on root mux (No publishable key required)
 	serveMux.Handle("/healthz", baseRouter.Mux())
@@ -180,6 +134,11 @@ func (server *Server) ControlPlaneRouter() *Router {
 	return server.controlPlaneRouter
 }
 
+// Kernel returns the parent kernel runtime.
+func (server *Server) Kernel() *Kernel {
+	return server.kernel
+}
+
 // Start boots the HTTP server in background.
 func (server *Server) Start() error {
 	log.Debugf("starting HTTP server on %s", server.server.Addr)
@@ -197,26 +156,6 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	}
 	log.Tracef("HTTP server shutdown complete")
 	return nil
-}
-
-// JWTSigner returns the server's Ed25519 JWT signer instance.
-func (server *Server) JWTSigner() *JWTSigner {
-	return server.jwtSigner
-}
-
-// SetJWTSigner assigns an explicit JWT signer to the server gateway.
-func (server *Server) SetJWTSigner(jwtSigner *JWTSigner) {
-	server.jwtSigner = jwtSigner
-}
-
-// ServiceAccountManager returns the server's service account manager.
-func (server *Server) ServiceAccountManager() *ServiceAccountManager {
-	return server.serviceAccountManager
-}
-
-// SetServiceAccountManager assigns a service account manager to the server gateway.
-func (server *Server) SetServiceAccountManager(serviceAccountManager *ServiceAccountManager) {
-	server.serviceAccountManager = serviceAccountManager
 }
 
 func (server *Server) middleware(handler http.Handler) http.Handler {
@@ -244,94 +183,94 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 
 		var authenticated bool
 
-		// 1. M2M / Service Account Request Verification
-		serviceAccountKey := ExtractRequestServiceAccountKey(request)
-		if serviceAccountKey != "" && server.serviceAccountManager != nil {
-			if serviceAccount, err := server.serviceAccountManager.Authenticate(ctx, serviceAccountKey, clientIP); err == nil && serviceAccount != nil {
-				serviceAccountUUID, _ := uuid.Parse(serviceAccount.ID)
-				role := "service_role"
-				ctx = WithAuthContext(ctx, AuthContext{
-					ServiceAccountID: serviceAccount.ID,
-					JWT: JWTClaims{
-						Subject: serviceAccount.ID,
-						Role:    role,
-						Scope:   strings.Join(serviceAccount.Scopes, " "),
-					},
-				})
-				ctx = WithEventActor(ctx, EventActor{
-					Type: "service_account",
-					ID:   &serviceAccountUUID,
-					Role: &role,
-				})
-				authenticated = true
+		// 1. JWT Request Verification (M2M JWT or User Access Token)
+		token := ExtractRequestSessionToken(request)
+		if token != "" {
+			if jwtClaims, err := server.kernel.jwtSigner.VerifyAccessToken(token); err == nil && jwtClaims != nil && jwtClaims.Subject != "" {
+				slugifier := NewSlugifier()
+				handle := slugifier.Slugify(GetConfig().Project.Name)
+				if handle == "" {
+					handle = "layr"
+				}
+				layrAudience := handle + ":service_account"
+
+				if jwtClaims.Role == "service_role" || strings.HasSuffix(jwtClaims.Audience, ":service_account") {
+					if jwtClaims.Audience != layrAudience {
+						log.Debugf("m2m token rejected: audience mismatch %q != expected %q", jwtClaims.Audience, layrAudience)
+					} else {
+						serviceAccountUUID, _ := uuid.Parse(jwtClaims.Subject)
+						role := "service_role"
+						jwtClaims.Role = role
+						ctx = WithAuthContext(ctx, AuthContext{
+							ServiceAccountID: jwtClaims.Subject,
+							JWT:              *jwtClaims,
+						})
+						ctx = WithEventActor(ctx, EventActor{
+							Type: "service_account",
+							ID:   &serviceAccountUUID,
+							Role: &role,
+						})
+						authenticated = true
+					}
+				} else {
+					var currentRefreshTokenHash string
+					if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
+						currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(cookie.Value)
+					} else if cookie, err := request.Cookie(SessionCookieNameInsecure); err == nil && cookie.Value != "" {
+						currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(cookie.Value)
+					}
+					if currentRefreshTokenHash == "" {
+						if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
+							currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(refreshTokenHeader)
+						}
+					}
+
+					ctx = WithAuthContext(ctx, AuthContext{
+						UserID:           jwtClaims.Subject,
+						JWT:              *jwtClaims,
+						RefreshTokenHash: currentRefreshTokenHash,
+					})
+
+					if parsedUserUUID, parseErr := uuid.Parse(jwtClaims.Subject); parseErr == nil {
+						role := jwtClaims.Role
+						ctx = WithEventActor(ctx, EventActor{
+							Type: "user",
+							ID:   &parsedUserUUID,
+							Role: &role,
+						})
+					}
+					authenticated = true
+				}
 			}
 		}
 
-		// 2. JWT Request Verification (M2M JWT or User Access Token)
-		if !authenticated && server.jwtSigner != nil {
-			token := ExtractRequestSessionToken(request)
-			if token != "" {
-				if jwtClaims, err := server.jwtSigner.VerifyAccessToken(token); err == nil && jwtClaims != nil && jwtClaims.Subject != "" {
-					slugifier := NewSlugifier()
-					handle := slugifier.Slugify(GetConfig().Project.Name)
-					if handle == "" {
-						handle = "layr"
-					}
-					layrAudience := handle + ":service_account"
-
-					if jwtClaims.Role == "service_role" || strings.HasSuffix(jwtClaims.Audience, ":service_account") {
-						if jwtClaims.Audience != layrAudience {
-							log.Debugf("m2m token rejected: audience mismatch %q != expected %q", jwtClaims.Audience, layrAudience)
-						} else {
-							serviceAccountUUID, _ := uuid.Parse(jwtClaims.Subject)
-							role := "service_role"
-							jwtClaims.Role = role
-							ctx = WithAuthContext(ctx, AuthContext{
-								ServiceAccountID: jwtClaims.Subject,
-								JWT:              *jwtClaims,
-							})
-							ctx = WithEventActor(ctx, EventActor{
-								Type: "service_account",
-								ID:   &serviceAccountUUID,
-								Role: &role,
-							})
-							authenticated = true
-						}
-					} else {
-						var currentRefreshTokenHash string
-						if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
-							currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(cookie.Value)
-						} else if cookie, err := request.Cookie(SessionCookieNameInsecure); err == nil && cookie.Value != "" {
-							currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(cookie.Value)
-						}
-						if currentRefreshTokenHash == "" {
-							if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
-								currentRefreshTokenHash = server.jwtSigner.HashRefreshToken(refreshTokenHeader)
-							}
-						}
-
-						ctx = WithAuthContext(ctx, AuthContext{
-							UserID:           jwtClaims.Subject,
-							JWT:              *jwtClaims,
-							RefreshTokenHash: currentRefreshTokenHash,
-						})
-
-						if parsedUserUUID, parseErr := uuid.Parse(jwtClaims.Subject); parseErr == nil {
-							role := jwtClaims.Role
-							ctx = WithEventActor(ctx, EventActor{
-								Type: "user",
-								ID:   &parsedUserUUID,
-								Role: &role,
-							})
-						}
-						authenticated = true
-					}
+		// 2. M2M / Service Account Request Verification
+		if !authenticated {
+			serviceAccountKey := ExtractRequestServiceAccountKey(request)
+			if serviceAccountKey != "" {
+				if serviceAccount, err := server.kernel.serviceAccountManager.Authenticate(ctx, serviceAccountKey, clientIP); err == nil && serviceAccount != nil {
+					serviceAccountUUID, _ := uuid.Parse(serviceAccount.ID)
+					role := "service_role"
+					ctx = WithAuthContext(ctx, AuthContext{
+						ServiceAccountID: serviceAccount.ID,
+						JWT: JWTClaims{
+							Subject: serviceAccount.ID,
+							Role:    role,
+							Scope:   strings.Join(serviceAccount.Scopes, " "),
+						},
+					})
+					ctx = WithEventActor(ctx, EventActor{
+						Type: "service_account",
+						ID:   &serviceAccountUUID,
+						Role: &role,
+					})
+					authenticated = true
 				}
 			}
 		}
 
 		// 3. Database Session Lookup (Cookie or X-Refresh-Token fallback)
-		if !authenticated && server.db != nil && server.jwtSigner != nil {
+		if !authenticated {
 			var sessionRefreshToken string
 			if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
 				sessionRefreshToken = cookie.Value
@@ -345,10 +284,10 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 			}
 
 			if sessionRefreshToken != "" {
-				refreshTokenHash := server.jwtSigner.HashRefreshToken(sessionRefreshToken)
+				refreshTokenHash := server.kernel.jwtSigner.HashRefreshToken(sessionRefreshToken)
 				var sessionID, sessionUserID, email, phone, role string
 				var isAnonymous bool
-				queryErr := server.db.QueryRow(ctx, `
+				queryErr := server.kernel.DB().QueryRow(ctx, `
 					SELECT s.id, s.user_id, COALESCE(u.email, ''), COALESCE(u.phone, ''), COALESCE(u.role, 'authenticated'), COALESCE(u.is_anonymous, false)
 					FROM auth.sessions s
 					JOIN auth.users u ON u.id = s.user_id
@@ -398,22 +337,190 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			return
 		}
 
-		if server.cryptoKeyManager != nil {
-			publishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
-			isValid := server.cryptoKeyManager.VerifyPublishableKey(publishableKey)
-			if !isValid {
-				authContext := GetAuthContext(request.Context())
-				if authContext.IsAuthenticated() {
-					isValid = true
-				}
+		publishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
+		isValid := server.kernel.cryptoKeyManager.VerifyPublishableKey(publishableKey)
+		if !isValid {
+			authContext := GetAuthContext(request.Context())
+			if authContext.IsAuthenticated() {
+				isValid = true
 			}
+		}
 
-			if !isValid {
-				WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing publishable key")
-				return
-			}
+		if !isValid {
+			WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "invalid or missing publishable key")
+			return
 		}
 
 		handler.ServeHTTP(responseWriter, request)
 	})
+}
+
+func (server *Server) registerBaseRoutes() {
+	baseRouter := server.baseRouter
+
+	GetRoute[GetHealthResponse](baseRouter, "/healthz", server.handleGetHealth,
+		RouteTag("Probes"),
+		RouteSummary("Liveness probe"),
+		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
+		RouteOperationID("core__healthz"),
+		RouteSDKGroupName("core"),
+		RouteSDKMethodName("healthz"),
+	)
+	GetRoute[GetReadinessResponse](baseRouter, "/readyz", server.handleGetReadiness,
+		RouteTag("Probes"),
+		RouteSummary("Readiness probe"),
+		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
+		RouteOperationID("core__readyz"),
+		RouteSDKGroupName("core"),
+		RouteSDKMethodName("readyz"),
+	)
+	GetRoute[string](baseRouter, "/metrics", server.handleGetMetrics,
+		RouteTag("Observability"),
+		RouteSummary("Prometheus metrics exposition"),
+		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
+		RouteOperationID("core__metrics"),
+		RouteSDKGroupName("core"),
+		RouteSDKMethodName("metrics"),
+	)
+	GetRoute[GetManifestResponse](baseRouter, "/v1/manifest", server.handleGetManifest,
+		RouteTag("Discovery"),
+		RouteSummary("Get dynamic cluster manifest and enabled services"),
+		RouteDescription("Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization."),
+		RouteOperationID("core__manifest"),
+		RouteSDKGroupName("core"),
+		RouteSDKMethodName("manifest"),
+	)
+}
+
+func (server *Server) registerControlPlaneRoutes() {
+	controlPlaneRouter := server.controlPlaneRouter
+
+	// Register Core Routes on Control Plane Router
+	GetRoute[ListServiceAccountsResponse](controlPlaneRouter, "/v1/_/core/service-accounts", server.handleListServiceAccounts,
+		RouteTag("Core Control Plane"),
+		RouteSummary("List all service accounts"),
+		RouteDescription("Lists all machine service accounts with status, name, and permission scopes."),
+		RouteOperationID("core__service_accounts__list"),
+		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKMethodName("list"),
+	)
+	PostRoute[CreateServiceAccountResponse, CreateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts", server.handleCreateServiceAccount,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Create a new machine service account"),
+		RouteDescription("Creates a machine service account, generates a 32-byte hex secret key, and hashes it."),
+		RouteDefaultStatusCode(http.StatusCreated),
+		RouteOperationID("core__service_accounts__create"),
+		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKMethodName("create"),
+	)
+	GetRoute[ServiceAccount](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleGetServiceAccount,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Get service account by ID"),
+		RouteDescription("Retrieves a service account by UUID."),
+		RouteOperationID("core__service_accounts__get"),
+		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKMethodName("get"),
+	)
+	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleUpdateServiceAccount,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Update service account"),
+		RouteDescription("Updates service account scopes, name, or enabled status while protecting root accounts."),
+		RouteOperationID("core__service_accounts__update"),
+		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKMethodName("update"),
+	)
+	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleDeleteServiceAccount,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Delete service account"),
+		RouteDescription("Deletes a machine service account, enforcing invariant that at least one root account remains."),
+		RouteNoContentResponse("Service account deleted"),
+		RouteOperationID("core__service_accounts__delete"),
+		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKMethodName("delete"),
+	)
+
+	// Event Hooks Routes
+	GetRoute[ListEventHooksResponse](controlPlaneRouter, "/v1/_/core/event-hooks", server.handleListEventHooks,
+		RouteTag("Core Control Plane"),
+		RouteSummary("List all event hooks"),
+		RouteDescription("Lists all active event hooks with driver, target URLs/functions, events, and retry policies."),
+		RouteOperationID("core__event_hooks__list"),
+		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKMethodName("list"),
+	)
+	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks", server.handleCreateEventHook,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Create a new event hook"),
+		RouteDescription("Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching."),
+		RouteDefaultStatusCode(http.StatusCreated),
+		RouteOperationID("core__event_hooks__create"),
+		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKMethodName("create"),
+	)
+	GetRoute[EventHook](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleGetEventHook,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Get event hook by ID"),
+		RouteDescription("Retrieves an event hook by UUID."),
+		RouteOperationID("core__event_hooks__get"),
+		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKMethodName("get"),
+	)
+	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleUpdateEventHook,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Update event hook"),
+		RouteDescription("Updates event hook driver, targets, subscribed events, secret, or enabled status."),
+		RouteOperationID("core__event_hooks__update"),
+		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKMethodName("update"),
+	)
+	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleDeleteEventHook,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Delete event hook"),
+		RouteDescription("Deletes an event hook."),
+		RouteNoContentResponse("Event hook deleted"),
+		RouteOperationID("core__event_hooks__delete"),
+		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKMethodName("delete"),
+	)
+	GetRoute[ListEventHookDeliveriesResponse](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries", server.handleListEventHookDeliveries,
+		RouteTag("Core Control Plane"),
+		RouteSummary("List event hook deliveries"),
+		RouteDescription("Queries recent dispatch attempts, response status, and latency for an event hook."),
+		RouteOperationID("core__event_hooks__deliveries__list"),
+		RouteSDKGroupName("core", "eventHooks", "deliveries"),
+		RouteSDKMethodName("list"),
+	)
+	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", server.handleRetryEventHookDelivery,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Retry event hook delivery"),
+		RouteDescription("Manually redrives a past event hook delivery attempt."),
+		RouteOperationID("core__event_hooks__deliveries__retry"),
+		RouteSDKGroupName("core", "eventHooks", "deliveries"),
+		RouteSDKMethodName("retry"),
+	)
+
+	// Events Routes
+	GetRoute[ListEventsResponse](controlPlaneRouter, "/v1/_/core/events", server.handleListEvents,
+		RouteTag("Core Control Plane"),
+		RouteSummary("List events"),
+		RouteDescription("Queries immutable system and domain events with multi-field filtering and pagination."),
+		RouteOperationID("core__events__list"),
+		RouteSDKGroupName("core", "events"),
+		RouteSDKMethodName("list"),
+	)
+	GetRoute[Event](controlPlaneRouter, "/v1/_/core/events/{event_id}", server.handleGetEvent,
+		RouteTag("Core Control Plane"),
+		RouteSummary("Get event by ID"),
+		RouteDescription("Retrieves an individual event entry by UUID."),
+		RouteOperationID("core__events__get"),
+		RouteSDKGroupName("core", "events"),
+		RouteSDKMethodName("get"),
+	)
+}
+
+// WriteJSONResponse writes a JSON response with the given status code and payload.
+func WriteJSONResponse(responseWriter http.ResponseWriter, statusCode int, payload any) {
+	responseWriter.Header().Set("Content-Type", "application/json")
+	responseWriter.WriteHeader(statusCode)
+	_ = json.NewEncoder(responseWriter).Encode(payload)
 }

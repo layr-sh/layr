@@ -10,8 +10,6 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
-	"layr.sh/auth/passkey"
-	"layr.sh/auth/password"
 	"layr.sh/core"
 )
 
@@ -26,53 +24,13 @@ var (
 
 // BaseHandler handles all authentication HTTP routes and state transitions on the base router.
 type BaseHandler struct {
-	db                    *core.DatabasePool
-	configManager         *ConfigManager
-	cryptoKeyManager      *core.CryptoKeyManager
-	jwtSigner             *core.JWTSigner
-	hasher                *password.Hasher
-	passkeyManager        *passkey.Manager
-	totpManager           *core.TOTPManager
-	emailDispatcher       *EmailDispatcher
-	smsDispatcher         *SMSDispatcher
-	kvStore               *core.KVStore
-	serviceAccountManager *core.ServiceAccountManager
-	eventBus              *core.EventBus
-	httpClient            HTTPClient
-	dummyPasswordHash     string
+	*Service
 }
 
-// NewBaseHandler creates a new Auth HTTP BaseHandler.
-func NewBaseHandler(db *core.DatabasePool, configManager *ConfigManager, cryptoKeyManager *core.CryptoKeyManager) *BaseHandler {
-	log.Debug("initializing auth base handler")
-	jwtSigner, _ := core.NewJWTSigner(cryptoKeyManager)
-	config := configManager.Get()
-
-	emailDispatcher := NewEmailDispatcher(db, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := configManager.Get().EmailDispatcher
-		return &emailDispatcherConfig
-	}, cryptoKeyManager)
-
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := configManager.Get().SMSDispatcher
-		return &smsDispatcherConfig
-	}, cryptoKeyManager)
-
-	hasher := password.NewHasher()
-	dummyHash, _ := hasher.Hash("antigravity_timing_dummy_password")
-
+// NewBaseHandler creates a new Auth HTTP BaseHandler extending Service.
+func NewBaseHandler(service *Service) *BaseHandler {
 	return &BaseHandler{
-		db:                db,
-		configManager:     configManager,
-		cryptoKeyManager:  cryptoKeyManager,
-		jwtSigner:         jwtSigner,
-		hasher:            hasher,
-		passkeyManager:    passkey.NewManager(config.Passkeys.RelyingPartyID, config.Passkeys.RelyingPartyName),
-		totpManager:       core.NewTOTPManager(config.MFA.Issuer),
-		emailDispatcher:   emailDispatcher,
-		smsDispatcher:     smsDispatcher,
-		httpClient:        &http.Client{Timeout: 5 * time.Second},
-		dummyPasswordHash: dummyHash,
+		Service: service,
 	}
 }
 
@@ -80,55 +38,8 @@ func (handler *BaseHandler) verifyDummyPassword(plainPassword string) {
 	_, _ = handler.hasher.Verify(plainPassword, handler.dummyPasswordHash)
 }
 
-// SetEmailDispatcher sets the email dispatcher for the handler.
-func (handler *BaseHandler) SetEmailDispatcher(emailDispatcher *EmailDispatcher) {
-	log.Debug("configuring custom email dispatcher on auth handler")
-	handler.emailDispatcher = emailDispatcher
-}
-
-// SetSMSDispatcher sets the SMS dispatcher for the handler.
-func (handler *BaseHandler) SetSMSDispatcher(smsDispatcher *SMSDispatcher) {
-	log.Debug("configuring custom SMS dispatcher on auth handler")
-	handler.smsDispatcher = smsDispatcher
-}
-
-// SetPasskeyManager sets the passkey manager on the handler.
-func (handler *BaseHandler) SetPasskeyManager(passkeyManager *passkey.Manager) {
-	log.Debug("configuring custom passkey manager on auth handler")
-	handler.passkeyManager = passkeyManager
-}
-
-// SetKVStore configures the pluggable KVStore for distributed rate-limiting and caching.
-func (handler *BaseHandler) SetKVStore(kvStore *core.KVStore) {
-	log.Debug("configuring KV store on auth handler")
-	handler.kvStore = kvStore
-}
-
-// SetServiceAccountManager sets the service account manager for the handler.
-func (handler *BaseHandler) SetServiceAccountManager(serviceAccountManager *core.ServiceAccountManager) {
-	log.Debug("configuring service account manager on auth handler")
-	handler.serviceAccountManager = serviceAccountManager
-}
-
-// SetEventBus sets the platform event bus for broadcasting events.
-func (handler *BaseHandler) SetEventBus(eventBus *core.EventBus) {
-	log.Debug("configuring event bus on auth handler")
-	handler.eventBus = eventBus
-}
-
-// SetHTTPClient configures the outbound HTTP client for federated sign-out notifications.
-func (handler *BaseHandler) SetHTTPClient(httpClient HTTPClient) {
-	log.Debug("configuring HTTP client on auth handler")
-	handler.httpClient = httpClient
-}
-
-// GetTOTPManager returns the active TOTP manager.
-func (handler *BaseHandler) GetTOTPManager() *core.TOTPManager {
-	return handler.totpManager
-}
-
 func (handler *BaseHandler) assertEmailDeliveryReady(responseWriter http.ResponseWriter, request *http.Request) bool {
-	if handler.emailDispatcher == nil || !handler.emailDispatcher.IsConfigured() {
+	if !handler.emailDispatcher.IsConfigured() {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email delivery check failed: email dispatcher is not configured")
 		return false
 	}
@@ -137,7 +48,7 @@ func (handler *BaseHandler) assertEmailDeliveryReady(responseWriter http.Respons
 }
 
 func (handler *BaseHandler) assertSMSDeliveryReady(responseWriter http.ResponseWriter, request *http.Request) bool {
-	if handler.smsDispatcher == nil || !handler.smsDispatcher.IsConfigured() {
+	if !handler.smsDispatcher.IsConfigured() {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "sms delivery check failed: sms dispatcher is not configured")
 		return false
 	}
@@ -167,8 +78,9 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		phone = *user.Phone
 	}
 
-	refreshToken := handler.jwtSigner.GenerateRefreshToken()
-	refreshHash := handler.jwtSigner.HashRefreshToken(refreshToken)
+	jwtSigner := handler.kernel.JWTSigner()
+	refreshToken := jwtSigner.GenerateRefreshToken()
+	refreshHash := jwtSigner.HashRefreshToken(refreshToken)
 
 	refreshTokenExpirySeconds := config.Sessions.RefreshTokenExpirySeconds
 	if refreshTokenExpirySeconds <= 0 {
@@ -181,18 +93,14 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 
 	var sessionID string
 	var sessionCreatedAt time.Time
-	if handler.db != nil {
-		log.Tracef("persisting session record in database for user %s", user.ID)
-		queryErr := handler.db.QueryRow(request.Context(), `
-			INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
-			VALUES ($1, $2, $3, $4, $5, clock_timestamp())
-			RETURNING id, created_at
-		`, user.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
-		if queryErr != nil {
-			log.Debugf("failed to persist database session for user %s: %v", user.ID, queryErr)
-		}
-	}
-	if sessionID == "" {
+	log.Tracef("persisting session record in database for user %s", user.ID)
+	queryErr := handler.kernel.DB().QueryRow(request.Context(), `
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
+		RETURNING id, created_at
+	`, user.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
+	if queryErr != nil {
+		log.Debugf("failed to persist database session for user %s: %v", user.ID, queryErr)
 		sessionID = uuid.NewV7().String()
 		sessionCreatedAt = time.Now().UTC()
 	}
@@ -207,9 +115,9 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		IsAnonymous: user.IsAnonymous,
 		Claims:      customClaims,
 	}
-	accessToken, _ := handler.jwtSigner.GenerateAccessToken(userJWTClaims, config.Sessions.AccessTokenExpirySeconds)
+	accessToken := jwtSigner.GenerateAccessToken(userJWTClaims, config.Sessions.AccessTokenExpirySeconds)
 
-	if config.Cache.FastPathSessionsEnabled && handler.kvStore != nil {
+	if config.Cache.FastPathSessionsEnabled {
 		sessionKey := "auth:session:" + refreshHash
 		cachedSession := CachedSession{
 			User:   user,
@@ -221,36 +129,34 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 			sessionTTLSeconds = defaultSessionTTLSeconds
 		}
 		log.Tracef("caching fast-path session in KV store: %s (ttl: %ds)", sessionKey, sessionTTLSeconds)
-		if kvErr := handler.kvStore.Set(request.Context(), sessionKey, string(sessionData), time.Duration(sessionTTLSeconds)*time.Second); kvErr != nil {
+		if kvErr := handler.kernel.KVStore().Set(request.Context(), sessionKey, string(sessionData), time.Duration(sessionTTLSeconds)*time.Second); kvErr != nil {
 			log.Debugf("failed to cache fast-path session in KV store for user %s: %v", user.ID, kvErr)
 		}
 	}
 
-	if handler.eventBus != nil {
-		var ipAddressPtr *string
-		if clientIP != "" {
-			ipAddressPtr = &clientIP
-		}
-		publishCtx := request.Context()
-		if parsedUserUUID, parseErr := uuid.Parse(user.ID); parseErr == nil {
-			role := user.Role
-			publishCtx = core.WithEventActor(publishCtx, core.EventActor{
-				Type: "user",
-				ID:   &parsedUserUUID,
-				Role: &role,
-			})
-		}
-		handler.eventBus.Publish(publishCtx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
-			ID:         sessionID,
-			User:       user,
-			AuthMethod: authMethod,
-			Provider:   provider,
-			IPAddress:  ipAddressPtr,
-			UserAgent:  userAgent,
-			ExpiresAt:  refreshTokenExpiredAt,
-			CreatedAt:  sessionCreatedAt,
-		}))
+	var ipAddressPtr *string
+	if clientIP != "" {
+		ipAddressPtr = &clientIP
 	}
+	publishCtx := request.Context()
+	if parsedUserUUID, parseErr := uuid.Parse(user.ID); parseErr == nil {
+		role := user.Role
+		publishCtx = core.WithEventActor(publishCtx, core.EventActor{
+			Type: "user",
+			ID:   &parsedUserUUID,
+			Role: &role,
+		})
+	}
+	handler.kernel.EventBus().Publish(publishCtx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+		ID:         sessionID,
+		User:       user,
+		AuthMethod: authMethod,
+		Provider:   provider,
+		IPAddress:  ipAddressPtr,
+		UserAgent:  userAgent,
+		ExpiresAt:  refreshTokenExpiredAt,
+		CreatedAt:  sessionCreatedAt,
+	}))
 
 	core.SetSessionCookie(responseWriter, request, refreshToken, refreshTokenExpiredAt)
 
@@ -263,7 +169,7 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		Claims:       customClaims,
 	}
 
-	handler.writeJSON(responseWriter, authTokenResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, authTokenResponse)
 }
 
 func (handler *BaseHandler) issueOIDCAuthorizationCode(ctx context.Context, clientID, redirectURI, userID, scope, codeChallenge, codeChallengeMethod, nonce string) string {
@@ -280,18 +186,9 @@ func (handler *BaseHandler) issueOIDCAuthorizationCode(ctx context.Context, clie
 		Nonce:               nonce,
 	}
 	payloadJSON, _ := json.Marshal(oidcAuthorizationCodePayload)
-	if handler.kvStore != nil {
-		log.Tracef("caching OIDC authorization code in KV store: %s", code)
-		_ = handler.kvStore.Set(ctx, "auth:code:"+code, string(payloadJSON), defaultOIDCAuthCodeCacheTTL)
-	}
+	log.Tracef("caching OIDC authorization code in KV store: %s", code)
+	_ = handler.kernel.KVStore().Set(ctx, "auth:code:"+code, string(payloadJSON), defaultOIDCAuthCodeCacheTTL)
 	return code
-}
-
-func (handler *BaseHandler) writeJSON(responseWriter http.ResponseWriter, payload any) {
-	log.Trace("writing JSON response with status 200")
-	responseWriter.Header().Set("Content-Type", "application/json")
-	responseWriter.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(responseWriter).Encode(payload)
 }
 
 func nilIfEmpty(value string) *string {
@@ -302,20 +199,20 @@ func nilIfEmpty(value string) *string {
 }
 
 func (handler *BaseHandler) resolveCustomClaims(ctx context.Context, userID string) map[string]any {
-	if handler.db == nil || userID == "" {
+	if userID == "" {
 		return nil
 	}
 
 	log.Tracef("resolving custom claims for user %s", userID)
 	var registeredProcedure *string
-	err := handler.db.QueryRow(ctx, "SELECT to_regprocedure('public.auth_claims(uuid)')::text").Scan(&registeredProcedure)
+	err := handler.kernel.DB().QueryRow(ctx, "SELECT to_regprocedure('public.auth_claims(uuid)')::text").Scan(&registeredProcedure)
 	if err != nil || registeredProcedure == nil || *registeredProcedure == "" {
 		log.Tracef("custom claims procedure public.auth_claims not found for user %s: %v", userID, err)
 		return nil
 	}
 
 	var rawClaimsJSON []byte
-	err = handler.db.QueryRow(ctx, "SELECT public.auth_claims($1::uuid)", userID).Scan(&rawClaimsJSON)
+	err = handler.kernel.DB().QueryRow(ctx, "SELECT public.auth_claims($1::uuid)", userID).Scan(&rawClaimsJSON)
 	if err != nil || len(rawClaimsJSON) == 0 || string(rawClaimsJSON) == "null" {
 		log.Tracef("custom claims procedure returned empty or error for user %s: %v", userID, err)
 		return nil
@@ -335,10 +232,6 @@ func (handler *BaseHandler) resolveCustomClaims(ctx context.Context, userID stri
 // Returns ErrAnonymousSessionNotFound if the caller is unauthenticated or not an anonymous user.
 func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User, error) {
 	log.Trace("resolving anonymous caller from request")
-	if handler == nil || handler.db == nil {
-		log.Debug("anonymous caller resolution rejected: database pool unavailable")
-		return nil, ErrAnonymousSessionNotFound
-	}
 
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
@@ -350,7 +243,7 @@ func (handler *BaseHandler) resolveAnonymousCaller(request *http.Request) (*User
 	ctx := request.Context()
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(ctx, `
+	err := handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users
 		WHERE id = $1

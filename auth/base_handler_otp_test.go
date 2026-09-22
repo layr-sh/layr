@@ -12,15 +12,11 @@ import (
 )
 
 func TestAuthOTPHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
+	testKVStore := kernel.KVStore()
 
 	// 1. OTP disabled -> 403
 	disabledConfig := DefaultConfig()
@@ -56,14 +52,14 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 		Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost:9999/dummy"},
 	}
 	configManager.Set(activeConfig)
-	baseHandler.SetEmailDispatcher(NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := activeConfig.EmailDispatcher
+	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig {
+		emailDispatcherConfig := configManager.Get().EmailDispatcher
 		return &emailDispatcherConfig
-	}, nil))
-	baseHandler.SetSMSDispatcher(NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := activeConfig.SMSDispatcher
+	})
+	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig {
+		smsDispatcherConfig := configManager.Get().SMSDispatcher
 		return &smsDispatcherConfig
-	}, nil))
+	})
 
 	// 3. Validation errors
 	missingRecipientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{}`))
@@ -140,8 +136,6 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	unconfiguredConfig.EmailDispatcher.Driver = nil
 	unconfiguredConfig.SMSDispatcher.Driver = nil
 	configManager.Set(unconfiguredConfig)
-	baseHandler.SetEmailDispatcher(nil)
-	baseHandler.SetSMSDispatcher(nil)
 
 	unconfiguredEmailOTPResponseRecorder := httptest.NewRecorder()
 	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
@@ -159,14 +153,6 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 
 	// Restore configured delivery
 	configManager.Set(activeConfig)
-	baseHandler.SetEmailDispatcher(NewEmailDispatcher(nil, func() *EmailDispatcherConfig {
-		emailDispatcherConfig := activeConfig.EmailDispatcher
-		return &emailDispatcherConfig
-	}, nil))
-	baseHandler.SetSMSDispatcher(NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
-		smsDispatcherConfig := activeConfig.SMSDispatcher
-		return &smsDispatcherConfig
-	}, nil))
 
 	// 6. Rate limits & Cooldown
 	_ = testKVStore.Set(context.Background(), "auth:cooldown:sign_in:cooldown_user@example.com", "1", 60*time.Second)
@@ -186,42 +172,35 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 429 on IP rate limited OTP request, got: %d", rateLimitedOTPResponseRecorder.Code)
 	}
 
-	// 7. Nil database pool -> 500
+	// 7. OTP send on broken pool -> 204 (db exec error is non-fatal for send)
 	otpSignUpSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"sign_up"}`))
 	otpSignUpSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSignUpSendResponseRecorder, otpSignUpSendRequest)
-	if otpSignUpSendResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on OTP sign up send nil pool, got: %d", otpSignUpSendResponseRecorder.Code)
+	if otpSignUpSendResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on OTP sign up send, got: %d", otpSignUpSendResponseRecorder.Code)
 	}
 
 	otpSignUpVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"sign_up"}`))
 	otpSignUpVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyOTP(otpSignUpVerifyResponseRecorder, otpSignUpVerifyRequest)
-	if otpSignUpVerifyResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on OTP sign up verify nil pool, got: %d", otpSignUpVerifyResponseRecorder.Code)
+	if otpSignUpVerifyResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on OTP sign up verify with broken pool, got: %d", otpSignUpVerifyResponseRecorder.Code)
 	}
 
-	// 8. Event Bus on Nil database pool -> 500
-	eventBus := core.NewEventBus(nil, cryptoKeyManager)
-	baseHandler.SetEventBus(eventBus)
+	// 8. Event Bus on broken pool -> 204
 	eventOTPSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"event_user@example.com"}`))
 	eventOTPSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(eventOTPSendResponseRecorder, eventOTPSendRequest)
-	if eventOTPSendResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on event OTP send nil pool, got: %d", eventOTPSendResponseRecorder.Code)
+	if eventOTPSendResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 on event OTP send, got: %d", eventOTPSendResponseRecorder.Code)
 	}
 }
 
 func TestAuthOTPThreatValidationUnit(t *testing.T) {
-	cryptoKeyManager, cryptoErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if cryptoErr != nil {
-		t.Fatalf("failed to create crypto key manager: %v", cryptoErr)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 
 	ctx := context.Background()
 

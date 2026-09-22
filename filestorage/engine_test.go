@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"testing"
+
+	"layr.sh/core"
 )
 
 type mockEchoDriver struct{}
@@ -113,12 +115,13 @@ func TestFilestorageEngineUnit(t *testing.T) {
 	})
 
 	t.Run("constructors unit", func(t *testing.T) {
-		databaseEngine := NewDatabaseFileStorageEngine(nil)
+		kernel := core.NewTestKernel(nil)
+		databaseEngine := NewDatabaseFileStorageEngine(kernel)
 		if databaseEngine == nil {
 			t.Fatal("expected non-nil database file storage engine")
 		}
 
-		s3Engine := NewS3FileStorageEngine(nil)
+		s3Engine := NewS3FileStorageEngine(kernel)
 		if s3Engine == nil {
 			t.Fatal("expected non-nil s3 file storage engine")
 		}

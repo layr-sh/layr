@@ -325,19 +325,13 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to update hook with valid bounds: %v", updateErr)
 	}
 
-	// Update signing secret with nil cryptoKeyManager
-	noCryptoEventHookManager := NewEventHookManager(db, nil, nil)
-	if _, noCryptoErr := noCryptoEventHookManager.Update(ctx, httpEventHook.ID, UpdateEventHookInput{SigningSecret: stringPointer("secret")}); noCryptoErr == nil {
-		t.Fatal("expected error when updating signing secret with nil cryptoKeyManager")
-	}
-
 	// Update signing secret with failing cryptoKeyManager
 	failingCryptoKeyManager, cryptoKeyErr := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if cryptoKeyErr != nil {
 		t.Fatalf("unexpected cryptoKeyManager init error: %v", cryptoKeyErr)
 	}
 	failingCryptoKeyManager.randomReader = &simulatedFailingReader{}
-	failingCryptoEventHookManager := NewEventHookManager(db, failingCryptoKeyManager, nil)
+	failingCryptoEventHookManager := NewEventHookManager(db, failingCryptoKeyManager)
 	if _, updateEncErr := failingCryptoEventHookManager.Update(ctx, httpEventHook.ID, UpdateEventHookInput{SigningSecret: stringPointer("secret")}); updateEncErr == nil {
 		t.Fatal("expected error when EncryptField fails in Update")
 	}
@@ -484,6 +478,64 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 	if err := eventHookManager.Delete(ctx, uuid.NewV7()); !errors.Is(err, ErrEventHookNotFound) {
 		t.Fatalf("expected ErrEventHookNotFound on delete, got: %v", err)
 	}
+
+	// 13. Test Create with lower-bound clamped values and IsEnabled
+	disabledState := false
+	clampedNegativeRetries := -1
+	zeroTimeoutValue := 0
+	lowerClampedEventHook, lowerClampErr := eventHookManager.Create(ctx, CreateEventHookInput{
+		Name:           "Lower Clamped Hook",
+		Driver:         EventHookDriverHTTP,
+		HTTPTargetURL:  &httpServer.URL,
+		EventTypes:     []string{"test.*"},
+		IsEnabled:      &disabledState,
+		MaxRetries:     &clampedNegativeRetries,
+		TimeoutSeconds: &zeroTimeoutValue,
+	})
+	if lowerClampErr != nil {
+		t.Fatalf("failed to create lower clamped hook: %v", lowerClampErr)
+	}
+	if lowerClampedEventHook.MaxRetries != 0 || lowerClampedEventHook.TimeoutSeconds != 1 || lowerClampedEventHook.IsEnabled != false {
+		t.Fatalf("unexpected lower clamped hook values: %+v", lowerClampedEventHook)
+	}
+
+	// Test Create with upper-bound clamped values
+	excessiveRetriesValue := 25
+	excessiveTimeoutValue := 120
+	upperClampedEventHook, upperClampErr := eventHookManager.Create(ctx, CreateEventHookInput{
+		Name:           "Upper Clamped Hook",
+		Driver:         EventHookDriverHTTP,
+		HTTPTargetURL:  &httpServer.URL,
+		EventTypes:     []string{"test.*"},
+		MaxRetries:     &excessiveRetriesValue,
+		TimeoutSeconds: &excessiveTimeoutValue,
+	})
+	if upperClampErr != nil {
+		t.Fatalf("failed to create upper clamped hook: %v", upperClampErr)
+	}
+	if upperClampedEventHook.MaxRetries != 10 || upperClampedEventHook.TimeoutSeconds != 60 {
+		t.Fatalf("unexpected upper clamped hook values: %+v", upperClampedEventHook)
+	}
+
+	// Test DeliverWithID with zero bounds and unknown driver
+	unknownDriverEventHook := *upperClampedEventHook
+	unknownDriverEventHook.Driver = "unsupported"
+	unknownDriverEventHook.MaxRetries = 0
+	unknownDriverEventHook.TimeoutSeconds = 0
+
+	unknownDriverEvent := Event{
+		ID:        uuid.NewV7(),
+		Type:      "test.event",
+		Data:      map[string]interface{}{},
+		CreatedAt: time.Now().UTC(),
+	}
+	if _, unknownDriverDeliveryErr := eventHookManager.DeliverWithID(ctx, unknownDriverEventHook, unknownDriverEvent, uuid.NewV7()); unknownDriverDeliveryErr == nil {
+		t.Fatal("expected error on DeliverWithID with unknown driver")
+	}
+
+	// Clean up clamped hooks
+	_ = eventHookManager.Delete(ctx, lowerClampedEventHook.ID)
+	_ = eventHookManager.Delete(ctx, upperClampedEventHook.ID)
 }
 
 func stringPointer(value string) *string {

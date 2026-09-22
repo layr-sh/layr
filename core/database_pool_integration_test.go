@@ -60,9 +60,6 @@ func startTestContainer(t *testing.T) (*DatabasePool, func()) {
 
 func TestCoreDatabasePoolMigrateUpFullCoverageIntegration(t *testing.T) {
 	db, cleanup := startTestContainer(t)
-	if db == nil {
-		return
-	}
 	defer cleanup()
 
 	ctx := context.Background()
@@ -108,9 +105,6 @@ func TestCoreDatabasePoolMigrateUpFullCoverageIntegration(t *testing.T) {
 
 func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 	db, cleanup := startTestContainer(t)
-	if db == nil {
-		return
-	}
 	defer cleanup()
 
 	ctx := context.Background()
@@ -181,9 +175,6 @@ func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 
 func TestCoreDatabasePoolMigrateUpInsertRecordErrorIntegration(t *testing.T) {
 	db, cleanup := startTestContainer(t)
-	if db == nil {
-		return
-	}
 	defer cleanup()
 
 	ctx := context.Background()
@@ -207,9 +198,6 @@ func TestCoreDatabasePoolMigrateUpInsertRecordErrorIntegration(t *testing.T) {
 
 func TestCoreDatabasePoolMigrateDownDeleteRecordErrorIntegration(t *testing.T) {
 	db, cleanup := startTestContainer(t)
-	if db == nil {
-		return
-	}
 	defer cleanup()
 
 	ctx := context.Background()

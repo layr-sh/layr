@@ -10,12 +10,15 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
 	"layr.sh/data/realtime"
 )
 
 func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	t.Run("DisabledRealtime", func(t *testing.T) {
 		config := configManager.Get()
@@ -140,18 +143,6 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 			_ = conn.Close()
 		}
-	})
-
-	t.Run("NilRealtimeHub", func(t *testing.T) {
-		nilHubBaseHandler := &BaseHandler{
-			configManager: configManager,
-			realtimeHub:   nil,
-		}
-		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
-		responseRecorder := httptest.NewRecorder()
-		nilHubBaseHandler.handleConnectRealtime(responseRecorder, request)
-		assert.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "Service temporarily unavailable")
 	})
 
 	t.Run("MaxConnectionsThrottling", func(t *testing.T) {

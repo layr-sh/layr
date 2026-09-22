@@ -13,39 +13,28 @@ import (
 )
 
 func TestFilestorageFullLifecycleE2E(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
 	ctx := context.Background()
-	service := NewService(db, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
-	service.SetKVStore(kvStore)
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	service.SetEventBus(eventBus)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	service.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
 
 	if startErr := service.Start(ctx); startErr != nil {
 		t.Fatalf("failed to start service: %v", startErr)
 	}
 	defer func() {
-		_ = service.Stop()
+		service.Stop()
 	}()
 
 	if service.BaseHandler() == nil || service.ControlPlaneHandler() == nil || service.ConfigManager() == nil {
 		t.Fatalf("expected non-nil service handlers")
 	}
 
-	coreServer := core.NewServer(db, cryptoKeyManager)
+	coreServer := core.NewServer(kernel)
 	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
 
 	// Create privileged service account for E2E flow
-	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+	createdServiceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "e2e-service-account",
 		Scopes: []string{
 			core.ScopeFileStorageBucketRead,
@@ -137,7 +126,7 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 
 	// 7. Data Plane: Anonymous Download via Presigned URL (no service account headers)
 	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, presignURLResponse.URL, nil)
-	presignedDownloadRequest.Header.Set("X-Layr-Client-Publishable-Key", cryptoKeyManager.DerivePublishableKey())
+	presignedDownloadRequest.Header.Set("X-Layr-Client-Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
 	presignedDownloadResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(presignedDownloadResponseRecorder, presignedDownloadRequest)
 	if presignedDownloadResponseRecorder.Code != http.StatusOK {

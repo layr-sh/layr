@@ -15,13 +15,13 @@ import (
 )
 
 func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
+	serviceAccountManager := kernel.ServiceAccountManager()
+	service := NewService(kernel)
+	db := kernel.DB()
 
 	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Auth Control Plane Service Account",
@@ -31,11 +31,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 		t.Fatalf("failed to create service account: %v", err)
 	}
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	controlPlaneHandler.SetKVStore(kvStore)
-	controlPlaneHandler.SetEventBus(eventBus)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
+	controlPlaneHandler := service.controlPlaneHandler
 
 	authBearerHeader := "Bearer " + createdServiceAccount.SecretKey
 
@@ -60,6 +56,7 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 
 	// 1. List user sessions
 	sessionsListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
+	sessionsListRequest.SetPathValue("user_id", testUserID)
 	sessionsListRequest.Header.Set("Authorization", authBearerHeader)
 	sessionsListResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUserSessions(sessionsListResponseRecorder, sessionsListRequest)
@@ -73,12 +70,13 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 
 	// 2. Revoke user sessions
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
+	revokeSessionsRequest.SetPathValue("user_id", testUserID)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 
-	if revokeSessionsResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from handleRevokeUserSessions, got: %d", revokeSessionsResponseRecorder.Code)
+	if revokeSessionsResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content from handleRevokeUserSessions, got: %d", revokeSessionsResponseRecorder.Code)
 	}
 
 	// Verify sessions are gone
@@ -90,21 +88,16 @@ func TestAuthControlPlaneHandlerSessionIntegration(t *testing.T) {
 }
 
 func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
-	brokenDB := createBrokenPool(t)
-	if brokenDB == nil {
-		t.Skip("skipping broken pool test")
-		return
-	}
-
-	cryptoKeyManager, _ := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	configManager := NewConfigManager(brokenDB, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(brokenDB, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 	randomID := uuid.NewV7().String()
 
 	ctx := context.Background()
 
 	// 1. List Sessions error
 	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID+"/sessions", nil)
+	listSessionsRequest.SetPathValue("user_id", randomID)
 	listSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListUserSessions(listSessionsResponseRecorder, listSessionsRequest)
 	if listSessionsResponseRecorder.Code != http.StatusInternalServerError {
@@ -113,6 +106,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 
 	// 2. Revoke Sessions error
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+randomID+"/sessions/revoke", nil)
+	revokeSessionsRequest.SetPathValue("user_id", randomID)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 	if revokeSessionsResponseRecorder.Code != http.StatusInternalServerError {
@@ -121,13 +115,13 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 }
 
 func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
+	serviceAccountManager := kernel.ServiceAccountManager()
+	service := NewService(kernel)
+	db := kernel.DB()
 
 	createdServiceAccount, serviceAccountErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Auth Control Plane Revoke Service Account",
@@ -157,7 +151,7 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 	}))
 	defer mockRPServer.Close()
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	configManager := service.configManager
 	authConfig := DefaultConfig()
 	authConfig.OIDC.Enabled = true
 	authConfig.OIDC.Clients = []OIDCClientConfig{
@@ -172,17 +166,9 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 	}
 	configManager.Set(authConfig)
 
-	jwtSigner, signerErr := core.NewJWTSigner(cryptoKeyManager)
-	if signerErr != nil {
-		t.Fatalf("failed to create jwt signer: %v", signerErr)
-	}
-
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	controlPlaneHandler.SetKVStore(kvStore)
-	controlPlaneHandler.SetEventBus(eventBus)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	controlPlaneHandler.SetJWTSigner(jwtSigner)
-	controlPlaneHandler.SetHTTPClient(mockRPServer.Client())
+	jwtSigner := kernel.JWTSigner()
+	controlPlaneHandler := service.controlPlaneHandler
+	controlPlaneHandler.httpClient = mockRPServer.Client()
 
 	authBearerHeader := "Bearer " + createdServiceAccount.SecretKey
 
@@ -205,12 +191,13 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 	}
 
 	revokeSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users/"+testUserID+"/sessions/revoke", nil)
+	revokeSessionsRequest.SetPathValue("user_id", testUserID)
 	revokeSessionsRequest.Header.Set("Authorization", authBearerHeader)
 	revokeSessionsResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRevokeUserSessions(revokeSessionsResponseRecorder, revokeSessionsRequest)
 
-	if revokeSessionsResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK from handleRevokeUserSessions, got: %d (%s)", revokeSessionsResponseRecorder.Code, revokeSessionsResponseRecorder.Body.String())
+	if revokeSessionsResponseRecorder.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content from handleRevokeUserSessions, got: %d (%s)", revokeSessionsResponseRecorder.Code, revokeSessionsResponseRecorder.Body.String())
 	}
 
 	var sessionCount int

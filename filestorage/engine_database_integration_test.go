@@ -10,11 +10,13 @@ import (
 	"strings"
 	"testing"
 	"uuid"
+
+	"layr.sh/core"
 )
 
 func TestFilestorageDatabaseChunkStreamingIntegration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
-	if db == nil {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	if kernel == nil {
 		return
 	}
 	defer cleanup()
@@ -23,10 +25,10 @@ func TestFilestorageDatabaseChunkStreamingIntegration(t *testing.T) {
 
 	// Use small 64KB chunk size to test multi-chunk slicing and boundary traversal
 	const testChunkSize = 65536
-	databaseEngine := NewDatabaseEngine(db, testChunkSize)
+	databaseEngine := NewDatabaseEngine(kernel, testChunkSize)
 
 	bucketID := uuid.NewV7()
-	_, bucketErr := db.Exec(ctx, `
+	_, bucketErr := kernel.DB().Exec(ctx, `
 		INSERT INTO file_storage.buckets (id, name, is_public, backend, max_file_size_bytes)
 		VALUES ($1, 'stream-bucket', true, 'database', 10485760);
 	`, bucketID)
@@ -56,7 +58,7 @@ func TestFilestorageDatabaseChunkStreamingIntegration(t *testing.T) {
 
 	// Verify chunk count in DB
 	var chunkCount int
-	countErr := db.QueryRow(ctx, "SELECT COUNT(*) FROM file_storage.chunks WHERE object_id = $1", uploadedObject.ID).Scan(&chunkCount)
+	countErr := kernel.DB().QueryRow(ctx, "SELECT COUNT(*) FROM file_storage.chunks WHERE object_id = $1", uploadedObject.ID).Scan(&chunkCount)
 	if countErr != nil || chunkCount != 3 {
 		t.Fatalf("expected 3 chunks in database, got %d (err: %v)", chunkCount, countErr)
 	}
@@ -166,7 +168,7 @@ func TestFilestorageDatabaseChunkStreamingIntegration(t *testing.T) {
 	}
 
 	var postDeleteChunkCount int
-	_ = db.QueryRow(ctx, "SELECT COUNT(*) FROM file_storage.chunks WHERE object_id = $1", uploadedObject.ID).Scan(&postDeleteChunkCount)
+	_ = kernel.DB().QueryRow(ctx, "SELECT COUNT(*) FROM file_storage.chunks WHERE object_id = $1", uploadedObject.ID).Scan(&postDeleteChunkCount)
 	if postDeleteChunkCount != 0 {
 		t.Fatalf("expected 0 chunks after cascade delete, got %d", postDeleteChunkCount)
 	}

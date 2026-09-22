@@ -3,11 +3,14 @@ package data
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestDataMigrationsExecutionIntegration(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
 

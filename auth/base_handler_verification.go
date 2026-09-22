@@ -36,15 +36,10 @@ func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.R
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email verification request rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var existingUserID string
 	var emailVerifiedAt *time.Time
-	err := handler.db.QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
+	err := handler.kernel.DB().QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use")
@@ -78,32 +73,28 @@ func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.R
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 
 	log.Tracef("dispatching email verification code to %s", recipientEmail)
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
-	if handler.eventBus != nil {
-		var targetUser *User
-		if authUserID != "" {
-			if user, fetchErr := fetchUserByID(ctx, handler.db, authUserID); fetchErr == nil {
-				targetUser = &user
-			}
-		} else if existingUserID != "" {
-			if user, fetchErr := fetchUserByID(ctx, handler.db, existingUserID); fetchErr == nil {
-				targetUser = &user
-			}
+	var targetUser *User
+	if authUserID != "" {
+		if user, fetchErr := fetchUserByID(ctx, handler.kernel.DB(), authUserID); fetchErr == nil {
+			targetUser = &user
 		}
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
-			Recipient: recipientEmail,
-			Purpose:   "email_verification",
-			Channel:   "email",
-			User:      targetUser,
-		}))
+	} else if existingUserID != "" {
+		if user, fetchErr := fetchUserByID(ctx, handler.kernel.DB(), existingUserID); fetchErr == nil {
+			targetUser = &user
+		}
 	}
+	handler.kernel.EventBus().Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
+		Recipient: recipientEmail,
+		Purpose:   "email_verification",
+		Channel:   "email",
+		User:      targetUser,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -129,11 +120,6 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "email verification confirmation rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var otpID string
 	var storedHash string
@@ -147,7 +133,7 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 		ORDER BY created_at DESC 
 		LIMIT 1
 	`
-	err := handler.db.QueryRow(ctx, query, recipientEmail).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+	err := handler.kernel.DB().QueryRow(ctx, query, recipientEmail).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code")
 		return
@@ -160,30 +146,28 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
-		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
 
-	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'email_verification'", recipientEmail)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail))
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'email_verification'", recipientEmail)
+	_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail))
 
 	authUserID := authContext.UserID
 	if authUserID != "" {
 		isCallerAnonymous := false
-		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
+		_ = handler.kernel.DB().QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
 		var user User
 		var rawProperties []byte
-		err = handler.db.QueryRow(ctx, `
+		err = handler.kernel.DB().QueryRow(ctx, `
 			UPDATE auth.users 
 			SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
@@ -204,12 +188,10 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
-			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
-			}
+		handler.kernel.EventBus().Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
+		handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
+		if isCallerAnonymous {
+			handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 		}
 
 		handler.issueSessionResponse(responseWriter, request, user, "otp")
@@ -218,7 +200,7 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 
 	var user User
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		UPDATE auth.users 
 		SET email_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE email = $1 
@@ -239,10 +221,8 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserEmailVerifiedEvent(user.ID, UserEmailVerifiedEventData(user)))
+	handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -284,15 +264,10 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "phone verification request rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var existingUserID string
 	var phoneVerifiedAt *time.Time
-	err = handler.db.QueryRow(ctx, "SELECT id, phone_verified_at FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID, &phoneVerifiedAt)
+	err = handler.kernel.DB().QueryRow(ctx, "SELECT id, phone_verified_at FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID, &phoneVerifiedAt)
 
 	targetUserID := existingUserID
 	if authUserID != "" {
@@ -329,32 +304,28 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 
 	log.Tracef("dispatching phone verification code to %s", recipientPhone)
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
 
-	if handler.eventBus != nil {
-		var targetUser *User
-		if authUserID != "" {
-			if user, fetchErr := fetchUserByID(ctx, handler.db, authUserID); fetchErr == nil {
-				targetUser = &user
-			}
-		} else if existingUserID != "" {
-			if user, fetchErr := fetchUserByID(ctx, handler.db, existingUserID); fetchErr == nil {
-				targetUser = &user
-			}
+	var targetUser *User
+	if authUserID != "" {
+		if user, fetchErr := fetchUserByID(ctx, handler.kernel.DB(), authUserID); fetchErr == nil {
+			targetUser = &user
 		}
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
-			Recipient: recipientPhone,
-			Purpose:   "phone_verification",
-			Channel:   "sms",
-			User:      targetUser,
-		}))
+	} else if existingUserID != "" {
+		if user, fetchErr := fetchUserByID(ctx, handler.kernel.DB(), existingUserID); fetchErr == nil {
+			targetUser = &user
+		}
 	}
+	handler.kernel.EventBus().Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
+		Recipient: recipientPhone,
+		Purpose:   "phone_verification",
+		Channel:   "sms",
+		User:      targetUser,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -387,11 +358,6 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 	}
 	recipientPhone = normalizedPhone
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "phone verification confirmation rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var otpID string
 	var storedHash string
@@ -405,7 +371,7 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 		ORDER BY created_at DESC 
 		LIMIT 1
 	`
-	err = handler.db.QueryRow(ctx, query, recipientPhone).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+	err = handler.kernel.DB().QueryRow(ctx, query, recipientPhone).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired verification code")
 		return
@@ -418,30 +384,28 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 
 	const maxOtpAttempts = 5
 	if attempts >= maxOtpAttempts {
-		_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Maximum attempts exceeded")
 		return
 	}
 
 	if !otp.VerifyCode(code, storedHash) {
-		_, _ = handler.db.Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
 
-	_, _ = handler.db.Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'phone_verification'", recipientPhone)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone))
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'phone_verification'", recipientPhone)
+	_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone))
 
 	authUserID := authContext.UserID
 	if authUserID != "" {
 		isCallerAnonymous := false
-		_ = handler.db.QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
+		_ = handler.kernel.DB().QueryRow(ctx, "SELECT (email IS NULL AND phone IS NULL AND is_anonymous) FROM auth.users WHERE id = $1", authUserID).Scan(&isCallerAnonymous)
 
 		var user User
 		var rawProperties []byte
-		err = handler.db.QueryRow(ctx, `
+		err = handler.kernel.DB().QueryRow(ctx, `
 			UPDATE auth.users 
 			SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
 			WHERE id = $2
@@ -462,12 +426,10 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
-			handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-			if isCallerAnonymous {
-				handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
-			}
+		handler.kernel.EventBus().Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
+		handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
+		if isCallerAnonymous {
+			handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 		}
 
 		handler.issueSessionResponse(responseWriter, request, user, "otp")
@@ -476,7 +438,7 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 
 	var user User
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		UPDATE auth.users 
 		SET phone_verified_at = clock_timestamp(), last_updated_at = clock_timestamp() 
 		WHERE phone = $1 
@@ -497,10 +459,8 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
-		handler.eventBus.Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
-	}
+	handler.kernel.EventBus().Publish(ctx, NewUserPhoneVerifiedEvent(user.ID, UserPhoneVerifiedEventData(user)))
+	handler.kernel.EventBus().Publish(ctx, NewUserUpdatedEvent(user.ID, UserUpdatedEventData(user)))
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -535,14 +495,9 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user email rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var existingUserID string
-	err := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID)
+	err := handler.kernel.DB().QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
 		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 		return
@@ -556,7 +511,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 
 	if anonymousUser != nil {
 		log.Debugf("converting anonymous user %s with email %s", anonymousUser.ID, recipientEmail)
-		_, updateErr := handler.db.Exec(ctx, `
+		_, updateErr := handler.kernel.DB().Exec(ctx, `
 			UPDATE auth.users
 			SET email = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
@@ -569,9 +524,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 		anonymousUser.Email = &recipientEmail
 		anonymousUser.IsAnonymous = false
 		anonymousUser.LastUpdatedAt = time.Now().UTC()
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
 	}
 
 	code, _ := otp.GenerateCode(nil)
@@ -582,28 +535,24 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.db.Exec(ctx, query, recipientEmail, codeHash, expiresAt)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 
 	log.Tracef("dispatching update email verification code to %s", recipientEmail)
 	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
 
-	if handler.eventBus != nil {
-		var targetUser *User
-		if anonymousUser != nil {
-			targetUser = anonymousUser
-		} else if user, err := fetchUserByID(ctx, handler.db, authUserID); err == nil {
-			targetUser = &user
-		}
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
-			Recipient: recipientEmail,
-			Purpose:   "email_verification",
-			Channel:   "email",
-			User:      targetUser,
-		}))
+	var targetUser *User
+	if anonymousUser != nil {
+		targetUser = anonymousUser
+	} else if user, err := fetchUserByID(ctx, handler.kernel.DB(), authUserID); err == nil {
+		targetUser = &user
 	}
+	handler.kernel.EventBus().Publish(ctx, NewOTPSentEvent(recipientEmail, OTPSentEventData{
+		Recipient: recipientEmail,
+		Purpose:   "email_verification",
+		Channel:   "email",
+		User:      targetUser,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -639,14 +588,9 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "update user phone rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var existingUserID string
-	err = handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID)
+	err = handler.kernel.DB().QueryRow(ctx, "SELECT id FROM auth.users WHERE phone = $1", recipientPhone).Scan(&existingUserID)
 	if err == nil && existingUserID != authUserID {
 		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account")
 		return
@@ -660,7 +604,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 
 	if anonymousUser != nil {
 		log.Debugf("converting anonymous user %s with phone %s", anonymousUser.ID, recipientPhone)
-		_, updateErr := handler.db.Exec(ctx, `
+		_, updateErr := handler.kernel.DB().Exec(ctx, `
 			UPDATE auth.users
 			SET phone = $1, is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $2
@@ -673,9 +617,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 		anonymousUser.Phone = &recipientPhone
 		anonymousUser.IsAnonymous = false
 		anonymousUser.LastUpdatedAt = time.Now().UTC()
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(anonymousUser.ID, UserConvertedEventData(*anonymousUser)))
 	}
 
 	code, _ := otp.GenerateCode(nil)
@@ -686,28 +628,24 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.db.Exec(ctx, query, recipientPhone, codeHash, expiresAt)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
-	}
+	_, _ = handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt)
+	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 
 	log.Tracef("dispatching update phone verification code to %s", recipientPhone)
 	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
 
-	if handler.eventBus != nil {
-		var targetUser *User
-		if anonymousUser != nil {
-			targetUser = anonymousUser
-		} else if user, err := fetchUserByID(ctx, handler.db, authUserID); err == nil {
-			targetUser = &user
-		}
-		handler.eventBus.Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
-			Recipient: recipientPhone,
-			Purpose:   "phone_verification",
-			Channel:   "sms",
-			User:      targetUser,
-		}))
+	var targetUser *User
+	if anonymousUser != nil {
+		targetUser = anonymousUser
+	} else if user, err := fetchUserByID(ctx, handler.kernel.DB(), authUserID); err == nil {
+		targetUser = &user
 	}
+	handler.kernel.EventBus().Publish(ctx, NewOTPSentEvent(recipientPhone, OTPSentEventData{
+		Recipient: recipientPhone,
+		Purpose:   "phone_verification",
+		Channel:   "sms",
+		User:      targetUser,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

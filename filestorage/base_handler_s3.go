@@ -17,7 +17,7 @@ import (
 )
 
 func (baseHandler *BaseHandler) authenticateS3(responseWriter http.ResponseWriter, request *http.Request, requiredScope string) (*core.ServiceAccount, bool) {
-	if baseHandler.configManager != nil && !baseHandler.configManager.Get().Enabled {
+	if !baseHandler.configManager.Get().Enabled {
 		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusForbidden, "AccessDenied", "Access denied")
 		return nil, false
 	}
@@ -32,11 +32,6 @@ func (baseHandler *BaseHandler) authenticateS3(responseWriter http.ResponseWrite
 			ID:     authContext.ServiceAccountID,
 			Scopes: strings.Fields(authContext.JWT.Scope),
 		}, true
-	}
-
-	if baseHandler.sigv4Validator == nil {
-		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", "SigV4 validator unavailable")
-		return nil, false
 	}
 
 	serviceAccount, authErr := baseHandler.sigv4Validator.Validate(request)
@@ -81,18 +76,13 @@ func (baseHandler *BaseHandler) handleListS3Buckets(responseWriter http.Response
 		return
 	}
 
-	if baseHandler.db == nil {
-		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", "Service temporarily unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	const querySQL = `
 		SELECT name, created_at
 		FROM file_storage.buckets
 		ORDER BY name ASC;
 	`
-	rows, queryErr := baseHandler.db.Query(ctx, querySQL)
+	rows, queryErr := baseHandler.kernel.DB().Query(ctx, querySQL)
 	if queryErr != nil {
 		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", queryErr.Error())
 		return
@@ -168,7 +158,7 @@ func (baseHandler *BaseHandler) handleListS3Bucket(responseWriter http.ResponseW
 		LIMIT $3;
 	`
 	var contents []S3ObjectContent
-	rows, queryErr := baseHandler.db.Query(ctx, querySQL, bucket.ID, prefix+"%", maxKeys)
+	rows, queryErr := baseHandler.kernel.DB().Query(ctx, querySQL, bucket.ID, prefix+"%", maxKeys)
 	if queryErr == nil {
 		defer rows.Close()
 
@@ -468,7 +458,7 @@ func (baseHandler *BaseHandler) processCreateMultipartUpload(responseWriter http
 			id, bucket_id, object_key, content_type
 		) VALUES ($1, $2, $3, $4);
 	`
-	_, _ = baseHandler.db.Exec(ctx, insertSQL, uploadID, bucket.ID, objectKey, contentType)
+	_, _ = baseHandler.kernel.DB().Exec(ctx, insertSQL, uploadID, bucket.ID, objectKey, contentType)
 
 	createS3MultipartUploadResponse := CreateS3MultipartUploadResponse{
 		Bucket:   bucket.Name,
@@ -517,7 +507,7 @@ func (baseHandler *BaseHandler) processUploadPart(responseWriter http.ResponseWr
 		ON CONFLICT (upload_id, part_number)
 		DO UPDATE SET etag = EXCLUDED.etag, size_bytes = EXCLUDED.size_bytes, chunk_data = EXCLUDED.chunk_data;
 	`
-	_, execErr := baseHandler.db.Exec(ctx, insertPartSQL, uploadID, partNumber, etag, int64(len(chunkData)), chunkData)
+	_, execErr := baseHandler.kernel.DB().Exec(ctx, insertPartSQL, uploadID, partNumber, etag, int64(len(chunkData)), chunkData)
 	if execErr != nil {
 		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", execErr.Error())
 		return
@@ -568,18 +558,18 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 		WHERE upload_id = $1;
 	`
 	var totalSizeBytes int64
-	_ = baseHandler.db.QueryRow(ctx, queryTotalSizeSQL, uploadID).Scan(&totalSizeBytes)
+	_ = baseHandler.kernel.DB().QueryRow(ctx, queryTotalSizeSQL, uploadID).Scan(&totalSizeBytes)
 
 	contentType := "application/octet-stream"
 	const queryUploadSQL = `SELECT content_type FROM file_storage.multipart_uploads WHERE id = $1;`
-	_ = baseHandler.db.QueryRow(ctx, queryUploadSQL, uploadID).Scan(&contentType)
+	_ = baseHandler.kernel.DB().QueryRow(ctx, queryUploadSQL, uploadID).Scan(&contentType)
 
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
 		defer func() {
 			_ = pipeWriter.Close()
 		}()
-		rows, queryErr := baseHandler.db.Query(ctx, queryPartsSQL, uploadID)
+		rows, queryErr := baseHandler.kernel.DB().Query(ctx, queryPartsSQL, uploadID)
 		if queryErr == nil {
 			defer rows.Close()
 			for rows.Next() {
@@ -607,7 +597,7 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 	}
 
 	// Clean up multipart records
-	_, _ = baseHandler.db.Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)
+	_, _ = baseHandler.kernel.DB().Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)
 
 	completeS3MultipartUploadResponse := CompleteS3MultipartUploadResponse{
 		Bucket:   bucket.Name,
@@ -634,7 +624,7 @@ func (baseHandler *BaseHandler) processAbortMultipartUpload(responseWriter http.
 	}
 
 	ctx := request.Context()
-	_, _ = baseHandler.db.Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)
+	_, _ = baseHandler.kernel.DB().Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

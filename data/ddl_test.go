@@ -3,6 +3,8 @@ package data
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
@@ -99,7 +101,7 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 
 	// 5. Protected schema validation in DDLEngine methods (pure in-memory checks before query execution)
 	ctx := context.Background()
-	ddlEngine := NewDDLEngine(nil)
+	ddlEngine := NewDDLEngine(core.NewTestKernel(nil))
 
 	// CreateTable on protected schema
 	err := ddlEngine.CreateTable(ctx, CreateTableInput{

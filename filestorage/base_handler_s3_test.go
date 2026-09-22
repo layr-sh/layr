@@ -7,20 +7,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 	"uuid"
 
 	"layr.sh/core"
 )
 
 func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	t.Run("s3 error formatting unit", func(t *testing.T) {
@@ -92,16 +87,6 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 		}
 	})
 
-	t.Run("authenticateS3 validator unavailable unit", func(t *testing.T) {
-		nilValidatorBaseHandler := &BaseHandler{}
-		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
-		responseRecorder := httptest.NewRecorder()
-		serviceAccount, authorized := nilValidatorBaseHandler.authenticateS3(responseRecorder, request, core.ScopeFileStorageBucketRead)
-		if authorized || serviceAccount != nil || responseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 when sigv4 validator is unavailable")
-		}
-	})
-
 	t.Run("authenticateS3 invalid algorithm unit", func(t *testing.T) {
 		badAlgoRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
 		badAlgoRequest.Header.Set("Authorization", "INVALID-ALGORITHM Credential=KEY/date/region/s3/aws4_request")
@@ -119,6 +104,16 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 		serviceAccount, authorized := baseHandler.authenticateS3(invalidKeyResponseRecorder, invalidKeyRequest, core.ScopeFileStorageBucketRead)
 		if authorized || serviceAccount != nil || invalidKeyResponseRecorder.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for non-existent access key, got %d", invalidKeyResponseRecorder.Code)
+		}
+	})
+
+	t.Run("authenticateS3 default generic error unit", func(t *testing.T) {
+		genericErrorRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
+		genericErrorRequest.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=bad")
+		genericErrorResponseRecorder := httptest.NewRecorder()
+		serviceAccount, authorized := baseHandler.authenticateS3(genericErrorResponseRecorder, genericErrorRequest, core.ScopeFileStorageBucketRead)
+		if authorized || serviceAccount != nil || genericErrorResponseRecorder.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 for generic error, got %d", genericErrorResponseRecorder.Code)
 		}
 	})
 
@@ -186,7 +181,7 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 		}
 	})
 
-	t.Run("s3 handlers with nil database unit", func(t *testing.T) {
+	t.Run("s3 handlers parameter validation unit", func(t *testing.T) {
 		serviceAccountID := uuid.NewV7()
 		serviceAccountAuthContext := core.AuthContext{
 			ServiceAccountID: serviceAccountID.String(),
@@ -198,43 +193,7 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 		}
 		authedCtx := core.WithAuthContext(ctx, serviceAccountAuthContext)
 
-		// 1. handleListS3Buckets with nil DB -> 500
-		listBucketsRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/v1/file-storage/s3", nil)
-		listBucketsResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleListS3Buckets(listBucketsResponseRecorder, listBucketsRequest)
-		if listBucketsResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 on list s3 buckets with nil db, got %d", listBucketsResponseRecorder.Code)
-		}
-
-		// 2. handleListS3Bucket with nil DB -> 404
-		listBucketRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/v1/file-storage/s3/any-bucket", nil)
-		listBucketRequest.SetPathValue("bucket", "any-bucket")
-		listBucketResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleListS3Bucket(listBucketResponseRecorder, listBucketRequest)
-		if listBucketResponseRecorder.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 on list s3 bucket with nil db, got %d", listBucketResponseRecorder.Code)
-		}
-
-		// 3. processDeleteMultipleS3Objects with nil DB (bucket resolution fails) -> 404
-		deleteObjectsRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/file-storage/s3/any-bucket?delete", bytes.NewReader([]byte("not-xml")))
-		deleteObjectsRequest.SetPathValue("bucket", "any-bucket")
-		deleteObjectsResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleDeleteMultipleS3Objects(deleteObjectsResponseRecorder, deleteObjectsRequest)
-		if deleteObjectsResponseRecorder.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 on delete objects with missing bucket, got %d", deleteObjectsResponseRecorder.Code)
-		}
-
-		// 4. processCreateMultipartUpload with nil DB (bucket resolution fails) -> 404
-		createMultipartRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/file-storage/s3/any-bucket/file.txt?uploads", nil)
-		createMultipartRequest.SetPathValue("bucket", "any-bucket")
-		createMultipartRequest.SetPathValue("key", "file.txt")
-		createMultipartResponseRecorder := httptest.NewRecorder()
-		baseHandler.processCreateMultipartUpload(createMultipartResponseRecorder, createMultipartRequest)
-		if createMultipartResponseRecorder.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 on create multipart with nil db, got %d", createMultipartResponseRecorder.Code)
-		}
-
-		// 5. processUploadPart with invalid uploadId -> 400
+		// 1. processUploadPart with invalid uploadId -> 400
 		badUploadIDPartRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPut, "/v1/file-storage/s3/any-bucket/file.txt?uploadId=bad-id&partNumber=1", nil)
 		badUploadIDPartRequest.SetPathValue("bucket", "any-bucket")
 		badUploadIDPartRequest.SetPathValue("key", "file.txt")
@@ -296,27 +255,10 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 		}
 	})
 
-	t.Run("authenticateS3 database pool unavailable", func(t *testing.T) {
-		nowTimestamp := time.Now().UTC().Format("20060102T150405Z")
-		databaseUnavailableRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
-		databaseUnavailableRequest.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=anykey/"+nowTimestamp[:8]+"/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abcdef")
-		databaseUnavailableRequest.Header.Set("X-Amz-Date", nowTimestamp)
-		databaseUnavailableResponseRecorder := httptest.NewRecorder()
-		_, isAuthorized := baseHandler.authenticateS3(databaseUnavailableResponseRecorder, databaseUnavailableRequest, core.ScopeFileStorageBucketRead)
-		if isAuthorized || databaseUnavailableResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 on database pool unavailable during s3 auth, got %d", databaseUnavailableResponseRecorder.Code)
-		}
-		var s3ErrorResponse S3ErrorResponse
-		_ = xml.NewDecoder(databaseUnavailableResponseRecorder.Body).Decode(&s3ErrorResponse)
-		if s3ErrorResponse.Message != "Service temporarily unavailable" {
-			t.Fatalf("expected Service temporarily unavailable message, got %q", s3ErrorResponse.Message)
-		}
-	})
-
 	t.Run("authenticateS3 disabled filestorage returns 403", func(t *testing.T) {
-		disabledConfigManager := NewConfigManager(nil)
-		disabledConfigManager.SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := NewBaseHandler(nil, disabledConfigManager, cryptoKeyManager)
+		disabledService := NewService(kernel)
+		disabledService.configManager.SetMemoryConfig(Config{Enabled: false})
+		disabledBaseHandler := disabledService.BaseHandler()
 
 		disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
 		disabledResponseRecorder := httptest.NewRecorder()

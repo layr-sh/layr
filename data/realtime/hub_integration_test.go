@@ -122,7 +122,8 @@ func TestRealtimeHubPostgresIntegration(t *testing.T) {
 		t.Fatalf("failed to setup CDC schema: %v", err)
 	}
 
-	hub := NewHub(db)
+	kernel := core.NewTestKernel(db)
+	hub := NewHub(kernel)
 
 	// 1. EnsureTableTrigger on real PostgreSQL table
 	if err = hub.EnsureTableTrigger(ctx, "public", "hub_items"); err != nil {
@@ -145,13 +146,9 @@ func TestRealtimeHubPostgresIntegration(t *testing.T) {
 	}
 
 	// 2. Start Hub and verify LISTEN loop receives pg_notify events
-	if err = hub.Start(ctx); err != nil {
-		t.Fatalf("failed to start hub: %v", err)
-	}
+	hub.Start(ctx)
 	// Second start is idempotent
-	if err = hub.Start(ctx); err != nil {
-		t.Fatalf("second start should be idempotent: %v", err)
-	}
+	hub.Start(ctx)
 
 	time.Sleep(100 * time.Millisecond) // Allow LISTEN loop to establish connection
 
@@ -189,8 +186,8 @@ func TestRealtimeHubPostgresIntegration(t *testing.T) {
 	// Test listenLoop cancellation via context
 	cancelableCtx, hubCancel := context.WithCancel(ctx)
 	hubCancel()
-	canceledHub := NewHub(db)
-	_ = canceledHub.Start(cancelableCtx)
+	canceledHub := NewHub(kernel)
+	canceledHub.Start(cancelableCtx)
 	time.Sleep(20 * time.Millisecond)
 	canceledHub.Stop()
 
@@ -198,18 +195,19 @@ func TestRealtimeHubPostgresIntegration(t *testing.T) {
 	closedDB, err := core.NewDatabasePool(ctx, databaseURL)
 	if err == nil && closedDB != nil {
 		closedDB.Close()
-		reconnectHub := NewHub(closedDB)
+		closedKernel := core.NewTestKernel(closedDB)
+		reconnectHub := NewHub(closedKernel)
 		reconnectHub.initialBackoff = 5 * time.Millisecond
 		reconnectHub.maxBackoff = 8 * time.Millisecond
-		_ = reconnectHub.Start(ctx)
+		reconnectHub.Start(ctx)
 		time.Sleep(25 * time.Millisecond)
 		reconnectHub.Stop()
 
 		// Exercise cancellation while waiting in backoff
 		reconnectCtx, reconnectCancel := context.WithCancel(ctx)
-		canceledReconnectHub := NewHub(closedDB)
+		canceledReconnectHub := NewHub(closedKernel)
 		canceledReconnectHub.initialBackoff = 200 * time.Millisecond
-		_ = canceledReconnectHub.Start(reconnectCtx)
+		canceledReconnectHub.Start(reconnectCtx)
 		time.Sleep(5 * time.Millisecond)
 		reconnectCancel()
 		canceledReconnectHub.Stop()

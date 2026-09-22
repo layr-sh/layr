@@ -3,10 +3,12 @@ package filestorage
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestFilestorageMigrationsExecutionIntegration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
+	db, cleanup := core.SetupTestDB(t, Migrations)
 	if db == nil {
 		return
 	}

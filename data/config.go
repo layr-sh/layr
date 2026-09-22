@@ -153,15 +153,15 @@ func (config Config) Validate() error {
 
 // ConfigManager handles in-memory caching and PostgreSQL synchronization for data.config.
 type ConfigManager struct {
-	db      *core.DatabasePool
+	kernel  *core.Kernel
 	rwMutex sync.RWMutex
 	config  Config
 }
 
 // NewConfigManager initializes a new dynamic configuration manager.
-func NewConfigManager(db *core.DatabasePool) *ConfigManager {
+func NewConfigManager(kernel *core.Kernel) *ConfigManager {
 	return &ConfigManager{
-		db:     db,
+		kernel: kernel,
 		config: DefaultConfig(),
 	}
 }
@@ -177,7 +177,7 @@ func (configManager *ConfigManager) Get() Config {
 func (configManager *ConfigManager) Load(ctx context.Context) error {
 	var rawJSON []byte
 	const selectSQLStatement = `SELECT value FROM data.config WHERE key = 'runtime'`
-	scanErr := configManager.db.QueryRow(ctx, selectSQLStatement).Scan(&rawJSON)
+	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement).Scan(&rawJSON)
 	if scanErr != nil {
 		defaultConfig := DefaultConfig()
 		return configManager.Set(ctx, defaultConfig)
@@ -270,7 +270,7 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 		ON CONFLICT (key) DO UPDATE
 		SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
 	`
-	if _, execErr := configManager.db.Exec(ctx, upsertSQLStatement, configJSON); execErr != nil {
+	if _, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, configJSON); execErr != nil {
 		return fmt.Errorf("failed to save data config to database: %w", execErr)
 	}
 

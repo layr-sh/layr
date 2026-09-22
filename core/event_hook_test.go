@@ -161,8 +161,8 @@ func TestCoreEventHookSleepWithContextUnit(t *testing.T) {
 	}
 }
 
-func TestCoreEventHookManagerNilDBUnit(t *testing.T) {
-	eventHookManager := NewEventHookManager(nil, nil, nil)
+func TestCoreEventHookManagerValidationUnit(t *testing.T) {
+	eventHookManager := NewEventHookManager(nil, nil)
 	ctx := context.Background()
 
 	// 1. Create validations
@@ -259,24 +259,13 @@ func TestCoreEventHookManagerNilDBUnit(t *testing.T) {
 		t.Fatal("expected error when providing sql_function_name for http driver")
 	}
 
-	// HTTP driver with signing_secret but nil cryptoKeyManager
-	_, err = eventHookManager.Create(ctx, CreateEventHookInput{
-		Name:          "HTTP Hook",
-		Driver:        EventHookDriverHTTP,
-		HTTPTargetURL: &targetURL,
-		SigningSecret: "secret",
-	})
-	if err == nil {
-		t.Fatal("expected error when cryptoKeyManager is nil")
-	}
-
 	// HTTP driver with signing_secret and failing cryptoKeyManager
 	failingCryptoKeyManager, cryptoKeyErr := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if cryptoKeyErr != nil {
 		t.Fatalf("unexpected cryptoKeyManager init error: %v", cryptoKeyErr)
 	}
 	failingCryptoKeyManager.randomReader = &simulatedFailingReader{}
-	failingCryptoEventHookManager := NewEventHookManager(nil, failingCryptoKeyManager, nil)
+	failingCryptoEventHookManager := NewEventHookManager(nil, failingCryptoKeyManager)
 	_, err = failingCryptoEventHookManager.Create(ctx, CreateEventHookInput{
 		Name:          "HTTP Hook",
 		Driver:        EventHookDriverHTTP,
@@ -309,90 +298,13 @@ func TestCoreEventHookManagerNilDBUnit(t *testing.T) {
 		t.Fatal("expected error on empty pattern in event_types")
 	}
 
-	// Valid input with nil db, testing bounds checks
-	isHookEnabled := false
-	negativeRetries := -1
-	excessiveRetries := 20
-	zeroTimeout := 0
-	excessiveTimeout := 100
-	validEventTypes := []string{"*"}
-
-	_, err = eventHookManager.Create(ctx, CreateEventHookInput{
-		Name:           "Valid HTTP Hook",
-		Driver:         EventHookDriverHTTP,
-		HTTPTargetURL:  &targetURL,
-		EventTypes:     validEventTypes,
-		IsEnabled:      &isHookEnabled,
-		MaxRetries:     &negativeRetries,
-		TimeoutSeconds: &zeroTimeout,
-	})
-	if err == nil {
-		t.Fatal("expected error on nil db")
-	}
-
-	_, err = eventHookManager.Create(ctx, CreateEventHookInput{
-		Name:           "Valid HTTP Hook 2",
-		Driver:         EventHookDriverHTTP,
-		HTTPTargetURL:  &targetURL,
-		EventTypes:     validEventTypes,
-		MaxRetries:     &excessiveRetries,
-		TimeoutSeconds: &excessiveTimeout,
-	})
-	if err == nil {
-		t.Fatal("expected error on nil db")
-	}
-
-	// 2. Get, List, Update, Delete with nil db
-	fakeID := uuid.NewV7()
-	_, err = eventHookManager.Get(ctx, fakeID)
-	if err == nil {
-		t.Fatal("expected error on Get with nil db")
-	}
-
-	_, err = eventHookManager.List(ctx, EventHookFilter{})
-	if err == nil {
-		t.Fatal("expected error on List with nil db")
-	}
-
-	_, err = eventHookManager.Update(ctx, fakeID, UpdateEventHookInput{})
-	if err == nil {
-		t.Fatal("expected error on Update with nil db")
-	}
-
-	err = eventHookManager.Delete(ctx, fakeID)
-	if err == nil {
-		t.Fatal("expected error on Delete with nil db")
-	}
-
-	// 3. Deliveries with nil db
-	_, err = eventHookManager.ListDeliveries(ctx, fakeID)
-	if err == nil {
-		t.Fatal("expected error on ListDeliveries with nil db")
-	}
-
-	_, err = eventHookManager.GetDelivery(ctx, fakeID, uuid.NewV7())
-	if err == nil {
-		t.Fatal("expected error on GetDelivery with nil db")
-	}
-
-	_, err = eventHookManager.RetryDelivery(ctx, fakeID)
-	if err == nil {
-		t.Fatal("expected error on RetryDelivery with nil db")
-	}
-
-	// 4. Dispatch with nil db should return cleanly
-	eventHookManager.Dispatch(ctx, Event{Type: "test.event"})
-
-	// 5. executeSQLAttempt error branches
+	// executeSQLAttempt error branches
 	if _, _, err := eventHookManager.executeSQLAttempt(ctx, EventHook{Driver: EventHookDriverSQL}, []byte(`{}`), 10); err == nil {
 		t.Fatal("expected error on nil SQLFunctionName")
 	}
-	validSQLFn := "public.fn"
-	if _, _, err := eventHookManager.executeSQLAttempt(ctx, EventHook{Driver: EventHookDriverSQL, SQLFunctionName: &validSQLFn}, []byte(`{}`), 10); err == nil {
-		t.Fatal("expected error on nil db for executeSQLAttempt")
-	}
 
-	// 6. executeHTTPAttempt error branches
+	// executeHTTPAttempt error branches
+	fakeID := uuid.NewV7()
 	if _, _, _, err := eventHookManager.executeHTTPAttempt(ctx, EventHook{Driver: EventHookDriverHTTP}, Event{}, []byte(`{}`), fakeID, 10); err == nil {
 		t.Fatal("expected error on nil HTTPTargetURL")
 	}
@@ -400,14 +312,4 @@ func TestCoreEventHookManagerNilDBUnit(t *testing.T) {
 	if _, _, _, err := eventHookManager.executeHTTPAttempt(ctx, EventHook{Driver: EventHookDriverHTTP, HTTPTargetURL: &invalidRequestURL}, Event{}, []byte(`{}`), fakeID, 10); err == nil {
 		t.Fatal("expected error on invalid target URL generating request error")
 	}
-
-	// 7. DeliverWithID with nil db
-	if _, err := eventHookManager.DeliverWithID(ctx, EventHook{}, Event{}, fakeID); err == nil {
-		t.Fatal("expected error on DeliverWithID with nil db")
-	}
-}
-
-func TestCoreEventHookSetHTTPClientUnit(t *testing.T) {
-	eventHookManager := NewEventHookManager(nil, nil, nil)
-	eventHookManager.SetHTTPClient(nil)
 }

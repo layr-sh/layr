@@ -48,13 +48,11 @@ func LoadSeedData() ([]Country, []Currency, error) {
 }
 
 // Seed populates the reference_data schema with normalized reference datasets.
-func Seed(ctx context.Context, db *core.DatabasePool) error {
-	if db != nil {
-		var exists bool
-		err := db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM reference_data.countries LIMIT 1)").Scan(&exists)
-		if err == nil && exists {
-			return nil
-		}
+func Seed(ctx context.Context, kernel *core.Kernel) error {
+	var exists bool
+	err := kernel.DB().QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM reference_data.countries LIMIT 1)").Scan(&exists)
+	if err == nil && exists {
+		return nil
 	}
 
 	countries, currencies, err := LoadSeedData()
@@ -62,12 +60,12 @@ func Seed(ctx context.Context, db *core.DatabasePool) error {
 		return err
 	}
 
-	return SeedWithData(ctx, db, countries, currencies)
+	return SeedWithData(ctx, kernel, countries, currencies)
 }
 
 // SeedWithData inserts custom or embedded reference data into reference_data schema tables.
-func SeedWithData(ctx context.Context, db *core.DatabasePool, countries []Country, currencies []Currency) error {
-	tx, err := db.Begin(ctx)
+func SeedWithData(ctx context.Context, kernel *core.Kernel, countries []Country, currencies []Currency) error {
+	tx, err := kernel.DB().Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin reference data seeding transaction: %w", err)
 	}

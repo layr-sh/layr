@@ -11,24 +11,18 @@ import (
 func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleListUserSessions invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.read") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.read required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	ctx := request.Context()
-	rows, err := controlPlaneHandler.db.Query(ctx, `
+	rows, err := controlPlaneHandler.kernel.DB().Query(ctx, `
 		SELECT id, user_id, client_id, refresh_token_hash, ip_address::text, user_agent, expires_at, created_at
 		FROM auth.sessions
 		WHERE user_id = $1
@@ -50,7 +44,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseW
 		sessions = append(sessions, session)
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, ListUserSessionsResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUserSessionsResponse{
 		Sessions: sessions,
 		Count:    len(sessions),
 	})
@@ -60,24 +54,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseW
 func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handleRevokeUserSessions invoked")
 
-	if !controlPlaneHandler.checkScope(request, "auth:user.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Forbidden: scope auth:user.write required")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
 	}
 
-	userID := controlPlaneHandler.extractUserID(request)
+	userID := request.PathValue("user_id")
 	if _, err := uuid.Parse(userID); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid user UUID")
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	ctx := request.Context()
-	deletedSessionRows, deleteErr := controlPlaneHandler.db.Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID)
+	deletedSessionRows, deleteErr := controlPlaneHandler.kernel.DB().Query(ctx, "DELETE FROM auth.sessions WHERE user_id = $1 RETURNING id, client_id, refresh_token_hash", userID)
 	if deleteErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deleteErr.Error())
 		return
@@ -90,8 +78,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(respons
 		var targetClientID *string
 		var refreshTokenHash string
 		if scanErr := deletedSessionRows.Scan(&targetSessionID, &targetClientID, &refreshTokenHash); scanErr == nil {
-			if controlPlaneHandler.kvStore != nil && refreshTokenHash != "" {
-				_ = controlPlaneHandler.kvStore.Delete(ctx, "auth:session:"+refreshTokenHash)
+			if refreshTokenHash != "" {
+				_ = controlPlaneHandler.kernel.KVStore().Delete(ctx, "auth:session:"+refreshTokenHash)
 			}
 			if targetClientID != nil && *targetClientID != "" {
 				targetSessions = append(targetSessions, ClientSessionInfo{
@@ -104,18 +92,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(respons
 	}
 	deletedSessionRows.Close()
 
-	if len(targetSessions) > 0 && controlPlaneHandler.jwtSigner != nil {
+	if len(targetSessions) > 0 {
 		config := controlPlaneHandler.configManager.Get()
-		dispatchBackChannelSignOut(ctx, controlPlaneHandler.httpClient, controlPlaneHandler.jwtSigner, config.OIDC.Clients, targetSessions)
+		dispatchBackChannelSignOut(ctx, controlPlaneHandler.httpClient, controlPlaneHandler.kernel.JWTSigner(), config.OIDC.Clients, targetSessions)
 	}
 
-	if controlPlaneHandler.eventBus != nil {
-		user, _ := fetchUserByID(ctx, controlPlaneHandler.db, userID)
-		controlPlaneHandler.eventBus.Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
-			User:         user,
-			RevokedCount: &revokedCount,
-		}))
-	}
+	user, _ := fetchUserByID(ctx, controlPlaneHandler.kernel.DB(), userID)
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewSessionDeletedEvent(userID, SessionDeletedEventData{
+		User:         user,
+		RevokedCount: &revokedCount,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, map[string]bool{"ok": true})
+	responseWriter.WriteHeader(http.StatusNoContent)
 }

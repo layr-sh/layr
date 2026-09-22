@@ -41,25 +41,19 @@ type RelationInfo struct {
 
 // SchemaIntrospector caches schema information from PostgreSQL.
 type SchemaIntrospector struct {
-	db         *core.DatabasePool
+	kernel     *core.Kernel
 	tables     map[string]*TableInfo // key: "schema.table"
-	kvStore    *core.KVStore
 	catalogTTL time.Duration
 	rwMutex    sync.RWMutex
 }
 
 // NewSchemaIntrospector creates an introspector instance.
-func NewSchemaIntrospector(db *core.DatabasePool) *SchemaIntrospector {
+func NewSchemaIntrospector(kernel *core.Kernel) *SchemaIntrospector {
 	return &SchemaIntrospector{
-		db:         db,
+		kernel:     kernel,
 		tables:     make(map[string]*TableInfo),
 		catalogTTL: 1 * time.Hour,
 	}
-}
-
-// SetKVStore attaches the pluggable KVStore instance for schema caching.
-func (schemaInspector *SchemaIntrospector) SetKVStore(kvStore *core.KVStore) {
-	schemaInspector.kvStore = kvStore
 }
 
 // SetCatalogTTL configures the TTL duration for cached schema metadata.
@@ -110,15 +104,13 @@ func (schemaInspector *SchemaIntrospector) Tables() map[string]*TableInfo {
 
 // Introspect reads tables, columns, and foreign keys from PostgreSQL information_schema.
 func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schemas []string) error {
-	if schemaInspector.kvStore != nil {
-		if cached, err := schemaInspector.kvStore.Get(ctx, "cache:schema:catalog"); err == nil && cached != "" {
-			var cachedTables map[string]*TableInfo
-			if err := json.Unmarshal([]byte(cached), &cachedTables); err == nil && len(cachedTables) > 0 {
-				schemaInspector.rwMutex.Lock()
-				schemaInspector.tables = cachedTables
-				schemaInspector.rwMutex.Unlock()
-				return nil
-			}
+	if cached, err := schemaInspector.kernel.KVStore().Get(ctx, "cache:schema:catalog"); err == nil && cached != "" {
+		var cachedTables map[string]*TableInfo
+		if err := json.Unmarshal([]byte(cached), &cachedTables); err == nil && len(cachedTables) > 0 {
+			schemaInspector.rwMutex.Lock()
+			schemaInspector.tables = cachedTables
+			schemaInspector.rwMutex.Unlock()
+			return nil
 		}
 	}
 
@@ -126,7 +118,7 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 
 	for _, schema := range schemas {
 		// Fetch tables
-		rows, err := schemaInspector.db.Query(ctx, `
+		rows, err := schemaInspector.kernel.DB().Query(ctx, `
 			SELECT table_name 
 			FROM information_schema.tables 
 			WHERE table_schema = $1 AND table_type = 'BASE TABLE'
@@ -154,7 +146,7 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 			}
 
 			// Fetch columns
-			columnRows, queryColumnsErr := schemaInspector.db.Query(ctx, `
+			columnRows, queryColumnsErr := schemaInspector.kernel.DB().Query(ctx, `
 				SELECT column_name, data_type, is_nullable
 				FROM information_schema.columns
 				WHERE table_schema = $1 AND table_name = $2
@@ -175,7 +167,7 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 
 			// Fetch primary key
 			var pkName string
-			_ = schemaInspector.db.QueryRow(ctx, `
+			_ = schemaInspector.kernel.DB().QueryRow(ctx, `
 				SELECT kcu.column_name
 				FROM information_schema.table_constraints tc
 				JOIN information_schema.key_column_usage kcu
@@ -195,7 +187,7 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 			}
 
 			// Fetch foreign keys (including cross-schema foreign keys)
-			fkRows, queryFKErr := schemaInspector.db.Query(ctx, `
+			fkRows, queryFKErr := schemaInspector.kernel.DB().Query(ctx, `
 				SELECT
 					kcu.column_name,
 					ccu.table_schema AS foreign_table_schema,
@@ -263,10 +255,8 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 	schemaInspector.tables = newTables
 	schemaInspector.rwMutex.Unlock()
 
-	if schemaInspector.kvStore != nil {
-		if data, err := json.Marshal(newTables); err == nil {
-			_ = schemaInspector.kvStore.Set(ctx, "cache:schema:catalog", string(data), schemaInspector.catalogTTL)
-		}
+	if data, err := json.Marshal(newTables); err == nil {
+		_ = schemaInspector.kernel.KVStore().Set(ctx, "cache:schema:catalog", string(data), schemaInspector.catalogTTL)
 	}
 	return nil
 }

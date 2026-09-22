@@ -51,9 +51,7 @@ func (handler *BaseHandler) handleBeginPasskeySignUp(responseWriter http.Respons
 		return
 	}
 
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signUpOptions.Challenge, beginPasskeySignUpInput.UserID, defaultPasskeyChallengeTTL)
-	}
+	_ = handler.kernel.KVStore().Set(request.Context(), "auth:challenge:"+signUpOptions.Challenge, beginPasskeySignUpInput.UserID, defaultPasskeyChallengeTTL)
 
 	log.Debugf("passkey sign up ceremony initiated for user %s", beginPasskeySignUpInput.UserID)
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -82,9 +80,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	}
 
 	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignUpInput.Challenge)
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+verifyPasskeySignUpInput.Challenge)
-	}
+	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignUpInput.Challenge)
 	if err != nil || (expectedUserID != "" && expectedUserID != verifyPasskeySignUpInput.UserID) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
@@ -94,11 +90,6 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	publicKeyBytes := []byte(verifyPasskeySignUpInput.PublicKey)
 	if verifyPasskeySignUpInput.FriendlyName == "" {
 		verifyPasskeySignUpInput.FriendlyName = "Passkey"
-	}
-
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "passkey sign up verify rejected: database pool unavailable")
-		return
 	}
 
 	ctx := request.Context()
@@ -114,7 +105,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	var user User
 	var rawProperties []byte
 	if isAnonymousConversion {
-		err = handler.db.QueryRow(ctx, `
+		err = handler.kernel.DB().QueryRow(ctx, `
 			UPDATE auth.users
 			SET is_anonymous = false, last_updated_at = clock_timestamp()
 			WHERE id = $1
@@ -126,7 +117,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
 	} else {
-		err = handler.db.QueryRow(ctx, `
+		err = handler.kernel.DB().QueryRow(ctx, `
 			INSERT INTO auth.users (id, role, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp())
 			ON CONFLICT (id) DO UPDATE SET last_updated_at = clock_timestamp()
@@ -150,7 +141,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 
 	// Insert passkey credential
 	passkeyID := uuid.NewV7().String()
-	_, execErr := handler.db.Exec(ctx, `
+	_, execErr := handler.kernel.DB().Exec(ctx, `
 		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
 		VALUES ($1, $2, $3, $4, 0, $5, $6, clock_timestamp(), clock_timestamp())
 		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
@@ -160,18 +151,16 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 		return
 	}
 
-	if handler.eventBus != nil {
-		handler.eventBus.Publish(ctx, NewPasskeyCreatedEvent(passkeyID, PasskeyCreatedEventData{
-			ID:           passkeyID,
-			User:         user,
-			FriendlyName: verifyPasskeySignUpInput.FriendlyName,
-			Transports:   verifyPasskeySignUpInput.Transports,
-		}))
-		if isAnonymousConversion {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
-		} else {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-		}
+	handler.kernel.EventBus().Publish(ctx, NewPasskeyCreatedEvent(passkeyID, PasskeyCreatedEventData{
+		ID:           passkeyID,
+		User:         user,
+		FriendlyName: verifyPasskeySignUpInput.FriendlyName,
+		Transports:   verifyPasskeySignUpInput.Transports,
+	}))
+	if isAnonymousConversion {
+		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
+	} else {
+		handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 	}
 
 	log.Debugf("passkey sign up verified and session issued for user %s", targetUserID)
@@ -192,9 +181,7 @@ func (handler *BaseHandler) handleBeginPasskeySignIn(responseWriter http.Respons
 		return
 	}
 
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Set(request.Context(), "auth:challenge:"+signInOptions.Challenge, "", defaultPasskeyChallengeTTL)
-	}
+	_ = handler.kernel.KVStore().Set(request.Context(), "auth:challenge:"+signInOptions.Challenge, "", defaultPasskeyChallengeTTL)
 
 	log.Debug("passkey sign-in challenge generated")
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -220,31 +207,22 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
-	if handler.kvStore != nil {
-		_ = handler.kvStore.Delete(request.Context(), "auth:challenge:"+verifyPasskeySignInInput.Challenge)
-	}
+	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignInInput.Challenge)
 
 	credentialIDBytes := []byte(verifyPasskeySignInInput.CredentialID)
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "passkey sign-in verify rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	var userID string
 	var publicKey []byte
-	err := handler.db.QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
+	err := handler.kernel.DB().QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
 	if err != nil {
-		if handler.eventBus != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(string(credentialIDBytes), UserSignInFailedEventData{
-				Identifier: string(credentialIDBytes),
-				AuthMethod: "passkey",
-				Reason:     "credential_not_found",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-			}))
-		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(string(credentialIDBytes), UserSignInFailedEventData{
+			Identifier: string(credentialIDBytes),
+			AuthMethod: "passkey",
+			Reason:     "credential_not_found",
+			IPAddress:  clientIP,
+			UserAgent:  request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 		return
 	}
@@ -254,16 +232,14 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 		authenticatorDataBytes := []byte(verifyPasskeySignInInput.AuthenticatorData)
 		signatureBytes := []byte(verifyPasskeySignInInput.Signature)
 		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
-			if handler.eventBus != nil {
-				clientIP := core.ExtractRequestClientIP(request)
-				handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(userID, UserSignInFailedEventData{
-					Identifier: userID,
-					AuthMethod: "passkey",
-					Reason:     "invalid_signature",
-					IPAddress:  clientIP,
-					UserAgent:  request.UserAgent(),
-				}))
-			}
+			clientIP := core.ExtractRequestClientIP(request)
+			handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(userID, UserSignInFailedEventData{
+				Identifier: userID,
+				AuthMethod: "passkey",
+				Reason:     "invalid_signature",
+				IPAddress:  clientIP,
+				UserAgent:  request.UserAgent(),
+			}))
 			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
@@ -271,7 +247,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 
 	var user User
 	var rawProperties []byte
-	err = handler.db.QueryRow(ctx, `
+	err = handler.kernel.DB().QueryRow(ctx, `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, userID).Scan(
@@ -286,17 +262,15 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 	}
 
 	if user.LockedUntil != nil && time.Now().UTC().Before(*user.LockedUntil) {
-		if handler.eventBus != nil {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.eventBus.Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
-				Identifier: user.ID,
-				AuthMethod: "passkey",
-				Reason:     "account_locked",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-				User:       &user,
-			}))
-		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(user.ID, UserSignInFailedEventData{
+			Identifier: user.ID,
+			AuthMethod: "passkey",
+			Reason:     "account_locked",
+			IPAddress:  clientIP,
+			UserAgent:  request.UserAgent(),
+			User:       &user,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
 		return
 	}
@@ -306,7 +280,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 		_ = json.Unmarshal(rawProperties, &user.Properties)
 	}
 
-	_, _ = handler.db.Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
+	_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
 	handler.issueSessionResponse(responseWriter, request, user, "passkey")
 }
@@ -318,14 +292,8 @@ func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWrite
 		return
 	}
 	userID := authContext.UserID
-
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "list user passkeys rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
-	rows, err := handler.db.Query(ctx, `
+	rows, err := handler.kernel.DB().Query(ctx, `
 		SELECT id, friendly_name, transports, created_at, last_used_at
 		FROM auth.passkeys
 		WHERE user_id = $1
@@ -350,7 +318,7 @@ func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWrite
 		listPasskeysResponse = append(listPasskeysResponse, passkey)
 	}
 
-	handler.writeJSON(responseWriter, listPasskeysResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, listPasskeysResponse)
 }
 
 func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWriter, request *http.Request) {
@@ -367,13 +335,8 @@ func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWrit
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "delete user passkey rejected: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
-	result, err := handler.db.Exec(ctx, `
+	result, err := handler.kernel.DB().Exec(ctx, `
 		DELETE FROM auth.passkeys
 		WHERE id = $1 AND user_id = $2
 	`, passkeyID, userID)
@@ -387,29 +350,27 @@ func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWrit
 		return
 	}
 
-	if handler.eventBus != nil {
-		var user User
-		var rawProperties []byte
-		fetchErr := handler.db.QueryRow(ctx, `
-			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-			FROM auth.users
-			WHERE id = $1
-		`, userID).Scan(
-			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
-			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
-			&user.EncryptedMFASecret, &user.MFAEnabled,
-			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
-		)
-		if fetchErr == nil {
-			user.Properties = make(map[string]any)
-			if len(rawProperties) > 0 {
-				_ = json.Unmarshal(rawProperties, &user.Properties)
-			}
-			handler.eventBus.Publish(ctx, NewPasskeyDeletedEvent(passkeyID, PasskeyDeletedEventData{
-				ID:   passkeyID,
-				User: user,
-			}))
+	var user User
+	var rawProperties []byte
+	fetchErr := handler.kernel.DB().QueryRow(ctx, `
+		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
+		FROM auth.users
+		WHERE id = $1
+	`, userID).Scan(
+		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
+		&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
+		&user.EncryptedMFASecret, &user.MFAEnabled,
+		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
+	)
+	if fetchErr == nil {
+		user.Properties = make(map[string]any)
+		if len(rawProperties) > 0 {
+			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
+		handler.kernel.EventBus().Publish(ctx, NewPasskeyDeletedEvent(passkeyID, PasskeyDeletedEventData{
+			ID:   passkeyID,
+			User: user,
+		}))
 	}
 
 	responseWriter.WriteHeader(http.StatusNoContent)

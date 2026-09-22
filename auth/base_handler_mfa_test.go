@@ -11,13 +11,10 @@ import (
 )
 
 func TestAuthMFAHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()
@@ -77,14 +74,11 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 
 	// 4. Valid token on nil pool -> 500
 	testUserUUID := "018f2234-5678-789a-bcde-f0123456789a"
-	validToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	validToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: testUserUUID,
 		Email:   "test@example.com",
 		Role:    "authenticated",
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to sign access token: %v", err)
-	}
 	bearerHeader := "Bearer " + validToken
 	authContext := core.AuthContext{UserID: testUserUUID, JWT: core.JWTClaims{Subject: testUserUUID, Role: "authenticated"}}
 
@@ -92,8 +86,8 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	validTokenMFASetupRequest.Header.Set("Authorization", bearerHeader)
 	validTokenMFASetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(validTokenMFASetupResponseRecorder, validTokenMFASetupRequest)
-	if validTokenMFASetupResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on valid token MFA setup with nil pool, got: %d", validTokenMFASetupResponseRecorder.Code)
+	if validTokenMFASetupResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on valid token MFA setup with non-existent user, got: %d", validTokenMFASetupResponseRecorder.Code)
 	}
 
 	// 5. Valid token and missing code -> 400
@@ -105,13 +99,13 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on missing code MFA verify, got: %d", missingCodeMFAVerifyResponseRecorder.Code)
 	}
 
-	// 6. Valid token and code on nil pool -> 500
+	// 6. Valid token and code on non-existent user -> 404
 	validMFAVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa/verify", strings.NewReader(`{"code":"123456"}`))
 	validMFAVerifyRequest.Header.Set("Authorization", bearerHeader)
 	validMFAVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(validMFAVerifyResponseRecorder, validMFAVerifyRequest)
-	if validMFAVerifyResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on valid token MFA verify with nil pool, got: %d", validMFAVerifyResponseRecorder.Code)
+	if validMFAVerifyResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on valid token MFA verify with non-existent user, got: %d", validMFAVerifyResponseRecorder.Code)
 	}
 
 	// 7. Custom Issuer
@@ -124,17 +118,17 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	customIssuerMFARequest.Header.Set("Authorization", bearerHeader)
 	customIssuerMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(customIssuerMFAResponseRecorder, customIssuerMFARequest)
-	if customIssuerMFAResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on custom issuer MFA setup nil pool, got: %d", customIssuerMFAResponseRecorder.Code)
+	if customIssuerMFAResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on custom issuer MFA setup with non-existent user, got: %d", customIssuerMFAResponseRecorder.Code)
 	}
 
 	// 8. Empty MFA Issuer defaults to "Layr"
 	emptyIssuerConfig := DefaultConfig()
 	emptyIssuerConfig.MFA.Issuer = ""
-	emptyIssuerConfigManager := NewConfigManager(nil, cryptoKeyManager)
-	emptyIssuerConfigManager.Set(emptyIssuerConfig)
-	emptyIssuerBaseHandler := NewBaseHandler(nil, emptyIssuerConfigManager, cryptoKeyManager)
-	if emptyIssuerBaseHandler.GetTOTPManager() == nil {
+	emptyIssuerService := NewService(kernel)
+	emptyIssuerService.configManager.Set(emptyIssuerConfig)
+	emptyIssuerBaseHandler := emptyIssuerService.baseHandler
+	if emptyIssuerBaseHandler.totpManager == nil {
 		t.Fatal("expected non-nil TOTP manager")
 	}
 
@@ -168,19 +162,16 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	validTokenDisableRequest.Header.Set("Authorization", bearerHeader)
 	validTokenDisableResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDisableMFA(validTokenDisableResponseRecorder, validTokenDisableRequest)
-	if validTokenDisableResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on valid token MFA disable with nil pool, got: %d", validTokenDisableResponseRecorder.Code)
+	if validTokenDisableResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on valid token MFA disable with non-existent user, got: %d", validTokenDisableResponseRecorder.Code)
 	}
 }
 
 func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	baseHandler := NewBaseHandler(nil, configManager, cryptoKeyManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	baseHandler := service.baseHandler
+	configManager := service.configManager
 
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()
@@ -215,23 +206,21 @@ func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
 		t.Fatalf("expected 400 on missing ticket/code in MFA challenge, got: %d", missingFieldsResponseRecorder.Code)
 	}
 
-	// 4. KV store nil -> 500
+	// 4. KV store missing ticket -> 401
 	validPayloadRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"mfa_tk_test","code":"123456"}`))
 	validPayloadResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleChallengeMFA(validPayloadResponseRecorder, validPayloadRequest)
-	if validPayloadResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil KV store in MFA challenge, got: %d", validPayloadResponseRecorder.Code)
+	if validPayloadResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on missing ticket in MFA challenge, got: %d", validPayloadResponseRecorder.Code)
 	}
 
-	// 5. KV store with ticket on nil DB pool -> 500
-	testKVStore := newInMemoryKVStore()
-	_ = testKVStore.Set(context.Background(), "auth:mfa_ticket:mfa_tk_test", "test-user-id", 0)
-	baseHandler.SetKVStore(testKVStore)
+	// 5. KV store with ticket on broken DB pool -> 401
+	_ = kernel.KVStore().Set(context.Background(), "auth:mfa_ticket:mfa_tk_test", "test-user-id", 0)
 
-	nilDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"mfa_tk_test","code":"123456"}`))
-	nilDBResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleChallengeMFA(nilDBResponseRecorder, nilDBRequest)
-	if nilDBResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil DB pool in MFA challenge, got: %d", nilDBResponseRecorder.Code)
+	brokenDBRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/challenge", strings.NewReader(`{"mfa_ticket":"mfa_tk_test","code":"123456"}`))
+	brokenDBResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleChallengeMFA(brokenDBResponseRecorder, brokenDBRequest)
+	if brokenDBResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 on broken DB pool in MFA challenge, got: %d", brokenDBResponseRecorder.Code)
 	}
 }

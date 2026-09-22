@@ -43,22 +43,16 @@ var sqlIdentifierPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z
 type EventHookManager struct {
 	db               *DatabasePool
 	cryptoKeyManager *CryptoKeyManager
-	eventBus         *EventBus
 	httpClient       *http.Client
 }
 
 // NewEventHookManager creates a new EventHookManager.
-func NewEventHookManager(db *DatabasePool, cryptoKeyManager *CryptoKeyManager, eventBus *EventBus) *EventHookManager {
+func NewEventHookManager(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *EventHookManager {
 	return &EventHookManager{
 		db:               db,
 		cryptoKeyManager: cryptoKeyManager,
-		eventBus:         eventBus,
+		httpClient:       &http.Client{},
 	}
-}
-
-// SetHTTPClient overrides the default HTTP client used for HTTP hook dispatches (useful in testing).
-func (eventHookManager *EventHookManager) SetHTTPClient(httpClient *http.Client) {
-	eventHookManager.httpClient = httpClient
 }
 
 // Create inserts a new event hook into core.event_hooks.
@@ -111,9 +105,6 @@ func (eventHookManager *EventHookManager) Create(ctx context.Context, createEven
 		}
 
 		if createEventHookInput.SigningSecret != "" {
-			if eventHookManager.cryptoKeyManager == nil {
-				return nil, fmt.Errorf("cryptographic key manager is not configured")
-			}
 			encrypted, encryptFieldErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(createEventHookInput.SigningSecret))
 			if encryptFieldErr != nil {
 				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encryptFieldErr)
@@ -159,10 +150,6 @@ func (eventHookManager *EventHookManager) Create(ctx context.Context, createEven
 		}
 	}
 
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
-
 	hookID := uuid.NewV7()
 	now := time.Now().UTC()
 
@@ -193,9 +180,6 @@ func (eventHookManager *EventHookManager) Create(ctx context.Context, createEven
 // Get retrieves an event hook by its UUID.
 func (eventHookManager *EventHookManager) Get(ctx context.Context, eventHookUUID uuid.UUID) (*EventHook, error) {
 	log.Tracef("retrieving event hook %s", eventHookUUID)
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
 
 	query := `
 		SELECT id, name, driver, sql_function_name, http_target_url, http_encrypted_signing_secret, event_types, is_enabled, max_retries, timeout_seconds, created_at, last_updated_at
@@ -218,9 +202,6 @@ func (eventHookManager *EventHookManager) Get(ctx context.Context, eventHookUUID
 // List queries event hooks with optional filtering by driver and enabled status.
 func (eventHookManager *EventHookManager) List(ctx context.Context, eventHookFilter EventHookFilter) ([]EventHook, error) {
 	log.Tracef("listing event hooks")
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
 
 	var conditions []string
 	var args []any
@@ -324,9 +305,6 @@ func (eventHookManager *EventHookManager) Update(ctx context.Context, eventHookU
 	if updateEventHookInput.SigningSecret != nil {
 		secretText := strings.TrimSpace(*updateEventHookInput.SigningSecret)
 		if secretText != "" {
-			if eventHookManager.cryptoKeyManager == nil {
-				return nil, fmt.Errorf("cryptographic key manager is not configured")
-			}
 			encrypted, encryptFieldErr := eventHookManager.cryptoKeyManager.EncryptField([]byte(secretText))
 			if encryptFieldErr != nil {
 				return nil, fmt.Errorf("failed to encrypt signing secret: %w", encryptFieldErr)
@@ -407,9 +385,6 @@ func (eventHookManager *EventHookManager) Update(ctx context.Context, eventHookU
 // Delete removes an event hook by UUID.
 func (eventHookManager *EventHookManager) Delete(ctx context.Context, eventHookUUID uuid.UUID) error {
 	log.Debugf("deleting event hook %s", eventHookUUID)
-	if eventHookManager.db == nil {
-		return fmt.Errorf("database pool is not available")
-	}
 
 	result, err := eventHookManager.db.Exec(ctx, "DELETE FROM core.event_hooks WHERE id = $1", eventHookUUID)
 	if err != nil {
@@ -426,9 +401,6 @@ func (eventHookManager *EventHookManager) Delete(ctx context.Context, eventHookU
 // ListDeliveries retrieves the delivery history for a specific event hook.
 func (eventHookManager *EventHookManager) ListDeliveries(ctx context.Context, eventHookUUID uuid.UUID) ([]EventHookDelivery, error) {
 	log.Tracef("listing deliveries for event hook %s", eventHookUUID)
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
 
 	query := `
 		SELECT id, event_hook_id, event_id, event_type, payload, http_response_status, result, error_message, attempt_count, duration_ms, is_delivered, delivered_at, created_at
@@ -461,9 +433,6 @@ func (eventHookManager *EventHookManager) ListDeliveries(ctx context.Context, ev
 // GetDelivery retrieves a single delivery by hook ID and delivery ID.
 func (eventHookManager *EventHookManager) GetDelivery(ctx context.Context, eventHookUUID, deliveryUUID uuid.UUID) (*EventHookDelivery, error) {
 	log.Tracef("retrieving delivery %s for hook %s", deliveryUUID, eventHookUUID)
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
 
 	query := `
 		SELECT id, event_hook_id, event_id, event_type, payload, http_response_status, result, error_message, attempt_count, duration_ms, is_delivered, delivered_at, created_at
@@ -486,9 +455,6 @@ func (eventHookManager *EventHookManager) GetDelivery(ctx context.Context, event
 // RetryDelivery manually redrives a past event hook delivery attempt.
 func (eventHookManager *EventHookManager) RetryDelivery(ctx context.Context, deliveryUUID uuid.UUID) (*EventHookDelivery, error) {
 	log.Debugf("retrying delivery %s", deliveryUUID)
-	if eventHookManager.db == nil {
-		return nil, fmt.Errorf("database pool is not available")
-	}
 
 	query := `
 		SELECT id, event_hook_id, event_id, event_type, payload
@@ -523,10 +489,6 @@ func (eventHookManager *EventHookManager) RetryDelivery(ctx context.Context, del
 
 // Dispatch finds active matching event hooks and executes deliveries.
 func (eventHookManager *EventHookManager) Dispatch(ctx context.Context, event Event) {
-	if eventHookManager.db == nil {
-		return
-	}
-
 	query := `
 		SELECT id, name, driver, sql_function_name, http_target_url, http_encrypted_signing_secret, event_types, is_enabled, max_retries, timeout_seconds, created_at, last_updated_at
 		FROM core.event_hooks
@@ -651,26 +613,24 @@ func (eventHookManager *EventHookManager) DeliverWithID(ctx context.Context, eve
 
 	// Persist delivery outcome using context.WithoutCancel so recording history is never cancelled
 	historyCtx := context.WithoutCancel(ctx)
-	if eventHookManager.db != nil {
-		upsertQuery := `
-			INSERT INTO core.event_hook_deliveries (
-				id, event_hook_id, event_id, event_type, payload, http_response_status, result, error_message, attempt_count, duration_ms, is_delivered, delivered_at, created_at
-			) VALUES (
-				$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-			)
-			ON CONFLICT (id) DO UPDATE SET
-				http_response_status = EXCLUDED.http_response_status,
-				result = EXCLUDED.result,
-				error_message = EXCLUDED.error_message,
-				attempt_count = EXCLUDED.attempt_count,
-				duration_ms = EXCLUDED.duration_ms,
-				is_delivered = EXCLUDED.is_delivered,
-				delivered_at = EXCLUDED.delivered_at
-		`
-		_, _ = eventHookManager.db.Exec(historyCtx, upsertQuery,
-			deliveryID, eventHook.ID, event.ID, event.Type, eventBytes, lastStatus, lastResult, lastErr, attempt, durationMs, isDelivered, deliveredAt, time.Now().UTC(),
+	upsertQuery := `
+		INSERT INTO core.event_hook_deliveries (
+			id, event_hook_id, event_id, event_type, payload, http_response_status, result, error_message, attempt_count, duration_ms, is_delivered, delivered_at, created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
-	}
+		ON CONFLICT (id) DO UPDATE SET
+			http_response_status = EXCLUDED.http_response_status,
+			result = EXCLUDED.result,
+			error_message = EXCLUDED.error_message,
+			attempt_count = EXCLUDED.attempt_count,
+			duration_ms = EXCLUDED.duration_ms,
+			is_delivered = EXCLUDED.is_delivered,
+			delivered_at = EXCLUDED.delivered_at
+	`
+	_, _ = eventHookManager.db.Exec(historyCtx, upsertQuery,
+		deliveryID, eventHook.ID, event.ID, event.Type, eventBytes, lastStatus, lastResult, lastErr, attempt, durationMs, isDelivered, deliveredAt, time.Now().UTC(),
+	)
 
 	eventHookDelivery := &EventHookDelivery{
 		ID:                 deliveryID,
@@ -701,9 +661,6 @@ func (eventHookManager *EventHookManager) DeliverWithID(ctx context.Context, eve
 func (eventHookManager *EventHookManager) executeSQLAttempt(ctx context.Context, eventHook EventHook, eventBytes []byte, timeoutSeconds int) (*int, *string, error) {
 	if eventHook.SQLFunctionName == nil || *eventHook.SQLFunctionName == "" {
 		return nil, nil, fmt.Errorf("sql_function_name is missing")
-	}
-	if eventHookManager.db == nil {
-		return nil, nil, fmt.Errorf("database pool is not available")
 	}
 
 	attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
@@ -745,7 +702,7 @@ func (eventHookManager *EventHookManager) executeHTTPAttempt(ctx context.Context
 	}
 
 	secret := ""
-	if eventHook.HTTPEncryptedSigningSecret != nil && *eventHook.HTTPEncryptedSigningSecret != "" && eventHookManager.cryptoKeyManager != nil {
+	if eventHook.HTTPEncryptedSigningSecret != nil && *eventHook.HTTPEncryptedSigningSecret != "" {
 		decrypted, decryptFieldErr := eventHookManager.cryptoKeyManager.DecryptField(*eventHook.HTTPEncryptedSigningSecret)
 		if decryptFieldErr == nil {
 			secret = string(decrypted)
@@ -762,12 +719,7 @@ func (eventHookManager *EventHookManager) executeHTTPAttempt(ctx context.Context
 	request.Header.Set("X-Layr-Event", event.Type)
 	request.Header.Set("X-Layr-Delivery-Id", deliveryID.String())
 
-	client := eventHookManager.httpClient
-	if client == nil {
-		client = &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second}
-	}
-
-	response, err := client.Do(request)
+	response, err := eventHookManager.httpClient.Do(request)
 	if err != nil {
 		return nil, nil, false, fmt.Errorf("failed to execute http request: %w", err)
 	}

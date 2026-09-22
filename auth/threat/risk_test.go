@@ -12,10 +12,7 @@ func TestThreatRiskEvaluationUnit(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Nil DB, Nil KVStore
-	riskAssessment, err := EvaluateSignInRisk(ctx, nil, nil, "user-1", "1.2.3.4", "Mozilla/5.0", 0)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	riskAssessment := EvaluateSignInRisk(ctx, nil, nil, "user-1", "1.2.3.4", "Mozilla/5.0", 0)
 	if riskAssessment.Level != RiskLevelLow || riskAssessment.Score != 0 {
 		t.Fatalf("expected low risk with 0 score, got level=%s, score=%d", riskAssessment.Level, riskAssessment.Score)
 	}
@@ -29,10 +26,7 @@ func TestThreatRiskEvaluationUnit(t *testing.T) {
 	_, _ = RecordFailedAttempt(ctx, kvStore, "1.2.3.4", time.Minute)
 	_, _ = RecordFailedAttempt(ctx, kvStore, "1.2.3.4", time.Minute)
 
-	medRiskAssessment, medErr := EvaluateSignInRisk(ctx, nil, kvStore, "user-1", "1.2.3.4", "Mozilla/5.0", 30)
-	if medErr != nil {
-		t.Fatalf("unexpected error: %v", medErr)
-	}
+	medRiskAssessment := EvaluateSignInRisk(ctx, nil, kvStore, "user-1", "1.2.3.4", "Mozilla/5.0", 30)
 	if medRiskAssessment.Level != RiskLevelMedium || medRiskAssessment.Score != 30 {
 		t.Fatalf("expected medium risk with 30 score, got level=%s, score=%d", medRiskAssessment.Level, medRiskAssessment.Score)
 	}
@@ -41,10 +35,7 @@ func TestThreatRiskEvaluationUnit(t *testing.T) {
 	_, _ = RecordFailedAttempt(ctx, kvStore, "user-1", time.Minute)
 	_, _ = RecordFailedAttempt(ctx, kvStore, "user-1", time.Minute)
 
-	highRiskAssessment, highErr := EvaluateSignInRisk(ctx, nil, kvStore, "user-1", "1.2.3.4", "Mozilla/5.0", 30)
-	if highErr != nil {
-		t.Fatalf("unexpected error: %v", highErr)
-	}
+	highRiskAssessment := EvaluateSignInRisk(ctx, nil, kvStore, "user-1", "1.2.3.4", "Mozilla/5.0", 30)
 	if highRiskAssessment.Level != RiskLevelHigh || highRiskAssessment.Score != 50 {
 		t.Fatalf("expected high risk with 50 score, got level=%s, score=%d", highRiskAssessment.Level, highRiskAssessment.Score)
 	}

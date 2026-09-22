@@ -12,9 +12,8 @@ import (
 
 func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	service := NewService(nil)
-	service.SetServiceAccountManager(serviceAccountManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Forbidden ListIndexes
@@ -47,7 +46,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
+	service := NewService(core.NewTestKernel(nil))
 	controlPlaneHandler := service.controlPlaneHandler
 
 	// Missing parameters on ListIndexes

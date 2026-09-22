@@ -17,13 +17,7 @@ import (
 
 // handleListBuckets handles GET /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
-		return
-	}
-
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
 
@@ -33,7 +27,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter
 		FROM file_storage.buckets
 		ORDER BY name ASC;
 	`
-	rows, queryErr := controlPlaneHandler.db.Query(ctx, querySQL)
+	rows, queryErr := controlPlaneHandler.kernel.DB().Query(ctx, querySQL)
 	if queryErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, queryErr.Error())
 		return
@@ -74,13 +68,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter
 		Count:   len(buckets),
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, listBucketsResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, listBucketsResponse)
 }
 
 // handleCreateBucket handles POST /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketWrite) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
 
@@ -110,11 +103,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	backendConfig := createBucketInput.BackendConfig
 	if backendConfig == nil {
 		backendConfig = map[string]any{}
@@ -123,8 +111,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 	// Encrypt secret_access_key if backend is S3
 	if backend == "s3" {
 		if rawSecretKey, ok := backendConfig["secret_access_key"].(string); ok && rawSecretKey != "" {
-			if !strings.HasPrefix(rawSecretKey, "enc:v1:aes256gcm:") && controlPlaneHandler.cryptoKeyManager != nil {
-				encryptedSecret, _ := controlPlaneHandler.cryptoKeyManager.EncryptField([]byte(rawSecretKey))
+			if !strings.HasPrefix(rawSecretKey, "enc:v1:aes256gcm:") {
+				encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(rawSecretKey))
 				backendConfig["secret_access_key"] = encryptedSecret
 			}
 		}
@@ -155,7 +143,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 
 	var createdBucket Bucket
 	var returnedConfigBytes []byte
-	insertErr := controlPlaneHandler.db.QueryRow(
+	insertErr := controlPlaneHandler.kernel.DB().QueryRow(
 		ctx,
 		insertSQL,
 		bucketID,
@@ -195,13 +183,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 		createdBucket.BackendConfig["secret_access_key"] = "********"
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, createdBucket)
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, createdBucket)
 }
 
 // handleGetBucket handles GET /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
 
@@ -211,10 +198,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter h
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
 	ctx := request.Context()
 	const querySQL = `
 		SELECT id, name, is_public, backend, backend_config, allowed_mime_types, max_file_size_bytes, created_at, last_updated_at
@@ -224,7 +207,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter h
 
 	var bucket Bucket
 	var rawBackendConfig []byte
-	queryErr := controlPlaneHandler.db.QueryRow(ctx, querySQL, bucketName).Scan(
+	queryErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, querySQL, bucketName).Scan(
 		&bucket.ID,
 		&bucket.Name,
 		&bucket.IsPublic,
@@ -252,13 +235,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter h
 		bucket.BackendConfig["secret_access_key"] = "********"
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, bucket)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, bucket)
 }
 
 // handleUpdateBucket handles PATCH/PUT /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketWrite) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
 
@@ -274,11 +256,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	const queryCurrentSQL = `
 		SELECT id, name, is_public, backend, backend_config, allowed_mime_types, max_file_size_bytes, created_at, last_updated_at
@@ -287,7 +264,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 	`
 	var bucket Bucket
 	var rawBackendConfig []byte
-	queryErr := controlPlaneHandler.db.QueryRow(ctx, queryCurrentSQL, bucketName).Scan(
+	queryErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, queryCurrentSQL, bucketName).Scan(
 		&bucket.ID,
 		&bucket.Name,
 		&bucket.IsPublic,
@@ -326,8 +303,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		for itemKey, itemValue := range updateBucketInput.BackendConfig {
 			if itemKey == "secret_access_key" {
 				if secretString, ok := itemValue.(string); ok && secretString != "" && secretString != "********" {
-					if !strings.HasPrefix(secretString, "enc:v1:aes256gcm:") && controlPlaneHandler.cryptoKeyManager != nil {
-						encryptedSecret, encryptErr := controlPlaneHandler.cryptoKeyManager.EncryptField([]byte(secretString))
+					if !strings.HasPrefix(secretString, "enc:v1:aes256gcm:") {
+						encryptedSecret, encryptErr := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(secretString))
 						if encryptErr == nil {
 							itemValue = encryptedSecret
 						}
@@ -357,7 +334,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 	`
 	var updatedBucket Bucket
 	var returnedConfigBytes []byte
-	_ = controlPlaneHandler.db.QueryRow(
+	_ = controlPlaneHandler.kernel.DB().QueryRow(
 		ctx,
 		updateSQL,
 		bucket.IsPublic,
@@ -386,13 +363,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		updatedBucket.BackendConfig["secret_access_key"] = "********"
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, updatedBucket)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, updatedBucket)
 }
 
 // handleDeleteBucket handles DELETE /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketWrite) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
 
@@ -402,14 +378,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
-
 	ctx := request.Context()
 	const deleteSQL = `DELETE FROM file_storage.buckets WHERE name = $1;`
-	result, deleteErr := controlPlaneHandler.db.Exec(ctx, deleteSQL, bucketName)
+	result, deleteErr := controlPlaneHandler.kernel.DB().Exec(ctx, deleteSQL, bucketName)
 	if deleteErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deleteErr.Error())
 		return
@@ -425,8 +396,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 
 // handleListBucketObjects handles GET /v1/_/file-storage/buckets/{bucket}/objects.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, core.ScopeFileStorageBucketRead) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
 
@@ -436,14 +406,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		return
 	}
 
-	if controlPlaneHandler.db == nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Database unavailable")
-		return
-	}
 	ctx := request.Context()
 	const queryBucketSQL = `SELECT id FROM file_storage.buckets WHERE name = $1;`
 	var bucketID uuid.UUID
-	if err := controlPlaneHandler.db.QueryRow(ctx, queryBucketSQL, bucketName).Scan(&bucketID); err != nil {
+	if err := controlPlaneHandler.kernel.DB().QueryRow(ctx, queryBucketSQL, bucketName).Scan(&bucketID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("Bucket %q not found", bucketName))
 			return
@@ -459,7 +425,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		ORDER BY object_key ASC;
 	`
 	objects := []Object{}
-	rows, queryErr := controlPlaneHandler.db.Query(ctx, queryObjectsSQL, bucketID)
+	rows, queryErr := controlPlaneHandler.kernel.DB().Query(ctx, queryObjectsSQL, bucketID)
 	if queryErr == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -489,7 +455,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		Count:   len(objects),
 	}
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, listBucketObjectsResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, listBucketObjectsResponse)
 }
 
 var bucketNamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)

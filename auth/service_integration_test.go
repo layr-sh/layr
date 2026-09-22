@@ -10,20 +10,13 @@ import (
 )
 
 func TestAuthServiceIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
 
-	// 1. Initialize Service with real DB and CryptoKeyManager
-	service := NewService(db, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	kvStore := newInMemoryKVStore()
-
-	service.SetKVStore(kvStore)
-	service.SetServiceAccountManager(serviceAccountManager)
-	service.SetEventBus(eventBus)
+	// 1. Initialize Service with real kernel
+	service := NewService(kernel)
 
 	// 2. Start service (loads or seeds config in real DB)
 	if err := service.Start(ctx); err != nil {
@@ -31,9 +24,10 @@ func TestAuthServiceIntegration(t *testing.T) {
 	}
 
 	// 3. Create service account in DB and test CheckScope
+	serviceAccountManager := kernel.ServiceAccountManager()
 	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Service Scope Verification Account",
-		Scopes: []string{"auth:user.read", "auth:config.read"},
+		Scopes: []string{core.ScopeAuthUserRead, core.ScopeAuthConfigRead},
 	})
 	if err != nil {
 		t.Fatalf("failed to create service account: %v", err)
@@ -42,14 +36,14 @@ func TestAuthServiceIntegration(t *testing.T) {
 	// Authorized scope
 	validScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	validScopeRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
-	if !service.CheckScope(validScopeRequest, "auth:user.read") {
+	if !serviceAccountManager.CheckScope(validScopeRequest, core.ScopeAuthUserRead) {
 		t.Fatal("expected CheckScope to return true for granted scope")
 	}
 
 	// Unauthorized scope
 	missingScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
 	missingScopeRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
-	if service.CheckScope(missingScopeRequest, "auth:user.write") {
+	if serviceAccountManager.CheckScope(missingScopeRequest, core.ScopeAuthUserWrite) {
 		t.Fatal("expected CheckScope to return false for ungranted scope")
 	}
 
@@ -58,12 +52,6 @@ func TestAuthServiceIntegration(t *testing.T) {
 	if !exists || serviceFactory == nil {
 		t.Fatal("expected 'auth' service factory to exist")
 	}
-
-	kernel := &core.Kernel{}
-	kernel.SetDB(db)
-	kernel.SetKVStore(kvStore)
-	kernel.SetEventBus(eventBus)
-	kernel.SetServiceAccountManager(serviceAccountManager)
 
 	serviceRunner, err := serviceFactory(kernel)
 	if err != nil {
@@ -75,17 +63,14 @@ func TestAuthServiceIntegration(t *testing.T) {
 	if err := serviceRunner.Start(ctx); err != nil {
 		t.Fatalf("expected factory runner Start to succeed: %v", err)
 	}
-	if err := serviceRunner.Stop(); err != nil {
-		t.Fatalf("expected factory runner Stop to succeed: %v", err)
-	}
+	serviceRunner.Stop()
 }
 
 func TestAuthServiceBrokenPoolIntegration(t *testing.T) {
-	brokenDB := createBrokenPool(t)
-	cryptoKeyManager, _ := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	ctx := context.Background()
 
-	brokenService := NewService(brokenDB, cryptoKeyManager)
+	brokenService := NewService(kernel)
 	err := brokenService.Start(ctx)
 	if err == nil {
 		t.Fatal("expected Service.Start to fail with broken DB pool")

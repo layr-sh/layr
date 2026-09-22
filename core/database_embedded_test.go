@@ -146,9 +146,6 @@ func TestCoreEmbeddedDatabaseFindAvailablePortFallbackExhaustedUnit(t *testing.T
 
 func TestCoreEmbeddedDatabaseNewUnit(t *testing.T) {
 	embeddedDatabase := NewEmbeddedDatabase(".layr/data")
-	if embeddedDatabase == nil {
-		t.Fatal("expected non-nil Embedded instance")
-	}
 	if embeddedDatabase.dataDir != ".layr/data" {
 		t.Errorf("expected dataDir .layr/data, got %s", embeddedDatabase.dataDir)
 	}

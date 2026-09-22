@@ -18,22 +18,22 @@ import (
 
 // S3Engine forwards file storage operations to upstream AWS S3 or compatible endpoints.
 type S3Engine struct {
-	cryptoKeyManager *core.CryptoKeyManager
+	kernel *core.Kernel
 }
 
 // S3Driver aliases S3Engine.
 type S3Driver = S3Engine
 
 // NewS3Engine initializes a new S3 proxy driver.
-func NewS3Engine(cryptoKeyManager *core.CryptoKeyManager) *S3Engine {
+func NewS3Engine(kernel *core.Kernel) *S3Engine {
 	return &S3Engine{
-		cryptoKeyManager: cryptoKeyManager,
+		kernel: kernel,
 	}
 }
 
 // NewS3FileStorageEngine initializes an Engine backed by upstream AWS S3.
-func NewS3FileStorageEngine(cryptoKeyManager *core.CryptoKeyManager) *Engine {
-	return NewEngine(NewS3Engine(cryptoKeyManager))
+func NewS3FileStorageEngine(kernel *core.Kernel) *Engine {
+	return NewEngine(NewS3Engine(kernel))
 }
 
 // S3UpstreamConfiguration stores upstream S3 connection parameters.
@@ -67,10 +67,7 @@ func (s3Engine *S3Engine) parseUpstreamConfiguration(bucket Bucket) (*S3Upstream
 
 	secretAccessKey := rawSecretKey
 	if strings.HasPrefix(rawSecretKey, "enc:v1:aes256gcm:") {
-		if s3Engine.cryptoKeyManager == nil {
-			return nil, fmt.Errorf("crypto key manager unavailable for decrypting s3 secret")
-		}
-		decryptedBytes, decryptErr := s3Engine.cryptoKeyManager.DecryptField(rawSecretKey)
+		decryptedBytes, decryptErr := s3Engine.kernel.CryptoKeyManager().DecryptField(rawSecretKey)
 		if decryptErr != nil {
 			return nil, fmt.Errorf("failed to decrypt s3 secret_access_key: %w", decryptErr)
 		}

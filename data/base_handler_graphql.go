@@ -134,7 +134,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 	var userVisibleKey string
 	var internalCacheKey string
 
-	isCacheActive := config.Cache.Enabled && handler.kvStore != nil
+	isCacheActive := config.Cache.Enabled
 
 	if isCacheActive && cacheTTL > 0 && operationNode.Type == graphql.QueryOperationType {
 		referencedTables := handler.resolveGraphQLTables(operationNode)
@@ -144,7 +144,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleKey)
 		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleKey)
 
-		if cached, cacheGetErr := handler.kvStore.Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("X-Layr-Cache", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
@@ -163,21 +163,16 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		return
 	}
 
-	if handler.db == nil {
-		handler.writeGraphQLError(responseWriter, http.StatusInternalServerError, "Database connection is not initialized")
-		return
-	}
-
-	tx, err := handler.db.Begin(ctx)
+	tx, err := handler.kernel.DB().Begin(ctx)
 	if err != nil {
 		handler.writeGraphQLDBError(responseWriter, err)
 		return
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
-	requiredScope := "data:query.read"
+	requiredScope := core.ScopeDataQueryRead
 	if operationNode.Type == graphql.MutationOperationType {
-		requiredScope = "data:query.write"
+		requiredScope = core.ScopeDataQueryWrite
 	}
 	if !handler.isRLSBypassed(request, requiredScope) {
 		common.ApplyRLS(ctx, tx, jwtClaims)
@@ -217,19 +212,19 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		maxQueries := config.Cache.MaxCachedQueries
 		shouldCache := true
 		if maxQueries > 0 {
-			if currentCountString, countErr := handler.kvStore.Get(ctx, "cache:query_count"); countErr == nil && currentCountString != "" {
+			if currentCountString, countErr := handler.kernel.KVStore().Get(ctx, "cache:query_count"); countErr == nil && currentCountString != "" {
 				if currentCount, parseCountErr := strconv.ParseInt(currentCountString, 10, 64); parseCountErr == nil && currentCount >= int64(maxQueries) {
 					shouldCache = false
 				}
 			}
 		}
 		if shouldCache {
-			_ = handler.kvStore.Set(ctx, internalCacheKey, string(responseBytes), time.Duration(cacheTTL)*time.Second)
+			_ = handler.kernel.KVStore().Set(ctx, internalCacheKey, string(responseBytes), time.Duration(cacheTTL)*time.Second)
 			counterExpiry := time.Duration(config.Cache.QueryTTLSeconds*2) * time.Second
 			if counterExpiry < 5*time.Minute {
 				counterExpiry = 5 * time.Minute
 			}
-			_, _ = handler.kvStore.Increment(ctx, "cache:query_count", counterExpiry)
+			_, _ = handler.kernel.KVStore().Increment(ctx, "cache:query_count", counterExpiry)
 		}
 	}
 
@@ -343,30 +338,28 @@ func (handler *BaseHandler) handleMutationSideEffects(ctx context.Context, opera
 		}
 
 		// Invalidate cache
-		handler.invalidateTableCache(ctx, schema, tableName)
+		handler.InvalidateTableCache(ctx, schema, tableName)
 
 		// Publish domain event
-		if handler.eventBus != nil {
-			eventResourceID := fmt.Sprintf("%s.%s", schema, tableName)
-			switch action {
-			case "insert":
-				handler.eventBus.Publish(ctx, NewRowCreatedEvent(eventResourceID, RowCreatedEventData{
-					Schema:     schema,
-					Table:      tableName,
-					Properties: map[string]string{"mutation": name},
-				}))
-			case "update":
-				handler.eventBus.Publish(ctx, NewRowUpdatedEvent(eventResourceID, RowUpdatedEventData{
-					Schema:     schema,
-					Table:      tableName,
-					Properties: map[string]string{"mutation": name},
-				}))
-			case "delete":
-				handler.eventBus.Publish(ctx, NewRowDeletedEvent(eventResourceID, RowDeletedEventData{
-					Schema: schema,
-					Table:  tableName,
-				}))
-			}
+		eventResourceID := fmt.Sprintf("%s.%s", schema, tableName)
+		switch action {
+		case "insert":
+			handler.kernel.EventBus().Publish(ctx, NewRowCreatedEvent(eventResourceID, RowCreatedEventData{
+				Schema:     schema,
+				Table:      tableName,
+				Properties: map[string]string{"mutation": name},
+			}))
+		case "update":
+			handler.kernel.EventBus().Publish(ctx, NewRowUpdatedEvent(eventResourceID, RowUpdatedEventData{
+				Schema:     schema,
+				Table:      tableName,
+				Properties: map[string]string{"mutation": name},
+			}))
+		case "delete":
+			handler.kernel.EventBus().Publish(ctx, NewRowDeletedEvent(eventResourceID, RowDeletedEventData{
+				Schema: schema,
+				Table:  tableName,
+			}))
 		}
 	}
 }
@@ -436,7 +429,7 @@ func (handler *BaseHandler) resolveGraphQLTables(operationNode *graphql.Operatio
 	for _, fieldNode := range operationNode.SelectionSet {
 		targetSchema := "public"
 		targetTable := fieldNode.Name
-		if strings.Contains(targetTable, "_") && handler.schemaIntrospector != nil {
+		if strings.Contains(targetTable, "_") {
 			for underscoreIndex := 1; underscoreIndex < len(targetTable); underscoreIndex++ {
 				if targetTable[underscoreIndex] == '_' {
 					potentialSchema := targetTable[:underscoreIndex]
@@ -464,22 +457,18 @@ func (handler *BaseHandler) resolveNestedGraphQLTables(schema string, subFields 
 			continue
 		}
 		relationTable := subField.Name
-		if handler.schemaIntrospector != nil {
-			if _, exists := handler.schemaIntrospector.GetTable(schema, relationTable); exists {
-				tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: relationTable})
-			} else if strings.HasSuffix(relationTable, "s") {
-				singular := strings.TrimSuffix(relationTable, "s")
-				if _, exists := handler.schemaIntrospector.GetTable(schema, singular); exists {
-					tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: singular})
-				}
-			} else {
-				plural := relationTable + "s"
-				if _, exists := handler.schemaIntrospector.GetTable(schema, plural); exists {
-					tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: plural})
-				}
+		if _, exists := handler.schemaIntrospector.GetTable(schema, relationTable); exists {
+			tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: relationTable})
+		} else if strings.HasSuffix(relationTable, "s") {
+			singular := strings.TrimSuffix(relationTable, "s")
+			if _, exists := handler.schemaIntrospector.GetTable(schema, singular); exists {
+				tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: singular})
 			}
 		} else {
-			tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: relationTable})
+			plural := relationTable + "s"
+			if _, exists := handler.schemaIntrospector.GetTable(schema, plural); exists {
+				tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: plural})
+			}
 		}
 		tableReferences = append(tableReferences, handler.resolveNestedGraphQLTables(schema, subField.SelectionSet)...)
 	}

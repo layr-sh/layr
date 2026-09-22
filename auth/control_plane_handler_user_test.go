@@ -14,14 +14,10 @@ import (
 
 func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	ctx := context.Background()
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(nil, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(nil, configManager)
-	controlPlaneHandler.SetHasher(password.NewHasher())
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+	controlPlaneHandler.hasher = password.NewHasher()
 
 	// 1. handleCreateUser validation
 	badJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/auth/users", bytes.NewReader([]byte(`invalid-json`)))
@@ -71,8 +67,6 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	}
 
 	// 4. Test Forbidden Scope on all user handlers
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
 
 	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID, nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
@@ -115,7 +109,6 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 	}
 
 	// 5. Test Invalid UUIDs on all single-user endpoints (with valid scope)
-	controlPlaneHandler.SetServiceAccountManager(nil)
 	invalidUUID := "not-a-valid-uuid"
 	invalidUUIDRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+invalidUUID, nil)
 	invalidUUIDRequest.SetPathValue("user_id", invalidUUID)

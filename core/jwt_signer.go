@@ -165,8 +165,8 @@ type JWTSigner struct {
 
 // NewJWTSigner derives an Ed25519 keypair from KEY_JWT_SIGNING subkey.
 // If customKeyID is provided, it uses it; otherwise it defaults to "<handle>-ed25519-v1".
-func NewJWTSigner(cryptoKeyManager *CryptoKeyManager, customKeyID ...string) (*JWTSigner, error) {
-	seed, _ := cryptoKeyManager.DeriveSubkey(CryptoContextAuthJWTSigning)
+func NewJWTSigner(cryptoKeyManager *CryptoKeyManager, customKeyID ...string) *JWTSigner {
+	seed := cryptoKeyManager.DeriveSubkey(CryptoContextAuthJWTSigning)
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
@@ -187,7 +187,7 @@ func NewJWTSigner(cryptoKeyManager *CryptoKeyManager, customKeyID ...string) (*J
 		publicKey:  publicKey,
 		seed:       seed,
 		keyID:      resolvedKeyID,
-	}, nil
+	}
 }
 
 // KeyID returns the configured Ed25519 key ID.
@@ -208,7 +208,7 @@ func (signer *JWTSigner) PublicKey() ed25519.PublicKey {
 // - IssuedAt / NotBefore: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 900s)
 // - JWTID: UUIDv7 string
-func (signer *JWTSigner) GenerateAccessToken(jwtClaims JWTClaims, expirySeconds ...int) (string, error) {
+func (signer *JWTSigner) GenerateAccessToken(jwtClaims JWTClaims, expirySeconds ...int) string {
 	if jwtClaims.Role == "" {
 		jwtClaims.Role = "authenticated"
 	}
@@ -265,7 +265,7 @@ func (signer *JWTSigner) GenerateAccessToken(jwtClaims JWTClaims, expirySeconds 
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
 	log.Debugf("issued access token for subject %s (kid: %s)", jwtClaims.Subject, signer.keyID)
-	return signingInput + "." + signatureBase64, nil
+	return signingInput + "." + signatureBase64
 }
 
 // VerifyAccessToken validates an Ed25519 JWT, asserting signature and expiration/nbf timestamps.
@@ -350,7 +350,7 @@ func (signer *JWTSigner) VerifyHMAC(message, expectedSignature string) bool {
 // - Issuer: handle (slugified project name)
 // - IssuedAt / AuthTime: current UTC timestamp
 // - ExpiresAt: current UTC timestamp + expirySeconds (default 3600s)
-func (signer *JWTSigner) GenerateIDToken(jwtClaims JWTClaims, expirySeconds ...int) (string, error) {
+func (signer *JWTSigner) GenerateIDToken(jwtClaims JWTClaims, expirySeconds ...int) string {
 	if jwtClaims.Role == "" {
 		jwtClaims.Role = "authenticated"
 	}
@@ -396,7 +396,7 @@ func (signer *JWTSigner) GenerateIDToken(jwtClaims JWTClaims, expirySeconds ...i
 	signatureBase64 := base64.RawURLEncoding.EncodeToString(signature)
 
 	log.Debugf("issued ID token for subject %s (kid: %s)", jwtClaims.Subject, signer.keyID)
-	return signingInput + "." + signatureBase64, nil
+	return signingInput + "." + signatureBase64
 }
 
 // GenerateM2MToken signs a machine-to-machine OAuth 2.0 Client Credentials token.

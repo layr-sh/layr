@@ -20,10 +20,7 @@ func TestCoreJWTJWKSHTTPIntegration(t *testing.T) {
 		t.Fatalf("failed to create KeyManager: %v", err)
 	}
 
-	jwtSigner, err := NewJWTSigner(cryptoKeyManager)
-	if err != nil {
-		t.Fatalf("failed to create Signer: %v", err)
-	}
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
 
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/.well-known/jwks.json", jwtSigner.handleGetJWKS)
@@ -76,14 +73,11 @@ func TestCoreJWTJWKSHTTPIntegration(t *testing.T) {
 	discoveredPublicKey := ed25519.PublicKey(publicKeyBytes)
 
 	userID := uuid.NewV7().String()
-	token, tokenGenerateErr := jwtSigner.GenerateAccessToken(JWTClaims{
+	token := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: userID,
 		Email:   "user@example.com",
 		Claims:  map[string]any{"premium": true},
 	}, 300)
-	if tokenGenerateErr != nil {
-		t.Fatalf("failed to generate access token: %v", tokenGenerateErr)
-	}
 
 	// Manually verify token using discovered public key
 	tokenSegments := strings.Split(token, ".")

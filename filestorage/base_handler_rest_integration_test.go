@@ -17,22 +17,15 @@ import (
 )
 
 func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
-	db, cleanup := setupTestFileStorageDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	cryptoKeyManager, err := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if err != nil {
-		t.Fatalf("failed to create crypto key manager: %v", err)
-	}
-
-	configManager := NewConfigManager(db)
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	serviceAccountManager := core.NewServiceAccountManager(db)
-	baseHandler.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
+	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	// Create service account for testing
-	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+	createdServiceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "rest-test-service-account",
 		Scopes: []string{
 			core.ScopeFileStorageObjectRead,
@@ -51,7 +44,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 			id, name, is_public, backend, allowed_mime_types, max_file_size_bytes
 		) VALUES ($1, $2, $3, $4, $5, $6);
 	`
-	_, insertErr := db.Exec(ctx, insertBucketSQL, bucketID, "test-rest-bucket", false, "database", []string{"text/plain", "application/octet-stream"}, 10485760)
+	_, insertErr := kernel.DB().Exec(ctx, insertBucketSQL, bucketID, "test-rest-bucket", false, "database", []string{"text/plain", "application/octet-stream"}, 10485760)
 	if insertErr != nil {
 		t.Fatalf("failed to insert test bucket: %v", insertErr)
 	}
@@ -319,9 +312,9 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	}
 	_ = baseHandler.databaseEngine.Delete(ctx, Bucket{ID: bucketID, Name: "test-rest-bucket"}, "presigned-upload.txt")
 
-	// 16. Engine Resolution Error (when engine is nil) -> 500
+	// 16. Engine Resolution Error (when backend is unsupported) -> 500
 	savedDatabaseEngine := baseHandler.databaseEngine
-	baseHandler.databaseEngine = nil
+	_, _ = kernel.DB().Exec(ctx, "UPDATE file_storage.buckets SET backend = 'unsupported' WHERE name = 'test-rest-bucket'")
 
 	nilEngineDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
 	nilEngineDownloadRequest.SetPathValue("bucket", "test-rest-bucket")
@@ -330,7 +323,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	nilEngineDownloadResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDownloadObject(nilEngineDownloadResponseRecorder, nilEngineDownloadRequest)
 	if nilEngineDownloadResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil engine download, got %d", nilEngineDownloadResponseRecorder.Code)
+		t.Fatalf("expected 500 on unsupported backend download, got %d", nilEngineDownloadResponseRecorder.Code)
 	}
 
 	nilEngineHeadRequest := httptest.NewRequestWithContext(ctx, http.MethodHead, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
@@ -340,7 +333,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	nilEngineHeadResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleHeadObject(nilEngineHeadResponseRecorder, nilEngineHeadRequest)
 	if nilEngineHeadResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil engine head, got %d", nilEngineHeadResponseRecorder.Code)
+		t.Fatalf("expected 500 on unsupported backend head, got %d", nilEngineHeadResponseRecorder.Code)
 	}
 
 	nilEngineUploadRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", bytes.NewReader([]byte("data")))
@@ -350,7 +343,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	nilEngineUploadResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUploadObject(nilEngineUploadResponseRecorder, nilEngineUploadRequest)
 	if nilEngineUploadResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil engine upload, got %d", nilEngineUploadResponseRecorder.Code)
+		t.Fatalf("expected 500 on unsupported backend upload, got %d", nilEngineUploadResponseRecorder.Code)
 	}
 
 	nilEngineDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
@@ -360,8 +353,10 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	nilEngineDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeleteObject(nilEngineDeleteResponseRecorder, nilEngineDeleteRequest)
 	if nilEngineDeleteResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on nil engine delete, got %d", nilEngineDeleteResponseRecorder.Code)
+		t.Fatalf("expected 500 on unsupported backend delete, got %d", nilEngineDeleteResponseRecorder.Code)
 	}
+
+	_, _ = kernel.DB().Exec(ctx, "UPDATE file_storage.buckets SET backend = 'database' WHERE name = 'test-rest-bucket'")
 
 	// 17. Engine Operation Error (when engine returns non-404 error) -> 500
 	baseHandler.databaseEngine = NewEngine(&mockFailingDriver{})
@@ -416,13 +411,104 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 		t.Fatal("expected error on resolveBucket with canceled context")
 	}
 
+	// Canceled context error on REST handlers (database pool query error -> 500)
+	canceledDownloadRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
+	canceledDownloadRequest.SetPathValue("bucket", "test-rest-bucket")
+	canceledDownloadRequest.SetPathValue("key", "notes/hello.txt")
+	canceledDownloadResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDownloadObject(canceledDownloadResponseRecorder, canceledDownloadRequest)
+	if canceledDownloadResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled download, got %d", canceledDownloadResponseRecorder.Code)
+	}
+
+	canceledHeadRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodHead, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
+	canceledHeadRequest.SetPathValue("bucket", "test-rest-bucket")
+	canceledHeadRequest.SetPathValue("key", "notes/hello.txt")
+	canceledHeadResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleHeadObject(canceledHeadResponseRecorder, canceledHeadRequest)
+	if canceledHeadResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled head, got %d", canceledHeadResponseRecorder.Code)
+	}
+
+	canceledUploadRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodPut, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", bytes.NewReader([]byte("test")))
+	canceledUploadRequest.SetPathValue("bucket", "test-rest-bucket")
+	canceledUploadRequest.SetPathValue("key", "notes/hello.txt")
+	uploadErrResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleUploadObject(uploadErrResponseRecorder, canceledUploadRequest)
+	if uploadErrResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled upload, got %d", uploadErrResponseRecorder.Code)
+	}
+
+	canceledDeleteRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodDelete, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
+	canceledDeleteRequest.SetPathValue("bucket", "test-rest-bucket")
+	canceledDeleteRequest.SetPathValue("key", "notes/hello.txt")
+	deleteErrResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleDeleteObject(deleteErrResponseRecorder, canceledDeleteRequest)
+	if deleteErrResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled delete, got %d", deleteErrResponseRecorder.Code)
+	}
+
+	// Presign with service account auth context
+	serviceAccountAuthContext := core.AuthContext{
+		ServiceAccountID: createdServiceAccount.ID,
+		JWT: core.JWTClaims{
+			Subject: createdServiceAccount.ID,
+			Role:    "service_role",
+			Scope:   core.ScopeFileStorageObjectRead,
+		},
+	}
+	serviceAccountPresignRequest := httptest.NewRequestWithContext(
+		core.WithAuthContext(ctx, serviceAccountAuthContext),
+		http.MethodPost,
+		"/v1/file-storage/presign",
+		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
+	)
+	serviceAccountPresignResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePresignURL(serviceAccountPresignResponseRecorder, serviceAccountPresignRequest)
+	if serviceAccountPresignResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on sa presign, got %d", serviceAccountPresignResponseRecorder.Code)
+	}
+
+	// Presign with authenticated user auth context
+	userAuthContext := core.AuthContext{
+		UserID: "user-123",
+		JWT: core.JWTClaims{
+			Subject: "user-123",
+			Role:    "authenticated",
+		},
+	}
+	userPresignRequest := httptest.NewRequestWithContext(
+		core.WithAuthContext(ctx, userAuthContext),
+		http.MethodPost,
+		"/v1/file-storage/presign",
+		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
+	)
+	userPresignResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePresignURL(userPresignResponseRecorder, userPresignRequest)
+	if userPresignResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 on user presign, got %d", userPresignResponseRecorder.Code)
+	}
+
+	// Presign with canceled context -> 500
+	canceledPresignRequest := httptest.NewRequestWithContext(
+		core.WithAuthContext(canceledCtx, userAuthContext),
+		http.MethodPost,
+		"/v1/file-storage/presign",
+		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
+	)
+	canceledPresignResponseRecorder := httptest.NewRecorder()
+	baseHandler.handlePresignURL(canceledPresignResponseRecorder, canceledPresignRequest)
+	if canceledPresignResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on canceled presign, got %d", canceledPresignResponseRecorder.Code)
+	}
+
 	// 19. Bucket with NULL backend_config and malformed backend_config
 	const insertNullConfigSQL = `
 		INSERT INTO file_storage.buckets (id, name, is_public, backend, backend_config, allowed_mime_types, max_file_size_bytes)
 		VALUES ($1, 'null-config-bucket', true, 'database', NULL, '{}', 1048576);
 	`
 	nullConfigBucketID := uuid.NewV7()
-	_, insertNullErr := db.Exec(ctx, insertNullConfigSQL, nullConfigBucketID)
+	_, insertNullErr := kernel.DB().Exec(ctx, insertNullConfigSQL, nullConfigBucketID)
 	if insertNullErr == nil {
 		nullBucket, _ := baseHandler.resolveBucket(ctx, "null-config-bucket")
 		if nullBucket != nil && nullBucket.BackendConfig == nil {
@@ -435,7 +521,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 		VALUES ($1, 'bad-config-bucket', true, 'database', 'not-valid-json'::bytea, '{}', 1048576);
 	`
 	badConfigBucketID := uuid.NewV7()
-	_, insertBadErr := db.Exec(ctx, insertBadConfigSQL, badConfigBucketID)
+	_, insertBadErr := kernel.DB().Exec(ctx, insertBadConfigSQL, badConfigBucketID)
 	if insertBadErr == nil {
 		badBucket, _ := baseHandler.resolveBucket(ctx, "bad-config-bucket")
 		if badBucket != nil && badBucket.BackendConfig == nil {

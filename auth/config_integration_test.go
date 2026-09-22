@@ -15,11 +15,12 @@ import (
 )
 
 func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
-	configManager := NewConfigManager(db, cryptoKeyManager)
+	configManager := NewConfigManager(kernel)
 
 	// 1. Initial Load creates and saves default config
 	if err := configManager.Load(ctx); err != nil {
@@ -40,7 +41,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	}
 
 	// 3. Create second manager and assert persisted values load accurately
-	secondaryConfigManager := NewConfigManager(db, cryptoKeyManager)
+	secondaryConfigManager := NewConfigManager(kernel)
 	if err := secondaryConfigManager.Load(ctx); err != nil {
 		t.Fatalf("failed to load secondary manager: %v", err)
 	}
@@ -48,12 +49,9 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 		t.Fatalf("mismatched loaded secondary config: %+v", secondaryConfigManager.Get())
 	}
 
-	// 4. handleUpdateConfig with plaintext secrets and event bus
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	configManager.SetEventBus(eventBus)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	controlPlaneHandler.SetEventBus(eventBus)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+	eventBus := kernel.EventBus()
 
 	var mutex sync.Mutex
 	var receivedEvent core.Event
@@ -203,11 +201,11 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 }
 
 func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
-	serviceAccountManager := core.NewServiceAccountManager(db)
+	serviceAccountManager := kernel.ServiceAccountManager()
 
 	serviceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
 		Name:   "Read Only Service Account",
@@ -217,10 +215,8 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 		t.Fatalf("failed to create service account: %v", err)
 	}
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
-	configManager.SetServiceAccountManager(serviceAccountManager)
-	controlPlaneHandler := NewControlPlaneHandler(db, configManager)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 
 	// 1. GET with read scope succeeds
 	getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
@@ -251,15 +247,10 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 }
 
 func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
-	brokenDB := createBrokenPool(t)
-	if brokenDB == nil {
-		t.Skip("skipping broken pool test")
-		return
-	}
-
-	cryptoKeyManager, _ := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	configManager := NewConfigManager(brokenDB, cryptoKeyManager)
-	controlPlaneHandler := NewControlPlaneHandler(brokenDB, configManager)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	configManager := NewConfigManager(kernel)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 	ctx := context.Background()
 
 	// Load with broken pool returns error

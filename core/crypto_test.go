@@ -19,28 +19,24 @@ func TestCoreCryptoKeyManagerNewUnit(t *testing.T) {
 	validEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 	// 1. Valid 64-char hex key
-	cryptoKeyManager, err := NewCryptoKeyManager(validEncryptionKeyHex)
-	if err != nil || cryptoKeyManager == nil {
+	if _, err := NewCryptoKeyManager(validEncryptionKeyHex); err != nil {
 		t.Fatalf("expected valid key manager, got %v", err)
 	}
 
 	// 2. Whitespace trimmed hex key
-	trimmedCryptoKeyManager, err := NewCryptoKeyManager("  \t\n" + validEncryptionKeyHex + "  \n")
-	if err != nil || trimmedCryptoKeyManager == nil {
+	if _, err := NewCryptoKeyManager("  \t\n" + validEncryptionKeyHex + "  \n"); err != nil {
 		t.Fatalf("expected valid key manager after trimming whitespace, got %v", err)
 	}
 
 	// 3. Valid base64 key (32 bytes standard encoding)
 	validBase64Key := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-	base64CryptoKeyManager, err := NewCryptoKeyManager(validBase64Key)
-	if err != nil || base64CryptoKeyManager == nil {
+	if _, err := NewCryptoKeyManager(validBase64Key); err != nil {
 		t.Fatalf("expected valid key manager for standard base64, got %v", err)
 	}
 
 	// 4. Valid raw base64 key (32 bytes unpadded)
 	validRawBase64Key := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-	rawBase64CryptoKeyManager, err := NewCryptoKeyManager(validRawBase64Key)
-	if err != nil || rawBase64CryptoKeyManager == nil {
+	if _, err := NewCryptoKeyManager(validRawBase64Key); err != nil {
 		t.Fatalf("expected valid key manager for raw base64, got %v", err)
 	}
 
@@ -86,9 +82,9 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 
 	derivedMap := make(map[string][]byte)
 	for _, contextName := range allContexts {
-		subkey, err := cryptoKeyManager.DeriveSubkey(contextName)
-		if err != nil || len(subkey) != 32 {
-			t.Fatalf("DeriveSubkey(%s) failed: %v", contextName, err)
+		subkey := cryptoKeyManager.DeriveSubkey(contextName)
+		if len(subkey) != 32 {
+			t.Fatalf("DeriveSubkey(%s) returned invalid length: %d", contextName, len(subkey))
 		}
 		for existingContext, existingSubkey := range derivedMap {
 			if bytes.Equal(existingSubkey, subkey) {
@@ -99,11 +95,8 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 	}
 
 	// Deterministic: same context -> same subkey
-	repeatedSubkey, err := cryptoKeyManager.DeriveSubkey("test:deterministic")
-	if err != nil {
-		t.Fatalf("unexpected error deriving subkey: %v", err)
-	}
-	repeatedSubkeySecond, _ := cryptoKeyManager.DeriveSubkey("test:deterministic")
+	repeatedSubkey := cryptoKeyManager.DeriveSubkey("test:deterministic")
+	repeatedSubkeySecond := cryptoKeyManager.DeriveSubkey("test:deterministic")
 	if !bytes.Equal(repeatedSubkey, repeatedSubkeySecond) {
 		t.Fatal("expected deterministic subkey derivation")
 	}
@@ -245,8 +238,7 @@ func TestCoreCryptoGenerateRandomEncryptionKeyHexUnit(t *testing.T) {
 	}
 
 	// Verify generated key initializes a valid CryptoKeyManager
-	cryptoKeyManager, err := NewCryptoKeyManager(keyHex)
-	if err != nil || cryptoKeyManager == nil {
+	if _, err := NewCryptoKeyManager(keyHex); err != nil {
 		t.Fatalf("generated key should be valid: %v", err)
 	}
 }

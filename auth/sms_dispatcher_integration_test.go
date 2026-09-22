@@ -3,11 +3,14 @@ package auth
 import (
 	"context"
 	"testing"
+
+	"layr.sh/core"
 )
 
 func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
-	db, cryptoKeyManager, cleanup := setupTestDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
+	db := kernel.DB()
 
 	ctx := context.Background()
 
@@ -57,7 +60,7 @@ func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
 			},
 		},
 	}
-	smsDispatcher := NewSMSDispatcher(db, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 
 	// 1. Test template resolution using JSON object result with user_id (SQL hook takes priority over runtime config)
 	text := smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "321654", "01918a24-1234-7000-8000-000000000001", smsDispatcherConfig)

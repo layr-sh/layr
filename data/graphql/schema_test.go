@@ -3,11 +3,13 @@ package graphql
 import (
 	"testing"
 	"time"
+
+	"layr.sh/core"
 )
 
 func TestGraphqlSchemaMetadataCacheUnit(t *testing.T) {
 	// 1. NewSchemaIntrospector initializes empty tables map
-	schemaIntrospector := NewSchemaIntrospector(nil)
+	schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(nil))
 	if schemaIntrospector == nil {
 		t.Fatal("expected non-nil SchemaIntrospector")
 	}
@@ -15,13 +17,7 @@ func TestGraphqlSchemaMetadataCacheUnit(t *testing.T) {
 		t.Fatal("expected initialized tables map")
 	}
 
-	// 2. SetKVStore setter
-	schemaIntrospector.SetKVStore(nil)
-	if schemaIntrospector.kvStore != nil {
-		t.Fatal("expected nil kvStore")
-	}
-
-	// 3. GetTable on missing table returns false
+	// 2. GetTable on missing table returns false
 	_, exists := schemaIntrospector.GetTable("public", "missing_table")
 	if exists {
 		t.Fatal("expected false for missing table")

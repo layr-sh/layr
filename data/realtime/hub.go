@@ -37,8 +37,7 @@ type Subscription struct {
 
 // Hub manages WebSocket clients, subscriptions, and PostgreSQL CDC notifications.
 type Hub struct {
-	db              *core.DatabasePool
-	kvStore         *core.KVStore
+	kernel          *core.Kernel
 	clients         map[*Client]bool
 	clientsRWMutex  sync.RWMutex
 	installedTables map[string]bool // "schema.table" -> bool
@@ -56,9 +55,9 @@ type Hub struct {
 }
 
 // NewHub initializes a real-time CDC hub.
-func NewHub(db *core.DatabasePool) *Hub {
+func NewHub(kernel *core.Kernel) *Hub {
 	return &Hub{
-		db:              db,
+		kernel:          kernel,
 		clients:         make(map[*Client]bool),
 		installedTables: make(map[string]bool),
 		stopChannel:     make(chan struct{}),
@@ -74,11 +73,6 @@ func (hub *Hub) SetEventHandler(handler func(CDCEvent)) {
 	hub.onEvent = handler
 }
 
-// SetKVStore attaches the pluggable KVStore instance for presence tracking.
-func (hub *Hub) SetKVStore(kvStore *core.KVStore) {
-	hub.kvStore = kvStore
-}
-
 // SetPresenceTTL configures the TTL for presence keys in KVStore.
 func (hub *Hub) SetPresenceTTL(expiry time.Duration) {
 	if expiry > 0 {
@@ -90,30 +84,26 @@ func (hub *Hub) SetPresenceTTL(expiry time.Duration) {
 
 // SetPresence records subscriber presence in KVStore.
 func (hub *Hub) SetPresence(ctx context.Context, channel, clientID string) {
-	if hub.kvStore != nil && channel != "" && clientID != "" {
-		_ = hub.kvStore.Set(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID), clientID, hub.presenceTTL)
+	if channel != "" && clientID != "" {
+		_ = hub.kernel.KVStore().Set(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID), clientID, hub.presenceTTL)
 	}
 }
 
 // RemovePresence cleans up subscriber presence in KVStore.
 func (hub *Hub) RemovePresence(ctx context.Context, channel, clientID string) {
-	if hub.kvStore != nil && channel != "" && clientID != "" {
-		_ = hub.kvStore.Delete(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID))
+	if channel != "" && clientID != "" {
+		_ = hub.kernel.KVStore().Delete(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID))
 	}
 }
 
 // Start launches the background LISTEN cdc loop.
-func (hub *Hub) Start(ctx context.Context) error {
-	if hub.db == nil {
-		return fmt.Errorf("database pool is required for realtime CDC")
-	}
+func (hub *Hub) Start(ctx context.Context) {
 	hub.startMutex.Lock()
 	if !hub.started {
 		hub.started = true
 		go hub.listenLoop(ctx)
 	}
 	hub.startMutex.Unlock()
-	return nil
 }
 
 // Stop terminates the hub and closes all client connections.
@@ -198,7 +188,7 @@ func (hub *Hub) EnsureTableTrigger(ctx context.Context, schema, table string) er
 		END $$;
 	`, triggerName, triggerName, schema, table)
 
-	if _, err := hub.db.Exec(ctx, query); err != nil {
+	if _, err := hub.kernel.DB().Exec(ctx, query); err != nil {
 		return fmt.Errorf("failed to install CDC trigger on %s.%s: %w", schema, table, err)
 	}
 
@@ -251,7 +241,7 @@ func (hub *Hub) listenLoop(ctx context.Context) {
 		default:
 		}
 
-		pooledConn, err := hub.db.Acquire(loopCtx)
+		pooledConn, err := hub.kernel.DB().Acquire(loopCtx)
 		if err != nil || pooledConn == nil {
 			select {
 			case <-loopCtx.Done():

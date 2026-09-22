@@ -10,8 +10,7 @@ import (
 
 // handleCreateColumn adds a new column to a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -28,20 +27,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, addErr.Error())
 		return
 	}
-	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.invalidateTableCache(request.Context(), schema, table)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
+	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", schema, table)
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "add_column",
-			Detail: column.Name,
-		}))
-	}
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "add_column",
+		Detail: column.Name,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusCreated, CreateColumnResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreateColumnResponse{
 		Status: "created",
 		Column: column.Name,
 	})
@@ -49,8 +46,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 
 // handleUpdateColumn alters a column definition.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -68,20 +64,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, alterErr.Error())
 		return
 	}
-	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.invalidateTableCache(request.Context(), schema, table)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
+	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", schema, table)
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "alter_column",
-			Detail: columnName,
-		}))
-	}
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "alter_column",
+		Detail: columnName,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, UpdateColumnResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, UpdateColumnResponse{
 		Status: "updated",
 		Column: columnName,
 	})
@@ -89,8 +83,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 
 // handleDeleteColumn drops a column from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	if !controlPlaneHandler.checkScope(request, "data:schema.write") {
-		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Insufficient scope permissions for this operation")
+	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
 	schema, table := controlPlaneHandler.extractSchemaAndTable(request)
@@ -104,20 +97,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, dropErr.Error())
 		return
 	}
-	controlPlaneHandler.invalidateCache(request.Context())
-	controlPlaneHandler.invalidateTableCache(request.Context(), schema, table)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
+	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
 
-	if controlPlaneHandler.eventBus != nil {
-		tableID := fmt.Sprintf("%s.%s", schema, table)
-		controlPlaneHandler.eventBus.Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
-			Schema: schema,
-			Table:  table,
-			Action: "drop_column",
-			Detail: columnName,
-		}))
-	}
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
+		Schema: schema,
+		Table:  table,
+		Action: "drop_column",
+		Detail: columnName,
+	}))
 
-	controlPlaneHandler.writeJSON(responseWriter, http.StatusOK, DeleteColumnResponse{
+	core.WriteJSONResponse(responseWriter, http.StatusOK, DeleteColumnResponse{
 		Status: "deleted",
 		Column: columnName,
 	})

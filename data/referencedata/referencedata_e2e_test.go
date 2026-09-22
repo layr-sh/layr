@@ -51,8 +51,10 @@ func TestReferencedataLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
+	kernel := core.NewTestKernel(db)
+
 	// 3. Seed Reference Data
-	if err := referencedata.Seed(ctx, db); err != nil {
+	if err := referencedata.Seed(ctx, kernel); err != nil {
 		t.Fatalf("failed to seed reference data: %v", err)
 	}
 
@@ -108,7 +110,7 @@ func TestReferencedataLifecycleE2E(t *testing.T) {
 	}
 
 	// 6. Test idempotent re-seeding
-	if err := referencedata.Seed(ctx, db); err != nil {
+	if err := referencedata.Seed(ctx, kernel); err != nil {
 		t.Fatalf("re-seeding should be idempotent, failed: %v", err)
 	}
 }

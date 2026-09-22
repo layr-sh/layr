@@ -18,13 +18,13 @@ func smsDispatcherStringPointer(value string) *string {
 
 func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 	// 1. Nil config provider
-	nilProviderSMSDispatcher := NewSMSDispatcher(nil, nil, nil)
+	var nilProviderSMSDispatcher *SMSDispatcher
 	if nilProviderSMSDispatcher.IsConfigured() {
-		t.Fatal("expected IsConfigured() to be false when configProvider is nil")
+		t.Fatal("expected IsConfigured() to be false when dispatcher is nil")
 	}
 
 	// 2. Returns nil config
-	nilSMSDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil }, nil)
+	nilSMSDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil })
 	if nilSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when config is nil")
 	}
@@ -32,7 +32,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 	// 3. Driver is nil
 	nilDriverSMSDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig {
 		return &SMSDispatcherConfig{Driver: nil}
-	}, nil)
+	})
 	if nilDriverSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when Driver is nil")
 	}
@@ -43,7 +43,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: smsDispatcherStringPointer("twilio"),
 			Twilio: SMSDispatcherTwilioConfig{AccountSID: "", FromNumber: "+1555000", AuthToken: "token"},
 		}
-	}, nil)
+	})
 	if twilioMissingAccountSIDSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when AccountSID is empty")
 	}
@@ -54,7 +54,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: smsDispatcherStringPointer("twilio"),
 			Twilio: SMSDispatcherTwilioConfig{AccountSID: "AC123", FromNumber: "", AuthToken: "token"},
 		}
-	}, nil)
+	})
 	if twilioMissingFromNumberSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when FromNumber is empty")
 	}
@@ -65,7 +65,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: smsDispatcherStringPointer("twilio"),
 			Twilio: SMSDispatcherTwilioConfig{AccountSID: "AC123", FromNumber: "+1555000", AuthToken: ""},
 		}
-	}, nil)
+	})
 	if twilioMissingAuthTokenSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when AuthToken is empty and not configured")
 	}
@@ -76,7 +76,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: smsDispatcherStringPointer("twilio"),
 			Twilio: SMSDispatcherTwilioConfig{AccountSID: "AC123", FromNumber: "+1555000", AuthToken: "token"},
 		}
-	}, nil)
+	})
 	if !twilioSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete Twilio config with AuthToken")
 	}
@@ -87,7 +87,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver: smsDispatcherStringPointer("twilio"),
 			Twilio: SMSDispatcherTwilioConfig{AccountSID: "AC123", FromNumber: "+1555000", AuthTokenConfigured: true},
 		}
-	}, nil)
+	})
 	if !twilioAuthTokenConfiguredSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete Twilio config with AuthTokenConfigured")
 	}
@@ -98,7 +98,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver:  smsDispatcherStringPointer("webhook"),
 			Webhook: SMSDispatcherWebhookConfig{URL: ""},
 		}
-	}, nil)
+	})
 	if emptyWebhookSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false when Webhook URL is empty")
 	}
@@ -109,7 +109,7 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 			Driver:  smsDispatcherStringPointer("webhook"),
 			Webhook: SMSDispatcherWebhookConfig{URL: "https://example.com/sms-webhook"},
 		}
-	}, nil)
+	})
 	if !webhookSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be true for complete Webhook config")
 	}
@@ -119,14 +119,14 @@ func TestAuthSMSDispatcherIsConfiguredUnit(t *testing.T) {
 		return &SMSDispatcherConfig{
 			Driver: smsDispatcherStringPointer("unknown"),
 		}
-	}, nil)
+	})
 	if unknownSMSDispatcher.IsConfigured() {
 		t.Fatal("expected IsConfigured() to be false for unknown driver")
 	}
 }
 
 func TestAuthSMSSendUnconfiguredUnit(t *testing.T) {
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil }, nil)
+	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return nil })
 	ctx := context.Background()
 
 	if err := smsDispatcher.Send(ctx, SMSDispatcherMessage{To: "+15551234567", Text: "Hello"}); !errors.Is(err, ErrSMSDispatcherNotConfigured) {
@@ -153,7 +153,7 @@ func TestAuthSMSValidationErrorsUnit(t *testing.T) {
 			AuthToken:  "token",
 		},
 	}
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, nil)
+	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 	ctx := context.Background()
 
 	// Empty recipient
@@ -191,7 +191,8 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, nil)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 	ctx := context.Background()
 
 	// 1. Password reset custom template
@@ -262,10 +263,8 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 }
 
 func TestAuthSMSTwilioSendUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create KeyManager: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	cryptoKeyManager := kernel.CryptoKeyManager()
 
 	encryptedAuthToken, _ := cryptoKeyManager.EncryptField([]byte("secret-twilio-token"))
 
@@ -292,7 +291,7 @@ func TestAuthSMSTwilioSendUnit(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 	smsDispatcher.httpClient = server.Client()
 
 	// Override twilio endpoint in transport for test
@@ -308,7 +307,7 @@ func TestAuthSMSTwilioSendUnit(t *testing.T) {
 	smsDispatcher.httpClient = customClient
 
 	ctx := context.Background()
-	err = smsDispatcher.SendSignInOTP(ctx, "+15559876543", "456123", "user-id")
+	err := smsDispatcher.SendSignInOTP(ctx, "+15559876543", "456123", "user-id")
 	if err != nil {
 		t.Fatalf("expected successful twilio send, got: %v", err)
 	}
@@ -380,10 +379,8 @@ func TestAuthSMSTwilioSendUnit(t *testing.T) {
 }
 
 func TestAuthSMSWebhookSendUnit(t *testing.T) {
-	cryptoKeyManager, err := core.NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
-	if err != nil {
-		t.Fatalf("failed to create KeyManager: %v", err)
-	}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	cryptoKeyManager := kernel.CryptoKeyManager()
 
 	var receivedBody string
 	var receivedSignature string
@@ -407,10 +404,10 @@ func TestAuthSMSWebhookSendUnit(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, cryptoKeyManager)
+	smsDispatcher := NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 	ctx := context.Background()
 
-	err = smsDispatcher.SendPhoneVerification(ctx, "+15551234567", "654321", "user-id-xyz")
+	err := smsDispatcher.SendPhoneVerification(ctx, "+15551234567", "654321", "user-id-xyz")
 	if err != nil {
 		t.Fatalf("expected successful webhook send, got: %v", err)
 	}
@@ -488,7 +485,7 @@ func TestAuthSMSSendDefaultDriverAndClientUnit(t *testing.T) {
 		},
 	}
 
-	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig }, nil)
+	smsDispatcher := NewSMSDispatcher(nil, func() *SMSDispatcherConfig { return smsDispatcherConfig })
 
 	// Test nil driver returns ErrSMSDispatcherNotConfigured
 	ctx := context.Background()

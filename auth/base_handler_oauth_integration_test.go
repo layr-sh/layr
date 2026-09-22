@@ -18,17 +18,13 @@ import (
 )
 
 func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
-	db, cryptoKeyManager, teardown := setupTestDatabase(t)
+	kernel, teardown := core.SetupTestKernel(t, Migrations)
 	defer teardown()
+	db := kernel.DB()
 
-	configManager := NewConfigManager(db, cryptoKeyManager)
-	baseHandler := NewBaseHandler(db, configManager, cryptoKeyManager)
-	testKVStore := newInMemoryKVStore()
-	baseHandler.SetKVStore(testKVStore)
-
-	eventBus := core.NewEventBus(db, cryptoKeyManager)
-	defer eventBus.Close()
-	baseHandler.SetEventBus(eventBus)
+	service := NewService(kernel)
+	configManager := service.configManager
+	baseHandler := service.baseHandler
 
 	// Configure Google OAuth provider
 	activeConfig := DefaultConfig()
@@ -96,7 +92,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	}
 
 	// 4. Second callback with same identity logs in existing user
-	_ = testKVStore.Set(context.Background(), "auth:pkce:re-login-state", "re-login-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:re-login-state", "re-login-state", 10*time.Minute)
 	secondCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-mock-code&state=re-login-state", nil)
 	secondCallbackRequest.SetPathValue("provider", "google")
 	secondCallbackResponseResponseRecorder := httptest.NewRecorder()
@@ -113,7 +109,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 
 	// 4b. Locked federated user callback -> 423
 	_, _ = db.Exec(context.Background(), "UPDATE auth.users SET locked_until = clock_timestamp() + interval '1 hour' WHERE id = $1", firstAuthTokenResponse.User.ID)
-	_ = testKVStore.Set(context.Background(), "auth:pkce:locked-login-state", "locked-login-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:locked-login-state", "locked-login-state", 10*time.Minute)
 	lockedOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-mock-code&state=locked-login-state", nil)
 	lockedOAuthRequest.SetPathValue("provider", "google")
 	lockedOAuthResponseRecorder := httptest.NewRecorder()
@@ -134,13 +130,10 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 
 	// 5b. UserInfo 404 for non-existent user
 	nonExistentUserID := uuid.NewV7().String()
-	nonExistentToken, nonExistentTokenErr := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	nonExistentToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject: nonExistentUserID,
 		Role:    "authenticated",
 	}, 900)
-	if nonExistentTokenErr != nil {
-		t.Fatalf("failed to generate access token for non-existent user: %v", nonExistentTokenErr)
-	}
 	nonExistentUserInfoRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), core.AuthContext{UserID: nonExistentUserID, JWT: core.JWTClaims{Subject: nonExistentUserID, Role: "authenticated"}}), http.MethodGet, "/v1/auth/oauth/userinfo", nil)
 	nonExistentUserInfoRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentUserInfoResponseRecorder := httptest.NewRecorder()
@@ -160,14 +153,11 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert anonymous user: %v", insertErr)
 	}
 
-	anonAccessToken, err := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
-	if err != nil {
-		t.Fatalf("failed to generate access token for anonymous user: %v", err)
-	}
 	anonAuthContext := core.AuthContext{UserID: anonUserID, JWT: core.JWTClaims{Subject: anonUserID, Role: "authenticated", IsAnonymous: true}}
 
 	// Test handleAuthorizeOAuth with active anonymous caller
@@ -196,7 +186,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:anon-conversion-state", "anon-conversion-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:anon-conversion-state", "anon-conversion-state", 10*time.Minute)
 	conversionRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), anonAuthContext), http.MethodGet, "/v1/auth/oauth/google/callback?code=anon-code&state=anon-conversion-state", nil)
 	conversionRequest.SetPathValue("provider", "google")
 	conversionRequest.Header.Set("Authorization", "Bearer "+anonAccessToken)
@@ -224,14 +214,14 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		INSERT INTO auth.users (id, email, phone, role, is_anonymous, created_at, last_updated_at)
 		VALUES ($1, NULL, NULL, 'authenticated', true, clock_timestamp(), clock_timestamp())
 	`, anonUserID2)
-	anonAccessToken2, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	anonAccessToken2 := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     anonUserID2,
 		Role:        "authenticated",
 		IsAnonymous: true,
 	}, 900)
 	secondAnonAuthContext := core.AuthContext{UserID: anonUserID2, JWT: core.JWTClaims{Subject: anonUserID2, Role: "authenticated", IsAnonymous: true}}
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:identity-conflict-state", "identity-conflict-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:identity-conflict-state", "identity-conflict-state", 10*time.Minute)
 	conflictRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), secondAnonAuthContext), http.MethodGet, "/v1/auth/oauth/google/callback?code=conflict-code&state=identity-conflict-state", nil)
 	conflictRequest.SetPathValue("provider", "google")
 	conflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
@@ -257,7 +247,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:email-conflict-state", "email-conflict-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:email-conflict-state", "email-conflict-state", 10*time.Minute)
 	emailConflictRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), secondAnonAuthContext), http.MethodGet, "/v1/auth/oauth/google/callback?code=conflict-email-code&state=email-conflict-state", nil)
 	emailConflictRequest.SetPathValue("provider", "google")
 	emailConflictRequest.Header.Set("Authorization", "Bearer "+anonAccessToken2)
@@ -276,14 +266,14 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		CodeChallenge: "challenge_integ_xyz",
 		ClientState:   "client_state_integ",
 	})
-	_ = testKVStore.Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:oidc:state:"+oidcStateID, string(oidcPayloadJSON), 10*time.Minute)
 
 	oauthStateWithOIDCJSON, _ := json.Marshal(OAuthStatePayload{
 		StateID:     "oauth_oidc_state",
 		Provider:    "google",
 		OIDCStateID: oidcStateID,
 	})
-	_ = testKVStore.Set(context.Background(), "auth:pkce:oauth_oidc_state", string(oauthStateWithOIDCJSON), 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:oauth_oidc_state", string(oauthStateWithOIDCJSON), 10*time.Minute)
 
 	oidcLinkRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-code&state=oauth_oidc_state", nil)
 	oidcLinkRequest.SetPathValue("provider", "google")
@@ -301,11 +291,12 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	}
 
 	// 10. Broken pool coverage
-	brokenDB := createBrokenPool(t)
-	brokenBaseHandler := NewBaseHandler(brokenDB, configManager, cryptoKeyManager)
-	brokenBaseHandler.SetKVStore(testKVStore)
+	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	brokenService := NewService(brokenKernel)
+	brokenService.configManager.Set(activeConfig)
+	brokenBaseHandler := brokenService.baseHandler
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)
+	_ = brokenKernel.KVStore().Set(context.Background(), "auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)
 	brokenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-code&state=broken-pool-state", nil)
 	brokenRequest.SetPathValue("provider", "google")
 	brokenResponseRecorder := httptest.NewRecorder()
@@ -314,7 +305,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on broken pool, got: %d", brokenResponseRecorder.Code)
 	}
 
-	brokenUserInfoRequest := withUserAuth(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/userinfo", nil), secondAuthTokenResponse.User.ID, "authenticated", false)
+	brokenUserInfoRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/userinfo", nil), secondAuthTokenResponse.User.ID, "authenticated", false)
 	brokenUserInfoRequest.Header.Set("Authorization", "Bearer "+secondAuthTokenResponse.AccessToken)
 	brokenUserInfoResponseRecorder := httptest.NewRecorder()
 	brokenBaseHandler.handleGetOAuthUserInfo(brokenUserInfoResponseRecorder, brokenUserInfoRequest)
@@ -367,7 +358,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 
 	// 13. Hash refresh token
 	refreshTokenRaw := "db-test-refresh-token-xyz"
-	refreshHash := baseHandler.jwtSigner.HashRefreshToken(refreshTokenRaw)
+	refreshHash := kernel.JWTSigner().HashRefreshToken(refreshTokenRaw)
 	_, _ = db.Exec(context.Background(), `
 		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
 		VALUES ($1, $2, '127.0.0.1', 'test-agent', clock_timestamp() + interval '1 day', clock_timestamp())
@@ -406,7 +397,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		VALUES ($1, NULL, NULL, 'authenticated', true, '{}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, failAnonUserID)
 
-	failAnonToken, _ := baseHandler.jwtSigner.GenerateAccessToken(core.JWTClaims{
+	failAnonToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     failAnonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -437,7 +428,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		},
 	})
 
-	_ = testKVStore.Set(context.Background(), "auth:pkce:fail-update-state", "fail-update-state", 10*time.Minute)
+	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:fail-update-state", "fail-update-state", 10*time.Minute)
 	failUpdateRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), failAnonAuthContext), http.MethodGet, "/v1/auth/oauth/google/callback?code=anon-code&state=fail-update-state", nil)
 	failUpdateRequest.SetPathValue("provider", "google")
 	failUpdateRequest.Header.Set("Authorization", "Bearer "+failAnonToken)

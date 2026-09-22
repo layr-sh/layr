@@ -68,19 +68,17 @@ func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWri
 		log.Tracef("attaching anonymous user %s to OAuth state %s", anonymousUser.ID, state)
 	}
 
-	if handler.kvStore != nil {
-		oAuthStatePayload := OAuthStatePayload{
-			StateID:       state,
-			Provider:      provider,
-			RedirectURI:   redirectURI,
-			OIDCStateID:   oidcStateID,
-			AnonymousID:   anonymousID,
-			CreatedAtUnix: time.Now().Unix(),
-		}
-		payloadJSON, _ := json.Marshal(oAuthStatePayload)
-		log.Tracef("persisting OAuth state payload to KV store: %s", state)
-		_ = handler.kvStore.Set(request.Context(), "auth:pkce:"+state, string(payloadJSON), 10*time.Minute)
+	oAuthStatePayload := OAuthStatePayload{
+		StateID:       state,
+		Provider:      provider,
+		RedirectURI:   redirectURI,
+		OIDCStateID:   oidcStateID,
+		AnonymousID:   anonymousID,
+		CreatedAtUnix: time.Now().Unix(),
 	}
+	payloadJSON, _ := json.Marshal(oAuthStatePayload)
+	log.Tracef("persisting OAuth state payload to KV store: %s", state)
+	_ = handler.kernel.KVStore().Set(request.Context(), "auth:pkce:"+state, string(payloadJSON), 10*time.Minute)
 
 	if scopeQuery := request.URL.Query().Get("scope"); scopeQuery != "" {
 		resolvedProviderConfig.Scope = scopeQuery
@@ -178,12 +176,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		return
 	}
 
-	if handler.kvStore == nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: KV store unavailable to verify state %q", state))
-		return
-	}
-
-	storedState, err := handler.kvStore.Get(request.Context(), "auth:pkce:"+state)
+	storedState, err := handler.kernel.KVStore().Get(request.Context(), "auth:pkce:"+state)
 	if err != nil || storedState == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", fmt.Sprintf("OAuth callback rejected: state %s not found in KV store or expired", state))
 		return
@@ -205,7 +198,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		return
 	}
 
-	_ = handler.kvStore.Delete(request.Context(), "auth:pkce:"+state)
+	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:pkce:"+state)
 
 	if provider == "" || code == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_request", "Provider and authorization code required")
@@ -256,16 +249,11 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OAuth callback failed: database pool unavailable")
-		return
-	}
-
 	ctx := request.Context()
 
 	// 1. Check existing identity
 	var existingUserID string
-	err = handler.db.QueryRow(ctx, "SELECT user_id FROM auth.identities WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID).Scan(&existingUserID)
+	err = handler.kernel.DB().QueryRow(ctx, "SELECT user_id FROM auth.identities WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID).Scan(&existingUserID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", fmt.Sprintf("OAuth callback database query error: %v", err))
 		return
@@ -286,7 +274,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		if userInfo.Email != "" {
 			emailPtr = &userInfo.Email
 			var conflictingUserID string
-			conflictErr := handler.db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
+			conflictErr := handler.kernel.DB().QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", userInfo.Email).Scan(&conflictingUserID)
 			if conflictErr == nil && conflictingUserID != anonymousUser.ID {
 				core.WriteOAuthErrorResponse(responseWriter, http.StatusConflict, "invalid_request", "Email is already in use by another account")
 				return
@@ -296,7 +284,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		propertiesJSON, _ := json.Marshal(userInfo.Properties)
 
 		// Link identity
-		_, _ = handler.db.Exec(ctx, `
+		_, _ = handler.kernel.DB().Exec(ctx, `
 			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET user_id = $1, last_sign_in_at = clock_timestamp(), properties = $4
@@ -313,7 +301,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			WHERE id = $3
 			RETURNING id, email, phone, role, is_anonymous, properties, created_at, last_updated_at
 		`
-		updateErr := handler.db.QueryRow(ctx, updateQuery, emailPtr, propertiesJSON, anonymousUser.ID).Scan(
+		updateErr := handler.kernel.DB().QueryRow(ctx, updateQuery, emailPtr, propertiesJSON, anonymousUser.ID).Scan(
 			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 			&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 		)
@@ -327,9 +315,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 
 		handler.CompleteOAuthFlow(responseWriter, request, user, parsedOAuthStatePayload, isPayload)
 		return
@@ -337,7 +323,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 
 	if err == nil {
 		log.Debugf("logging in existing federated user %s via %s", existingUserID, provider)
-		_ = handler.db.QueryRow(ctx, `
+		_ = handler.kernel.DB().QueryRow(ctx, `
 			SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at 
 			FROM auth.users WHERE id = $1
 		`, existingUserID).Scan(&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous, &user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil, &user.EncryptedMFASecret, &user.MFAEnabled, &rawProperties, &user.CreatedAt, &user.LastUpdatedAt)
@@ -349,7 +335,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account is temporarily locked", fmt.Sprintf("failed OAuth sign in for locked user %s", user.ID))
 			return
 		}
-		_, _ = handler.db.Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
+		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
 	} else {
 		log.Debugf("registering new federated user via %s", provider)
 		var emailPtr *string
@@ -358,7 +344,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		}
 		propertiesJSON, _ := json.Marshal(userInfo.Properties)
 
-		_ = handler.db.QueryRow(ctx, `
+		_ = handler.kernel.DB().QueryRow(ctx, `
 			INSERT INTO auth.users (email, role, email_verified_at, properties, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), $2, clock_timestamp(), clock_timestamp())
 			ON CONFLICT (email) DO UPDATE SET last_updated_at = clock_timestamp()
@@ -369,16 +355,14 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
-		_, _ = handler.db.Exec(ctx, `
+		_, _ = handler.kernel.DB().Exec(ctx, `
 			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
 			ON CONFLICT (provider, provider_user_id) DO UPDATE SET last_sign_in_at = clock_timestamp()
 		`, user.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		log.Tracef("created new federated user %s for %s:%s", user.ID, provider, userInfo.ProviderUserID)
-		if handler.eventBus != nil {
-			handler.eventBus.Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
-		}
+		handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 	}
 
 	handler.CompleteOAuthFlow(responseWriter, request, user, parsedOAuthStatePayload, isPayload)
@@ -387,16 +371,16 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 // CompleteOAuthFlow completes the OAuth session flow, redirecting to OIDC client if linked, or issuing session tokens.
 func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter, request *http.Request, user User, parsedOAuthStatePayload OAuthStatePayload, isPayload bool) {
 	log.Debugf("completing OAuth flow for user %s (isPayload: %t, OIDCStateID: %s)", user.ID, isPayload, parsedOAuthStatePayload.OIDCStateID)
-	if isPayload && parsedOAuthStatePayload.OIDCStateID != "" && handler.kvStore != nil {
-		oidcStateJSON, err := handler.kvStore.Get(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
+	if isPayload && parsedOAuthStatePayload.OIDCStateID != "" {
+		oidcStateJSON, err := handler.kernel.KVStore().Get(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 		if err == nil && oidcStateJSON != "" {
 			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 			if err := json.Unmarshal([]byte(oidcStateJSON), &oidcAuthorizationStatePayload); err == nil {
 				log.Tracef("resolving linked OIDC state %s for client %s", parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload.ClientID)
-				_ = handler.kvStore.Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
+				_ = handler.kernel.KVStore().Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, user.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
-				refreshToken := handler.jwtSigner.GenerateRefreshToken()
-				refreshTokenHash := handler.jwtSigner.HashRefreshToken(refreshToken)
+				refreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
+				refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 				config := handler.configManager.Get()
 				refreshTokenExpirySeconds := config.Sessions.RefreshTokenExpirySeconds
 				if refreshTokenExpirySeconds <= 0 {
@@ -404,13 +388,11 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 				}
 				expiresAt := time.Now().Add(time.Duration(refreshTokenExpirySeconds) * time.Second)
 				sessionID := uuid.New().String()
-				if handler.db != nil {
-					log.Tracef("saving session for OIDC flow for user %s", user.ID)
-					_, _ = handler.db.Exec(request.Context(), `
-						INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-						VALUES ($1, $2, $3, $4, clock_timestamp())
-					`, sessionID, user.ID, refreshTokenHash, expiresAt)
-				}
+				log.Tracef("saving session for OIDC flow for user %s", user.ID)
+				_, _ = handler.kernel.DB().Exec(request.Context(), `
+					INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
+					VALUES ($1, $2, $3, $4, clock_timestamp())
+				`, sessionID, user.ID, refreshTokenHash, expiresAt)
 				core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
 				targetURL, parseErr := url.Parse(oidcAuthorizationStatePayload.RedirectURI)
@@ -441,14 +423,9 @@ func (handler *BaseHandler) handleGetOAuthUserInfo(responseWriter http.ResponseW
 		return
 	}
 
-	if handler.db == nil {
-		core.WriteOAuthErrorResponse(responseWriter, http.StatusInternalServerError, "server_error", "Service temporarily unavailable", "OAuth userinfo failed: database pool unavailable")
-		return
-	}
-
 	var user User
 	var rawProperties []byte
-	err := handler.db.QueryRow(request.Context(), `
+	err := handler.kernel.DB().QueryRow(request.Context(), `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 		FROM auth.users WHERE id = $1
 	`, authContext.UserID).Scan(

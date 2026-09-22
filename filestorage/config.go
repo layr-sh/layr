@@ -55,15 +55,15 @@ func (config Config) Validate() error {
 
 // ConfigManager handles in-memory caching and PostgreSQL synchronization for file_storage.config.
 type ConfigManager struct {
-	db      *core.DatabasePool
+	kernel  *core.Kernel
 	rwMutex sync.RWMutex
 	config  Config
 }
 
 // NewConfigManager initializes a new dynamic configuration manager.
-func NewConfigManager(db *core.DatabasePool) *ConfigManager {
+func NewConfigManager(kernel *core.Kernel) *ConfigManager {
 	return &ConfigManager{
-		db:     db,
+		kernel: kernel,
 		config: DefaultConfig(),
 	}
 }
@@ -84,13 +84,9 @@ func (configManager *ConfigManager) SetMemoryConfig(config Config) {
 
 // Load fetches the runtime config from PostgreSQL or initializes the default if not present.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
-	if configManager.db == nil {
-		return fmt.Errorf("database pool unavailable")
-	}
-
 	var rawJSON []byte
 	const selectSQLStatement = `SELECT value FROM file_storage.config WHERE key = $1`
-	scanErr := configManager.db.QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
+	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
 	if scanErr != nil {
 		defaultConfig := DefaultConfig()
 		return configManager.Set(ctx, defaultConfig)
@@ -113,11 +109,6 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 		return validateErr
 	}
 
-	if configManager.db == nil {
-		configManager.SetMemoryConfig(config)
-		return nil
-	}
-
 	serializedJSON, _ := json.Marshal(config)
 
 	const upsertSQLStatement = `
@@ -127,7 +118,7 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 		SET value = EXCLUDED.value,
 		    last_updated_at = EXCLUDED.last_updated_at;
 	`
-	_, execErr := configManager.db.Exec(ctx, upsertSQLStatement, ConfigKey, serializedJSON)
+	_, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, serializedJSON)
 	if execErr != nil {
 		return fmt.Errorf("failed to persist dynamic file storage config: %w", execErr)
 	}

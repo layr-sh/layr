@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"layr.sh/core"
 )
 
 func TestS3sigv4ErrorDefinitionsUnit(t *testing.T) {
@@ -130,20 +132,9 @@ func TestS3sigv4CanonicalHelpersUnit(t *testing.T) {
 	}
 }
 
-func TestS3sigv4NilDatabaseUnit(t *testing.T) {
-	validator := NewValidator(nil, nil)
-	request, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com/bucket", nil)
-	request.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIA/20260920/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abc")
-	request.Header.Set("X-Amz-Date", time.Now().UTC().Format("20060102T150405Z"))
-
-	_, err := validator.Validate(request)
-	if err == nil {
-		t.Fatal("expected error on validate with nil database pool")
-	}
-}
-
 func TestS3sigv4ValidatePreDatabaseUnit(t *testing.T) {
-	validator := NewValidator(nil, nil)
+	kernel := core.NewTestKernel(nil)
+	validator := NewValidator(kernel)
 	ctx := context.Background()
 
 	// 1. Missing auth headers and query params
@@ -173,6 +164,14 @@ func TestS3sigv4ValidatePreDatabaseUnit(t *testing.T) {
 		t.Fatalf("expected ErrInvalidTimestamp, got: %v", err)
 	}
 
+	// 4b. Date header fallback when X-Amz-Date is missing
+	dateHeaderRequest, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/bucket", nil)
+	dateHeaderRequest.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIA/20260920/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abc")
+	dateHeaderRequest.Header.Set("Date", "invalid-date")
+	if _, err := validator.Validate(dateHeaderRequest); !errors.Is(err, ErrInvalidTimestamp) {
+		t.Fatalf("expected ErrInvalidTimestamp, got: %v", err)
+	}
+
 	// 5. Expired timestamp in the past (>15m)
 	expiredPastRequest, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/bucket", nil)
 	expiredPastRequest.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIA/20260920/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abc")
@@ -187,25 +186,6 @@ func TestS3sigv4ValidatePreDatabaseUnit(t *testing.T) {
 	expiredFutureRequest.Header.Set("X-Amz-Date", time.Now().Add(20*time.Minute).UTC().Format("20060102T150405Z"))
 	if _, err := validator.Validate(expiredFutureRequest); !errors.Is(err, ErrRequestExpired) {
 		t.Fatalf("expected ErrRequestExpired for future timestamp, got: %v", err)
-	}
-
-	// 7. Valid RFC1123 Date header fallback
-	rfc1123DateRequest, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/bucket", nil)
-	rfc1123DateRequest.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=AKIA/20260920/us-east-1/s3/aws4_request, SignedHeaders=host, Signature=abc")
-	rfc1123DateRequest.Header.Set("Date", time.Now().UTC().Format(time.RFC1123))
-	if _, err := validator.Validate(rfc1123DateRequest); err == nil {
-		t.Fatal("expected error on validate with RFC1123 date and nil database pool")
-	}
-
-	// 8. Query auth with valid replay window
-	validQueryRequest, _ := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		"http://example.com/bucket?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIA/20260920/us-east-1/s3/aws4_request&X-Amz-Date="+time.Now().UTC().Format("20060102T150405Z")+"&X-Amz-SignedHeaders=host&X-Amz-Signature=abc",
-		nil,
-	)
-	if _, err := validator.Validate(validQueryRequest); err == nil {
-		t.Fatal("expected error on validate with query auth and nil database pool")
 	}
 }
 

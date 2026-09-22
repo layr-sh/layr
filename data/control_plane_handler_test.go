@@ -10,39 +10,21 @@ import (
 )
 
 func TestDataControlPlaneHandlerBaseConstructorAndSettersUnit(t *testing.T) {
-	service := NewService(nil)
-	controlPlaneHandler := NewControlPlaneHandler(service.ddlEngine, service, service.configManager)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	controlPlaneHandler := NewControlPlaneHandler(service)
 
 	if controlPlaneHandler == nil {
 		t.Fatal("expected non-nil controlPlaneHandler")
-	}
-
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	controlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	if controlPlaneHandler.serviceAccountManager != serviceAccountManager {
-		t.Fatal("expected serviceAccountManager to match")
-	}
-
-	eventBus := core.NewEventBus(nil, nil)
-	controlPlaneHandler.SetEventBus(eventBus)
-	if controlPlaneHandler.eventBus != eventBus {
-		t.Fatal("expected eventBus to match")
-	}
-
-	controlPlaneHandler.SetKVStore(nil)
-	if controlPlaneHandler.kvStore != nil {
-		t.Fatal("expected kvStore to be nil")
 	}
 }
 
 func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 	ctx := context.Background()
-	service := NewService(nil)
-	controlPlaneHandler := service.controlPlaneHandler
 
-	// writeJSON
+	// WriteJSONResponse
 	jsonResponseRecorder := httptest.NewRecorder()
-	controlPlaneHandler.writeJSON(jsonResponseRecorder, http.StatusOK, map[string]string{"status": "ok"})
+	core.WriteJSONResponse(jsonResponseRecorder, http.StatusOK, map[string]string{"status": "ok"})
 	if jsonResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", jsonResponseRecorder.Code)
 	}
@@ -66,7 +48,9 @@ func TestDataControlPlaneHandlerBaseHelpersUnit(t *testing.T) {
 
 func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 	ctx := context.Background()
-	controlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
 
 	// Path Value extractor test
 	pathValueRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/myschema/mytable/columns/mycolumn", nil)
@@ -100,33 +84,35 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 		t.Fatalf("expected fallback_column, got %s", column)
 	}
 
+	// URL path with indexes
 	indexFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/fallback_schema/fallback_table/indexes/fallback_index", nil)
 	if index := controlPlaneHandler.extractIndexName(indexFallbackRequest); index != "fallback_index" {
 		t.Fatalf("expected fallback_index, got %s", index)
 	}
 
+	// URL path with policies
 	policyFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/fallback_schema/fallback_table/policies/fallback_policy", nil)
 	if policy := controlPlaneHandler.extractPolicyName(policyFallbackRequest); policy != "fallback_policy" {
 		t.Fatalf("expected fallback_policy, got %s", policy)
 	}
 
-	// Empty / missing parts test
-	emptyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
-	schema, table = controlPlaneHandler.extractSchemaAndTable(emptyRequest)
-	if schema != "" || table != "" {
-		t.Fatalf("expected empty schema/table, got %s/%s", schema, table)
+	// Edge cases: empty URL path
+	emptyPathRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data", nil)
+	emptySchema, emptyTable := controlPlaneHandler.extractSchemaAndTable(emptyPathRequest)
+	if emptySchema != "" || emptyTable != "" {
+		t.Fatalf("expected empty schema/table, got %s/%s", emptySchema, emptyTable)
 	}
-	if column := controlPlaneHandler.extractColumnName(emptyRequest); column != "" {
-		t.Fatalf("expected empty column, got %s", column)
+	if column := controlPlaneHandler.extractColumnName(emptyPathRequest); column != "" {
+		t.Fatalf("expected empty column for empty path, got %s", column)
 	}
-	if index := controlPlaneHandler.extractIndexName(emptyRequest); index != "" {
-		t.Fatalf("expected empty index, got %s", index)
+	if index := controlPlaneHandler.extractIndexName(emptyPathRequest); index != "" {
+		t.Fatalf("expected empty index for empty path, got %s", index)
 	}
-	if policy := controlPlaneHandler.extractPolicyName(emptyRequest); policy != "" {
-		t.Fatalf("expected empty policy, got %s", policy)
+	if policy := controlPlaneHandler.extractPolicyName(emptyPathRequest); policy != "" {
+		t.Fatalf("expected empty policy for empty path, got %s", policy)
 	}
 
-	// Test non-matching path with insufficient parts
+	// Non-matching path segments
 	nonMatchingRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables/public/users", nil)
 	if index := controlPlaneHandler.extractIndexName(nonMatchingRequest); index != "" {
 		t.Fatalf("expected empty index for non-matching path, got %s", index)
@@ -136,71 +122,54 @@ func TestDataControlPlaneHandlerBasePathExtractorsUnit(t *testing.T) {
 	}
 }
 
-func TestDataControlPlaneHandlerBaseCheckScopeUnit(t *testing.T) {
+func TestDataControlPlaneHandlerBaseRequireScopeUnit(t *testing.T) {
 	ctx := context.Background()
+	kernel := core.NewTestKernel(nil)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+	serviceAccountManager := controlPlaneHandler.kernel.ServiceAccountManager()
 
-	// Nil manager returns true
-	handlerWithoutManagerControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
 	allowedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
-	if !handlerWithoutManagerControlPlaneHandler.checkScope(allowedRequest, "data:config.read") {
-		t.Fatal("expected true when serviceAccountManager is nil")
-	}
-
-	// With service and nil manager
-	service := NewService(nil)
-	service.SetServiceAccountManager(nil)
-	handlerWithServiceControlPlaneHandler := NewControlPlaneHandler(nil, service, nil)
-	if !handlerWithServiceControlPlaneHandler.checkScope(allowedRequest, "data:config.read") {
-		t.Fatal("expected true when service has nil serviceAccountManager")
-	}
-
-	// Empty key with serviceAccountManager returns true (internal / session auth)
-	serviceAccountManager := core.NewServiceAccountManager(nil)
-	handlerWithManagerControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
-	handlerWithManagerControlPlaneHandler.SetServiceAccountManager(serviceAccountManager)
-	if !handlerWithManagerControlPlaneHandler.checkScope(allowedRequest, "data:config.read") {
+	allowedResponseRecorder := httptest.NewRecorder()
+	if !serviceAccountManager.RequireScope(allowedResponseRecorder, allowedRequest, core.ScopeDataConfigRead) {
 		t.Fatal("expected true on empty service account key")
 	}
 
-	// Invalid key with serviceAccountManager returns false
 	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_key")
-	if handlerWithManagerControlPlaneHandler.checkScope(invalidKeyRequest, "data:config.read") {
+	invalidResponseRecorder := httptest.NewRecorder()
+	if serviceAccountManager.RequireScope(invalidResponseRecorder, invalidKeyRequest, core.ScopeDataConfigRead) {
 		t.Fatal("expected false on invalid service account key")
 	}
 
-	// Service role JWT with scope returns true
 	allowedJWTRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{
 		JWT: core.JWTClaims{
 			Role:  "service_role",
-			Scope: "data:config.read",
+			Scope: core.ScopeDataConfigRead,
 		},
 	}), http.MethodGet, "/v1/_/data/config", nil)
-	if !handlerWithManagerControlPlaneHandler.checkScope(allowedJWTRequest, "data:config.read") {
+	allowedJWTResponseRecorder := httptest.NewRecorder()
+	if !serviceAccountManager.RequireScope(allowedJWTResponseRecorder, allowedJWTRequest, core.ScopeDataConfigRead) {
 		t.Fatal("expected true on service_role JWT with required scope")
 	}
 
-	// Service role JWT without scope returns false
 	deniedJWTRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{
 		JWT: core.JWTClaims{
 			Role:  "service_role",
 			Scope: "other:scope",
 		},
 	}), http.MethodGet, "/v1/_/data/config", nil)
-	if handlerWithManagerControlPlaneHandler.checkScope(deniedJWTRequest, "data:config.read") {
+	deniedJWTResponseRecorder := httptest.NewRecorder()
+	if serviceAccountManager.RequireScope(deniedJWTResponseRecorder, deniedJWTRequest, core.ScopeDataConfigRead) {
 		t.Fatal("expected false on service_role JWT without required scope")
 	}
 }
 
 func TestDataControlPlaneHandlerBaseInvalidateCacheUnit(t *testing.T) {
 	ctx := context.Background()
-
-	// With nil service
-	handlerWithoutServiceControlPlaneHandler := NewControlPlaneHandler(nil, nil, nil)
-	handlerWithoutServiceControlPlaneHandler.invalidateCache(ctx)
-
-	// With service
-	service := NewService(nil)
-	handlerWithServiceControlPlaneHandler := service.controlPlaneHandler
-	handlerWithServiceControlPlaneHandler.invalidateCache(ctx)
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+	controlPlaneHandler.InvalidateCache(ctx, InvalidateCacheInput{All: true})
+	controlPlaneHandler.InvalidateTableCache(ctx, "public", "users")
 }

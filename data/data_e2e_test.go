@@ -13,27 +13,20 @@ import (
 )
 
 func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
-	db, cleanup := setupTestDataDatabase(t)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	cryptoKeyManager, keyErr := core.NewCryptoKeyManager(testMasterEncryptionKeyHex)
-	if keyErr != nil {
-		t.Fatalf("failed to create key manager: %v", keyErr)
-	}
-
-	dataService := NewService(db)
-	mockKVStore := newInMemoryKVStore()
-	dataService.SetKVStore(mockKVStore)
+	dataService := NewService(kernel)
 
 	if startErr := dataService.Start(ctx); startErr != nil {
 		t.Fatalf("failed to start data service: %v", startErr)
 	}
-	defer func() { _ = dataService.Stop() }()
+	defer func() { dataService.Stop() }()
 
-	coreServer := core.NewServer(db, cryptoKeyManager)
+	coreServer := core.NewServer(kernel)
 	dataService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
 
 	publicServeMux := coreServer.BaseRouter().Mux()
