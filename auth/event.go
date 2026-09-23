@@ -317,3 +317,31 @@ type UserExportedEventData User
 func NewUserExportedEvent(resourceID string, userExportedEventData UserExportedEventData) core.Event {
 	return core.NewEvent("auth.user.exported", userExportedEventData).WithResourceID(resourceID)
 }
+
+// IdentityLinkedEventData represents the payload for auth.identity.linked.
+type IdentityLinkedEventData struct {
+	UserID         string         `json:"user_id"`
+	Provider       string         `json:"provider"`
+	ProviderUserID string         `json:"provider_user_id"`
+	Properties     map[string]any `json:"properties,omitempty"`
+	User           User           `json:"user"`
+}
+
+// NewIdentityLinkedEvent creates a typed event for federated identity linking.
+func NewIdentityLinkedEvent(resourceID string, identityLinkedEventData IdentityLinkedEventData) core.Event {
+	return core.NewEvent("auth.identity.linked", identityLinkedEventData).WithResourceID(resourceID)
+}
+
+// TokenRefreshedEventData represents the payload for auth.token.refreshed.
+type TokenRefreshedEventData struct {
+	SessionID string    `json:"session_id"`
+	User      User      `json:"user"`
+	IPAddress *string   `json:"ip_address,omitempty"`
+	UserAgent *string   `json:"user_agent,omitempty"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// NewTokenRefreshedEvent creates a typed event for access/refresh token rotation.
+func NewTokenRefreshedEvent(resourceID string, tokenRefreshedEventData TokenRefreshedEventData) core.Event {
+	return core.NewEvent("auth.token.refreshed", tokenRefreshedEventData).WithResourceID(resourceID)
+}

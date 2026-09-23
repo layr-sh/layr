@@ -17,6 +17,7 @@ import (
 
 // handleListBuckets handles GET /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListBuckets invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
@@ -68,11 +69,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter
 		Count:   len(buckets),
 	}
 
+	log.Debugf("retrieved %d bucket(s)", len(buckets))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listBucketsResponse)
 }
 
 // handleCreateBucket handles POST /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreateBucket invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -183,11 +186,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 		createdBucket.BackendConfig["secret_access_key"] = "********"
 	}
 
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketCreatedEvent(createdBucket.ID.String(), BucketCreatedEventData(createdBucket)))
+	log.Debugf("bucket %s successfully created", createdBucket.Name)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, createdBucket)
 }
 
 // handleGetBucket handles GET /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleGetBucket invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
@@ -240,6 +246,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter h
 
 // handleUpdateBucket handles PATCH/PUT /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleUpdateBucket invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -363,11 +370,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		updatedBucket.BackendConfig["secret_access_key"] = "********"
 	}
 
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketUpdatedEvent(updatedBucket.ID.String(), BucketUpdatedEventData(updatedBucket)))
+	log.Debugf("bucket %s successfully updated", updatedBucket.Name)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, updatedBucket)
 }
 
 // handleDeleteBucket handles DELETE /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeleteBucket invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -391,11 +401,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 		return
 	}
 
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketDeletedEvent(bucketName, BucketDeletedEventData{
+		BucketName: bucketName,
+	}))
+	log.Debugf("bucket %s successfully deleted", bucketName)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
 // handleListBucketObjects handles GET /v1/_/file-storage/buckets/{bucket}/objects.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListBucketObjects invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
@@ -455,6 +470,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		Count:   len(objects),
 	}
 
+	log.Debugf("retrieved %d object(s) in bucket %s", len(objects), bucketName)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listBucketObjectsResponse)
 }
 

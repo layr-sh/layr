@@ -158,6 +158,16 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 		CreatedAt:  sessionCreatedAt,
 	}))
 
+	if authMethod == "session_refresh" {
+		handler.kernel.EventBus().Publish(publishCtx, NewTokenRefreshedEvent(sessionID, TokenRefreshedEventData{
+			SessionID: sessionID,
+			User:      user,
+			IPAddress: ipAddressPtr,
+			UserAgent: userAgent,
+			ExpiresAt: refreshTokenExpiredAt,
+		}))
+	}
+
 	core.SetSessionCookie(responseWriter, request, refreshToken, refreshTokenExpiredAt)
 
 	authTokenResponse := AuthTokenResponse{

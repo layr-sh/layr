@@ -11,6 +11,7 @@ import (
 // Node handles cluster heartbeats and active nodes.
 type Node struct {
 	db                *DatabasePool
+	eventBus          *EventBus
 	nodeID            uuid.UUID
 	nodeName          string
 	services          []string
@@ -33,6 +34,12 @@ func NewNode(db *DatabasePool, nodeName string, services []string) *Node {
 	}
 }
 
+// WithEventBus attaches an EventBus to the Node for publishing cluster lifecycle events.
+func (node *Node) WithEventBus(eventBus *EventBus) *Node {
+	node.eventBus = eventBus
+	return node
+}
+
 const (
 	heartbeatTimeoutDuration  = 5 * time.Second
 	unregisterTimeoutDuration = 3 * time.Second
@@ -53,6 +60,13 @@ func (node *Node) Register(ctx context.Context) error {
 	node.nodeID = nodeID
 
 	log.Tracef("node %s registered with id %s", node.nodeName, nodeID)
+	if node.eventBus != nil {
+		node.eventBus.Publish(ctx, NewNodeRegisteredEvent(node.nodeID.String(), NodeRegisteredEventData{
+			ID:              node.nodeID,
+			NodeName:        node.nodeName,
+			EnabledServices: node.services,
+		}))
+	}
 	node.waitGroup.Add(1)
 	go node.startHeartbeatLoop(ctx)
 	return nil
@@ -88,6 +102,12 @@ func (node *Node) startHeartbeatLoop(ctx context.Context) {
 				unregisterCtx, unregisterCancel := context.WithTimeout(context.WithoutCancel(ctx), unregisterTimeoutDuration)
 				if _, err := node.db.Exec(unregisterCtx, "DELETE FROM core.nodes WHERE id = $1", node.nodeID); err != nil {
 					log.Warnf("failed to unregister node: %v", err)
+				}
+				if node.eventBus != nil {
+					node.eventBus.Publish(unregisterCtx, NewNodeUnregisteredEvent(node.nodeID.String(), NodeUnregisteredEventData{
+						ID:       node.nodeID,
+						NodeName: node.nodeName,
+					}))
 				}
 				unregisterCancel()
 			}

@@ -9,6 +9,7 @@ import (
 
 // handleGetConfig handles GET /v1/_/file-storage/config returning runtime config.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleGetConfig invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageConfigRead) {
 		return
 	}
@@ -19,6 +20,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 
 // handleUpdateConfig handles PUT /v1/_/file-storage/config updating runtime config.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleUpdateConfig invoked")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageConfigWrite) {
 		return
 	}
@@ -37,6 +39,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	}
 
 	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("file_storage.config", ConfigUpdatedEventData(newConfig)))
+	log.Debug("handleUpdateConfig successfully saved dynamic file storage configuration")
 
 	core.WriteJSONResponse(responseWriter, http.StatusOK, newConfig)
 }

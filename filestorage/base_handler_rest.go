@@ -20,6 +20,7 @@ func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.Respons
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
+	log.Tracef("handling download object request: bucket=%s key=%s", bucketName, objectKey)
 	if bucketName == "" || objectKey == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Bucket and key parameters are required")
 		return
@@ -79,6 +80,12 @@ func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.Respons
 		responseWriter.WriteHeader(http.StatusOK)
 	}
 
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDownloadedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDownloadedEventData{
+		BucketName: bucket.Name,
+		ObjectKey:  objectKey,
+		SizeBytes:  length,
+	}))
+
 	_, _ = io.Copy(responseWriter, downloadReadCloser)
 }
 
@@ -91,6 +98,7 @@ func (baseHandler *BaseHandler) handleHeadObject(responseWriter http.ResponseWri
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
+	log.Tracef("handling head object request: bucket=%s key=%s", bucketName, objectKey)
 	if bucketName == "" || objectKey == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Bucket and key parameters are required")
 		return
@@ -145,6 +153,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
+	log.Tracef("handling upload object request: bucket=%s key=%s", bucketName, objectKey)
 	if bucketName == "" || objectKey == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Bucket and key parameters are required")
 		return
@@ -180,6 +189,12 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 			}
 		}
 		if !mimeAllowed {
+			baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+				BucketName: bucket.Name,
+				ObjectKey:  objectKey,
+				Reason:     "Content type not allowed for this bucket",
+				StatusCode: http.StatusBadRequest,
+			}))
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Content type not allowed for this bucket")
 			return
 		}
@@ -187,6 +202,12 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 
 	contentLength := request.ContentLength
 	if bucket.MaxFileSizeBytes > 0 && contentLength > bucket.MaxFileSizeBytes {
+		baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+			BucketName: bucket.Name,
+			ObjectKey:  objectKey,
+			Reason:     "File size exceeds allowed maximum for this bucket",
+			StatusCode: http.StatusRequestEntityTooLarge,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusRequestEntityTooLarge, "File size exceeds allowed maximum for this bucket")
 		return
 	}
@@ -199,10 +220,26 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 
 	uploadedObject, uploadErr := fileStorageEngine.Upload(ctx, *bucket, objectKey, request.Body, contentLength, contentType)
 	if uploadErr != nil {
+		baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+			BucketName: bucket.Name,
+			ObjectKey:  objectKey,
+			Reason:     uploadErr.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", uploadErr.Error())
 		return
 	}
 
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(uploadedObject.ID.String(), ObjectUploadedEventData{
+		BucketID:       uploadedObject.BucketID,
+		BucketName:     bucket.Name,
+		ObjectKey:      uploadedObject.ObjectKey,
+		ContentType:    uploadedObject.ContentType,
+		SizeBytes:      uploadedObject.SizeBytes,
+		ChecksumSHA256: uploadedObject.ChecksumSHA256,
+	}))
+
+	log.Debugf("object %s in bucket %s uploaded successfully (%d bytes)", objectKey, bucket.Name, contentLength)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, uploadedObject)
 }
 
@@ -215,6 +252,7 @@ func (baseHandler *BaseHandler) handleDeleteObject(responseWriter http.ResponseW
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
+	log.Tracef("handling delete object request: bucket=%s key=%s", bucketName, objectKey)
 	if bucketName == "" || objectKey == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Bucket and key parameters are required")
 		return
@@ -248,6 +286,12 @@ func (baseHandler *BaseHandler) handleDeleteObject(responseWriter http.ResponseW
 		return
 	}
 
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDeletedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDeletedEventData{
+		BucketName: bucket.Name,
+		ObjectKey:  objectKey,
+	}))
+
+	log.Debugf("object %s in bucket %s deleted successfully", objectKey, bucket.Name)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 

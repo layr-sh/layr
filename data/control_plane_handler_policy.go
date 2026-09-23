@@ -10,6 +10,8 @@ import (
 
 // handleListPolicies lists all Row-Level Security policies on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListPolicies invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
@@ -23,6 +25,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.Debugf("retrieved %d policy(ies) on %s.%s", len(policies), schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListPoliciesResponse{
 		Policies: policies,
 		Count:    len(policies),
@@ -31,6 +34,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 
 // handleCreatePolicy creates a new Row-Level Security policy on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreatePolicy invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -57,6 +62,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 		Detail: createPolicyInput.Name,
 	}))
 
+	log.Debugf("policy %s successfully created on %s.%s", createPolicyInput.Name, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreatePolicyResponse{
 		Status: "created",
 		Policy: createPolicyInput.Name,
@@ -65,6 +71,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 
 // handleDeletePolicy drops a Row-Level Security policy from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeletePolicy invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -87,6 +95,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 		Detail: policyName,
 	}))
 
+	log.Debugf("policy %s successfully dropped from %s.%s", policyName, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, DeletePolicyResponse{
 		Status: "deleted",
 		Policy: policyName,
@@ -95,6 +104,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 
 // handleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
 func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleToggleRLS invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -138,6 +149,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			Action: "toggle_rls",
 			Detail: "enabled",
 		}))
+		log.Debugf("RLS mode ENABLE successfully applied to %s.%s", schema, table)
 		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "enabled",
 			Mode:   "ENABLE",
@@ -153,6 +165,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			Action: "toggle_rls",
 			Detail: "disabled",
 		}))
+		log.Debugf("RLS mode DISABLE successfully applied to %s.%s", schema, table)
 		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "disabled",
 			Mode:   "DISABLE",
@@ -173,6 +186,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			Action: "toggle_rls",
 			Detail: status,
 		}))
+		log.Debugf("RLS mode FORCE successfully applied to %s.%s (status=%s)", schema, table, status)
 		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: status,
 			Mode:   "FORCE",
@@ -188,6 +202,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			Action: "toggle_rls",
 			Detail: "unforced",
 		}))
+		log.Debugf("RLS mode UNFORCE successfully applied to %s.%s", schema, table)
 		core.WriteJSONResponse(responseWriter, http.StatusOK, ToggleRLSResponse{
 			Status: "unforced",
 			Mode:   "UNFORCE",

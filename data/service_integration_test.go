@@ -251,12 +251,12 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
 
 	// Test OpenAPI spec endpoints contain Data service operations
-	publicOpenAPISpec := baseRouter.OutputOpenAPISpec()
-	if publicOpenAPISpec == nil {
+	baseOpenAPISpec := baseRouter.OutputOpenAPISpec()
+	if baseOpenAPISpec == nil {
 		t.Fatal("expected non-nil public spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil ||
-		publicOpenAPISpec.Paths.Value("/v1/graphql") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil ||
+		baseOpenAPISpec.Paths.Value("/v1/graphql") == nil {
 		t.Fatal("expected public spec to contain Data service paths")
 	}
 

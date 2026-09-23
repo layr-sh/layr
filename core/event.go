@@ -713,3 +713,34 @@ type EventHookDeletedEventData EventHook
 func NewEventHookDeletedEvent(id string, eventHookDeletedEventData EventHookDeletedEventData) Event {
 	return NewEvent("core.event_hook.deleted", eventHookDeletedEventData).WithResourceID(id)
 }
+
+// EventHookDeliveryRetriedEventData represents the payload for core.event_hook.delivery_retried.
+type EventHookDeliveryRetriedEventData EventHookDelivery
+
+// NewEventHookDeliveryRetriedEvent creates a typed event for event hook delivery retries.
+func NewEventHookDeliveryRetriedEvent(id string, eventHookDeliveryRetriedEventData EventHookDeliveryRetriedEventData) Event {
+	return NewEvent("core.event_hook.delivery_retried", eventHookDeliveryRetriedEventData).WithResourceID(id)
+}
+
+// NodeRegisteredEventData represents the payload for core.node.registered.
+type NodeRegisteredEventData struct {
+	ID              uuid.UUID `json:"id"`
+	NodeName        string    `json:"node_name"`
+	EnabledServices []string  `json:"enabled_services"`
+}
+
+// NewNodeRegisteredEvent creates a typed event for node registration in the cluster.
+func NewNodeRegisteredEvent(id string, nodeRegisteredEventData NodeRegisteredEventData) Event {
+	return NewEvent("core.node.registered", nodeRegisteredEventData).WithResourceID(id)
+}
+
+// NodeUnregisteredEventData represents the payload for core.node.unregistered.
+type NodeUnregisteredEventData struct {
+	ID       uuid.UUID `json:"id"`
+	NodeName string    `json:"node_name"`
+}
+
+// NewNodeUnregisteredEvent creates a typed event for node unregistration from the cluster.
+func NewNodeUnregisteredEvent(id string, nodeUnregisteredEventData NodeUnregisteredEventData) Event {
+	return NewEvent("core.node.unregistered", nodeUnregisteredEventData).WithResourceID(id)
+}

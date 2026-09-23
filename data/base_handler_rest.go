@@ -36,6 +36,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	if !ok {
 		return
 	}
+	log.Tracef("handleListRecords invoked for %s.%s", schema, table)
 
 	config := handler.configManager.Get()
 	queryParams, err := rest.ParseQueryParams(request.URL.Query(), config.REST.DefaultLimit, config.REST.MaxLimit)
@@ -83,6 +84,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleCacheKey)
 
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+			log.Debugf("cache hit for %s.%s", schema, table)
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("X-Layr-Cache", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
@@ -153,6 +155,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		}
 	}
 
+	log.Debugf("retrieved %d record(s) from %s.%s", len(results), schema, table)
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_, _ = responseWriter.Write(responseJSON)
@@ -168,6 +171,7 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
+	log.Tracef("handleGetRecord invoked for %s.%s id=%s", schema, table, recordID)
 
 	ctx := request.Context()
 	tx, err := handler.kernel.DB().Begin(ctx)
@@ -202,6 +206,7 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 		return
 	}
 
+	log.Debugf("retrieved record %s.%s id=%s", schema, table, recordID)
 	if isReturnMinimal(request) {
 		responseWriter.WriteHeader(http.StatusNoContent)
 		return
@@ -218,6 +223,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	if !ok {
 		return
 	}
+	log.Tracef("handleCreateRecord invoked for %s.%s", schema, table)
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
@@ -329,6 +335,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 		}))
 	}
 
+	log.Debugf("created %d record(s) in %s.%s", len(insertedRows), schema, table)
 	if isReturnMinimal(request) {
 		responseWriter.WriteHeader(http.StatusNoContent)
 		return
@@ -359,6 +366,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
+	log.Tracef("handleUpdateRecord invoked for %s.%s id=%s", schema, table, recordID)
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
@@ -444,6 +452,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 		Properties: props,
 	}))
 
+	log.Debugf("updated record in %s.%s id=%s", schema, table, recordID)
 	if isReturnMinimal(request) {
 		responseWriter.WriteHeader(http.StatusNoContent)
 		return
@@ -464,6 +473,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
+	log.Tracef("handleDeleteRecord invoked for %s.%s id=%s", schema, table, recordID)
 
 	ctx := request.Context()
 	tx, err := handler.kernel.DB().Begin(ctx)
@@ -515,6 +525,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 		ID:     recordID,
 	}))
 
+	log.Debugf("deleted record from %s.%s id=%s", schema, table, recordID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
@@ -556,6 +567,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request")
 		return
 	}
+	log.Tracef("handleExecuteFunction invoked for %s.%s", schema, functionName)
 
 	isSchemaAllowed := false
 	for _, allowedSchema := range config.Schemas {
@@ -677,6 +689,13 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 			}
 		}
 	}
+
+	handler.kernel.EventBus().Publish(ctx, NewFunctionExecutedEvent(fmt.Sprintf("%s.%s", schema, functionName), FunctionExecutedEventData{
+		Schema:   schema,
+		Function: functionName,
+		Args:     args,
+	}))
+	log.Debugf("executed stored function %s.%s (%d result(s))", schema, functionName, len(results))
 
 	if isVoid || len(results) == 0 {
 		responseWriter.WriteHeader(http.StatusNoContent)

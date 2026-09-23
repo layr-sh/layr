@@ -197,6 +197,19 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		t.Fatalf("expected SMS code to be dispatched")
 	}
 
+	// 7a. Confirm with Wrong Code for Phone -> 400
+	wrongPhoneConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
+		Phone:    resetPhone,
+		Code:     "000000",
+		Password: "PhoneUpdatedPassword789!$",
+	})
+	wrongPhoneConfirmRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/password-reset/confirm", bytes.NewReader(wrongPhoneConfirmPayload))
+	wrongPhoneConfirmResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleConfirmPasswordReset(wrongPhoneConfirmResponseRecorder, wrongPhoneConfirmRequest)
+	if wrongPhoneConfirmResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(wrongPhoneConfirmResponseRecorder.Body.String(), "Invalid reset code") {
+		t.Fatalf("expected 400 on invalid reset code for phone, got: %d (%s)", wrongPhoneConfirmResponseRecorder.Code, wrongPhoneConfirmResponseRecorder.Body.String())
+	}
+
 	phoneConfirmPayload, _ := json.Marshal(ConfirmPasswordResetInput{
 		Phone:    resetPhone,
 		Code:     dispatchedSMSCode,

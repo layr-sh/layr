@@ -31,32 +31,32 @@ func TestDataRouterUnit(t *testing.T) {
 	service.RegisterRoutes(baseRouter, controlPlaneRouter)
 
 	// 4. Inspect generated OpenAPI specifications
-	publicOpenAPISpec := baseRouter.OutputOpenAPISpec()
-	if publicOpenAPISpec == nil {
+	baseOpenAPISpec := baseRouter.OutputOpenAPISpec()
+	if baseOpenAPISpec == nil {
 		t.Fatal("expected non-nil public OpenAPI specification")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil {
 		t.Fatal("expected /v1/data/{schema_name}/{table_name} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}/{record_id}") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}/{record_id}") == nil {
 		t.Fatal("expected /v1/data/{schema_name}/{table_name}/{record_id} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/kv/{key}") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/kv/{key}") == nil {
 		t.Fatal("expected /v1/data/kv/{key} route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/kv/mget") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/kv/mget") == nil {
 		t.Fatal("expected /v1/data/kv/mget route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/kv/mset") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/kv/mset") == nil {
 		t.Fatal("expected /v1/data/kv/mset route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/data/kv/increment") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/data/kv/increment") == nil {
 		t.Fatal("expected /v1/data/kv/increment route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/graphql") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/graphql") == nil {
 		t.Fatal("expected /v1/graphql route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/realtime") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/realtime") == nil {
 		t.Fatal("expected /v1/realtime route in public OpenAPI spec")
 	}
 

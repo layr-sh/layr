@@ -51,6 +51,7 @@ func (databaseEngine *DatabaseEngine) Upload(
 	sizeBytes int64,
 	contentType string,
 ) (*Object, error) {
+	log.Tracef("uploading object %s to database bucket %s", key, bucket.Name)
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -150,6 +151,7 @@ func (databaseEngine *DatabaseEngine) Upload(
 
 	_ = tx.Commit(ctx)
 
+	log.Debugf("object %s stored in database bucket %s (%d bytes)", key, bucket.Name, totalBytes)
 	return &storedObject, nil
 }
 
@@ -159,6 +161,7 @@ func (databaseEngine *DatabaseEngine) Head(
 	bucket Bucket,
 	key string,
 ) (*Object, error) {
+	log.Tracef("heading object %s from database bucket %s", key, bucket.Name)
 	const selectObjectSQL = `
 		SELECT id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata, created_at, last_updated_at
 		FROM file_storage.objects
@@ -193,6 +196,7 @@ func (databaseEngine *DatabaseEngine) Delete(
 	bucket Bucket,
 	key string,
 ) error {
+	log.Tracef("deleting object %s from database bucket %s", key, bucket.Name)
 	const deleteObjectSQL = `
 		DELETE FROM file_storage.objects
 		WHERE bucket_id = $1 AND object_key = $2;
@@ -214,6 +218,7 @@ func (databaseEngine *DatabaseEngine) Download(
 	key string,
 	contentRange *ContentRange,
 ) (io.ReadCloser, int64, error) {
+	log.Tracef("downloading object %s from database bucket %s", key, bucket.Name)
 	object, headErr := databaseEngine.Head(ctx, bucket, key)
 	if headErr != nil {
 		return nil, 0, headErr

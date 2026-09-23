@@ -104,6 +104,30 @@ func TestCoreScopesHasScopeUnit(t *testing.T) {
 			required: "data:query.read",
 			expected: true,
 		},
+		{
+			name:     "Image wildcard matches image:preset.read",
+			granted:  []string{"image:*"},
+			required: ScopeImagePresetRead,
+			expected: true,
+		},
+		{
+			name:     "Image preset write implies image:preset.read",
+			granted:  []string{ScopeImagePresetWrite},
+			required: ScopeImagePresetRead,
+			expected: true,
+		},
+		{
+			name:     "Image config write implies image:config.read",
+			granted:  []string{ScopeImageConfigWrite},
+			required: ScopeImageConfigRead,
+			expected: true,
+		},
+		{
+			name:     "Image sign write does not grant image:config.write",
+			granted:  []string{ScopeImageSignWrite},
+			required: ScopeImageConfigWrite,
+			expected: false,
+		},
 	}
 
 	for _, testCase := range tests {

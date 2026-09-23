@@ -57,7 +57,13 @@ const (
 	ScopeAnalyticsConfigRead  = "analytics:config.read"
 	ScopeAnalyticsConfigWrite = "analytics:config.write"
 
-	// TODO: Add Image scopes
+	// Image scopes
+	ScopeImageConfigRead  = "image:config.read"
+	ScopeImageConfigWrite = "image:config.write"
+	ScopeImagePresetRead  = "image:preset.read"
+	ScopeImagePresetWrite = "image:preset.write"
+	ScopeImageSignWrite   = "image:sign.write"
+	ScopeImageStatsRead   = "image:stats.read"
 
 	// Console scopes
 	ScopeConsoleUserRead  = "console:user.read"

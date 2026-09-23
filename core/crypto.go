@@ -25,6 +25,8 @@ const (
 	CryptoContextCoreIPCHMAC               = "core:ipc:hmacsha256:v1"
 	CryptoContextFileStorageChunkAES256GCM = "file_storage:chunk:aes256gcm:v1"
 	CryptoContextPublishableKey            = "client:publishable:v1"
+	CryptoContextImageSigningKey           = "image:signing:key:v1"
+	CryptoContextImageSigningSalt          = "image:signing:salt:v1"
 )
 
 const (

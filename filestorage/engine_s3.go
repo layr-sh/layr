@@ -110,6 +110,7 @@ func (s3Engine *S3Engine) Upload(
 	sizeBytes int64,
 	contentType string,
 ) (*Object, error) {
+	log.Tracef("uploading object %s to upstream S3 bucket %s", key, bucket.Name)
 	s3UpstreamConfiguration, configErr := s3Engine.parseUpstreamConfiguration(bucket)
 	if configErr != nil {
 		return nil, configErr
@@ -158,6 +159,7 @@ func (s3Engine *S3Engine) Head(
 	bucket Bucket,
 	key string,
 ) (*Object, error) {
+	log.Tracef("heading object %s from upstream S3 bucket %s", key, bucket.Name)
 	s3UpstreamConfiguration, configErr := s3Engine.parseUpstreamConfiguration(bucket)
 	if configErr != nil {
 		return nil, configErr
@@ -214,6 +216,7 @@ func (s3Engine *S3Engine) Delete(
 	bucket Bucket,
 	key string,
 ) error {
+	log.Tracef("deleting object %s from upstream S3 bucket %s", key, bucket.Name)
 	s3UpstreamConfiguration, configErr := s3Engine.parseUpstreamConfiguration(bucket)
 	if configErr != nil {
 		return configErr
@@ -240,6 +243,7 @@ func (s3Engine *S3Engine) Download(
 	key string,
 	contentRange *ContentRange,
 ) (io.ReadCloser, int64, error) {
+	log.Tracef("downloading object %s from upstream S3 bucket %s", key, bucket.Name)
 	s3UpstreamConfiguration, configErr := s3Engine.parseUpstreamConfiguration(bucket)
 	if configErr != nil {
 		return nil, 0, configErr

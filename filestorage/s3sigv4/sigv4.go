@@ -21,7 +21,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
+	"layr.sh/logger"
 )
+
+var log = logger.New("filestorage/s3sigv4")
 
 // Standard S3 SigV4 error definitions.
 var (
@@ -199,6 +202,7 @@ func buildCanonicalQueryString(values url.Values, isQueryAuth bool) string {
 
 // Validate authenticates the incoming S3 request and returns the caller's ServiceAccount entity.
 func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccount, error) {
+	log.Trace("validating AWS SigV4 request signature")
 	var credentials *authCredentials
 	var isQueryAuth bool
 

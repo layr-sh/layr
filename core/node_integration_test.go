@@ -86,3 +86,45 @@ func TestCoreNodeHeartbeatAndReaperErrorIntegration(t *testing.T) {
 	// Close node to trigger unregister error logging with closed db
 	node.Close()
 }
+
+func TestCoreNodeEventBusIntegration(t *testing.T) {
+	db, cleanup := startTestContainer(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
+
+	eventBus := NewEventBus(db, nil)
+	defer eventBus.Close()
+
+	var registeredReceived, unregisteredReceived bool
+	eventBus.Subscribe("core.node.registered", func(eventCtx context.Context, event Event) error {
+		if event.Type == "core.node.registered" && event.Data["node_name"] == "event-node" {
+			registeredReceived = true
+		}
+		return nil
+	})
+	eventBus.Subscribe("core.node.unregistered", func(eventCtx context.Context, event Event) error {
+		if event.Type == "core.node.unregistered" && event.Data["node_name"] == "event-node" {
+			unregisteredReceived = true
+		}
+		return nil
+	})
+
+	node := NewNode(db, "event-node", []string{"data", "auth"}).WithEventBus(eventBus)
+	node.heartbeatInterval = 50 * time.Millisecond
+	if err := node.Register(ctx); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if !registeredReceived {
+		t.Fatal("expected core.node.registered event to be received")
+	}
+
+	node.Close()
+	time.Sleep(100 * time.Millisecond)
+	if !unregisteredReceived {
+		t.Fatal("expected core.node.unregistered event to be received")
+	}
+}

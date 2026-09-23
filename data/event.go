@@ -115,3 +115,69 @@ type RowDeletedEventData struct {
 func NewRowDeletedEvent(resourceID string, rowDeletedEventData RowDeletedEventData) core.Event {
 	return core.NewEvent("data.row.deleted", rowDeletedEventData).WithResourceID(resourceID)
 }
+
+// TableTruncatedEventData represents the payload for data.table.truncated.
+type TableTruncatedEventData struct {
+	Schema string `json:"schema"`
+	Table  string `json:"table"`
+}
+
+// NewTableTruncatedEvent creates a typed event for table truncation.
+func NewTableTruncatedEvent(resourceID string, tableTruncatedEventData TableTruncatedEventData) core.Event {
+	return core.NewEvent("data.table.truncated", tableTruncatedEventData).WithResourceID(resourceID)
+}
+
+// SQLExecutedEventData represents the payload for data.sql.executed.
+type SQLExecutedEventData struct {
+	Query        string `json:"query"`
+	RowsAffected int64  `json:"rows_affected"`
+}
+
+// NewSQLExecutedEvent creates a typed event for SQL scratchpad execution.
+func NewSQLExecutedEvent(resourceID string, sqlExecutedEventData SQLExecutedEventData) core.Event {
+	return core.NewEvent("data.sql.executed", sqlExecutedEventData).WithResourceID(resourceID)
+}
+
+// FunctionExecutedEventData represents the payload for data.function.executed.
+type FunctionExecutedEventData struct {
+	Schema   string         `json:"schema"`
+	Function string         `json:"function"`
+	Args     map[string]any `json:"args,omitempty"`
+}
+
+// NewFunctionExecutedEvent creates a typed event for stored RPC function execution.
+func NewFunctionExecutedEvent(resourceID string, functionExecutedEventData FunctionExecutedEventData) core.Event {
+	return core.NewEvent("data.function.executed", functionExecutedEventData).WithResourceID(resourceID)
+}
+
+// KVSetEventData represents the payload for data.kv.set.
+type KVSetEventData struct {
+	Key string `json:"key"`
+	TTL int    `json:"ttl,omitempty"`
+}
+
+// NewKVSetEvent creates a typed event for KV key creation or update.
+func NewKVSetEvent(resourceID string, kvSetEventData KVSetEventData) core.Event {
+	return core.NewEvent("data.kv.set", kvSetEventData).WithResourceID(resourceID)
+}
+
+// KVDeletedEventData represents the payload for data.kv.deleted.
+type KVDeletedEventData struct {
+	Key string `json:"key"`
+}
+
+// NewKVDeletedEvent creates a typed event for KV key deletion.
+func NewKVDeletedEvent(resourceID string, kvDeletedEventData KVDeletedEventData) core.Event {
+	return core.NewEvent("data.kv.deleted", kvDeletedEventData).WithResourceID(resourceID)
+}
+
+// KVTouchedEventData represents the payload for data.kv.touched.
+type KVTouchedEventData struct {
+	Key string `json:"key"`
+	TTL int    `json:"ttl"`
+}
+
+// NewKVTouchedEvent creates a typed event for KV key expiration updates.
+func NewKVTouchedEvent(resourceID string, kvTouchedEventData KVTouchedEventData) core.Event {
+	return core.NewEvent("data.kv.touched", kvTouchedEventData).WithResourceID(resourceID)
+}
