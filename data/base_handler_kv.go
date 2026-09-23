@@ -36,6 +36,7 @@ func validateKVKey(cacheKey string) (bool, string) {
 func (handler *BaseHandler) handleGetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	cacheKey := handler.extractKVKey(request)
+	log.Tracef("handleGetKV invoked for key %s", cacheKey)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
@@ -48,6 +49,7 @@ func (handler *BaseHandler) handleGetKV(responseWriter http.ResponseWriter, requ
 func (handler *BaseHandler) handleSetKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	cacheKey := handler.extractKVKey(request)
+	log.Tracef("handleSetKV invoked for key %s", cacheKey)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
@@ -60,6 +62,7 @@ func (handler *BaseHandler) handleSetKV(responseWriter http.ResponseWriter, requ
 func (handler *BaseHandler) handleUpdateKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	cacheKey := handler.extractKVKey(request)
+	log.Tracef("handleUpdateKV invoked for key %s", cacheKey)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
@@ -72,6 +75,7 @@ func (handler *BaseHandler) handleUpdateKV(responseWriter http.ResponseWriter, r
 func (handler *BaseHandler) handleTouchKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	cacheKey := handler.extractKVKey(request)
+	log.Tracef("handleTouchKV invoked for key %s", cacheKey)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
@@ -84,6 +88,7 @@ func (handler *BaseHandler) handleTouchKV(responseWriter http.ResponseWriter, re
 func (handler *BaseHandler) handleDeleteKV(responseWriter http.ResponseWriter, request *http.Request) {
 	responseWriter.Header().Set("Content-Type", "application/json")
 	cacheKey := handler.extractKVKey(request)
+	log.Tracef("handleDeleteKV invoked for key %s", cacheKey)
 	if valid, errorMsg := validateKVKey(cacheKey); !valid {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, errorMsg)
 		return
@@ -94,6 +99,7 @@ func (handler *BaseHandler) handleDeleteKV(responseWriter http.ResponseWriter, r
 
 // handleGetMultipleKV handles POST /v1/data/kv/mget.
 func (handler *BaseHandler) handleGetMultipleKV(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleGetMultipleKV invoked")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 	handler.executeMGetKV(responseWriter, request, authContext)
@@ -101,6 +107,7 @@ func (handler *BaseHandler) handleGetMultipleKV(responseWriter http.ResponseWrit
 
 // handleSetMultipleKV handles POST /v1/data/kv/mset.
 func (handler *BaseHandler) handleSetMultipleKV(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleSetMultipleKV invoked")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 	handler.executeMSetKV(responseWriter, request, authContext)
@@ -108,6 +115,7 @@ func (handler *BaseHandler) handleSetMultipleKV(responseWriter http.ResponseWrit
 
 // handleIncrementKV handles POST /v1/data/kv/increment.
 func (handler *BaseHandler) handleIncrementKV(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleIncrementKV invoked")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	authContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 	handler.executeIncrementKV(responseWriter, request, authContext)
@@ -137,6 +145,7 @@ func (handler *BaseHandler) executeGetKV(responseWriter http.ResponseWriter, req
 		return
 	}
 
+	log.Debugf("retrieved kv key %s", cacheKey)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, GetKVResponse{
 		Key:   cacheKey,
 		Value: storedValue,
@@ -193,6 +202,11 @@ func (handler *BaseHandler) executePostKV(responseWriter http.ResponseWriter, re
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Key already exists")
 			return
 		}
+		handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(cacheKey, KVSetEventData{
+			Key: cacheKey,
+			TTL: ttlSeconds,
+		}))
+		log.Debugf("set kv key %s (created=true, ttl=%d)", cacheKey, ttlSeconds)
 		core.WriteJSONResponse(responseWriter, http.StatusCreated, SetKVResponse{
 			Key:     cacheKey,
 			Status:  "ok",
@@ -208,6 +222,11 @@ func (handler *BaseHandler) executePostKV(responseWriter http.ResponseWriter, re
 		return
 	}
 
+	handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(cacheKey, KVSetEventData{
+		Key: cacheKey,
+		TTL: ttlSeconds,
+	}))
+	log.Debugf("set kv key %s (ttl=%d)", cacheKey, ttlSeconds)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, SetKVResponse{
 		Key:    cacheKey,
 		Status: "ok",
@@ -256,6 +275,11 @@ func (handler *BaseHandler) executePutKV(responseWriter http.ResponseWriter, req
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Key already exists")
 			return
 		}
+		handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(cacheKey, KVSetEventData{
+			Key: cacheKey,
+			TTL: ttlSeconds,
+		}))
+		log.Debugf("put kv key %s (created=true, ttl=%d)", cacheKey, ttlSeconds)
 		core.WriteJSONResponse(responseWriter, http.StatusCreated, SetKVResponse{
 			Key:     cacheKey,
 			Status:  "ok",
@@ -271,6 +295,11 @@ func (handler *BaseHandler) executePutKV(responseWriter http.ResponseWriter, req
 		return
 	}
 
+	handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(cacheKey, KVSetEventData{
+		Key: cacheKey,
+		TTL: ttlSeconds,
+	}))
+	log.Debugf("put kv key %s (ttl=%d)", cacheKey, ttlSeconds)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, SetKVResponse{
 		Key:    cacheKey,
 		Status: "ok",
@@ -297,6 +326,11 @@ func (handler *BaseHandler) executePatchKV(responseWriter http.ResponseWriter, r
 		return
 	}
 
+	handler.kernel.EventBus().Publish(request.Context(), NewKVTouchedEvent(cacheKey, KVTouchedEventData{
+		Key: cacheKey,
+		TTL: touchKVInput.TTL,
+	}))
+	log.Debugf("touched kv key %s (ttl=%d)", cacheKey, touchKVInput.TTL)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, TouchKVResponse{
 		Key:    cacheKey,
 		Status: "ok",
@@ -307,6 +341,10 @@ func (handler *BaseHandler) executePatchKV(responseWriter http.ResponseWriter, r
 func (handler *BaseHandler) executeDeleteKV(responseWriter http.ResponseWriter, request *http.Request, authContext datakv.AuthContext, cacheKey string) {
 	internalKey := datakv.BuildInternalKey(authContext, cacheKey)
 	_ = handler.kernel.KVStore().Delete(request.Context(), internalKey)
+	handler.kernel.EventBus().Publish(request.Context(), NewKVDeletedEvent(cacheKey, KVDeletedEventData{
+		Key: cacheKey,
+	}))
+	log.Debugf("deleted kv key %s", cacheKey)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
@@ -341,6 +379,7 @@ func (handler *BaseHandler) executeMGetKV(responseWriter http.ResponseWriter, re
 		}
 	}
 
+	log.Debugf("retrieved %d kv key(s)", len(result))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, GetMultipleKVResponse{
 		Values: result,
 	})
@@ -379,6 +418,13 @@ func (handler *BaseHandler) executeMSetKV(responseWriter http.ResponseWriter, re
 		return
 	}
 
+	for userKey := range setMultipleKVInput.Entries {
+		handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(userKey, KVSetEventData{
+			Key: userKey,
+			TTL: ttlSeconds,
+		}))
+	}
+	log.Debugf("set %d kv key(s)", len(internalEntries))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, SetMultipleKVResponse{
 		Status: "ok",
 		Count:  len(internalEntries),
@@ -415,6 +461,11 @@ func (handler *BaseHandler) executeIncrementKV(responseWriter http.ResponseWrite
 		return
 	}
 
+	handler.kernel.EventBus().Publish(request.Context(), NewKVSetEvent(incrementKVInput.Key, KVSetEventData{
+		Key: incrementKVInput.Key,
+		TTL: ttlSeconds,
+	}))
+	log.Debugf("incremented kv key %s to %d", incrementKVInput.Key, counterValue)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, IncrementKVResponse{
 		Key:   incrementKVInput.Key,
 		Value: counterValue,

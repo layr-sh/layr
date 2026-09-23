@@ -102,7 +102,6 @@ func (service *Service) Start(ctx context.Context) error {
 	}
 
 	if service.configManager.Get().Realtime.Enabled {
-		log.Infof("starting PostgreSQL CDC listener on channel %q", CDCNotificationChannel)
 		service.realtimeHub.SetEventHandler(func(cdcEvent realtime.CDCEvent) {
 			if service.configManager.Get().Cache.Enabled && service.configManager.Get().Cache.InvalidateOnCDC {
 				service.InvalidateTableCache(ctx, cdcEvent.Schema, cdcEvent.Table)

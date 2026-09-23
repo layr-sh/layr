@@ -356,6 +356,8 @@ func NewTestKernel(db *DatabasePool, options ...TestKernelOption) *Kernel {
 		kernel.eventBus = NewEventBus(db, cryptoKeyManager)
 		kernel.eventManager = kernel.eventBus.EventManager()
 		kernel.eventHookManager = kernel.eventBus.EventHookManager()
+	} else {
+		kernel.eventBus = NewEventBus(nil, cryptoKeyManager)
 	}
 
 	for _, option := range options {

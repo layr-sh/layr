@@ -26,6 +26,8 @@ const (
 
 // handleExecuteGraphQL processes POST /v1/graphql requests.
 func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleExecuteGraphQL invoked")
+
 	if request.Method != http.MethodPost {
 		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests")
 		return
@@ -81,6 +83,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 			return
 		}
 		introspectionData := handler.handleIntrospection(operationNode)
+		log.Debug("executed GraphQL introspection query")
 		handler.writeGraphQLSuccess(responseWriter, introspectionData)
 		return
 	}
@@ -145,6 +148,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleKey)
 
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+			log.Debug("cache hit for GraphQL query")
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("X-Layr-Cache", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
@@ -228,6 +232,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		}
 	}
 
+	log.Debug("executed GraphQL operation successfully")
 	responseWriter.WriteHeader(http.StatusOK)
 	_, _ = responseWriter.Write(responseBytes)
 }

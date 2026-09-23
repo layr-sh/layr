@@ -13,6 +13,8 @@ import (
 
 // handleConnectRealtime upgrades HTTP connection to WebSocket and attaches to the CDC Hub.
 func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleConnectRealtime invoked")
+
 	config := handler.configManager.Get()
 	if !config.Realtime.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "realtime connection rejected: Real-Time API is disabled in configuration")
@@ -104,4 +106,6 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 
 	go client.WritePump(clientCtx, heartbeatInterval)
 	go client.ReadPump(clientCtx, heartbeatInterval)
+
+	log.Debug("realtime websocket client connected successfully")
 }

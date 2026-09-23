@@ -315,6 +315,13 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			_ = json.Unmarshal(rawProperties, &user.Properties)
 		}
 
+		handler.kernel.EventBus().Publish(ctx, NewIdentityLinkedEvent(anonymousUser.ID, IdentityLinkedEventData{
+			UserID:         anonymousUser.ID,
+			Provider:       provider,
+			ProviderUserID: userInfo.ProviderUserID,
+			Properties:     userInfo.Properties,
+			User:           user,
+		}))
 		handler.kernel.EventBus().Publish(ctx, NewUserConvertedEvent(user.ID, UserConvertedEventData(user)))
 
 		handler.CompleteOAuthFlow(responseWriter, request, user, parsedOAuthStatePayload, isPayload)
@@ -362,6 +369,13 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		`, user.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		log.Tracef("created new federated user %s for %s:%s", user.ID, provider, userInfo.ProviderUserID)
+		handler.kernel.EventBus().Publish(ctx, NewIdentityLinkedEvent(user.ID, IdentityLinkedEventData{
+			UserID:         user.ID,
+			Provider:       provider,
+			ProviderUserID: userInfo.ProviderUserID,
+			Properties:     userInfo.Properties,
+			User:           user,
+		}))
 		handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 	}
 

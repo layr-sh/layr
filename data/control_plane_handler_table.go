@@ -10,6 +10,8 @@ import (
 
 // handleListTables lists all tables in the allowed schemas.
 func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListTables invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
@@ -19,6 +21,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter 
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.Debugf("retrieved %d table(s)", len(tables))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListTablesResponse{
 		Tables: tables,
 		Count:  len(tables),
@@ -27,6 +30,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter 
 
 // handleCreateTable creates a new database table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreateTable invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -50,6 +55,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter
 		ForeignKeys: createTableInput.ForeignKeys,
 	}))
 
+	log.Debugf("table %s.%s successfully created", createTableInput.Schema, createTableInput.Name)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreateTableResponse{
 		Status:  "created",
 		Schema:  createTableInput.Schema,
@@ -60,6 +66,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter
 
 // handleGetTable returns the schema summary for a specific table.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleGetTable invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
@@ -73,11 +81,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter ht
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
+	log.Debugf("retrieved table %s.%s", schema, tableName)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, table)
 }
 
 // handleDeleteTable drops a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeleteTable invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -100,6 +111,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter
 		Table:  table,
 	}))
 
+	log.Debugf("table %s.%s successfully dropped", schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, DeleteTableResponse{
 		Status:  "deleted",
 		Schema:  schema,
@@ -110,6 +122,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter
 
 // handleTruncateTable truncates all rows in a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleTruncateTable invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -123,6 +137,15 @@ func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWrit
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, truncateErr.Error())
 		return
 	}
+	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
+
+	tableID := fmt.Sprintf("%s.%s", schema, table)
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableTruncatedEvent(tableID, TableTruncatedEventData{
+		Schema: schema,
+		Table:  table,
+	}))
+
+	log.Debugf("table %s.%s successfully truncated", schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, map[string]any{
 		"status":  "truncated",
 		"message": fmt.Sprintf("Table %s.%s truncated", schema, table),

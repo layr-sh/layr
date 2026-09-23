@@ -10,6 +10,8 @@ import (
 
 // handleCreateColumn adds a new column to a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreateColumn invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -38,6 +40,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 		Detail: column.Name,
 	}))
 
+	log.Debugf("column %s successfully added to %s.%s", column.Name, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreateColumnResponse{
 		Status: "created",
 		Column: column.Name,
@@ -46,6 +49,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 
 // handleUpdateColumn alters a column definition.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleUpdateColumn invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -75,6 +80,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 		Detail: columnName,
 	}))
 
+	log.Debugf("column %s successfully altered in %s.%s", columnName, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, UpdateColumnResponse{
 		Status: "updated",
 		Column: columnName,
@@ -83,6 +89,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 
 // handleDeleteColumn drops a column from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeleteColumn invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -108,6 +116,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWrite
 		Detail: columnName,
 	}))
 
+	log.Debugf("column %s successfully dropped from %s.%s", columnName, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, DeleteColumnResponse{
 		Status: "deleted",
 		Column: columnName,

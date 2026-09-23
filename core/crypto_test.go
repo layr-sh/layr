@@ -77,6 +77,8 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 		CryptoContextCoreIPCHMAC,
 		CryptoContextFileStorageChunkAES256GCM,
 		CryptoContextPublishableKey,
+		CryptoContextImageSigningKey,
+		CryptoContextImageSigningSalt,
 		"custom:arbitrary:context:v1",
 	}
 

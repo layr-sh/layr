@@ -13,6 +13,12 @@ func TestCoreNodeNewUnit(t *testing.T) {
 		t.Errorf("expected 2 services, got %d", len(node.services))
 	}
 
+	eventBus := NewEventBus(nil, nil)
+	node.WithEventBus(eventBus)
+	if node.eventBus != eventBus {
+		t.Fatal("expected eventBus to be set on node")
+	}
+
 	// Clean close of unstarted registry (idempotent double-close test)
 	node.Close()
 	node.Close()

@@ -77,6 +77,13 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 
 	ipRateKey := fmt.Sprintf("auth:ratelimit:otp:ip:%s", clientIP)
 	if count, err := handler.kernel.KVStore().Increment(ctx, ipRateKey, time.Hour); err == nil && count > 10 {
+		handler.kernel.EventBus().Publish(ctx, NewRateLimitExceededEvent(clientIP, RateLimitExceededEventData{
+			Identifier:   clientIP,
+			Endpoint:     "/v1/auth/otp",
+			AttemptCount: count,
+			IPAddress:    clientIP,
+			UserAgent:    request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Rate limit exceeded. Too many requests from this IP address.")
 		return
 	}

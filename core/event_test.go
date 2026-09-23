@@ -313,7 +313,51 @@ func TestCoreEventNewEventUnit(t *testing.T) {
 		t.Fatalf("unexpected hook deleted event: %v", hookDeletedEvent)
 	}
 
-	// 7. Fluent methods: WithMetadata, WithActor, WithContext, WithResourceID
+	// 7. EventHookDeliveryRetried
+	deliveryID := uuid.NewV7()
+	status200 := 200
+	hookDeliveryRetriedEvent := NewEventHookDeliveryRetriedEvent(hookID.String(), EventHookDeliveryRetriedEventData{
+		ID:                 deliveryID,
+		EventHookID:        hookID,
+		EventType:          "auth.user.created",
+		HTTPResponseStatus: &status200,
+		AttemptCount:       2,
+		IsDelivered:        true,
+	})
+	if hookDeliveryRetriedEvent.Type != "core.event_hook.delivery_retried" || hookDeliveryRetriedEvent.ResourceType != "core.event_hook" || hookDeliveryRetriedEvent.Action != "delivery_retried" {
+		t.Fatalf("unexpected delivery retried event: %v", hookDeliveryRetriedEvent)
+	}
+	if hookDeliveryRetriedEvent.ResourceID == nil || *hookDeliveryRetriedEvent.ResourceID != hookID.String() {
+		t.Fatalf("unexpected resource ID: %v", hookDeliveryRetriedEvent.ResourceID)
+	}
+
+	// 8. NodeRegistered
+	nodeUUID := uuid.NewV7()
+	nodeRegisteredEvent := NewNodeRegisteredEvent(nodeUUID.String(), NodeRegisteredEventData{
+		ID:              nodeUUID,
+		NodeName:        "worker-node-1",
+		EnabledServices: []string{"data", "auth"},
+	})
+	if nodeRegisteredEvent.Type != "core.node.registered" || nodeRegisteredEvent.ResourceType != "core.node" || nodeRegisteredEvent.Action != "registered" {
+		t.Fatalf("unexpected node registered event: %v", nodeRegisteredEvent)
+	}
+	if nodeRegisteredEvent.Data["node_name"] != "worker-node-1" {
+		t.Fatalf("unexpected node_name: %v", nodeRegisteredEvent.Data["node_name"])
+	}
+
+	// 9. NodeUnregistered
+	nodeUnregisteredEvent := NewNodeUnregisteredEvent(nodeUUID.String(), NodeUnregisteredEventData{
+		ID:       nodeUUID,
+		NodeName: "worker-node-1",
+	})
+	if nodeUnregisteredEvent.Type != "core.node.unregistered" || nodeUnregisteredEvent.ResourceType != "core.node" || nodeUnregisteredEvent.Action != "unregistered" {
+		t.Fatalf("unexpected node unregistered event: %v", nodeUnregisteredEvent)
+	}
+	if nodeUnregisteredEvent.Data["node_name"] != "worker-node-1" {
+		t.Fatalf("unexpected node_name: %v", nodeUnregisteredEvent.Data["node_name"])
+	}
+
+	// 10. Fluent methods: WithMetadata, WithActor, WithContext, WithResourceID
 	customEventActor := EventActor{Type: "custom_actor"}
 	customEventContext := EventContext{}
 	fluentEvent := NewServiceAccountCreatedEvent("sa_123", ServiceAccountCreatedEventData{

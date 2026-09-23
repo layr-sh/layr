@@ -1331,6 +1331,12 @@ func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter
 
 		// Delete all active sessions for this user
 		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.sessions WHERE user_id = $1", callerUserID)
+		user, _ := fetchUserByID(ctx, handler.kernel.DB(), callerUserID)
+		revokedCount := len(targetSessions)
+		handler.kernel.EventBus().Publish(ctx, NewSessionDeletedEvent(callerUserID, SessionDeletedEventData{
+			User:         user,
+			RevokedCount: &revokedCount,
+		}))
 	}
 
 	if clientID != "" && (callerUserID != "" || callerSessionID != "") {

@@ -502,4 +502,40 @@ func TestAuthEventsUnit(t *testing.T) {
 	if userExportedEvent.ResourceID == nil || *userExportedEvent.ResourceID != "usr_123" {
 		t.Fatalf("unexpected resource ID in user exported event: %v", userExportedEvent.ResourceID)
 	}
+
+	// 29. IdentityLinked
+	identityLinkedEvent := NewIdentityLinkedEvent("usr_123", IdentityLinkedEventData{
+		UserID:         "usr_123",
+		Provider:       "github",
+		ProviderUserID: "gh_98765",
+		Properties:     map[string]any{"login": "octocat"},
+		User:           user,
+	})
+	if identityLinkedEvent.Type != "auth.identity.linked" {
+		t.Fatalf("unexpected identity linked event type: %s", identityLinkedEvent.Type)
+	}
+	if identityLinkedEvent.ResourceID == nil || *identityLinkedEvent.ResourceID != "usr_123" {
+		t.Fatalf("unexpected resource ID in identity linked event: %v", identityLinkedEvent.ResourceID)
+	}
+	if identityLinkedEvent.Data["provider"] != "github" {
+		t.Fatalf("unexpected provider in identity linked event: %v", identityLinkedEvent.Data["provider"])
+	}
+
+	// 30. TokenRefreshed
+	refreshClientIP := "127.0.0.1"
+	tokenRefreshedEvent := NewTokenRefreshedEvent("sess_123", TokenRefreshedEventData{
+		SessionID: "sess_123",
+		User:      user,
+		IPAddress: &refreshClientIP,
+		ExpiresAt: time.Now().UTC().Add(time.Hour),
+	})
+	if tokenRefreshedEvent.Type != "auth.token.refreshed" {
+		t.Fatalf("unexpected token refreshed event type: %s", tokenRefreshedEvent.Type)
+	}
+	if tokenRefreshedEvent.ResourceID == nil || *tokenRefreshedEvent.ResourceID != "sess_123" {
+		t.Fatalf("unexpected resource ID in token refreshed event: %v", tokenRefreshedEvent.ResourceID)
+	}
+	if tokenRefreshedEvent.Data["session_id"] != "sess_123" {
+		t.Fatalf("unexpected session_id in token refreshed event: %v", tokenRefreshedEvent.Data["session_id"])
+	}
 }

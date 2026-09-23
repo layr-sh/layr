@@ -441,6 +441,19 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 
 	if !otp.VerifyCode(confirmPasswordResetInput.Code, storedHash) {
 		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		channel := "email"
+		if !strings.Contains(recipient, "@") {
+			channel = "sms"
+		}
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
+			Recipient: recipient,
+			Purpose:   "password_reset",
+			Channel:   channel,
+			Reason:    "invalid_code",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid reset code")
 		return
 	}

@@ -153,6 +153,15 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 
 	if !otp.VerifyCode(code, storedHash) {
 		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewOTPVerificationFailedEvent(recipientEmail, OTPVerificationFailedEventData{
+			Recipient: recipientEmail,
+			Purpose:   "email_verification",
+			Channel:   "email",
+			Reason:    "invalid_code",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}
@@ -391,6 +400,15 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 
 	if !otp.VerifyCode(code, storedHash) {
 		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
+		clientIP := core.ExtractRequestClientIP(request)
+		handler.kernel.EventBus().Publish(ctx, NewOTPVerificationFailedEvent(recipientPhone, OTPVerificationFailedEventData{
+			Recipient: recipientPhone,
+			Purpose:   "phone_verification",
+			Channel:   "sms",
+			Reason:    "invalid_code",
+			IPAddress: clientIP,
+			UserAgent: request.UserAgent(),
+		}))
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid verification code")
 		return
 	}

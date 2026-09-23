@@ -162,7 +162,7 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 
 	// Register Node in Cluster
 	nodeName, _ := os.Hostname()
-	kernel.node = NewNode(kernel.db, nodeName, config.GetEnabledServices())
+	kernel.node = NewNode(kernel.db, nodeName, config.GetEnabledServices()).WithEventBus(kernel.eventBus)
 	_ = kernel.node.Register(ctx)
 
 	// Initialize KV Store

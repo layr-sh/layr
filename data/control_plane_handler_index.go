@@ -10,6 +10,8 @@ import (
 
 // handleListIndexes lists all indexes on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleListIndexes invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
 	}
@@ -23,6 +25,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.Debugf("retrieved %d index(es) on %s.%s", len(indexes), schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListIndexesResponse{
 		Indexes: indexes,
 		Count:   len(indexes),
@@ -31,6 +34,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 
 // handleCreateIndex creates a new index on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleCreateIndex invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -59,6 +64,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 		Detail: createIndexInput.IndexName,
 	}))
 
+	log.Debugf("index %s successfully created on %s.%s", createIndexInput.IndexName, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, CreateIndexResponse{
 		Status: "created",
 		Index:  createIndexInput.IndexName,
@@ -67,6 +73,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 
 // handleDeleteIndex drops an index from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handleDeleteIndex invoked")
+
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
 	}
@@ -93,6 +101,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter
 		Detail: indexName,
 	}))
 
+	log.Debugf("index %s successfully dropped from %s.%s", indexName, schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, DeleteIndexResponse{
 		Status: "deleted",
 		Index:  indexName,

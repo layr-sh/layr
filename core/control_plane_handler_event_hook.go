@@ -127,5 +127,7 @@ func (server *Server) handleRetryEventHookDelivery(responseWriter http.ResponseW
 		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
+	hookResourceID := eventHookDelivery.EventHookID.String()
+	server.kernel.eventBus.Publish(request.Context(), NewEventHookDeliveryRetriedEvent(hookResourceID, EventHookDeliveryRetriedEventData(*eventHookDelivery)))
 	WriteJSONResponse(responseWriter, http.StatusOK, eventHookDelivery)
 }

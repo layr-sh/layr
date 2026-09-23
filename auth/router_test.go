@@ -32,17 +32,17 @@ func TestAuthRouterUnit(t *testing.T) {
 	service.RegisterRoutes(baseRouter, controlPlaneRouter)
 
 	// 4. Inspect generated OpenAPI specifications
-	publicOpenAPISpec := baseRouter.OutputOpenAPISpec()
-	if publicOpenAPISpec == nil {
+	baseOpenAPISpec := baseRouter.OutputOpenAPISpec()
+	if baseOpenAPISpec == nil {
 		t.Fatal("expected non-nil public OpenAPI specification")
 	}
-	if publicOpenAPISpec.Paths.Value("/.well-known/openid-configuration") == nil {
+	if baseOpenAPISpec.Paths.Value("/.well-known/openid-configuration") == nil {
 		t.Fatal("expected /.well-known/openid-configuration route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/auth/sign-in") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/auth/sign-in") == nil {
 		t.Fatal("expected /v1/auth/sign-in route in public OpenAPI spec")
 	}
-	if publicOpenAPISpec.Paths.Value("/v1/auth/user") == nil {
+	if baseOpenAPISpec.Paths.Value("/v1/auth/user") == nil {
 		t.Fatal("expected /v1/auth/user route in public OpenAPI spec")
 	}
 

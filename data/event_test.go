@@ -124,4 +124,84 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 		require.NotNil(t, event.ResourceID)
 		assert.Equal(t, "user-123", *event.ResourceID)
 	})
+
+	t.Run("TableTruncatedEvent", func(t *testing.T) {
+		event := NewTableTruncatedEvent("public.users", TableTruncatedEventData{
+			Schema: "public",
+			Table:  "users",
+		})
+		assert.Equal(t, "data.table.truncated", event.Type)
+		assert.Equal(t, "truncated", event.Action)
+		assert.Equal(t, "data.table", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "public.users", *event.ResourceID)
+		assert.Equal(t, "public", event.Data["schema"])
+		assert.Equal(t, "users", event.Data["table"])
+	})
+
+	t.Run("SQLExecutedEvent", func(t *testing.T) {
+		event := NewSQLExecutedEvent("raw_sql", SQLExecutedEventData{
+			Query:        "SELECT * FROM users",
+			RowsAffected: 10,
+		})
+		assert.Equal(t, "data.sql.executed", event.Type)
+		assert.Equal(t, "executed", event.Action)
+		assert.Equal(t, "data.sql", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "raw_sql", *event.ResourceID)
+		assert.Equal(t, "SELECT * FROM users", event.Data["query"])
+	})
+
+	t.Run("FunctionExecutedEvent", func(t *testing.T) {
+		event := NewFunctionExecutedEvent("public.get_user", FunctionExecutedEventData{
+			Schema:   "public",
+			Function: "get_user",
+			Args:     map[string]any{"id": 42},
+		})
+		assert.Equal(t, "data.function.executed", event.Type)
+		assert.Equal(t, "executed", event.Action)
+		assert.Equal(t, "data.function", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "public.get_user", *event.ResourceID)
+		assert.Equal(t, "public", event.Data["schema"])
+		assert.Equal(t, "get_user", event.Data["function"])
+	})
+
+	t.Run("KVSetEvent", func(t *testing.T) {
+		event := NewKVSetEvent("session:123", KVSetEventData{
+			Key: "session:123",
+			TTL: 3600,
+		})
+		assert.Equal(t, "data.kv.set", event.Type)
+		assert.Equal(t, "set", event.Action)
+		assert.Equal(t, "data.kv", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "session:123", *event.ResourceID)
+		assert.Equal(t, "session:123", event.Data["key"])
+	})
+
+	t.Run("KVDeletedEvent", func(t *testing.T) {
+		event := NewKVDeletedEvent("session:123", KVDeletedEventData{
+			Key: "session:123",
+		})
+		assert.Equal(t, "data.kv.deleted", event.Type)
+		assert.Equal(t, "deleted", event.Action)
+		assert.Equal(t, "data.kv", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "session:123", *event.ResourceID)
+		assert.Equal(t, "session:123", event.Data["key"])
+	})
+
+	t.Run("KVTouchedEvent", func(t *testing.T) {
+		event := NewKVTouchedEvent("session:123", KVTouchedEventData{
+			Key: "session:123",
+			TTL: 7200,
+		})
+		assert.Equal(t, "data.kv.touched", event.Type)
+		assert.Equal(t, "touched", event.Action)
+		assert.Equal(t, "data.kv", event.ResourceType)
+		require.NotNil(t, event.ResourceID)
+		assert.Equal(t, "session:123", *event.ResourceID)
+		assert.Equal(t, "session:123", event.Data["key"])
+	})
 }

@@ -18,6 +18,7 @@ const (
 
 // handlePresignURL handles POST /v1/file-storage/presign.
 func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handlePresignURL invoked")
 	var presignURLInput PresignURLInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&presignURLInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
@@ -97,6 +98,16 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 
 	presignedURL := fmt.Sprintf("/v1/file-storage/objects/%s/%s?token=%s&expires=%d&op=%s",
 		bucket.Name, presignURLInput.Key, token, expiresUnix, operation)
+
+	log.Debugf("presigned url generated for bucket=%s key=%s operation=%s", bucket.Name, presignURLInput.Key, operation)
+
+	baseHandler.kernel.EventBus().Publish(ctx, NewURLPresignedEvent(fmt.Sprintf("%s/%s", bucket.Name, presignURLInput.Key), URLPresignedEventData{
+		BucketName: bucket.Name,
+		ObjectKey:  presignURLInput.Key,
+		Operation:  operation,
+		URL:        presignedURL,
+		ExpiresAt:  expiresAtTime,
+	}))
 
 	presignURLResponse := PresignURLResponse{
 		URL:       presignedURL,
