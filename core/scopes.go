@@ -40,10 +40,13 @@ const (
 	ScopeFileStorageConfigWrite = "storage:config.write"
 
 	// Tasks scopes
-	ScopeTasksJobRead        = "scheduler:job.read"
-	ScopeTasksJobWrite       = "scheduler:job.write"
-	ScopeTasksExecutionRead  = "scheduler:execution.read"
-	ScopeTasksExecutionWrite = "scheduler:execution.write"
+	ScopeTasksJobRead        = "tasks:job.read"
+	ScopeTasksJobWrite       = "tasks:job.write"
+	ScopeTasksExecutionRead  = "tasks:execution.read"
+	ScopeTasksExecutionWrite = "tasks:execution.write"
+	ScopeTasksConfigRead     = "tasks:config.read"
+	ScopeTasksConfigWrite    = "tasks:config.write"
+	ScopeTasksStatsRead      = "tasks:stats.read"
 
 	// Notification scopes
 	ScopeNotificationChannelRead   = "notification:channel.read"

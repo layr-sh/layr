@@ -79,6 +79,7 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 		CryptoContextPublishableKey,
 		CryptoContextImageSigningKey,
 		CryptoContextImageSigningSalt,
+		CryptoContextTasksWebhookHMAC,
 		"custom:arbitrary:context:v1",
 	}
 
