@@ -161,12 +161,14 @@ func TestCoreRouterTypedMethodsUnit(t *testing.T) {
 
 	// Test HTTP dispatching
 	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
-		request := httptest.NewRequestWithContext(context.Background(), method, "/test/typed/"+strings.ToLower(method), strings.NewReader(`{"name":"layr"}`))
-		request.Header.Set("Content-Type", "application/json")
-		responseResponseRecorder := httptest.NewRecorder()
-		engine.Mux.ServeHTTP(responseResponseRecorder, request)
-		if responseResponseRecorder.Code != http.StatusOK {
-			t.Fatalf("expected status 200 for %s, got %d", method, responseResponseRecorder.Code)
-		}
+		t.Run(method, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(context.Background(), method, "/test/typed/"+strings.ToLower(method), strings.NewReader(`{"name":"layr"}`))
+			request.Header.Set("Content-Type", "application/json")
+			responseResponseRecorder := httptest.NewRecorder()
+			engine.Mux.ServeHTTP(responseResponseRecorder, request)
+			if responseResponseRecorder.Code != http.StatusOK {
+				t.Fatalf("expected status 200 for %s, got %d", method, responseResponseRecorder.Code)
+			}
+		})
 	}
 }

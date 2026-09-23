@@ -32,13 +32,19 @@ func TestThreatCaptchaFactoryUnit(t *testing.T) {
 	}
 
 	for _, providerTestCase := range providers {
-		captchaVerifier, err := NewCaptchaVerifier(providerTestCase.name, "secret-key", client)
-		if err != nil {
-			t.Fatalf("unexpected error for %s: %v", providerTestCase.name, err)
+		testName := providerTestCase.name
+		if testName == "" {
+			testName = "default"
 		}
-		if captchaVerifier == nil {
-			t.Fatalf("expected non-nil verifier for %s", providerTestCase.name)
-		}
+		t.Run(testName, func(t *testing.T) {
+			captchaVerifier, err := NewCaptchaVerifier(providerTestCase.name, "secret-key", client)
+			if err != nil {
+				t.Fatalf("unexpected error for %s: %v", providerTestCase.name, err)
+			}
+			if captchaVerifier == nil {
+				t.Fatalf("expected non-nil verifier for %s", providerTestCase.name)
+			}
+		})
 	}
 
 	// Unsupported provider
@@ -55,11 +61,21 @@ func TestThreatCaptchaEmptyTokenUnit(t *testing.T) {
 	recaptchaCaptchaVerifier, _ := NewCaptchaVerifier("recaptcha", "secret", client)
 	hCaptchaCaptchaVerifier, _ := NewCaptchaVerifier("hcaptcha", "secret", client)
 
-	for _, captchaVerifier := range []CaptchaVerifier{turnstileCaptchaVerifier, recaptchaCaptchaVerifier, hCaptchaCaptchaVerifier} {
-		valid, err := captchaVerifier.Verify(ctx, "   ", "127.0.0.1")
-		if err != nil || valid {
-			t.Fatalf("expected (false, nil) for empty token, got (%v, %v)", valid, err)
-		}
+	verifiers := []struct {
+		name            string
+		captchaVerifier CaptchaVerifier
+	}{
+		{"Turnstile", turnstileCaptchaVerifier},
+		{"Recaptcha", recaptchaCaptchaVerifier},
+		{"HCaptcha", hCaptchaCaptchaVerifier},
+	}
+	for _, tc := range verifiers {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := tc.captchaVerifier.Verify(ctx, "   ", "127.0.0.1")
+			if err != nil || valid {
+				t.Fatalf("expected (false, nil) for empty token, got (%v, %v)", valid, err)
+			}
+		})
 	}
 }
 
@@ -80,11 +96,21 @@ func TestThreatCaptchaVerifySuccessAndFailureUnit(t *testing.T) {
 	recaptchaCaptchaVerifier, _ := NewCaptchaVerifier("recaptcha", "secret", successClient)
 	hCaptchaCaptchaVerifier, _ := NewCaptchaVerifier("hcaptcha", "secret", successClient)
 
-	for _, captchaVerifier := range []CaptchaVerifier{turnstileCaptchaVerifier, recaptchaCaptchaVerifier, hCaptchaCaptchaVerifier} {
-		valid, err := captchaVerifier.Verify(ctx, "valid-token", "1.2.3.4")
-		if err != nil || !valid {
-			t.Fatalf("expected valid token, got (%v, %v)", valid, err)
-		}
+	verifiers := []struct {
+		name            string
+		captchaVerifier CaptchaVerifier
+	}{
+		{"Turnstile", turnstileCaptchaVerifier},
+		{"Recaptcha", recaptchaCaptchaVerifier},
+		{"HCaptcha", hCaptchaCaptchaVerifier},
+	}
+	for _, tc := range verifiers {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, err := tc.captchaVerifier.Verify(ctx, "valid-token", "1.2.3.4")
+			if err != nil || !valid {
+				t.Fatalf("expected valid token, got (%v, %v)", valid, err)
+			}
+		})
 	}
 
 	// Without remote IP

@@ -351,9 +351,11 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 		"bad": struct{}{},
 	}
 	for _, key := range []string{"f64", "f32", "i", "i64", "i32", "u", "u64", "s"} {
-		if _, err := toFloat64(typesRecord[key]); err != nil {
-			t.Fatalf("expected toFloat64 success for %s, got: %v", key, err)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, err := toFloat64(typesRecord[key]); err != nil {
+				t.Fatalf("expected toFloat64 success for %s, got: %v", key, err)
+			}
+		})
 	}
 	if _, err := toFloat64(typesRecord["bad"]); err == nil {
 		t.Fatal("expected toFloat64 error for non-number")

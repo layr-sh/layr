@@ -25,8 +25,10 @@ func TestAuthMigrationsDefinitionUnit(t *testing.T) {
 	}
 
 	for _, tableName := range requiredTables {
-		if !strings.Contains(databaseMigration.UpSQL, tableName) {
-			t.Fatalf("migration missing table definition: %s", tableName)
-		}
+		t.Run(tableName, func(t *testing.T) {
+			if !strings.Contains(databaseMigration.UpSQL, tableName) {
+				t.Fatalf("migration missing table definition: %s", tableName)
+			}
+		})
 	}
 }

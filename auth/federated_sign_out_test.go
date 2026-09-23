@@ -117,36 +117,38 @@ func TestAuthFederatedSignOutUnit(t *testing.T) {
 	}
 
 	// 3. Test front-channel URL construction
-	frontChannelURLs := buildFrontChannelSignOutURLs("https://layr.example.com", clients, targets[:6])
-	// Expected: frontchannel-success and frontchannel-duplicate (deduplicated), invalid-url skipped, no-uris skipped, not-registered skipped
-	if len(frontChannelURLs) != 2 {
-		t.Fatalf("expected 2 unique front channel URLs, got: %d (%v)", len(frontChannelURLs), frontChannelURLs)
-	}
+	t.Run("FrontChannelURLConstruction", func(t *testing.T) {
+		frontChannelURLs := buildFrontChannelSignOutURLs("https://layr.example.com", clients, targets[:6])
+		// Expected: frontchannel-success and frontchannel-duplicate (deduplicated), invalid-url skipped, no-uris skipped, not-registered skipped
+		if len(frontChannelURLs) != 2 {
+			t.Fatalf("expected 2 unique front channel URLs, got: %d (%v)", len(frontChannelURLs), frontChannelURLs)
+		}
 
-	foundSuccess := false
-	foundDuplicate := false
-	for _, frontChannelURL := range frontChannelURLs {
-		if strings.Contains(frontChannelURL, "frontchannel-success") {
-			foundSuccess = true
-			if !strings.Contains(frontChannelURL, "iss=https%3A%2F%2Flayr.example.com") || !strings.Contains(frontChannelURL, "sid=session-1") {
-				t.Fatalf("missing iss or sid in success url: %s", frontChannelURL)
+		foundSuccess := false
+		foundDuplicate := false
+		for _, frontChannelURL := range frontChannelURLs {
+			if strings.Contains(frontChannelURL, "frontchannel-success") {
+				foundSuccess = true
+				if !strings.Contains(frontChannelURL, "iss=https%3A%2F%2Flayr.example.com") || !strings.Contains(frontChannelURL, "sid=session-1") {
+					t.Fatalf("missing iss or sid in success url: %s", frontChannelURL)
+				}
+			}
+			if strings.Contains(frontChannelURL, "frontchannel-duplicate") {
+				foundDuplicate = true
 			}
 		}
-		if strings.Contains(frontChannelURL, "frontchannel-duplicate") {
-			foundDuplicate = true
+
+		if !foundSuccess || !foundDuplicate {
+			t.Fatalf("expected both success and duplicate urls in result: %v", frontChannelURLs)
 		}
-	}
 
-	if !foundSuccess || !foundDuplicate {
-		t.Fatalf("expected both success and duplicate urls in result: %v", frontChannelURLs)
-	}
-
-	// Test front-channel with target lacking session ID
-	noSessionTargets := []ClientSessionInfo{
-		{ClientID: "client-success", SessionID: "", UserID: "user-1"},
-	}
-	noSessionURLs := buildFrontChannelSignOutURLs("https://layr.example.com", clients, noSessionTargets)
-	if len(noSessionURLs) != 1 || strings.Contains(noSessionURLs[0], "sid=") {
-		t.Fatalf("expected 1 url without sid parameter, got: %v", noSessionURLs)
-	}
+		// Test front-channel with target lacking session ID
+		noSessionTargets := []ClientSessionInfo{
+			{ClientID: "client-success", SessionID: "", UserID: "user-1"},
+		}
+		noSessionURLs := buildFrontChannelSignOutURLs("https://layr.example.com", clients, noSessionTargets)
+		if len(noSessionURLs) != 1 || strings.Contains(noSessionURLs[0], "sid=") {
+			t.Fatalf("expected 1 url without sid parameter, got: %v", noSessionURLs)
+		}
+	})
 }

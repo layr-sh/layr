@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -169,9 +170,11 @@ func TestGraphqlParserParseAndValidateUnit(t *testing.T) {
 	}
 
 	for queryIndex, errQuery := range errQueries {
-		if _, parseErr := ParseGraphQL(errQuery, nil); parseErr == nil {
-			t.Fatalf("case %d: expected error for %q, got nil", queryIndex, errQuery)
-		}
+		t.Run(fmt.Sprintf("ErrQuery_%d", queryIndex), func(t *testing.T) {
+			if _, parseErr := ParseGraphQL(errQuery, nil); parseErr == nil {
+				t.Fatalf("case %d: expected error for %q, got nil", queryIndex, errQuery)
+			}
+		})
 	}
 
 	// 5. Direct parser methods error testing

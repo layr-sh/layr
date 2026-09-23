@@ -63,59 +63,62 @@ func TestPasskeyConcurrentSignUpIntegration(t *testing.T) {
 	generatedChallenges := make([]string, concurrentUserCount)
 	generatedUserIDs := make([]string, concurrentUserCount)
 
-	for index := 0; index < concurrentUserCount; index++ {
-		waitGroup.Add(1)
-		userIndex := index
-		go func() {
-			defer waitGroup.Done()
-			userID := fmt.Sprintf("user-%s-%d", uuid.NewV7().String(), userIndex)
-			userName := fmt.Sprintf("User%d", userIndex)
+	t.Run("GenerateChallengesConcurrently", func(t *testing.T) {
+		for index := 0; index < concurrentUserCount; index++ {
+			waitGroup.Add(1)
+			userIndex := index
+			go func() {
+				defer waitGroup.Done()
+				userID := fmt.Sprintf("user-%s-%d", uuid.NewV7().String(), userIndex)
+				userName := fmt.Sprintf("User%d", userIndex)
 
-			signUpOptions, regErr := passkeyManager.BeginSignUp(userID, userName)
-			if regErr != nil {
-				t.Errorf("failed to begin sign up for %s: %v", userID, regErr)
-				return
-			}
-			generatedChallenges[userIndex] = signUpOptions.Challenge
-			generatedUserIDs[userIndex] = userID
-		}()
-	}
-	waitGroup.Wait()
-
-	// Ensure all 50 challenges were generated concurrently and are distinct
-	seenChallenges := make(map[string]bool)
-	for userIndex, challenge := range generatedChallenges {
-		if challenge == "" {
-			t.Fatalf("empty challenge for index %d", userIndex)
+				signUpOptions, regErr := passkeyManager.BeginSignUp(userID, userName)
+				if regErr != nil {
+					t.Errorf("failed to begin sign up for %s: %v", userID, regErr)
+					return
+				}
+				generatedChallenges[userIndex] = signUpOptions.Challenge
+				generatedUserIDs[userIndex] = userID
+			}()
 		}
-		if seenChallenges[challenge] {
-			t.Fatalf("duplicate challenge produced: %s", challenge)
+		waitGroup.Wait()
+	})
+
+	t.Run("VerifyDistinctChallenges", func(t *testing.T) {
+		seenChallenges := make(map[string]bool)
+		for userIndex, challenge := range generatedChallenges {
+			if challenge == "" {
+				t.Fatalf("empty challenge for index %d", userIndex)
+			}
+			if seenChallenges[challenge] {
+				t.Fatalf("duplicate challenge produced: %s", challenge)
+			}
+			seenChallenges[challenge] = true
 		}
-		seenChallenges[challenge] = true
-	}
+	})
 
-	// Concurrently consume all challenges
-	for index := 0; index < concurrentUserCount; index++ {
-		waitGroup.Add(1)
-		currentIndex := index
-		go func() {
-			defer waitGroup.Done()
-			consumedUserID, consumeErr := passkeyManager.ConsumeChallenge(generatedChallenges[currentIndex])
-			if consumeErr != nil {
-				t.Errorf("failed to consume challenge for index %d: %v", currentIndex, consumeErr)
-				return
-			}
-			if consumedUserID != generatedUserIDs[currentIndex] {
-				t.Errorf("consumed user mismatch: expected %s, got %s", generatedUserIDs[currentIndex], consumedUserID)
-			}
-		}()
-	}
-	waitGroup.Wait()
+	t.Run("ConsumeChallengesConcurrently", func(t *testing.T) {
+		for index := 0; index < concurrentUserCount; index++ {
+			waitGroup.Add(1)
+			currentIndex := index
+			go func() {
+				defer waitGroup.Done()
+				consumedUserID, consumeErr := passkeyManager.ConsumeChallenge(generatedChallenges[currentIndex])
+				if consumeErr != nil {
+					t.Errorf("failed to consume challenge for index %d: %v", currentIndex, consumeErr)
+					return
+				}
+				if consumedUserID != generatedUserIDs[currentIndex] {
+					t.Errorf("consumed user mismatch: expected %s, got %s", generatedUserIDs[currentIndex], consumedUserID)
+				}
+			}()
+		}
+		waitGroup.Wait()
 
-	// All challenges should now be consumed
-	if len(passkeyManager.challenges) != 0 {
-		t.Fatalf("expected 0 remaining challenges, got: %d", len(passkeyManager.challenges))
-	}
+		if len(passkeyManager.challenges) != 0 {
+			t.Fatalf("expected 0 remaining challenges, got: %d", len(passkeyManager.challenges))
+		}
+	})
 }
 
 func TestPasskeyCredentialStorageAndCounterIntegration(t *testing.T) {

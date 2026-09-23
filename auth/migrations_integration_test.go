@@ -24,18 +24,20 @@ func TestAuthMigrationsExecutionIntegration(t *testing.T) {
 	}
 
 	for _, tableName := range expectedTables {
-		var exists bool
-		err := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.tables 
-				WHERE table_schema = 'auth' AND table_name = $1
-			)
-		`, tableName).Scan(&exists)
-		if err != nil {
-			t.Fatalf("failed to query table existence for %s: %v", tableName, err)
-		}
-		if !exists {
-			t.Fatalf("table auth.%s does not exist after running migrations", tableName)
-		}
+		t.Run(tableName, func(t *testing.T) {
+			var exists bool
+			err := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = 'auth' AND table_name = $1
+				)
+			`, tableName).Scan(&exists)
+			if err != nil {
+				t.Fatalf("failed to query table existence for %s: %v", tableName, err)
+			}
+			if !exists {
+				t.Fatalf("table auth.%s does not exist after running migrations", tableName)
+			}
+		})
 	}
 }

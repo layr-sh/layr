@@ -54,9 +54,11 @@ func TestCommonClaimsValidationAndMappingUnit(t *testing.T) {
 		"-",
 	}
 	for _, key := range validKeys {
-		if !IsSafeClaimKey(key) {
-			t.Fatalf("expected claim key %q to be safe", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if !IsSafeClaimKey(key) {
+				t.Fatalf("expected claim key %q to be safe", key)
+			}
+		})
 	}
 
 	invalidKeys := []string{
@@ -72,9 +74,11 @@ func TestCommonClaimsValidationAndMappingUnit(t *testing.T) {
 		"tenant\x00id",
 	}
 	for _, key := range invalidKeys {
-		if IsSafeClaimKey(key) {
-			t.Fatalf("expected claim key %q to be unsafe", key)
-		}
+		t.Run(fmt.Sprintf("%q", key), func(t *testing.T) {
+			if IsSafeClaimKey(key) {
+				t.Fatalf("expected claim key %q to be unsafe", key)
+			}
+		})
 	}
 
 	// 2. BuildClaimsMap with all standard and custom claims (including SessionID -> sid)
@@ -221,9 +225,11 @@ func TestCommonClaimsValidationAndMappingUnit(t *testing.T) {
 	}
 
 	for key, expectedSettingValue := range expectedSettings {
-		if actualSettingValue, exists := appliedSettings[key]; !exists || actualSettingValue != expectedSettingValue {
-			t.Fatalf("expected setting %s to be %q, got %q (exists: %v)", key, expectedSettingValue, actualSettingValue, exists)
-		}
+		t.Run(key, func(t *testing.T) {
+			if actualSettingValue, exists := appliedSettings[key]; !exists || actualSettingValue != expectedSettingValue {
+				t.Fatalf("expected setting %s to be %q, got %q (exists: %v)", key, expectedSettingValue, actualSettingValue, exists)
+			}
+		})
 	}
 
 	if _, exists := appliedSettings["request.jwt.bad!claim"]; exists {

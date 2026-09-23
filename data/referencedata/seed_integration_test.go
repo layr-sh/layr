@@ -2,6 +2,7 @@ package referencedata_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 	"uuid"
@@ -96,14 +97,16 @@ func TestReferencedataSeedLifecycleIntegration(t *testing.T) {
 	}
 
 	for _, tableName := range tablesToVerify {
-		var count int
-		err := db.QueryRow(ctx, "SELECT COUNT(*) FROM "+tableName).Scan(&count)
-		if err != nil {
-			t.Fatalf("failed to query count for %s: %v", tableName, err)
-		}
-		if count == 0 {
-			t.Fatalf("expected rows in %s, got 0", tableName)
-		}
+		t.Run(tableName, func(t *testing.T) {
+			var count int
+			err := db.QueryRow(ctx, "SELECT COUNT(*) FROM "+tableName).Scan(&count)
+			if err != nil {
+				t.Fatalf("failed to query count for %s: %v", tableName, err)
+			}
+			if count == 0 {
+				t.Fatalf("expected rows in %s, got 0", tableName)
+			}
+		})
 	}
 
 	// 3. Idempotent Second Seed (should not duplicate or fail)
@@ -280,22 +283,24 @@ func TestReferencedataSeedBranchesAndErrorsIntegration(t *testing.T) {
 	`
 
 	for constraintIndex, testCase := range tableConstraints {
-		_, _ = db.Exec(ctx, truncateTables)
-		constraintName := "fail_constraint"
-		alterAdd := "ALTER TABLE " + testCase.table + " ADD CONSTRAINT " + constraintName + " " + testCase.constraint
-		if _, err := db.Exec(ctx, alterAdd); err != nil {
-			t.Fatalf("failed to add constraint on %s (test %d): %v", testCase.table, constraintIndex, err)
-		}
+		t.Run(fmt.Sprintf("%s_%d", testCase.table, constraintIndex), func(t *testing.T) {
+			_, _ = db.Exec(ctx, truncateTables)
+			constraintName := fmt.Sprintf("fail_constraint_%d", constraintIndex)
+			alterAdd := "ALTER TABLE " + testCase.table + " ADD CONSTRAINT " + constraintName + " " + testCase.constraint
+			if _, err := db.Exec(ctx, alterAdd); err != nil {
+				t.Fatalf("failed to add constraint on %s (test %d): %v", testCase.table, constraintIndex, err)
+			}
 
-		if err := referencedata.SeedWithData(ctx, kernel, customCountries, customCurrencies); err == nil {
-			t.Fatalf("expected error on %s constraint (%s)", testCase.table, testCase.constraint)
-		}
+			if err := referencedata.SeedWithData(ctx, kernel, customCountries, customCurrencies); err == nil {
+				t.Fatalf("expected error on %s constraint (%s)", testCase.table, testCase.constraint)
+			}
 
-		alterDrop := "ALTER TABLE " + testCase.table + " DROP CONSTRAINT " + constraintName
-		if _, err := db.Exec(ctx, alterDrop); err != nil {
-			t.Fatalf("failed to drop constraint on %s: %v", testCase.table, err)
-		}
-		_, _ = db.Exec(ctx, truncateTables)
+			alterDrop := "ALTER TABLE " + testCase.table + " DROP CONSTRAINT " + constraintName
+			if _, err := db.Exec(ctx, alterDrop); err != nil {
+				t.Fatalf("failed to drop constraint on %s: %v", testCase.table, err)
+			}
+			_, _ = db.Exec(ctx, truncateTables)
+		})
 	}
 }
 

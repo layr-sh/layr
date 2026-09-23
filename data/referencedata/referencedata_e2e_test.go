@@ -73,14 +73,16 @@ func TestReferencedataLifecycleE2E(t *testing.T) {
 	}
 
 	for _, table := range tables {
-		var count int
-		query := "SELECT COUNT(*) FROM " + table
-		if err := db.QueryRow(ctx, query).Scan(&count); err != nil {
-			t.Fatalf("failed to count rows in %s: %v", table, err)
-		}
-		if count == 0 {
-			t.Fatalf("expected rows in %s, got 0", table)
-		}
+		t.Run(table, func(t *testing.T) {
+			var count int
+			query := "SELECT COUNT(*) FROM " + table
+			if err := db.QueryRow(ctx, query).Scan(&count); err != nil {
+				t.Fatalf("failed to count rows in %s: %v", table, err)
+			}
+			if count == 0 {
+				t.Fatalf("expected rows in %s, got 0", table)
+			}
+		})
 	}
 
 	// 5. Query relational cross-table joins for a country (e.g. US)

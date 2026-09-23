@@ -3,6 +3,7 @@ package totp
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -152,9 +153,11 @@ func TestTOTPManagerValidateCodeUnit(t *testing.T) {
 
 	// 8. Invalid code lengths
 	for _, invalidLengthCode := range []string{"", "123", "12345", "1234567", "abcdef"} {
-		if manager.ValidateCode(secretBase32, invalidLengthCode, now, 1) {
-			t.Errorf("expected invalid code length '%s' to fail validation", invalidLengthCode)
-		}
+		t.Run(fmt.Sprintf("%q", invalidLengthCode), func(t *testing.T) {
+			if manager.ValidateCode(secretBase32, invalidLengthCode, now, 1) {
+				t.Errorf("expected invalid code length '%s' to fail validation", invalidLengthCode)
+			}
+		})
 	}
 
 	// 9. Invalid base32 secret

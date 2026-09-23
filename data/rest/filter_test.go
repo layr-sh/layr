@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -101,11 +102,13 @@ func TestRestFilterParseQueryParamsUnit(t *testing.T) {
 	}
 
 	for i, errorCase := range errorCases {
-		var parseErr error
-		_, parseErr = ParseQueryParams(errorCase, 50, 1000)
-		if parseErr == nil {
-			t.Fatalf("case %d: expected error for %+v, got nil", i, errorCase)
-		}
+		t.Run(fmt.Sprintf("ErrorCase_%d", i), func(t *testing.T) {
+			var parseErr error
+			_, parseErr = ParseQueryParams(errorCase, 50, 1000)
+			if parseErr == nil {
+				t.Fatalf("case %d: expected error for %+v, got nil", i, errorCase)
+			}
+		})
 	}
 
 	// 5. Test negated operators
@@ -118,9 +121,11 @@ func TestRestFilterParseQueryParamsUnit(t *testing.T) {
 		t.Fatalf("failed to parse negated filters: %v", parseErr)
 	}
 	for _, filterOp := range negatedQueryParams.Filters {
-		if !filterOp.Negated {
-			t.Fatalf("expected filter %s to be negated", filterOp.Column)
-		}
+		t.Run(filterOp.Column, func(t *testing.T) {
+			if !filterOp.Negated {
+				t.Fatalf("expected filter %s to be negated", filterOp.Column)
+			}
+		})
 	}
 
 	// 5. Test isValidIdentifier edge cases

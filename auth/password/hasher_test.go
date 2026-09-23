@@ -71,8 +71,10 @@ func TestPasswordArgon2idHasherUnit(t *testing.T) {
 	}
 
 	for _, malformedHash := range malformedTestCases {
-		if isMatch, err := hasher.Verify("test", malformedHash); err == nil && isMatch {
-			t.Fatalf("expected error on malformed hash: %s", malformedHash)
-		}
+		t.Run(malformedHash, func(t *testing.T) {
+			if isMatch, err := hasher.Verify("test", malformedHash); err == nil && isMatch {
+				t.Fatalf("expected error on malformed hash: %s", malformedHash)
+			}
+		})
 	}
 }

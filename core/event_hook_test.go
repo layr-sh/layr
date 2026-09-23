@@ -127,11 +127,15 @@ func TestCoreEventHookTransientErrorUnit(t *testing.T) {
 		"server closed the connection",
 	}
 
-	for _, errPattern := range transientErrors {
-		if !isTransientDatabaseError(errors.New(errPattern)) {
-			t.Fatalf("expected error %q to be classified as transient", errPattern)
+	t.Run("transient errors", func(t *testing.T) {
+		for _, errPattern := range transientErrors {
+			t.Run(errPattern, func(t *testing.T) {
+				if !isTransientDatabaseError(errors.New(errPattern)) {
+					t.Fatalf("expected error %q to be classified as transient", errPattern)
+				}
+			})
 		}
-	}
+	})
 
 	permanentErrors := []string{
 		"syntax error at or near \"SELECT\"",
@@ -139,26 +143,32 @@ func TestCoreEventHookTransientErrorUnit(t *testing.T) {
 		"relation \"missing_table\" does not exist",
 	}
 
-	for _, errPattern := range permanentErrors {
-		if isTransientDatabaseError(errors.New(errPattern)) {
-			t.Fatalf("expected error %q to be classified as permanent", errPattern)
+	t.Run("permanent errors", func(t *testing.T) {
+		for _, errPattern := range permanentErrors {
+			t.Run(errPattern, func(t *testing.T) {
+				if isTransientDatabaseError(errors.New(errPattern)) {
+					t.Fatalf("expected error %q to be classified as permanent", errPattern)
+				}
+			})
 		}
-	}
+	})
 }
 
 func TestCoreEventHookSleepWithContextUnit(t *testing.T) {
-	// 1. Cancelled context -> returns false
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if sleepWithContext(canceledCtx, 10*time.Second) {
-		t.Fatal("expected sleepWithContext to return false on canceled context")
-	}
+	t.Run("canceled context returns false", func(t *testing.T) {
+		canceledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if sleepWithContext(canceledCtx, 10*time.Second) {
+			t.Fatal("expected sleepWithContext to return false on canceled context")
+		}
+	})
 
-	// 2. Active context -> returns true after duration
-	activeCtx := context.Background()
-	if !sleepWithContext(activeCtx, 1*time.Millisecond) {
-		t.Fatal("expected sleepWithContext to return true on active context")
-	}
+	t.Run("active context returns true", func(t *testing.T) {
+		activeCtx := context.Background()
+		if !sleepWithContext(activeCtx, 1*time.Millisecond) {
+			t.Fatal("expected sleepWithContext to return true on active context")
+		}
+	})
 }
 
 func TestCoreEventHookManagerValidationUnit(t *testing.T) {
