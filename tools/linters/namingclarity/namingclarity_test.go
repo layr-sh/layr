@@ -1173,6 +1173,40 @@ func TestInvalid() {}
 `,
 			wantReports: nil,
 		},
+		{
+			name:     "range loop with assertions must use t.Run",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+import "testing"
+func TestCoreConfigDefaultsUnit(t *testing.T) {
+	testCases := []string{"a", "b"}
+	for _, testCase := range testCases {
+		if testCase == "" {
+			t.Fatalf("expected non-empty")
+		}
+	}
+}
+`,
+			wantReports: []string{"table-driven test loop in 'TestCoreConfigDefaultsUnit' must execute cases using t.Run"},
+		},
+		{
+			name:     "range loop with t.Run is permitted",
+			filePath: "/workspace/core/config_test.go",
+			sourceCode: `package core
+import "testing"
+func TestCoreConfigDefaultsUnit(t *testing.T) {
+	testCases := []string{"a", "b"}
+	for _, testCase := range testCases {
+		t.Run(testCase, func(t *testing.T) {
+			if testCase == "" {
+				t.Fatalf("expected non-empty")
+			}
+		})
+	}
+}
+`,
+			wantReports: nil,
+		},
 	}
 
 	for _, tc := range tests {

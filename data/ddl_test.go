@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"layr.sh/core"
@@ -29,16 +30,20 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 		"pg_catalog",
 	}
 	for _, schemaName := range protectedList {
-		if !IsProtectedSchema(schemaName) {
-			t.Fatalf("expected schema %q to be protected", schemaName)
-		}
+		t.Run(fmt.Sprintf("Protected_%s", schemaName), func(t *testing.T) {
+			if !IsProtectedSchema(schemaName) {
+				t.Fatalf("expected schema %q to be protected", schemaName)
+			}
+		})
 	}
 
 	unprotectedList := []string{"public", "app", "store", "custom", "tenant1"}
 	for _, schemaName := range unprotectedList {
-		if IsProtectedSchema(schemaName) {
-			t.Fatalf("expected schema %q to not be protected", schemaName)
-		}
+		t.Run(fmt.Sprintf("Unprotected_%s", schemaName), func(t *testing.T) {
+			if IsProtectedSchema(schemaName) {
+				t.Fatalf("expected schema %q to not be protected", schemaName)
+			}
+		})
 	}
 
 	// 2. sanitizeDefaultValue

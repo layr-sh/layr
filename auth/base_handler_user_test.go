@@ -33,37 +33,39 @@ func TestAuthHandlerUserUnit(t *testing.T) {
 	}
 
 	for _, userEndpoint := range userEndpoints {
-		// No auth header/cookie
-		unauthenticatedRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
-		unauthenticatedResponseRecorder := httptest.NewRecorder()
-		userEndpoint.run(unauthenticatedResponseRecorder, unauthenticatedRequest)
-		if unauthenticatedResponseRecorder.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401 on %s without auth, got: %d", userEndpoint.name, unauthenticatedResponseRecorder.Code)
-		}
+		t.Run(userEndpoint.name, func(t *testing.T) {
+			// No auth header/cookie
+			unauthenticatedRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
+			unauthenticatedResponseRecorder := httptest.NewRecorder()
+			userEndpoint.run(unauthenticatedResponseRecorder, unauthenticatedRequest)
+			if unauthenticatedResponseRecorder.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401 on %s without auth, got: %d", userEndpoint.name, unauthenticatedResponseRecorder.Code)
+			}
 
-		// Invalid bearer token
-		invalidTokenRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
-		invalidTokenRequest.Header.Set("Authorization", "Bearer invalid-token-string")
-		invalidTokenResponseRecorder := httptest.NewRecorder()
-		userEndpoint.run(invalidTokenResponseRecorder, invalidTokenRequest)
-		if invalidTokenResponseRecorder.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401 on %s with invalid token, got: %d", userEndpoint.name, invalidTokenResponseRecorder.Code)
-		}
+			// Invalid bearer token
+			invalidTokenRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
+			invalidTokenRequest.Header.Set("Authorization", "Bearer invalid-token-string")
+			invalidTokenResponseRecorder := httptest.NewRecorder()
+			userEndpoint.run(invalidTokenResponseRecorder, invalidTokenRequest)
+			if invalidTokenResponseRecorder.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401 on %s with invalid token, got: %d", userEndpoint.name, invalidTokenResponseRecorder.Code)
+			}
 
-		// Expired bearer token
-		expiredToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
-			Subject:     "user-expired",
-			Email:       "user@example.com",
-			Role:        "authenticated",
-			IsAnonymous: false,
-		}, -10)
-		expiredTokenRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
-		expiredTokenRequest.Header.Set("Authorization", "Bearer "+expiredToken)
-		expiredTokenResponseRecorder := httptest.NewRecorder()
-		userEndpoint.run(expiredTokenResponseRecorder, expiredTokenRequest)
-		if expiredTokenResponseRecorder.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401 on %s with expired token, got: %d", userEndpoint.name, expiredTokenResponseRecorder.Code)
-		}
+			// Expired bearer token
+			expiredToken := jwtSigner.GenerateAccessToken(core.JWTClaims{
+				Subject:     "user-expired",
+				Email:       "user@example.com",
+				Role:        "authenticated",
+				IsAnonymous: false,
+			}, -10)
+			expiredTokenRequest := httptest.NewRequestWithContext(context.Background(), userEndpoint.method, "/v1/auth/user", strings.NewReader(`{}`))
+			expiredTokenRequest.Header.Set("Authorization", "Bearer "+expiredToken)
+			expiredTokenResponseRecorder := httptest.NewRecorder()
+			userEndpoint.run(expiredTokenResponseRecorder, expiredTokenRequest)
+			if expiredTokenResponseRecorder.Code != http.StatusUnauthorized {
+				t.Fatalf("expected 401 on %s with expired token, got: %d", userEndpoint.name, expiredTokenResponseRecorder.Code)
+			}
+		})
 	}
 
 	// 2. Valid token for profile tests

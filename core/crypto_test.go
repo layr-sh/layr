@@ -18,57 +18,44 @@ func (simulatedFailingReader *simulatedFailingReader) Read(destination []byte) (
 func TestCoreCryptoKeyManagerNewUnit(t *testing.T) {
 	validEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-	// 1. Valid 64-char hex key
-	if _, err := NewCryptoKeyManager(validEncryptionKeyHex); err != nil {
-		t.Fatalf("expected valid key manager, got %v", err)
+	testCases := []struct {
+		name        string
+		key         string
+		expectError bool
+	}{
+		{name: "valid 64-char hex key", key: validEncryptionKeyHex, expectError: false},
+		{name: "whitespace trimmed hex key", key: "  \t\n" + validEncryptionKeyHex + "  \n", expectError: false},
+		{name: "valid base64 key 32 bytes standard", key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", expectError: false},
+		{name: "valid raw base64 key 32 bytes unpadded", key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", expectError: false},
+		{name: "invalid short key", key: "short", expectError: true},
+		{name: "invalid hex characters", key: "zzzz456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", expectError: true},
+		{name: "non-64 char invalid base64", key: "not-base64-!!!", expectError: true},
+		{name: "non-64 char valid base64 wrong byte length", key: "AAAAAAAAAAAAAAAAAAAAAA==", expectError: true},
+		{name: "empty string", key: "", expectError: true},
 	}
 
-	// 2. Whitespace trimmed hex key
-	if _, err := NewCryptoKeyManager("  \t\n" + validEncryptionKeyHex + "  \n"); err != nil {
-		t.Fatalf("expected valid key manager after trimming whitespace, got %v", err)
-	}
-
-	// 3. Valid base64 key (32 bytes standard encoding)
-	validBase64Key := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-	if _, err := NewCryptoKeyManager(validBase64Key); err != nil {
-		t.Fatalf("expected valid key manager for standard base64, got %v", err)
-	}
-
-	// 4. Valid raw base64 key (32 bytes unpadded)
-	validRawBase64Key := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-	if _, err := NewCryptoKeyManager(validRawBase64Key); err != nil {
-		t.Fatalf("expected valid key manager for raw base64, got %v", err)
-	}
-
-	// 5. Invalid short key
-	if _, err := NewCryptoKeyManager("short"); err == nil {
-		t.Fatal("expected error on short key")
-	}
-
-	// 6. Invalid hex characters
-	if _, err := NewCryptoKeyManager("zzzz456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"); err == nil {
-		t.Fatal("expected error on invalid hex")
-	}
-
-	// 7. Non-64 char, invalid base64
-	if _, err := NewCryptoKeyManager("not-base64-!!!"); err == nil {
-		t.Fatal("expected error on invalid base64")
-	}
-
-	// 8. Non-64 char, valid base64 but wrong decoded length (16 bytes instead of 32)
-	if _, err := NewCryptoKeyManager("AAAAAAAAAAAAAAAAAAAAAA=="); err == nil {
-		t.Fatal("expected error on base64 key with wrong byte length")
-	}
-
-	// 9. Empty string
-	if _, err := NewCryptoKeyManager(""); err == nil {
-		t.Fatal("expected error on empty master encryption key")
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := NewCryptoKeyManager(testCase.key)
+			if testCase.expectError {
+				if err == nil {
+					t.Fatalf("expected error for key %q, got nil", testCase.key)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for key %q: %v", testCase.key, err)
+				}
+			}
+		})
 	}
 }
 
 func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 	validEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	cryptoKeyManager, _ := NewCryptoKeyManager(validEncryptionKeyHex)
+	cryptoKeyManager, err := NewCryptoKeyManager(validEncryptionKeyHex)
+	if err != nil {
+		t.Fatalf("unexpected key manager creation error: %v", err)
+	}
 
 	allContexts := []string{
 		CryptoContextDBEnvelopeAES256GCM,
@@ -83,73 +70,89 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 		"custom:arbitrary:context:v1",
 	}
 
-	derivedMap := make(map[string][]byte)
-	for _, contextName := range allContexts {
-		subkey := cryptoKeyManager.DeriveSubkey(contextName)
-		if len(subkey) != 32 {
-			t.Fatalf("DeriveSubkey(%s) returned invalid length: %d", contextName, len(subkey))
+	t.Run("context isolation and length", func(t *testing.T) {
+		derivedMap := make(map[string][]byte)
+		for _, contextName := range allContexts {
+			t.Run(contextName, func(t *testing.T) {
+				subkey := cryptoKeyManager.DeriveSubkey(contextName)
+				if len(subkey) != 32 {
+					t.Fatalf("DeriveSubkey(%s) returned invalid length: %d", contextName, len(subkey))
+				}
+				for existingContext, existingSubkey := range derivedMap {
+					if bytes.Equal(existingSubkey, subkey) {
+						t.Fatalf("context isolation collision between '%s' and '%s'", existingContext, contextName)
+					}
+				}
+				derivedMap[contextName] = subkey
+			})
 		}
-		for existingContext, existingSubkey := range derivedMap {
-			if bytes.Equal(existingSubkey, subkey) {
-				t.Fatalf("context isolation collision between '%s' and '%s'", existingContext, contextName)
-			}
-		}
-		derivedMap[contextName] = subkey
-	}
+	})
 
-	// Deterministic: same context -> same subkey
-	repeatedSubkey := cryptoKeyManager.DeriveSubkey("test:deterministic")
-	repeatedSubkeySecond := cryptoKeyManager.DeriveSubkey("test:deterministic")
-	if !bytes.Equal(repeatedSubkey, repeatedSubkeySecond) {
-		t.Fatal("expected deterministic subkey derivation")
-	}
+	t.Run("deterministic derivation", func(t *testing.T) {
+		repeatedSubkey := cryptoKeyManager.DeriveSubkey("test:deterministic")
+		repeatedSubkeySecond := cryptoKeyManager.DeriveSubkey("test:deterministic")
+		if !bytes.Equal(repeatedSubkey, repeatedSubkeySecond) {
+			t.Fatal("expected deterministic subkey derivation")
+		}
+	})
 }
 
 func TestCoreCryptoKeyManagerEncryptDecryptFieldUnit(t *testing.T) {
 	validEncryptionKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	cryptoKeyManager, _ := NewCryptoKeyManager(validEncryptionKeyHex)
-
-	testPayloads := [][]byte{
-		[]byte(""),
-		[]byte("a"),
-		[]byte("super-secret-oauth-client-secret-12345"),
-		make([]byte, 1024),
-		bytes.Repeat([]byte("payload-segment-"), 100),
-	}
-
-	for _, payload := range testPayloads {
-		encrypted, err := cryptoKeyManager.EncryptField(payload)
-		if err != nil {
-			t.Fatalf("EncryptField failed: %v", err)
-		}
-
-		if !strings.HasPrefix(encrypted, "enc:v1:aes256gcm:") {
-			t.Fatalf("expected envelope prefix, got %s", encrypted)
-		}
-
-		decrypted, err := cryptoKeyManager.DecryptField(encrypted)
-		if err != nil {
-			t.Fatalf("DecryptField failed: %v", err)
-		}
-
-		if !bytes.Equal(payload, decrypted) {
-			t.Fatalf("decrypted mismatch: expected %d bytes, got %d bytes", len(payload), len(decrypted))
-		}
-	}
-
-	// Nonce randomness: encrypting identical plaintext twice produces distinct ciphertexts
-	samplePlaintext := []byte("identical-plaintext-secret")
-	ciphertextFirst, err := cryptoKeyManager.EncryptField(samplePlaintext)
+	cryptoKeyManager, err := NewCryptoKeyManager(validEncryptionKeyHex)
 	if err != nil {
-		t.Fatalf("first encryption failed: %v", err)
+		t.Fatalf("unexpected key manager creation error: %v", err)
 	}
-	ciphertextSecond, err := cryptoKeyManager.EncryptField(samplePlaintext)
-	if err != nil {
-		t.Fatalf("second encryption failed: %v", err)
+
+	testPayloads := []struct {
+		name    string
+		payload []byte
+	}{
+		{name: "empty payload", payload: []byte("")},
+		{name: "single byte", payload: []byte("a")},
+		{name: "secret string", payload: []byte("super-secret-oauth-client-secret-12345")},
+		{name: "1024 zero bytes", payload: make([]byte, 1024)},
+		{name: "repeated segments", payload: bytes.Repeat([]byte("payload-segment-"), 100)},
 	}
-	if ciphertextFirst == ciphertextSecond {
-		t.Fatal("expected nonces to differ between independent encryptions")
-	}
+
+	t.Run("roundtrip encryption and decryption", func(t *testing.T) {
+		for _, testCase := range testPayloads {
+			t.Run(testCase.name, func(t *testing.T) {
+				encrypted, err := cryptoKeyManager.EncryptField(testCase.payload)
+				if err != nil {
+					t.Fatalf("EncryptField failed: %v", err)
+				}
+
+				if !strings.HasPrefix(encrypted, "enc:v1:aes256gcm:") {
+					t.Fatalf("expected envelope prefix, got %s", encrypted)
+				}
+
+				decrypted, err := cryptoKeyManager.DecryptField(encrypted)
+				if err != nil {
+					t.Fatalf("DecryptField failed: %v", err)
+				}
+
+				if !bytes.Equal(testCase.payload, decrypted) {
+					t.Fatalf("decrypted mismatch: expected %d bytes, got %d bytes", len(testCase.payload), len(decrypted))
+				}
+			})
+		}
+	})
+
+	t.Run("nonce randomness", func(t *testing.T) {
+		samplePlaintext := []byte("identical-plaintext-secret")
+		ciphertextFirst, err := cryptoKeyManager.EncryptField(samplePlaintext)
+		if err != nil {
+			t.Fatalf("first encryption failed: %v", err)
+		}
+		ciphertextSecond, err := cryptoKeyManager.EncryptField(samplePlaintext)
+		if err != nil {
+			t.Fatalf("second encryption failed: %v", err)
+		}
+		if ciphertextFirst == ciphertextSecond {
+			t.Fatalf("expected unique ciphertexts due to distinct nonces")
+		}
+	})
 }
 
 func TestCoreCryptoKeyManagerDecryptFieldErrorsUnit(t *testing.T) {

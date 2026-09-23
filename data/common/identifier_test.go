@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -21,17 +22,21 @@ func TestCommonIdentifierValidationUnit(t *testing.T) {
 	// Must start with letter or underscore
 	validStarts := []string{"users", "Users", "_private", "_123"}
 	for _, identifier := range validStarts {
-		if !IsValidIdentifier(identifier) {
-			t.Fatalf("expected valid initial character for %q", identifier)
-		}
+		t.Run(fmt.Sprintf("ValidStart_%s", identifier), func(t *testing.T) {
+			if !IsValidIdentifier(identifier) {
+				t.Fatalf("expected valid initial character for %q", identifier)
+			}
+		})
 	}
 
 	// Cannot start with digits or special characters
 	invalidStarts := []string{"1users", "9table", "-column", "$data", " users", ".table"}
 	for _, identifier := range invalidStarts {
-		if IsValidIdentifier(identifier) {
-			t.Fatalf("expected invalid initial character for %q", identifier)
-		}
+		t.Run(fmt.Sprintf("InvalidStart_%q", identifier), func(t *testing.T) {
+			if IsValidIdentifier(identifier) {
+				t.Fatalf("expected invalid initial character for %q", identifier)
+			}
+		})
 	}
 
 	// 3. Subsequent character constraints
@@ -46,9 +51,11 @@ func TestCommonIdentifierValidationUnit(t *testing.T) {
 		"mix_123_ABC",
 	}
 	for _, identifier := range validIdentifiers {
-		if !IsValidIdentifier(identifier) {
-			t.Fatalf("expected valid identifier for %q", identifier)
-		}
+		t.Run(fmt.Sprintf("ValidID_%s", identifier), func(t *testing.T) {
+			if !IsValidIdentifier(identifier) {
+				t.Fatalf("expected valid identifier for %q", identifier)
+			}
+		})
 	}
 
 	// Forbidden: dashes, spaces, punctuation, symbols
@@ -64,8 +71,10 @@ func TestCommonIdentifierValidationUnit(t *testing.T) {
 		"amount$total",
 	}
 	for _, identifier := range invalidIdentifiers {
-		if IsValidIdentifier(identifier) {
-			t.Fatalf("expected invalid identifier for %q", identifier)
-		}
+		t.Run(fmt.Sprintf("InvalidID_%q", identifier), func(t *testing.T) {
+			if IsValidIdentifier(identifier) {
+				t.Fatalf("expected invalid identifier for %q", identifier)
+			}
+		})
 	}
 }

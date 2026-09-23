@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -334,13 +335,15 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		{http.MethodPost, "/v1/_/data/cache/flush"},
 		{http.MethodPost, "/v1/_/data/cache/invalidate"},
 	} {
-		endpointRequest := httptest.NewRequestWithContext(ctx, endpoint.method, endpoint.path, nil)
-		endpointRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
-		endpointResponseRecorder := httptest.NewRecorder()
-		controlPlaneRouter.Mux().ServeHTTP(endpointResponseRecorder, endpointRequest)
-		if endpointResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on %s %s with no scope, got %d", endpoint.method, endpoint.path, endpointResponseRecorder.Code)
-		}
+		t.Run(fmt.Sprintf("%s_%s", endpoint.method, endpoint.path), func(t *testing.T) {
+			endpointRequest := httptest.NewRequestWithContext(ctx, endpoint.method, endpoint.path, nil)
+			endpointRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
+			endpointResponseRecorder := httptest.NewRecorder()
+			controlPlaneRouter.Mux().ServeHTTP(endpointResponseRecorder, endpointRequest)
+			if endpointResponseRecorder.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 on %s %s with no scope, got %d", endpoint.method, endpoint.path, endpointResponseRecorder.Code)
+			}
+		})
 	}
 
 	// 6. Test Start failure when configManager.Load fails on closed database pool

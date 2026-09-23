@@ -229,27 +229,31 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 		{"delete", http.MethodDelete, baseHandler.handleDeleteObject},
 	}
 	for _, endpoint := range endpoints {
-		nonExistentRequest := httptest.NewRequestWithContext(ctx, endpoint.method, "/v1/file-storage/objects/non-existent-bucket/file.txt", bytes.NewReader([]byte("data")))
-		nonExistentRequest.SetPathValue("bucket", "non-existent-bucket")
-		nonExistentRequest.SetPathValue("key", "file.txt")
-		nonExistentRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
-		nonExistentResponseRecorder := httptest.NewRecorder()
-		endpoint.handler(nonExistentResponseRecorder, nonExistentRequest)
-		if nonExistentResponseRecorder.Code != http.StatusNotFound {
-			t.Fatalf("expected 404 for %s on non-existent bucket, got %d", endpoint.name, nonExistentResponseRecorder.Code)
-		}
+		t.Run(fmt.Sprintf("NotFound_%s", endpoint.name), func(t *testing.T) {
+			nonExistentRequest := httptest.NewRequestWithContext(ctx, endpoint.method, "/v1/file-storage/objects/non-existent-bucket/file.txt", bytes.NewReader([]byte("data")))
+			nonExistentRequest.SetPathValue("bucket", "non-existent-bucket")
+			nonExistentRequest.SetPathValue("key", "file.txt")
+			nonExistentRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
+			nonExistentResponseRecorder := httptest.NewRecorder()
+			endpoint.handler(nonExistentResponseRecorder, nonExistentRequest)
+			if nonExistentResponseRecorder.Code != http.StatusNotFound {
+				t.Fatalf("expected 404 for %s on non-existent bucket, got %d", endpoint.name, nonExistentResponseRecorder.Code)
+			}
+		})
 	}
 
 	// 11. Access Denied (403) on private bucket without authentication
 	for _, endpoint := range endpoints {
-		unauthorizedRequest := httptest.NewRequestWithContext(ctx, endpoint.method, "/v1/file-storage/objects/test-rest-bucket/file.txt", bytes.NewReader([]byte("data")))
-		unauthorizedRequest.SetPathValue("bucket", "test-rest-bucket")
-		unauthorizedRequest.SetPathValue("key", "file.txt")
-		unauthorizedResponseRecorder := httptest.NewRecorder()
-		endpoint.handler(unauthorizedResponseRecorder, unauthorizedRequest)
-		if unauthorizedResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 for %s without authentication, got %d", endpoint.name, unauthorizedResponseRecorder.Code)
-		}
+		t.Run(fmt.Sprintf("Forbidden_%s", endpoint.name), func(t *testing.T) {
+			unauthorizedRequest := httptest.NewRequestWithContext(ctx, endpoint.method, "/v1/file-storage/objects/test-rest-bucket/file.txt", bytes.NewReader([]byte("data")))
+			unauthorizedRequest.SetPathValue("bucket", "test-rest-bucket")
+			unauthorizedRequest.SetPathValue("key", "file.txt")
+			unauthorizedResponseRecorder := httptest.NewRecorder()
+			endpoint.handler(unauthorizedResponseRecorder, unauthorizedRequest)
+			if unauthorizedResponseRecorder.Code != http.StatusForbidden {
+				t.Fatalf("expected 403 for %s without authentication, got %d", endpoint.name, unauthorizedResponseRecorder.Code)
+			}
+		})
 	}
 
 	// 12. Upload Validations: Disallowed MIME type

@@ -142,9 +142,11 @@ func TestOtpTimingResistanceIntegration(t *testing.T) {
 	}
 
 	for _, candidate := range testVariations {
-		if VerifyCode(candidate, correctHash) {
-			t.Fatalf("expected mismatching candidate %q to fail verification against %s", candidate, correctCode)
-		}
+		t.Run(fmt.Sprintf("%q", candidate), func(t *testing.T) {
+			if VerifyCode(candidate, correctHash) {
+				t.Fatalf("expected mismatching candidate %q to fail verification against %s", candidate, correctCode)
+			}
+		})
 	}
 
 	if !VerifyCode(correctCode, correctHash) {

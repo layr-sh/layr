@@ -3,6 +3,7 @@ package namingclarity
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"path/filepath"
 	"regexp"
@@ -211,6 +212,72 @@ func checkTestFunctionName(pass *analysis.Pass, funcDecl *ast.FuncDecl) {
 			)
 		}
 	}
+
+	checkTestTableSubtests(pass, funcDecl)
+}
+
+func checkTestTableSubtests(pass *analysis.Pass, funcDecl *ast.FuncDecl) {
+	if funcDecl.Body == nil {
+		return
+	}
+
+	ast.Inspect(funcDecl.Body, func(node ast.Node) bool {
+		if _, ok := node.(*ast.FuncLit); ok {
+			return false
+		}
+
+		rangeStmt, ok := node.(*ast.RangeStmt)
+		if !ok {
+			return true
+		}
+
+		hasAssertions := false
+		hasRun := false
+		hasBreak := false
+
+		ast.Inspect(rangeStmt.Body, func(child ast.Node) bool {
+			if branch, isBranch := child.(*ast.BranchStmt); isBranch && branch.Tok == token.BREAK {
+				hasBreak = true
+			}
+
+			callExpr, isCall := child.(*ast.CallExpr)
+			if !isCall {
+				return true
+			}
+
+			selExpr, isSel := callExpr.Fun.(*ast.SelectorExpr)
+			if !isSel {
+				return true
+			}
+
+			if selExpr.Sel.Name == "Run" {
+				hasRun = true
+			}
+
+			methodName := selExpr.Sel.Name
+			if methodName == "Fatalf" || methodName == "Errorf" || methodName == "Fatal" || methodName == "Error" || methodName == "Fail" || methodName == "FailNow" {
+				hasAssertions = true
+			}
+
+			if ident, isIdent := selExpr.X.(*ast.Ident); isIdent {
+				if ident.Name == "assert" || ident.Name == "require" {
+					hasAssertions = true
+				}
+			}
+
+			return true
+		})
+
+		if hasAssertions && !hasRun && !hasBreak {
+			pass.Reportf(
+				rangeStmt.Pos(),
+				"table-driven test loop in '%s' must execute cases using t.Run",
+				funcDecl.Name.Name,
+			)
+		}
+
+		return true
+	})
 }
 
 func inspectIdentifier(pass *analysis.Pass, identifier *ast.Ident, concreteName string) bool {

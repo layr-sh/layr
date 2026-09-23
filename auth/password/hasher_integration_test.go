@@ -88,16 +88,18 @@ func TestPasswordSaltUniquenessIntegration(t *testing.T) {
 	// All hashes for the exact same password must be distinct due to unique random salts
 	seenHashes := make(map[string]bool)
 	for index, currentHash := range hashes {
-		if seenHashes[currentHash] {
-			t.Fatalf("duplicate hash produced at index %d: %s", index, currentHash)
-		}
-		seenHashes[currentHash] = true
+		t.Run(fmt.Sprintf("Hash_%d", index), func(t *testing.T) {
+			if seenHashes[currentHash] {
+				t.Fatalf("duplicate hash produced at index %d: %s", index, currentHash)
+			}
+			seenHashes[currentHash] = true
 
-		// Each distinct hash must still verify the common password
-		isValid, err := hasher.Verify(commonPassword, currentHash)
-		if err != nil || !isValid {
-			t.Fatalf("hash at index %d failed verification: %s", index, currentHash)
-		}
+			// Each distinct hash must still verify the common password
+			isValid, err := hasher.Verify(commonPassword, currentHash)
+			if err != nil || !isValid {
+				t.Fatalf("hash at index %d failed verification: %s", index, currentHash)
+			}
+		})
 	}
 }
 

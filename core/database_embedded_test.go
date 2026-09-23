@@ -22,10 +22,12 @@ func TestCoreEmbeddedDatabaseIsEmbeddedDatabasePathUnit(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		result := IsEmbeddedDatabasePath(testCase.url)
-		if result != testCase.expected {
-			t.Errorf("IsEmbeddedDatabasePath(%q) = %v, expected %v", testCase.url, result, testCase.expected)
-		}
+		t.Run(testCase.url, func(t *testing.T) {
+			result := IsEmbeddedDatabasePath(testCase.url)
+			if result != testCase.expected {
+				t.Errorf("IsEmbeddedDatabasePath(%q) = %v, expected %v", testCase.url, result, testCase.expected)
+			}
+		})
 	}
 }
 

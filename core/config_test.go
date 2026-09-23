@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -105,16 +106,18 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 	}
 
 	for _, tableTest := range caseVariations {
-		config := DefaultConfig()
-		if err := config.EnableService(tableTest.inputName); err != nil {
-			t.Fatalf("expected success enabling service '%s', got: %v", tableTest.inputName, err)
-		}
-		if !config.IsServiceEnabled(tableTest.inputName) {
-			t.Fatalf("expected service '%s' to be reported as enabled", tableTest.inputName)
-		}
-		if !config.IsServiceEnabled(tableTest.canonicalField) {
-			t.Fatalf("expected canonical service '%s' to be reported as enabled", tableTest.canonicalField)
-		}
+		t.Run(tableTest.inputName, func(t *testing.T) {
+			config := DefaultConfig()
+			if err := config.EnableService(tableTest.inputName); err != nil {
+				t.Fatalf("expected success enabling service '%s', got: %v", tableTest.inputName, err)
+			}
+			if !config.IsServiceEnabled(tableTest.inputName) {
+				t.Fatalf("expected service '%s' to be reported as enabled", tableTest.inputName)
+			}
+			if !config.IsServiceEnabled(tableTest.canonicalField) {
+				t.Fatalf("expected canonical service '%s' to be reported as enabled", tableTest.canonicalField)
+			}
+		})
 	}
 
 	// Invalid / unknown service names
@@ -122,13 +125,15 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 		"", "   ", "unknown", "invalid", "redis", "postgres", "studio", "unsupported", "custom", "123", "!@#$%", "auth_service",
 	}
 	for _, invalidName := range invalidServiceNames {
-		config := DefaultConfig()
-		if err := config.EnableService(invalidName); err == nil {
-			t.Fatalf("expected error enabling invalid service name '%s'", invalidName)
-		}
-		if config.IsServiceEnabled(invalidName) {
-			t.Fatalf("expected invalid service '%s' to not be enabled", invalidName)
-		}
+		t.Run(fmt.Sprintf("%q", invalidName), func(t *testing.T) {
+			config := DefaultConfig()
+			if err := config.EnableService(invalidName); err == nil {
+				t.Fatalf("expected error enabling invalid service name '%s'", invalidName)
+			}
+			if config.IsServiceEnabled(invalidName) {
+				t.Fatalf("expected invalid service '%s' to not be enabled", invalidName)
+			}
+		})
 	}
 }
 
@@ -152,25 +157,27 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	// 2. Each of the 7 functional services enabled individually
 	allFunctionalServices := []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image"}
 	for _, serviceName := range allFunctionalServices {
-		singleServiceConfig := DefaultConfig()
-		singleServiceConfig.Data.Enabled = false
-		singleServiceConfig.Auth.Enabled = false
-		singleServiceConfig.FileStorage.Enabled = false
-		singleServiceConfig.Console.Enabled = false
-		if err := singleServiceConfig.EnableService(serviceName); err != nil {
-			t.Fatalf("failed to enable service '%s': %v", serviceName, err)
-		}
-		if !singleServiceConfig.HasAnyFunctionalServiceEnabled() {
-			t.Fatalf("expected HasAnyFunctionalServiceEnabled true for '%s'", serviceName)
-		}
-		functionalList := singleServiceConfig.GetFunctionalServices()
-		if len(functionalList) != 1 || functionalList[0] != serviceName {
-			t.Fatalf("expected [%s], got %v", serviceName, functionalList)
-		}
-		enabledList := singleServiceConfig.GetEnabledServices()
-		if len(enabledList) != 1 || enabledList[0] != serviceName {
-			t.Fatalf("expected [%s], got %v", serviceName, enabledList)
-		}
+		t.Run(serviceName, func(t *testing.T) {
+			singleServiceConfig := DefaultConfig()
+			singleServiceConfig.Data.Enabled = false
+			singleServiceConfig.Auth.Enabled = false
+			singleServiceConfig.FileStorage.Enabled = false
+			singleServiceConfig.Console.Enabled = false
+			if err := singleServiceConfig.EnableService(serviceName); err != nil {
+				t.Fatalf("failed to enable service '%s': %v", serviceName, err)
+			}
+			if !singleServiceConfig.HasAnyFunctionalServiceEnabled() {
+				t.Fatalf("expected HasAnyFunctionalServiceEnabled true for '%s'", serviceName)
+			}
+			functionalList := singleServiceConfig.GetFunctionalServices()
+			if len(functionalList) != 1 || functionalList[0] != serviceName {
+				t.Fatalf("expected [%s], got %v", serviceName, functionalList)
+			}
+			enabledList := singleServiceConfig.GetEnabledServices()
+			if len(enabledList) != 1 || enabledList[0] != serviceName {
+				t.Fatalf("expected [%s], got %v", serviceName, enabledList)
+			}
+		})
 	}
 
 	// 3. All 7 functional services enabled with console enabled
@@ -200,14 +207,16 @@ func TestCoreConfigValidationVersionEdgeCasesUnit(t *testing.T) {
 
 	invalidVersions := []string{"", "0", "2", "1.0", "v1", "alpha", "-1", "   ", "null"}
 	for _, invalidVersion := range invalidVersions {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Version = invalidVersion
+		t.Run(fmt.Sprintf("%q", invalidVersion), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Version = invalidVersion
 
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for invalid version '%s'", invalidVersion)
-		}
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for invalid version '%s'", invalidVersion)
+			}
+		})
 	}
 }
 
@@ -216,14 +225,16 @@ func TestCoreConfigValidationDatabaseURLEdgeCasesUnit(t *testing.T) {
 
 	invalidURLs := []string{"", "   ", "\t", "\n", " \t\n "}
 	for _, invalidURL := range invalidURLs {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.URL = invalidURL
+		t.Run(fmt.Sprintf("%q", invalidURL), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.URL = invalidURL
 
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for empty/whitespace database url '%s'", invalidURL)
-		}
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for empty/whitespace database url '%s'", invalidURL)
+			}
+		})
 	}
 }
 
@@ -233,25 +244,29 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	// MaxConnections: [1, 1000]
 	invalidMaxConnections := []int{-100, -1, 0, 1001, 2000, 50000}
 	for _, invalidMax := range invalidMaxConnections {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxConnections = invalidMax
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for max_connections %d", invalidMax)
-		}
+		t.Run(fmt.Sprintf("InvalidMaxConn_%d", invalidMax), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxConnections = invalidMax
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for max_connections %d", invalidMax)
+			}
+		})
 	}
 
 	// Boundary values for MaxConnections: 1 and 1000
 	for _, validMax := range []int{1, 100, 1000} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxConnections = validMax
-		config.Database.MinConnections = 1
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for max_connections %d, got: %v", validMax, err)
-		}
+		t.Run(fmt.Sprintf("ValidMaxConn_%d", validMax), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxConnections = validMax
+			config.Database.MinConnections = 1
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for max_connections %d, got: %v", validMax, err)
+			}
+		})
 	}
 
 	// MinConnections: [0, max_connections]
@@ -265,110 +280,130 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 		{min: 100, max: 10},
 	}
 	for _, tableTest := range invalidMinConnections {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxConnections = tableTest.max
-		config.Database.MinConnections = tableTest.min
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for min_connections %d (max: %d)", tableTest.min, tableTest.max)
-		}
+		t.Run(fmt.Sprintf("InvalidMinConn_%d_Max_%d", tableTest.min, tableTest.max), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxConnections = tableTest.max
+			config.Database.MinConnections = tableTest.min
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for min_connections %d (max: %d)", tableTest.min, tableTest.max)
+			}
+		})
 	}
 
 	// Boundary values for MinConnections: 0 and equal to max_connections
 	for _, validMin := range []int{0, 25} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxConnections = 25
-		config.Database.MinConnections = validMin
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for min_connections %d, got: %v", validMin, err)
-		}
+		t.Run(fmt.Sprintf("ValidMinConn_%d", validMin), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxConnections = 25
+			config.Database.MinConnections = validMin
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for min_connections %d, got: %v", validMin, err)
+			}
+		})
 	}
 
 	// ConnectionTimeoutMs: [100, 60000]
 	invalidConnectionTimeouts := []int{-1, 0, 50, 99, 60001, 100000}
 	for _, timeout := range invalidConnectionTimeouts {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.ConnectionTimeoutMs = timeout
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for connection_timeout_ms %d", timeout)
-		}
+		t.Run(fmt.Sprintf("InvalidConnTimeout_%d", timeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.ConnectionTimeoutMs = timeout
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for connection_timeout_ms %d", timeout)
+			}
+		})
 	}
 	for _, validTimeout := range []int{100, 5000, 60000} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.ConnectionTimeoutMs = validTimeout
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for connection_timeout_ms %d, got: %v", validTimeout, err)
-		}
+		t.Run(fmt.Sprintf("ValidConnTimeout_%d", validTimeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.ConnectionTimeoutMs = validTimeout
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for connection_timeout_ms %d, got: %v", validTimeout, err)
+			}
+		})
 	}
 
 	// IdleTimeoutMs: [1000, 86400000]
 	invalidIdleTimeouts := []int{-1, 0, 500, 999, 86400001, 100000000}
 	for _, timeout := range invalidIdleTimeouts {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.IdleTimeoutMs = timeout
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for idle_timeout_ms %d", timeout)
-		}
+		t.Run(fmt.Sprintf("InvalidIdleTimeout_%d", timeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.IdleTimeoutMs = timeout
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for idle_timeout_ms %d", timeout)
+			}
+		})
 	}
 	for _, validTimeout := range []int{1000, 300000, 86400000} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.IdleTimeoutMs = validTimeout
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for idle_timeout_ms %d, got: %v", validTimeout, err)
-		}
+		t.Run(fmt.Sprintf("ValidIdleTimeout_%d", validTimeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.IdleTimeoutMs = validTimeout
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for idle_timeout_ms %d, got: %v", validTimeout, err)
+			}
+		})
 	}
 
 	// MaxLifetimeMs: [1000, 86400000]
 	invalidMaxLifetimes := []int{-1, 0, 999, 86400001, 200000000}
 	for _, timeout := range invalidMaxLifetimes {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxLifetimeMs = timeout
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for max_lifetime_ms %d", timeout)
-		}
+		t.Run(fmt.Sprintf("InvalidMaxLifetime_%d", timeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxLifetimeMs = timeout
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for max_lifetime_ms %d", timeout)
+			}
+		})
 	}
 	for _, validTimeout := range []int{1000, 1800000, 86400000} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.MaxLifetimeMs = validTimeout
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for max_lifetime_ms %d, got: %v", validTimeout, err)
-		}
+		t.Run(fmt.Sprintf("ValidMaxLifetime_%d", validTimeout), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.MaxLifetimeMs = validTimeout
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for max_lifetime_ms %d, got: %v", validTimeout, err)
+			}
+		})
 	}
 
 	// HealthCheckPeriodMs: [1000, 3600000]
 	invalidHealthChecks := []int{-1, 0, 999, 3600001, 10000000}
 	for _, period := range invalidHealthChecks {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.HealthCheckPeriodMs = period
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for health_check_period_ms %d", period)
-		}
+		t.Run(fmt.Sprintf("InvalidHealthCheck_%d", period), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.HealthCheckPeriodMs = period
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for health_check_period_ms %d", period)
+			}
+		})
 	}
 	for _, validPeriod := range []int{1000, 15000, 3600000} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.HealthCheckPeriodMs = validPeriod
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for health_check_period_ms %d, got: %v", validPeriod, err)
-		}
+		t.Run(fmt.Sprintf("ValidHealthCheck_%d", validPeriod), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.HealthCheckPeriodMs = validPeriod
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for health_check_period_ms %d, got: %v", validPeriod, err)
+			}
+		})
 	}
 }
 
@@ -378,39 +413,45 @@ func TestCoreConfigValidationSSLModeEdgeCasesUnit(t *testing.T) {
 	// Valid SSL modes
 	validSSLModes := []string{"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
 	for _, sslMode := range validSSLModes {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.SSLMode = sslMode
+		t.Run(fmt.Sprintf("Valid_%s", sslMode), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.SSLMode = sslMode
 
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for ssl_mode '%s', got: %v", sslMode, err)
-		}
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for ssl_mode '%s', got: %v", sslMode, err)
+			}
+		})
 	}
 
 	// Invalid SSL modes
 	invalidSSLModes := []string{"disabled", "enabled", "strict", "verify", "1", "false", "REQUIRE"}
 	for _, sslMode := range invalidSSLModes {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.Database.SSLMode = sslMode
+		t.Run(fmt.Sprintf("Invalid_%s", sslMode), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.Database.SSLMode = sslMode
 
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for invalid ssl_mode '%s'", sslMode)
-		}
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for invalid ssl_mode '%s'", sslMode)
+			}
+		})
 	}
 }
 
 func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 	// Empty / whitespace key
 	for _, emptyKey := range []string{"", "   ", "\t\n"} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = emptyKey
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for empty master key '%s'", emptyKey)
-		}
+		t.Run(fmt.Sprintf("%q", emptyKey), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = emptyKey
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for empty master key '%s'", emptyKey)
+			}
+		})
 	}
 
 	// Invalid length keys
@@ -423,12 +464,14 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 		strings.Repeat("a", 128),
 	}
 	for _, invalidLengthKey := range invalidLengthKeys {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = invalidLengthKey
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for master key with length %d", len(invalidLengthKey))
-		}
+		t.Run(fmt.Sprintf("Len_%d", len(invalidLengthKey)), func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = invalidLengthKey
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for master key with length %d", len(invalidLengthKey))
+			}
+		})
 	}
 
 	// Length 64 but invalid hex characters
@@ -440,12 +483,14 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 		strings.Repeat("a", 30) + "xx" + strings.Repeat("a", 32),
 	}
 	for _, invalidHexKey := range invalidHexKeys {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = invalidHexKey
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for non-hex master key: %s", invalidHexKey)
-		}
+		t.Run(invalidHexKey, func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = invalidHexKey
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for non-hex master key: %s", invalidHexKey)
+			}
+		})
 	}
 
 	// Valid 64-character hex keys
@@ -456,12 +501,14 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 		"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
 	for _, validHexKey := range validHexKeys {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		if err := config.Validate(); err != nil {
-			t.Fatalf("expected valid configuration for hex key, got: %v", err)
-		}
+		t.Run(validHexKey, func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			if err := config.Validate(); err != nil {
+				t.Fatalf("expected valid configuration for hex key, got: %v", err)
+			}
+		})
 	}
 }
 
@@ -470,13 +517,15 @@ func TestCoreConfigValidationKVStoreEdgeCasesUnit(t *testing.T) {
 
 	// Invalid backend
 	for _, invalidBackend := range []string{"memcached", "memory", "dynamodb", "bad_backend", "123"} {
-		config := DefaultConfig()
-		config.Data.Enabled = true
-		config.Security.MasterEncryptionKey = validHexKey
-		config.KVStore.Backend = invalidBackend
-		if err := config.Validate(); err == nil {
-			t.Fatalf("expected validation error for invalid kv backend '%s'", invalidBackend)
-		}
+		t.Run(invalidBackend, func(t *testing.T) {
+			config := DefaultConfig()
+			config.Data.Enabled = true
+			config.Security.MasterEncryptionKey = validHexKey
+			config.KVStore.Backend = invalidBackend
+			if err := config.Validate(); err == nil {
+				t.Fatalf("expected validation error for invalid kv backend '%s'", invalidBackend)
+			}
+		})
 	}
 
 	// Redis backend with missing URL and missing ClusterURLs
@@ -542,12 +591,14 @@ func TestCoreConfigValidationMinimumFunctionalServiceInvariantUnit(t *testing.T)
 	// Each functional service individually satisfies the invariant
 	allFunctionalServices := []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image"}
 	for _, serviceName := range allFunctionalServices {
-		validServiceConfig := DefaultConfig()
-		validServiceConfig.Security.MasterEncryptionKey = validHexKey
-		_ = validServiceConfig.EnableService(serviceName)
-		if err := validServiceConfig.Validate(); err != nil {
-			t.Fatalf("expected service '%s' to satisfy minimum functional service invariant, got: %v", serviceName, err)
-		}
+		t.Run(serviceName, func(t *testing.T) {
+			validServiceConfig := DefaultConfig()
+			validServiceConfig.Security.MasterEncryptionKey = validHexKey
+			_ = validServiceConfig.EnableService(serviceName)
+			if err := validServiceConfig.Validate(); err != nil {
+				t.Fatalf("expected service '%s' to satisfy minimum functional service invariant, got: %v", serviceName, err)
+			}
+		})
 	}
 }
 
@@ -557,9 +608,11 @@ func TestCoreConfigParseBooleanExhaustiveEdgeCasesUnit(t *testing.T) {
 		"  true  ", "\t1\t", " yes\n", " ON ",
 	}
 	for _, truthyCase := range truthyCases {
-		if !parseFlag(truthyCase) {
-			t.Fatalf("expected truthy result for input '%s'", truthyCase)
-		}
+		t.Run(fmt.Sprintf("%q", truthyCase), func(t *testing.T) {
+			if !parseFlag(truthyCase) {
+				t.Fatalf("expected truthy result for input '%s'", truthyCase)
+			}
+		})
 	}
 
 	falsyCases := []string{
@@ -567,9 +620,11 @@ func TestCoreConfigParseBooleanExhaustiveEdgeCasesUnit(t *testing.T) {
 		"", "   ", "\t\n", "none", "null", "undefined", "invalid", "-1", "2", "truee", "yess", "00",
 	}
 	for _, falsyCase := range falsyCases {
-		if parseFlag(falsyCase) {
-			t.Fatalf("expected falsy result for input '%s'", falsyCase)
-		}
+		t.Run(fmt.Sprintf("%q", falsyCase), func(t *testing.T) {
+			if parseFlag(falsyCase) {
+				t.Fatalf("expected falsy result for input '%s'", falsyCase)
+			}
+		})
 	}
 }
 
@@ -984,9 +1039,11 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 		"Overriding server.listen_addr from ENV",
 	}
 	for _, expectedSubstring := range expectedSubstrings {
-		if !strings.Contains(loggedContent, expectedSubstring) {
-			t.Errorf("expected log to contain %q, got output:\n%s", expectedSubstring, loggedContent)
-		}
+		t.Run(expectedSubstring, func(t *testing.T) {
+			if !strings.Contains(loggedContent, expectedSubstring) {
+				t.Errorf("expected log to contain %q, got output:\n%s", expectedSubstring, loggedContent)
+			}
+		})
 	}
 
 	// 3. Test disabled logging: LoadConfig must not log

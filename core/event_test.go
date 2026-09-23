@@ -49,74 +49,82 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 	ctx := context.Background()
 	resourceID := "res_123"
 
-	// 1. Invalid events missing required fields should return errors
-	invalidEvents := []Event{
-		{},
-		{Type: "test.event"},
-		{Type: "test.event", ResourceType: "test"},
-		{Type: "test.event", ResourceType: "test", Action: "event"},
-	}
-	for i, invalidEvent := range invalidEvents {
-		_, err := prepareEvent(ctx, invalidEvent)
-		if err == nil {
-			t.Fatalf("case %d: expected error on invalid event missing fields, got nil", i)
+	t.Run("invalid events missing required fields return errors", func(t *testing.T) {
+		invalidEvents := []struct {
+			name  string
+			event Event
+		}{
+			{name: "empty event", event: Event{}},
+			{name: "missing resource type and action", event: Event{Type: "test.event"}},
+			{name: "missing action", event: Event{Type: "test.event", ResourceType: "test"}},
+			{name: "missing resource ID", event: Event{Type: "test.event", ResourceType: "test", Action: "event"}},
 		}
-	}
+		for _, testCase := range invalidEvents {
+			t.Run(testCase.name, func(t *testing.T) {
+				_, err := prepareEvent(ctx, testCase.event)
+				if err == nil {
+					t.Fatalf("expected error on invalid event missing fields, got nil")
+				}
+			})
+		}
+	})
 
-	// 2. Valid Event should receive defaults
-	validEvent := Event{
-		Type:         "test.event",
-		ResourceType: "test",
-		Action:       "event",
-		ResourceID:   &resourceID,
-	}
-	preparedEvent, err := prepareEvent(ctx, validEvent)
-	if err != nil {
-		t.Fatalf("unexpected error preparing event: %v", err)
-	}
-	if preparedEvent.ID == uuid.Nil() {
-		t.Fatal("expected non-nil ID generated")
-	}
-	if preparedEvent.CreatedAt.IsZero() {
-		t.Fatal("expected non-zero CreatedAt generated")
-	}
-	if preparedEvent.Actor.Type != "system" || preparedEvent.Actor.ID != nil || preparedEvent.Actor.Role != nil {
-		t.Fatalf("expected default actor type 'system' with nil ID and Role, got: %+v", preparedEvent.Actor)
-	}
-	if preparedEvent.Metadata == nil {
-		t.Fatal("expected initialized Metadata map")
-	}
-	if preparedEvent.Data == nil {
-		t.Fatal("expected initialized Data map")
-	}
+	t.Run("valid event receives defaults", func(t *testing.T) {
+		validEvent := Event{
+			Type:         "test.event",
+			ResourceType: "test",
+			Action:       "event",
+			ResourceID:   &resourceID,
+		}
+		preparedEvent, err := prepareEvent(ctx, validEvent)
+		if err != nil {
+			t.Fatalf("unexpected error preparing event: %v", err)
+		}
+		if preparedEvent.ID == uuid.Nil() {
+			t.Fatal("expected non-nil ID generated")
+		}
+		if preparedEvent.CreatedAt.IsZero() {
+			t.Fatal("expected non-zero CreatedAt generated")
+		}
+		if preparedEvent.Actor.Type != "system" || preparedEvent.Actor.ID != nil || preparedEvent.Actor.Role != nil {
+			t.Fatalf("expected default actor type 'system' with nil ID and Role, got: %+v", preparedEvent.Actor)
+		}
+		if preparedEvent.Metadata == nil {
+			t.Fatal("expected initialized Metadata map")
+		}
+		if preparedEvent.Data == nil {
+			t.Fatal("expected initialized Data map")
+		}
+	})
 
-	// 3. Existing fields should be preserved
-	customID := uuid.NewV7()
-	customTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	existingEvent := Event{
-		ID:           customID,
-		Type:         "custom.event",
-		Actor:        EventActor{Type: "user"},
-		Action:       "create",
-		ResourceType: "user",
-		ResourceID:   &resourceID,
-		Metadata:     map[string]interface{}{"key": "val"},
-		Data:         map[string]interface{}{"foo": "bar"},
-		CreatedAt:    customTime,
-	}
-	preservedEvent, err := prepareEvent(ctx, existingEvent)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if preservedEvent.ID != customID {
-		t.Fatalf("expected preserved ID, got: %s", preservedEvent.ID)
-	}
-	if !preservedEvent.CreatedAt.Equal(customTime) {
-		t.Fatalf("expected preserved CreatedAt, got: %v", preservedEvent.CreatedAt)
-	}
-	if preservedEvent.Actor.Type != "user" {
-		t.Fatalf("expected preserved actor type 'user', got: %s", preservedEvent.Actor.Type)
-	}
+	t.Run("existing fields are preserved", func(t *testing.T) {
+		customID := uuid.NewV7()
+		customTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		existingEvent := Event{
+			ID:           customID,
+			Type:         "custom.event",
+			Actor:        EventActor{Type: "user"},
+			Action:       "create",
+			ResourceType: "user",
+			ResourceID:   &resourceID,
+			Metadata:     map[string]interface{}{"key": "val"},
+			Data:         map[string]interface{}{"foo": "bar"},
+			CreatedAt:    customTime,
+		}
+		preservedEvent, err := prepareEvent(ctx, existingEvent)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if preservedEvent.ID != customID {
+			t.Fatalf("expected preserved ID, got: %s", preservedEvent.ID)
+		}
+		if !preservedEvent.CreatedAt.Equal(customTime) {
+			t.Fatalf("expected preserved CreatedAt, got: %v", preservedEvent.CreatedAt)
+		}
+		if preservedEvent.Actor.Type != "user" {
+			t.Fatalf("expected preserved actor type 'user', got: %s", preservedEvent.Actor.Type)
+		}
+	})
 }
 
 func TestCoreEventManagerRecordInvalidEventUnit(t *testing.T) {
