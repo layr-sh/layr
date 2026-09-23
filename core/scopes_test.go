@@ -128,6 +128,36 @@ func TestCoreScopesHasScopeUnit(t *testing.T) {
 			required: ScopeImageConfigWrite,
 			expected: false,
 		},
+		{
+			name:     "Tasks wildcard matches tasks:job.read",
+			granted:  []string{"tasks:*"},
+			required: ScopeTasksJobRead,
+			expected: true,
+		},
+		{
+			name:     "Tasks job write implies tasks:job.read",
+			granted:  []string{ScopeTasksJobWrite},
+			required: ScopeTasksJobRead,
+			expected: true,
+		},
+		{
+			name:     "Tasks execution write implies tasks:execution.read",
+			granted:  []string{ScopeTasksExecutionWrite},
+			required: ScopeTasksExecutionRead,
+			expected: true,
+		},
+		{
+			name:     "Tasks config write implies tasks:config.read",
+			granted:  []string{ScopeTasksConfigWrite},
+			required: ScopeTasksConfigRead,
+			expected: true,
+		},
+		{
+			name:     "Tasks stats read",
+			granted:  []string{ScopeTasksStatsRead},
+			required: ScopeTasksStatsRead,
+			expected: true,
+		},
 	}
 
 	for _, testCase := range tests {

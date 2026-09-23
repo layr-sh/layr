@@ -27,6 +27,7 @@ const (
 	CryptoContextPublishableKey            = "client:publishable:v1"
 	CryptoContextImageSigningKey           = "image:signing:key:v1"
 	CryptoContextImageSigningSalt          = "image:signing:salt:v1"
+	CryptoContextTasksWebhookHMAC          = "tasks:webhook:hmacsha256:v1"
 )
 
 const (
