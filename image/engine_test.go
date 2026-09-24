@@ -81,13 +81,13 @@ func TestImageEngineUnit(t *testing.T) {
 		reader := bytes.NewReader(pngBytes)
 		infoOptions := NewDefaultInfoOptions()
 
-		info, inspectErr := engine.Inspect(reader, infoOptions)
+		getInfoResponse, inspectErr := engine.Inspect(reader, infoOptions)
 		require.NoError(t, inspectErr)
-		require.NotNil(t, info)
-		require.Equal(t, 200, info.Width)
-		require.Equal(t, 100, info.Height)
-		require.Equal(t, FormatPNG, info.Format)
-		require.Equal(t, "image/png", info.MIMEType)
+		require.NotNil(t, getInfoResponse)
+		require.Equal(t, 200, getInfoResponse.Width)
+		require.Equal(t, 100, getInfoResponse.Height)
+		require.Equal(t, FormatPNG, getInfoResponse.Format)
+		require.Equal(t, "image/png", getInfoResponse.MIMEType)
 	})
 
 	t.Run("transform resize and convert to webp", func(t *testing.T) {
@@ -108,10 +108,10 @@ func TestImageEngineUnit(t *testing.T) {
 
 		// Verify transformed dimensions
 		transformedReader := bytes.NewReader(outputBytes)
-		transformedInfo, inspectErr := engine.Inspect(transformedReader, NewDefaultInfoOptions())
+		transformedGetInfoResponse, inspectErr := engine.Inspect(transformedReader, NewDefaultInfoOptions())
 		require.NoError(t, inspectErr)
-		require.Equal(t, 50, transformedInfo.Width)
-		require.Equal(t, 50, transformedInfo.Height)
+		require.Equal(t, 50, transformedGetInfoResponse.Width)
+		require.Equal(t, 50, transformedGetInfoResponse.Height)
 	})
 
 	t.Run("transform blur sharpen and rotate", func(t *testing.T) {
@@ -133,10 +133,10 @@ func TestImageEngineUnit(t *testing.T) {
 
 		// Check rotated dimensions (width: 200, height: 100 -> rotated 90: width: 100, height: 200)
 		transformedReader := bytes.NewReader(outputBytes)
-		transformedInfo, inspectErr := engine.Inspect(transformedReader, NewDefaultInfoOptions())
+		transformedGetInfoResponse, inspectErr := engine.Inspect(transformedReader, NewDefaultInfoOptions())
 		require.NoError(t, inspectErr)
-		require.Equal(t, 100, transformedInfo.Width)
-		require.Equal(t, 200, transformedInfo.Height)
+		require.Equal(t, 100, transformedGetInfoResponse.Width)
+		require.Equal(t, 200, transformedGetInfoResponse.Height)
 	})
 
 	t.Run("transform crop padding and format conversions", func(t *testing.T) {
@@ -165,9 +165,9 @@ func TestImageEngineUnit(t *testing.T) {
 			require.NotEmpty(t, outputContentType)
 
 			inspectReader := bytes.NewReader(outputBytes)
-			info, inspectErr := engine.Inspect(inspectReader, NewDefaultInfoOptions())
+			getInfoResponse, inspectErr := engine.Inspect(inspectReader, NewDefaultInfoOptions())
 			require.NoError(t, inspectErr)
-			require.NotNil(t, info)
+			require.NotNil(t, getInfoResponse)
 		}
 	})
 
@@ -333,10 +333,10 @@ func TestImageEngineUnit(t *testing.T) {
 			Format: FormatJPEG,
 		}
 		jpegBytes, _, _ := engine.Transform(bytes.NewReader(pngBytes), jpegProcessingOptions)
-		jpegInfo, inspectErr := engine.Inspect(bytes.NewReader(jpegBytes), NewDefaultInfoOptions())
+		jpegGetInfoResponse, inspectErr := engine.Inspect(bytes.NewReader(jpegBytes), NewDefaultInfoOptions())
 		require.NoError(t, inspectErr)
-		require.NotNil(t, jpegInfo.Alpha)
-		require.False(t, *jpegInfo.Alpha)
+		require.NotNil(t, jpegGetInfoResponse.Alpha)
+		require.False(t, *jpegGetInfoResponse.Alpha)
 
 		// Inspect with false option flags
 		sparseInfoOptions := InfoOptions{
@@ -348,14 +348,14 @@ func TestImageEngineUnit(t *testing.T) {
 			Bands:      false,
 			Pages:      false,
 		}
-		sparseInfo, sparseInspectErr := engine.Inspect(bytes.NewReader(pngBytes), sparseInfoOptions)
+		sparseGetInfoResponse, sparseInspectErr := engine.Inspect(bytes.NewReader(pngBytes), sparseInfoOptions)
 		require.NoError(t, sparseInspectErr)
-		require.Nil(t, sparseInfo.Alpha)
-		require.Empty(t, sparseInfo.Colorspace)
-		require.Zero(t, sparseInfo.Bands)
-		require.Zero(t, sparseInfo.Pages)
-		require.Zero(t, sparseInfo.Width)
-		require.Zero(t, sparseInfo.Height)
+		require.Nil(t, sparseGetInfoResponse.Alpha)
+		require.Empty(t, sparseGetInfoResponse.Colorspace)
+		require.Zero(t, sparseGetInfoResponse.Bands)
+		require.Zero(t, sparseGetInfoResponse.Pages)
+		require.Zero(t, sparseGetInfoResponse.Width)
+		require.Zero(t, sparseGetInfoResponse.Height)
 	})
 
 	t.Run("error branches in transform and inspect", func(t *testing.T) {
@@ -388,9 +388,9 @@ func TestImageEngineUnit(t *testing.T) {
 		require.NoError(t, webpTransformErr)
 		require.NotEmpty(t, webpBytes)
 
-		webpInfo, webpInspectErr := engine.Inspect(bytes.NewReader(webpBytes), NewDefaultInfoOptions())
+		webpGetInfoResponse, webpInspectErr := engine.Inspect(bytes.NewReader(webpBytes), NewDefaultInfoOptions())
 		require.NoError(t, webpInspectErr)
-		require.Equal(t, FormatWebP, webpInfo.Format)
+		require.Equal(t, FormatWebP, webpGetInfoResponse.Format)
 
 		_, _, webpDecodeErr := engine.Transform(bytes.NewReader(webpBytes), ProcessingOptions{Format: FormatPNG})
 		require.NoError(t, webpDecodeErr)
@@ -461,25 +461,25 @@ func TestImageEngineUnit(t *testing.T) {
 
 		// 7. Non-standard format inspection and full decode fallback (WebP, BMP, TIFF)
 		rawWebPBytes := createTestImageWebP(100, 50)
-		rawWebPInfo, rawWebPErr := engine.Inspect(bytes.NewReader(rawWebPBytes), NewDefaultInfoOptions())
+		rawWebPGetInfoResponse, rawWebPErr := engine.Inspect(bytes.NewReader(rawWebPBytes), NewDefaultInfoOptions())
 		require.NoError(t, rawWebPErr)
-		require.Equal(t, 100, rawWebPInfo.Width)
-		require.Equal(t, 50, rawWebPInfo.Height)
-		require.Equal(t, FormatWebP, rawWebPInfo.Format)
+		require.Equal(t, 100, rawWebPGetInfoResponse.Width)
+		require.Equal(t, 50, rawWebPGetInfoResponse.Height)
+		require.Equal(t, FormatWebP, rawWebPGetInfoResponse.Format)
 
 		rawBMPBytes := createTestImageBMP(80, 40)
-		rawBMPInfo, rawBMPErr := engine.Inspect(bytes.NewReader(rawBMPBytes), NewDefaultInfoOptions())
+		rawBMPGetInfoResponse, rawBMPErr := engine.Inspect(bytes.NewReader(rawBMPBytes), NewDefaultInfoOptions())
 		require.NoError(t, rawBMPErr)
-		require.Equal(t, 80, rawBMPInfo.Width)
-		require.Equal(t, 40, rawBMPInfo.Height)
-		require.Equal(t, FormatBMP, rawBMPInfo.Format)
+		require.Equal(t, 80, rawBMPGetInfoResponse.Width)
+		require.Equal(t, 40, rawBMPGetInfoResponse.Height)
+		require.Equal(t, FormatBMP, rawBMPGetInfoResponse.Format)
 
 		rawTIFFBytes := createTestImageTIFF(60, 30)
-		rawTIFFInfo, rawTIFFErr := engine.Inspect(bytes.NewReader(rawTIFFBytes), NewDefaultInfoOptions())
+		rawTIFFGetInfoResponse, rawTIFFErr := engine.Inspect(bytes.NewReader(rawTIFFBytes), NewDefaultInfoOptions())
 		require.NoError(t, rawTIFFErr)
-		require.Equal(t, 60, rawTIFFInfo.Width)
-		require.Equal(t, 30, rawTIFFInfo.Height)
-		require.Equal(t, FormatTIFF, rawTIFFInfo.Format)
+		require.Equal(t, 60, rawTIFFGetInfoResponse.Width)
+		require.Equal(t, 30, rawTIFFGetInfoResponse.Height)
+		require.Equal(t, FormatTIFF, rawTIFFGetInfoResponse.Format)
 
 		// 8. Transform encoding error on unsupported format
 		_, _, transformErr := engine.Transform(bytes.NewReader(pngBytes), ProcessingOptions{

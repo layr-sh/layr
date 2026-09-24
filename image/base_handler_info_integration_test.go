@@ -61,14 +61,14 @@ func TestImageBaseHandlerInfoIntegration(t *testing.T) {
 		infoRequest.SetPathValue("signature", infoSignature)
 		infoRequest.SetPathValue("path", infoPath)
 		infoResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(infoResponseRecorder, infoRequest)
+		baseHandler.handleGetInfo(infoResponseRecorder, infoRequest)
 
 		require.Equal(t, http.StatusOK, infoResponseRecorder.Code)
-		var info Info
-		require.NoError(t, json.Unmarshal(infoResponseRecorder.Body.Bytes(), &info))
-		require.Equal(t, 100, info.Width)
-		require.Equal(t, 100, info.Height)
-		require.Equal(t, FormatPNG, info.Format)
+		var getInfoResponse GetInfoResponse
+		require.NoError(t, json.Unmarshal(infoResponseRecorder.Body.Bytes(), &getInfoResponse))
+		require.Equal(t, 100, getInfoResponse.Width)
+		require.Equal(t, 100, getInfoResponse.Height)
+		require.Equal(t, FormatPNG, getInfoResponse.Format)
 	})
 
 	t.Run("info returns 404 for missing storage asset", func(t *testing.T) {
@@ -79,7 +79,7 @@ func TestImageBaseHandlerInfoIntegration(t *testing.T) {
 		missingRequest.SetPathValue("signature", missingSignature)
 		missingRequest.SetPathValue("path", missingPath)
 		missingResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(missingResponseRecorder, missingRequest)
+		baseHandler.handleGetInfo(missingResponseRecorder, missingRequest)
 
 		require.Equal(t, http.StatusNotFound, missingResponseRecorder.Code)
 	})

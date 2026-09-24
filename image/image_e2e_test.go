@@ -124,10 +124,10 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 	coreServer.Handler().ServeHTTP(infoProbeResponseRecorder, infoProbeRequest)
 	require.Equal(t, http.StatusOK, infoProbeResponseRecorder.Code)
 
-	var info Info
-	require.NoError(t, json.Unmarshal(infoProbeResponseRecorder.Body.Bytes(), &info))
-	require.Equal(t, 200, info.Width)
-	require.Equal(t, 150, info.Height)
+	var getInfoResponse GetInfoResponse
+	require.NoError(t, json.Unmarshal(infoProbeResponseRecorder.Body.Bytes(), &getInfoResponse))
+	require.Equal(t, 200, getInfoResponse.Width)
+	require.Equal(t, 150, getInfoResponse.Height)
 
 	// 9. Control Plane: Query Telemetry Statistics
 	statsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/image/stats", nil)
@@ -136,9 +136,9 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 	coreServer.Handler().ServeHTTP(statsResponseRecorder, statsRequest)
 	require.Equal(t, http.StatusOK, statsResponseRecorder.Code)
 
-	var statsResponse StatsResponse
-	require.NoError(t, json.Unmarshal(statsResponseRecorder.Body.Bytes(), &statsResponse))
-	require.GreaterOrEqual(t, statsResponse.CacheHits, int64(1))
+	var getStatsResponse GetStatsResponse
+	require.NoError(t, json.Unmarshal(statsResponseRecorder.Body.Bytes(), &getStatsResponse))
+	require.GreaterOrEqual(t, getStatsResponse.CacheHits, int64(1))
 
 	// 10. Control Plane: Delete Preset
 	deletePresetRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/image/presets/"+createdPreset.ID.String(), nil)

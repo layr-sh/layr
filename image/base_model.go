@@ -20,8 +20,8 @@ const (
 	FormatBMP  = "bmp"
 )
 
-// Info represents the inspection metadata returned by the /info endpoints.
-type Info struct {
+// GetInfoResponse represents the inspection metadata returned by the /info endpoints.
+type GetInfoResponse struct {
 	Size        int64          `json:"size,omitempty"`
 	Format      string         `json:"format,omitempty"`
 	MIMEType    string         `json:"mime_type,omitempty"`

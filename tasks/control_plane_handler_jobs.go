@@ -75,7 +75,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http
 	}
 
 	requestCtx := request.Context()
-	jobWithCountdown, err := controlPlaneHandler.jobManager.GetJob(requestCtx, jobID)
+	getJobResponse, err := controlPlaneHandler.jobManager.GetJob(requestCtx, jobID)
 	if err != nil {
 		if errors.Is(err, ErrJobNotFound) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
@@ -85,8 +85,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http
 		return
 	}
 
-	log.Debugf("retrieved job %s", jobWithCountdown.ID)
-	core.WriteJSONResponse(responseWriter, http.StatusOK, jobWithCountdown)
+	log.Debugf("retrieved job %s", getJobResponse.ID)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getJobResponse)
 }
 
 // handleUpdateJob handles PATCH /v1/_/tasks/jobs/{id} updating an existing cron job.

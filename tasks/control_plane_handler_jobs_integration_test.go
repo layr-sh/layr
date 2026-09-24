@@ -66,9 +66,9 @@ func TestTasksControlPlaneHandlerJobsIntegration(t *testing.T) {
 		coreServer.Handler().ServeHTTP(getResponseRecorder, getRequest)
 		require.Equal(t, http.StatusOK, getResponseRecorder.Code)
 
-		var jobWithCountdown JobWithCountdown
-		require.NoError(t, json.Unmarshal(getResponseRecorder.Body.Bytes(), &jobWithCountdown))
-		require.Equal(t, createdJob.ID, jobWithCountdown.ID)
+		var getJobResponse GetJobResponse
+		require.NoError(t, json.Unmarshal(getResponseRecorder.Body.Bytes(), &getJobResponse))
+		require.Equal(t, createdJob.ID, getJobResponse.ID)
 
 		// 4. PATCH /v1/_/tasks/jobs/{id}
 		updatePayload := `{"name":"api-cron-job-renamed"}`

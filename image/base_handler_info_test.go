@@ -83,14 +83,14 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 	t.Run("info probe inspects binary payload", func(t *testing.T) {
 		probeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bytes.NewReader(pngBytes))
 		probeResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(probeResponseRecorder, probeRequest)
+		baseHandler.handleProbeInfo(probeResponseRecorder, probeRequest)
 		require.Equal(t, http.StatusOK, probeResponseRecorder.Code)
 
-		var info Info
-		require.NoError(t, json.Unmarshal(probeResponseRecorder.Body.Bytes(), &info))
-		require.Equal(t, 120, info.Width)
-		require.Equal(t, 80, info.Height)
-		require.Equal(t, FormatPNG, info.Format)
+		var getInfoResponse GetInfoResponse
+		require.NoError(t, json.Unmarshal(probeResponseRecorder.Body.Bytes(), &getInfoResponse))
+		require.Equal(t, 120, getInfoResponse.Width)
+		require.Equal(t, 80, getInfoResponse.Height)
+		require.Equal(t, FormatPNG, getInfoResponse.Format)
 	})
 
 	t.Run("info probe multipart form upload", func(t *testing.T) {
@@ -109,26 +109,26 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		infoRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bodyBuffer)
 		infoRequest.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
 		infoResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(infoResponseRecorder, infoRequest)
+		baseHandler.handleProbeInfo(infoResponseRecorder, infoRequest)
 		require.Equal(t, http.StatusOK, infoResponseRecorder.Code)
 
-		var info Info
-		require.NoError(t, json.Unmarshal(infoResponseRecorder.Body.Bytes(), &info))
-		require.Equal(t, 120, info.Width)
-		require.Equal(t, 80, info.Height)
+		var getInfoResponse GetInfoResponse
+		require.NoError(t, json.Unmarshal(infoResponseRecorder.Body.Bytes(), &getInfoResponse))
+		require.Equal(t, 120, getInfoResponse.Width)
+		require.Equal(t, 80, getInfoResponse.Height)
 	})
 
 	t.Run("info probe error cases", func(t *testing.T) {
 		// Empty body -> 422 Unprocessable Entity
 		emptyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bytes.NewReader(nil))
 		emptyResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(emptyResponseRecorder, emptyRequest)
+		baseHandler.handleProbeInfo(emptyResponseRecorder, emptyRequest)
 		require.Equal(t, http.StatusUnprocessableEntity, emptyResponseRecorder.Code)
 
 		// Corrupt bytes -> 422 Unprocessable Entity
 		corruptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bytes.NewReader([]byte("not-an-image")))
 		corruptResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(corruptResponseRecorder, corruptRequest)
+		baseHandler.handleProbeInfo(corruptResponseRecorder, corruptRequest)
 		require.Equal(t, http.StatusUnprocessableEntity, corruptResponseRecorder.Code)
 	})
 
@@ -139,7 +139,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		// Missing signature -> 400
 		missingSignatureRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/image/info//", nil)
 		missingSignatureResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(missingSignatureResponseRecorder, missingSignatureRequest)
+		baseHandler.handleGetInfo(missingSignatureResponseRecorder, missingSignatureRequest)
 		require.Equal(t, http.StatusBadRequest, missingSignatureResponseRecorder.Code)
 
 		// Invalid signature -> 403
@@ -147,7 +147,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		badSignatureRequest.SetPathValue("signature", "bad")
 		badSignatureRequest.SetPathValue("path", "/plain/b/k")
 		badSignatureResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(badSignatureResponseRecorder, badSignatureRequest)
+		baseHandler.handleGetInfo(badSignatureResponseRecorder, badSignatureRequest)
 		require.Equal(t, http.StatusForbidden, badSignatureResponseRecorder.Code)
 
 		// Bad path -> 400
@@ -157,7 +157,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		badPathRequest.SetPathValue("signature", badSig)
 		badPathRequest.SetPathValue("path", badPath)
 		badPathResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(badPathResponseRecorder, badPathRequest)
+		baseHandler.handleGetInfo(badPathResponseRecorder, badPathRequest)
 		require.Equal(t, http.StatusBadRequest, badPathResponseRecorder.Code)
 
 		// With query parameter and nonexistent storage target -> 404
@@ -168,7 +168,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		queryRequest.SetPathValue("signature", querySig)
 		queryRequest.SetPathValue("path", queryTarget)
 		queryResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(queryResponseRecorder, queryRequest)
+		baseHandler.handleGetInfo(queryResponseRecorder, queryRequest)
 		require.Equal(t, http.StatusNotFound, queryResponseRecorder.Code)
 	})
 
@@ -183,13 +183,13 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		successRequest.SetPathValue("signature", successSig)
 		successRequest.SetPathValue("path", successPath)
 		successResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(successResponseRecorder, successRequest)
+		baseHandler.handleGetInfo(successResponseRecorder, successRequest)
 		require.Equal(t, http.StatusOK, successResponseRecorder.Code)
 
-		var info Info
-		require.NoError(t, json.Unmarshal(successResponseRecorder.Body.Bytes(), &info))
-		require.Equal(t, 120, info.Width)
-		require.Equal(t, 80, info.Height)
+		var getInfoResponse GetInfoResponse
+		require.NoError(t, json.Unmarshal(successResponseRecorder.Body.Bytes(), &getInfoResponse))
+		require.Equal(t, 120, getInfoResponse.Width)
+		require.Equal(t, 80, getInfoResponse.Height)
 
 		// 2. Storage Access Denied 403
 		deniedPath := "/plain/info-private/secret.png"
@@ -198,7 +198,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		deniedRequest.SetPathValue("signature", deniedSig)
 		deniedRequest.SetPathValue("path", deniedPath)
 		deniedResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(deniedResponseRecorder, deniedRequest)
+		baseHandler.handleGetInfo(deniedResponseRecorder, deniedRequest)
 		require.Equal(t, http.StatusForbidden, deniedResponseRecorder.Code)
 
 		// 3. Bad Gateway 502 (unsupported scheme)
@@ -208,7 +208,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		badGatewayRequest.SetPathValue("signature", badGatewaySig)
 		badGatewayRequest.SetPathValue("path", badGatewayPath)
 		badGatewayResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(badGatewayResponseRecorder, badGatewayRequest)
+		baseHandler.handleGetInfo(badGatewayResponseRecorder, badGatewayRequest)
 		require.Equal(t, http.StatusBadGateway, badGatewayResponseRecorder.Code)
 
 		// 4. Corrupt asset inspection 422
@@ -218,7 +218,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		corruptRequest.SetPathValue("signature", corruptSig)
 		corruptRequest.SetPathValue("path", corruptPath)
 		corruptResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfo(corruptResponseRecorder, corruptRequest)
+		baseHandler.handleGetInfo(corruptResponseRecorder, corruptRequest)
 		require.Equal(t, http.StatusUnprocessableEntity, corruptResponseRecorder.Code)
 	})
 
@@ -227,7 +227,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		corruptMultipartRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bytes.NewReader([]byte("not-a-valid-multipart")))
 		corruptMultipartRequest.Header.Set("Content-Type", "multipart/form-data; boundary=invalid")
 		corruptResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(corruptResponseRecorder, corruptMultipartRequest)
+		baseHandler.handleProbeInfo(corruptResponseRecorder, corruptMultipartRequest)
 		require.Equal(t, http.StatusBadRequest, corruptResponseRecorder.Code)
 
 		// 2. Field named "image" fallback
@@ -246,7 +246,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		imageFieldRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", imageFieldBuffer)
 		imageFieldRequest.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
 		imageFieldResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(imageFieldResponseRecorder, imageFieldRequest)
+		baseHandler.handleProbeInfo(imageFieldResponseRecorder, imageFieldRequest)
 		require.Equal(t, http.StatusOK, imageFieldResponseRecorder.Code)
 
 		// 3. No file field in form -> 400
@@ -264,7 +264,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		noFileRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", noFileBuffer)
 		noFileRequest.Header.Set("Content-Type", "multipart/form-data; boundary="+noFileBoundary)
 		noFileResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(noFileResponseRecorder, noFileRequest)
+		baseHandler.handleProbeInfo(noFileResponseRecorder, noFileRequest)
 		require.Equal(t, http.StatusBadRequest, noFileResponseRecorder.Code)
 
 		// 4. File field containing non-image bytes -> 422
@@ -283,7 +283,7 @@ func TestImageBaseHandlerInfoUnit(t *testing.T) {
 		corruptFileRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", corruptFileBuffer)
 		corruptFileRequest.Header.Set("Content-Type", "multipart/form-data; boundary="+corruptBoundary)
 		corruptFileResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleInfoProbe(corruptFileResponseRecorder, corruptFileRequest)
+		baseHandler.handleProbeInfo(corruptFileResponseRecorder, corruptFileRequest)
 		require.Equal(t, http.StatusUnprocessableEntity, corruptFileResponseRecorder.Code)
 	})
 }

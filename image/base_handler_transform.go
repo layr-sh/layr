@@ -141,7 +141,6 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 }
 
 func (baseHandler *BaseHandler) writeTransformError(responseWriter http.ResponseWriter, request *http.Request, sourceURL string, statusCode int, message string) {
-	log.Debugf("image transform error: status=%d message=%s source=%s", statusCode, message, sourceURL)
 	baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
 		SourceURL:  sourceURL,
 		Reason:     message,

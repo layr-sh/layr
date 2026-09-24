@@ -31,7 +31,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "jobs"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[JobWithCountdown](router, "/v1/_/tasks/jobs/{id}", service.controlPlaneHandler.handleGetJob,
+	core.GetRoute[GetJobResponse](router, "/v1/_/tasks/jobs/{id}", service.controlPlaneHandler.handleGetJob,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Get cron job details by ID"),
 		core.RouteDescription("Returns a single cron job definition with next execution countdown."),
@@ -122,7 +122,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 5. Telemetry Statistics
-	core.GetRoute[StatsResponse](router, "/v1/_/tasks/stats", service.controlPlaneHandler.handleGetStats,
+	core.GetRoute[GetStatsResponse](router, "/v1/_/tasks/stats", service.controlPlaneHandler.handleGetStats,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Get operational telemetry statistics"),
 		core.RouteDescription("Returns real-time job counts, queue depths, DLQ sizes, and success rates."),

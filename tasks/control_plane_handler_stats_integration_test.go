@@ -40,8 +40,8 @@ func TestTasksControlPlaneHandlerStatsIntegration(t *testing.T) {
 		coreServer.Handler().ServeHTTP(statsResponseRecorder, statsRequest)
 		require.Equal(t, http.StatusOK, statsResponseRecorder.Code)
 
-		var statsResponse StatsResponse
-		require.NoError(t, json.Unmarshal(statsResponseRecorder.Body.Bytes(), &statsResponse))
-		require.GreaterOrEqual(t, statsResponse.TotalJobs, 0)
+		var getStatsResponse GetStatsResponse
+		require.NoError(t, json.Unmarshal(statsResponseRecorder.Body.Bytes(), &getStatsResponse))
+		require.GreaterOrEqual(t, getStatsResponse.TotalJobs, 0)
 	})
 }

@@ -102,7 +102,7 @@ func (jobManager *JobManager) CreateJob(ctx context.Context, createJobInput Crea
 }
 
 // GetJob retrieves a cron job with its live countdown to next run.
-func (jobManager *JobManager) GetJob(ctx context.Context, jobID uuid.UUID) (*JobWithCountdown, error) {
+func (jobManager *JobManager) GetJob(ctx context.Context, jobID uuid.UUID) (*GetJobResponse, error) {
 	var job Job
 	err := jobManager.kernel.DB().QueryRow(ctx, `
 		SELECT id, name, cron_expression, timezone, target_type, target_payload, is_enabled, last_run_at, next_run_at, created_at, last_updated_at
@@ -124,14 +124,14 @@ func (jobManager *JobManager) GetJob(ctx context.Context, jobID uuid.UUID) (*Job
 		countdown = 0
 	}
 
-	return &JobWithCountdown{
+	return &GetJobResponse{
 		Job:                     job,
 		NextRunCountdownSeconds: countdown,
 	}, nil
 }
 
 // ListJobs returns all configured recurring jobs.
-func (jobManager *JobManager) ListJobs(ctx context.Context) ([]JobWithCountdown, error) {
+func (jobManager *JobManager) ListJobs(ctx context.Context) ([]GetJobResponse, error) {
 	rows, err := jobManager.kernel.DB().Query(ctx, `
 		SELECT id, name, cron_expression, timezone, target_type, target_payload, is_enabled, last_run_at, next_run_at, created_at, last_updated_at
 		FROM tasks.jobs
@@ -142,7 +142,7 @@ func (jobManager *JobManager) ListJobs(ctx context.Context) ([]JobWithCountdown,
 	}
 	defer rows.Close()
 
-	var jobs []JobWithCountdown
+	var jobs []GetJobResponse
 	for rows.Next() {
 		var job Job
 		_ = rows.Scan(
@@ -155,7 +155,7 @@ func (jobManager *JobManager) ListJobs(ctx context.Context) ([]JobWithCountdown,
 			countdown = 0
 		}
 
-		jobs = append(jobs, JobWithCountdown{
+		jobs = append(jobs, GetJobResponse{
 			Job:                     job,
 			NextRunCountdownSeconds: countdown,
 		})
@@ -166,22 +166,22 @@ func (jobManager *JobManager) ListJobs(ctx context.Context) ([]JobWithCountdown,
 
 // UpdateJob updates an existing job's schedule, targets, or active state.
 func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, updateJobInput UpdateJobInput) (*Job, error) {
-	jobWithCountdown, err := jobManager.GetJob(ctx, jobID)
+	getJobResponse, err := jobManager.GetJob(ctx, jobID)
 	if err != nil {
 		return nil, err
 	}
 
-	name := jobWithCountdown.Name
+	name := getJobResponse.Name
 	if updateJobInput.Name != nil && strings.TrimSpace(*updateJobInput.Name) != "" {
 		name = strings.TrimSpace(*updateJobInput.Name)
 	}
 
-	cronExpr := jobWithCountdown.CronExpression
+	cronExpr := getJobResponse.CronExpression
 	if updateJobInput.CronExpression != nil && strings.TrimSpace(*updateJobInput.CronExpression) != "" {
 		cronExpr = strings.TrimSpace(*updateJobInput.CronExpression)
 	}
 
-	timezone := jobWithCountdown.Timezone
+	timezone := getJobResponse.Timezone
 	if updateJobInput.Timezone != nil && strings.TrimSpace(*updateJobInput.Timezone) != "" {
 		timezone = strings.TrimSpace(*updateJobInput.Timezone)
 	}
@@ -196,7 +196,7 @@ func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, up
 		return nil, fmt.Errorf("invalid timezone: %w", err)
 	}
 
-	targetType := jobWithCountdown.TargetType
+	targetType := getJobResponse.TargetType
 	if updateJobInput.TargetType != nil && strings.TrimSpace(*updateJobInput.TargetType) != "" {
 		targetType = strings.ToLower(strings.TrimSpace(*updateJobInput.TargetType))
 		if targetType != TargetTypeHTTP && targetType != TargetTypeSQL {
@@ -204,7 +204,7 @@ func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, up
 		}
 	}
 
-	targetPayloadValue := jobWithCountdown.TargetPayload
+	targetPayloadValue := getJobResponse.TargetPayload
 	if updateJobInput.TargetPayload != nil && len(*updateJobInput.TargetPayload) > 0 {
 		targetPayloadValue = *updateJobInput.TargetPayload
 	}
@@ -213,7 +213,7 @@ func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, up
 		return nil, validateErr
 	}
 
-	isEnabled := jobWithCountdown.IsEnabled
+	isEnabled := getJobResponse.IsEnabled
 	stateChanged := false
 	if updateJobInput.IsEnabled != nil && *updateJobInput.IsEnabled != isEnabled {
 		isEnabled = *updateJobInput.IsEnabled
@@ -268,7 +268,7 @@ func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, up
 
 // DeleteJob removes a job and cancels all associated pending executions.
 func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) error {
-	jobWithCountdown, err := jobManager.GetJob(ctx, jobID)
+	getJobResponse, err := jobManager.GetJob(ctx, jobID)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) er
 
 	jobManager.kernel.EventBus().Publish(ctx, NewJobDeletedEvent(jobID.String(), JobDeletedEventData{
 		JobID:                  jobID,
-		JobName:                jobWithCountdown.Name,
+		JobName:                getJobResponse.Name,
 		DeletedExecutionsCount: deletedExecutionsCount,
 	}))
 	return nil
@@ -304,13 +304,13 @@ func (jobManager *JobManager) TriggerExecution(ctx context.Context, triggerExecu
 	targetType := TargetTypeHTTP
 
 	if triggerExecutionInput.JobID != nil {
-		jobWithCountdown, err := jobManager.GetJob(ctx, *triggerExecutionInput.JobID)
+		getJobResponse, err := jobManager.GetJob(ctx, *triggerExecutionInput.JobID)
 		if err != nil {
 			return nil, err
 		}
-		targetPayloadValue = jobWithCountdown.TargetPayload
-		jobName = jobWithCountdown.Name
-		targetType = jobWithCountdown.TargetType
+		targetPayloadValue = getJobResponse.TargetPayload
+		jobName = getJobResponse.Name
+		targetType = getJobResponse.TargetType
 	}
 
 	if triggerExecutionInput.Payload != nil && len(*triggerExecutionInput.Payload) > 0 {
@@ -522,8 +522,8 @@ func (jobManager *JobManager) PurgeDLQExecution(ctx context.Context, executionID
 }
 
 // GetStats returns telemetry metrics across all jobs and executions.
-func (jobManager *JobManager) GetStats(ctx context.Context) (*StatsResponse, error) {
-	var statsResponse StatsResponse
+func (jobManager *JobManager) GetStats(ctx context.Context) (*GetStatsResponse, error) {
+	var getStatsResponse GetStatsResponse
 
 	// Jobs stats
 	if err := jobManager.kernel.DB().QueryRow(ctx, `
@@ -532,7 +532,7 @@ func (jobManager *JobManager) GetStats(ctx context.Context) (*StatsResponse, err
 			count(*) FILTER (WHERE is_enabled = true),
 			count(*) FILTER (WHERE is_enabled = false)
 		FROM tasks.jobs
-	`).Scan(&statsResponse.TotalJobs, &statsResponse.ActiveJobs, &statsResponse.PausedJobs); err != nil {
+	`).Scan(&getStatsResponse.TotalJobs, &getStatsResponse.ActiveJobs, &getStatsResponse.PausedJobs); err != nil {
 		return nil, fmt.Errorf("failed to query jobs stats: %w", err)
 	}
 
@@ -544,18 +544,18 @@ func (jobManager *JobManager) GetStats(ctx context.Context) (*StatsResponse, err
 			count(*) FILTER (WHERE status = 'completed'),
 			count(*) FILTER (WHERE status = 'failed')
 		FROM tasks.executions
-	`).Scan(&statsResponse.PendingExecutions, &statsResponse.RunningExecutions, &statsResponse.CompletedExecutions, &statsResponse.FailedExecutions); err != nil {
+	`).Scan(&getStatsResponse.PendingExecutions, &getStatsResponse.RunningExecutions, &getStatsResponse.CompletedExecutions, &getStatsResponse.FailedExecutions); err != nil {
 		return nil, fmt.Errorf("failed to query executions stats: %w", err)
 	}
 
-	totalFinished := statsResponse.CompletedExecutions + statsResponse.FailedExecutions
+	totalFinished := getStatsResponse.CompletedExecutions + getStatsResponse.FailedExecutions
 	if totalFinished > 0 {
-		statsResponse.SuccessRate = float64(statsResponse.CompletedExecutions) / float64(totalFinished) * 100.0
+		getStatsResponse.SuccessRate = float64(getStatsResponse.CompletedExecutions) / float64(totalFinished) * 100.0
 	} else {
-		statsResponse.SuccessRate = 100.0
+		getStatsResponse.SuccessRate = 100.0
 	}
 
-	return &statsResponse, nil
+	return &getStatsResponse, nil
 }
 
 func validateTargetPayload(targetType string, payloadValue json.RawMessage) error {
