@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strings"
 	"testing"
 	"time"
 )
@@ -537,5 +541,45 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 	if tokenRefreshedEvent.Data["session_id"] != "sess_123" {
 		t.Fatalf("unexpected session_id in token refreshed event: %v", tokenRefreshedEvent.Data["session_id"])
+	}
+}
+
+func TestAuthEventConstructorParameterSignaturesUnit(t *testing.T) {
+	fileSet := token.NewFileSet()
+	parsedFile, err := parser.ParseFile(fileSet, "event.go", nil, 0)
+	if err != nil {
+		t.Fatalf("failed to parse event.go: %v", err)
+	}
+
+	testedCount := 0
+	for _, decl := range parsedFile.Decls {
+		functionDeclaration, ok := decl.(*ast.FuncDecl)
+		if !ok || functionDeclaration.Recv != nil {
+			continue
+		}
+		name := functionDeclaration.Name.Name
+		if !strings.HasPrefix(name, "New") || !strings.HasSuffix(name, "Event") || name == "NewEvent" {
+			continue
+		}
+
+		testedCount++
+		t.Run(name, func(t *testing.T) {
+			params := functionDeclaration.Type.Params.List
+			if len(params) == 0 {
+				t.Fatalf("constructor %s has no parameters", name)
+			}
+			firstParamField := params[0]
+			if len(firstParamField.Names) == 0 {
+				t.Fatalf("constructor %s first parameter has no name", name)
+			}
+			paramName := firstParamField.Names[0].Name
+			if paramName != "resourceID" {
+				t.Errorf("constructor %s first parameter expected 'resourceID', got '%s'", name, paramName)
+			}
+		})
+	}
+
+	if testedCount == 0 {
+		t.Fatal("no constructors found to test")
 	}
 }

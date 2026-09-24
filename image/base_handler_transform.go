@@ -62,7 +62,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 			return
 		}
 
-		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformedEvent(sourceURL, TransformedEventData{
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformCompletedEvent(sourceURL, TransformCompletedEventData{
 			SourceURL: sourceURL,
 			Format:    strings.TrimPrefix(cachedImage.ContentType, "image/"),
 			ByteSize:  int64(len(cachedImage.Data)),
@@ -120,7 +120,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	// 6. Record Cache Entry
 	eTag := baseHandler.cacheManager.Set(request.Context(), cacheKey, sourceURL, optionsHash, outputContentType, outputBytes)
 
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformedEvent(sourceURL, TransformedEventData{
+	baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformCompletedEvent(sourceURL, TransformCompletedEventData{
 		SourceURL: sourceURL,
 		Format:    strings.TrimPrefix(outputContentType, "image/"),
 		ByteSize:  int64(len(outputBytes)),

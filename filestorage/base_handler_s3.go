@@ -394,7 +394,7 @@ func (baseHandler *BaseHandler) handlePutS3Object(responseWriter http.ResponseWr
 		return
 	}
 
-	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(uploadedObject.ID.String(), ObjectUploadedEventData{
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
 		BucketID:       uploadedObject.BucketID,
 		BucketName:     bucket.Name,
 		ObjectKey:      uploadedObject.ObjectKey,
@@ -652,7 +652,7 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 		ChecksumSHA256: uploadedObject.ChecksumSHA256,
 	}))
 
-	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(uploadedObject.ID.String(), ObjectUploadedEventData{
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
 		BucketID:       uploadedObject.BucketID,
 		BucketName:     bucket.Name,
 		ObjectKey:      uploadedObject.ObjectKey,

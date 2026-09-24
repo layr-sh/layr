@@ -389,19 +389,19 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 	}
 
 	ctx := request.Context()
-	const deleteSQL = `DELETE FROM file_storage.buckets WHERE name = $1;`
-	result, deleteErr := controlPlaneHandler.kernel.DB().Exec(ctx, deleteSQL, bucketName)
+	const deleteSQL = `DELETE FROM file_storage.buckets WHERE name = $1 RETURNING id;`
+	var deletedBucketID uuid.UUID
+	deleteErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, deleteSQL, bucketName).Scan(&deletedBucketID)
 	if deleteErr != nil {
+		if errors.Is(deleteErr, pgx.ErrNoRows) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("Bucket %q not found", bucketName))
+			return
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deleteErr.Error())
 		return
 	}
 
-	if result.RowsAffected() == 0 {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("Bucket %q not found", bucketName))
-		return
-	}
-
-	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketDeletedEvent(bucketName, BucketDeletedEventData{
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketDeletedEvent(deletedBucketID.String(), BucketDeletedEventData{
 		BucketName: bucketName,
 	}))
 	log.Debugf("bucket %s successfully deleted", bucketName)

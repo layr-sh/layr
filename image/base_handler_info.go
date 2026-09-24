@@ -65,7 +65,7 @@ func (baseHandler *BaseHandler) handleInfo(responseWriter http.ResponseWriter, r
 		return
 	}
 
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectedEvent(sourceURL, InspectedEventData{
+	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent(sourceURL, InspectCompletedEventData{
 		SourceURL: sourceURL,
 		Format:    info.Format,
 		ByteSize:  info.Size,
@@ -104,7 +104,7 @@ func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWrit
 			return
 		}
 
-		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectedEvent("upload", InspectedEventData{
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
 			SourceURL: "upload",
 			Format:    info.Format,
 			ByteSize:  info.Size,
@@ -124,7 +124,7 @@ func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWrit
 		return
 	}
 
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectedEvent("upload", InspectedEventData{
+	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
 		SourceURL: "upload",
 		Format:    info.Format,
 		ByteSize:  info.Size,

@@ -217,7 +217,7 @@ func (cacheManager *CacheManager) Invalidate(ctx context.Context, cacheKey strin
 	}))
 }
 
-// Clear flushes all cached transformations from in-memory cache and PostgreSQL index, emitting image.cache.cleared.
+// Clear flushes all cached transformations from in-memory cache and PostgreSQL index, emitting image.cache.flushed.
 func (cacheManager *CacheManager) Clear(ctx context.Context) {
 	cacheManager.rwMutex.Lock()
 	cacheManager.memoryCache = make(map[string]*list.Element)
@@ -227,7 +227,7 @@ func (cacheManager *CacheManager) Clear(ctx context.Context) {
 	const truncateSQLStatement = `DELETE FROM image.cache_entries;`
 	_, _ = cacheManager.kernel.DB().Exec(ctx, truncateSQLStatement)
 
-	cacheManager.kernel.EventBus().Publish(ctx, NewCacheClearedEvent("all", CacheClearedEventData{
-		SourceURL: "all",
+	cacheManager.kernel.EventBus().Publish(ctx, NewCacheFlushedEvent("*", CacheFlushedEventData{
+		SourceURL: "*",
 	}))
 }
