@@ -1,6 +1,10 @@
 package image
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -45,9 +49,9 @@ func TestImageEventUnit(t *testing.T) {
 		require.Equal(t, "preset-3", *event.ResourceID)
 	})
 
-	t.Run("image transformed event creation", func(t *testing.T) {
+	t.Run("image transform completed event creation", func(t *testing.T) {
 		t.Parallel()
-		transformedEventData := TransformedEventData{
+		transformCompletedEventData := TransformCompletedEventData{
 			SourceURL: "local/bucket/photo.jpg",
 			Format:    "jpeg",
 			ByteSize:  2048,
@@ -55,8 +59,8 @@ func TestImageEventUnit(t *testing.T) {
 			Height:    100,
 			CacheHit:  true,
 		}
-		event := NewTransformedEvent("local/bucket/photo.jpg", transformedEventData)
-		require.Equal(t, "image.transformed", event.Type)
+		event := NewTransformCompletedEvent("local/bucket/photo.jpg", transformCompletedEventData)
+		require.Equal(t, "image.transform.completed", event.Type)
 		require.NotNil(t, event.ResourceID)
 		require.Equal(t, "local/bucket/photo.jpg", *event.ResourceID)
 	})
@@ -69,33 +73,33 @@ func TestImageEventUnit(t *testing.T) {
 			StatusCode: 404,
 		}
 		event := NewTransformFailedEvent("local/bucket/missing.jpg", transformFailedEventData)
-		require.Equal(t, "image.transform_failed", event.Type)
+		require.Equal(t, "image.transform.failed", event.Type)
 		require.NotNil(t, event.ResourceID)
 		require.Equal(t, "local/bucket/missing.jpg", *event.ResourceID)
 	})
 
-	t.Run("inspected event creation", func(t *testing.T) {
+	t.Run("inspect completed event creation", func(t *testing.T) {
 		t.Parallel()
-		inspectedEventData := InspectedEventData{
+		inspectCompletedEventData := InspectCompletedEventData{
 			SourceURL: "local/bucket/photo.jpg",
 			Format:    "png",
 			ByteSize:  4096,
 		}
-		event := NewInspectedEvent("local/bucket/photo.jpg", inspectedEventData)
-		require.Equal(t, "image.inspected", event.Type)
+		event := NewInspectCompletedEvent("local/bucket/photo.jpg", inspectCompletedEventData)
+		require.Equal(t, "image.inspect.completed", event.Type)
 		require.NotNil(t, event.ResourceID)
 		require.Equal(t, "local/bucket/photo.jpg", *event.ResourceID)
 	})
 
-	t.Run("cache cleared event creation", func(t *testing.T) {
+	t.Run("cache flushed event creation", func(t *testing.T) {
 		t.Parallel()
-		cacheClearedEventData := CacheClearedEventData{
-			SourceURL: "all",
+		cacheFlushedEventData := CacheFlushedEventData{
+			SourceURL: "*",
 		}
-		event := NewCacheClearedEvent("all", cacheClearedEventData)
-		require.Equal(t, "image.cache.cleared", event.Type)
+		event := NewCacheFlushedEvent("*", cacheFlushedEventData)
+		require.Equal(t, "image.cache.flushed", event.Type)
 		require.NotNil(t, event.ResourceID)
-		require.Equal(t, "all", *event.ResourceID)
+		require.Equal(t, "*", *event.ResourceID)
 	})
 
 	t.Run("cache invalidated event creation", func(t *testing.T) {
@@ -118,7 +122,7 @@ func TestImageEventUnit(t *testing.T) {
 			StatusCode: 422,
 		}
 		event := NewInspectFailedEvent("local/bucket/corrupt.png", inspectFailedEventData)
-		require.Equal(t, "image.inspect_failed", event.Type)
+		require.Equal(t, "image.inspect.failed", event.Type)
 		require.NotNil(t, event.ResourceID)
 		require.Equal(t, "local/bucket/corrupt.png", *event.ResourceID)
 	})
@@ -148,4 +152,44 @@ func TestImageEventUnit(t *testing.T) {
 		require.NotNil(t, event.ResourceID)
 		require.Equal(t, "/rs:fill:300:200/plain/bucket/img.jpg", *event.ResourceID)
 	})
+}
+
+func TestImageEventConstructorParameterSignaturesUnit(t *testing.T) {
+	fileSet := token.NewFileSet()
+	parsedFile, err := parser.ParseFile(fileSet, "event.go", nil, 0)
+	if err != nil {
+		t.Fatalf("failed to parse event.go: %v", err)
+	}
+
+	testedCount := 0
+	for _, decl := range parsedFile.Decls {
+		functionDeclaration, ok := decl.(*ast.FuncDecl)
+		if !ok || functionDeclaration.Recv != nil {
+			continue
+		}
+		name := functionDeclaration.Name.Name
+		if !strings.HasPrefix(name, "New") || !strings.HasSuffix(name, "Event") || name == "NewEvent" {
+			continue
+		}
+
+		testedCount++
+		t.Run(name, func(t *testing.T) {
+			params := functionDeclaration.Type.Params.List
+			if len(params) == 0 {
+				t.Fatalf("constructor %s has no parameters", name)
+			}
+			firstParamField := params[0]
+			if len(firstParamField.Names) == 0 {
+				t.Fatalf("constructor %s first parameter has no name", name)
+			}
+			paramName := firstParamField.Names[0].Name
+			if paramName != "resourceID" {
+				t.Errorf("constructor %s first parameter expected 'resourceID', got '%s'", name, paramName)
+			}
+		})
+	}
+
+	if testedCount == 0 {
+		t.Fatal("no constructors found to test")
+	}
 }

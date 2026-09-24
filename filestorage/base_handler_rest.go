@@ -189,7 +189,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 			}
 		}
 		if !mimeAllowed {
-			baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+			baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
 				BucketName: bucket.Name,
 				ObjectKey:  objectKey,
 				Reason:     "Content type not allowed for this bucket",
@@ -202,7 +202,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 
 	contentLength := request.ContentLength
 	if bucket.MaxFileSizeBytes > 0 && contentLength > bucket.MaxFileSizeBytes {
-		baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+		baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
 			BucketName: bucket.Name,
 			ObjectKey:  objectKey,
 			Reason:     "File size exceeds allowed maximum for this bucket",
@@ -220,7 +220,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 
 	uploadedObject, uploadErr := fileStorageEngine.Upload(ctx, *bucket, objectKey, request.Body, contentLength, contentType)
 	if uploadErr != nil {
-		baseHandler.kernel.EventBus().Publish(ctx, NewUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), UploadFailedEventData{
+		baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
 			BucketName: bucket.Name,
 			ObjectKey:  objectKey,
 			Reason:     uploadErr.Error(),
@@ -230,7 +230,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 		return
 	}
 
-	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(uploadedObject.ID.String(), ObjectUploadedEventData{
+	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
 		BucketID:       uploadedObject.BucketID,
 		BucketName:     bucket.Name,
 		ObjectKey:      uploadedObject.ObjectKey,

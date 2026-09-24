@@ -670,56 +670,56 @@ func NewEvent(eventType string, data any) Event {
 type ServiceAccountCreatedEventData ServiceAccount
 
 // NewServiceAccountCreatedEvent creates a typed event for service account creation.
-func NewServiceAccountCreatedEvent(id string, serviceAccountCreatedEventData ServiceAccountCreatedEventData) Event {
-	return NewEvent("core.service_account.created", serviceAccountCreatedEventData).WithResourceID(id)
+func NewServiceAccountCreatedEvent(resourceID string, serviceAccountCreatedEventData ServiceAccountCreatedEventData) Event {
+	return NewEvent("core.service_account.created", serviceAccountCreatedEventData).WithResourceID(resourceID)
 }
 
 // ServiceAccountUpdatedEventData represents the payload for core.service_account.updated.
 type ServiceAccountUpdatedEventData ServiceAccount
 
 // NewServiceAccountUpdatedEvent creates a typed event for service account update.
-func NewServiceAccountUpdatedEvent(id string, serviceAccountUpdatedEventData ServiceAccountUpdatedEventData) Event {
-	return NewEvent("core.service_account.updated", serviceAccountUpdatedEventData).WithResourceID(id)
+func NewServiceAccountUpdatedEvent(resourceID string, serviceAccountUpdatedEventData ServiceAccountUpdatedEventData) Event {
+	return NewEvent("core.service_account.updated", serviceAccountUpdatedEventData).WithResourceID(resourceID)
 }
 
 // ServiceAccountDeletedEventData represents the payload for core.service_account.deleted.
 type ServiceAccountDeletedEventData ServiceAccount
 
 // NewServiceAccountDeletedEvent creates a typed event for service account deletion.
-func NewServiceAccountDeletedEvent(id string, serviceAccountDeletedEventData ServiceAccountDeletedEventData) Event {
-	return NewEvent("core.service_account.deleted", serviceAccountDeletedEventData).WithResourceID(id)
+func NewServiceAccountDeletedEvent(resourceID string, serviceAccountDeletedEventData ServiceAccountDeletedEventData) Event {
+	return NewEvent("core.service_account.deleted", serviceAccountDeletedEventData).WithResourceID(resourceID)
 }
 
 // EventHookCreatedEventData represents the payload for core.event_hook.created.
 type EventHookCreatedEventData EventHook
 
 // NewEventHookCreatedEvent creates a typed event for event hook creation.
-func NewEventHookCreatedEvent(id string, eventHookCreatedEventData EventHookCreatedEventData) Event {
-	return NewEvent("core.event_hook.created", eventHookCreatedEventData).WithResourceID(id)
+func NewEventHookCreatedEvent(resourceID string, eventHookCreatedEventData EventHookCreatedEventData) Event {
+	return NewEvent("core.event_hook.created", eventHookCreatedEventData).WithResourceID(resourceID)
 }
 
 // EventHookUpdatedEventData represents the payload for core.event_hook.updated.
 type EventHookUpdatedEventData EventHook
 
 // NewEventHookUpdatedEvent creates a typed event for event hook update.
-func NewEventHookUpdatedEvent(id string, eventHookUpdatedEventData EventHookUpdatedEventData) Event {
-	return NewEvent("core.event_hook.updated", eventHookUpdatedEventData).WithResourceID(id)
+func NewEventHookUpdatedEvent(resourceID string, eventHookUpdatedEventData EventHookUpdatedEventData) Event {
+	return NewEvent("core.event_hook.updated", eventHookUpdatedEventData).WithResourceID(resourceID)
 }
 
 // EventHookDeletedEventData represents the payload for core.event_hook.deleted.
 type EventHookDeletedEventData EventHook
 
 // NewEventHookDeletedEvent creates a typed event for event hook deletion.
-func NewEventHookDeletedEvent(id string, eventHookDeletedEventData EventHookDeletedEventData) Event {
-	return NewEvent("core.event_hook.deleted", eventHookDeletedEventData).WithResourceID(id)
+func NewEventHookDeletedEvent(resourceID string, eventHookDeletedEventData EventHookDeletedEventData) Event {
+	return NewEvent("core.event_hook.deleted", eventHookDeletedEventData).WithResourceID(resourceID)
 }
 
 // EventHookDeliveryRetriedEventData represents the payload for core.event_hook.delivery_retried.
 type EventHookDeliveryRetriedEventData EventHookDelivery
 
 // NewEventHookDeliveryRetriedEvent creates a typed event for event hook delivery retries.
-func NewEventHookDeliveryRetriedEvent(id string, eventHookDeliveryRetriedEventData EventHookDeliveryRetriedEventData) Event {
-	return NewEvent("core.event_hook.delivery_retried", eventHookDeliveryRetriedEventData).WithResourceID(id)
+func NewEventHookDeliveryRetriedEvent(resourceID string, eventHookDeliveryRetriedEventData EventHookDeliveryRetriedEventData) Event {
+	return NewEvent("core.event_hook.delivery_retried", eventHookDeliveryRetriedEventData).WithResourceID(resourceID)
 }
 
 // NodeRegisteredEventData represents the payload for core.node.registered.
@@ -730,8 +730,8 @@ type NodeRegisteredEventData struct {
 }
 
 // NewNodeRegisteredEvent creates a typed event for node registration in the cluster.
-func NewNodeRegisteredEvent(id string, nodeRegisteredEventData NodeRegisteredEventData) Event {
-	return NewEvent("core.node.registered", nodeRegisteredEventData).WithResourceID(id)
+func NewNodeRegisteredEvent(resourceID string, nodeRegisteredEventData NodeRegisteredEventData) Event {
+	return NewEvent("core.node.registered", nodeRegisteredEventData).WithResourceID(resourceID)
 }
 
 // NodeUnregisteredEventData represents the payload for core.node.unregistered.
@@ -741,6 +741,6 @@ type NodeUnregisteredEventData struct {
 }
 
 // NewNodeUnregisteredEvent creates a typed event for node unregistration from the cluster.
-func NewNodeUnregisteredEvent(id string, nodeUnregisteredEventData NodeUnregisteredEventData) Event {
-	return NewEvent("core.node.unregistered", nodeUnregisteredEventData).WithResourceID(id)
+func NewNodeUnregisteredEvent(resourceID string, nodeUnregisteredEventData NodeUnregisteredEventData) Event {
+	return NewEvent("core.node.unregistered", nodeUnregisteredEventData).WithResourceID(resourceID)
 }

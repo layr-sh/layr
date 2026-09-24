@@ -31,7 +31,7 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 	// Subscribe to config updated events
 	var capturedEvents []core.Event
 	var eventMutex sync.Mutex
-	kernel.EventBus().Subscribe("file_storage.config.updated", func(eventCtx context.Context, event core.Event) error {
+	kernel.EventBus().Subscribe("filestorage.config.updated", func(eventCtx context.Context, event core.Event) error {
 		eventMutex.Lock()
 		defer eventMutex.Unlock()
 		capturedEvents = append(capturedEvents, event)
@@ -53,8 +53,8 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 	if len(capturedEvents) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(capturedEvents))
 	}
-	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "file_storage.config" {
-		t.Fatalf("expected resourceID 'file_storage.config', got %v", capturedEvents[0].ResourceID)
+	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "filestorage.config" {
+		t.Fatalf("expected resourceID 'filestorage.config', got %v", capturedEvents[0].ResourceID)
 	}
 	eventMutex.Unlock()
 

@@ -36,8 +36,8 @@ func NewPresetDeletedEvent(resourceID string, presetDeletedEventData PresetDelet
 	return core.NewEvent("image.preset.deleted", presetDeletedEventData).WithResourceID(resourceID)
 }
 
-// TransformedEventData represents the payload for image.transformed.
-type TransformedEventData struct {
+// TransformCompletedEventData represents the payload for image.transform.completed.
+type TransformCompletedEventData struct {
 	SourceURL string `json:"source_url"`
 	Format    string `json:"format"`
 	ByteSize  int64  `json:"byte_size"`
@@ -46,12 +46,12 @@ type TransformedEventData struct {
 	CacheHit  bool   `json:"cache_hit"`
 }
 
-// NewTransformedEvent creates a typed event for image transformation.
-func NewTransformedEvent(resourceID string, transformedEventData TransformedEventData) core.Event {
-	return core.NewEvent("image.transformed", transformedEventData).WithResourceID(resourceID)
+// NewTransformCompletedEvent creates a typed event for image transformation completion.
+func NewTransformCompletedEvent(resourceID string, transformCompletedEventData TransformCompletedEventData) core.Event {
+	return core.NewEvent("image.transform.completed", transformCompletedEventData).WithResourceID(resourceID)
 }
 
-// TransformFailedEventData represents the payload for image.transform_failed.
+// TransformFailedEventData represents the payload for image.transform.failed.
 type TransformFailedEventData struct {
 	SourceURL  string `json:"source_url"`
 	Reason     string `json:"reason"`
@@ -60,30 +60,30 @@ type TransformFailedEventData struct {
 
 // NewTransformFailedEvent creates a typed event for image transformation failures.
 func NewTransformFailedEvent(resourceID string, transformFailedEventData TransformFailedEventData) core.Event {
-	return core.NewEvent("image.transform_failed", transformFailedEventData).WithResourceID(resourceID)
+	return core.NewEvent("image.transform.failed", transformFailedEventData).WithResourceID(resourceID)
 }
 
-// InspectedEventData represents the payload for image.inspected.
-type InspectedEventData struct {
+// InspectCompletedEventData represents the payload for image.inspect.completed.
+type InspectCompletedEventData struct {
 	SourceURL string `json:"source_url"`
 	Format    string `json:"format"`
 	ByteSize  int64  `json:"byte_size"`
 }
 
-// NewInspectedEvent creates a typed event for image metadata introspection.
-func NewInspectedEvent(resourceID string, inspectedEventData InspectedEventData) core.Event {
-	return core.NewEvent("image.inspected", inspectedEventData).WithResourceID(resourceID)
+// NewInspectCompletedEvent creates a typed event for image metadata introspection.
+func NewInspectCompletedEvent(resourceID string, inspectCompletedEventData InspectCompletedEventData) core.Event {
+	return core.NewEvent("image.inspect.completed", inspectCompletedEventData).WithResourceID(resourceID)
 }
 
-// CacheClearedEventData represents the payload for image.cache.cleared.
-type CacheClearedEventData struct {
+// CacheFlushedEventData represents the payload for image.cache.flushed.
+type CacheFlushedEventData struct {
 	CacheKey  string `json:"cache_key,omitempty"`
 	SourceURL string `json:"source_url,omitempty"`
 }
 
-// NewCacheClearedEvent creates a typed event for cache clearing.
-func NewCacheClearedEvent(resourceID string, cacheClearedEventData CacheClearedEventData) core.Event {
-	return core.NewEvent("image.cache.cleared", cacheClearedEventData).WithResourceID(resourceID)
+// NewCacheFlushedEvent creates a typed event for cache clearing / flushing.
+func NewCacheFlushedEvent(resourceID string, cacheFlushedEventData CacheFlushedEventData) core.Event {
+	return core.NewEvent("image.cache.flushed", cacheFlushedEventData).WithResourceID(resourceID)
 }
 
 // CacheInvalidatedEventData represents the payload for image.cache.invalidated.
@@ -97,7 +97,7 @@ func NewCacheInvalidatedEvent(resourceID string, cacheInvalidatedEventData Cache
 	return core.NewEvent("image.cache.invalidated", cacheInvalidatedEventData).WithResourceID(resourceID)
 }
 
-// InspectFailedEventData represents the payload for image.inspect_failed.
+// InspectFailedEventData represents the payload for image.inspect.failed.
 type InspectFailedEventData struct {
 	SourceURL  string `json:"source_url"`
 	Reason     string `json:"reason"`
@@ -106,7 +106,7 @@ type InspectFailedEventData struct {
 
 // NewInspectFailedEvent creates a typed event for image inspection failures.
 func NewInspectFailedEvent(resourceID string, inspectFailedEventData InspectFailedEventData) core.Event {
-	return core.NewEvent("image.inspect_failed", inspectFailedEventData).WithResourceID(resourceID)
+	return core.NewEvent("image.inspect.failed", inspectFailedEventData).WithResourceID(resourceID)
 }
 
 // ThreatSSRFBlockedEventData represents the payload for image.threat.ssrf_blocked.

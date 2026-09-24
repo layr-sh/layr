@@ -10,8 +10,8 @@ import (
 type ConfigUpdatedEventData Config
 
 // NewConfigUpdatedEvent creates a typed event for auth configuration updates.
-func NewConfigUpdatedEvent(key string, configUpdatedEventData ConfigUpdatedEventData) core.Event {
-	return core.NewEvent("auth.config.updated", configUpdatedEventData).WithResourceID(key)
+func NewConfigUpdatedEvent(resourceID string, configUpdatedEventData ConfigUpdatedEventData) core.Event {
+	return core.NewEvent("auth.config.updated", configUpdatedEventData).WithResourceID(resourceID)
 }
 
 // SessionCreatedEventData represents the payload for auth.session.created.

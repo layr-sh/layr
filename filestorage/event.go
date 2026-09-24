@@ -8,41 +8,41 @@ import (
 	"layr.sh/core"
 )
 
-// ConfigUpdatedEventData represents the payload for file_storage.config.updated.
+// ConfigUpdatedEventData represents the payload for filestorage.config.updated.
 type ConfigUpdatedEventData Config
 
 // NewConfigUpdatedEvent creates a typed event for file storage configuration updates.
 func NewConfigUpdatedEvent(resourceID string, configUpdatedEventData ConfigUpdatedEventData) core.Event {
-	return core.NewEvent("file_storage.config.updated", configUpdatedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.config.updated", configUpdatedEventData).WithResourceID(resourceID)
 }
 
-// BucketCreatedEventData represents the payload for file_storage.bucket.created.
+// BucketCreatedEventData represents the payload for filestorage.bucket.created.
 type BucketCreatedEventData Bucket
 
 // NewBucketCreatedEvent creates a typed event for bucket creations.
 func NewBucketCreatedEvent(resourceID string, bucketCreatedEventData BucketCreatedEventData) core.Event {
-	return core.NewEvent("file_storage.bucket.created", bucketCreatedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.bucket.created", bucketCreatedEventData).WithResourceID(resourceID)
 }
 
-// BucketUpdatedEventData represents the payload for file_storage.bucket.updated.
+// BucketUpdatedEventData represents the payload for filestorage.bucket.updated.
 type BucketUpdatedEventData Bucket
 
 // NewBucketUpdatedEvent creates a typed event for bucket updates.
 func NewBucketUpdatedEvent(resourceID string, bucketUpdatedEventData BucketUpdatedEventData) core.Event {
-	return core.NewEvent("file_storage.bucket.updated", bucketUpdatedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.bucket.updated", bucketUpdatedEventData).WithResourceID(resourceID)
 }
 
-// BucketDeletedEventData represents the payload for file_storage.bucket.deleted.
+// BucketDeletedEventData represents the payload for filestorage.bucket.deleted.
 type BucketDeletedEventData struct {
 	BucketName string `json:"bucket_name"`
 }
 
 // NewBucketDeletedEvent creates a typed event for bucket deletions.
 func NewBucketDeletedEvent(resourceID string, bucketDeletedEventData BucketDeletedEventData) core.Event {
-	return core.NewEvent("file_storage.bucket.deleted", bucketDeletedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.bucket.deleted", bucketDeletedEventData).WithResourceID(resourceID)
 }
 
-// ObjectUploadedEventData represents the payload for file_storage.object.uploaded.
+// ObjectUploadedEventData represents the payload for filestorage.object.uploaded.
 type ObjectUploadedEventData struct {
 	BucketID       uuid.UUID `json:"bucket_id"`
 	BucketName     string    `json:"bucket_name"`
@@ -54,10 +54,10 @@ type ObjectUploadedEventData struct {
 
 // NewObjectUploadedEvent creates a typed event for object uploads.
 func NewObjectUploadedEvent(resourceID string, objectUploadedEventData ObjectUploadedEventData) core.Event {
-	return core.NewEvent("file_storage.object.uploaded", objectUploadedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.object.uploaded", objectUploadedEventData).WithResourceID(resourceID)
 }
 
-// ObjectDownloadedEventData represents the payload for file_storage.object.downloaded.
+// ObjectDownloadedEventData represents the payload for filestorage.object.downloaded.
 type ObjectDownloadedEventData struct {
 	BucketName string `json:"bucket_name"`
 	ObjectKey  string `json:"object_key"`
@@ -66,10 +66,10 @@ type ObjectDownloadedEventData struct {
 
 // NewObjectDownloadedEvent creates a typed event for object downloads.
 func NewObjectDownloadedEvent(resourceID string, objectDownloadedEventData ObjectDownloadedEventData) core.Event {
-	return core.NewEvent("file_storage.object.downloaded", objectDownloadedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.object.downloaded", objectDownloadedEventData).WithResourceID(resourceID)
 }
 
-// ObjectDeletedEventData represents the payload for file_storage.object.deleted.
+// ObjectDeletedEventData represents the payload for filestorage.object.deleted.
 type ObjectDeletedEventData struct {
 	BucketName string `json:"bucket_name"`
 	ObjectKey  string `json:"object_key"`
@@ -77,23 +77,23 @@ type ObjectDeletedEventData struct {
 
 // NewObjectDeletedEvent creates a typed event for object deletions.
 func NewObjectDeletedEvent(resourceID string, objectDeletedEventData ObjectDeletedEventData) core.Event {
-	return core.NewEvent("file_storage.object.deleted", objectDeletedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.object.deleted", objectDeletedEventData).WithResourceID(resourceID)
 }
 
-// UploadFailedEventData represents the payload for file_storage.upload_failed.
-type UploadFailedEventData struct {
+// ObjectUploadFailedEventData represents the payload for filestorage.object.upload_failed.
+type ObjectUploadFailedEventData struct {
 	BucketName string `json:"bucket_name"`
 	ObjectKey  string `json:"object_key"`
 	Reason     string `json:"reason"`
 	StatusCode int    `json:"status_code"`
 }
 
-// NewUploadFailedEvent creates a typed event for failed uploads.
-func NewUploadFailedEvent(resourceID string, uploadFailedEventData UploadFailedEventData) core.Event {
-	return core.NewEvent("file_storage.upload_failed", uploadFailedEventData).WithResourceID(resourceID)
+// NewObjectUploadFailedEvent creates a typed event for failed uploads.
+func NewObjectUploadFailedEvent(resourceID string, objectUploadFailedEventData ObjectUploadFailedEventData) core.Event {
+	return core.NewEvent("filestorage.object.upload_failed", objectUploadFailedEventData).WithResourceID(resourceID)
 }
 
-// MultipartInitiatedEventData represents the payload for file_storage.multipart.initiated.
+// MultipartInitiatedEventData represents the payload for filestorage.multipart.initiated.
 type MultipartInitiatedEventData struct {
 	UploadID   string `json:"upload_id"`
 	BucketName string `json:"bucket_name"`
@@ -102,10 +102,10 @@ type MultipartInitiatedEventData struct {
 
 // NewMultipartInitiatedEvent creates a typed event for initiated multipart uploads.
 func NewMultipartInitiatedEvent(resourceID string, multipartInitiatedEventData MultipartInitiatedEventData) core.Event {
-	return core.NewEvent("file_storage.multipart.initiated", multipartInitiatedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.multipart.initiated", multipartInitiatedEventData).WithResourceID(resourceID)
 }
 
-// MultipartCompletedEventData represents the payload for file_storage.multipart.completed.
+// MultipartCompletedEventData represents the payload for filestorage.multipart.completed.
 type MultipartCompletedEventData struct {
 	UploadID       string `json:"upload_id"`
 	BucketName     string `json:"bucket_name"`
@@ -116,10 +116,10 @@ type MultipartCompletedEventData struct {
 
 // NewMultipartCompletedEvent creates a typed event for completed multipart uploads.
 func NewMultipartCompletedEvent(resourceID string, multipartCompletedEventData MultipartCompletedEventData) core.Event {
-	return core.NewEvent("file_storage.multipart.completed", multipartCompletedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.multipart.completed", multipartCompletedEventData).WithResourceID(resourceID)
 }
 
-// MultipartAbortedEventData represents the payload for file_storage.multipart.aborted.
+// MultipartAbortedEventData represents the payload for filestorage.multipart.aborted.
 type MultipartAbortedEventData struct {
 	UploadID   string `json:"upload_id"`
 	BucketName string `json:"bucket_name"`
@@ -128,10 +128,10 @@ type MultipartAbortedEventData struct {
 
 // NewMultipartAbortedEvent creates a typed event for aborted multipart uploads.
 func NewMultipartAbortedEvent(resourceID string, multipartAbortedEventData MultipartAbortedEventData) core.Event {
-	return core.NewEvent("file_storage.multipart.aborted", multipartAbortedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.multipart.aborted", multipartAbortedEventData).WithResourceID(resourceID)
 }
 
-// URLPresignedEventData represents the payload for file_storage.url.presigned.
+// URLPresignedEventData represents the payload for filestorage.url.presigned.
 type URLPresignedEventData struct {
 	BucketName string    `json:"bucket_name"`
 	ObjectKey  string    `json:"object_key"`
@@ -142,5 +142,5 @@ type URLPresignedEventData struct {
 
 // NewURLPresignedEvent creates a typed event for presigned URL generation.
 func NewURLPresignedEvent(resourceID string, urlPresignedEventData URLPresignedEventData) core.Event {
-	return core.NewEvent("file_storage.url.presigned", urlPresignedEventData).WithResourceID(resourceID)
+	return core.NewEvent("filestorage.url.presigned", urlPresignedEventData).WithResourceID(resourceID)
 }
