@@ -9,6 +9,7 @@ import (
 
 // DatabaseMigration represents a versioned SQL migration supporting Up and Down scripts.
 type DatabaseMigration struct {
+	Service     string
 	Version     int
 	Description string
 	UpSQL       string
@@ -22,32 +23,50 @@ var (
 
 // RegisterDatabaseMigration adds a migration to the global db of migrations.
 func RegisterDatabaseMigration(databaseMigration DatabaseMigration) {
+	if databaseMigration.Service == "" {
+		databaseMigration.Service = "core"
+	}
 	registryMutex.Lock()
 	defer registryMutex.Unlock()
 	registered = append(registered, databaseMigration)
 }
 
-// GetRegisteredDatabaseMigrations returns all registered migrations deduplicated and sorted by version.
+func sortDatabaseMigrations(migrations []DatabaseMigration) {
+	sort.Slice(migrations, func(indexI, indexJ int) bool {
+		if migrations[indexI].Service != migrations[indexJ].Service {
+			if migrations[indexI].Service == "core" {
+				return true
+			}
+			if migrations[indexJ].Service == "core" {
+				return false
+			}
+			return migrations[indexI].Service < migrations[indexJ].Service
+		}
+		return migrations[indexI].Version < migrations[indexJ].Version
+	})
+}
+
+// GetRegisteredDatabaseMigrations returns all registered migrations deduplicated and sorted by service and version.
 func GetRegisteredDatabaseMigrations() []DatabaseMigration {
 	registryMutex.Lock()
 	defer registryMutex.Unlock()
-	seen := make(map[int]bool)
+	seen := make(map[string]bool)
 	var registeredMigrations []DatabaseMigration
 	for _, migration := range append(SystemDatabaseMigrations, registered...) {
-		if !seen[migration.Version] {
-			seen[migration.Version] = true
+		key := fmt.Sprintf("%s:%d", migration.Service, migration.Version)
+		if !seen[key] {
+			seen[key] = true
 			registeredMigrations = append(registeredMigrations, migration)
 		}
 	}
-	sort.Slice(registeredMigrations, func(indexI, indexJ int) bool {
-		return registeredMigrations[indexI].Version < registeredMigrations[indexJ].Version
-	})
+	sortDatabaseMigrations(registeredMigrations)
 	return registeredMigrations
 }
 
 // SystemDatabaseMigrations contains foundational core schema definitions for core and console.
 var SystemDatabaseMigrations = []DatabaseMigration{
 	{
+		Service:     "core",
 		Version:     1,
 		Description: "Initialize core and console foundational schemas, migrations, nodes, users, and service accounts",
 		UpSQL: `
@@ -56,9 +75,11 @@ CREATE SCHEMA IF NOT EXISTS console;
 
 CREATE TABLE IF NOT EXISTS core.migrations (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    version INT NOT NULL UNIQUE,
+    service VARCHAR(64) NOT NULL DEFAULT 'core',
+    version INT NOT NULL,
     description TEXT NOT NULL,
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    CONSTRAINT core_migrations_service_version_key UNIQUE (service, version)
 );
 
 CREATE UNLOGGED TABLE IF NOT EXISTS core.kv_store (
@@ -173,15 +194,6 @@ CREATE INDEX IF NOT EXISTS idx_core_event_hook_deliveries_event_id ON core.event
 `,
 
 		DownSQL: `
-DROP TABLE IF EXISTS core.event_hook_deliveries CASCADE;
-DROP TABLE IF EXISTS core.event_hooks CASCADE;
-DROP TABLE IF EXISTS core.service_accounts CASCADE;
-DROP TABLE IF EXISTS core.nodes CASCADE;
-DROP TABLE IF EXISTS core.kv_store CASCADE;
-DROP TABLE IF EXISTS core.events CASCADE;
-DROP TABLE IF EXISTS console.sessions CASCADE;
-DROP TABLE IF EXISTS console.users CASCADE;
-DROP TABLE IF EXISTS core.migrations CASCADE;
 DROP SCHEMA IF EXISTS console CASCADE;
 DROP SCHEMA IF EXISTS core CASCADE;
 `,
@@ -212,55 +224,62 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 	_, _ = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS core.migrations (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
-			version INT NOT NULL UNIQUE,
+			service VARCHAR(64) NOT NULL DEFAULT 'core',
+			version INT NOT NULL,
 			description TEXT NOT NULL,
-			applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+			CONSTRAINT core_migrations_service_version_key UNIQUE (service, version)
 		);
 	`)
 
 	// Fetch applied migrations
-	rows, _ := tx.Query(ctx, "SELECT version FROM core.migrations ORDER BY version ASC")
+	rows, _ := tx.Query(ctx, "SELECT service, version FROM core.migrations ORDER BY service ASC, version ASC")
 	if rows != nil {
 		defer rows.Close()
 	}
 
-	applied := make(map[int]bool)
+	applied := make(map[string]bool)
 	for rows.Next() {
+		var appliedService string
 		var appliedVersion int
-		_ = rows.Scan(&appliedVersion)
-		applied[appliedVersion] = true
+		_ = rows.Scan(&appliedService, &appliedVersion)
+		applied[fmt.Sprintf("%s:%d", appliedService, appliedVersion)] = true
 	}
 	log.Tracef("retrieved %d applied migration versions from core.migrations", len(applied))
 
-	// Sort migrations in ascending order
+	// Sort migrations in ascending order: "core" first, then service alphabetically, then version ascending
 	sortedMigrations := make([]DatabaseMigration, len(migrations))
 	copy(sortedMigrations, migrations)
-	sort.Slice(sortedMigrations, func(indexI, indexJ int) bool {
-		return sortedMigrations[indexI].Version < sortedMigrations[indexJ].Version
-	})
+	for index := range sortedMigrations {
+		if sortedMigrations[index].Service == "" {
+			sortedMigrations[index].Service = "core"
+		}
+	}
+	sortDatabaseMigrations(sortedMigrations)
 
 	log.Debugf("starting MigrateUp (available migrations: %d, target: %d)", len(migrations), targetVersion)
 	for _, migration := range sortedMigrations {
-		if applied[migration.Version] {
-			log.Tracef("migration %d (%s) already applied, skipping", migration.Version, migration.Description)
+		key := fmt.Sprintf("%s:%d", migration.Service, migration.Version)
+		if applied[key] {
+			log.Tracef("migration %s (%s) already applied, skipping", key, migration.Description)
 			continue
 		}
 		if targetVersion > 0 && migration.Version > targetVersion {
-			log.Tracef("migration %d exceeds target version %d, stopping MigrateUp", migration.Version, targetVersion)
+			log.Tracef("migration %s exceeds target version %d, stopping MigrateUp", key, targetVersion)
 			break
 		}
 
-		log.Infof("Applying Up migration %d: %s", migration.Version, migration.Description)
-		log.Tracef("executing Up migration SQL for version %d", migration.Version)
+		log.Infof("Applying Up migration %s: %s", key, migration.Description)
+		log.Tracef("executing Up migration SQL for version %s", key)
 		if _, execErr := tx.Exec(ctx, migration.UpSQL); execErr != nil {
-			return fmt.Errorf("failed Up migration %d (%s): %w", migration.Version, migration.Description, execErr)
+			return fmt.Errorf("failed Up migration %s (%s): %w", key, migration.Description, execErr)
 		}
 
-		if _, insertErr := tx.Exec(ctx, "INSERT INTO core.migrations (version, description) VALUES ($1, $2)", migration.Version, migration.Description); insertErr != nil {
-			return fmt.Errorf("failed to record migration %d: %w", migration.Version, insertErr)
+		if _, insertErr := tx.Exec(ctx, "INSERT INTO core.migrations (service, version, description) VALUES ($1, $2, $3)", migration.Service, migration.Version, migration.Description); insertErr != nil {
+			return fmt.Errorf("failed to record migration %s: %w", key, insertErr)
 		}
-		applied[migration.Version] = true
-		log.Tracef("recorded migration %d in core.migrations", migration.Version)
+		applied[key] = true
+		log.Tracef("recorded migration %s in core.migrations", key)
 	}
 
 	log.Debug("MigrateUp completed successfully, committing transaction")
@@ -291,50 +310,69 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 		return nil // Nothing to rollback
 	}
 
-	rows, _ := tx.Query(ctx, "SELECT version FROM core.migrations ORDER BY version DESC")
+	// Order applied migrations in reverse dependency order: non-core services first (descending), core last; version descending
+	rows, _ := tx.Query(ctx, "SELECT service, version FROM core.migrations ORDER BY (CASE WHEN service = 'core' THEN 1 ELSE 0 END) ASC, service DESC, version DESC")
 	if rows != nil {
 		defer rows.Close()
 	}
 
-	var appliedVersions []int
+	type appliedMigrationEntry struct {
+		Service string
+		Version int
+	}
+	var appliedMigrations []appliedMigrationEntry
 	for rows.Next() {
-		var appliedVersion int
-		_ = rows.Scan(&appliedVersion)
-		appliedVersions = append(appliedVersions, appliedVersion)
+		var currentAppliedMigrationEntry appliedMigrationEntry
+		_ = rows.Scan(&currentAppliedMigrationEntry.Service, &currentAppliedMigrationEntry.Version)
+		appliedMigrations = append(appliedMigrations, currentAppliedMigrationEntry)
 	}
 
-	migrationMap := make(map[int]DatabaseMigration)
+	targetServices := make(map[string]bool)
+	migrationMap := make(map[string]DatabaseMigration)
 	for _, migration := range migrations {
-		migrationMap[migration.Version] = migration
+		svc := migration.Service
+		if svc == "" {
+			svc = "core"
+		}
+		targetServices[svc] = true
+		migrationMap[fmt.Sprintf("%s:%d", svc, migration.Version)] = migration
 	}
 
-	log.Debugf("starting MigrateDown (applied versions count: %d, target: %d)", len(appliedVersions), targetVersion)
-	for _, version := range appliedVersions {
-		if version <= targetVersion {
-			log.Tracef("version %d is at or below target %d, stopping MigrateDown", version, targetVersion)
-			break
+	log.Debugf("starting MigrateDown (applied count: %d, target: %d)", len(appliedMigrations), targetVersion)
+	for _, currentAppliedMigrationEntry := range appliedMigrations {
+		key := fmt.Sprintf("%s:%d", currentAppliedMigrationEntry.Service, currentAppliedMigrationEntry.Version)
+		if len(migrations) == 0 {
+			return fmt.Errorf("cannot rollback migration %s: definition not found in registry", key)
+		}
+		if !targetServices[currentAppliedMigrationEntry.Service] {
+			continue
 		}
 
-		databaseMigration, ok := migrationMap[version]
+		databaseMigration, ok := migrationMap[key]
 		if !ok {
-			return fmt.Errorf("cannot rollback migration %d: definition not found in registry", version)
+			return fmt.Errorf("cannot rollback migration %s: definition not found in registry", key)
+		}
+
+		if targetVersion > 0 && currentAppliedMigrationEntry.Version <= targetVersion {
+			log.Tracef("migration %s is at or below target %d, skipping MigrateDown", key, targetVersion)
+			continue
 		}
 
 		if databaseMigration.DownSQL == "" {
-			return fmt.Errorf("cannot rollback migration %d (%s): no DownSQL specified", databaseMigration.Version, databaseMigration.Description)
+			return fmt.Errorf("cannot rollback migration %s (%s): no DownSQL specified", key, databaseMigration.Description)
 		}
 
-		// If this is the base migration (version 1) that drops core, don't execute DELETE afterward
-		if databaseMigration.Version != 1 {
-			if _, err := tx.Exec(ctx, "DELETE FROM core.migrations WHERE version = $1", databaseMigration.Version); err != nil {
-				return fmt.Errorf("failed to delete migration %d record: %w", databaseMigration.Version, err)
+		// If this is the base migration (core version 1) that drops core schema, don't execute DELETE afterward
+		if databaseMigration.Service != "core" || databaseMigration.Version != 1 {
+			if _, err := tx.Exec(ctx, "DELETE FROM core.migrations WHERE service = $1 AND version = $2", databaseMigration.Service, databaseMigration.Version); err != nil {
+				return fmt.Errorf("failed to delete migration %s record: %w", key, err)
 			}
 		}
 
-		log.Infof("Rolling back Down migration %d: %s", databaseMigration.Version, databaseMigration.Description)
-		log.Tracef("executing Down rollback SQL for version %d", databaseMigration.Version)
+		log.Infof("Rolling back Down migration %s: %s", key, databaseMigration.Description)
+		log.Tracef("executing Down rollback SQL for %s", key)
 		if _, err := tx.Exec(ctx, databaseMigration.DownSQL); err != nil {
-			return fmt.Errorf("failed Down migration %d (%s): %w", databaseMigration.Version, databaseMigration.Description, err)
+			return fmt.Errorf("failed Down migration %s (%s): %w", key, databaseMigration.Description, err)
 		}
 	}
 

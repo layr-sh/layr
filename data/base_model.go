@@ -3,13 +3,10 @@ package data
 import (
 	"encoding/json"
 	"time"
-
-	"uuid"
 )
 
 // ConfigRecord represents a row in the data.config table.
 type ConfigRecord struct {
-	ID            uuid.UUID       `json:"id"`
 	Key           string          `json:"key"`
 	Value         json.RawMessage `json:"value"`
 	LastUpdatedAt time.Time       `json:"last_updated_at"`

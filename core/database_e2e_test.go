@@ -147,6 +147,7 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 
 	// Schema evolution upgrade and rollback flow
 	evolutionDatabaseMigration := DatabaseMigration{
+		Service:     "core",
 		Version:     2,
 		Description: "Add custom domain items table",
 		UpSQL: `

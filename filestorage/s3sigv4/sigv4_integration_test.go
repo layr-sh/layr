@@ -18,7 +18,8 @@ import (
 )
 
 var s3CredentialDatabaseMigration = core.DatabaseMigration{
-	Version:     300,
+	Service:     "filestorage",
+	Version:     1,
 	Description: "create_s3_credentials",
 	UpSQL: `CREATE SCHEMA IF NOT EXISTS file_storage;
 		CREATE TABLE IF NOT EXISTS file_storage.s3_credentials (

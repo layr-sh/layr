@@ -9,12 +9,10 @@ func init() {
 	}
 }
 
-// ImageDatabaseMigrationVersion is the schema version for the image subsystem.
-const ImageDatabaseMigrationVersion = 700
-
 // ImageDatabaseMigration defines the database schema for the image subsystem.
 var ImageDatabaseMigration = core.DatabaseMigration{
-	Version:     ImageDatabaseMigrationVersion,
+	Service:     "image",
+	Version:     1,
 	Description: "Initialize image schema, dynamic config, presets, and cache entries",
 	UpSQL: `
 CREATE SCHEMA IF NOT EXISTS image;

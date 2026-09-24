@@ -10,12 +10,10 @@ func init() {
 	}
 }
 
-// TasksDatabaseMigrationVersion is the schema version for the tasks subsystem.
-const TasksDatabaseMigrationVersion = 400
-
 // TasksDatabaseMigration defines the database schema for the tasks subsystem.
 var TasksDatabaseMigration = core.DatabaseMigration{
-	Version:     TasksDatabaseMigrationVersion,
+	Service:     "tasks",
+	Version:     1,
 	Description: "Initialize tasks schema, dynamic config, jobs, executions, and execution logs",
 	UpSQL: `
 CREATE SCHEMA IF NOT EXISTS tasks;

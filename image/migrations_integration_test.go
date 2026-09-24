@@ -10,13 +10,17 @@ import (
 
 func TestImageMigrationsExecutionIntegration(t *testing.T) {
 	db, cleanup := core.SetupTestDB(t, Migrations)
+	if db == nil {
+		return
+	}
 	defer cleanup()
 
 	ctx := context.Background()
 
+	tablesToCheck := []string{"config", "presets", "cache_entries"}
+
 	// 1. Verify that image tables exist
 	t.Run("VerifyImageTablesExist", func(t *testing.T) {
-		tablesToCheck := []string{"config", "presets", "cache_entries"}
 		for _, tableName := range tablesToCheck {
 			var tableExists bool
 			queryErr := db.QueryRow(ctx, `
@@ -55,6 +59,18 @@ func TestImageMigrationsExecutionIntegration(t *testing.T) {
 		for _, databaseMigration := range Migrations {
 			_, upErr := db.Exec(ctx, databaseMigration.UpSQL)
 			require.NoError(t, upErr, "failed re-applying migration %d", databaseMigration.Version)
+		}
+
+		for _, tableName := range tablesToCheck {
+			var tableExists bool
+			queryErr := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = 'image' AND table_name = $1
+				);
+			`, tableName).Scan(&tableExists)
+			require.NoError(t, queryErr)
+			require.True(t, tableExists, "expected image.%s table to exist after reapply", tableName)
 		}
 	})
 }

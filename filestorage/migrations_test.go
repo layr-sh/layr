@@ -12,6 +12,9 @@ func TestFilestorageMigrationsDefinitionUnit(t *testing.T) {
 
 	for _, databaseMigration := range Migrations {
 		t.Run(fmt.Sprintf("Version_%d", databaseMigration.Version), func(t *testing.T) {
+			if databaseMigration.Service != "filestorage" {
+				t.Fatalf("expected Service 'filestorage', got %q", databaseMigration.Service)
+			}
 			if databaseMigration.Version <= 0 {
 				t.Fatalf("expected positive migration version, got %d", databaseMigration.Version)
 			}

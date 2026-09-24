@@ -11,7 +11,7 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"layr.sh/core"
-	_ "layr.sh/data"
+	"layr.sh/data"
 	"layr.sh/data/referencedata"
 )
 
@@ -133,7 +133,7 @@ func TestReferencedataSeedLifecycleIntegration(t *testing.T) {
 	}
 
 	// Rollback migration
-	if err := db.MigrateDown(ctx, core.GetRegisteredDatabaseMigrations(), 1); err != nil {
+	if err := db.MigrateDown(ctx, data.Migrations, 0); err != nil {
 		t.Fatalf("failed to rollback migration: %v", err)
 	}
 }

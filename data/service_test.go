@@ -154,3 +154,31 @@ func TestDataServiceScopeCheckUnit(t *testing.T) {
 	// Stop
 	dataService.Stop()
 }
+
+func TestDataServiceFactoryUnit(t *testing.T) {
+	serviceFactory, exists := core.GetServiceFactory("data")
+	if !exists || serviceFactory == nil {
+		t.Fatal("expected 'data' service factory to be registered in core")
+	}
+
+	kernel := &core.Kernel{}
+	serviceRunner, err := serviceFactory(kernel)
+	if err != nil {
+		t.Fatalf("unexpected error creating data service from kernel: %v", err)
+	}
+	if serviceRunner == nil {
+		t.Fatal("expected non-nil service runner from factory")
+	}
+	if _, ok := serviceRunner.(*Service); !ok {
+		t.Fatalf("expected *Service runner, got %T", serviceRunner)
+	}
+
+	dependenciesKernel := core.NewTestKernel(nil)
+	dependenciesServiceRunner, err := serviceFactory(dependenciesKernel)
+	if err != nil {
+		t.Fatalf("unexpected error creating data service from kernel with deps: %v", err)
+	}
+	if dependenciesServiceRunner == nil {
+		t.Fatal("expected non-nil service runner from factory with deps")
+	}
+}

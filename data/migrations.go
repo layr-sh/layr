@@ -9,22 +9,19 @@ func init() {
 	}
 }
 
-// DataDatabaseMigrationVersion is the schema version for the data subsystem.
-const DataDatabaseMigrationVersion = 100
-
 // CDCNotificationChannel is the PostgreSQL LISTEN/NOTIFY channel for CDC events.
 const CDCNotificationChannel = "cdc"
 
 // DataDatabaseMigration defines the database schema for data and reference_data.
 var DataDatabaseMigration = core.DatabaseMigration{
-	Version:     DataDatabaseMigrationVersion,
+	Service:     "data",
+	Version:     1,
 	Description: "Initialize data and reference_data schemas, config table, CDC triggers, and relational tables",
 	UpSQL: `
 CREATE SCHEMA IF NOT EXISTS data;
 
 CREATE TABLE IF NOT EXISTS data.config (
-    id UUID PRIMARY KEY DEFAULT uuidv7(),
-    key VARCHAR(128) NOT NULL UNIQUE,
+    key VARCHAR(128) PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -303,25 +300,7 @@ ALTER TABLE reference_data.country_alt_spellings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY select_public ON reference_data.country_alt_spellings FOR SELECT USING (true);
 `,
 	DownSQL: `
-DROP TABLE IF EXISTS reference_data.country_alt_spellings CASCADE;
-DROP TABLE IF EXISTS reference_data.country_tlds CASCADE;
-DROP TABLE IF EXISTS reference_data.country_capitals CASCADE;
-DROP TABLE IF EXISTS reference_data.country_demonyms CASCADE;
-DROP TABLE IF EXISTS reference_data.country_native_names CASCADE;
-DROP TABLE IF EXISTS reference_data.country_name_translations CASCADE;
-DROP TABLE IF EXISTS reference_data.country_borders CASCADE;
-DROP TABLE IF EXISTS reference_data.country_timezones CASCADE;
-DROP TABLE IF EXISTS reference_data.country_languages CASCADE;
-DROP TABLE IF EXISTS reference_data.country_currencies CASCADE;
-DROP TABLE IF EXISTS reference_data.timezones CASCADE;
-DROP TABLE IF EXISTS reference_data.languages CASCADE;
-DROP TABLE IF EXISTS reference_data.currencies CASCADE;
-DROP TABLE IF EXISTS reference_data.countries CASCADE;
-DROP TABLE IF EXISTS reference_data.subregions CASCADE;
-DROP TABLE IF EXISTS reference_data.regions CASCADE;
 DROP SCHEMA IF EXISTS reference_data CASCADE;
-DROP FUNCTION IF EXISTS data.notify_cdc() CASCADE;
-DROP TABLE IF EXISTS data.config CASCADE;
 DROP SCHEMA IF EXISTS data CASCADE;
 `,
 }
