@@ -7,6 +7,7 @@ import (
 )
 
 func (server *Server) handleListEvents(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling list events request")
 	queryValues := request.URL.Query()
 	eventFilter := EventFilter{}
 	if typeQueryParam := queryValues.Get("type"); typeQueryParam != "" {
@@ -42,11 +43,14 @@ func (server *Server) handleListEvents(responseWriter http.ResponseWriter, reque
 		WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
+	log.Debugf("retrieved %d event(s)", len(events))
 	WriteJSONResponse(responseWriter, http.StatusOK, events)
 }
 
 func (server *Server) handleGetEvent(responseWriter http.ResponseWriter, request *http.Request) {
-	eventID, err := uuid.Parse(request.PathValue("event_id"))
+	eventParam := request.PathValue("event_id")
+	log.Tracef("handling get event request: id=%s", eventParam)
+	eventID, err := uuid.Parse(eventParam)
 	if err != nil {
 		WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
@@ -56,5 +60,6 @@ func (server *Server) handleGetEvent(responseWriter http.ResponseWriter, request
 		WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
 		return
 	}
+	log.Debugf("retrieved event %s", event.ID)
 	WriteJSONResponse(responseWriter, http.StatusOK, event)
 }

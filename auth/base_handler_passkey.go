@@ -286,6 +286,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 }
 
 func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling list user passkeys request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -318,10 +319,12 @@ func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWrite
 		listPasskeysResponse = append(listPasskeysResponse, passkey)
 	}
 
+	log.Debugf("retrieved %d passkey(s) for user %s", len(listPasskeysResponse), userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listPasskeysResponse)
 }
 
 func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling delete user passkey request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -373,5 +376,6 @@ func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWrit
 		}))
 	}
 
+	log.Debugf("passkey %s successfully deleted for user %s", passkeyID, userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

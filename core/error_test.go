@@ -1,11 +1,16 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
+
+	"layr.sh/logger"
 )
 
 func TestCoreErrorResponseSerializationAndHelpersUnit(t *testing.T) {
@@ -200,5 +205,29 @@ func TestCoreOAuthErrorResponseSerializationAndHelpersUnit(t *testing.T) {
 	WriteOAuthErrorResponse(lowStatusResponseRecorder, http.StatusOK, "ok_notice", "Notice", "info trace")
 	if lowStatusResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", lowStatusResponseRecorder.Code)
+	}
+}
+
+func TestCoreWriteErrorResponseAutomatic500LoggingUnit(t *testing.T) {
+	var logBuffer bytes.Buffer
+	log.SetOutput(&logBuffer)
+	defer log.SetOutput(os.Stderr)
+	log.SetLevel(logger.LevelTrace)
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/test", nil)
+
+	// WriteErrorResponse with 500 and no debugLog
+	responseRecorder := httptest.NewRecorder()
+	WriteErrorResponse(responseRecorder, request, http.StatusInternalServerError, "database connection failed")
+	if !strings.Contains(logBuffer.String(), "[ERROR] [core] internal server error (500): database connection failed") {
+		t.Errorf("expected 500 error log, got: %s", logBuffer.String())
+	}
+
+	logBuffer.Reset()
+	// WriteOAuthErrorResponse with 500 and no debugLog
+	oauthResponseRecorder := httptest.NewRecorder()
+	WriteOAuthErrorResponse(oauthResponseRecorder, http.StatusInternalServerError, "server_error", "internal auth failure")
+	if !strings.Contains(logBuffer.String(), "[ERROR] [core] internal oauth error (500): internal auth failure") {
+		t.Errorf("expected 500 oauth error log, got: %s", logBuffer.String())
 	}
 }

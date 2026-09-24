@@ -18,7 +18,7 @@ const (
 
 // handleTriggerExecution handles POST /v1/_/tasks/executions triggering an immediate execution.
 func (controlPlaneHandler *ControlPlaneHandler) handleTriggerExecution(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleTriggerExecution invoked")
+	log.Trace("handling trigger execution request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionWrite) {
 		return
 	}
@@ -42,12 +42,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleTriggerExecution(responseW
 		return
 	}
 
+	log.Debugf("execution %s successfully triggered for job %s", triggerExecutionResponse.ExecutionID, triggerExecutionInput.JobID)
 	core.WriteJSONResponse(responseWriter, http.StatusAccepted, triggerExecutionResponse)
 }
 
 // handleListExecutions handles GET /v1/_/tasks/executions querying execution history logs.
 func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListExecutions invoked")
+	log.Trace("handling list executions request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionRead) {
 		return
 	}
@@ -88,12 +89,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWri
 		Executions: executions,
 		Count:      totalCount,
 	}
+	log.Debugf("retrieved %d execution(s)", len(executions))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listExecutionsResponse)
 }
 
 // handleListDLQ handles GET /v1/_/tasks/dlq returning dead-lettered executions.
 func (controlPlaneHandler *ControlPlaneHandler) handleListDLQ(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListDLQ invoked")
+	log.Trace("handling list DLQ executions request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionRead) {
 		return
 	}
@@ -124,12 +126,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListDLQ(responseWriter htt
 		DLQ:   dlq,
 		Count: totalCount,
 	}
+	log.Debugf("retrieved %d DLQ execution(s)", len(dlq))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listDLQResponse)
 }
 
 // handleRetryDLQ handles POST /v1/_/tasks/dlq/{id}/retry re-queuing a failed execution.
 func (controlPlaneHandler *ControlPlaneHandler) handleRetryDLQ(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleRetryDLQ invoked")
+	log.Trace("handling retry DLQ execution request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionWrite) {
 		return
 	}
@@ -151,12 +154,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRetryDLQ(responseWriter ht
 		return
 	}
 
+	log.Debugf("retried DLQ execution %s", executionID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, retryDLQResponse)
 }
 
 // handlePurgeDLQ handles DELETE /v1/_/tasks/dlq/{id} deleting a failed execution from DLQ.
 func (controlPlaneHandler *ControlPlaneHandler) handlePurgeDLQ(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handlePurgeDLQ invoked")
+	log.Trace("handling purge DLQ executions request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionWrite) {
 		return
 	}
@@ -178,5 +182,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handlePurgeDLQ(responseWriter ht
 		return
 	}
 
+	log.Debugf("purged DLQ execution %s", executionID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

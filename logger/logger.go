@@ -462,7 +462,10 @@ func (logger *Logger) With(args ...any) *Logger {
 func (logger *Logger) resolveEnvLevel() Level {
 	// 1. Check subsystem/scope-specific log level overrides
 	if logger.scope != "" {
-		normalizedScope := strings.ToUpper(strings.ReplaceAll(logger.scope, "-", "_"))
+		normalizedScope := strings.ToUpper(logger.scope)
+		for _, sep := range []string{"-", ".", "/"} {
+			normalizedScope = strings.ReplaceAll(normalizedScope, sep, "_")
+		}
 		for _, envKey := range []string{
 			"LAYR_" + normalizedScope + "_LOG_LEVEL",
 			normalizedScope + "_LOG_LEVEL",

@@ -215,6 +215,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 		Attempt:     execution.Attempts + 1,
 		LockedBy:    workerQueue.nodeID,
 	}))
+	log.Tracef("starting execution %s for job %s (attempt %d)", execution.ID, jobName, execution.Attempts+1)
 
 	var responseStatusCode *int
 	var responseBody *string
@@ -280,6 +281,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			ResponseStatusCode: responseStatusCode,
 			Attempt:            execution.Attempts + 1,
 		}))
+		log.Debugf("execution %s completed successfully in %dms", execution.ID, durationMs)
 	} else {
 		// --- Failure ---
 		errMsg := execErr.Error()
@@ -294,6 +296,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 				TimeoutLimitSeconds: timeoutSeconds,
 				Attempt:             execution.Attempts + 1,
 			}))
+			log.Warnf("execution %s timed out after %ds", execution.ID, timeoutSeconds)
 		} else {
 			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionFailedEvent(execution.ID.String(), ExecutionFailedEventData{
 				ExecutionID:        execution.ID,
@@ -341,6 +344,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 				BackoffDelayMs: delay.Milliseconds(),
 				Error:          errMsg,
 			}))
+			log.Warnf("execution %s failed: %v (retrying in %ds)", execution.ID, execErr, int(delay.Seconds()))
 		} else {
 			// Move to Dead-Letter Queue
 			_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
@@ -360,6 +364,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 				TotalAttempts: nextAttempt,
 				LastError:     errMsg,
 			}))
+			log.Errorf("execution %s failed permanently: %v (moved to DLQ)", execution.ID, execErr)
 		}
 	}
 }

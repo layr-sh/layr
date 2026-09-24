@@ -9,7 +9,7 @@ import (
 
 // handleListUserSessions lists active sessions for a user (auth:user.read).
 func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListUserSessions invoked")
+	log.Trace("handling list user sessions request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
@@ -44,6 +44,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseW
 		sessions = append(sessions, session)
 	}
 
+	log.Debugf("retrieved %d session(s) for user %s", len(sessions), userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUserSessionsResponse{
 		Sessions: sessions,
 		Count:    len(sessions),
@@ -52,7 +53,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseW
 
 // handleRevokeUserSessions terminates all sessions for a user (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleRevokeUserSessions invoked")
+	log.Trace("handling revoke user sessions request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
@@ -103,5 +104,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRevokeUserSessions(respons
 		RevokedCount: &revokedCount,
 	}))
 
+	log.Debugf("revoked %d session(s) for user %s", revokedCount, userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

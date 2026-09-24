@@ -326,10 +326,12 @@ func (service *Service) GetRealtimeHub() *realtime.Hub {
 
 // handleFlushCache handles cache flush via the control plane handler.
 func (service *Service) handleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling flush data cache request")
 	service.controlPlaneHandler.handleFlushCache(responseWriter, request)
 }
 
 // handleInvalidateCache handles cache invalidation via the control plane handler.
 func (service *Service) handleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling invalidate data cache request")
 	service.controlPlaneHandler.handleInvalidateCache(responseWriter, request)
 }

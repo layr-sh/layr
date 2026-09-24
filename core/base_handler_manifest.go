@@ -7,6 +7,7 @@ import (
 
 // /v1/manifest - Dynamic cluster & manifest discovery
 func (server *Server) handleGetManifest(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get cluster manifest request")
 	publishableKey := server.kernel.cryptoKeyManager.DerivePublishableKey()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)

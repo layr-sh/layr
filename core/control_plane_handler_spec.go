@@ -9,6 +9,7 @@ import (
 
 // /v1/_/spec.json - Protected Control Plane OpenAPI 3.1 JSON
 func (server *Server) handleGetControlPlaneSpecJSON(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get control plane OpenAPI JSON spec request")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()
@@ -17,6 +18,7 @@ func (server *Server) handleGetControlPlaneSpecJSON(responseWriter http.Response
 
 // /v1/_/spec.yaml - Protected Control Plane OpenAPI 3.1 YAML
 func (server *Server) handleGetControlPlaneSpecYAML(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get control plane OpenAPI YAML spec request")
 	responseWriter.Header().Set("Content-Type", "application/yaml")
 	responseWriter.WriteHeader(http.StatusOK)
 	openAPISpec := server.controlPlaneRouter.OutputOpenAPISpec()

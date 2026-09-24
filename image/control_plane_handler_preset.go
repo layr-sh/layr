@@ -12,7 +12,7 @@ import (
 
 // handleListPresets handles GET /v1/_/image/presets returning all presets.
 func (controlPlaneHandler *ControlPlaneHandler) handleListPresets(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListPresets invoked")
+	log.Trace("handling list image presets request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetRead) {
 		return
 	}
@@ -28,12 +28,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPresets(responseWriter
 		Presets: presets,
 		Count:   len(presets),
 	}
+	log.Debugf("retrieved %d preset(s)", len(presets))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listPresetsResponse)
 }
 
 // handleCreatePreset handles POST /v1/_/image/presets creating a new transformation preset.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreatePreset(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreatePreset invoked")
+	log.Trace("handling create image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetWrite) {
 		return
 	}
@@ -63,7 +64,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePreset(responseWrite
 
 // handleGetPreset handles GET /v1/_/image/presets/{id} returning a preset by ID.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetPreset(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetPreset invoked")
+	log.Trace("handling get image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetRead) {
 		return
 	}
@@ -85,12 +86,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetPreset(responseWriter h
 		return
 	}
 
+	log.Debugf("retrieved preset %s", presetID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, preset)
 }
 
 // handleUpdatePreset handles PUT /v1/_/image/presets/{id} modifying an existing preset.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdatePreset(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdatePreset invoked")
+	log.Trace("handling update image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetWrite) {
 		return
 	}
@@ -126,7 +128,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdatePreset(responseWrite
 
 // handleDeletePreset handles DELETE /v1/_/image/presets/{id} removing a preset.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeletePreset(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeletePreset invoked")
+	log.Trace("handling delete image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetWrite) {
 		return
 	}

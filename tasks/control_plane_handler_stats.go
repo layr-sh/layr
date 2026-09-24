@@ -9,7 +9,7 @@ import (
 
 // handleGetStats handles GET /v1/_/tasks/stats returning operational telemetry statistics.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetStats(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetStats invoked")
+	log.Trace("handling get tasks statistics request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksStatsRead) {
 		return
 	}

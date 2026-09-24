@@ -113,6 +113,7 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 // 1. OIDC Discovery & JWKS
 
 func (handler *BaseHandler) handleGetOIDCDiscovery(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get OIDC discovery request")
 	baseURL := core.GetConfig().ServerBaseURL()
 	oidcConfiguration := BuildOIDCDiscovery(baseURL)
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -121,6 +122,7 @@ func (handler *BaseHandler) handleGetOIDCDiscovery(responseWriter http.ResponseW
 }
 
 func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get JWKS request")
 	jwks := handler.kernel.JWTSigner().BuildJWKS()
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -130,6 +132,7 @@ func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, re
 // 2. Authorization Endpoint (GET /v1/auth/oauth/authorize)
 
 func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling OIDC authorize request")
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize request rejected: OIDC identity provider is disabled in configuration")
@@ -296,6 +299,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 // 3. Authorization Form Submission (POST /v1/auth/oauth/authorize)
 
 func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling submit OIDC authorize request")
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC authorize submit rejected: OIDC identity provider is disabled in configuration")
@@ -767,6 +771,7 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenInput {
 // 4. Token Endpoint (POST /v1/auth/oauth/token)
 
 func (handler *BaseHandler) handleIssueOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling issue OIDC token request")
 	oauthTokenInput := parseOAuthTokenRequest(request)
 
 	// If no grant_type or if provider parameter is present, delegate to handleOAuthCallback
@@ -800,6 +805,7 @@ func (handler *BaseHandler) handleIssueOIDCToken(responseWriter http.ResponseWri
 }
 
 func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.ResponseWriter, request *http.Request, oauthTokenInput OAuthTokenInput) {
+	log.Trace("handling OAuth client credentials grant request")
 	clientID := oauthTokenInput.ClientID
 	clientSecret := oauthTokenInput.ClientSecret
 
@@ -916,10 +922,12 @@ func (handler *BaseHandler) handleOAuthClientCredentials(responseWriter http.Res
 
 // handleIssueOAuthToken delegates to handleIssueOIDCToken for OAuth 2.0 token requests.
 func (handler *BaseHandler) handleIssueOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling issue OAuth token request")
 	handler.handleIssueOIDCToken(responseWriter, request)
 }
 
 func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling issue OIDC authorization code token request")
 	clientID, clientSecret, hasBasicAuth := request.BasicAuth()
 	if !hasBasicAuth {
 		clientID = request.FormValue("client_id")
@@ -1083,6 +1091,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 }
 
 func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling issue OIDC refresh token request")
 	clientID, clientSecret, hasBasicAuth := request.BasicAuth()
 	if !hasBasicAuth {
 		clientID = request.FormValue("client_id")
@@ -1201,6 +1210,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 // 5. Userinfo Endpoint (GET /v1/auth/oauth/userinfo)
 
 func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get OIDC userinfo request")
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC userinfo rejected: OIDC identity provider is disabled in configuration")
@@ -1261,6 +1271,7 @@ func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWr
 // 6. Sign-Out Endpoint (GET/POST /v1/auth/oauth/sign-out)
 
 func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling OIDC sign-out request")
 	config := handler.configManager.Get()
 	if !config.OIDC.Enabled {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusForbidden, "access_denied", "Access denied", "OIDC sign-out rejected: OIDC identity provider is disabled in configuration")

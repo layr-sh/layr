@@ -18,7 +18,7 @@ import (
 // handleAuthorizeOAuth initiates the authorization redirection for an OAuth provider.
 func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWriter, request *http.Request) {
 	provider := request.PathValue("provider")
-	log.Debugf("handling OAuth authorize request for provider: %s", provider)
+	log.Tracef("handling OAuth authorize request for provider: %s", provider)
 
 	config := handler.configManager.Get()
 	oAuthProviderConfig, ok := config.OAuthProviders[provider]
@@ -91,6 +91,7 @@ func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWri
 
 // handleExchangeOAuthToken handles token exchange requests.
 func (handler *BaseHandler) handleExchangeOAuthToken(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling exchange OAuth token request")
 	if request.FormValue("grant_type") != "" {
 		handler.handleIssueOIDCToken(responseWriter, request)
 		return
@@ -100,7 +101,7 @@ func (handler *BaseHandler) handleExchangeOAuthToken(responseWriter http.Respons
 
 // handleProcessOAuthCallback processes the incoming OAuth redirect callback.
 func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling OAuth callback request")
+	log.Trace("handling OAuth callback request")
 	var provider, code, redirectURI, state string
 
 	if request.Method == http.MethodGet {
@@ -431,6 +432,7 @@ func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter
 
 // handleGetOAuthUserInfo returns user details for the authenticated OAuth bearer token caller.
 func (handler *BaseHandler) handleGetOAuthUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get OAuth user info request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_token", "Bearer token required")

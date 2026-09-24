@@ -517,3 +517,26 @@ func TestLoggerWithUnit(t *testing.T) {
 		}
 	})
 }
+
+func TestLoggerScopeEnvNormalizationUnit(t *testing.T) {
+	t.Run("resolves env with dot and slash separators", func(t *testing.T) {
+		t.Setenv("LAYR_AUTH_THREAT_LOG_LEVEL", "DEBUG")
+		t.Setenv("LAYR_FILESTORAGE_S3SIGV4_LOG_LEVEL", "TRACE")
+		t.Setenv("LAYR_CORE_LOG_LEVEL", "WARN")
+
+		threatLogger := New("auth.threat")
+		if threatLogger.GetLevel() != LevelDebug {
+			t.Errorf("expected LevelDebug for auth.threat, got %v", threatLogger.GetLevel())
+		}
+
+		s3sigv4Logger := New("filestorage.s3sigv4")
+		if s3sigv4Logger.GetLevel() != LevelTrace {
+			t.Errorf("expected LevelTrace for filestorage.s3sigv4, got %v", s3sigv4Logger.GetLevel())
+		}
+
+		coreLogger := New("core")
+		if coreLogger.GetLevel() != LevelWarn {
+			t.Errorf("expected LevelWarn for core, got %v", coreLogger.GetLevel())
+		}
+	})
+}

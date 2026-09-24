@@ -11,6 +11,7 @@ import (
 )
 
 func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling setup MFA request")
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "mfa setup rejected: MFA is disabled in configuration")
@@ -91,6 +92,7 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 }
 
 func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling verify MFA request")
 	config := handler.configManager.Get()
 	if !config.MFA.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "mfa verify rejected: MFA is disabled in configuration")

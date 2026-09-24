@@ -13,7 +13,7 @@ import (
 
 // handleConnectRealtime upgrades HTTP connection to WebSocket and attaches to the CDC Hub.
 func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleConnectRealtime invoked")
+	log.Trace("handling realtime connection request")
 
 	config := handler.configManager.Get()
 	if !config.Realtime.Enabled {

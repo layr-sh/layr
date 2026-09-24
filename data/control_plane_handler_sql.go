@@ -10,7 +10,7 @@ import (
 
 // handleExecuteSQL executes raw SQL from the console scratchpad.
 func (controlPlaneHandler *ControlPlaneHandler) handleExecuteSQL(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleExecuteSQL invoked")
+	log.Trace("handling execute SQL query request")
 
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method not allowed")

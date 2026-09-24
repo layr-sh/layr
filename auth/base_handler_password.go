@@ -152,6 +152,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 
 	handler.kernel.EventBus().Publish(ctx, NewUserSignedUpEvent(user.ID, UserSignedUpEventData(user)))
 
+	log.Debugf("user %s successfully registered", user.ID)
 	handler.issueSessionResponse(responseWriter, request, user, "password")
 }
 
@@ -272,6 +273,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 		_ = handler.kernel.KVStore().Delete(ctx, rateKey)
 	}
 
+	log.Debugf("user %s successfully authenticated", user.ID)
 	handler.completeSignInFlow(responseWriter, request, user, "password")
 }
 
@@ -502,6 +504,7 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 }
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling update user password request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")

@@ -48,7 +48,7 @@ func (signer *JWTSigner) BuildJWKS() JWKS {
 
 // handleGetJWKS serves the GET /.well-known/jwks.json HTTP endpoint.
 func (signer *JWTSigner) handleGetJWKS(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Tracef("handling JWKS HTTP request from %s", request.RemoteAddr)
+	log.Trace("handling get JWKS request")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(signer.BuildJWKS())

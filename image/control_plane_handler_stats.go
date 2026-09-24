@@ -8,7 +8,7 @@ import (
 
 // handleGetStats handles GET /v1/_/image/stats returning cache metrics and memory stats.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetStats(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetStats invoked")
+	log.Trace("handling get image engine statistics request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImageStatsRead) {
 		return
 	}

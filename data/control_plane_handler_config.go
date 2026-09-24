@@ -11,7 +11,7 @@ import (
 
 // handleGetConfig handles GET /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetConfig invoked")
+	log.Trace("handling get data configuration request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataConfigRead) {
 		return
@@ -22,7 +22,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 
 // handleUpdateConfig handles PUT /v1/_/data/config.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdateConfig invoked")
+	log.Trace("handling update data configuration request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataConfigWrite) {
 		return
@@ -49,7 +49,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 
 // handleFlushCache handles POST /v1/_/data/cache/flush.
 func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleFlushCache invoked")
+	log.Trace("handling flush data cache request")
 
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
@@ -76,7 +76,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter 
 
 // handleInvalidateCache handles POST /v1/_/data/cache/invalidate.
 func (controlPlaneHandler *ControlPlaneHandler) handleInvalidateCache(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleInvalidateCache invoked")
+	log.Trace("handling invalidate data cache request")
 
 	if request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method Not Allowed")
