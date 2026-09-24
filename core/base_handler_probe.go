@@ -10,6 +10,7 @@ import (
 
 // /healthz - Liveness probe
 func (server *Server) handleGetHealth(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get liveness probe request")
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(responseWriter).Encode(GetHealthResponse{
@@ -21,6 +22,7 @@ func (server *Server) handleGetHealth(responseWriter http.ResponseWriter, reques
 
 // /readyz - Readiness probe
 func (server *Server) handleGetReadiness(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get readiness probe request")
 	ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
 	defer cancel()
 

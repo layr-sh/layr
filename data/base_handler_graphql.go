@@ -26,7 +26,7 @@ const (
 
 // handleExecuteGraphQL processes POST /v1/graphql requests.
 func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleExecuteGraphQL invoked")
+	log.Trace("handling execute GraphQL query request")
 
 	if request.Method != http.MethodPost {
 		handler.writeGraphQLError(responseWriter, http.StatusMethodNotAllowed, "GraphQL endpoint only supports POST requests")

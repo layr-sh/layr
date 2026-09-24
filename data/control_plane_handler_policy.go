@@ -10,7 +10,7 @@ import (
 
 // handleListPolicies lists all Row-Level Security policies on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListPolicies invoked")
+	log.Trace("handling list policies request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
@@ -34,7 +34,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 
 // handleCreatePolicy creates a new Row-Level Security policy on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreatePolicy invoked")
+	log.Trace("handling create policy request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -71,7 +71,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 
 // handleDeletePolicy drops a Row-Level Security policy from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeletePolicy invoked")
+	log.Trace("handling delete policy request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -104,7 +104,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 
 // handleToggleRLS toggles Row-Level Security mode (ENABLE / DISABLE / FORCE / UNFORCE).
 func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleToggleRLS invoked")
+	log.Trace("handling toggle table RLS request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return

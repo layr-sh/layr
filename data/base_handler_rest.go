@@ -36,7 +36,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	if !ok {
 		return
 	}
-	log.Tracef("handleListRecords invoked for %s.%s", schema, table)
+	log.Tracef("handling list records request: %s.%s", schema, table)
 
 	config := handler.configManager.Get()
 	queryParams, err := rest.ParseQueryParams(request.URL.Query(), config.REST.DefaultLimit, config.REST.MaxLimit)
@@ -171,7 +171,7 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
-	log.Tracef("handleGetRecord invoked for %s.%s id=%s", schema, table, recordID)
+	log.Tracef("handling get record request: %s.%s id=%s", schema, table, recordID)
 
 	ctx := request.Context()
 	tx, err := handler.kernel.DB().Begin(ctx)
@@ -223,7 +223,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	if !ok {
 		return
 	}
-	log.Tracef("handleCreateRecord invoked for %s.%s", schema, table)
+	log.Tracef("handling create record request: %s.%s", schema, table)
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
@@ -366,7 +366,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
-	log.Tracef("handleUpdateRecord invoked for %s.%s id=%s", schema, table, recordID)
+	log.Tracef("handling update record request: %s.%s id=%s", schema, table, recordID)
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
@@ -473,7 +473,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Missing record ID in path")
 		return
 	}
-	log.Tracef("handleDeleteRecord invoked for %s.%s id=%s", schema, table, recordID)
+	log.Tracef("handling delete record request: %s.%s id=%s", schema, table, recordID)
 
 	ctx := request.Context()
 	tx, err := handler.kernel.DB().Begin(ctx)
@@ -536,6 +536,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 // Note: End users execute under Postgres RLS. Service accounts can bypass RLS if granted data:query.read (for GET) or data:query.write (for POST).
 // Responses are unwrapped: raw scalar, array of objects, array of scalars, or 204 No Content for void/empty.
 func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling execute function request")
 	if request.Method != http.MethodGet && request.Method != http.MethodPost {
 		core.WriteErrorResponse(responseWriter, request, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -567,7 +568,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request")
 		return
 	}
-	log.Tracef("handleExecuteFunction invoked for %s.%s", schema, functionName)
+	log.Tracef("handling execute function request: %s.%s", schema, functionName)
 
 	isSchemaAllowed := false
 	for _, allowedSchema := range config.Schemas {

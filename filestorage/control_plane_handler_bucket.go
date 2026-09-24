@@ -17,7 +17,7 @@ import (
 
 // handleListBuckets handles GET /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListBuckets invoked")
+	log.Trace("handling list buckets request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
@@ -75,7 +75,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter
 
 // handleCreateBucket handles POST /v1/_/file-storage/buckets.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateBucket invoked")
+	log.Trace("handling create bucket request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -193,7 +193,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 
 // handleGetBucket handles GET /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetBucket invoked")
+	log.Trace("handling get bucket request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}
@@ -241,12 +241,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetBucket(responseWriter h
 		bucket.BackendConfig["secret_access_key"] = "********"
 	}
 
+	log.Debugf("retrieved bucket %s", bucketName)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, bucket)
 }
 
 // handleUpdateBucket handles PATCH/PUT /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdateBucket invoked")
+	log.Trace("handling update bucket request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -377,7 +378,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 
 // handleDeleteBucket handles DELETE /v1/_/file-storage/buckets/{bucket}.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteBucket invoked")
+	log.Trace("handling delete bucket request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketWrite) {
 		return
 	}
@@ -410,7 +411,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 
 // handleListBucketObjects handles GET /v1/_/file-storage/buckets/{bucket}/objects.
 func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListBucketObjects invoked")
+	log.Trace("handling list bucket objects request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFileStorageBucketRead) {
 		return
 	}

@@ -16,7 +16,7 @@ import (
 
 // handleListUsers lists registered application users with filtering and pagination (auth:user.read).
 func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListUsers invoked")
+	log.Trace("handling list users request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
@@ -87,6 +87,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 		users = append(users, user)
 	}
 
+	log.Debugf("retrieved %d user(s)", len(users))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUsersResponse{
 		Users:  users,
 		Limit:  limit,
@@ -97,7 +98,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 
 // handleCreateUser creates an application user via control plane (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateUser invoked")
+	log.Trace("handling create user request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
@@ -182,12 +183,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateUser(responseWriter 
 
 	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
 
+	log.Debugf("user %s successfully created", user.ID)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, user)
 }
 
 // handleGetUser retrieves a specific user by UUID (auth:user.read).
 func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetUser invoked")
+	log.Trace("handling get user request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserRead) {
 		return
@@ -223,12 +225,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetUser(responseWriter htt
 	}
 	_ = json.Unmarshal(rawProperties, &user.Properties)
 
+	log.Debugf("retrieved user %s", user.ID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }
 
 // handleDeleteUser deletes a user and cascades sessions, passkeys, identities (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteUser invoked")
+	log.Trace("handling delete user request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
@@ -269,12 +272,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteUser(responseWriter 
 
 	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 
+	log.Debugf("user %s successfully deleted", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
 // handleLockUser locks a user account and immediately invalidates all active sessions (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleLockUser invoked")
+	log.Trace("handling lock user request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
@@ -352,12 +356,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleLockUser(responseWriter ht
 		LockedUntil: &lockedUntil,
 	}))
 
+	log.Debugf("user %s successfully locked", userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }
 
 // handleUnlockUser lifts lock restrictions on a user account (auth:user.write).
 func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUnlockUser invoked")
+	log.Trace("handling unlock user request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthUserWrite) {
 		return
@@ -396,5 +401,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUnlockUser(responseWriter 
 
 	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewUserUnlockedEvent(userID, UserUnlockedEventData(user)))
 
+	log.Debugf("user %s successfully unlocked", userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, user)
 }

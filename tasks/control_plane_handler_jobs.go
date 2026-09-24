@@ -13,7 +13,7 @@ import (
 
 // handleListJobs handles GET /v1/_/tasks/jobs returning all configured recurring cron jobs.
 func (controlPlaneHandler *ControlPlaneHandler) handleListJobs(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListJobs invoked")
+	log.Trace("handling list jobs request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobRead) {
 		return
 	}
@@ -29,12 +29,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListJobs(responseWriter ht
 		Jobs:  jobs,
 		Count: len(jobs),
 	}
+	log.Debugf("retrieved %d job(s)", len(jobs))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listJobsResponse)
 }
 
 // handleCreateJob handles POST /v1/_/tasks/jobs creating a new recurring cron job.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateJob(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateJob invoked")
+	log.Trace("handling create job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobWrite) {
 		return
 	}
@@ -56,12 +57,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateJob(responseWriter h
 		return
 	}
 
+	log.Debugf("job %s successfully created", job.ID)
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, job)
 }
 
 // handleGetJob handles GET /v1/_/tasks/jobs/{id} returning a single job by UUID.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetJob invoked")
+	log.Trace("handling get job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobRead) {
 		return
 	}
@@ -83,12 +85,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http
 		return
 	}
 
+	log.Debugf("retrieved job %s", jobWithCountdown.ID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, jobWithCountdown)
 }
 
 // handleUpdateJob handles PATCH /v1/_/tasks/jobs/{id} updating an existing cron job.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateJob(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdateJob invoked")
+	log.Trace("handling update job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobWrite) {
 		return
 	}
@@ -120,12 +123,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateJob(responseWriter h
 		return
 	}
 
+	log.Debugf("job %s successfully updated", job.ID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, job)
 }
 
 // handleDeleteJob handles DELETE /v1/_/tasks/jobs/{id} removing a job and cancelling pending executions.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteJob(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteJob invoked")
+	log.Trace("handling delete job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobWrite) {
 		return
 	}
@@ -147,5 +151,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteJob(responseWriter h
 		return
 	}
 
+	log.Debugf("job %s successfully deleted", jobID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

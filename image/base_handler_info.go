@@ -77,6 +77,7 @@ func (baseHandler *BaseHandler) handleInfo(responseWriter http.ResponseWriter, r
 
 // handleInfoProbe handles POST /v1/image/info inspecting uploaded binary or multipart image data.
 func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling image info probe request")
 	infoOptions := NewDefaultInfoOptions()
 
 	contentType := request.Header.Get("Content-Type")

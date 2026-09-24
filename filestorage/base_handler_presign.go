@@ -18,7 +18,7 @@ const (
 
 // handlePresignURL handles POST /v1/file-storage/presign.
 func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handlePresignURL invoked")
+	log.Trace("handling presign URL request")
 	var presignURLInput PresignURLInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&presignURLInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")

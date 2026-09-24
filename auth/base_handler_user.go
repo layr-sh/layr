@@ -10,6 +10,7 @@ import (
 )
 
 func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get user profile request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -59,6 +60,7 @@ func (handler *BaseHandler) handleGetUser(responseWriter http.ResponseWriter, re
 }
 
 func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling update user properties request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -108,6 +110,7 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 }
 
 func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling delete user account request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -116,7 +119,6 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 	userID := authContext.UserID
 
 	ctx := request.Context()
-
 	var user User
 	var rawProperties []byte
 	_ = handler.kernel.DB().QueryRow(ctx, `
@@ -161,7 +163,7 @@ func (handler *BaseHandler) handleDeleteUser(responseWriter http.ResponseWriter,
 
 	handler.kernel.EventBus().Publish(ctx, NewUserDeletedEvent(user.ID, UserDeletedEventData(user)))
 
-	log.Debugf("user account %s deleted successfully", userID)
+	log.Debugf("user account %s successfully deleted", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 

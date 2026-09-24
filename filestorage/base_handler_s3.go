@@ -71,7 +71,7 @@ func (baseHandler *BaseHandler) authenticateS3(responseWriter http.ResponseWrite
 
 // handleListS3Buckets handles GET /v1/file-storage/s3.
 func (baseHandler *BaseHandler) handleListS3Buckets(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListS3Buckets invoked")
+	log.Trace("handling S3 list buckets request")
 	serviceAccount, authorized := baseHandler.authenticateS3(responseWriter, request, core.ScopeFileStorageBucketRead)
 	if !authorized {
 		return
@@ -118,7 +118,7 @@ func (baseHandler *BaseHandler) handleHeadS3Bucket(responseWriter http.ResponseW
 	}
 
 	bucketName := request.PathValue("bucket")
-	log.Tracef("handleHeadS3Bucket invoked for bucket %s", bucketName)
+	log.Tracef("handling S3 head bucket request: bucket=%s", bucketName)
 	ctx := request.Context()
 	_, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -137,7 +137,7 @@ func (baseHandler *BaseHandler) handleListS3Bucket(responseWriter http.ResponseW
 	}
 
 	bucketName := request.PathValue("bucket")
-	log.Tracef("handleListS3Bucket invoked for bucket %s", bucketName)
+	log.Tracef("handling S3 list bucket objects request: bucket=%s", bucketName)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -201,7 +201,7 @@ func (baseHandler *BaseHandler) handleDeleteMultipleS3Objects(responseWriter htt
 	}
 
 	bucketName := request.PathValue("bucket")
-	log.Tracef("handleDeleteMultipleS3Objects invoked for bucket %s", bucketName)
+	log.Tracef("handling S3 delete multiple objects request: bucket=%s", bucketName)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -258,7 +258,7 @@ func (baseHandler *BaseHandler) handleGetS3Object(responseWriter http.ResponseWr
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
-	log.Tracef("handleGetS3Object invoked for bucket=%s key=%s", bucketName, objectKey)
+	log.Tracef("handling S3 get object request: bucket=%s key=%s", bucketName, objectKey)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -322,7 +322,7 @@ func (baseHandler *BaseHandler) handleHeadS3Object(responseWriter http.ResponseW
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
-	log.Tracef("handleHeadS3Object invoked for bucket=%s key=%s", bucketName, objectKey)
+	log.Tracef("handling S3 head object request: bucket=%s key=%s", bucketName, objectKey)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -365,7 +365,7 @@ func (baseHandler *BaseHandler) handlePutS3Object(responseWriter http.ResponseWr
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
-	log.Tracef("handlePutS3Object invoked for bucket=%s key=%s", bucketName, objectKey)
+	log.Tracef("handling S3 put object request: bucket=%s key=%s", bucketName, objectKey)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -409,7 +409,7 @@ func (baseHandler *BaseHandler) handlePutS3Object(responseWriter http.ResponseWr
 
 // handlePostS3Object handles POST /v1/file-storage/s3/{bucket}/{key...} (multipart initiation or completion).
 func (baseHandler *BaseHandler) handlePostS3Object(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handlePostS3Object invoked")
+	log.Trace("handling S3 post object request")
 	values := request.URL.Query()
 	if values.Has("uploads") {
 		baseHandler.processCreateMultipartUpload(responseWriter, request)
@@ -438,7 +438,7 @@ func (baseHandler *BaseHandler) handleDeleteS3Object(responseWriter http.Respons
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
-	log.Tracef("handleDeleteS3Object invoked for bucket=%s key=%s", bucketName, objectKey)
+	log.Tracef("handling S3 delete object request: bucket=%s key=%s", bucketName, objectKey)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -474,7 +474,7 @@ func (baseHandler *BaseHandler) processCreateMultipartUpload(responseWriter http
 
 	bucketName := request.PathValue("bucket")
 	objectKey := request.PathValue("key")
-	log.Tracef("processCreateMultipartUpload invoked for bucket=%s key=%s", bucketName, objectKey)
+	log.Tracef("handling S3 initiate multipart upload request: bucket=%s key=%s", bucketName, objectKey)
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
 	if bucketErr != nil {
@@ -531,7 +531,7 @@ func (baseHandler *BaseHandler) processUploadPart(responseWriter http.ResponseWr
 		return
 	}
 
-	log.Tracef("processUploadPart invoked for uploadID=%s part=%d", uploadID, partNumber)
+	log.Tracef("handling S3 upload part request: uploadID=%s part=%d", uploadID, partNumber)
 
 	chunkData, readErr := io.ReadAll(request.Body)
 	if readErr != nil {
@@ -576,7 +576,7 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 		return
 	}
 
-	log.Tracef("processCompleteMultipartUpload invoked for uploadID=%s bucket=%s key=%s", uploadID, bucketName, objectKey)
+	log.Tracef("handling S3 complete multipart upload request: uploadID=%s bucket=%s key=%s", uploadID, bucketName, objectKey)
 
 	ctx := request.Context()
 	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
@@ -685,7 +685,7 @@ func (baseHandler *BaseHandler) processAbortMultipartUpload(responseWriter http.
 		return
 	}
 
-	log.Tracef("processAbortMultipartUpload invoked for uploadID=%s", uploadID)
+	log.Tracef("handling S3 abort multipart upload request: uploadID=%s", uploadID)
 
 	ctx := request.Context()
 	_, _ = baseHandler.kernel.DB().Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)

@@ -17,6 +17,7 @@ const (
 )
 
 func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling send OTP request")
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp send rejected: OTP authentication is disabled in configuration")
@@ -127,6 +128,7 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 }
 
 func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling verify OTP request")
 	config := handler.configManager.Get()
 	if !config.EmailOTP.Enabled && !config.SMSOTP.Enabled {
 		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", "otp verify rejected: OTP authentication is disabled in configuration")

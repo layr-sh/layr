@@ -15,7 +15,7 @@ import (
 
 // handleGetConfig handles GET /v1/_/auth/config returning sanitized config without raw secrets.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Tracef("handleGetConfig invoked")
+	log.Trace("handling get auth configuration request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthConfigRead) {
 		return
@@ -27,7 +27,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 
 // handleUpdateConfig handles PUT /v1/_/auth/config updating runtime config with envelope encryption.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Tracef("handleUpdateConfig invoked")
+	log.Trace("handling update auth configuration request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeAuthConfigWrite) {
 		return
@@ -273,6 +273,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	controlPlaneHandler.passkeyManager = passkey.NewManager(inputConfig.Passkeys.RelyingPartyID, inputConfig.Passkeys.RelyingPartyName)
 	controlPlaneHandler.totpManager = totp.NewManager(inputConfig.MFA.Issuer)
 
-	log.Debugf("handleUpdateConfig successfully saved and sanitized configuration")
+	log.Debug("successfully updated auth configuration")
 	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.GetUnencrypted())
 }

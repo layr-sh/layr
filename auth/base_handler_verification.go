@@ -13,7 +13,7 @@ import (
 )
 
 func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling user email verification request")
+	log.Trace("handling user email verification request")
 	var requestEmailVerificationInput RequestEmailVerificationInput
 	_ = json.NewDecoder(request.Body).Decode(&requestEmailVerificationInput)
 
@@ -100,6 +100,7 @@ func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.R
 }
 
 func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling verify email request")
 	var confirmEmailVerificationInput ConfirmEmailVerificationInput
 	if err := json.NewDecoder(request.Body).Decode(&confirmEmailVerificationInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
@@ -243,7 +244,7 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 }
 
 func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Debug("handling user phone verification request")
+	log.Trace("handling user phone verification request")
 	var requestPhoneVerificationInput RequestPhoneVerificationInput
 	_ = json.NewDecoder(request.Body).Decode(&requestPhoneVerificationInput)
 
@@ -340,6 +341,7 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 }
 
 func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling verify phone request")
 	var confirmPhoneVerificationInput ConfirmPhoneVerificationInput
 	if err := json.NewDecoder(request.Body).Decode(&confirmPhoneVerificationInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
@@ -490,6 +492,7 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 }
 
 func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling update user email request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
@@ -576,6 +579,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 }
 
 func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling update user phone request")
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")

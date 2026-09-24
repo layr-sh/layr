@@ -24,7 +24,7 @@ import (
 	"layr.sh/logger"
 )
 
-var log = logger.New("filestorage/s3sigv4")
+var log = logger.New("filestorage.s3sigv4")
 
 // Standard S3 SigV4 error definitions.
 var (

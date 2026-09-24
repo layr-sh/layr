@@ -9,6 +9,7 @@ import (
 
 // /metrics - Minimal Prometheus exposition
 func (server *Server) handleGetMetrics(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling get prometheus metrics request")
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 

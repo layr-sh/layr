@@ -11,7 +11,7 @@ import (
 
 // handleGetConfig handles GET /v1/_/tasks/config returning dynamic runtime configuration.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetConfig invoked")
+	log.Trace("handling get tasks configuration request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksConfigRead) {
 		return
 	}
@@ -22,7 +22,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConfig(responseWriter h
 
 // handleUpdateConfig handles PUT /v1/_/tasks/config updating dynamic runtime configuration.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdateConfig invoked")
+	log.Trace("handling update tasks configuration request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksConfigWrite) {
 		return
 	}
@@ -44,5 +44,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
+	log.Debug("successfully updated tasks configuration")
 	core.WriteJSONResponse(responseWriter, http.StatusOK, newConfig)
 }

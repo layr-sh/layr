@@ -10,7 +10,7 @@ import (
 
 // handleListTables lists all tables in the allowed schemas.
 func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListTables invoked")
+	log.Trace("handling list tables request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
@@ -30,7 +30,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter 
 
 // handleCreateTable creates a new database table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateTable invoked")
+	log.Trace("handling create table request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -66,7 +66,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateTable(responseWriter
 
 // handleGetTable returns the schema summary for a specific table.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleGetTable invoked")
+	log.Trace("handling get table request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
@@ -87,7 +87,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetTable(responseWriter ht
 
 // handleDeleteTable drops a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteTable invoked")
+	log.Trace("handling delete table request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -122,7 +122,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteTable(responseWriter
 
 // handleTruncateTable truncates all rows in a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleTruncateTable invoked")
+	log.Trace("handling truncate table request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return

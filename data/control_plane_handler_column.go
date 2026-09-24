@@ -10,7 +10,7 @@ import (
 
 // handleCreateColumn adds a new column to a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateColumn invoked")
+	log.Trace("handling create column request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -49,7 +49,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateColumn(responseWrite
 
 // handleUpdateColumn alters a column definition.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleUpdateColumn invoked")
+	log.Trace("handling update column request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -89,7 +89,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateColumn(responseWrite
 
 // handleDeleteColumn drops a column from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteColumn(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteColumn invoked")
+	log.Trace("handling delete column request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return

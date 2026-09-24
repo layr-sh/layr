@@ -59,6 +59,8 @@ func WriteErrorResponse(responseWriter http.ResponseWriter, request *http.Reques
 		} else {
 			log.Debug(debugMessage)
 		}
+	} else if status >= http.StatusInternalServerError {
+		log.Errorf("internal server error (%d): %s", status, detail)
 	}
 
 	_ = json.NewEncoder(responseWriter).Encode(errorResponse)
@@ -99,6 +101,8 @@ func WriteOAuthErrorResponse(responseWriter http.ResponseWriter, status int, oau
 		} else {
 			log.Debug(debugMessage)
 		}
+	} else if status >= http.StatusInternalServerError {
+		log.Errorf("internal oauth error (%d): %s", status, errorDescription)
 	}
 
 	_ = json.NewEncoder(responseWriter).Encode(oauthErrorResponse)

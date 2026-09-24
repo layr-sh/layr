@@ -10,7 +10,7 @@ import (
 
 // handleListIndexes lists all indexes on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleListIndexes invoked")
+	log.Trace("handling list indexes request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaRead) {
 		return
@@ -34,7 +34,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 
 // handleCreateIndex creates a new index on a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleCreateIndex invoked")
+	log.Trace("handling create index request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
@@ -73,7 +73,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateIndex(responseWriter
 
 // handleDeleteIndex drops an index from a table.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteIndex(responseWriter http.ResponseWriter, request *http.Request) {
-	log.Trace("handleDeleteIndex invoked")
+	log.Trace("handling delete index request")
 
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeDataSchemaWrite) {
 		return
