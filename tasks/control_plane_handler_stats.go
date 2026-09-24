@@ -15,11 +15,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetStats(responseWriter ht
 	}
 
 	requestCtx := request.Context()
-	statsResponse, err := controlPlaneHandler.jobManager.GetStats(requestCtx)
+	getStatsResponse, err := controlPlaneHandler.jobManager.GetStats(requestCtx)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	core.WriteJSONResponse(responseWriter, http.StatusOK, statsResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getStatsResponse)
 }

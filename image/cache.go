@@ -150,7 +150,7 @@ func (cacheManager *CacheManager) Set(ctx context.Context, cacheKey string, sour
 }
 
 // Stats returns real-time cache performance and memory allocation metrics.
-func (cacheManager *CacheManager) Stats() StatsResponse {
+func (cacheManager *CacheManager) Stats() GetStatsResponse {
 	hits := cacheManager.cacheHitsInt64.Load()
 	misses := cacheManager.cacheMissesInt64.Load()
 	total := cacheManager.totalRequestsInt64.Load()
@@ -163,7 +163,7 @@ func (cacheManager *CacheManager) Stats() StatsResponse {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	return StatsResponse{
+	return GetStatsResponse{
 		CacheHits:        hits,
 		CacheMisses:      misses,
 		CacheHitRatio:    ratio,

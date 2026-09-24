@@ -25,7 +25,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 3. Inspect Image Metadata (GET)
-	core.GetRoute[Info](router, "/v1/image/info/{signature}/{path...}", service.baseHandler.handleInfo,
+	core.GetRoute[GetInfoResponse](router, "/v1/image/info/{signature}/{path...}", service.baseHandler.handleGetInfo,
 		core.RouteTag("Image Data Plane"),
 		core.RouteSummary("Inspect image metadata by path"),
 		core.RouteDescription("Extracts dimensions, format, colorspace, EXIF, and structural metadata from a remote or local image path."),
@@ -35,7 +35,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 4. Inspect Image Metadata (POST binary)
-	core.PostRoute[Info, core.Empty](router, "/v1/image/info", service.baseHandler.handleInfoProbe,
+	core.PostRoute[GetInfoResponse, core.Empty](router, "/v1/image/info", service.baseHandler.handleProbeInfo,
 		core.RouteTag("Image Data Plane"),
 		core.RouteSummary("Inspect image metadata from binary upload"),
 		core.RouteDescription("Extracts dimensions, format, colorspace, EXIF, and structural metadata from an uploaded image payload."),
@@ -119,7 +119,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 4. Performance & Telemetry Statistics
-	core.GetRoute[StatsResponse](router, "/v1/_/image/stats", service.controlPlaneHandler.handleGetStats,
+	core.GetRoute[GetStatsResponse](router, "/v1/_/image/stats", service.controlPlaneHandler.handleGetStats,
 		core.RouteTag("Image Control Plane"),
 		core.RouteSummary("Get image service telemetry statistics"),
 		core.RouteDescription("Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics."),

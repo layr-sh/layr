@@ -46,8 +46,8 @@ type SignURLResponse struct {
 	Signature string `json:"signature"`
 }
 
-// StatsResponse represents real-time cache performance and throughput metrics.
-type StatsResponse struct {
+// GetStatsResponse represents real-time cache performance and throughput metrics.
+type GetStatsResponse struct {
 	CacheHits        int64   `json:"cache_hits"`
 	CacheMisses      int64   `json:"cache_misses"`
 	CacheHitRatio    float64 `json:"cache_hit_ratio"`

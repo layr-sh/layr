@@ -53,12 +53,12 @@ func TestImageCacheUnit(t *testing.T) {
 		require.Equal(t, eTag, retrievedCachedImage.ETag)
 
 		// Check Stats
-		statsResponse := cacheManager.Stats()
-		require.Equal(t, int64(1), statsResponse.CacheHits)
-		require.Equal(t, int64(1), statsResponse.CacheMisses)
-		require.Equal(t, int64(2), statsResponse.TotalRequests)
-		require.Equal(t, 0.5, statsResponse.CacheHitRatio)
-		require.Equal(t, int64(len(payload)), statsResponse.BytesServed)
+		getStatsResponse := cacheManager.Stats()
+		require.Equal(t, int64(1), getStatsResponse.CacheHits)
+		require.Equal(t, int64(1), getStatsResponse.CacheMisses)
+		require.Equal(t, int64(2), getStatsResponse.TotalRequests)
+		require.Equal(t, 0.5, getStatsResponse.CacheHitRatio)
+		require.Equal(t, int64(len(payload)), getStatsResponse.BytesServed)
 	})
 
 	t.Run("lru eviction policy", func(t *testing.T) {

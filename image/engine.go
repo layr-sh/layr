@@ -129,7 +129,7 @@ func (engine *Engine) Transform(inputReader io.Reader, processingOptions Process
 }
 
 // Inspect introspects the image input stream and returns detailed dimensions and format metadata.
-func (engine *Engine) Inspect(inputReader io.Reader, infoOptions InfoOptions) (*Info, error) {
+func (engine *Engine) Inspect(inputReader io.Reader, infoOptions InfoOptions) (*GetInfoResponse, error) {
 	bufferedBytes, readErr := io.ReadAll(inputReader)
 	if readErr != nil {
 		return nil, fmt.Errorf("failed reading image stream for inspection: %w", readErr)
@@ -146,7 +146,7 @@ func (engine *Engine) Inspect(inputReader io.Reader, infoOptions InfoOptions) (*
 		hasAlpha = false
 	}
 
-	info := &Info{
+	getInfoResponse := &GetInfoResponse{
 		Orientation: 1,
 		Colorspace:  "sRGB",
 		Bands:       3,
@@ -157,30 +157,30 @@ func (engine *Engine) Inspect(inputReader io.Reader, infoOptions InfoOptions) (*
 	}
 
 	if infoOptions.Size {
-		info.Size = int64(len(bufferedBytes))
+		getInfoResponse.Size = int64(len(bufferedBytes))
 	}
 	if infoOptions.Format {
-		info.Format = formatName
-		info.MIMEType = resolveMIMEType(formatName)
+		getInfoResponse.Format = formatName
+		getInfoResponse.MIMEType = resolveMIMEType(formatName)
 	}
 	if infoOptions.Dimensions {
-		info.Width = imageConfig.Width
-		info.Height = imageConfig.Height
+		getInfoResponse.Width = imageConfig.Width
+		getInfoResponse.Height = imageConfig.Height
 	}
 	if !infoOptions.Alpha {
-		info.Alpha = nil
+		getInfoResponse.Alpha = nil
 	}
 	if !infoOptions.Colorspace {
-		info.Colorspace = ""
+		getInfoResponse.Colorspace = ""
 	}
 	if !infoOptions.Bands {
-		info.Bands = 0
+		getInfoResponse.Bands = 0
 	}
 	if !infoOptions.Pages {
-		info.Pages = 0
+		getInfoResponse.Pages = 0
 	}
 
-	return info, nil
+	return getInfoResponse, nil
 }
 
 func (engine *Engine) decodeImage(inputReader io.Reader) (image.Image, string, error) {

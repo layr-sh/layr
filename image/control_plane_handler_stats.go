@@ -13,7 +13,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetStats(responseWriter ht
 		return
 	}
 
-	statsResponse := controlPlaneHandler.cacheManager.Stats()
-	log.Debugf("retrieved cache statistics (hits: %d, misses: %d, ratio: %.2f)", statsResponse.CacheHits, statsResponse.CacheMisses, statsResponse.CacheHitRatio)
-	core.WriteJSONResponse(responseWriter, http.StatusOK, statsResponse)
+	getStatsResponse := controlPlaneHandler.cacheManager.Stats()
+	log.Debugf("retrieved cache statistics (hits: %d, misses: %d, ratio: %.2f)", getStatsResponse.CacheHits, getStatsResponse.CacheMisses, getStatsResponse.CacheHitRatio)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getStatsResponse)
 }

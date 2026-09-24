@@ -86,19 +86,19 @@ func TestTasksJobManagerIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// GetJob returns job with countdown
-		jobWithCountdown, err := jobManager.GetJob(ctx, createdJob.ID)
+		getJobResponse, err := jobManager.GetJob(ctx, createdJob.ID)
 		require.NoError(t, err)
-		require.Equal(t, createdJob.ID, jobWithCountdown.ID)
-		require.False(t, jobWithCountdown.IsEnabled)
-		require.Positive(t, jobWithCountdown.NextRunCountdownSeconds)
+		require.Equal(t, createdJob.ID, getJobResponse.ID)
+		require.False(t, getJobResponse.IsEnabled)
+		require.Positive(t, getJobResponse.NextRunCountdownSeconds)
 
 		// GetJob for past next_run_at returns countdown 0
 		_, err = kernel.DB().Exec(ctx, "UPDATE tasks.jobs SET next_run_at = $1 WHERE id = $2", time.Now().UTC().Add(-time.Hour), createdJob.ID)
 		require.NoError(t, err)
 
-		zeroCountdownJobWithCountdown, err := jobManager.GetJob(ctx, createdJob.ID)
+		zeroCountdownGetJobResponse, err := jobManager.GetJob(ctx, createdJob.ID)
 		require.NoError(t, err)
-		require.Equal(t, int64(0), zeroCountdownJobWithCountdown.NextRunCountdownSeconds)
+		require.Equal(t, int64(0), zeroCountdownGetJobResponse.NextRunCountdownSeconds)
 
 		// GetJob non-existent ID
 		_, notFoundErr := jobManager.GetJob(ctx, uuid.NewV7())
@@ -284,10 +284,10 @@ func TestTasksJobManagerIntegration(t *testing.T) {
 
 	// --- 6. Telemetry Stats ---
 	t.Run("GetStats telemetry metrics calculation", func(t *testing.T) {
-		statsResponse, err := jobManager.GetStats(ctx)
+		getStatsResponse, err := jobManager.GetStats(ctx)
 		require.NoError(t, err)
-		require.NotNil(t, statsResponse)
-		require.Positive(t, statsResponse.TotalJobs)
+		require.NotNil(t, getStatsResponse)
+		require.Positive(t, getStatsResponse.TotalJobs)
 	})
 
 	// --- 7. DeleteJob ---
@@ -416,11 +416,11 @@ func TestTasksJobManagerIntegration(t *testing.T) {
 
 		// GetStats with completed executions calculates positive success rate
 		_, _ = kernel.DB().Exec(ctx, "INSERT INTO tasks.executions (status, run_at, payload) VALUES ('completed', clock_timestamp(), '{}'::jsonb)")
-		statsResponse, err := jobManager.GetStats(ctx)
+		getStatsResponse, err := jobManager.GetStats(ctx)
 		require.NoError(t, err)
-		require.NotNil(t, statsResponse)
-		require.Positive(t, statsResponse.CompletedExecutions)
-		require.Positive(t, statsResponse.SuccessRate)
+		require.NotNil(t, getStatsResponse)
+		require.Positive(t, getStatsResponse.CompletedExecutions)
+		require.Positive(t, getStatsResponse.SuccessRate)
 
 		// GetStats executions query failure
 		_, _ = kernel.DB().Exec(ctx, "ALTER TABLE tasks.executions RENAME TO executions_backup")

@@ -8,8 +8,8 @@ import (
 	"layr.sh/core"
 )
 
-// handleInfo handles GET /v1/image/info/{signature}/{path...}.
-func (baseHandler *BaseHandler) handleInfo(responseWriter http.ResponseWriter, request *http.Request) {
+// handleGetInfo handles GET /v1/image/info/{signature}/{path...}.
+func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	signature := request.PathValue("signature")
 	rawPath := request.PathValue("path")
 	log.Tracef("handling image info request: path=%s", rawPath)
@@ -59,7 +59,7 @@ func (baseHandler *BaseHandler) handleInfo(responseWriter http.ResponseWriter, r
 	defer func() { _ = bodyReadCloser.Close() }()
 
 	// 4. Introspect Metadata
-	info, inspectErr := baseHandler.engine.Inspect(bodyReadCloser, infoOptions)
+	getInfoResponse, inspectErr := baseHandler.engine.Inspect(bodyReadCloser, infoOptions)
 	if inspectErr != nil {
 		baseHandler.writeInfoError(responseWriter, request, sourceURL, http.StatusUnprocessableEntity, inspectErr.Error())
 		return
@@ -67,16 +67,16 @@ func (baseHandler *BaseHandler) handleInfo(responseWriter http.ResponseWriter, r
 
 	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent(sourceURL, InspectCompletedEventData{
 		SourceURL: sourceURL,
-		Format:    info.Format,
-		ByteSize:  info.Size,
+		Format:    getInfoResponse.Format,
+		ByteSize:  getInfoResponse.Size,
 	}))
 
-	log.Debugf("image metadata inspection succeeded for %s: format=%s dimensions=%dx%d", sourceURL, info.Format, info.Width, info.Height)
-	core.WriteJSONResponse(responseWriter, http.StatusOK, info)
+	log.Debugf("image metadata inspection succeeded for %s: format=%s dimensions=%dx%d", sourceURL, getInfoResponse.Format, getInfoResponse.Width, getInfoResponse.Height)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getInfoResponse)
 }
 
-// handleInfoProbe handles POST /v1/image/info inspecting uploaded binary or multipart image data.
-func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWriter, request *http.Request) {
+// handleProbeInfo handles POST /v1/image/info inspecting uploaded binary or multipart image data.
+func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling image info probe request")
 	infoOptions := NewDefaultInfoOptions()
 
@@ -99,7 +99,7 @@ func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWrit
 		}
 		defer func() { _ = file.Close() }()
 
-		info, inspectErr := baseHandler.engine.Inspect(file, infoOptions)
+		getInfoResponse, inspectErr := baseHandler.engine.Inspect(file, infoOptions)
 		if inspectErr != nil {
 			baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusUnprocessableEntity, inspectErr.Error())
 			return
@@ -107,19 +107,19 @@ func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWrit
 
 		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
 			SourceURL: "upload",
-			Format:    info.Format,
-			ByteSize:  info.Size,
+			Format:    getInfoResponse.Format,
+			ByteSize:  getInfoResponse.Size,
 		}))
 
-		log.Debugf("multipart image info probe succeeded: format=%s dimensions=%dx%d", info.Format, info.Width, info.Height)
-		core.WriteJSONResponse(responseWriter, http.StatusOK, info)
+		log.Debugf("multipart image info probe succeeded: format=%s dimensions=%dx%d", getInfoResponse.Format, getInfoResponse.Width, getInfoResponse.Height)
+		core.WriteJSONResponse(responseWriter, http.StatusOK, getInfoResponse)
 		return
 	}
 
 	// Raw binary body inspection
 	log.Trace("handling raw binary image info probe request")
 	defer func() { _ = request.Body.Close() }()
-	info, inspectErr := baseHandler.engine.Inspect(request.Body, infoOptions)
+	getInfoResponse, inspectErr := baseHandler.engine.Inspect(request.Body, infoOptions)
 	if inspectErr != nil {
 		baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusUnprocessableEntity, inspectErr.Error())
 		return
@@ -127,16 +127,15 @@ func (baseHandler *BaseHandler) handleInfoProbe(responseWriter http.ResponseWrit
 
 	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
 		SourceURL: "upload",
-		Format:    info.Format,
-		ByteSize:  info.Size,
+		Format:    getInfoResponse.Format,
+		ByteSize:  getInfoResponse.Size,
 	}))
 
-	log.Debugf("raw binary image info probe succeeded: format=%s dimensions=%dx%d", info.Format, info.Width, info.Height)
-	core.WriteJSONResponse(responseWriter, http.StatusOK, info)
+	log.Debugf("raw binary image info probe succeeded: format=%s dimensions=%dx%d", getInfoResponse.Format, getInfoResponse.Width, getInfoResponse.Height)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, getInfoResponse)
 }
 
 func (baseHandler *BaseHandler) writeInfoError(responseWriter http.ResponseWriter, request *http.Request, sourceURL string, statusCode int, message string) {
-	log.Debugf("image info error: status=%d message=%s source=%s", statusCode, message, sourceURL)
 	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
 		SourceURL:  sourceURL,
 		Reason:     message,

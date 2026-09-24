@@ -51,10 +51,10 @@ func TestImageControlPlaneHandlerStatsUnit(t *testing.T) {
 		controlPlaneHandler.handleGetStats(authedResponseRecorder, authedRequest)
 		require.Equal(t, http.StatusOK, authedResponseRecorder.Code)
 
-		var statsResponse StatsResponse
-		unmarshalErr := json.Unmarshal(authedResponseRecorder.Body.Bytes(), &statsResponse)
+		var getStatsResponse GetStatsResponse
+		unmarshalErr := json.Unmarshal(authedResponseRecorder.Body.Bytes(), &getStatsResponse)
 		require.NoError(t, unmarshalErr)
-		require.GreaterOrEqual(t, statsResponse.CacheHits, int64(0))
-		require.GreaterOrEqual(t, statsResponse.CacheMisses, int64(0))
+		require.GreaterOrEqual(t, getStatsResponse.CacheHits, int64(0))
+		require.GreaterOrEqual(t, getStatsResponse.CacheMisses, int64(0))
 	})
 }

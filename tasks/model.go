@@ -40,8 +40,8 @@ type Job struct {
 	LastUpdatedAt  time.Time       `json:"last_updated_at"`
 }
 
-// JobWithCountdown augments Job with next run countdown in seconds.
-type JobWithCountdown struct {
+// GetJobResponse augments Job with next run countdown in seconds.
+type GetJobResponse struct {
 	Job
 	NextRunCountdownSeconds int64 `json:"next_run_countdown_seconds"`
 }
@@ -68,8 +68,8 @@ type UpdateJobInput struct {
 
 // ListJobsResponse represents the output of listing cron jobs.
 type ListJobsResponse struct {
-	Jobs  []JobWithCountdown `json:"jobs"`
-	Count int                `json:"count"`
+	Jobs  []GetJobResponse `json:"jobs"`
+	Count int              `json:"count"`
 }
 
 // Execution represents an execution task queued in tasks.executions.
@@ -145,8 +145,8 @@ type RetryDLQResponse struct {
 	Message     string    `json:"message"`
 }
 
-// StatsResponse represents service operational telemetry.
-type StatsResponse struct {
+// GetStatsResponse represents service operational telemetry.
+type GetStatsResponse struct {
 	TotalJobs           int     `json:"total_jobs"`
 	ActiveJobs          int     `json:"active_jobs"`
 	PausedJobs          int     `json:"paused_jobs"`
