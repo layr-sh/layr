@@ -18,6 +18,70 @@ func (brokenBodyReader) Read(_ []byte) (int, error) {
 	return 0, errors.New("simulated read error")
 }
 
+func TestAuthConfigValidationAndContractUnit(t *testing.T) {
+	if ConfigKey != "runtime" {
+		t.Fatalf("expected ConfigKey to be 'runtime', got %q", ConfigKey)
+	}
+
+	defaultConfig := DefaultConfig()
+	if err := defaultConfig.Validate(); err != nil {
+		t.Fatalf("expected default config to be valid, got: %v", err)
+	}
+
+	invalidConfig := defaultConfig
+	invalidConfig.Sessions.AccessTokenExpirySeconds = -1
+	if err := invalidConfig.Validate(); err == nil {
+		t.Fatal("expected error on negative access token expiry")
+	}
+
+	invalidRefreshConfig := defaultConfig
+	invalidRefreshConfig.Sessions.RefreshTokenExpirySeconds = -1
+	if err := invalidRefreshConfig.Validate(); err == nil {
+		t.Fatal("expected error on negative refresh token expiry")
+	}
+
+	invalidIdleConfig := defaultConfig
+	invalidIdleConfig.Sessions.IdleTimeoutSeconds = -1
+	if err := invalidIdleConfig.Validate(); err == nil {
+		t.Fatal("expected error on negative idle timeout")
+	}
+
+	invalidPasswordConfig := defaultConfig
+	invalidPasswordConfig.Password.MinLength = -1
+	if err := invalidPasswordConfig.Validate(); err == nil {
+		t.Fatal("expected error on negative password min length")
+	}
+
+	configManager := NewConfigManager(core.SetupTestKernelWithBrokenDB(t, Migrations))
+	if err := configManager.Set(context.Background(), invalidConfig); err == nil || !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("expected ErrInvalidConfig when calling Set with invalid config, got: %v", err)
+	}
+
+	invalidBotConfig := defaultConfig
+	invalidBotConfig.Threat.BotProtection.Enabled = true
+	invalidBotConfig.Threat.BotProtection.Provider = "unsupported-provider"
+	if err := invalidBotConfig.Validate(); err == nil {
+		t.Fatal("expected error on unsupported bot protection provider")
+	}
+
+	invalidBotSecretConfig := defaultConfig
+	invalidBotSecretConfig.Threat.BotProtection.Enabled = true
+	invalidBotSecretConfig.Threat.BotProtection.Provider = "turnstile"
+	invalidBotSecretConfig.Threat.BotProtection.SecretKey = ""
+	if err := invalidBotSecretConfig.Validate(); err == nil {
+		t.Fatal("expected error on missing bot protection secret key")
+	}
+
+	invalidBotModeConfig := defaultConfig
+	invalidBotModeConfig.Threat.BotProtection.Enabled = true
+	invalidBotModeConfig.Threat.BotProtection.Provider = "turnstile"
+	invalidBotModeConfig.Threat.BotProtection.SecretKey = "dummy-secret"
+	invalidBotModeConfig.Threat.BotProtection.Mode = "invalid-mode"
+	if err := invalidBotModeConfig.Validate(); err == nil {
+		t.Fatal("expected error on invalid bot protection mode")
+	}
+}
+
 func TestAuthDefaultConfigUnit(t *testing.T) {
 	authConfig := DefaultConfig()
 
@@ -67,7 +131,7 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 	emptyTemplateConfig := authConfig
 	emptyTemplateConfig.EmailDispatcher.Templates = EmailDispatcherTemplatesConfig{}
 	emptyTemplateConfig.SMSDispatcher.Templates = SMSDispatcherTemplatesConfig{}
-	configManager.Set(emptyTemplateConfig)
+	configManager.SetMemoryConfig(emptyTemplateConfig)
 	if configManager.Get().EmailDispatcher.Templates.EmailVerification.Subject == "" || configManager.Get().SMSDispatcher.Templates.PhoneVerification.Text == "" || configManager.Get().SMSDispatcher.Templates.PasswordReset.Text == "" {
 		t.Fatal("expected Set to restore default templates when empty")
 	}
@@ -81,12 +145,12 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	brokenConfigManager := NewConfigManager(brokenKernel)
 
-	// Test Load and Save on broken pool (should return error)
+	// Test Load and Set on broken pool (should return error)
 	if loadErr := brokenConfigManager.Load(context.Background()); loadErr == nil {
 		t.Fatal("expected error on broken pool Load")
 	}
-	if saveErr := brokenConfigManager.Save(context.Background(), DefaultConfig()); saveErr == nil {
-		t.Fatal("expected error on broken pool Save")
+	if setErr := brokenConfigManager.Set(context.Background(), DefaultConfig()); setErr == nil {
+		t.Fatal("expected error on broken pool Set")
 	}
 
 	configManager := NewConfigManager(kernel)
@@ -96,13 +160,13 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		t.Fatalf("expected default min length 8, got: %d", initialConfig.Password.MinLength)
 	}
 
-	// Test Set with zero/negative fallbacks
+	// Test SetMemoryConfig with zero/negative fallbacks
 	var emptyConfig Config
 	emptyConfig.RateLimiting.Enabled = false
 	emptyConfig.RateLimiting.MaxSignInAttempts = 0
 	emptyConfig.Cache.FastPathSessionsEnabled = false
 	emptyConfig.Cache.SessionTTLSeconds = 0
-	configManager.Set(emptyConfig)
+	configManager.SetMemoryConfig(emptyConfig)
 
 	fallbackConfig := configManager.Get()
 	if fallbackConfig.Sessions.AccessTokenExpirySeconds != 900 || fallbackConfig.Sessions.RefreshTokenExpirySeconds != 2592000 {
@@ -117,7 +181,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	var adaptiveConfig Config
 	adaptiveConfig.MFA.Policy = "adaptive"
-	configManager.Set(adaptiveConfig)
+	configManager.SetMemoryConfig(adaptiveConfig)
 	adaptiveSavedConfig := configManager.Get()
 	if len(adaptiveSavedConfig.MFA.RiskTriggers) != 3 {
 		t.Fatalf("expected 3 default risk triggers for adaptive MFA, got: %+v", adaptiveSavedConfig.MFA.RiskTriggers)
@@ -143,7 +207,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		ClientID:     "google-client-id",
 		ClientSecret: encryptedPassword,
 	}
-	configManager.Set(withClientSecretConfig)
+	configManager.SetMemoryConfig(withClientSecretConfig)
 
 	unencryptedConfig := configManager.GetUnencrypted()
 	if unencryptedConfig.EmailDispatcher.SMTP.Password != "" || !unencryptedConfig.EmailDispatcher.SMTP.PasswordConfigured {
@@ -215,6 +279,14 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	controlPlaneHandler.handleUpdateConfig(invalidJSONPutResponseRecorder, invalidJSONPutRequest)
 	if invalidJSONPutResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid JSON in handleUpdateConfig, got: %d", invalidJSONPutResponseRecorder.Code)
+	}
+
+	// Test handleUpdateConfig invalid configuration -> 400
+	invalidConfigPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{"sessions":{"access_token_expiry_seconds":-1}}`))
+	invalidConfigPutResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(invalidConfigPutResponseRecorder, invalidConfigPutRequest)
+	if invalidConfigPutResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid config in handleUpdateConfig, got: %d", invalidConfigPutResponseRecorder.Code)
 	}
 
 	// Test handleUpdateConfig body read error -> 400
@@ -686,7 +758,7 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 		oauthProviderConfig.Enabled = false
 		initialConfig.OAuthProviders[k] = oauthProviderConfig
 	}
-	configManager.Set(initialConfig)
+	configManager.SetMemoryConfig(initialConfig)
 
 	testCases := []struct {
 		name        string
@@ -862,16 +934,16 @@ func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
 		t.Fatalf("expected MFA issuer 'Custom Company', got: %s", defaultConfig.MFA.Issuer)
 	}
 
-	// In Set(): when empty, fallback to project name
+	// In SetMemoryConfig(): when empty, fallback to project name
 	var inputConfig Config
 	inputConfig.Passkeys.RelyingPartyName = ""
 	inputConfig.MFA.Issuer = ""
-	configManager.Set(inputConfig)
+	configManager.SetMemoryConfig(inputConfig)
 	if configManager.Get().Passkeys.RelyingPartyName != "Custom Company" {
-		t.Fatalf("expected Set() to fallback to 'Custom Company', got: %s", configManager.Get().Passkeys.RelyingPartyName)
+		t.Fatalf("expected SetMemoryConfig() to fallback to 'Custom Company', got: %s", configManager.Get().Passkeys.RelyingPartyName)
 	}
 	if configManager.Get().MFA.Issuer != "Custom Company" {
-		t.Fatalf("expected Set() MFA issuer fallback to 'Custom Company', got: %s", configManager.Get().MFA.Issuer)
+		t.Fatalf("expected SetMemoryConfig() MFA issuer fallback to 'Custom Company', got: %s", configManager.Get().MFA.Issuer)
 	}
 
 	// Case 2: Empty project name -> falls back to "Layr Auth"
@@ -889,12 +961,12 @@ func TestAuthConfigRelyingPartyNameFallbackUnit(t *testing.T) {
 
 	inputConfig.Passkeys.RelyingPartyName = ""
 	inputConfig.MFA.Issuer = ""
-	configManager.Set(inputConfig)
+	configManager.SetMemoryConfig(inputConfig)
 	if configManager.Get().Passkeys.RelyingPartyName != "Layr Auth" {
-		t.Fatalf("expected Set() to fallback to 'Layr Auth', got: %s", configManager.Get().Passkeys.RelyingPartyName)
+		t.Fatalf("expected SetMemoryConfig() to fallback to 'Layr Auth', got: %s", configManager.Get().Passkeys.RelyingPartyName)
 	}
 	if configManager.Get().MFA.Issuer != "Layr Auth" {
-		t.Fatalf("expected Set() MFA issuer to fallback to 'Layr Auth', got: %s", configManager.Get().MFA.Issuer)
+		t.Fatalf("expected SetMemoryConfig() MFA issuer to fallback to 'Layr Auth', got: %s", configManager.Get().MFA.Issuer)
 	}
 }
 
@@ -962,7 +1034,7 @@ func TestAuthConfigOIDCClientSignOutFieldsUnit(t *testing.T) {
 	// 4. Set and Get preservation, and GetUnencrypted
 	initialConfig := DefaultConfig()
 	initialConfig.OIDC.Clients = []OIDCClientConfig{standardOIDCClientConfig}
-	configManager.Set(initialConfig)
+	configManager.SetMemoryConfig(initialConfig)
 
 	retrievedConfig := configManager.Get()
 	if len(retrievedConfig.OIDC.Clients) != 1 {
@@ -1018,7 +1090,7 @@ func TestAuthConfigThreatUnit(t *testing.T) {
 	customConfig := defaultConfig
 	customConfig.Threat.BotProtection.Mode = ""
 	customConfig.Threat.BotProtection.AdaptiveFailedAttempts = 0
-	configManager.Set(customConfig)
+	configManager.SetMemoryConfig(customConfig)
 
 	activeConfig := configManager.Get()
 	if activeConfig.Threat.BotProtection.Mode != "adaptive" {
@@ -1038,7 +1110,7 @@ func TestAuthConfigThreatUnit(t *testing.T) {
 	}
 
 	customConfig.Threat.BotProtection.SecretKey = "enc:v1:test-secret"
-	configManager.Set(customConfig)
+	configManager.SetMemoryConfig(customConfig)
 
 	setUnencryptedConfig := configManager.GetUnencrypted()
 	if !setUnencryptedConfig.Threat.BotProtection.SecretKeyConfigured {

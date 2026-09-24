@@ -2,7 +2,9 @@ package filestorage
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"layr.sh/core"
 )
@@ -26,6 +28,16 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 		t.Fatalf("unexpected initial settings: %+v", initialConfig)
 	}
 
+	// Subscribe to config updated events
+	var capturedEvents []core.Event
+	var eventMutex sync.Mutex
+	kernel.EventBus().Subscribe("file_storage.config.updated", func(eventCtx context.Context, event core.Event) error {
+		eventMutex.Lock()
+		defer eventMutex.Unlock()
+		capturedEvents = append(capturedEvents, event)
+		return nil
+	})
+
 	// 2. Set with custom configuration and verify roundtrip via Load
 	customConfig := initialConfig
 	customConfig.ChunkSizeBytes = 1048576
@@ -35,6 +47,16 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 	if err := configManager.Set(ctx, customConfig); err != nil {
 		t.Fatalf("failed to set custom config: %v", err)
 	}
+
+	time.Sleep(50 * time.Millisecond)
+	eventMutex.Lock()
+	if len(capturedEvents) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(capturedEvents))
+	}
+	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "file_storage.config" {
+		t.Fatalf("expected resourceID 'file_storage.config', got %v", capturedEvents[0].ResourceID)
+	}
+	eventMutex.Unlock()
 
 	freshConfigManager := NewConfigManager(kernel)
 	if err := freshConfigManager.Load(ctx); err != nil {
@@ -61,9 +83,23 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 		t.Fatal("expected error on service Start with corrupted config JSON")
 	}
 
-	// 4. Set with canceled context fails with exec error
+	// 4. Invalid config values in database causes Load to return validation error
+	const invalidValuesSQL = `UPDATE file_storage.config SET value = '{"chunk_size_bytes": 0, "default_max_file_size_bytes": 100, "presign_token_expiry_seconds": 100}'::jsonb WHERE key = 'runtime'`
+	if _, execErr := kernel.DB().Exec(ctx, invalidValuesSQL); execErr != nil {
+		t.Fatalf("failed to write invalid config values: %v", execErr)
+	}
+
+	invalidConfigManager := NewConfigManager(kernel)
+	if err := invalidConfigManager.Load(ctx); err == nil {
+		t.Fatal("expected error on Load with invalid stored config values")
+	}
+
+	// 5. Canceled context causes query errors on Load and Set
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
+	if loadCancelErr := configManager.Load(canceledCtx); loadCancelErr == nil {
+		t.Fatal("expected error on Load with canceled context")
+	}
 	if setCancelErr := configManager.Set(canceledCtx, customConfig); setCancelErr == nil {
 		t.Fatal("expected error on Set with canceled context")
 	}

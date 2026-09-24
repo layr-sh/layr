@@ -2,6 +2,7 @@ package data
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -27,20 +28,23 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
-	var config Config
+	config := controlPlaneHandler.configManager.Get()
 	if decodeErr := json.NewDecoder(request.Body).Decode(&config); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
 	if setErr := controlPlaneHandler.configManager.Set(request.Context(), config); setErr != nil {
+		if errors.Is(setErr, ErrInvalidConfig) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, setErr.Error())
+			return
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
 		return
 	}
 
 	log.Debug("successfully updated data configuration")
 	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
-	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(controlPlaneHandler.configManager.Get())))
 }
 
 // handleFlushCache handles POST /v1/_/data/cache/flush.

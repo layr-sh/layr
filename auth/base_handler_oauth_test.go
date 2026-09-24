@@ -43,7 +43,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		Enabled:  false,
 		ClientID: "disabled-id",
 	}
-	configManager.Set(oauthDisabledConfig)
+	configManager.SetMemoryConfig(oauthDisabledConfig)
 	disabledOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/disabled_provider/authorize", nil)
 	disabledOAuthRequest.SetPathValue("provider", "disabled_provider")
 	disabledOAuthResponseRecorder := httptest.NewRecorder()
@@ -59,7 +59,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		ClientID: "google-test-id",
 		Scope:    "openid profile email custom_scope",
 	}
-	configManager.Set(oauthConfig)
+	configManager.SetMemoryConfig(oauthConfig)
 
 	oauthAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:3000/callback&state=teststate123&scope=custom_scope", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
@@ -88,7 +88,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		Enabled: true,
 	}
 	brokenOAuthConfigManager := NewConfigManager(kernel)
-	brokenOAuthConfigManager.Set(brokenOAuthConfig)
+	brokenOAuthConfigManager.SetMemoryConfig(brokenOAuthConfig)
 	brokenService := NewService(kernel)
 	brokenService.configManager = brokenOAuthConfigManager
 	brokenOAuthBaseHandler := brokenService.baseHandler
@@ -168,7 +168,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 		Enabled:  false,
 		ClientID: "disabled-id",
 	}
-	configManager.Set(oauthConfig)
+	configManager.SetMemoryConfig(oauthConfig)
 	_ = kernel.KVStore().Set(context.Background(), "auth:pkce:disabled-provider-state-2", "disabled-provider-state-2", 10*time.Minute)
 	oauthConfiguredDisabledCallbackRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/disabled_provider/callback?code=123&state=disabled-provider-state-2", nil)
 	oauthConfiguredDisabledCallbackResponseRecorder := httptest.NewRecorder()
@@ -380,7 +380,7 @@ func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 			ClientSecret: "google-secret",
 		},
 	}
-	configManager.Set(authConfig)
+	configManager.SetMemoryConfig(authConfig)
 
 	anonToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
 		Subject:     "018f2234-5678-789a-bcde-f0123456789a",

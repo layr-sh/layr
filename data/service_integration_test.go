@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -73,16 +74,10 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to load existing config: %v", loadErr)
 	}
 
-	// 5. Test Set default fallback branches
+	// 5. Test Set validation rejects invalid config
 	zeroConfig := Config{} // zero values for all
-	if setErr := dataService.GetConfigManager().Set(ctx, zeroConfig); setErr != nil {
-		t.Fatalf("failed to set zeroConfig: %v", setErr)
-	}
-	activeConfig := dataService.GetConfigManager().Get()
-	if activeConfig.REST.MaxLimit != 1000 || activeConfig.REST.DefaultLimit != 50 || activeConfig.GraphQL.MaxDepth != 8 ||
-		activeConfig.Realtime.HeartbeatIntervalMS != 30000 || activeConfig.Realtime.MaxChannelsPerConnection != 50 ||
-		len(activeConfig.Schemas) != 2 || activeConfig.Schemas[0] != "public" || activeConfig.Schemas[1] != "reference_data" {
-		t.Fatalf("defaults not filled on zeroConfig: %+v", activeConfig)
+	if setErr := dataService.GetConfigManager().Set(ctx, zeroConfig); setErr == nil || !errors.Is(setErr, ErrInvalidConfig) {
+		t.Fatalf("expected ErrInvalidConfig on zeroConfig, got: %v", setErr)
 	}
 
 	// 6. Test Load corrupted JSON error

@@ -28,7 +28,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	authConfig := configManager.Get()
 	authConfig.MFA.Enabled = true
 	authConfig.MFA.Issuer = "LayrAuthIntegration"
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	// 8. Phone-only user MFA setup & verify with empty issuer fallback to "Layr"
 	phoneUserMFAConfig := configManager.Get()
 	phoneUserMFAConfig.MFA.Issuer = ""
-	_ = configManager.Save(ctx, phoneUserMFAConfig)
+	_ = configManager.Set(ctx, phoneUserMFAConfig)
 
 	var phoneUserID string
 	err = db.QueryRow(ctx, `
@@ -343,7 +343,7 @@ func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
 	authConfig := configManager.Get()
 	authConfig.MFA.Enabled = true
 	authConfig.Password.Enabled = true
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 

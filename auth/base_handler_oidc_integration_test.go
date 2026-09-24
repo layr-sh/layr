@@ -87,7 +87,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 			Scopes:                  []string{"openid", "email"},
 		},
 	}
-	if saveConfigErr := configManager.Save(ctx, authConfig); saveConfigErr != nil {
+	if saveConfigErr := configManager.Set(ctx, authConfig); saveConfigErr != nil {
 		t.Fatalf("failed to save oidc config: %v", saveConfigErr)
 	}
 
@@ -324,7 +324,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	zeroExpiryConfig := configManager.Get()
 	zeroExpiryConfig.Sessions.AccessTokenExpirySeconds = 0
 	zeroExpiryConfig.Sessions.RefreshTokenExpirySeconds = 0
-	configManager.Set(zeroExpiryConfig)
+	configManager.SetMemoryConfig(zeroExpiryConfig)
 
 	// Submit with valid credentials
 	validSubmitValues := url.Values{
@@ -887,7 +887,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 			Scopes:     []string{"invoices:read", "invoices:write", "payments:read"},
 		},
 	}
-	configManager.Set(rsConfig)
+	configManager.SetMemoryConfig(rsConfig)
 
 	rsValues := url.Values{
 		"grant_type":    {"client_credentials"},
@@ -1115,7 +1115,7 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 			Scopes:       []string{"openid", "email"},
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -1476,7 +1476,7 @@ func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 			PostSignOutRedirectURIs:           []string{"https://rp.example.com/signed-out"},
 		},
 	}
-	if saveErr := configManager.Save(ctx, authConfig); saveErr != nil {
+	if saveErr := configManager.Set(ctx, authConfig); saveErr != nil {
 		t.Fatalf("failed to save config: %v", saveErr)
 	}
 

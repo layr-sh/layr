@@ -22,7 +22,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// 1. Password disabled -> 403 on sign up, sign in, and password reset
 	disabledConfig := DefaultConfig()
 	disabledConfig.Password.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	signupDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", strings.NewReader(`{"email":"test@example.com","password":"Password123!"}`))
 	signupDisabledResponseRecorder := httptest.NewRecorder()
@@ -46,7 +46,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	}
 
 	// 2. Validation errors on SignUp
-	configManager.Set(DefaultConfig())
+	configManager.SetMemoryConfig(DefaultConfig())
 
 	badJSONSignupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader([]byte(`bad-json`)))
 	badJSONSignupResponseRecorder := httptest.NewRecorder()
@@ -123,7 +123,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	// 5. Unconfigured email/SMS delivery -> 422
 	activeConfig := configManager.Get()
 	activeConfig.Password.Enabled = true
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	unconfEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/request", strings.NewReader(`{"email":"user@example.com"}`))
 	unconfEmailResponseRecorder := httptest.NewRecorder()
@@ -149,7 +149,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 		Driver:  &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost:9999/dummy"},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
 	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
@@ -235,7 +235,7 @@ func TestAuthPasswordThreatValidationUnit(t *testing.T) {
 	botProtectionConfig := DefaultConfig()
 	botProtectionConfig.Threat.BotProtection.Enabled = true
 	botProtectionConfig.Threat.BotProtection.Mode = "always"
-	configManager.Set(botProtectionConfig)
+	configManager.SetMemoryConfig(botProtectionConfig)
 
 	// SignUp captcha check
 	signupNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", strings.NewReader(`{"email":"test@example.com","password":"Password123!"}`))
@@ -265,7 +265,7 @@ func TestAuthPasswordThreatValidationUnit(t *testing.T) {
 	passwordBreachConfig := DefaultConfig()
 	passwordBreachConfig.Password.BreachCheck.Enabled = true
 	passwordBreachConfig.Password.BreachCheck.FailOpen = false
-	configManager.Set(passwordBreachConfig)
+	configManager.SetMemoryConfig(passwordBreachConfig)
 
 	// SHA-1 for "password" has prefix 5BAA6 and suffix 1E4C9B93F3F0682250B6CF8331B7EE68FD8
 	mockClient.doFunc = func(_ *http.Request) (*http.Response, error) {

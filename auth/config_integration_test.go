@@ -36,7 +36,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	updatedConfig := loadedConfig
 	updatedConfig.Password.MinLength = 12
 	updatedConfig.Sessions.AccessTokenExpirySeconds = 1800
-	if err := configManager.Save(ctx, updatedConfig); err != nil {
+	if err := configManager.Set(ctx, updatedConfig); err != nil {
 		t.Fatalf("failed to save updated config: %v", err)
 	}
 
@@ -123,6 +123,9 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	mutex.Unlock()
 	if capturedEvent.Type != "auth.config.updated" {
 		t.Fatalf("expected auth.config.updated event, got: %+v", capturedEvent)
+	}
+	if capturedEvent.ResourceID == nil || *capturedEvent.ResourceID != "auth.config" {
+		t.Fatalf("expected auth.config resource ID, got: %v", capturedEvent.ResourceID)
 	}
 
 	// 5. Preserving existing secrets when omitted in subsequent PUT
@@ -259,7 +262,7 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 	}
 
 	// Save with broken pool returns error
-	if err := configManager.Save(ctx, DefaultConfig()); err == nil {
+	if err := configManager.Set(ctx, DefaultConfig()); err == nil {
 		t.Fatal("expected error saving with broken pool")
 	}
 
@@ -269,5 +272,26 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 	if putResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on broken pool, got: %d", putResponseRecorder.Code)
+	}
+}
+
+func TestAuthConfigManagerInvalidDBRowIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert invalid config row into auth.config
+	_, err := kernel.DB().Exec(ctx, `
+		INSERT INTO auth.config (key, value, last_updated_at)
+		VALUES ($1, $2, clock_timestamp())
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+	`, ConfigKey, []byte(`{"sessions":{"access_token_expiry_seconds":-1}}`))
+	if err != nil {
+		t.Fatalf("failed to insert invalid config row: %v", err)
+	}
+
+	configManager := NewConfigManager(kernel)
+	if err := configManager.Load(ctx); err == nil {
+		t.Fatal("expected error loading invalid config row from database")
 	}
 }

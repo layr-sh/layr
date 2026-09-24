@@ -31,6 +31,14 @@ func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
 	if invalidJSONResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on invalid JSON, got %d", invalidJSONResponseRecorder.Code)
 	}
+
+	// 3. handleUpdateConfig invalid config -> 400
+	invalidConfigRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":0}}`)))
+	invalidConfigResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(invalidConfigResponseRecorder, invalidConfigRequest)
+	if invalidConfigResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on invalid config, got %d", invalidConfigResponseRecorder.Code)
+	}
 }
 
 func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {

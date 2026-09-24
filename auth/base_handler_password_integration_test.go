@@ -60,7 +60,7 @@ func TestAuthPasswordResetFlowIntegration(t *testing.T) {
 		Driver:  &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{URL: smsWebhookServer.URL},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	testKVStore := kernel.KVStore()
 	baseHandler := service.baseHandler

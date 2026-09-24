@@ -92,13 +92,37 @@ func TestFilestorageControlPlaneHandlerConfigUnit(t *testing.T) {
 			t.Fatalf("expected 200 for valid update, got %d: %s", validUpdateResponseRecorder.Code, validUpdateResponseRecorder.Body.String())
 		}
 
-		// Invalid config validation failure (e.g. chunk_size_bytes <= 0) -> 500
+		// Invalid config validation failure (e.g. chunk_size_bytes <= 0) -> 400
 		invalidConfigPayload := `{"default_max_file_size_bytes":1000,"chunk_size_bytes":-1}`
 		invalidConfigRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/file-storage/config", bytes.NewReader([]byte(invalidConfigPayload)))
 		invalidConfigResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateConfig(invalidConfigResponseRecorder, invalidConfigRequest)
-		if invalidConfigResponseRecorder.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500 for invalid config validation failure, got %d", invalidConfigResponseRecorder.Code)
+		if invalidConfigResponseRecorder.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for invalid config validation failure, got %d", invalidConfigResponseRecorder.Code)
 		}
 	})
+}
+
+func TestFilestorageControlPlaneHandlerConfigDatabaseErrorUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
+
+	writeConfigAuthContext := core.AuthContext{
+		ServiceAccountID: "sa-test",
+		JWT: core.JWTClaims{
+			Subject:  "sa-test",
+			Role:     "service_role",
+			Audience: "test:service_account",
+			Scope:    core.ScopeFileStorageConfigWrite,
+		},
+	}
+	writeConfigCtx := core.WithAuthContext(context.Background(), writeConfigAuthContext)
+
+	validUpdateRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/file-storage/config", bytes.NewReader([]byte(`{"chunk_size_bytes":262144}`)))
+	validUpdateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(validUpdateResponseRecorder, validUpdateRequest)
+	if validUpdateResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for database error on config update, got %d", validUpdateResponseRecorder.Code)
+	}
 }

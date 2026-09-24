@@ -12,7 +12,8 @@ import (
 )
 
 func TestTasksControlPlaneHandlerConfigUnit(t *testing.T) {
-	kernel := core.NewTestKernel(nil)
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
 	tasksService := NewService(kernel)
 	controlPlaneHandler := tasksService.ControlPlaneHandler()
 	require.NotNil(t, controlPlaneHandler)
@@ -83,5 +84,35 @@ func TestTasksControlPlaneHandlerConfigUnit(t *testing.T) {
 		invalidPayloadResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateConfig(invalidPayloadResponseRecorder, invalidPayloadRequest)
 		require.Equal(t, http.StatusBadRequest, invalidPayloadResponseRecorder.Code)
+
+		// Valid update -> 200
+		validPayload := []byte(`{"concurrency_limit":50,"timeout_seconds":60}`)
+		validPayloadRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/tasks/config", bytes.NewReader(validPayload))
+		validPayloadResponseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleUpdateConfig(validPayloadResponseRecorder, validPayloadRequest)
+		require.Equal(t, http.StatusOK, validPayloadResponseRecorder.Code)
 	})
+}
+
+func TestTasksControlPlaneHandlerConfigDatabaseErrorUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	tasksService := NewService(kernel)
+	controlPlaneHandler := tasksService.ControlPlaneHandler()
+
+	writeConfigAuthContext := core.AuthContext{
+		ServiceAccountID: "sa-test",
+		JWT: core.JWTClaims{
+			Subject:  "sa-test",
+			Role:     "service_role",
+			Audience: "test:service_account",
+			Scope:    core.ScopeTasksConfigWrite,
+		},
+	}
+	writeConfigCtx := core.WithAuthContext(context.Background(), writeConfigAuthContext)
+
+	validPayload := []byte(`{"concurrency_limit":50}`)
+	validRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/tasks/config", bytes.NewReader(validPayload))
+	validResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(validResponseRecorder, validRequest)
+	require.Equal(t, http.StatusInternalServerError, validResponseRecorder.Code)
 }

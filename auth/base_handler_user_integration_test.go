@@ -115,7 +115,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 			URL: smsWebhookServer.URL,
 		},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
 	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
@@ -547,7 +547,7 @@ func TestAuthUserSelfServiceIntegration(t *testing.T) {
 			URL: smsWebhookServer.URL,
 		},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	testKVStore := kernel.KVStore()
 	jwtSigner := kernel.JWTSigner()

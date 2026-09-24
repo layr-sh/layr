@@ -50,11 +50,11 @@ func TestAuthEventsUnit(t *testing.T) {
 	}
 
 	// 1. ConfigUpdated
-	configEvent := NewConfigUpdatedEvent("auth_config", ConfigUpdatedEventData{})
+	configEvent := NewConfigUpdatedEvent("auth.config", ConfigUpdatedEventData{})
 	if configEvent.Type != "auth.config.updated" || configEvent.ResourceType != "auth.config" || configEvent.Action != "updated" {
 		t.Fatalf("unexpected config event: %+v", configEvent)
 	}
-	if configEvent.ResourceID == nil || *configEvent.ResourceID != "auth_config" {
+	if configEvent.ResourceID == nil || *configEvent.ResourceID != "auth.config" {
 		t.Fatalf("unexpected config resource ID: %v", configEvent.ResourceID)
 	}
 

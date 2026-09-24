@@ -2,7 +2,10 @@ package image
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
@@ -112,4 +115,42 @@ func TestImageConfigUnit(t *testing.T) {
 
 		require.Error(t, configManager.Set(ctx, DefaultConfig()))
 	})
+}
+
+func TestImageConfigEventAndContractUnit(t *testing.T) {
+	require.Equal(t, "runtime", ConfigKey)
+
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	configManager := NewConfigManager(kernel)
+	ctx := context.Background()
+
+	var capturedEvents []core.Event
+	var eventMutex sync.Mutex
+	kernel.EventBus().Subscribe("image.config.updated", func(eventCtx context.Context, event core.Event) error {
+		eventMutex.Lock()
+		defer eventMutex.Unlock()
+		capturedEvents = append(capturedEvents, event)
+		return nil
+	})
+
+	// Invalid config returns ErrInvalidConfig
+	invalidConfig := DefaultConfig()
+	invalidConfig.DefaultQuality = 0
+	setErr := configManager.Set(ctx, invalidConfig)
+	require.Error(t, setErr)
+	require.True(t, errors.Is(setErr, ErrInvalidConfig))
+
+	// Valid config publishes event
+	validConfig := DefaultConfig()
+	validConfig.DefaultQuality = 85
+	require.NoError(t, configManager.Set(ctx, validConfig))
+
+	time.Sleep(50 * time.Millisecond)
+	eventMutex.Lock()
+	require.Len(t, capturedEvents, 1)
+	require.NotNil(t, capturedEvents[0].ResourceID)
+	require.Equal(t, "image.config", *capturedEvents[0].ResourceID)
+	eventMutex.Unlock()
 }

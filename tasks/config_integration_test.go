@@ -33,7 +33,7 @@ func TestTasksConfigPostgresIntegration(t *testing.T) {
 	require.Equal(t, 60, loadedConfig.TimeoutSeconds)
 
 	// 3. Corrupt stored JSON -> Load returns error
-	const corruptSQLStatement = `UPDATE tasks.config SET value = '{"concurrency_limit":"not-a-number"}' WHERE key = 'tasks_config'`
+	const corruptSQLStatement = `UPDATE tasks.config SET value = '{"concurrency_limit":"not-a-number"}' WHERE key = 'runtime'`
 	_, execErr := kernel.DB().Exec(ctx, corruptSQLStatement)
 	require.NoError(t, execErr)
 
@@ -41,10 +41,16 @@ func TestTasksConfigPostgresIntegration(t *testing.T) {
 	require.Error(t, corruptedConfigManager.Load(ctx))
 
 	// 4. Invalid validation config in database -> Load returns error
-	const invalidValueSQLStatement = `UPDATE tasks.config SET value = '{"concurrency_limit":-10}' WHERE key = 'tasks_config'`
+	const invalidValueSQLStatement = `UPDATE tasks.config SET value = '{"concurrency_limit":-10}' WHERE key = 'runtime'`
 	_, execValueErr := kernel.DB().Exec(ctx, invalidValueSQLStatement)
 	require.NoError(t, execValueErr)
 
 	invalidConfigManager := NewConfigManager(kernel)
 	require.Error(t, invalidConfigManager.Load(ctx))
+
+	// 5. Canceled context causes query errors on Load and Set
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Error(t, configManager.Load(canceledCtx))
+	require.Error(t, configManager.Set(canceledCtx, customConfig))
 }

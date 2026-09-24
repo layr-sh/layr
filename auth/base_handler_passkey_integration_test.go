@@ -28,7 +28,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 
 	activeConfig := configManager.Get()
 	activeConfig.Passkeys.Enabled = true
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	eventBus := kernel.EventBus()
 	jwtSigner := kernel.JWTSigner()
@@ -275,7 +275,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 
 	activeConfig := configManager.Get()
 	activeConfig.Passkeys.Enabled = true
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	eventBus := kernel.EventBus()
 	jwtSigner := kernel.JWTSigner()

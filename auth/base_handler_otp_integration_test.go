@@ -46,7 +46,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 			URL: "http://localhost:9999/webhook",
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 			URL: "http://localhost:9999/webhook",
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -540,7 +540,7 @@ func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 			URL: "http://localhost:9999/webhook",
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 

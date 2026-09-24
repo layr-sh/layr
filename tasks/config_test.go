@@ -2,7 +2,10 @@ package tasks
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
@@ -123,4 +126,42 @@ func TestTasksConfigUnit(t *testing.T) {
 		setErr := configManager.Set(context.Background(), DefaultConfig())
 		require.Error(t, setErr)
 	})
+}
+
+func TestTasksConfigEventAndContractUnit(t *testing.T) {
+	require.Equal(t, "runtime", ConfigKey)
+
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	configManager := NewConfigManager(kernel)
+	ctx := context.Background()
+
+	var capturedEvents []core.Event
+	var eventMutex sync.Mutex
+	kernel.EventBus().Subscribe("tasks.config.updated", func(eventCtx context.Context, event core.Event) error {
+		eventMutex.Lock()
+		defer eventMutex.Unlock()
+		capturedEvents = append(capturedEvents, event)
+		return nil
+	})
+
+	// Invalid config returns ErrInvalidConfig
+	invalidConfig := DefaultConfig()
+	invalidConfig.ConcurrencyLimit = 0
+	setErr := configManager.Set(ctx, invalidConfig)
+	require.Error(t, setErr)
+	require.True(t, errors.Is(setErr, ErrInvalidConfig))
+
+	// Valid config publishes event
+	validConfig := DefaultConfig()
+	validConfig.ConcurrencyLimit = 30
+	require.NoError(t, configManager.Set(ctx, validConfig))
+
+	time.Sleep(50 * time.Millisecond)
+	eventMutex.Lock()
+	require.Len(t, capturedEvents, 1)
+	require.NotNil(t, capturedEvents[0].ResourceID)
+	require.Equal(t, "tasks.config", *capturedEvents[0].ResourceID)
+	eventMutex.Unlock()
 }

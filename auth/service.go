@@ -82,6 +82,7 @@ func (service *Service) Start(ctx context.Context) error {
 
 // Stop terminates active service routines.
 func (service *Service) Stop() {
+	log.Tracef("stopping auth service")
 }
 
 // Kernel returns the parent kernel instance.

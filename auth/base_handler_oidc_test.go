@@ -73,7 +73,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 			Public:       true,
 		},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	// Missing client_id
 	missingClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/authorize", nil)
@@ -158,7 +158,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Test Disabled OIDC.Enabled -> 403 Forbidden on all OIDC endpoints
 	disabledOIDCConfig := configManager.Get()
 	disabledOIDCConfig.OIDC.Enabled = false
-	configManager.Set(disabledOIDCConfig)
+	configManager.SetMemoryConfig(disabledOIDCConfig)
 
 	disabledAuthorizeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth/oauth/authorize?client_id=client-app-1&redirect_uri=https://demo.app/callback&response_type=code&state=clientstate123&code_challenge=abc123challenge&code_challenge_method=S256", nil)
 	disabledAuthorizeResponseRecorder := httptest.NewRecorder()
@@ -178,7 +178,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	// Re-enable OIDC for subsequent tests
 	enabledConfig := configManager.Get()
 	enabledConfig.OIDC.Enabled = true
-	configManager.Set(enabledConfig)
+	configManager.SetMemoryConfig(enabledConfig)
 
 	// 5. Authorization Submit (POST /v1/auth/oauth/authorize)
 	invalidStateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state=nonexistent-state-id&email=test@example.com&password=pass"))
@@ -303,14 +303,14 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 			Public:       false,
 		},
 	}
-	configManager.Set(baseConfig)
+	configManager.SetMemoryConfig(baseConfig)
 
 	baseHandler := service.baseHandler
 
 	// 1. handleSubmitOIDCAuthorize when OIDC disabled -> 403
 	disabledConfig := configManager.Get()
 	disabledConfig.OIDC.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	submitRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", nil)
 	submitResponseRecorder := httptest.NewRecorder()
@@ -335,7 +335,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 
 	// Re-enable OIDC
 	disabledConfig.OIDC.Enabled = true
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	// 4. handleSubmitOIDCAuthorize invalid form data -> 400
 	badFormRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("key=%zz"))
@@ -500,7 +500,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	oauthButtonsConfig := configManager.Get()
 	oauthButtonsConfig.OAuthProviders["google"] = OAuthProviderConfig{Enabled: true}
 	oauthButtonsConfig.OAuthProviders["github"] = OAuthProviderConfig{Enabled: true}
-	configManager.Set(oauthButtonsConfig)
+	configManager.SetMemoryConfig(oauthButtonsConfig)
 
 	renderResponseRecorder := httptest.NewRecorder()
 	baseHandler.renderOIDCSignInPage(renderResponseRecorder, "state_render", &OIDCClientConfig{Name: "Client App"}, "Some error")
@@ -590,7 +590,7 @@ func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
 	config.OIDC.Enabled = true
 	config.OIDC.UI.ShowSignUp = true
 	config.OIDC.UI.ShowEmailOTP = true
-	service.configManager.Set(config)
+	service.configManager.SetMemoryConfig(config)
 	baseHandler := service.baseHandler
 
 	signUpResponseRecorder := httptest.NewRecorder()
@@ -620,7 +620,7 @@ func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
 	config.OIDC.Clients = []OIDCClientConfig{
 		{ClientID: "client-1", Name: "Client One"},
 	}
-	service.configManager.Set(config)
+	service.configManager.SetMemoryConfig(config)
 	baseHandler := service.baseHandler
 	kvStore := kernel.KVStore()
 
@@ -647,7 +647,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	config.OIDC.Clients = []OIDCClientConfig{
 		{ClientID: "client-sub-1", Name: "Submit Client"},
 	}
-	configManager.Set(config)
+	configManager.SetMemoryConfig(config)
 	baseHandler := service.baseHandler
 	kvStore := kernel.KVStore()
 
@@ -723,7 +723,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 
 	// 8. sign_up validation: empty email, passwords mismatch, short password
 	config.OIDC.UI.ShowSignUp = true
-	configManager.Set(config)
+	configManager.SetMemoryConfig(config)
 
 	emptyEmailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_up&email=&password=pass"))
 	emptyEmailRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -751,7 +751,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 
 	// 9. sign_in when ShowPassword disabled
 	config.OIDC.UI.ShowPassword = false
-	configManager.Set(config)
+	configManager.SetMemoryConfig(config)
 
 	disabledSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader("state="+stateID+"&action=sign_in&email=a@b.com&password=pass"))
 	disabledSignInRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -811,7 +811,7 @@ func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 			PostSignOutRedirectURIs:            []string{"https://rp.example.com/signed-out"},
 		},
 	}
-	configManager.Set(config)
+	configManager.SetMemoryConfig(config)
 	baseHandler := service.baseHandler
 
 	// Create valid ID token hint for user and session
@@ -853,7 +853,7 @@ func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
 			PostSignOutRedirectURIs: []string{"https://trusted.example.com/logout-done"},
 		},
 	}
-	configManager.Set(config)
+	configManager.SetMemoryConfig(config)
 	baseHandler := service.baseHandler
 
 	idTokenHint := jwtSigner.GenerateIDToken(core.JWTClaims{

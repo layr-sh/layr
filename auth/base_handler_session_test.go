@@ -141,7 +141,7 @@ func TestAuthSessionHandlerUnit(t *testing.T) {
 	// Fast-path session cache hit with locked user -> 423
 	fastPathConfig := DefaultConfig()
 	fastPathConfig.Cache.FastPathSessionsEnabled = true
-	configManager.Set(fastPathConfig)
+	configManager.SetMemoryConfig(fastPathConfig)
 
 	futureLockUntil := time.Now().UTC().Add(time.Hour)
 	lockedCachedSession := CachedSession{

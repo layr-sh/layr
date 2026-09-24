@@ -249,7 +249,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 
 	activeConfig := service.configManager.Get()
 	activeConfig.Anonymous.Enabled = true
-	service.configManager.Set(activeConfig)
+	service.configManager.SetMemoryConfig(activeConfig)
 
 	coreServer := core.NewServer(kernel)
 	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
