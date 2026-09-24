@@ -76,8 +76,8 @@ func TestCoreDatabasePoolMigrateUpFullCoverageIntegration(t *testing.T) {
 
 	// 3. MigrateUp with targetVersion (break branch when m.Version > targetVersion)
 	custom := []DatabaseMigration{
-		{Version: 5, Description: "v5", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
-		{Version: 6, Description: "v6", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "core", Version: 5, Description: "v5", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "core", Version: 6, Description: "v6", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
 	}
 	// Apply only v5, v6 should be skipped (break)
 	if err := db.MigrateUp(ctx, custom, 5); err != nil {
@@ -85,7 +85,7 @@ func TestCoreDatabasePoolMigrateUpFullCoverageIntegration(t *testing.T) {
 	}
 
 	// 4. MigrateUp with bad SQL (exec error)
-	invalidMigrations := []DatabaseMigration{{Version: 99, Description: "bad", UpSQL: "INVALID SQL;", DownSQL: "SELECT 1;"}}
+	invalidMigrations := []DatabaseMigration{{Service: "core", Version: 99, Description: "bad", UpSQL: "INVALID SQL;", DownSQL: "SELECT 1;"}}
 	if err := db.MigrateUp(ctx, invalidMigrations, 0); err == nil {
 		t.Fatal("expected error on bad SQL migration")
 	}
@@ -112,8 +112,8 @@ func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 	// Setup: Apply system + custom migrations
 	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
 	custom := []DatabaseMigration{
-		{Version: 2, Description: "v2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
-		{Version: 3, Description: "v3", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "core", Version: 2, Description: "v2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "core", Version: 3, Description: "v3", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
 	}
 	_ = db.MigrateUp(ctx, custom, 0)
 	allMigrations := append(SystemDatabaseMigrations, custom...)
@@ -145,20 +145,20 @@ func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 	}
 
 	// 6. MigrateDown with empty DownSQL
-	noDown := []DatabaseMigration{{Version: 9991, Description: "nodown", UpSQL: "SELECT 1;", DownSQL: ""}}
+	noDown := []DatabaseMigration{{Service: "core", Version: 9991, Description: "nodown", UpSQL: "SELECT 1;", DownSQL: ""}}
 	_ = db.MigrateUp(ctx, append(SystemDatabaseMigrations, noDown...), 0)
 	if err := db.MigrateDown(ctx, append(SystemDatabaseMigrations, noDown...), 9990); err == nil {
 		t.Fatal("expected error on empty DownSQL")
 	}
-	_, _ = db.Exec(ctx, "DELETE FROM core.migrations WHERE version = 9991")
+	_, _ = db.Exec(ctx, "DELETE FROM core.migrations WHERE service = 'core' AND version = 9991")
 
 	// 7. MigrateDown with bad DownSQL (exec error)
-	badDown := []DatabaseMigration{{Version: 9992, Description: "bad", UpSQL: "SELECT 1;", DownSQL: "INVALID SQL STATEMENT;"}}
+	badDown := []DatabaseMigration{{Service: "core", Version: 9992, Description: "bad", UpSQL: "SELECT 1;", DownSQL: "INVALID SQL STATEMENT;"}}
 	_ = db.MigrateUp(ctx, append(SystemDatabaseMigrations, badDown...), 0)
 	if err := db.MigrateDown(ctx, append(SystemDatabaseMigrations, badDown...), 9990); err == nil {
 		t.Fatal("expected error on bad DownSQL")
 	}
-	_, _ = db.Exec(ctx, "DELETE FROM core.migrations WHERE version = 9992")
+	_, _ = db.Exec(ctx, "DELETE FROM core.migrations WHERE service = 'core' AND version = 9992")
 
 	// 8. MigrateDown with canceled context (tx.Begin error)
 	{
@@ -167,6 +167,39 @@ func TestCoreDatabasePoolMigrateDownFullCoverageIntegration(t *testing.T) {
 		if err := db.MigrateDown(canceledCtx, allMigrations, 0); err == nil {
 			t.Fatal("expected error on canceled context Begin")
 		}
+	}
+
+	// 9. MigrateUp and MigrateDown with empty Service defaulting
+	emptySvc := []DatabaseMigration{{Version: 9993, Description: "empty svc", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"}}
+	if err := db.MigrateUp(ctx, emptySvc, 0); err != nil {
+		t.Fatalf("MigrateUp with empty service failed: %v", err)
+	}
+	// MigrateDown with emptySvc alone targets "core" but lacks core:1 definition -> errors on missing definition
+	if err := db.MigrateDown(ctx, emptySvc, 0); err == nil {
+		t.Fatal("expected error on missing core:1 definition when rolling down emptySvc alone")
+	}
+	// With core:1 definition included, rollback succeeds
+	if err := db.MigrateDown(ctx, append(SystemDatabaseMigrations, emptySvc...), 0); err != nil {
+		t.Fatalf("MigrateDown with empty service failed: %v", err)
+	}
+
+	// 10. Multi-service selective rollback and missing version definition
+	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
+	customMulti := []DatabaseMigration{
+		{Service: "svc_x", Version: 1, Description: "sx1", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "svc_x", Version: 2, Description: "sx2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+	}
+	if err := db.MigrateUp(ctx, customMulti, 0); err != nil {
+		t.Fatalf("MigrateUp multi failed: %v", err)
+	}
+	missingDef := []DatabaseMigration{
+		{Service: "svc_x", Version: 2, Description: "sx2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+	}
+	if err := db.MigrateDown(ctx, missingDef, 0); err == nil {
+		t.Fatal("expected error on missing svc_x:1 definition")
+	}
+	if err := db.MigrateDown(ctx, customMulti, 0); err != nil {
+		t.Fatalf("selective rollback of svc_x failed: %v", err)
 	}
 
 	// cleanup
@@ -183,9 +216,10 @@ func TestCoreDatabasePoolMigrateUpInsertRecordErrorIntegration(t *testing.T) {
 	// A migration that manually pre-inserts its version in UpSQL to cause INSERT record failure
 	conflicting := []DatabaseMigration{
 		{
+			Service:     "core",
 			Version:     2,
 			Description: "conflict",
-			UpSQL:       "INSERT INTO core.migrations (version, description) VALUES (2, 'manual');",
+			UpSQL:       "INSERT INTO core.migrations (service, version, description) VALUES ('core', 2, 'manual');",
 			DownSQL:     "SELECT 1;",
 		},
 	}
@@ -205,7 +239,7 @@ func TestCoreDatabasePoolMigrateDownDeleteRecordErrorIntegration(t *testing.T) {
 
 	// Apply migration 2
 	migration2 := []DatabaseMigration{
-		{Version: 2, Description: "v2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
+		{Service: "core", Version: 2, Description: "v2", UpSQL: "SELECT 1;", DownSQL: "SELECT 1;"},
 	}
 	_ = db.MigrateUp(ctx, migration2, 0)
 

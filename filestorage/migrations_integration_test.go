@@ -62,5 +62,19 @@ func TestFilestorageMigrationsExecutionIntegration(t *testing.T) {
 				t.Fatalf("failed re-applying migration %d: %v", databaseMigration.Version, upErr)
 			}
 		}
+
+		tablesToCheck := []string{"config", "buckets", "objects", "chunks", "s3_credentials", "multipart_uploads", "multipart_parts"}
+		for _, tableName := range tablesToCheck {
+			var tableExists bool
+			queryErr := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = 'file_storage' AND table_name = $1
+				);
+			`, tableName).Scan(&tableExists)
+			if queryErr != nil || !tableExists {
+				t.Fatalf("expected file_storage.%s table to exist after reapply: %v", tableName, queryErr)
+			}
+		}
 	})
 }

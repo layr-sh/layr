@@ -11,6 +11,7 @@ func TestCoreTestSetupKernelIntegration(t *testing.T) {
 	defer cancel()
 
 	testDatabaseMigration := DatabaseMigration{
+		Service:     "core",
 		Version:     9999,
 		Description: "test helper migration",
 		UpSQL:       "CREATE TABLE IF NOT EXISTS _test_helper_table (id text PRIMARY KEY);",

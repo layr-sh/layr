@@ -14,6 +14,7 @@ func TestTasksMigrationsDefinitionUnit(t *testing.T) {
 
 	for _, databaseMigration := range Migrations {
 		t.Run(fmt.Sprintf("Version_%d", databaseMigration.Version), func(t *testing.T) {
+			require.Equal(t, "tasks", databaseMigration.Service)
 			require.Positive(t, databaseMigration.Version)
 			require.NotEmpty(t, databaseMigration.Description)
 			require.NotEmpty(t, databaseMigration.UpSQL)

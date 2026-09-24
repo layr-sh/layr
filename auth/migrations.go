@@ -9,20 +9,17 @@ func init() {
 	}
 }
 
-// AuthDatabaseMigrationVersion is the schema version for the auth subsystem.
-const AuthDatabaseMigrationVersion = 200
-
 // AuthDatabaseMigration defines the database schema for auth.
 var AuthDatabaseMigration = core.DatabaseMigration{
-	Version:     AuthDatabaseMigrationVersion,
+	Service:     "auth",
+	Version:     1,
 	Description: "Initialize auth schema, users, identities, sessions, passkeys, and otps",
 	UpSQL: `
 CREATE SCHEMA IF NOT EXISTS auth;
 
 -- 1. Dynamic Runtime Configuration (Managed via Console)
 CREATE TABLE IF NOT EXISTS auth.config (
-    id UUID PRIMARY KEY DEFAULT uuidv7(),
-    key VARCHAR(128) NOT NULL UNIQUE,
+    key VARCHAR(128) PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -108,12 +105,6 @@ CREATE TABLE IF NOT EXISTS auth.otps (
 CREATE INDEX IF NOT EXISTS idx_layr_otps_recipient ON auth.otps(recipient, purpose);
 `,
 	DownSQL: `
-DROP TABLE IF EXISTS auth.otps CASCADE;
-DROP TABLE IF EXISTS auth.passkeys CASCADE;
-DROP TABLE IF EXISTS auth.sessions CASCADE;
-DROP TABLE IF EXISTS auth.identities CASCADE;
-DROP TABLE IF EXISTS auth.users CASCADE;
-DROP TABLE IF EXISTS auth.config CASCADE;
 DROP SCHEMA IF EXISTS auth CASCADE;
 `,
 }

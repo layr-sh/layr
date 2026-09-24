@@ -227,7 +227,8 @@ const (
 
 var threatDatabaseMigrations = []core.DatabaseMigration{
 	{
-		Version:     200,
+		Service:     "auth",
+		Version:     1,
 		Description: "Auth schema and tables for threat testing",
 		UpSQL: `
 			CREATE SCHEMA IF NOT EXISTS auth;

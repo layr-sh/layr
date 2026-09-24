@@ -9,12 +9,10 @@ func init() {
 	}
 }
 
-// FileStorageDatabaseMigrationVersion is the schema version for the file storage subsystem.
-const FileStorageDatabaseMigrationVersion = 300
-
 // FileStorageDatabaseMigration defines the database schema for the file_storage subsystem.
 var FileStorageDatabaseMigration = core.DatabaseMigration{
-	Version:     FileStorageDatabaseMigrationVersion,
+	Service:     "filestorage",
+	Version:     1,
 	Description: "Initialize file_storage schema, buckets, objects, chunks, s3 credentials, and multipart uploads",
 	UpSQL: `
 CREATE SCHEMA IF NOT EXISTS file_storage;

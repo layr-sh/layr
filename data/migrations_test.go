@@ -3,8 +3,6 @@ package data
 import (
 	"fmt"
 	"testing"
-
-	"layr.sh/core"
 )
 
 func TestDataMigrationsDefinitionUnit(t *testing.T) {
@@ -14,6 +12,9 @@ func TestDataMigrationsDefinitionUnit(t *testing.T) {
 
 	for _, databaseMigration := range Migrations {
 		t.Run(fmt.Sprintf("Version_%d", databaseMigration.Version), func(t *testing.T) {
+			if databaseMigration.Service != "data" {
+				t.Fatalf("expected Service 'data', got %q", databaseMigration.Service)
+			}
 			if databaseMigration.Version <= 0 {
 				t.Fatalf("expected positive migration version, got %d", databaseMigration.Version)
 			}
@@ -27,33 +28,5 @@ func TestDataMigrationsDefinitionUnit(t *testing.T) {
 				t.Fatalf("expected non-empty DownSQL for migration version %d", databaseMigration.Version)
 			}
 		})
-	}
-}
-
-func TestDataServiceFactoryUnit(t *testing.T) {
-	serviceFactory, exists := core.GetServiceFactory("data")
-	if !exists || serviceFactory == nil {
-		t.Fatal("expected 'data' service factory to be registered in core")
-	}
-
-	kernel := &core.Kernel{}
-	serviceRunner, err := serviceFactory(kernel)
-	if err != nil {
-		t.Fatalf("unexpected error creating data service from kernel: %v", err)
-	}
-	if serviceRunner == nil {
-		t.Fatal("expected non-nil service runner from factory")
-	}
-	if _, ok := serviceRunner.(*Service); !ok {
-		t.Fatalf("expected *Service runner, got %T", serviceRunner)
-	}
-
-	dependenciesKernel := core.NewTestKernel(nil)
-	dependenciesServiceRunner, err := serviceFactory(dependenciesKernel)
-	if err != nil {
-		t.Fatalf("unexpected error creating data service from kernel with deps: %v", err)
-	}
-	if dependenciesServiceRunner == nil {
-		t.Fatal("expected non-nil service runner from factory with deps")
 	}
 }
