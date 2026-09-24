@@ -4,11 +4,19 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
+
+// ConfigKey is the primary key in data.config table.
+const ConfigKey = "runtime"
+
+// ErrInvalidConfig is returned when runtime configuration validation fails.
+var ErrInvalidConfig = errors.New("invalid data configuration")
 
 // Config represents the dynamic runtime configuration for layr/data.
 type Config struct {
@@ -176,11 +184,14 @@ func (configManager *ConfigManager) Get() Config {
 // Load fetches the runtime config from PostgreSQL or initializes the default if not present.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
 	var rawJSON []byte
-	const selectSQLStatement = `SELECT value FROM data.config WHERE key = 'runtime'`
-	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement).Scan(&rawJSON)
+	const selectSQLStatement = `SELECT value FROM data.config WHERE key = $1`
+	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
 	if scanErr != nil {
-		defaultConfig := DefaultConfig()
-		return configManager.Set(ctx, defaultConfig)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			defaultConfig := DefaultConfig()
+			return configManager.Set(ctx, defaultConfig)
+		}
+		return fmt.Errorf("failed to query data.config: %w", scanErr)
 	}
 
 	var parsedConfig Config
@@ -188,9 +199,11 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 		return fmt.Errorf("failed to parse dynamic data config JSON: %w", unmarshalErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = parsedConfig
-	configManager.rwMutex.Unlock()
+	if err := parsedConfig.Validate(); err != nil {
+		return fmt.Errorf("stored data config is invalid: %w", err)
+	}
+
+	configManager.SetMemoryConfig(parsedConfig)
 	return nil
 }
 
@@ -201,81 +214,31 @@ func (configManager *ConfigManager) SetMemoryConfig(config Config) {
 	configManager.config = config
 }
 
-// Set writes new configuration to PostgreSQL and updates the in-memory cache.
+// Set writes new configuration to PostgreSQL, updates the in-memory cache, and publishes event.
 func (configManager *ConfigManager) Set(ctx context.Context, config Config) error {
-	const (
-		fallbackRESTMaxLimit            = 1000
-		fallbackRESTDefaultLimit        = 50
-		fallbackGraphQLMaxDepth         = 8
-		fallbackGraphQLMaxComplexity    = 500
-		fallbackGraphQLDefaultLimit     = 100
-		fallbackRealtimeHeartbeatMS     = 30000
-		fallbackRealtimeMaxChannels     = 50
-		fallbackRealtimeMaxConnections  = 10000
-		fallbackCacheCatalogTTLSeconds  = 3600
-		fallbackCacheQueryTTLSeconds    = 30
-		fallbackCacheMaxQueries         = 10000
-		fallbackRateLimitRequestsPerMin = 600
-		fallbackRateLimitBurst          = 100
-	)
+	if err := config.Validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+	}
 
 	if len(config.Schemas) == 0 {
 		config.Schemas = []string{"public", "reference_data"}
-	}
-	if config.REST.MaxLimit <= 0 {
-		config.REST.MaxLimit = fallbackRESTMaxLimit
-	}
-	if config.REST.DefaultLimit <= 0 {
-		config.REST.DefaultLimit = fallbackRESTDefaultLimit
-	}
-	if config.GraphQL.MaxDepth <= 0 {
-		config.GraphQL.MaxDepth = fallbackGraphQLMaxDepth
-	}
-	if config.GraphQL.MaxComplexity <= 0 {
-		config.GraphQL.MaxComplexity = fallbackGraphQLMaxComplexity
-	}
-	if config.GraphQL.DefaultLimit <= 0 {
-		config.GraphQL.DefaultLimit = fallbackGraphQLDefaultLimit
-	}
-	if config.Realtime.HeartbeatIntervalMS <= 0 {
-		config.Realtime.HeartbeatIntervalMS = fallbackRealtimeHeartbeatMS
-	}
-	if config.Realtime.MaxChannelsPerConnection <= 0 {
-		config.Realtime.MaxChannelsPerConnection = fallbackRealtimeMaxChannels
-	}
-	if config.Realtime.MaxConnections <= 0 {
-		config.Realtime.MaxConnections = fallbackRealtimeMaxConnections
-	}
-	if config.Cache.CatalogTTLSeconds <= 0 {
-		config.Cache.CatalogTTLSeconds = fallbackCacheCatalogTTLSeconds
-	}
-	if config.Cache.QueryTTLSeconds <= 0 {
-		config.Cache.QueryTTLSeconds = fallbackCacheQueryTTLSeconds
-	}
-	if config.Cache.MaxCachedQueries <= 0 {
-		config.Cache.MaxCachedQueries = fallbackCacheMaxQueries
-	}
-	if config.RateLimiting.RequestsPerMinute <= 0 {
-		config.RateLimiting.RequestsPerMinute = fallbackRateLimitRequestsPerMin
-	}
-	if config.RateLimiting.Burst <= 0 {
-		config.RateLimiting.Burst = fallbackRateLimitBurst
 	}
 
 	configJSON, _ := json.Marshal(config)
 
 	const upsertSQLStatement = `
 		INSERT INTO data.config (key, value, last_updated_at)
-		VALUES ('runtime', $1::jsonb, clock_timestamp())
+		VALUES ($1, $2::jsonb, clock_timestamp())
 		ON CONFLICT (key) DO UPDATE
-		SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
+		SET value = EXCLUDED.value, last_updated_at = clock_timestamp();
 	`
-	if _, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, configJSON); execErr != nil {
+	if _, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, configJSON); execErr != nil {
 		return fmt.Errorf("failed to save data config to database: %w", execErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = config
-	configManager.rwMutex.Unlock()
+	configManager.SetMemoryConfig(config)
+	if configManager.kernel != nil && configManager.kernel.EventBus() != nil {
+		configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(config)))
+	}
 	return nil
 }

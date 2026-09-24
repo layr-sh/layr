@@ -20,7 +20,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	// 1. Anonymous auth disabled -> 403
 	disabledAnonymousConfig := DefaultConfig()
 	disabledAnonymousConfig.Anonymous.Enabled = false
-	configManager.Set(disabledAnonymousConfig)
+	configManager.SetMemoryConfig(disabledAnonymousConfig)
 
 	anonymousDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", nil)
 	anonymousDisabledResponseRecorder := httptest.NewRecorder()
@@ -30,7 +30,7 @@ func TestAuthHandlerAnonymousUnit(t *testing.T) {
 	}
 
 	// 2. Anonymous auth enabled with broken database pool -> 500
-	configManager.Set(DefaultConfig())
+	configManager.SetMemoryConfig(DefaultConfig())
 	anonymousBrokenDBRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/anonymous", strings.NewReader(`{"properties":{"source":"mobile"}}`))
 	anonymousBrokenDBResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignInAnonymous(anonymousBrokenDBResponseRecorder, anonymousBrokenDBRequest)

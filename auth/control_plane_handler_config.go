@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -260,15 +261,17 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		inputConfig.OIDC.UI.ShowOAuth = false
 	}
 
-	if err := controlPlaneHandler.configManager.Save(request.Context(), inputConfig); err != nil {
+	if err := controlPlaneHandler.configManager.Set(request.Context(), inputConfig); err != nil {
+		if errors.Is(err, ErrInvalidConfig) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
+			return
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	controlPlaneHandler.passkeyManager = passkey.NewManager(inputConfig.Passkeys.RelyingPartyID, inputConfig.Passkeys.RelyingPartyName)
 	controlPlaneHandler.totpManager = totp.NewManager(inputConfig.MFA.Issuer)
-
-	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewConfigUpdatedEvent(ConfigKey, ConfigUpdatedEventData(controlPlaneHandler.configManager.GetUnencrypted())))
 
 	log.Debugf("handleUpdateConfig successfully saved and sanitized configuration")
 	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.GetUnencrypted())

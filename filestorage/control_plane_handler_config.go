@@ -2,6 +2,7 @@ package filestorage
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"layr.sh/core"
@@ -25,7 +26,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
-	var newConfig Config
+	newConfig := controlPlaneHandler.configManager.Get()
 	if decodeErr := json.NewDecoder(request.Body).Decode(&newConfig); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
 		return
@@ -34,11 +35,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 	ctx := request.Context()
 	setErr := controlPlaneHandler.configManager.Set(ctx, newConfig)
 	if setErr != nil {
+		if errors.Is(setErr, ErrInvalidConfig) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, setErr.Error())
+			return
+		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
 		return
 	}
 
-	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("file_storage.config", ConfigUpdatedEventData(newConfig)))
 	log.Debug("handleUpdateConfig successfully saved dynamic file storage configuration")
 
 	core.WriteJSONResponse(responseWriter, http.StatusOK, newConfig)

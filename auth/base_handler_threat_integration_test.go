@@ -59,7 +59,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 		Driver:  &driverWebhook,
 		Webhook: EmailDispatcherWebhookConfig{URL: emailWebhookServer.URL},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	testKVStore := kernel.KVStore()
 	baseHandler := service.baseHandler
@@ -182,7 +182,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	// 3c. When RiskTriggers does NOT match the assessed reason (only triggers on excessive_failed_attempts):
 	customRiskConfig := activeConfig
 	customRiskConfig.MFA.RiskTriggers = []string{"excessive_failed_attempts"}
-	configManager.Set(customRiskConfig)
+	configManager.SetMemoryConfig(customRiskConfig)
 
 	lowRiskUnmatchedSignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	lowRiskUnmatchedSignInRequest.Header.Set("X-Forwarded-For", "198.51.100.23")
@@ -203,7 +203,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	// 4. Switching MFA Policy to "always" triggers MFA ticket even for known device
 	alwaysMFAConfig := activeConfig
 	alwaysMFAConfig.MFA.Policy = "always"
-	configManager.Set(alwaysMFAConfig)
+	configManager.SetMemoryConfig(alwaysMFAConfig)
 
 	alwaysPolicySignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(validPasswordPayload))
 	alwaysPolicySignInRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
@@ -253,7 +253,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	breachCheckConfig := activeConfig
 	breachCheckConfig.Password.BreachCheck.Enabled = true
 	breachCheckConfig.Password.BreachCheck.FailOpen = false
-	configManager.Set(breachCheckConfig)
+	configManager.SetMemoryConfig(breachCheckConfig)
 
 	// Mock HTTP client returns breached response for "password"
 	mockHTTPClient.doFunc = func(_ *http.Request) (*http.Response, error) {
@@ -302,7 +302,7 @@ func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	activeOTPConfig.EmailOTP.Enabled = true
 	activeOTPConfig.MFA.Policy = "adaptive"
 	activeOTPConfig.MFA.RiskTriggers = []string{"new_device", "new_ip"}
-	configManager.Set(activeOTPConfig)
+	configManager.SetMemoryConfig(activeOTPConfig)
 
 	otpCode := "123456"
 	otpCodeHash := otp.HashCode(otpCode)

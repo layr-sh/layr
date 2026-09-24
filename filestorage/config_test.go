@@ -2,6 +2,7 @@ package filestorage
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"layr.sh/core"
@@ -80,5 +81,21 @@ func TestFilestorageConfigManagerMemoryUnit(t *testing.T) {
 	invalidConfig.ChunkSizeBytes = -1
 	if err := configManager.Set(context.Background(), invalidConfig); err == nil {
 		t.Fatal("expected error when setting invalid config")
+	}
+}
+
+func TestFilestorageConfigManagerEventAndContractUnit(t *testing.T) {
+	if ConfigKey != "runtime" {
+		t.Fatalf("expected ConfigKey to be 'runtime', got %q", ConfigKey)
+	}
+
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	configManager := NewConfigManager(kernel)
+
+	invalidConfig := DefaultConfig()
+	invalidConfig.ChunkSizeBytes = 0
+	err := configManager.Set(context.Background(), invalidConfig)
+	if err == nil || !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("expected ErrInvalidConfig, got: %v", err)
 	}
 }

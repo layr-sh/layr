@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -28,7 +29,10 @@ const (
 )
 
 // ConfigKey is the primary key in auth.config table.
-const ConfigKey = "auth_config"
+const ConfigKey = "runtime"
+
+// ErrInvalidConfig is returned when runtime configuration validation fails.
+var ErrInvalidConfig = errors.New("invalid auth configuration")
 
 // Config represents the full dynamic configuration for layr/auth.
 type Config struct {
@@ -331,6 +335,38 @@ func DefaultConfig() Config {
 	}
 }
 
+// Validate verifies whether the configuration settings are valid.
+func (config Config) Validate() error {
+	if config.Sessions.AccessTokenExpirySeconds <= 0 {
+		return fmt.Errorf("sessions access_token_expiry_seconds must be greater than 0, got %d", config.Sessions.AccessTokenExpirySeconds)
+	}
+	if config.Sessions.RefreshTokenExpirySeconds <= 0 {
+		return fmt.Errorf("sessions refresh_token_expiry_seconds must be greater than 0, got %d", config.Sessions.RefreshTokenExpirySeconds)
+	}
+	if config.Sessions.IdleTimeoutSeconds <= 0 {
+		return fmt.Errorf("sessions idle_timeout_seconds must be greater than 0, got %d", config.Sessions.IdleTimeoutSeconds)
+	}
+	if config.Password.MinLength < 0 {
+		return fmt.Errorf("password min_length cannot be negative, got %d", config.Password.MinLength)
+	}
+	if config.Threat.BotProtection.Enabled {
+		provider := strings.ToLower(strings.TrimSpace(config.Threat.BotProtection.Provider))
+		switch provider {
+		case "turnstile", "cloudflare", "recaptcha", "google", "hcaptcha":
+		default:
+			return fmt.Errorf("unsupported bot protection provider: %s", config.Threat.BotProtection.Provider)
+		}
+		if config.Threat.BotProtection.SecretKey == "" && !config.Threat.BotProtection.SecretKeyConfigured {
+			return errors.New("bot protection secret key is required when enabled")
+		}
+		mode := strings.ToLower(strings.TrimSpace(config.Threat.BotProtection.Mode))
+		if mode != "" && mode != "always" && mode != "adaptive" {
+			return fmt.Errorf("invalid bot protection mode: %s", config.Threat.BotProtection.Mode)
+		}
+	}
+	return nil
+}
+
 // ConfigManager handles loading, validating, caching, and envelope encryption of auth.config.
 type ConfigManager struct {
 	kernel  *core.Kernel
@@ -379,8 +415,8 @@ func (configManager *ConfigManager) Get() Config {
 	return copiedConfig
 }
 
-// Set updates the in-memory configuration with sane fallbacks.
-func (configManager *ConfigManager) Set(updatedConfig Config) {
+// SetMemoryConfig updates the in-memory configuration with sane fallbacks.
+func (configManager *ConfigManager) SetMemoryConfig(updatedConfig Config) {
 	configManager.rwMutex.Lock()
 	defer configManager.rwMutex.Unlock()
 
@@ -553,9 +589,8 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			defaultConfig := DefaultConfig()
-			configManager.Set(defaultConfig)
 			log.Debugf("no existing auth config found in database; initialized and saving defaults")
-			return configManager.Save(ctx, defaultConfig)
+			return configManager.Set(ctx, defaultConfig)
 		}
 		return fmt.Errorf("failed to query auth.config: %w", err)
 	}
@@ -565,28 +600,39 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 		return fmt.Errorf("failed to parse auth.config JSON: %w", err)
 	}
 
-	configManager.Set(loadedConfig)
+	if err := loadedConfig.Validate(); err != nil {
+		return fmt.Errorf("stored auth config is invalid: %w", err)
+	}
+
+	configManager.SetMemoryConfig(loadedConfig)
 	log.Debugf("successfully loaded and parsed auth config from database")
 	return nil
 }
 
-// Save persists the configuration to auth.config table.
-func (configManager *ConfigManager) Save(ctx context.Context, updatedConfig Config) error {
+// Set persists the configuration to auth.config table and updates memory snapshot.
+func (configManager *ConfigManager) Set(ctx context.Context, updatedConfig Config) error {
 	log.Tracef("saving auth configuration to database")
 
-	rawJSON, _ := json.Marshal(updatedConfig)
+	if err := updatedConfig.Validate(); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+	}
 
-	query := `
+	configManager.SetMemoryConfig(updatedConfig)
+	activeConfig := configManager.Get()
+
+	rawJSON, _ := json.Marshal(activeConfig)
+
+	const upsertSQLStatement = `
 		INSERT INTO auth.config (key, value, last_updated_at)
 		VALUES ($1, $2, clock_timestamp())
 		ON CONFLICT (key) DO UPDATE
-		SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
+		SET value = EXCLUDED.value, last_updated_at = clock_timestamp();
 	`
-	if _, err := configManager.kernel.DB().Exec(ctx, query, ConfigKey, rawJSON); err != nil {
+	if _, err := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, rawJSON); err != nil {
 		return fmt.Errorf("failed to persist auth.config: %w", err)
 	}
 
-	configManager.Set(updatedConfig)
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("auth.config", ConfigUpdatedEventData(configManager.GetUnencrypted())))
 	log.Debugf("successfully persisted auth config to database")
 	return nil
 }

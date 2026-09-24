@@ -43,7 +43,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	// 1. Bot protection disabled -> returns true
 	disabledConfig := DefaultConfig()
 	disabledConfig.Threat.BotProtection.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	disabledResponseRecorder := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	adaptiveConfig.Threat.BotProtection.Enabled = true
 	adaptiveConfig.Threat.BotProtection.Mode = "adaptive"
 	adaptiveConfig.Threat.BotProtection.AdaptiveFailedAttempts = 5
-	configManager.Set(adaptiveConfig)
+	configManager.SetMemoryConfig(adaptiveConfig)
 
 	adaptiveAllowedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	adaptiveAllowedResponseRecorder := httptest.NewRecorder()
@@ -67,7 +67,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	// 3. Adaptive mode, failed attempts >= threshold with empty token -> returns false (400)
 	// Also test with AdaptiveFailedAttempts <= 0 to trigger the fallback threshold branch
 	adaptiveConfig.Threat.BotProtection.AdaptiveFailedAttempts = 0
-	configManager.Set(adaptiveConfig)
+	configManager.SetMemoryConfig(adaptiveConfig)
 	for index := 0; index < 5; index++ {
 		_, _ = threat.RecordFailedAttempt(ctx, testKVStore, "192.168.1.3", 0)
 	}
@@ -87,7 +87,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	alwaysConfig.Threat.BotProtection.Enabled = true
 	alwaysConfig.Threat.BotProtection.Mode = "always"
 	alwaysConfig.Threat.BotProtection.Provider = "turnstile"
-	configManager.Set(alwaysConfig)
+	configManager.SetMemoryConfig(alwaysConfig)
 
 	emptyTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	emptyTokenResponseRecorder := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 
 	// 5. Secret decryption error or empty decrypted secret -> returns false (500)
 	alwaysConfig.Threat.BotProtection.SecretKey = "invalid-corrupted-prefix"
-	configManager.Set(alwaysConfig)
+	configManager.SetMemoryConfig(alwaysConfig)
 
 	decryptFailRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	decryptFailResponseRecorder := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 
 	encryptedEmptySecret, _ := cryptoKeyManager.EncryptField([]byte(""))
 	alwaysConfig.Threat.BotProtection.SecretKey = encryptedEmptySecret
-	configManager.Set(alwaysConfig)
+	configManager.SetMemoryConfig(alwaysConfig)
 
 	emptySecretRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	emptySecretResponseRecorder := httptest.NewRecorder()
@@ -128,7 +128,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 	encryptedValidSecret, _ := cryptoKeyManager.EncryptField([]byte("real-secret"))
 	alwaysConfig.Threat.BotProtection.SecretKey = encryptedValidSecret
 	alwaysConfig.Threat.BotProtection.Provider = "unsupported-provider"
-	configManager.Set(alwaysConfig)
+	configManager.SetMemoryConfig(alwaysConfig)
 
 	invalidProviderRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
 	invalidProviderResponseRecorder := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestAuthBaseHandlerThreatCheckCaptchaUnit(t *testing.T) {
 
 	// 7. Valid provider, but verification fails -> returns false (400) and publishes event
 	alwaysConfig.Threat.BotProtection.Provider = "turnstile"
-	configManager.Set(alwaysConfig)
+	configManager.SetMemoryConfig(alwaysConfig)
 	mockClient.doFunc = func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -188,7 +188,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	// 1. Breach check disabled -> returns true
 	disabledConfig := DefaultConfig()
 	disabledConfig.Password.BreachCheck.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	breachDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", nil)
 	breachDisabledResponseRecorder := httptest.NewRecorder()
@@ -200,7 +200,7 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	breachConfig := DefaultConfig()
 	breachConfig.Password.BreachCheck.Enabled = true
 	breachConfig.Password.BreachCheck.FailOpen = false
-	configManager.Set(breachConfig)
+	configManager.SetMemoryConfig(breachConfig)
 	mockClient.doFunc = func(_ *http.Request) (*http.Response, error) {
 		return nil, errors.New("simulated network timeout")
 	}

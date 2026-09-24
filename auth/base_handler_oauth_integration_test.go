@@ -33,7 +33,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 		ClientID:     "google-client-integration-id",
 		ClientSecret: "google-client-integration-secret",
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	// 1. Mock OAuth exchange HTTP client
 	oauth.SetHTTPClient(&mockOAuthClient{
@@ -293,7 +293,7 @@ func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
 	// 10. Broken pool coverage
 	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	brokenService := NewService(brokenKernel)
-	brokenService.configManager.Set(activeConfig)
+	brokenService.configManager.SetMemoryConfig(activeConfig)
 	brokenBaseHandler := brokenService.baseHandler
 
 	_ = brokenKernel.KVStore().Set(context.Background(), "auth:pkce:broken-pool-state", "broken-pool-state", 10*time.Minute)

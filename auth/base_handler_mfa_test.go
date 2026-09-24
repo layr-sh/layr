@@ -19,7 +19,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()
 	disabledConfig.MFA.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	mfaSetupDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/setup", strings.NewReader(`{}`))
 	mfaSetupDisabledResponseRecorder := httptest.NewRecorder()
@@ -38,7 +38,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	// Enable MFA
 	enabledConfig := DefaultConfig()
 	enabledConfig.MFA.Enabled = true
-	configManager.Set(enabledConfig)
+	configManager.SetMemoryConfig(enabledConfig)
 
 	// 2. Missing bearer -> 401
 	missingBearerMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/setup", nil)
@@ -112,7 +112,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	customIssuerConfig := DefaultConfig()
 	customIssuerConfig.MFA.Enabled = true
 	customIssuerConfig.MFA.Issuer = "MyCustomIssuer"
-	configManager.Set(customIssuerConfig)
+	configManager.SetMemoryConfig(customIssuerConfig)
 
 	customIssuerMFARequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa/setup", nil)
 	customIssuerMFARequest.Header.Set("Authorization", bearerHeader)
@@ -126,7 +126,7 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 	emptyIssuerConfig := DefaultConfig()
 	emptyIssuerConfig.MFA.Issuer = ""
 	emptyIssuerService := NewService(kernel)
-	emptyIssuerService.configManager.Set(emptyIssuerConfig)
+	emptyIssuerService.configManager.SetMemoryConfig(emptyIssuerConfig)
 	emptyIssuerBaseHandler := emptyIssuerService.baseHandler
 	if emptyIssuerBaseHandler.totpManager == nil {
 		t.Fatal("expected non-nil TOTP manager")
@@ -134,14 +134,14 @@ func TestAuthMFAHandlerUnit(t *testing.T) {
 
 	// 9. handleDisableMFA unit checks
 	disabledConfig.MFA.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 	disableMFAForbiddenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/auth/mfa", nil)
 	disableMFAForbiddenResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDisableMFA(disableMFAForbiddenResponseRecorder, disableMFAForbiddenRequest)
 	if disableMFAForbiddenResponseRecorder.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 on MFA disable when disabled in config, got: %d", disableMFAForbiddenResponseRecorder.Code)
 	}
-	configManager.Set(enabledConfig)
+	configManager.SetMemoryConfig(enabledConfig)
 
 	missingBearerDisableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/v1/auth/mfa", nil)
 	missingBearerDisableResponseRecorder := httptest.NewRecorder()
@@ -176,7 +176,7 @@ func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
 	// 1. MFA disabled -> 403
 	disabledConfig := DefaultConfig()
 	disabledConfig.MFA.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	mfaChallengeDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/challenge", strings.NewReader(`{}`))
 	mfaChallengeDisabledResponseRecorder := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestAuthMFAChallengeHandlerUnit(t *testing.T) {
 	// Enable MFA
 	enabledConfig := DefaultConfig()
 	enabledConfig.MFA.Enabled = true
-	configManager.Set(enabledConfig)
+	configManager.SetMemoryConfig(enabledConfig)
 
 	// 2. Bad JSON body -> 400
 	badJSONRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/challenge", strings.NewReader(`{invalid`))

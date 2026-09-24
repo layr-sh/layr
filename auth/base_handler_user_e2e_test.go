@@ -69,7 +69,7 @@ func TestAuthEmailVerificationFullLifecycleE2E(t *testing.T) {
 			TimeoutSeconds: 5,
 		},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig { return &activeConfig.EmailDispatcher })
 
 	// 3. Request Email Verification
@@ -182,7 +182,7 @@ func TestAuthPhoneVerificationFullLifecycleE2E(t *testing.T) {
 			TimeoutSeconds: 5,
 		},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 	baseHandler.smsDispatcher = NewSMSDispatcher(kernel, func() *SMSDispatcherConfig { return &activeConfig.SMSDispatcher })
 
 	// 1. Request Phone Verification
@@ -266,7 +266,7 @@ func TestAuthVerificationUnconfiguredE2E(t *testing.T) {
 	activeConfig := configManager.Get()
 	activeConfig.EmailDispatcher.Driver = nil
 	activeConfig.SMSDispatcher.Driver = nil
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	// 1. Email Verification Request -> 500 Internal Server Error
 	emailPayload, _ := json.Marshal(map[string]any{"email": "unconfigured@example.com"})

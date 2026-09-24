@@ -3,14 +3,19 @@ package image
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
 
 // ConfigKey is the primary key used in image.config.
 const ConfigKey = "runtime"
+
+// ErrInvalidConfig is returned when runtime configuration validation fails.
+var ErrInvalidConfig = errors.New("invalid image configuration")
 
 // Named default constants for image transformation configuration.
 const (
@@ -122,8 +127,11 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 	const selectSQLStatement = `SELECT value FROM image.config WHERE key = $1`
 	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
 	if scanErr != nil {
-		defaultConfig := DefaultConfig()
-		return configManager.Set(ctx, defaultConfig)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			defaultConfig := DefaultConfig()
+			return configManager.Set(ctx, defaultConfig)
+		}
+		return fmt.Errorf("failed to query image.config: %w", scanErr)
 	}
 
 	var parsedConfig Config
@@ -131,17 +139,18 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 		return fmt.Errorf("failed to parse dynamic image config JSON: %w", unmarshalErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = parsedConfig
-	configManager.rwMutex.Unlock()
+	if err := parsedConfig.Validate(); err != nil {
+		return fmt.Errorf("stored image config is invalid: %w", err)
+	}
 
+	configManager.SetMemoryConfig(parsedConfig)
 	return nil
 }
 
 // Set writes dynamic image configuration to PostgreSQL and updates lifetime memory.
 func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) error {
 	if validateErr := newConfig.Validate(); validateErr != nil {
-		return fmt.Errorf("invalid image configuration: %w", validateErr)
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, validateErr)
 	}
 
 	rawJSON, _ := json.Marshal(newConfig)
@@ -158,9 +167,10 @@ func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) e
 		return fmt.Errorf("failed to save image config to database: %w", execErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = newConfig
-	configManager.rwMutex.Unlock()
+	configManager.SetMemoryConfig(newConfig)
+	if configManager.kernel != nil && configManager.kernel.EventBus() != nil {
+		configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("image.config", ConfigUpdatedEventData(newConfig)))
+	}
 
 	return nil
 }

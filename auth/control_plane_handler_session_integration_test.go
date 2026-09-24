@@ -164,7 +164,7 @@ func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) 
 			FrontChannelSignOutSessionRequired: false,
 		},
 	}
-	configManager.Set(authConfig)
+	configManager.SetMemoryConfig(authConfig)
 
 	jwtSigner := kernel.JWTSigner()
 	controlPlaneHandler := service.controlPlaneHandler

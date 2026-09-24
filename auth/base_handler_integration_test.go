@@ -48,7 +48,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 			URL: "http://localhost:9999/webhook",
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -373,7 +373,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 		ClientID:     "google-client-id",
 		ClientSecret: "google-secret",
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:8080/callback&state=valid-state", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
@@ -480,7 +480,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 			URL: "http://localhost:9999/webhook",
 		},
 	}
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -806,7 +806,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	authConfig.RateLimiting.Enabled = true
 	authConfig.RateLimiting.MaxSignInAttempts = 2
 	authConfig.RateLimiting.WindowDurationSeconds = 60
-	if err := configManager.Save(ctx, authConfig); err != nil {
+	if err := configManager.Set(ctx, authConfig); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
 
@@ -1000,7 +1000,7 @@ func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	// 7. Token Refresh via Database (FastPath Disabled)
 	authConfig.Cache.FastPathSessionsEnabled = false
-	if saveConfigErr := configManager.Save(ctx, authConfig); saveConfigErr != nil {
+	if saveConfigErr := configManager.Set(ctx, authConfig); saveConfigErr != nil {
 		t.Fatalf("failed to update config: %v", saveConfigErr)
 	}
 

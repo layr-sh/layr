@@ -84,11 +84,33 @@ func TestImageControlPlaneHandlerConfigUnit(t *testing.T) {
 		controlPlaneHandler.handleUpdateConfig(validUpdateResponseRecorder, validUpdateRequest)
 		require.Equal(t, http.StatusOK, validUpdateResponseRecorder.Code)
 
-		// Invalid config validation failure (quality > 100) -> 500
+		// Invalid config validation failure (quality > 100) -> 400
 		invalidPayload := `{"default_quality":150}`
 		invalidConfigRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/image/config", bytes.NewReader([]byte(invalidPayload)))
 		invalidConfigResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateConfig(invalidConfigResponseRecorder, invalidConfigRequest)
-		require.Equal(t, http.StatusInternalServerError, invalidConfigResponseRecorder.Code)
+		require.Equal(t, http.StatusBadRequest, invalidConfigResponseRecorder.Code)
 	})
+}
+
+func TestImageControlPlaneHandlerConfigDatabaseErrorUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.ControlPlaneHandler()
+
+	writeConfigAuthContext := core.AuthContext{
+		ServiceAccountID: "sa-test",
+		JWT: core.JWTClaims{
+			Subject:  "sa-test",
+			Role:     "service_role",
+			Audience: "test:service_account",
+			Scope:    core.ScopeImageConfigWrite,
+		},
+	}
+	writeConfigCtx := core.WithAuthContext(context.Background(), writeConfigAuthContext)
+
+	validUpdateRequest := httptest.NewRequestWithContext(writeConfigCtx, http.MethodPut, "/v1/_/image/config", bytes.NewReader([]byte(`{"default_quality":90}`)))
+	validUpdateResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(validUpdateResponseRecorder, validUpdateRequest)
+	require.Equal(t, http.StatusInternalServerError, validUpdateResponseRecorder.Code)
 }

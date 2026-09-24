@@ -3,14 +3,19 @@ package filestorage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
 
 // ConfigKey is the primary key used in file_storage.config.
 const ConfigKey = "runtime"
+
+// ErrInvalidConfig is returned when runtime configuration validation fails.
+var ErrInvalidConfig = errors.New("invalid file storage configuration")
 
 // Named default constants for file storage configuration.
 const (
@@ -88,8 +93,11 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 	const selectSQLStatement = `SELECT value FROM file_storage.config WHERE key = $1`
 	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
 	if scanErr != nil {
-		defaultConfig := DefaultConfig()
-		return configManager.Set(ctx, defaultConfig)
+		if errors.Is(scanErr, pgx.ErrNoRows) {
+			defaultConfig := DefaultConfig()
+			return configManager.Set(ctx, defaultConfig)
+		}
+		return fmt.Errorf("failed to query file_storage.config: %w", scanErr)
 	}
 
 	var parsedConfig Config
@@ -97,16 +105,18 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 		return fmt.Errorf("failed to parse dynamic file storage config JSON: %w", unmarshalErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = parsedConfig
-	configManager.rwMutex.Unlock()
+	if err := parsedConfig.Validate(); err != nil {
+		return fmt.Errorf("stored file storage config is invalid: %w", err)
+	}
+
+	configManager.SetMemoryConfig(parsedConfig)
 	return nil
 }
 
-// Set saves the updated configuration to PostgreSQL and updates the in-memory cache.
+// Set saves the updated configuration to PostgreSQL, updates memory cache, and publishes event.
 func (configManager *ConfigManager) Set(ctx context.Context, config Config) error {
 	if validateErr := config.Validate(); validateErr != nil {
-		return validateErr
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, validateErr)
 	}
 
 	serializedJSON, _ := json.Marshal(config)
@@ -115,16 +125,16 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 		INSERT INTO file_storage.config (key, value, last_updated_at)
 		VALUES ($1, $2, clock_timestamp())
 		ON CONFLICT (key) DO UPDATE
-		SET value = EXCLUDED.value,
-		    last_updated_at = EXCLUDED.last_updated_at;
+		SET value = EXCLUDED.value, last_updated_at = clock_timestamp();
 	`
 	_, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, serializedJSON)
 	if execErr != nil {
 		return fmt.Errorf("failed to persist dynamic file storage config: %w", execErr)
 	}
 
-	configManager.rwMutex.Lock()
-	configManager.config = config
-	configManager.rwMutex.Unlock()
+	configManager.SetMemoryConfig(config)
+	if configManager.kernel != nil && configManager.kernel.EventBus() != nil {
+		configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("file_storage.config", ConfigUpdatedEventData(config)))
+	}
 	return nil
 }

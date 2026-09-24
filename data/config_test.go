@@ -1,6 +1,8 @@
 package data
 
 import (
+	"context"
+	"errors"
 	"testing"
 )
 
@@ -97,5 +99,23 @@ func TestDataConfigManagerMemoryUnit(t *testing.T) {
 	currentConfig := configManager.Get()
 	if !currentConfig.REST.Enabled || !currentConfig.GraphQL.Enabled {
 		t.Fatal("expected default settings in new config manager")
+	}
+}
+
+func TestDataConfigManagerSetValidationUnit(t *testing.T) {
+	if ConfigKey != "runtime" {
+		t.Fatalf("expected ConfigKey to be 'runtime', got %q", ConfigKey)
+	}
+
+	configManager := NewConfigManager(nil)
+	invalidConfig := DefaultConfig()
+	invalidConfig.REST.MaxLimit = 0
+
+	err := configManager.Set(context.Background(), invalidConfig)
+	if err == nil {
+		t.Fatal("expected Set to fail on invalid configuration, but got nil")
+	}
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Fatalf("expected error to wrap ErrInvalidConfig, got: %v", err)
 	}
 }

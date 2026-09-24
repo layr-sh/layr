@@ -38,4 +38,19 @@ func TestImageConfigPostgresIntegration(t *testing.T) {
 
 	corruptedConfigManager := NewConfigManager(kernel)
 	require.Error(t, corruptedConfigManager.Load(ctx))
+
+	// 4. Stored config with invalid values fails validation on Load
+	const invalidValuesSQL = `UPDATE image.config SET value = '{"default_quality": 0, "max_src_resolution": 10, "max_animation_frames": 10, "cache_ttl_seconds": 10, "watermark_opacity": 0.5}' WHERE key = 'runtime'`
+	_, execErr = kernel.DB().Exec(ctx, invalidValuesSQL)
+	require.NoError(t, execErr)
+
+	invalidConfigManager := NewConfigManager(kernel)
+	loadErr := invalidConfigManager.Load(ctx)
+	require.Error(t, loadErr)
+	require.Contains(t, loadErr.Error(), "stored image config is invalid")
+
+	// 5. Canceled context causes query error on Load
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.Error(t, configManager.Load(canceledCtx))
 }

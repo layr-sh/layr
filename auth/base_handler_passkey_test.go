@@ -23,7 +23,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	// 1. Passkeys disabled -> 403
 	disabledConfig := configManager.Get()
 	disabledConfig.Passkeys.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	passkeySignUpDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{"user_id":"u1","user_name":"Alice"}`))
 	passkeySignUpDisabledResponseRecorder := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestAuthPasskeyHandlerUnit(t *testing.T) {
 	// Enable Passkeys
 	enabledConfig := configManager.Get()
 	enabledConfig.Passkeys.Enabled = true
-	configManager.Set(enabledConfig)
+	configManager.SetMemoryConfig(enabledConfig)
 
 	// 2. Passkey SignUp Bad JSON / Missing Fields
 	badJSONPasskeySignUpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up", strings.NewReader(`{invalid`))

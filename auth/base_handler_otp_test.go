@@ -22,7 +22,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	disabledConfig := DefaultConfig()
 	disabledConfig.EmailOTP.Enabled = false
 	disabledConfig.SMSOTP.Enabled = false
-	configManager.Set(disabledConfig)
+	configManager.SetMemoryConfig(disabledConfig)
 
 	disabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))
 	disabledSendResponseRecorder := httptest.NewRecorder()
@@ -51,7 +51,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 		Driver:  &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{URL: "http://localhost:9999/dummy"},
 	}
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 	baseHandler.emailDispatcher = NewEmailDispatcher(kernel, func() *EmailDispatcherConfig {
 		emailDispatcherConfig := configManager.Get().EmailDispatcher
 		return &emailDispatcherConfig
@@ -94,7 +94,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	emailOnlyConfig := activeConfig
 	emailOnlyConfig.EmailOTP.Enabled = true
 	emailOnlyConfig.SMSOTP.Enabled = false
-	configManager.Set(emailOnlyConfig)
+	configManager.SetMemoryConfig(emailOnlyConfig)
 
 	smsDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+15551112222"}`))
 	smsDisabledSendResponseRecorder := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	smsOnlyConfig := activeConfig
 	smsOnlyConfig.EmailOTP.Enabled = false
 	smsOnlyConfig.SMSOTP.Enabled = true
-	configManager.Set(smsOnlyConfig)
+	configManager.SetMemoryConfig(smsOnlyConfig)
 
 	emailDisabledSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com"}`))
 	emailDisabledSendResponseRecorder := httptest.NewRecorder()
@@ -135,7 +135,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	unconfiguredConfig.SMSOTP.Enabled = true
 	unconfiguredConfig.EmailDispatcher.Driver = nil
 	unconfiguredConfig.SMSDispatcher.Driver = nil
-	configManager.Set(unconfiguredConfig)
+	configManager.SetMemoryConfig(unconfiguredConfig)
 
 	unconfiguredEmailOTPResponseRecorder := httptest.NewRecorder()
 	unconfiguredEmailOTPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"user@example.com","purpose":"sign_in"}`))
@@ -152,7 +152,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 
 	// Restore configured delivery
-	configManager.Set(activeConfig)
+	configManager.SetMemoryConfig(activeConfig)
 
 	// 6. Rate limits & Cooldown
 	_ = testKVStore.Set(context.Background(), "auth:cooldown:sign_in:cooldown_user@example.com", "1", 60*time.Second)
@@ -209,7 +209,7 @@ func TestAuthOTPThreatValidationUnit(t *testing.T) {
 	botProtectionConfig.EmailOTP.Enabled = true
 	botProtectionConfig.Threat.BotProtection.Enabled = true
 	botProtectionConfig.Threat.BotProtection.Mode = "always"
-	configManager.Set(botProtectionConfig)
+	configManager.SetMemoryConfig(botProtectionConfig)
 
 	// OTP Send captcha check
 	otpSendNoCaptchaRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"test@example.com","purpose":"sign_in"}`))

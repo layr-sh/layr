@@ -3,6 +3,7 @@ package tasks
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"layr.sh/core"
@@ -26,15 +27,20 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
-	var newConfig Config
+	newConfig := controlPlaneHandler.configManager.Get()
 	if err := json.NewDecoder(request.Body).Decode(&newConfig); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	requestCtx := request.Context()
-	if err := controlPlaneHandler.configManager.Set(requestCtx, newConfig); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
+	setErr := controlPlaneHandler.configManager.Set(requestCtx, newConfig)
+	if setErr != nil {
+		if errors.Is(setErr, ErrInvalidConfig) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, setErr.Error())
+			return
+		}
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, setErr.Error())
 		return
 	}
 

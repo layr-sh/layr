@@ -8,8 +8,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
+
+// ConfigKey is the primary key used in tasks.config.
+const ConfigKey = "runtime"
+
+// ErrInvalidConfig is returned when runtime configuration validation fails.
+var ErrInvalidConfig = errors.New("invalid tasks configuration")
 
 const (
 	defaultConcurrencyLimit         = 25
@@ -98,22 +105,14 @@ func (configManager *ConfigManager) SetMemoryConfig(config Config) {
 func (configManager *ConfigManager) Load(ctx context.Context) error {
 	log.Debug("loading tasks configuration from database")
 	var rawJSON []byte
-	err := configManager.kernel.DB().QueryRow(ctx, "SELECT value FROM tasks.config WHERE key = 'tasks_config'").Scan(&rawJSON)
+	const selectSQLStatement = `SELECT value FROM tasks.config WHERE key = $1`
+	err := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)
 	if err != nil {
-		defaultConfig := DefaultConfig()
-		configBytes, _ := json.Marshal(defaultConfig)
-
-		_, insertErr := configManager.kernel.DB().Exec(ctx, `
-			INSERT INTO tasks.config (key, value, last_updated_at)
-			VALUES ('tasks_config', $1, clock_timestamp())
-			ON CONFLICT (key) DO NOTHING
-		`, configBytes)
-		if insertErr != nil {
-			return fmt.Errorf("failed to initialize tasks config in database: %w", insertErr)
+		if errors.Is(err, pgx.ErrNoRows) {
+			defaultConfig := DefaultConfig()
+			return configManager.Set(ctx, defaultConfig)
 		}
-
-		configManager.SetMemoryConfig(defaultConfig)
-		return nil
+		return fmt.Errorf("failed to query tasks.config: %w", err)
 	}
 
 	var loadedConfig Config
@@ -132,21 +131,24 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 // Set persists new configuration into PostgreSQL and updates memory.
 func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) error {
 	if err := newConfig.Validate(); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
 
 	configBytes, _ := json.Marshal(newConfig)
 
-	_, execErr := configManager.kernel.DB().Exec(ctx, `
+	const upsertSQLStatement = `
 		INSERT INTO tasks.config (key, value, last_updated_at)
-		VALUES ('tasks_config', $1, clock_timestamp())
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, last_updated_at = clock_timestamp()
-	`, configBytes)
+		VALUES ($1, $2, clock_timestamp())
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, last_updated_at = clock_timestamp();
+	`
+	_, execErr := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, configBytes)
 	if execErr != nil {
 		return fmt.Errorf("failed to persist tasks config: %w", execErr)
 	}
 
 	configManager.SetMemoryConfig(newConfig)
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("tasks_config", ConfigUpdatedEventData(newConfig)))
+	if configManager.kernel != nil && configManager.kernel.EventBus() != nil {
+		configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("tasks.config", ConfigUpdatedEventData(newConfig)))
+	}
 	return nil
 }
