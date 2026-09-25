@@ -62,7 +62,7 @@ type Kernel struct {
 	eventBus              *EventBus
 	eventManager          *EventManager
 	eventHookManager      *EventHookManager
-	node                  *Node
+	nodeManager           *NodeManager
 	server                *Server
 	services              []ServiceRunner
 	stopOnce              sync.Once
@@ -162,8 +162,8 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 
 	// Register Node in Cluster
 	nodeName, _ := os.Hostname()
-	kernel.node = NewNode(kernel.db, nodeName, config.GetEnabledServices()).WithEventBus(kernel.eventBus)
-	_ = kernel.node.Register(ctx)
+	kernel.nodeManager = NewNodeManager(kernel.db, nodeName, config.GetEnabledServices()).WithEventBus(kernel.eventBus)
+	_ = kernel.nodeManager.Register(ctx)
 
 	// Initialize KV Store
 	kvStore, err := NewKVStore(ctx, kernel.db)
@@ -271,6 +271,19 @@ func (kernel *Kernel) ServiceAccountManager() *ServiceAccountManager {
 	return kernel.serviceAccountManager
 }
 
+// NodeManager returns the cluster node manager.
+func (kernel *Kernel) NodeManager() *NodeManager {
+	return kernel.nodeManager
+}
+
+// Node returns the registered node entity.
+func (kernel *Kernel) Node() Node {
+	if kernel.nodeManager == nil {
+		return Node{}
+	}
+	return kernel.nodeManager.Node()
+}
+
 // Server returns the HTTP gateway server.
 func (kernel *Kernel) Server() *Server {
 	return kernel.server
@@ -292,7 +305,7 @@ func (kernel *Kernel) ValidateSubsystems() error {
 	if kernel.cryptoKeyManager == nil {
 		return errors.New("kernel invariant violation: crypto key manager is not initialized")
 	}
-	if kernel.node == nil {
+	if kernel.nodeManager == nil {
 		return errors.New("kernel invariant violation: node registry is not initialized")
 	}
 	if kernel.kvStore == nil {
@@ -334,8 +347,8 @@ func (kernel *Kernel) Stop(ctx context.Context) {
 		if kernel.server != nil {
 			_ = kernel.server.Shutdown(shutdownCtx)
 		}
-		if kernel.node != nil {
-			kernel.node.Close()
+		if kernel.nodeManager != nil {
+			kernel.nodeManager.Close()
 		}
 		for i := len(kernel.services) - 1; i >= 0; i-- {
 			kernel.services[i].Stop()

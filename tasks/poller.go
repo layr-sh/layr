@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"uuid"
-
 	"layr.sh/core"
 )
 
@@ -98,29 +96,20 @@ func (jobPoller *JobPoller) PollOnce(ctx context.Context) (int, error) {
 	}()
 
 	rows, _ := tx.Query(ctx, `
-		SELECT id, name, cron_expression, timezone, target_type, target_payload, next_run_at
+		SELECT id, name, cron_expression, timezone, target_type, target_payload, is_enabled, last_run_at, next_run_at, created_at, last_updated_at
 		FROM tasks.jobs
 		WHERE is_enabled = true AND next_run_at <= clock_timestamp()
 		FOR UPDATE SKIP LOCKED
 	`)
 	defer rows.Close()
 
-	type dueJob struct {
-		id            uuid.UUID
-		name          string
-		cronExpr      string
-		timezone      string
-		targetType    string
-		targetPayload []byte
-		nextRunAt     time.Time
-	}
-
-	var dueJobs []dueJob
+	var dueJobs []Job
 	for rows.Next() {
-		var targetDueJob dueJob
+		var targetDueJob Job
 		_ = rows.Scan(
-			&targetDueJob.id, &targetDueJob.name, &targetDueJob.cronExpr, &targetDueJob.timezone,
-			&targetDueJob.targetType, &targetDueJob.targetPayload, &targetDueJob.nextRunAt,
+			&targetDueJob.ID, &targetDueJob.Name, &targetDueJob.CronExpression, &targetDueJob.Timezone,
+			&targetDueJob.TargetType, &targetDueJob.TargetPayload, &targetDueJob.IsEnabled,
+			&targetDueJob.LastRunAt, &targetDueJob.NextRunAt, &targetDueJob.CreatedAt, &targetDueJob.LastUpdatedAt,
 		)
 		dueJobs = append(dueJobs, targetDueJob)
 	}
@@ -139,35 +128,47 @@ func (jobPoller *JobPoller) PollOnce(ctx context.Context) (int, error) {
 	scheduledCount := 0
 
 	for _, targetDueJob := range dueJobs {
-		cronSchedule, err := ParseCron(targetDueJob.cronExpr)
+		cronSchedule, err := ParseCron(targetDueJob.CronExpression)
 		if err != nil {
-			log.Errorf("skipping job %s (%s) due to invalid cron expression: %v", targetDueJob.id, targetDueJob.name, err)
+			log.Errorf("skipping job %s (%s) due to invalid cron expression: %v", targetDueJob.ID, targetDueJob.Name, err)
 			continue
 		}
 
-		timezoneLocation, err := time.LoadLocation(targetDueJob.timezone)
+		timezoneLocation, err := time.LoadLocation(targetDueJob.Timezone)
 		if err != nil {
 			timezoneLocation = time.UTC
 		}
 
 		now := time.Now()
-		newNextRunAt := cronSchedule.Next(targetDueJob.nextRunAt, timezoneLocation)
+		newNextRunAt := cronSchedule.Next(targetDueJob.NextRunAt, timezoneLocation)
 		// Advance next run if the calculated run is still in the past
 		for newNextRunAt.Before(now) {
 			newNextRunAt = cronSchedule.Next(newNextRunAt, timezoneLocation)
 		}
 
-		var executionID uuid.UUID
+		var execution Execution
 		err = tx.QueryRow(ctx, `
 			INSERT INTO tasks.executions (
 				job_id, status, run_at, payload, attempts, max_attempts, created_at
 			) VALUES (
 				$1, 'pending', clock_timestamp(), $2, 0, $3, clock_timestamp()
 			)
-			RETURNING id
-		`, targetDueJob.id, targetDueJob.targetPayload, tasksConfig.RetryMaxAttempts).Scan(&executionID)
+			RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
+		`, targetDueJob.ID, targetDueJob.TargetPayload, tasksConfig.RetryMaxAttempts).Scan(
+			&execution.ID,
+			&execution.JobID,
+			&execution.Status,
+			&execution.RunAt,
+			&execution.Payload,
+			&execution.Attempts,
+			&execution.MaxAttempts,
+			&execution.LockedAt,
+			&execution.LockedBy,
+			&execution.LastError,
+			&execution.CreatedAt,
+		)
 		if err != nil {
-			log.Errorf("failed to enqueue execution for job %s: %v", targetDueJob.id, err)
+			log.Errorf("failed to enqueue execution for job %s: %v", targetDueJob.ID, err)
 			continue
 		}
 
@@ -177,27 +178,24 @@ func (jobPoller *JobPoller) PollOnce(ctx context.Context) (int, error) {
 				next_run_at = $1,
 				last_updated_at = clock_timestamp()
 			WHERE id = $2
-		`, newNextRunAt, targetDueJob.id)
+		`, newNextRunAt, targetDueJob.ID)
 		if err != nil {
-			log.Errorf("failed to advance next_run_at for job %s: %v", targetDueJob.id, err)
+			log.Errorf("failed to advance next_run_at for job %s: %v", targetDueJob.ID, err)
 			continue
 		}
 
 		scheduledCount++
 
-		jobPoller.kernel.EventBus().Publish(ctx, NewJobScheduledEvent(targetDueJob.id.String(), JobScheduledEventData{
-			JobID:         targetDueJob.id,
-			JobName:       targetDueJob.name,
-			PreviousRunAt: &targetDueJob.nextRunAt,
+		previousRunAt := targetDueJob.NextRunAt
+		jobPoller.kernel.EventBus().Publish(ctx, NewJobScheduledEvent(targetDueJob.ID.String(), JobScheduledEventData{
+			Job:           targetDueJob,
+			PreviousRunAt: &previousRunAt,
 			NextRunAt:     newNextRunAt,
 		}))
 
-		jobPoller.kernel.EventBus().Publish(ctx, NewExecutionEnqueuedEvent(executionID.String(), ExecutionEnqueuedEventData{
-			ExecutionID: executionID,
-			JobID:       &targetDueJob.id,
-			JobName:     targetDueJob.name,
-			RunAt:       now,
-			TargetType:  targetDueJob.targetType,
+		jobPoller.kernel.EventBus().Publish(ctx, NewExecutionEnqueuedEvent(execution.ID.String(), ExecutionEnqueuedEventData{
+			Execution:   execution,
+			JobName:     targetDueJob.Name,
 			IsImmediate: false,
 		}))
 	}

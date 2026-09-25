@@ -42,7 +42,7 @@ func TestImageEventUnit(t *testing.T) {
 
 	t.Run("preset deleted event creation", func(t *testing.T) {
 		t.Parallel()
-		presetDeletedEventData := PresetDeletedEventData{PresetName: "thumbnail"}
+		presetDeletedEventData := PresetDeletedEventData(Preset{Name: "thumbnail"})
 		event := NewPresetDeletedEvent("preset-3", presetDeletedEventData)
 		require.Equal(t, "image.preset.deleted", event.Type)
 		require.NotNil(t, event.ResourceID)

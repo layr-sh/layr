@@ -27,9 +27,7 @@ func NewPresetUpdatedEvent(resourceID string, presetUpdatedEventData PresetUpdat
 }
 
 // PresetDeletedEventData represents the payload for image.preset.deleted.
-type PresetDeletedEventData struct {
-	PresetName string `json:"preset_name"`
-}
+type PresetDeletedEventData Preset
 
 // NewPresetDeletedEvent creates a typed event for preset deletions.
 func NewPresetDeletedEvent(resourceID string, presetDeletedEventData PresetDeletedEventData) core.Event {

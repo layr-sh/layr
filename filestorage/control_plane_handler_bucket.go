@@ -390,9 +390,24 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 	}
 
 	ctx := request.Context()
-	const deleteSQL = `DELETE FROM file_storage.buckets WHERE name = $1 RETURNING id;`
-	var deletedBucketID uuid.UUID
-	deleteErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, deleteSQL, bucketName).Scan(&deletedBucketID)
+	const deleteSQL = `
+		DELETE FROM file_storage.buckets
+		WHERE name = $1
+		RETURNING id, name, is_public, backend, backend_config, allowed_mime_types, max_file_size_bytes, created_at, last_updated_at;
+	`
+	var deletedBucket Bucket
+	var rawBackendConfig []byte
+	deleteErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, deleteSQL, bucketName).Scan(
+		&deletedBucket.ID,
+		&deletedBucket.Name,
+		&deletedBucket.IsPublic,
+		&deletedBucket.Backend,
+		&rawBackendConfig,
+		&deletedBucket.AllowedMIMETypes,
+		&deletedBucket.MaxFileSizeBytes,
+		&deletedBucket.CreatedAt,
+		&deletedBucket.LastUpdatedAt,
+	)
 	if deleteErr != nil {
 		if errors.Is(deleteErr, pgx.ErrNoRows) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("Bucket %q not found", bucketName))
@@ -402,9 +417,15 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 		return
 	}
 
-	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketDeletedEvent(deletedBucketID.String(), BucketDeletedEventData{
-		BucketName: bucketName,
-	}))
+	deletedBucket.BackendConfig = map[string]any{}
+	if len(rawBackendConfig) > 0 {
+		_ = json.Unmarshal(rawBackendConfig, &deletedBucket.BackendConfig)
+	}
+	if secretKey, ok := deletedBucket.BackendConfig["secret_access_key"].(string); ok && secretKey != "" {
+		deletedBucket.BackendConfig["secret_access_key"] = "********"
+	}
+
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewBucketDeletedEvent(deletedBucket.ID.String(), BucketDeletedEventData(deletedBucket)))
 	log.Debugf("bucket %s successfully deleted", bucketName)
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

@@ -62,9 +62,9 @@ func TestImagePresetPostgresIntegration(t *testing.T) {
 	require.Equal(t, updatedOptions, updatedPreset.ProcessingOptions)
 
 	// 8. Delete preset
-	deletedName, deleteErr := presetManager.Delete(ctx, createdPreset.ID)
+	deletedPreset, deleteErr := presetManager.Delete(ctx, createdPreset.ID)
 	require.NoError(t, deleteErr)
-	require.Equal(t, "hero_banner", deletedName)
+	require.Equal(t, "hero_banner", deletedPreset.Name)
 
 	// 9. Nonexistent Get returns error
 	_, notFoundErr := presetManager.GetByID(ctx, uuid.New())

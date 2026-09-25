@@ -262,10 +262,10 @@ func (presetManager *PresetManager) Update(ctx context.Context, presetID uuid.UU
 }
 
 // Delete removes a preset by ID.
-func (presetManager *PresetManager) Delete(ctx context.Context, presetID uuid.UUID) (string, error) {
+func (presetManager *PresetManager) Delete(ctx context.Context, presetID uuid.UUID) (*Preset, error) {
 	existingPreset, getErr := presetManager.GetByID(ctx, presetID)
 	if getErr != nil {
-		return "", getErr
+		return nil, getErr
 	}
 
 	const deleteSQLStatement = `
@@ -275,12 +275,12 @@ func (presetManager *PresetManager) Delete(ctx context.Context, presetID uuid.UU
 
 	_, execErr := presetManager.kernel.DB().Exec(ctx, deleteSQLStatement, presetID)
 	if execErr != nil {
-		return "", fmt.Errorf("failed to delete preset: %w", execErr)
+		return nil, fmt.Errorf("failed to delete preset: %w", execErr)
 	}
 
 	presetManager.rwMutex.Lock()
 	delete(presetManager.cache, existingPreset.Name)
 	presetManager.rwMutex.Unlock()
 
-	return existingPreset.Name, nil
+	return existingPreset, nil
 }

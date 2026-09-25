@@ -43,12 +43,12 @@ func TestCoreEmbeddedDatabaseFullLifecycleAndMigrationsIntegration(t *testing.T)
 	}
 
 	// 4. Test Node Register and Heartbeat
-	node := NewNode(db, "test-node", []string{"data", "auth"})
-	if err := node.Register(ctx); err != nil {
+	nodeManager := NewNodeManager(db, "test-node", []string{"data", "auth"})
+	if err := nodeManager.Register(ctx); err != nil {
 		t.Fatalf("Node Register failed: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	node.Close()
+	nodeManager.Close()
 
 	// 5. Test MigrateDown (Rollback to 0)
 	if err := db.MigrateDown(ctx, SystemDatabaseMigrations, 0); err != nil {

@@ -109,9 +109,9 @@ func TestImagePresetUnit(t *testing.T) {
 		require.Equal(t, "rs:fill:64:64", resolvedOptions)
 
 		// Delete
-		deletedName, deleteErr := presetManager.Delete(ctx, createdPreset.ID)
+		deletedPreset, deleteErr := presetManager.Delete(ctx, createdPreset.ID)
 		require.NoError(t, deleteErr)
-		require.Equal(t, "avatar-thumb", deletedName)
+		require.Equal(t, "avatar-thumb", deletedPreset.Name)
 
 		// Cache reflects deletion
 		_, missingErr := presetManager.ResolveOptions("avatar-thumb")

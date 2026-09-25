@@ -235,8 +235,8 @@ func (baseHandler *BaseHandler) handleDeleteMultipleS3Objects(responseWriter htt
 		} else {
 			deletedObjects = append(deletedObjects, S3DeletedObjectConfirmation(objectRef))
 			baseHandler.kernel.EventBus().Publish(ctx, NewObjectDeletedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectRef.Key), ObjectDeletedEventData{
-				BucketName: bucket.Name,
-				ObjectKey:  objectRef.Key,
+				Bucket:    *bucket,
+				ObjectKey: objectRef.Key,
 			}))
 		}
 	}
@@ -305,9 +305,9 @@ func (baseHandler *BaseHandler) handleGetS3Object(responseWriter http.ResponseWr
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDownloadedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDownloadedEventData{
-		BucketName: bucket.Name,
-		ObjectKey:  objectKey,
-		SizeBytes:  length,
+		Bucket:    *bucket,
+		ObjectKey: objectKey,
+		SizeBytes: length,
 	}))
 
 	_, _ = io.Copy(responseWriter, downloadReadCloser)
@@ -395,12 +395,8 @@ func (baseHandler *BaseHandler) handlePutS3Object(responseWriter http.ResponseWr
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
-		BucketID:       uploadedObject.BucketID,
-		BucketName:     bucket.Name,
-		ObjectKey:      uploadedObject.ObjectKey,
-		ContentType:    uploadedObject.ContentType,
-		SizeBytes:      uploadedObject.SizeBytes,
-		ChecksumSHA256: uploadedObject.ChecksumSHA256,
+		Bucket: *bucket,
+		Object: *uploadedObject,
 	}))
 
 	responseWriter.Header().Set("ETag", fmt.Sprintf("\"%s\"", uploadedObject.ChecksumSHA256))
@@ -458,8 +454,8 @@ func (baseHandler *BaseHandler) handleDeleteS3Object(responseWriter http.Respons
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDeletedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDeletedEventData{
-		BucketName: bucket.Name,
-		ObjectKey:  objectKey,
+		Bucket:    *bucket,
+		ObjectKey: objectKey,
 	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
@@ -496,9 +492,9 @@ func (baseHandler *BaseHandler) processCreateMultipartUpload(responseWriter http
 	_, _ = baseHandler.kernel.DB().Exec(ctx, insertSQL, uploadID, bucket.ID, objectKey, contentType)
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewMultipartInitiatedEvent(uploadID.String(), MultipartInitiatedEventData{
-		UploadID:   uploadID.String(),
-		BucketName: bucket.Name,
-		ObjectKey:  objectKey,
+		UploadID:  uploadID.String(),
+		Bucket:    *bucket,
+		ObjectKey: objectKey,
 	}))
 
 	createS3MultipartUploadResponse := CreateS3MultipartUploadResponse{
@@ -646,19 +642,15 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewMultipartCompletedEvent(uploadID.String(), MultipartCompletedEventData{
 		UploadID:       uploadID.String(),
-		BucketName:     bucket.Name,
+		Bucket:         *bucket,
 		ObjectKey:      objectKey,
 		SizeBytes:      totalSizeBytes,
 		ChecksumSHA256: uploadedObject.ChecksumSHA256,
 	}))
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
-		BucketID:       uploadedObject.BucketID,
-		BucketName:     bucket.Name,
-		ObjectKey:      uploadedObject.ObjectKey,
-		ContentType:    uploadedObject.ContentType,
-		SizeBytes:      uploadedObject.SizeBytes,
-		ChecksumSHA256: uploadedObject.ChecksumSHA256,
+		Bucket: *bucket,
+		Object: *uploadedObject,
 	}))
 
 	completeS3MultipartUploadResponse := CompleteS3MultipartUploadResponse{
@@ -688,12 +680,19 @@ func (baseHandler *BaseHandler) processAbortMultipartUpload(responseWriter http.
 	log.Tracef("handling S3 abort multipart upload request: uploadID=%s", uploadID)
 
 	ctx := request.Context()
+	bucketName := request.PathValue("bucket")
+	bucket, bucketErr := baseHandler.resolveBucket(ctx, bucketName)
+	if bucketErr != nil {
+		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist.")
+		return
+	}
+
 	_, _ = baseHandler.kernel.DB().Exec(ctx, `DELETE FROM file_storage.multipart_uploads WHERE id = $1;`, uploadID)
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewMultipartAbortedEvent(uploadID.String(), MultipartAbortedEventData{
-		UploadID:   uploadID.String(),
-		BucketName: request.PathValue("bucket"),
-		ObjectKey:  request.PathValue("key"),
+		UploadID:  uploadID.String(),
+		Bucket:    *bucket,
+		ObjectKey: request.PathValue("key"),
 	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)

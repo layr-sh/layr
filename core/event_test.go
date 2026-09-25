@@ -345,11 +345,14 @@ func TestCoreEventNewEventUnit(t *testing.T) {
 
 	// 8. NodeRegistered
 	nodeUUID := uuid.NewV7()
-	nodeRegisteredEvent := NewNodeRegisteredEvent(nodeUUID.String(), NodeRegisteredEventData{
+	now = time.Now().UTC()
+	nodeRegisteredEvent := NewNodeRegisteredEvent(nodeUUID.String(), NodeRegisteredEventData(Node{
 		ID:              nodeUUID,
 		NodeName:        "worker-node-1",
 		EnabledServices: []string{"data", "auth"},
-	})
+		StartedAt:       now,
+		LastHeartbeatAt: now,
+	}))
 	if nodeRegisteredEvent.Type != "core.node.registered" || nodeRegisteredEvent.ResourceType != "core.node" || nodeRegisteredEvent.Action != "registered" {
 		t.Fatalf("unexpected node registered event: %v", nodeRegisteredEvent)
 	}
@@ -358,10 +361,13 @@ func TestCoreEventNewEventUnit(t *testing.T) {
 	}
 
 	// 9. NodeUnregistered
-	nodeUnregisteredEvent := NewNodeUnregisteredEvent(nodeUUID.String(), NodeUnregisteredEventData{
-		ID:       nodeUUID,
-		NodeName: "worker-node-1",
-	})
+	nodeUnregisteredEvent := NewNodeUnregisteredEvent(nodeUUID.String(), NodeUnregisteredEventData(Node{
+		ID:              nodeUUID,
+		NodeName:        "worker-node-1",
+		EnabledServices: []string{"data", "auth"},
+		StartedAt:       now,
+		LastHeartbeatAt: now,
+	}))
 	if nodeUnregisteredEvent.Type != "core.node.unregistered" || nodeUnregisteredEvent.ResourceType != "core.node" || nodeUnregisteredEvent.Action != "unregistered" {
 		t.Fatalf("unexpected node unregistered event: %v", nodeUnregisteredEvent)
 	}

@@ -81,9 +81,9 @@ func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.Respons
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDownloadedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDownloadedEventData{
-		BucketName: bucket.Name,
-		ObjectKey:  objectKey,
-		SizeBytes:  length,
+		Bucket:    *bucket,
+		ObjectKey: objectKey,
+		SizeBytes: length,
 	}))
 
 	_, _ = io.Copy(responseWriter, downloadReadCloser)
@@ -190,7 +190,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 		}
 		if !mimeAllowed {
 			baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
-				BucketName: bucket.Name,
+				Bucket:     *bucket,
 				ObjectKey:  objectKey,
 				Reason:     "Content type not allowed for this bucket",
 				StatusCode: http.StatusBadRequest,
@@ -203,7 +203,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 	contentLength := request.ContentLength
 	if bucket.MaxFileSizeBytes > 0 && contentLength > bucket.MaxFileSizeBytes {
 		baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
-			BucketName: bucket.Name,
+			Bucket:     *bucket,
 			ObjectKey:  objectKey,
 			Reason:     "File size exceeds allowed maximum for this bucket",
 			StatusCode: http.StatusRequestEntityTooLarge,
@@ -221,7 +221,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 	uploadedObject, uploadErr := fileStorageEngine.Upload(ctx, *bucket, objectKey, request.Body, contentLength, contentType)
 	if uploadErr != nil {
 		baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadFailedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectUploadFailedEventData{
-			BucketName: bucket.Name,
+			Bucket:     *bucket,
 			ObjectKey:  objectKey,
 			Reason:     uploadErr.Error(),
 			StatusCode: http.StatusInternalServerError,
@@ -231,12 +231,8 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectUploadedEvent(fmt.Sprintf("%s/%s", bucket.Name, uploadedObject.ObjectKey), ObjectUploadedEventData{
-		BucketID:       uploadedObject.BucketID,
-		BucketName:     bucket.Name,
-		ObjectKey:      uploadedObject.ObjectKey,
-		ContentType:    uploadedObject.ContentType,
-		SizeBytes:      uploadedObject.SizeBytes,
-		ChecksumSHA256: uploadedObject.ChecksumSHA256,
+		Bucket: *bucket,
+		Object: *uploadedObject,
 	}))
 
 	log.Debugf("object %s in bucket %s uploaded successfully (%d bytes)", objectKey, bucket.Name, contentLength)
@@ -287,8 +283,8 @@ func (baseHandler *BaseHandler) handleDeleteObject(responseWriter http.ResponseW
 	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewObjectDeletedEvent(fmt.Sprintf("%s/%s", bucket.Name, objectKey), ObjectDeletedEventData{
-		BucketName: bucket.Name,
-		ObjectKey:  objectKey,
+		Bucket:    *bucket,
+		ObjectKey: objectKey,
 	}))
 
 	log.Debugf("object %s in bucket %s deleted successfully", objectKey, bucket.Name)

@@ -4,8 +4,6 @@ package tasks
 import (
 	"time"
 
-	"uuid"
-
 	"layr.sh/core"
 )
 
@@ -29,9 +27,8 @@ func NewJobUpdatedEvent(resourceID string, jobUpdatedEventData JobUpdatedEventDa
 
 // JobDeletedEventData represents payload for tasks.job.deleted.
 type JobDeletedEventData struct {
-	JobID                  uuid.UUID `json:"job_id"`
-	JobName                string    `json:"job_name"`
-	DeletedExecutionsCount int       `json:"deleted_executions_count"`
+	Job                    Job `json:"job"`
+	DeletedExecutionsCount int `json:"deleted_executions_count"`
 }
 
 // NewJobDeletedEvent creates a typed event when a recurring cron job is deleted.
@@ -40,10 +37,7 @@ func NewJobDeletedEvent(resourceID string, jobDeletedEventData JobDeletedEventDa
 }
 
 // JobPausedEventData represents payload for tasks.job.paused.
-type JobPausedEventData struct {
-	JobID   uuid.UUID `json:"job_id"`
-	JobName string    `json:"job_name"`
-}
+type JobPausedEventData Job
 
 // NewJobPausedEvent creates a typed event when a job is paused.
 func NewJobPausedEvent(resourceID string, jobPausedEventData JobPausedEventData) core.Event {
@@ -51,11 +45,7 @@ func NewJobPausedEvent(resourceID string, jobPausedEventData JobPausedEventData)
 }
 
 // JobResumedEventData represents payload for tasks.job.resumed.
-type JobResumedEventData struct {
-	JobID     uuid.UUID `json:"job_id"`
-	JobName   string    `json:"job_name"`
-	NextRunAt time.Time `json:"next_run_at"`
-}
+type JobResumedEventData Job
 
 // NewJobResumedEvent creates a typed event when a job is resumed.
 func NewJobResumedEvent(resourceID string, jobResumedEventData JobResumedEventData) core.Event {
@@ -64,8 +54,7 @@ func NewJobResumedEvent(resourceID string, jobResumedEventData JobResumedEventDa
 
 // JobScheduledEventData represents payload for tasks.job.scheduled.
 type JobScheduledEventData struct {
-	JobID         uuid.UUID  `json:"job_id"`
-	JobName       string     `json:"job_name"`
+	Job           Job        `json:"job"`
 	PreviousRunAt *time.Time `json:"previous_run_at,omitempty"`
 	NextRunAt     time.Time  `json:"next_run_at"`
 }
@@ -79,12 +68,9 @@ func NewJobScheduledEvent(resourceID string, jobScheduledEventData JobScheduledE
 
 // ExecutionEnqueuedEventData represents payload for tasks.execution.enqueued.
 type ExecutionEnqueuedEventData struct {
-	ExecutionID uuid.UUID  `json:"execution_id"`
-	JobID       *uuid.UUID `json:"job_id,omitempty"`
-	JobName     string     `json:"job_name,omitempty"`
-	RunAt       time.Time  `json:"run_at"`
-	TargetType  string     `json:"target_type"`
-	IsImmediate bool       `json:"is_immediate"`
+	Execution   Execution `json:"execution"`
+	JobName     string    `json:"job_name,omitempty"`
+	IsImmediate bool      `json:"is_immediate"`
 }
 
 // NewExecutionEnqueuedEvent creates a typed event when an execution is enqueued.
@@ -94,11 +80,10 @@ func NewExecutionEnqueuedEvent(resourceID string, executionEnqueuedEventData Exe
 
 // ExecutionStartedEventData represents payload for tasks.execution.started.
 type ExecutionStartedEventData struct {
-	ExecutionID uuid.UUID  `json:"execution_id"`
-	JobID       *uuid.UUID `json:"job_id,omitempty"`
-	JobName     string     `json:"job_name,omitempty"`
-	Attempt     int        `json:"attempt"`
-	LockedBy    string     `json:"locked_by"`
+	Execution Execution `json:"execution"`
+	JobName   string    `json:"job_name,omitempty"`
+	Attempt   int       `json:"attempt"`
+	LockedBy  string    `json:"locked_by"`
 }
 
 // NewExecutionStartedEvent creates a typed event when an execution begins processing.
@@ -108,12 +93,11 @@ func NewExecutionStartedEvent(resourceID string, executionStartedEventData Execu
 
 // ExecutionCompletedEventData represents payload for tasks.execution.completed.
 type ExecutionCompletedEventData struct {
-	ExecutionID        uuid.UUID  `json:"execution_id"`
-	JobID              *uuid.UUID `json:"job_id,omitempty"`
-	JobName            string     `json:"job_name,omitempty"`
-	DurationMs         int64      `json:"duration_ms"`
-	ResponseStatusCode *int       `json:"response_status_code,omitempty"`
-	Attempt            int        `json:"attempt"`
+	Execution          Execution `json:"execution"`
+	JobName            string    `json:"job_name,omitempty"`
+	DurationMs         int64     `json:"duration_ms"`
+	ResponseStatusCode *int      `json:"response_status_code,omitempty"`
+	Attempt            int       `json:"attempt"`
 }
 
 // NewExecutionCompletedEvent creates a typed event when an execution succeeds.
@@ -123,13 +107,12 @@ func NewExecutionCompletedEvent(resourceID string, executionCompletedEventData E
 
 // ExecutionFailedEventData represents payload for tasks.execution.failed.
 type ExecutionFailedEventData struct {
-	ExecutionID        uuid.UUID  `json:"execution_id"`
-	JobID              *uuid.UUID `json:"job_id,omitempty"`
-	JobName            string     `json:"job_name,omitempty"`
-	DurationMs         int64      `json:"duration_ms"`
-	ResponseStatusCode *int       `json:"response_status_code,omitempty"`
-	Attempt            int        `json:"attempt"`
-	Error              string     `json:"error"`
+	Execution          Execution `json:"execution"`
+	JobName            string    `json:"job_name,omitempty"`
+	DurationMs         int64     `json:"duration_ms"`
+	ResponseStatusCode *int      `json:"response_status_code,omitempty"`
+	Attempt            int       `json:"attempt"`
+	Error              string    `json:"error"`
 }
 
 // NewExecutionFailedEvent creates a typed event when an execution fails before DLQ threshold.
@@ -139,12 +122,11 @@ func NewExecutionFailedEvent(resourceID string, executionFailedEventData Executi
 
 // ExecutionTimedOutEventData represents payload for tasks.execution.timed_out.
 type ExecutionTimedOutEventData struct {
-	ExecutionID         uuid.UUID  `json:"execution_id"`
-	JobID               *uuid.UUID `json:"job_id,omitempty"`
-	JobName             string     `json:"job_name,omitempty"`
-	DurationMs          int64      `json:"duration_ms"`
-	TimeoutLimitSeconds int        `json:"timeout_limit_seconds"`
-	Attempt             int        `json:"attempt"`
+	Execution           Execution `json:"execution"`
+	JobName             string    `json:"job_name,omitempty"`
+	DurationMs          int64     `json:"duration_ms"`
+	TimeoutLimitSeconds int       `json:"timeout_limit_seconds"`
+	Attempt             int       `json:"attempt"`
 }
 
 // NewExecutionTimedOutEvent creates a typed event when an execution exceeds timeout limit.
@@ -154,14 +136,13 @@ func NewExecutionTimedOutEvent(resourceID string, executionTimedOutEventData Exe
 
 // ExecutionRetriedEventData represents payload for tasks.execution.retried.
 type ExecutionRetriedEventData struct {
-	ExecutionID    uuid.UUID  `json:"execution_id"`
-	JobID          *uuid.UUID `json:"job_id,omitempty"`
-	JobName        string     `json:"job_name,omitempty"`
-	Attempt        int        `json:"attempt"`
-	MaxAttempts    int        `json:"max_attempts"`
-	NextRunAt      time.Time  `json:"next_run_at"`
-	BackoffDelayMs int64      `json:"backoff_delay_ms"`
-	Error          string     `json:"error"`
+	Execution      Execution `json:"execution"`
+	JobName        string    `json:"job_name,omitempty"`
+	Attempt        int       `json:"attempt"`
+	MaxAttempts    int       `json:"max_attempts"`
+	NextRunAt      time.Time `json:"next_run_at"`
+	BackoffDelayMs int64     `json:"backoff_delay_ms"`
+	Error          string    `json:"error"`
 }
 
 // NewExecutionRetriedEvent creates a typed event when an execution is rescheduled with backoff.
@@ -171,9 +152,8 @@ func NewExecutionRetriedEvent(resourceID string, executionRetriedEventData Execu
 
 // ExecutionCancelledEventData represents payload for tasks.execution.cancelled.
 type ExecutionCancelledEventData struct {
-	ExecutionID uuid.UUID  `json:"execution_id"`
-	JobID       *uuid.UUID `json:"job_id,omitempty"`
-	Reason      string     `json:"reason"`
+	Execution Execution `json:"execution"`
+	Reason    string    `json:"reason"`
 }
 
 // NewExecutionCancelledEvent creates a typed event when pending executions are cancelled.
@@ -185,11 +165,10 @@ func NewExecutionCancelledEvent(resourceID string, executionCancelledEventData E
 
 // DLQIsolatedEventData represents payload for tasks.dlq.isolated.
 type DLQIsolatedEventData struct {
-	ExecutionID   uuid.UUID  `json:"execution_id"`
-	JobID         *uuid.UUID `json:"job_id,omitempty"`
-	JobName       string     `json:"job_name,omitempty"`
-	TotalAttempts int        `json:"total_attempts"`
-	LastError     string     `json:"last_error"`
+	Execution     Execution `json:"execution"`
+	JobName       string    `json:"job_name,omitempty"`
+	TotalAttempts int       `json:"total_attempts"`
+	LastError     string    `json:"last_error"`
 }
 
 // NewDLQIsolatedEvent creates a typed event when an execution transitions to DLQ.
@@ -199,10 +178,9 @@ func NewDLQIsolatedEvent(resourceID string, dlqIsolatedEventData DLQIsolatedEven
 
 // DLQRetriedEventData represents payload for tasks.dlq.retried.
 type DLQRetriedEventData struct {
-	ExecutionID uuid.UUID  `json:"execution_id"`
-	JobID       *uuid.UUID `json:"job_id,omitempty"`
-	JobName     string     `json:"job_name,omitempty"`
-	TriggeredBy string     `json:"triggered_by"`
+	Execution   Execution `json:"execution"`
+	JobName     string    `json:"job_name,omitempty"`
+	TriggeredBy string    `json:"triggered_by"`
 }
 
 // NewDLQRetriedEvent creates a typed event when a dead-lettered execution is manually re-queued.
@@ -211,10 +189,7 @@ func NewDLQRetriedEvent(resourceID string, dlqRetriedEventData DLQRetriedEventDa
 }
 
 // DLQPurgedEventData represents payload for tasks.dlq.purged.
-type DLQPurgedEventData struct {
-	ExecutionID uuid.UUID  `json:"execution_id"`
-	JobID       *uuid.UUID `json:"job_id,omitempty"`
-}
+type DLQPurgedEventData Execution
 
 // NewDLQPurgedEvent creates a typed event when a DLQ execution is purged.
 func NewDLQPurgedEvent(resourceID string, dlqPurgedEventData DLQPurgedEventData) core.Event {
