@@ -48,18 +48,6 @@ const (
 	ScopeTasksConfigWrite    = "tasks:config.write"
 	ScopeTasksStatsRead      = "tasks:stats.read"
 
-	// Notification scopes
-	ScopeNotificationChannelRead   = "notification:channel.read"
-	ScopeNotificationChannelWrite  = "notification:channel.write"
-	ScopeNotificationTemplateRead  = "notification:template.read"
-	ScopeNotificationTemplateWrite = "notification:template.write"
-	ScopeNotificationMessageWrite  = "notification:message.write"
-
-	// Analytics scopes
-	ScopeAnalyticsMetricRead  = "analytics:metric.read"
-	ScopeAnalyticsConfigRead  = "analytics:config.read"
-	ScopeAnalyticsConfigWrite = "analytics:config.write"
-
 	// Image scopes
 	ScopeImageConfigRead  = "image:config.read"
 	ScopeImageConfigWrite = "image:config.write"

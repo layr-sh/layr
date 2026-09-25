@@ -118,13 +118,13 @@ func TestCoreEmbeddedDatabaseLifecycleE2E(t *testing.T) {
 	}
 
 	// Multi-node cluster topology and worker lifecycle
-	nodeManager := NewNodeManager(db, "primary-node-1", []string{"data", "auth", "storage", "console"})
+	nodeManager := NewNodeManager(db, "primary-node-1", []string{"data", "auth", "file_storage", "console"})
 	err = nodeManager.Register(ctx)
 	if err != nil {
 		t.Fatalf("primary node registration failed: %v", err)
 	}
 
-	secondNodeManager := NewNodeManager(db, "worker-node-2", []string{"scheduler", "notification"})
+	secondNodeManager := NewNodeManager(db, "worker-node-2", []string{"tasks", "function"})
 	err = secondNodeManager.Register(ctx)
 	if err != nil {
 		t.Fatalf("worker node registration failed: %v", err)

@@ -27,7 +27,6 @@ func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
 	config := DefaultConfig()
 	config.Database.URL = dataDirectory
 	config.Data.Enabled = true
-	config.Analytics.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -141,8 +140,8 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 	config.Auth.Enabled = true
 	config.FileStorage.Enabled = true
 	config.Tasks.Enabled = true
-	config.Notification.Enabled = true
-	config.Analytics.Enabled = true
+	config.Image.Enabled = true
+	config.Function.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()

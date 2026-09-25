@@ -13,7 +13,7 @@ Layr (`layr.sh`) is an open-source developer infrastructure platform engineered 
 
 - **User-Owned Data Sovereignty:** You always own your database and underlying data. Layr operates directly on standard PostgreSQL schemas using ANSI SQL, native `DEFAULT uuidv7()` primary keys, and standard Argon2id hashes.
 - **5-Minute Exit Guarantee:** Zero vendor lock-in. Migrating away requires no data conversion—just run `pg_dump`.
-- **Invariant Kernel + Modular Services:** A lightweight core runtime kernel (`layr/core`) with 8 opt-in, unbundled services (`data`, `auth`, `file-storage`, `tasks`, `notification`, `analytics`, `image`, `console`).
+- **Invariant Kernel + Modular Services:** A lightweight core runtime kernel (`layr/core`) with 7 opt-in, unbundled services (`data`, `auth`, `file-storage`, `tasks`, `image`, `function`, `console`).
 - **Dual Database Engine:** Connect to an external PostgreSQL 18+ cluster (`postgres://...`) or use the embedded native engine (`.layr/data`) for instant, zero-config local development in $<3$ seconds.
 - **Monolith to Microservice Elasticity:** Run all enabled services in a single binary on a single machine or scale dedicated service pods horizontally (`layr start auth`, `layr start data`, `layr start file-storage`) with zero code changes.
 - **Zero Taste Forcing:** No hardcoded rate limits, fixed cache TTLs, or unalterable lockout policies. Every policy is 100% configurable via the control plane.
@@ -30,9 +30,8 @@ Layr provides unbundled primitives that can be enabled independently or combined
 | **`layr/auth`**         | Clerk • Auth0 • Logto • Keycloak    | Full OIDC/OAuth2 Identity Provider discovery (`/.well-known/openid-configuration`), Passkeys (WebAuthn), TOTP MFA, OTP, Argon2id, and Social OAuth. |
 | **`layr/file-storage`** | MinIO • AWS S3 • Cloudflare R2      | S3-compatible REST API, presigned URLs, and zero-infra streamable PostgreSQL BYTEA chunking fallback.                                               |
 | **`layr/tasks`**        | Temporal • BullMQ • AWS EventBridge | Distributed cron, decentralized transactional `SKIP LOCKED` task queues and job polling, and resilient HTTP webhook dispatchers.                    |
-| **`layr/notification`** | Novu • Courier • Resend • Knock     | Multi-channel delivery engine (Email/SMTP, Twilio SMS, Push via FCM/APNs, Webhooks) and dynamic templating.                                         |
-| **`layr/analytics`**    | Umami • Plausible • PostHog         | Privacy-first cookieless tracking script (`<script data-site="...">`), 46-field telemetry store, and monthly partitioned PostgreSQL tables.         |
 | **`layr/image`**        | imgproxy • Cloudinary • Imgix       | 100% imgproxy-compatible API, HMAC-SHA256 URL signing, dynamic resizing, gravity cropping, and WebP/AVIF transcoding.                               |
+| **`layr/function`**     | AWS Lambda • Cloudflare Workers     | V8 worker runtime (workerd) serverless edge execution, bundle packaging, custom domains, and dynamic routing.                                       |
 | **`layr/console`**      | Retool • TablePlus • Prisma Studio  | Embedded web dashboard (`/console`), visual SQL editor, interactive schema explorer, and dynamic runtime configuration manager.                     |
 
 ---

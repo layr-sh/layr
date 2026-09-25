@@ -28,21 +28,19 @@ var (
 
 // Config represents the Tier 1 configuration (layr.yaml + LAYR__ env vars).
 type Config struct {
-	Version      string         `yaml:"version"`
-	Project      ProjectConfig  `yaml:"project"`
-	Server       ServerConfig   `yaml:"server"`
-	Database     DatabaseConfig `yaml:"database"`
-	Security     SecurityConfig `yaml:"security"`
-	KVStore      KVStoreConfig  `yaml:"kv_store"`
-	Data         ServiceConfig  `yaml:"data"`
-	Auth         ServiceConfig  `yaml:"auth"`
-	FileStorage  ServiceConfig  `yaml:"file_storage"`
-	Tasks        ServiceConfig  `yaml:"tasks"`
-	Notification ServiceConfig  `yaml:"notification"`
-	Analytics    ServiceConfig  `yaml:"analytics"`
-	Image        ServiceConfig  `yaml:"image"`
-	Function     ServiceConfig  `yaml:"function"`
-	Console      ConsoleConfig  `yaml:"console"`
+	Version     string         `yaml:"version"`
+	Project     ProjectConfig  `yaml:"project"`
+	Server      ServerConfig   `yaml:"server"`
+	Database    DatabaseConfig `yaml:"database"`
+	Security    SecurityConfig `yaml:"security"`
+	KVStore     KVStoreConfig  `yaml:"kv_store"`
+	Data        ServiceConfig  `yaml:"data"`
+	Auth        ServiceConfig  `yaml:"auth"`
+	FileStorage ServiceConfig  `yaml:"file_storage"`
+	Tasks       ServiceConfig  `yaml:"tasks"`
+	Image       ServiceConfig  `yaml:"image"`
+	Function    ServiceConfig  `yaml:"function"`
+	Console     ConsoleConfig  `yaml:"console"`
 }
 
 // ProjectConfig holds general project metadata.
@@ -125,14 +123,12 @@ func DefaultConfig() *Config {
 		KVStore: KVStoreConfig{
 			Backend: "database",
 		},
-		Data:         ServiceConfig{Enabled: true},
-		Auth:         ServiceConfig{Enabled: true},
-		FileStorage:  ServiceConfig{Enabled: true},
-		Tasks:        ServiceConfig{Enabled: false},
-		Notification: ServiceConfig{Enabled: false},
-		Analytics:    ServiceConfig{Enabled: false},
-		Image:        ServiceConfig{Enabled: false},
-		Function:     ServiceConfig{Enabled: false},
+		Data:        ServiceConfig{Enabled: true},
+		Auth:        ServiceConfig{Enabled: true},
+		FileStorage: ServiceConfig{Enabled: true},
+		Tasks:       ServiceConfig{Enabled: false},
+		Image:       ServiceConfig{Enabled: false},
+		Function:    ServiceConfig{Enabled: false},
 		Console: ConsoleConfig{
 			Enabled: true,
 		},
@@ -415,16 +411,6 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 			config.FileStorage.Enabled = parseFlag(value)
 			return "file_storage.enabled", true
 		}
-	case "notification":
-		if field == "enabled" {
-			config.Notification.Enabled = parseFlag(value)
-			return "notification.enabled", true
-		}
-	case "analytics":
-		if field == "enabled" {
-			config.Analytics.Enabled = parseFlag(value)
-			return "analytics.enabled", true
-		}
 	case "image":
 		if field == "enabled" {
 			config.Image.Enabled = parseFlag(value)
@@ -531,7 +517,7 @@ func (config *Config) Validate() error {
 
 	// Minimum Functional Service Invariant
 	if !config.HasAnyFunctionalServiceEnabled() {
-		return errors.New("minimum functional service invariant violated: at least one functional backend service (data, auth, tasks, file_storage, notification, analytics, image) must be enabled")
+		return errors.New("minimum functional service invariant violated: at least one functional backend service (data, auth, tasks, file_storage, image, function) must be enabled")
 	}
 
 	return nil
@@ -543,8 +529,6 @@ func (config *Config) HasAnyFunctionalServiceEnabled() bool {
 		config.Auth.Enabled ||
 		config.Tasks.Enabled ||
 		config.FileStorage.Enabled ||
-		config.Notification.Enabled ||
-		config.Analytics.Enabled ||
 		config.Image.Enabled ||
 		config.Function.Enabled
 }
@@ -563,12 +547,6 @@ func (config *Config) GetFunctionalServices() []string {
 	}
 	if config.FileStorage.Enabled {
 		list = append(list, "file_storage")
-	}
-	if config.Notification.Enabled {
-		list = append(list, "notification")
-	}
-	if config.Analytics.Enabled {
-		list = append(list, "analytics")
 	}
 	if config.Image.Enabled {
 		list = append(list, "image")
@@ -599,10 +577,6 @@ func (config *Config) IsServiceEnabled(serviceName string) bool {
 		return config.Tasks.Enabled
 	case "file_storage", "filestorage":
 		return config.FileStorage.Enabled
-	case "notification":
-		return config.Notification.Enabled
-	case "analytics":
-		return config.Analytics.Enabled
 	case "image":
 		return config.Image.Enabled
 	case "function":
@@ -625,10 +599,6 @@ func (config *Config) EnableService(serviceName string) error {
 		config.Tasks.Enabled = true
 	case "file_storage", "filestorage":
 		config.FileStorage.Enabled = true
-	case "notification":
-		config.Notification.Enabled = true
-	case "analytics":
-		config.Analytics.Enabled = true
 	case "image":
 		config.Image.Enabled = true
 	case "function":

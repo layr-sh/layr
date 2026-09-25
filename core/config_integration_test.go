@@ -64,11 +64,9 @@ tasks:
   enabled: true
 file_storage:
   enabled: true
-notification:
-  enabled: true
-analytics:
-  enabled: true
 image:
+  enabled: true
+function:
   enabled: true
 console:
   enabled: true
@@ -91,7 +89,7 @@ console:
 		loadedCompleteConfig.Server.ListenAddr != ":8443" ||
 		loadedCompleteConfig.Database.MaxConnections != 50 ||
 		loadedCompleteConfig.KVStore.Backend != "redis" ||
-		len(loadedCompleteConfig.GetFunctionalServices()) != 7 {
+		len(loadedCompleteConfig.GetFunctionalServices()) != 6 {
 		t.Fatalf("complete config fields mismatch: %+v", loadedCompleteConfig)
 	}
 

@@ -12,22 +12,17 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	// 1. IsProtectedSchema
 	protectedList := []string{
 		"system",
+		"core",
 		"auth",
 		"data",
-		"storage",
-		"scheduler",
-		"notification",
-		"analytics",
+		"file_storage",
+		"tasks",
+		"image",
+		"function",
 		"console",
-		"core",
-		"layr_auth",
-		"layr_storage",
-		"layr_scheduler",
-		"layr_notification",
-		"layr_analytics",
-		"layr_console",
 		"information_schema",
 		"pg_catalog",
+		"pg_toast",
 	}
 	for _, schemaName := range protectedList {
 		t.Run(fmt.Sprintf("Protected_%s", schemaName), func(t *testing.T) {
@@ -118,56 +113,56 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	}
 
 	// AddColumn on protected schema
-	err = ddlEngine.AddColumn(ctx, "layr_auth", "users", Column{Name: "new_column", Type: "text"})
-	if err == nil || err.Error() != "cannot alter tables in protected schema 'layr_auth'" {
+	err = ddlEngine.AddColumn(ctx, "auth", "users", Column{Name: "new_column", Type: "text"})
+	if err == nil || err.Error() != "cannot alter tables in protected schema 'auth'" {
 		t.Fatalf("expected protected schema error on AddColumn, got: %v", err)
 	}
 
 	// AlterColumn on protected schema
-	err = ddlEngine.AlterColumn(ctx, "layr_auth", "users", "email", UpdateColumnInput{})
-	if err == nil || err.Error() != "cannot alter tables in protected schema 'layr_auth'" {
+	err = ddlEngine.AlterColumn(ctx, "auth", "users", "email", UpdateColumnInput{})
+	if err == nil || err.Error() != "cannot alter tables in protected schema 'auth'" {
 		t.Fatalf("expected protected schema error on AlterColumn, got: %v", err)
 	}
 
 	// DropColumn on protected schema
-	err = ddlEngine.DropColumn(ctx, "layr_auth", "users", "email", false)
-	if err == nil || err.Error() != "cannot alter tables in protected schema 'layr_auth'" {
+	err = ddlEngine.DropColumn(ctx, "auth", "users", "email", false)
+	if err == nil || err.Error() != "cannot alter tables in protected schema 'auth'" {
 		t.Fatalf("expected protected schema error on DropColumn, got: %v", err)
 	}
 
 	// DropTable on protected schema
-	err = ddlEngine.DropTable(ctx, "layr_storage", "objects", false)
-	if err == nil || err.Error() != "cannot drop tables in protected schema 'layr_storage'" {
+	err = ddlEngine.DropTable(ctx, "file_storage", "objects", false)
+	if err == nil || err.Error() != "cannot drop tables in protected schema 'file_storage'" {
 		t.Fatalf("expected protected schema error on DropTable, got: %v", err)
 	}
 
 	// TruncateTable on protected schema
-	err = ddlEngine.TruncateTable(ctx, "layr_storage", "objects", false)
-	if err == nil || err.Error() != "cannot truncate tables in protected schema 'layr_storage'" {
+	err = ddlEngine.TruncateTable(ctx, "file_storage", "objects", false)
+	if err == nil || err.Error() != "cannot truncate tables in protected schema 'file_storage'" {
 		t.Fatalf("expected protected schema error on TruncateTable, got: %v", err)
 	}
 
 	// ListPolicies on protected schema
-	_, err = ddlEngine.ListPolicies(ctx, "layr_console", "users")
-	if err == nil || err.Error() != "cannot view policies in protected schema 'layr_console'" {
+	_, err = ddlEngine.ListPolicies(ctx, "console", "users")
+	if err == nil || err.Error() != "cannot view policies in protected schema 'console'" {
 		t.Fatalf("expected protected schema error on ListPolicies, got: %v", err)
 	}
 
 	// CreatePolicy on protected schema
-	err = ddlEngine.CreatePolicy(ctx, "layr_analytics", "events", CreatePolicyInput{Name: "p1"})
-	if err == nil || err.Error() != "cannot manage policies in protected schema 'layr_analytics'" {
+	err = ddlEngine.CreatePolicy(ctx, "file_storage", "objects", CreatePolicyInput{Name: "p1"})
+	if err == nil || err.Error() != "cannot manage policies in protected schema 'file_storage'" {
 		t.Fatalf("expected protected schema error on CreatePolicy, got: %v", err)
 	}
 
 	// DropPolicy on protected schema
-	err = ddlEngine.DropPolicy(ctx, "layr_scheduler", "jobs", "p1")
-	if err == nil || err.Error() != "cannot manage policies in protected schema 'layr_scheduler'" {
+	err = ddlEngine.DropPolicy(ctx, "tasks", "jobs", "p1")
+	if err == nil || err.Error() != "cannot manage policies in protected schema 'tasks'" {
 		t.Fatalf("expected protected schema error on DropPolicy, got: %v", err)
 	}
 
 	// EnableRLS on protected schema
-	err = ddlEngine.EnableRLS(ctx, "layr_notification", "messages")
-	if err == nil || err.Error() != "cannot alter table in protected schema 'layr_notification'" {
+	err = ddlEngine.EnableRLS(ctx, "auth", "users")
+	if err == nil || err.Error() != "cannot alter table in protected schema 'auth'" {
 		t.Fatalf("expected protected schema error on EnableRLS, got: %v", err)
 	}
 
