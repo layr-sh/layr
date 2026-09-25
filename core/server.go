@@ -355,7 +355,9 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			path == "/v1/_" ||
 			path == "/v1/spec.json" ||
 			path == "/v1/spec.yaml" ||
-			strings.HasPrefix(path, "/.well-known/") {
+			strings.HasPrefix(path, "/.well-known/") ||
+			strings.HasPrefix(path, "/v1/function/") ||
+			path == "/v1/function" {
 			handler.ServeHTTP(responseWriter, request)
 			return
 		}

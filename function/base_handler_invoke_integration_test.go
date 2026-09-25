@@ -28,9 +28,8 @@ func TestFunctionBaseHandlerInvokeIntegration(t *testing.T) {
 	publicEndpoint := insertTestEndpoint(testCtx, t, kernel, "hello-integration-fn", true)
 	deployTestEndpoint(testCtx, t, service, &publicEndpoint, "export default { hello: 'world' };")
 
-	// 2. Invoke through coreServer
+	// 2. Invoke through coreServer without publishable key
 	request := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+publicEndpoint.Name+"/greet", nil)
-	request.Header.Set("X-Layr-Client-Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
 	responseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(responseRecorder, request)
 	require.Equal(t, http.StatusOK, responseRecorder.Code)
