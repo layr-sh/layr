@@ -66,8 +66,8 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 
 	publishableKey := testKernel.CryptoKeyManager().DerivePublishableKey()
 
+	// Public function invocation without publishable key
 	invokeSwRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/sw-worker/hello", nil)
-	invokeSwRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	invokeSwResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(invokeSwResponseRecorder, invokeSwRequest)
 	require.Equal(t, http.StatusOK, invokeSwResponseRecorder.Code)
@@ -124,11 +124,10 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.Equal(t, "event-received", esmResponse["node_event"])
 	t.Logf("ES Module computation verified: %s", invokeEsmResponseRecorder.Body.String())
 
-	// Transparent HTTP POST Ingress to endpoint root
+	// Transparent HTTP POST Ingress to endpoint root without publishable key
 	directPayload := `{"user":"direct-caller"}`
 	directRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/function/crypto-worker", bytes.NewReader([]byte(directPayload)))
 	directRequest.Header.Set("Content-Type", "application/json")
-	directRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
 	directResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(directResponseRecorder, directRequest)
 	require.Equal(t, http.StatusOK, directResponseRecorder.Code)

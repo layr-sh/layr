@@ -73,6 +73,18 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		_, _ = responseWriter.Write([]byte("ok-client"))
 	})
 
+	// Test /v1/function route without publishable key -> 200 (not required for functions)
+	GetRoute[string](server.BaseRouter(), "/v1/function/{endpoint_name}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write([]byte("ok-function"))
+	})
+	noKeyFunctionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/function/public-fn", nil)
+	noKeyFunctionResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(noKeyFunctionResponseRecorder, noKeyFunctionRequest)
+	if noKeyFunctionResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected function endpoint 200 without key, got %d", noKeyFunctionResponseRecorder.Code)
+	}
+
 	// Test base client endpoint without publishable key -> 401
 	noKeyClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
 	noKeyClientResponseRecorder := httptest.NewRecorder()
