@@ -33,7 +33,7 @@ const (
 	portWaitInterval = 20 * time.Millisecond
 
 	// WorkerdStorageDir defines the static directory for workerd storage and function files.
-	WorkerdStorageDir = ".layr/workerd"
+	WorkerdStorageDir = ".layr/function/workerd"
 	// WorkerdBinaryPath defines the static path where the workerd executable resides.
 	WorkerdBinaryPath = ".layr/bin/workerd"
 	// WorkerdDownloadURL defines the static URL from which workerd releases are downloaded.

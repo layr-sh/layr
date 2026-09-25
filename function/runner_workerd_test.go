@@ -32,7 +32,7 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 	t.Run("runner initialization and name", func(t *testing.T) {
 		workerdRunner := NewWorkerdRunner(nil)
 		require.Equal(t, "workerd", workerdRunner.Name())
-		require.Equal(t, filepath.Join(".layr", "workerd"), WorkerdStorageDir)
+		require.Equal(t, filepath.Join(".layr", "function", "workerd"), WorkerdStorageDir)
 	})
 
 	t.Run("sanitizeCapnpIdentifier edge cases", func(t *testing.T) {
@@ -610,7 +610,7 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 
 	t.Run("runner coverage edge cases", func(t *testing.T) {
 		// 1. Static storage directory
-		require.Equal(t, filepath.Join(".layr", "workerd"), WorkerdStorageDir)
+		require.Equal(t, filepath.Join(".layr", "function", "workerd"), WorkerdStorageDir)
 
 		// 2. ResolveWorkerdBinary standalone and PATH lookup
 		testBinaryDirectory := t.TempDir()
