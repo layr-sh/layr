@@ -65,7 +65,7 @@ func (embeddedDatabase *EmbeddedDatabase) Start(ctx context.Context) (string, er
 		embeddedDatabase.port = freePort
 	}
 
-	cachePath, _ := filepath.Abs(filepath.Join(".layr", "cache", "pg"))
+	cachePath, _ := filepath.Abs(filepath.Join(".layr", "bin"))
 	_ = os.MkdirAll(cachePath, defaultDirectoryPermission)
 	_ = os.MkdirAll(absDataDir, defaultDirectoryPermission)
 	runtimePath := filepath.Join(absDataDir, "runtime")
