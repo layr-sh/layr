@@ -130,14 +130,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListDLQ(responseWriter htt
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listDLQResponse)
 }
 
-// handleRetryDLQ handles POST /v1/_/tasks/dlq/{id}/retry re-queuing a failed execution.
+// handleRetryDLQ handles POST /v1/_/tasks/dlq/{execution_id}/retry re-queuing a failed execution.
 func (controlPlaneHandler *ControlPlaneHandler) handleRetryDLQ(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling retry DLQ execution request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionWrite) {
 		return
 	}
 
-	executionID, parseErr := uuid.Parse(request.PathValue("id"))
+	executionID, parseErr := uuid.Parse(request.PathValue("execution_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid execution UUID")
 		return
@@ -158,14 +158,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRetryDLQ(responseWriter ht
 	core.WriteJSONResponse(responseWriter, http.StatusOK, retryDLQResponse)
 }
 
-// handlePurgeDLQ handles DELETE /v1/_/tasks/dlq/{id} deleting a failed execution from DLQ.
+// handlePurgeDLQ handles DELETE /v1/_/tasks/dlq/{execution_id} deleting a failed execution from DLQ.
 func (controlPlaneHandler *ControlPlaneHandler) handlePurgeDLQ(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling purge DLQ executions request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksExecutionWrite) {
 		return
 	}
 
-	executionID, parseErr := uuid.Parse(request.PathValue("id"))
+	executionID, parseErr := uuid.Parse(request.PathValue("execution_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid execution UUID")
 		return

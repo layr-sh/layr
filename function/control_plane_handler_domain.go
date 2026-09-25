@@ -217,14 +217,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomains(response
 	})
 }
 
-// handleDeleteCustomDomain handles DELETE /v1/_/function/domains/{id} removing a standalone custom domain.
+// handleDeleteCustomDomain handles DELETE /v1/_/function/domains/{domain_id} removing a standalone custom domain.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomain(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling delete custom domain request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointWrite) {
 		return
 	}
 
-	domainIDString := request.PathValue("id")
+	domainIDString := request.PathValue("domain_id")
 	domainID, parseDomainErr := uuid.Parse(domainIDString)
 	if parseDomainErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid custom domain ID")
@@ -262,14 +262,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomain(respons
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-// handleCreateCustomDomainRoute handles POST /v1/_/function/endpoints/{id}/domains attaching an endpoint to a domain route.
+// handleCreateCustomDomainRoute handles POST /v1/_/function/endpoints/{endpoint_id}/domains attaching an endpoint to a domain route.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomainRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling create endpoint domain route request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointWrite) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseEndpointErr := uuid.Parse(endpointIDString)
 	if parseEndpointErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -359,14 +359,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomainRoute(re
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, customDomainRoute)
 }
 
-// handleListCustomDomainRoutes handles GET /v1/_/function/endpoints/{id}/domains listing all route mappings for an endpoint.
+// handleListCustomDomainRoutes handles GET /v1/_/function/endpoints/{endpoint_id}/domains listing all route mappings for an endpoint.
 func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomainRoutes(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling list endpoint domain routes request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointRead) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseEndpointErr := uuid.Parse(endpointIDString)
 	if parseEndpointErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -410,14 +410,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomainRoutes(res
 	})
 }
 
-// handleDeleteCustomDomainRoute handles DELETE /v1/_/function/endpoints/{id}/domains/{route_id} unbinding an endpoint from a domain route.
+// handleDeleteCustomDomainRoute handles DELETE /v1/_/function/endpoints/{endpoint_id}/domains/{route_id} unbinding an endpoint from a domain route.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomainRoute(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling delete endpoint domain route request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointWrite) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseEndpointErr := uuid.Parse(endpointIDString)
 	if parseEndpointErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")

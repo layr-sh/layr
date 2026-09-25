@@ -76,21 +76,21 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 	t.Run("Scope permissions and denials", func(t *testing.T) {
 		// Deploy without scope -> 403
 		deployNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", nil)
-		deployNoScopeRequest.SetPathValue("id", endpoint.ID.String())
+		deployNoScopeRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		deployNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(deployNoScopeResponseRecorder, deployNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, deployNoScopeResponseRecorder.Code)
 
 		// List deployments without scope -> 403
 		listNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodGet, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deployments", nil)
-		listNoScopeRequest.SetPathValue("id", endpoint.ID.String())
+		listNoScopeRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		listNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListDeployments(listNoScopeResponseRecorder, listNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, listNoScopeResponseRecorder.Code)
 
 		// Rollback without scope -> 403
 		rollbackNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", nil)
-		rollbackNoScopeRequest.SetPathValue("id", endpoint.ID.String())
+		rollbackNoScopeRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		rollbackNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollbackNoScopeResponseRecorder, rollbackNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, rollbackNoScopeResponseRecorder.Code)
@@ -99,21 +99,21 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 	t.Run("Validations and edge cases", func(t *testing.T) {
 		// Deploy - invalid UUID
 		badIDRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/invalid-uuid/deploy", nil)
-		badIDRequest.SetPathValue("id", "invalid-uuid")
+		badIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		badIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(badIDResponseRecorder, badIDRequest)
 		require.Equal(t, http.StatusBadRequest, badIDResponseRecorder.Code)
 
 		// Deploy - not found endpoint
 		notFoundRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+randomUUID+"/deploy", bytes.NewReader([]byte("{}")))
-		notFoundRequest.SetPathValue("id", randomUUID)
+		notFoundRequest.SetPathValue("endpoint_id", randomUUID)
 		notFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(notFoundResponseRecorder, notFoundRequest)
 		require.Equal(t, http.StatusNotFound, notFoundResponseRecorder.Code)
 
 		// Deploy - bad JSON
 		badJSONRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader([]byte("{invalid-json")))
-		badJSONRequest.SetPathValue("id", endpoint.ID.String())
+		badJSONRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		badJSONResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(badJSONResponseRecorder, badJSONRequest)
 		require.Equal(t, http.StatusBadRequest, badJSONResponseRecorder.Code)
@@ -126,7 +126,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		}
 		invalidFilesJSON, _ := json.Marshal(invalidFilesCreateDeploymentInput)
 		invalidFilesRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader(invalidFilesJSON))
-		invalidFilesRequest.SetPathValue("id", endpoint.ID.String())
+		invalidFilesRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		invalidFilesResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(invalidFilesResponseRecorder, invalidFilesRequest)
 		require.Equal(t, http.StatusBadRequest, invalidFilesResponseRecorder.Code)
@@ -141,7 +141,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		}
 		tooLargeJSON, _ := json.Marshal(tooLargeCreateDeploymentInput)
 		tooLargeRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader(tooLargeJSON))
-		tooLargeRequest.SetPathValue("id", endpoint.ID.String())
+		tooLargeRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		tooLargeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(tooLargeResponseRecorder, tooLargeRequest)
 		require.Equal(t, http.StatusRequestEntityTooLarge, tooLargeResponseRecorder.Code)
@@ -152,28 +152,28 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 
 		// List deployments - invalid UUID
 		listBadIDRequest := httptest.NewRequestWithContext(readCtx, http.MethodGet, "/v1/_/function/endpoints/invalid-uuid/deployments", nil)
-		listBadIDRequest.SetPathValue("id", "invalid-uuid")
+		listBadIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		listBadIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListDeployments(listBadIDResponseRecorder, listBadIDRequest)
 		require.Equal(t, http.StatusBadRequest, listBadIDResponseRecorder.Code)
 
 		// Rollback - invalid UUID
 		rollBadIDRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/invalid-uuid/rollback", nil)
-		rollBadIDRequest.SetPathValue("id", "invalid-uuid")
+		rollBadIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		rollBadIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollBadIDResponseRecorder, rollBadIDRequest)
 		require.Equal(t, http.StatusBadRequest, rollBadIDResponseRecorder.Code)
 
 		// Rollback - bad JSON
 		rollBadJSONRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte("{invalid-json")))
-		rollBadJSONRequest.SetPathValue("id", endpoint.ID.String())
+		rollBadJSONRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		rollBadJSONResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollBadJSONResponseRecorder, rollBadJSONRequest)
 		require.Equal(t, http.StatusBadRequest, rollBadJSONResponseRecorder.Code)
 
 		// Rollback - not found version
 		rollNotFoundRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte(`{"target_version":999}`)))
-		rollNotFoundRequest.SetPathValue("id", endpoint.ID.String())
+		rollNotFoundRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		rollNotFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollNotFoundResponseRecorder, rollNotFoundRequest)
 		require.Equal(t, http.StatusNotFound, rollNotFoundResponseRecorder.Code)
@@ -187,7 +187,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		}
 		runtimeConfigJSON, _ := json.Marshal(runtimeConfigCreateDeploymentInput)
 		runtimeConfigRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader(runtimeConfigJSON))
-		runtimeConfigRequest.SetPathValue("id", endpoint.ID.String())
+		runtimeConfigRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		runtimeConfigResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(runtimeConfigResponseRecorder, runtimeConfigRequest)
 		require.Equal(t, http.StatusCreated, runtimeConfigResponseRecorder.Code)
@@ -198,14 +198,14 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		}
 		versionTwoJSON, _ := json.Marshal(versionTwoCreateDeploymentInput)
 		versionTwoRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader(versionTwoJSON))
-		versionTwoRequest.SetPathValue("id", endpoint.ID.String())
+		versionTwoRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		versionTwoResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(versionTwoResponseRecorder, versionTwoRequest)
 		require.Equal(t, http.StatusCreated, versionTwoResponseRecorder.Code)
 
 		// List deployments with active deployments having WorkerdRuntimeConfig
 		validListDeploymentsRequest := httptest.NewRequestWithContext(readCtx, http.MethodGet, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deployments", nil)
-		validListDeploymentsRequest.SetPathValue("id", endpoint.ID.String())
+		validListDeploymentsRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		validListDeploymentsResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListDeployments(validListDeploymentsResponseRecorder, validListDeploymentsRequest)
 		require.Equal(t, http.StatusOK, validListDeploymentsResponseRecorder.Code)
@@ -217,7 +217,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		}
 		failDeployJSON, _ := json.Marshal(failCreateDeploymentInput)
 		failDeployRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader(failDeployJSON))
-		failDeployRequest.SetPathValue("id", endpoint.ID.String())
+		failDeployRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		failDeployResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(failDeployResponseRecorder, failDeployRequest)
 		require.Equal(t, http.StatusInternalServerError, failDeployResponseRecorder.Code)
@@ -225,14 +225,14 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 
 		// Rollback with non-existent endpoint ID
 		notFoundEndpointRollbackRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/01923456-789a-7bc8-9def-0123456789ab/rollback", bytes.NewReader([]byte(`{"target_version":1}`)))
-		notFoundEndpointRollbackRequest.SetPathValue("id", "01923456-789a-7bc8-9def-0123456789ab")
+		notFoundEndpointRollbackRequest.SetPathValue("endpoint_id", "01923456-789a-7bc8-9def-0123456789ab")
 		notFoundEndpointRollbackResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(notFoundEndpointRollbackResponseRecorder, notFoundEndpointRollbackRequest)
 		require.Equal(t, http.StatusNotFound, notFoundEndpointRollbackResponseRecorder.Code)
 
 		// Rollback to deployment with WorkerdRuntimeConfig (version 1)
 		validRollbackRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte(`{"target_version":1}`)))
-		validRollbackRequest.SetPathValue("id", endpoint.ID.String())
+		validRollbackRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		validRollbackResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(validRollbackResponseRecorder, validRollbackRequest)
 		require.Equal(t, http.StatusOK, validRollbackResponseRecorder.Code)
@@ -240,7 +240,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		// Rollback with runner deploy error (reverting to previous deployment)
 		testRunner.deployFail = true
 		failRollbackRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte(`{"target_version":2}`)))
-		failRollbackRequest.SetPathValue("id", endpoint.ID.String())
+		failRollbackRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		failRollbackResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(failRollbackResponseRecorder, failRollbackRequest)
 		require.Equal(t, http.StatusInternalServerError, failRollbackResponseRecorder.Code)
@@ -259,7 +259,7 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		require.NoError(t, createTrgErr)
 
 		rollbackUpdateFailRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte(`{"target_version":1}`)))
-		rollbackUpdateFailRequest.SetPathValue("id", endpoint.ID.String())
+		rollbackUpdateFailRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		rollbackUpdateFailResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollbackUpdateFailResponseRecorder, rollbackUpdateFailRequest)
 		require.Equal(t, http.StatusInternalServerError, rollbackUpdateFailResponseRecorder.Code)
@@ -271,13 +271,13 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 		require.NoError(t, dropDeploymentsErr)
 
 		createDepFailRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/deploy", bytes.NewReader([]byte(`{"bundle_content":"export default {};"}`)))
-		createDepFailRequest.SetPathValue("id", endpoint.ID.String())
+		createDepFailRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		createDepFailResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(createDepFailResponseRecorder, createDepFailRequest)
 		require.Equal(t, http.StatusInternalServerError, createDepFailResponseRecorder.Code)
 
 		rollbackQueryFailRequest := httptest.NewRequestWithContext(deployCtx, http.MethodPost, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/rollback", bytes.NewReader([]byte(`{"target_version":1}`)))
-		rollbackQueryFailRequest.SetPathValue("id", endpoint.ID.String())
+		rollbackQueryFailRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		rollbackQueryFailResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollbackQueryFailResponseRecorder, rollbackQueryFailRequest)
 		require.Equal(t, http.StatusInternalServerError, rollbackQueryFailResponseRecorder.Code)
@@ -303,21 +303,21 @@ func TestFunctionControlPlaneHandlerDeploymentsDatabaseFailureUnit(t *testing.T)
 
 	// Create deployment DB failure -> 500
 	createRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+randomUUID+"/deploy", strings.NewReader(`{"bundle_content":"export default {};"}`))
-	createRequest.SetPathValue("id", randomUUID)
+	createRequest.SetPathValue("endpoint_id", randomUUID)
 	createResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateDeployment(createResponseRecorder, createRequest)
 	require.Equal(t, http.StatusInternalServerError, createResponseRecorder.Code)
 
 	// List deployments DB failure -> 500
 	listRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/"+randomUUID+"/deployments", nil)
-	listRequest.SetPathValue("id", randomUUID)
+	listRequest.SetPathValue("endpoint_id", randomUUID)
 	listResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListDeployments(listResponseRecorder, listRequest)
 	require.Equal(t, http.StatusInternalServerError, listResponseRecorder.Code)
 
 	// Rollback deployment DB failure -> 500
 	rollbackRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+randomUUID+"/rollback", strings.NewReader(`{"target_version":1}`))
-	rollbackRequest.SetPathValue("id", randomUUID)
+	rollbackRequest.SetPathValue("endpoint_id", randomUUID)
 	rollbackResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleRollbackDeployment(rollbackResponseRecorder, rollbackRequest)
 	require.Equal(t, http.StatusInternalServerError, rollbackResponseRecorder.Code)

@@ -141,7 +141,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "user", "passkeys"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/auth/user/passkeys/{id}", service.baseHandler.handleDeletePasskey,
+	core.DeleteRoute[core.Empty](router, "/v1/auth/user/passkeys/{passkey_id}", service.baseHandler.handleDeletePasskey,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Revoke a registered passkey"),
 		core.RouteDescription("Revokes and deletes a registered WebAuthn passkey credential belonging to the authenticated user."),

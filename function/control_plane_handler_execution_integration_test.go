@@ -74,7 +74,7 @@ func TestFunctionControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 
 		// List executions by endpoint ID path
 		byEndpointRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/executions", nil)
-		byEndpointRequest.SetPathValue("id", endpoint.ID.String())
+		byEndpointRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		byEndpointRequest.Header.Set("Authorization", authHeader)
 		byEndpointResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListExecutions(byEndpointResponseRecorder, byEndpointRequest)

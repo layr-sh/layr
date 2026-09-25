@@ -97,14 +97,14 @@ func TestTasksControlPlaneHandlerExecutionsUnit(t *testing.T) {
 
 		// RetryDLQ bad UUID
 		request = httptest.NewRequestWithContext(writeCtx, http.MethodPost, "/v1/_/tasks/dlq/invalid-uuid/retry", nil)
-		request.SetPathValue("id", "invalid-uuid")
+		request.SetPathValue("execution_id", "invalid-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleRetryDLQ(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// PurgeDLQ bad UUID
 		request = httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/tasks/dlq/invalid-uuid", nil)
-		request.SetPathValue("id", "invalid-uuid")
+		request.SetPathValue("execution_id", "invalid-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handlePurgeDLQ(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -160,14 +160,14 @@ func TestTasksControlPlaneHandlerExecutionsDatabaseErrorsUnit(t *testing.T) {
 
 	// RetryDLQ broken DB -> 500
 	request = httptest.NewRequestWithContext(writeCtx, http.MethodPost, "/v1/_/tasks/dlq/"+randomUUID+"/retry", nil)
-	request.SetPathValue("id", randomUUID)
+	request.SetPathValue("execution_id", randomUUID)
 	responseRecorder = httptest.NewRecorder()
 	brokenControlPlaneHandler.handleRetryDLQ(responseRecorder, request)
 	require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
 
 	// PurgeDLQ broken DB -> 500
 	request = httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/tasks/dlq/"+randomUUID, nil)
-	request.SetPathValue("id", randomUUID)
+	request.SetPathValue("execution_id", randomUUID)
 	responseRecorder = httptest.NewRecorder()
 	brokenControlPlaneHandler.handlePurgeDLQ(responseRecorder, request)
 	require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)

@@ -32,7 +32,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 
 		// Endpoint not found
 		notFoundRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/nonexistent", nil)
-		notFoundRequest.SetPathValue("name", "nonexistent")
+		notFoundRequest.SetPathValue("endpoint_name", "nonexistent")
 		notFoundResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(notFoundResponseRecorder, notFoundRequest)
 		require.Equal(t, http.StatusNotFound, notFoundResponseRecorder.Code)
@@ -41,7 +41,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		createdEndpoint := insertTestEndpoint(testCtx, t, kernel, "no-deploy-fn", true)
 
 		noDeployRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+createdEndpoint.Name, nil)
-		noDeployRequest.SetPathValue("name", createdEndpoint.Name)
+		noDeployRequest.SetPathValue("endpoint_name", createdEndpoint.Name)
 		noDeployResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(noDeployResponseRecorder, noDeployRequest)
 		require.Equal(t, http.StatusServiceUnavailable, noDeployResponseRecorder.Code)
@@ -51,7 +51,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 
 		// Successful invoke
 		successRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+createdEndpoint.Name+"/test", nil)
-		successRequest.SetPathValue("name", createdEndpoint.Name)
+		successRequest.SetPathValue("endpoint_name", createdEndpoint.Name)
 		successResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(successResponseRecorder, successRequest)
 		require.Equal(t, http.StatusOK, successResponseRecorder.Code)
@@ -59,7 +59,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		// Failing forward
 		testRunner.shouldFail = true
 		failRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+createdEndpoint.Name+"/test", nil)
-		failRequest.SetPathValue("name", createdEndpoint.Name)
+		failRequest.SetPathValue("endpoint_name", createdEndpoint.Name)
 		failResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(failResponseRecorder, failRequest)
 		testRunner.shouldFail = false
@@ -90,7 +90,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 
 		// Successful invoke records execution
 		trackInvokeRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+trackingEndpoint.Name+"/test", nil)
-		trackInvokeRequest.SetPathValue("name", trackingEndpoint.Name)
+		trackInvokeRequest.SetPathValue("endpoint_name", trackingEndpoint.Name)
 		trackInvokeResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(trackInvokeResponseRecorder, trackInvokeRequest)
 		require.Equal(t, http.StatusOK, trackInvokeResponseRecorder.Code)
@@ -98,7 +98,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		// Table alteration causing GetActiveDeployment to return internal server error
 		_, _ = kernel.DB().Exec(testCtx, "ALTER TABLE function.deployments RENAME TO deployments_backup")
 		brokenInvokeRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+trackingEndpoint.Name, nil)
-		brokenInvokeRequest.SetPathValue("name", trackingEndpoint.Name)
+		brokenInvokeRequest.SetPathValue("endpoint_name", trackingEndpoint.Name)
 		brokenInvokeResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(brokenInvokeResponseRecorder, brokenInvokeRequest)
 		require.Equal(t, http.StatusInternalServerError, brokenInvokeResponseRecorder.Code)
@@ -106,7 +106,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		// Table alteration causing GetEndpointByName to return internal server error
 		_, _ = kernel.DB().Exec(testCtx, "ALTER TABLE function.endpoints RENAME TO endpoints_backup")
 		brokenEndpointInvokeRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+trackingEndpoint.Name, nil)
-		brokenEndpointInvokeRequest.SetPathValue("name", trackingEndpoint.Name)
+		brokenEndpointInvokeRequest.SetPathValue("endpoint_name", trackingEndpoint.Name)
 		brokenEndpointInvokeResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(brokenEndpointInvokeResponseRecorder, brokenEndpointInvokeRequest)
 		require.Equal(t, http.StatusInternalServerError, brokenEndpointInvokeResponseRecorder.Code)
@@ -125,7 +125,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 
 		// 2. Invoke without any credentials -> 401
 		unauthRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/"+privateEndpoint.Name, nil)
-		unauthRequest.SetPathValue("name", privateEndpoint.Name)
+		unauthRequest.SetPathValue("endpoint_name", privateEndpoint.Name)
 		unauthResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(unauthResponseRecorder, unauthRequest)
 		require.Equal(t, http.StatusUnauthorized, unauthResponseRecorder.Code)
@@ -146,7 +146,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		})
 
 		forbiddenRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodGet, "/v1/function/"+privateEndpoint.Name, nil)
-		forbiddenRequest.SetPathValue("name", privateEndpoint.Name)
+		forbiddenRequest.SetPathValue("endpoint_name", privateEndpoint.Name)
 		forbiddenResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(forbiddenResponseRecorder, forbiddenRequest)
 		require.Equal(t, http.StatusForbidden, forbiddenResponseRecorder.Code)
@@ -167,7 +167,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		})
 
 		validRequest := httptest.NewRequestWithContext(authedCtx, http.MethodGet, "/v1/function/"+privateEndpoint.Name, nil)
-		validRequest.SetPathValue("name", privateEndpoint.Name)
+		validRequest.SetPathValue("endpoint_name", privateEndpoint.Name)
 		validResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(validResponseRecorder, validRequest)
 		require.Equal(t, http.StatusOK, validResponseRecorder.Code)
@@ -182,7 +182,7 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 			},
 		})
 		userRequest := httptest.NewRequestWithContext(userCtx, http.MethodGet, "/v1/function/"+privateEndpoint.Name, nil)
-		userRequest.SetPathValue("name", privateEndpoint.Name)
+		userRequest.SetPathValue("endpoint_name", privateEndpoint.Name)
 		userResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleInvokeEndpoint(userResponseRecorder, userRequest)
 		require.Equal(t, http.StatusOK, userResponseRecorder.Code)

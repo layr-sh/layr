@@ -427,7 +427,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	// 6. Delete passkey -> 204 No Content
 	passkeyToDeleteID := listPasskeysResponse[0].ID
 	deleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, userAuthContext), http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToDeleteID, nil)
-	deleteRequest.SetPathValue("id", passkeyToDeleteID)
+	deleteRequest.SetPathValue("passkey_id", passkeyToDeleteID)
 	deleteRequest.Header.Set("Authorization", bearerHeader)
 	deleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(deleteResponseRecorder, deleteRequest)
@@ -466,7 +466,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 
 	// 7. Delete non-existent passkey -> 404
 	delete404Request := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToDeleteID, nil), userID, "authenticated", false)
-	delete404Request.SetPathValue("id", passkeyToDeleteID)
+	delete404Request.SetPathValue("passkey_id", passkeyToDeleteID)
 	delete404Request.Header.Set("Authorization", bearerHeader)
 	delete404ResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(delete404ResponseRecorder, delete404Request)
@@ -488,7 +488,7 @@ func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
 
 	passkeyToFailDeleteID := listPasskeysResponse[1].ID
 	failDeleteRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/passkeys/"+passkeyToFailDeleteID, nil), userID, "authenticated", false)
-	failDeleteRequest.SetPathValue("id", passkeyToFailDeleteID)
+	failDeleteRequest.SetPathValue("passkey_id", passkeyToFailDeleteID)
 	failDeleteRequest.Header.Set("Authorization", bearerHeader)
 	failDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(failDeleteResponseRecorder, failDeleteRequest)

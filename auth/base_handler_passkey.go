@@ -332,7 +332,7 @@ func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWrit
 	}
 	userID := authContext.UserID
 
-	passkeyID := strings.TrimSpace(request.PathValue("id"))
+	passkeyID := strings.TrimSpace(request.PathValue("passkey_id"))
 	if passkeyID == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID required")
 		return

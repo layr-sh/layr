@@ -83,7 +83,7 @@ func TestFunctionControlPlaneHandlerDomainsIntegration(t *testing.T) {
 		}
 		createRouteJSON, _ := json.Marshal(createCustomDomainRouteInput)
 		createRouteRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", bytes.NewReader(createRouteJSON))
-		createRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+		createRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		createRouteRequest.Header.Set("Authorization", authHeader)
 		createRouteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateCustomDomainRoute(createRouteResponseRecorder, createRouteRequest)
@@ -95,7 +95,7 @@ func TestFunctionControlPlaneHandlerDomainsIntegration(t *testing.T) {
 
 		// 4. List routes on endpoint
 		listRoutesRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", nil)
-		listRoutesRequest.SetPathValue("id", targetEndpoint.ID.String())
+		listRoutesRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		listRoutesRequest.Header.Set("Authorization", authHeader)
 		listRoutesResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListCustomDomainRoutes(listRoutesResponseRecorder, listRoutesRequest)
@@ -107,7 +107,7 @@ func TestFunctionControlPlaneHandlerDomainsIntegration(t *testing.T) {
 
 		// 5. Delete route
 		deleteRouteRequest := httptest.NewRequestWithContext(testCtx, http.MethodDelete, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains/"+customDomainRoute.ID.String(), nil)
-		deleteRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+		deleteRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		deleteRouteRequest.SetPathValue("route_id", customDomainRoute.ID.String())
 		deleteRouteRequest.Header.Set("Authorization", authHeader)
 		deleteRouteResponseRecorder := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestFunctionControlPlaneHandlerDomainsIntegration(t *testing.T) {
 
 		// 6. Delete domain
 		deleteDomainRequest := httptest.NewRequestWithContext(testCtx, http.MethodDelete, "/v1/_/function/domains/"+customDomain.ID.String(), nil)
-		deleteDomainRequest.SetPathValue("id", customDomain.ID.String())
+		deleteDomainRequest.SetPathValue("domain_id", customDomain.ID.String())
 		deleteDomainRequest.Header.Set("Authorization", authHeader)
 		deleteDomainResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteCustomDomain(deleteDomainResponseRecorder, deleteDomainRequest)

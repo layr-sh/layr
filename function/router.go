@@ -22,7 +22,7 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 
 func (service *Service) registerBaseRoutes(router *core.Router) {
 	// Proxy routes for subpaths
-	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy GET to endpoint"),
 		core.RouteDescription("Proxies public HTTP GET requests directly to the active endpoint isolate."),
@@ -30,7 +30,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy POST to endpoint"),
 		core.RouteDescription("Proxies public HTTP POST requests directly to the active endpoint isolate."),
@@ -38,7 +38,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("post"),
 	)
-	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PUT to endpoint"),
 		core.RouteDescription("Proxies public HTTP PUT requests directly to the active endpoint isolate."),
@@ -46,7 +46,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("put"),
 	)
-	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy DELETE to endpoint"),
 		core.RouteDescription("Proxies public HTTP DELETE requests directly to the active endpoint isolate."),
@@ -54,7 +54,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("delete"),
 	)
-	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PATCH to endpoint"),
 		core.RouteDescription("Proxies public HTTP PATCH requests directly to the active endpoint isolate."),
@@ -62,7 +62,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("patch"),
 	)
-	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy HEAD to endpoint"),
 		core.RouteDescription("Proxies public HTTP HEAD requests directly to the active endpoint isolate."),
@@ -72,7 +72,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// Proxy routes for root endpoint path
-	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy GET to endpoint root"),
 		core.RouteDescription("Proxies public HTTP GET requests directly to the active endpoint root."),
@@ -80,7 +80,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("root_get"),
 	)
-	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy POST to endpoint root"),
 		core.RouteDescription("Proxies public HTTP POST requests directly to the active endpoint root."),
@@ -88,7 +88,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("root_post"),
 	)
-	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PUT to endpoint root"),
 		core.RouteDescription("Proxies public HTTP PUT requests directly to the active endpoint root."),
@@ -96,7 +96,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("root_put"),
 	)
-	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy DELETE to endpoint root"),
 		core.RouteDescription("Proxies public HTTP DELETE requests directly to the active endpoint root."),
@@ -104,7 +104,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("root_delete"),
 	)
-	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PATCH to endpoint root"),
 		core.RouteDescription("Proxies public HTTP PATCH requests directly to the active endpoint root."),
@@ -112,7 +112,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "proxy"),
 		core.RouteSDKMethodName("root_patch"),
 	)
-	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{name}", service.baseHandler.handleInvokeEndpoint,
+	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy HEAD to endpoint root"),
 		core.RouteDescription("Proxies public HTTP HEAD requests directly to the active endpoint root."),
@@ -159,7 +159,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "endpoints"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[Endpoint](router, "/v1/_/function/endpoints/{id}", service.controlPlaneHandler.handleGetEndpoint,
+	core.GetRoute[Endpoint](router, "/v1/_/function/endpoints/{endpoint_id}", service.controlPlaneHandler.handleGetEndpoint,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Get endpoint"),
 		core.RouteDescription("Returns details of a single serverless endpoint definition."),
@@ -167,7 +167,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "endpoints"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PutRoute[Endpoint, UpdateEndpointInput](router, "/v1/_/function/endpoints/{id}", service.controlPlaneHandler.handleUpdateEndpoint,
+	core.PutRoute[Endpoint, UpdateEndpointInput](router, "/v1/_/function/endpoints/{endpoint_id}", service.controlPlaneHandler.handleUpdateEndpoint,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Update endpoint"),
 		core.RouteDescription("Modifies an existing serverless endpoint definition."),
@@ -175,7 +175,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "endpoints"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/function/endpoints/{id}", service.controlPlaneHandler.handleDeleteEndpoint,
+	core.DeleteRoute[core.Empty](router, "/v1/_/function/endpoints/{endpoint_id}", service.controlPlaneHandler.handleDeleteEndpoint,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Delete endpoint"),
 		core.RouteDescription("Permanently removes an endpoint definition and unloads it from running runtimes."),
@@ -186,7 +186,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 3. Deployments
-	core.PostRoute[Deployment, CreateDeploymentInput](router, "/v1/_/function/endpoints/{id}/deploy", service.controlPlaneHandler.handleCreateDeployment,
+	core.PostRoute[Deployment, CreateDeploymentInput](router, "/v1/_/function/endpoints/{endpoint_id}/deploy", service.controlPlaneHandler.handleCreateDeployment,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Deploy endpoint"),
 		core.RouteDescription("Uploads an immutable code bundle and hot-reloads it in the active runtime runner."),
@@ -195,7 +195,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "deployments"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[ListDeploymentsResponse](router, "/v1/_/function/endpoints/{id}/deployments", service.controlPlaneHandler.handleListDeployments,
+	core.GetRoute[ListDeploymentsResponse](router, "/v1/_/function/endpoints/{endpoint_id}/deployments", service.controlPlaneHandler.handleListDeployments,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("List deployments"),
 		core.RouteDescription("Returns immutable deployment version history for an endpoint."),
@@ -203,7 +203,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "deployments"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[Deployment, RollbackDeploymentInput](router, "/v1/_/function/endpoints/{id}/rollback", service.controlPlaneHandler.handleRollbackDeployment,
+	core.PostRoute[Deployment, RollbackDeploymentInput](router, "/v1/_/function/endpoints/{endpoint_id}/rollback", service.controlPlaneHandler.handleRollbackDeployment,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Rollback deployment"),
 		core.RouteDescription("Restores an earlier immutable deployment version as active."),
@@ -221,7 +221,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "executions"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.GetRoute[ListExecutionsResponse](router, "/v1/_/function/endpoints/{id}/executions", service.controlPlaneHandler.handleListExecutions,
+	core.GetRoute[ListExecutionsResponse](router, "/v1/_/function/endpoints/{endpoint_id}/executions", service.controlPlaneHandler.handleListExecutions,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("List endpoint execution logs"),
 		core.RouteDescription("Returns historical invocation logs for a specific endpoint including status codes, duration, stdout, and stderr."),
@@ -258,7 +258,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "domains"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/function/domains/{id}", service.controlPlaneHandler.handleDeleteCustomDomain,
+	core.DeleteRoute[core.Empty](router, "/v1/_/function/domains/{domain_id}", service.controlPlaneHandler.handleDeleteCustomDomain,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Delete custom domain"),
 		core.RouteDescription("Removes a registered custom domain and cascades its routes."),
@@ -269,7 +269,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 7. Custom Domain Route Mappings
-	core.PostRoute[CustomDomainRoute, CreateCustomDomainRouteInput](router, "/v1/_/function/endpoints/{id}/domains", service.controlPlaneHandler.handleCreateCustomDomainRoute,
+	core.PostRoute[CustomDomainRoute, CreateCustomDomainRouteInput](router, "/v1/_/function/endpoints/{endpoint_id}/domains", service.controlPlaneHandler.handleCreateCustomDomainRoute,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Create custom domain route"),
 		core.RouteDescription("Attaches an endpoint to a custom domain route with a path prefix."),
@@ -278,7 +278,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "endpoint_domains"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[ListCustomDomainRoutesResponse](router, "/v1/_/function/endpoints/{id}/domains", service.controlPlaneHandler.handleListCustomDomainRoutes,
+	core.GetRoute[ListCustomDomainRoutesResponse](router, "/v1/_/function/endpoints/{endpoint_id}/domains", service.controlPlaneHandler.handleListCustomDomainRoutes,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("List custom domain routes"),
 		core.RouteDescription("Returns all custom domain routes attached to an endpoint."),
@@ -286,7 +286,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "endpoint_domains"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/function/endpoints/{id}/domains/{route_id}", service.controlPlaneHandler.handleDeleteCustomDomainRoute,
+	core.DeleteRoute[core.Empty](router, "/v1/_/function/endpoints/{endpoint_id}/domains/{route_id}", service.controlPlaneHandler.handleDeleteCustomDomainRoute,
 		core.RouteTag("Function Control Plane"),
 		core.RouteSummary("Delete custom domain route"),
 		core.RouteDescription("Removes an endpoint route mapping from a custom domain."),

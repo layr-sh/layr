@@ -31,7 +31,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "jobs"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[GetJobResponse](router, "/v1/_/tasks/jobs/{id}", service.controlPlaneHandler.handleGetJob,
+	core.GetRoute[GetJobResponse](router, "/v1/_/tasks/jobs/{job_id}", service.controlPlaneHandler.handleGetJob,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Get cron job details by ID"),
 		core.RouteDescription("Returns a single cron job definition with next execution countdown."),
@@ -39,7 +39,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "jobs"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PatchRoute[Job, UpdateJobInput](router, "/v1/_/tasks/jobs/{id}", service.controlPlaneHandler.handleUpdateJob,
+	core.PatchRoute[Job, UpdateJobInput](router, "/v1/_/tasks/jobs/{job_id}", service.controlPlaneHandler.handleUpdateJob,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Update an existing cron job"),
 		core.RouteDescription("Modifies schedule expressions, timezone, payloads, or active status."),
@@ -47,7 +47,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "jobs"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/tasks/jobs/{id}", service.controlPlaneHandler.handleDeleteJob,
+	core.DeleteRoute[core.Empty](router, "/v1/_/tasks/jobs/{job_id}", service.controlPlaneHandler.handleDeleteJob,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Delete a cron job"),
 		core.RouteDescription("Deletes a job definition and cancels associated pending queued executions."),
@@ -85,7 +85,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "dlq"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.PostRoute[RetryDLQResponse, core.Empty](router, "/v1/_/tasks/dlq/{id}/retry", service.controlPlaneHandler.handleRetryDLQ,
+	core.PostRoute[RetryDLQResponse, core.Empty](router, "/v1/_/tasks/dlq/{execution_id}/retry", service.controlPlaneHandler.handleRetryDLQ,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Re-queue a failed task from DLQ"),
 		core.RouteDescription("Resets a dead-lettered execution to pending for immediate re-attempt."),
@@ -93,7 +93,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("tasks", "dlq"),
 		core.RouteSDKMethodName("retry"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/tasks/dlq/{id}", service.controlPlaneHandler.handlePurgeDLQ,
+	core.DeleteRoute[core.Empty](router, "/v1/_/tasks/dlq/{execution_id}", service.controlPlaneHandler.handlePurgeDLQ,
 		core.RouteTag("Tasks Control Plane"),
 		core.RouteSummary("Purge a task from DLQ"),
 		core.RouteDescription("Permanently removes a failed execution from the dead-letter queue."),

@@ -130,7 +130,7 @@ func (baseHandler *BaseHandler) fetchActiveDeployment(ctx context.Context, endpo
 // handleInvokeEndpoint reverse-proxies public HTTP requests to the target endpoint's active deployment.
 func (baseHandler *BaseHandler) handleInvokeEndpoint(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling endpoint invoke request")
-	name := request.PathValue("name")
+	name := request.PathValue("endpoint_name")
 	if name == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Endpoint name is required")
 		return

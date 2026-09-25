@@ -105,21 +105,21 @@ func TestImageControlPlaneHandlerPresetUnit(t *testing.T) {
 		// 6. Get preset missing scope -> 403
 		presetIDString := createdPreset.ID.String()
 		noScopeGetRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodGet, "/v1/_/image/presets/"+presetIDString, nil)
-		noScopeGetRequest.SetPathValue("id", presetIDString)
+		noScopeGetRequest.SetPathValue("preset_id", presetIDString)
 		noScopeGetResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetPreset(noScopeGetResponseRecorder, noScopeGetRequest)
 		require.Equal(t, http.StatusForbidden, noScopeGetResponseRecorder.Code)
 
 		// 7. Get preset by ID -> 200
 		getRequest := httptest.NewRequestWithContext(readPresetCtx, http.MethodGet, "/v1/_/image/presets/"+presetIDString, nil)
-		getRequest.SetPathValue("id", presetIDString)
+		getRequest.SetPathValue("preset_id", presetIDString)
 		getResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetPreset(getResponseRecorder, getRequest)
 		require.Equal(t, http.StatusOK, getResponseRecorder.Code)
 
 		// 8. Get preset invalid UUID -> 400
 		badUUIDRequest := httptest.NewRequestWithContext(readPresetCtx, http.MethodGet, "/v1/_/image/presets/invalid-uuid", nil)
-		badUUIDRequest.SetPathValue("id", "invalid-uuid")
+		badUUIDRequest.SetPathValue("preset_id", "invalid-uuid")
 		badUUIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetPreset(badUUIDResponseRecorder, badUUIDRequest)
 		require.Equal(t, http.StatusBadRequest, badUUIDResponseRecorder.Code)
@@ -127,7 +127,7 @@ func TestImageControlPlaneHandlerPresetUnit(t *testing.T) {
 		// 9. Get nonexistent preset -> 404
 		randomID := uuid.New()
 		notFoundRequest := httptest.NewRequestWithContext(readPresetCtx, http.MethodGet, "/v1/_/image/presets/"+randomID.String(), nil)
-		notFoundRequest.SetPathValue("id", randomID.String())
+		notFoundRequest.SetPathValue("preset_id", randomID.String())
 		notFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetPreset(notFoundResponseRecorder, notFoundRequest)
 		require.Equal(t, http.StatusNotFound, notFoundResponseRecorder.Code)
@@ -135,63 +135,63 @@ func TestImageControlPlaneHandlerPresetUnit(t *testing.T) {
 		// 10. Update preset missing scope -> 403
 		updatePayload := `{"processing_options":"rs:fill:200:200/q:85"}`
 		noScopeUpdateRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodPut, "/v1/_/image/presets/"+presetIDString, bytes.NewReader([]byte(updatePayload)))
-		noScopeUpdateRequest.SetPathValue("id", presetIDString)
+		noScopeUpdateRequest.SetPathValue("preset_id", presetIDString)
 		noScopeUpdateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdatePreset(noScopeUpdateResponseRecorder, noScopeUpdateRequest)
 		require.Equal(t, http.StatusForbidden, noScopeUpdateResponseRecorder.Code)
 
 		// 11. Update preset -> 200
 		updateRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodPut, "/v1/_/image/presets/"+presetIDString, bytes.NewReader([]byte(updatePayload)))
-		updateRequest.SetPathValue("id", presetIDString)
+		updateRequest.SetPathValue("preset_id", presetIDString)
 		updateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdatePreset(updateResponseRecorder, updateRequest)
 		require.Equal(t, http.StatusOK, updateResponseRecorder.Code)
 
 		// 10. Update preset bad UUID -> 400
 		badUUIDUpdateRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodPut, "/v1/_/image/presets/invalid-uuid", bytes.NewReader([]byte(updatePayload)))
-		badUUIDUpdateRequest.SetPathValue("id", "invalid-uuid")
+		badUUIDUpdateRequest.SetPathValue("preset_id", "invalid-uuid")
 		badUUIDUpdateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdatePreset(badUUIDUpdateResponseRecorder, badUUIDUpdateRequest)
 		require.Equal(t, http.StatusBadRequest, badUUIDUpdateResponseRecorder.Code)
 
 		// 11. Update preset bad JSON -> 400
 		badJSONUpdateRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodPut, "/v1/_/image/presets/"+presetIDString, bytes.NewReader([]byte("{bad-json")))
-		badJSONUpdateRequest.SetPathValue("id", presetIDString)
+		badJSONUpdateRequest.SetPathValue("preset_id", presetIDString)
 		badJSONUpdateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdatePreset(badJSONUpdateResponseRecorder, badJSONUpdateRequest)
 		require.Equal(t, http.StatusBadRequest, badJSONUpdateResponseRecorder.Code)
 
 		// 12. Update nonexistent preset -> 404
 		nonexistentUpdateRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodPut, "/v1/_/image/presets/"+randomID.String(), bytes.NewReader([]byte(updatePayload)))
-		nonexistentUpdateRequest.SetPathValue("id", randomID.String())
+		nonexistentUpdateRequest.SetPathValue("preset_id", randomID.String())
 		nonexistentUpdateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdatePreset(nonexistentUpdateResponseRecorder, nonexistentUpdateRequest)
 		require.Equal(t, http.StatusNotFound, nonexistentUpdateResponseRecorder.Code)
 
 		// 13. Delete preset missing scope -> 403
 		noScopeDeleteRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodDelete, "/v1/_/image/presets/"+presetIDString, nil)
-		noScopeDeleteRequest.SetPathValue("id", presetIDString)
+		noScopeDeleteRequest.SetPathValue("preset_id", presetIDString)
 		noScopeDeleteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeletePreset(noScopeDeleteResponseRecorder, noScopeDeleteRequest)
 		require.Equal(t, http.StatusForbidden, noScopeDeleteResponseRecorder.Code)
 
 		// 14. Delete preset bad UUID -> 400
 		badUUIDDeleteRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodDelete, "/v1/_/image/presets/invalid-uuid", nil)
-		badUUIDDeleteRequest.SetPathValue("id", "invalid-uuid")
+		badUUIDDeleteRequest.SetPathValue("preset_id", "invalid-uuid")
 		badUUIDDeleteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeletePreset(badUUIDDeleteResponseRecorder, badUUIDDeleteRequest)
 		require.Equal(t, http.StatusBadRequest, badUUIDDeleteResponseRecorder.Code)
 
 		// 15. Delete preset -> 204
 		deleteRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodDelete, "/v1/_/image/presets/"+presetIDString, nil)
-		deleteRequest.SetPathValue("id", presetIDString)
+		deleteRequest.SetPathValue("preset_id", presetIDString)
 		deleteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeletePreset(deleteResponseRecorder, deleteRequest)
 		require.Equal(t, http.StatusNoContent, deleteResponseRecorder.Code)
 
 		// 16. Delete again -> 404
 		deleteAgainRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodDelete, "/v1/_/image/presets/"+presetIDString, nil)
-		deleteAgainRequest.SetPathValue("id", presetIDString)
+		deleteAgainRequest.SetPathValue("preset_id", presetIDString)
 		deleteAgainResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeletePreset(deleteAgainResponseRecorder, deleteAgainRequest)
 		require.Equal(t, http.StatusNotFound, deleteAgainResponseRecorder.Code)
@@ -235,7 +235,7 @@ func TestImageControlPlaneHandlerPresetDatabaseFailureUnit(t *testing.T) {
 
 	// 2. Get preset DB error -> 500
 	getRequest := httptest.NewRequestWithContext(readPresetCtx, http.MethodGet, "/v1/_/image/presets/"+targetUUIDString, nil)
-	getRequest.SetPathValue("id", targetUUIDString)
+	getRequest.SetPathValue("preset_id", targetUUIDString)
 	getResponseRecorder := httptest.NewRecorder()
 	brokenControlPlaneHandler.handleGetPreset(getResponseRecorder, getRequest)
 	require.Equal(t, http.StatusInternalServerError, getResponseRecorder.Code)
@@ -243,14 +243,14 @@ func TestImageControlPlaneHandlerPresetDatabaseFailureUnit(t *testing.T) {
 	// 3. Update preset DB error -> 500
 	updatePayload := `{"processing_options":"rs:fill:100:100"}`
 	updateRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodPut, "/v1/_/image/presets/"+targetUUIDString, bytes.NewReader([]byte(updatePayload)))
-	updateRequest.SetPathValue("id", targetUUIDString)
+	updateRequest.SetPathValue("preset_id", targetUUIDString)
 	updateResponseRecorder := httptest.NewRecorder()
 	brokenControlPlaneHandler.handleUpdatePreset(updateResponseRecorder, updateRequest)
 	require.Equal(t, http.StatusInternalServerError, updateResponseRecorder.Code)
 
 	// 4. Delete preset DB error -> 500
 	deleteRequest := httptest.NewRequestWithContext(writePresetCtx, http.MethodDelete, "/v1/_/image/presets/"+targetUUIDString, nil)
-	deleteRequest.SetPathValue("id", targetUUIDString)
+	deleteRequest.SetPathValue("preset_id", targetUUIDString)
 	deleteResponseRecorder := httptest.NewRecorder()
 	brokenControlPlaneHandler.handleDeletePreset(deleteResponseRecorder, deleteRequest)
 	require.Equal(t, http.StatusInternalServerError, deleteResponseRecorder.Code)

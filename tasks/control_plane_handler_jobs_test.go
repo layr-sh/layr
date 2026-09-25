@@ -91,14 +91,14 @@ func TestTasksControlPlaneHandlerJobsUnit(t *testing.T) {
 
 		// GetJob invalid UUID
 		request = httptest.NewRequestWithContext(readJobCtx, http.MethodGet, "/v1/_/tasks/jobs/invalid-uuid", nil)
-		request.SetPathValue("id", "invalid-uuid")
+		request.SetPathValue("job_id", "invalid-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleGetJob(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// UpdateJob invalid UUID
 		request = httptest.NewRequestWithContext(writeJobCtx, http.MethodPatch, "/v1/_/tasks/jobs/invalid-uuid", nil)
-		request.SetPathValue("id", "invalid-uuid")
+		request.SetPathValue("job_id", "invalid-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateJob(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -106,14 +106,14 @@ func TestTasksControlPlaneHandlerJobsUnit(t *testing.T) {
 		// UpdateJob bad JSON
 		validID := "0191eb58-75c1-7cb2-b7b5-0c7f1a30282b"
 		request = httptest.NewRequestWithContext(writeJobCtx, http.MethodPatch, "/v1/_/tasks/jobs/"+validID, bytes.NewReader([]byte("{bad")))
-		request.SetPathValue("id", validID)
+		request.SetPathValue("job_id", validID)
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateJob(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// DeleteJob invalid UUID
 		request = httptest.NewRequestWithContext(writeJobCtx, http.MethodDelete, "/v1/_/tasks/jobs/invalid-uuid", nil)
-		request.SetPathValue("id", "invalid-uuid")
+		request.SetPathValue("job_id", "invalid-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteJob(responseRecorder, request)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -137,7 +137,7 @@ func TestTasksControlPlaneHandlerJobsUnit(t *testing.T) {
 
 		// GetJob DB error -> 500
 		getJobRequest := httptest.NewRequestWithContext(readJobCtx, http.MethodGet, "/v1/_/tasks/jobs/"+validUUID, nil)
-		getJobRequest.SetPathValue("id", validUUID)
+		getJobRequest.SetPathValue("job_id", validUUID)
 		getJobResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetJob(getJobResponseRecorder, getJobRequest)
 		require.Equal(t, http.StatusInternalServerError, getJobResponseRecorder.Code)
@@ -145,14 +145,14 @@ func TestTasksControlPlaneHandlerJobsUnit(t *testing.T) {
 		// UpdateJob DB error -> 400
 		updatePayload := []byte(`{"name":"updated-job"}`)
 		updateJobRequest := httptest.NewRequestWithContext(writeJobCtx, http.MethodPatch, "/v1/_/tasks/jobs/"+validUUID, bytes.NewReader(updatePayload))
-		updateJobRequest.SetPathValue("id", validUUID)
+		updateJobRequest.SetPathValue("job_id", validUUID)
 		updateJobResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateJob(updateJobResponseRecorder, updateJobRequest)
 		require.Equal(t, http.StatusBadRequest, updateJobResponseRecorder.Code)
 
 		// DeleteJob DB error -> 500
 		deleteJobRequest := httptest.NewRequestWithContext(writeJobCtx, http.MethodDelete, "/v1/_/tasks/jobs/"+validUUID, nil)
-		deleteJobRequest.SetPathValue("id", validUUID)
+		deleteJobRequest.SetPathValue("job_id", validUUID)
 		deleteJobResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteJob(deleteJobResponseRecorder, deleteJobRequest)
 		require.Equal(t, http.StatusInternalServerError, deleteJobResponseRecorder.Code)
