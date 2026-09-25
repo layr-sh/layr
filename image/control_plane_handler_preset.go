@@ -62,14 +62,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePreset(responseWrite
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, preset)
 }
 
-// handleGetPreset handles GET /v1/_/image/presets/{id} returning a preset by ID.
+// handleGetPreset handles GET /v1/_/image/presets/{preset_id} returning a preset by ID.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetPreset(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling get image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetRead) {
 		return
 	}
 
-	presetID, parseErr := uuid.Parse(request.PathValue("id"))
+	presetID, parseErr := uuid.Parse(request.PathValue("preset_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid preset UUID")
 		return
@@ -90,14 +90,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetPreset(responseWriter h
 	core.WriteJSONResponse(responseWriter, http.StatusOK, preset)
 }
 
-// handleUpdatePreset handles PUT /v1/_/image/presets/{id} modifying an existing preset.
+// handleUpdatePreset handles PUT /v1/_/image/presets/{preset_id} modifying an existing preset.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdatePreset(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling update image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetWrite) {
 		return
 	}
 
-	presetID, parseErr := uuid.Parse(request.PathValue("id"))
+	presetID, parseErr := uuid.Parse(request.PathValue("preset_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid preset UUID")
 		return
@@ -126,14 +126,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdatePreset(responseWrite
 	core.WriteJSONResponse(responseWriter, http.StatusOK, preset)
 }
 
-// handleDeletePreset handles DELETE /v1/_/image/presets/{id} removing a preset.
+// handleDeletePreset handles DELETE /v1/_/image/presets/{preset_id} removing a preset.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeletePreset(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling delete image preset request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImagePresetWrite) {
 		return
 	}
 
-	presetID, parseErr := uuid.Parse(request.PathValue("id"))
+	presetID, parseErr := uuid.Parse(request.PathValue("preset_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid preset UUID")
 		return

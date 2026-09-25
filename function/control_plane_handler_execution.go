@@ -12,7 +12,7 @@ import (
 
 const defaultExecutionListLimit = 50
 
-// handleListExecutions handles GET /v1/_/function/executions and GET /v1/_/function/endpoints/{id}/executions.
+// handleListExecutions handles GET /v1/_/function/executions and GET /v1/_/function/endpoints/{endpoint_id}/executions.
 func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling list executions request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointRead) {
@@ -21,8 +21,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWri
 
 	var endpointID *uuid.UUID
 
-	// Check path parameter {id}
-	if endpointIDString := request.PathValue("id"); endpointIDString != "" {
+	// Check path parameter {endpoint_id}
+	if endpointIDString := request.PathValue("endpoint_id"); endpointIDString != "" {
 		parsedID, parseErr := uuid.Parse(endpointIDString)
 		if parseErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")

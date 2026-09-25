@@ -58,7 +58,7 @@ func TestFunctionControlPlaneHandlerDeploymentsIntegration(t *testing.T) {
 		}
 		deployV1JSON, _ := json.Marshal(deployV1CreateDeploymentInput)
 		deployV1Request := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/deploy", bytes.NewReader(deployV1JSON))
-		deployV1Request.SetPathValue("id", targetEndpoint.ID.String())
+		deployV1Request.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		deployV1Request.Header.Set("Authorization", authHeader)
 		deployV1ResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(deployV1ResponseRecorder, deployV1Request)
@@ -77,7 +77,7 @@ func TestFunctionControlPlaneHandlerDeploymentsIntegration(t *testing.T) {
 		}
 		deployV2JSON, _ := json.Marshal(deployV2CreateDeploymentInput)
 		deployV2Request := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/deploy", bytes.NewReader(deployV2JSON))
-		deployV2Request.SetPathValue("id", targetEndpoint.ID.String())
+		deployV2Request.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		deployV2Request.Header.Set("Authorization", authHeader)
 		deployV2ResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleCreateDeployment(deployV2ResponseRecorder, deployV2Request)
@@ -90,7 +90,7 @@ func TestFunctionControlPlaneHandlerDeploymentsIntegration(t *testing.T) {
 
 		// 3. List deployments
 		listRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/deployments", nil)
-		listRequest.SetPathValue("id", targetEndpoint.ID.String())
+		listRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		listRequest.Header.Set("Authorization", authHeader)
 		listResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListDeployments(listResponseRecorder, listRequest)
@@ -106,7 +106,7 @@ func TestFunctionControlPlaneHandlerDeploymentsIntegration(t *testing.T) {
 		}
 		rollbackJSON, _ := json.Marshal(rollbackDeploymentInput)
 		rollbackRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/rollback", bytes.NewReader(rollbackJSON))
-		rollbackRequest.SetPathValue("id", targetEndpoint.ID.String())
+		rollbackRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		rollbackRequest.Header.Set("Authorization", authHeader)
 		rollbackResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleRollbackDeployment(rollbackResponseRecorder, rollbackRequest)
@@ -175,7 +175,7 @@ func TestFunctionControlPlaneHandlerDeploymentFailurePostgresIntegration(t *test
 		// Deploy endpoint - triggers download which fails
 		deployPayload := `{"bundle_content":"export default {};"}`
 		deployRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+createdEndpoint.ID.String()+"/deploy", bytes.NewReader([]byte(deployPayload)))
-		deployRequest.SetPathValue("id", createdEndpoint.ID.String())
+		deployRequest.SetPathValue("endpoint_id", createdEndpoint.ID.String())
 		deployRequest.Header.Set("Authorization", authHeader)
 		deployResponseRecorder := httptest.NewRecorder()
 		failingControlPlaneHandler.handleCreateDeployment(deployResponseRecorder, deployRequest)
@@ -205,7 +205,7 @@ func TestFunctionControlPlaneHandlerDeploymentFailurePostgresIntegration(t *test
 
 		rollbackPayload := `{"target_version":1}`
 		rollbackRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+createdEndpoint.ID.String()+"/rollback", bytes.NewReader([]byte(rollbackPayload)))
-		rollbackRequest.SetPathValue("id", createdEndpoint.ID.String())
+		rollbackRequest.SetPathValue("endpoint_id", createdEndpoint.ID.String())
 		rollbackRequest.Header.Set("Authorization", authHeader)
 		rollbackResponseRecorder := httptest.NewRecorder()
 		failingControlPlaneHandler.handleRollbackDeployment(rollbackResponseRecorder, rollbackRequest)

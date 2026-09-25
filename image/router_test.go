@@ -28,7 +28,7 @@ func TestImageRouterUnit(t *testing.T) {
 	require.NotNil(t, controlPlaneOpenAPISpec)
 	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/config"))
 	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/presets"))
-	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/presets/{id}"))
+	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/presets/{preset_id}"))
 	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/sign"))
 	require.NotNil(t, controlPlaneOpenAPISpec.Paths.Value("/v1/_/image/stats"))
 }

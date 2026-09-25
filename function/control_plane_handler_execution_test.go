@@ -48,7 +48,7 @@ func TestFunctionControlPlaneHandlerExecutionsUnit(t *testing.T) {
 
 		// Invalid path ID -> 400
 		invalidPathRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/invalid-uuid/executions", nil)
-		invalidPathRequest.SetPathValue("id", "invalid-uuid")
+		invalidPathRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		invalidPathResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListExecutions(invalidPathResponseRecorder, invalidPathRequest)
 		require.Equal(t, http.StatusBadRequest, invalidPathResponseRecorder.Code)
@@ -89,7 +89,7 @@ func TestFunctionControlPlaneHandlerExecutionsUnit(t *testing.T) {
 
 		// Query executions for specific endpoint via path parameter
 		byPathRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/executions", nil)
-		byPathRequest.SetPathValue("id", endpoint.ID.String())
+		byPathRequest.SetPathValue("endpoint_id", endpoint.ID.String())
 		byPathResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleListExecutions(byPathResponseRecorder, byPathRequest)
 		require.Equal(t, http.StatusOK, byPathResponseRecorder.Code)

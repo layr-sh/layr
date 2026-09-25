@@ -120,14 +120,14 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 
 		// Bad UUID on get job
 		getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/jobs/not-a-uuid", nil)
-		getRequest.SetPathValue("id", "not-a-uuid")
+		getRequest.SetPathValue("job_id", "not-a-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleGetJob(responseRecorder, getRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Bad UUID on update job
 		updateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/tasks/jobs/not-a-uuid", nil)
-		updateRequest.SetPathValue("id", "not-a-uuid")
+		updateRequest.SetPathValue("job_id", "not-a-uuid")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateJob(responseRecorder, updateRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -135,14 +135,14 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 		// Bad JSON on update job
 		validUUID := "0191eb58-75c1-7cb2-b7b5-0c7f1a30282b"
 		badUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/tasks/jobs/"+validUUID, strings.NewReader("{bad"))
-		badUpdateRequest.SetPathValue("id", validUUID)
+		badUpdateRequest.SetPathValue("job_id", validUUID)
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateJob(responseRecorder, badUpdateRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Bad UUID on delete job
 		deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/tasks/jobs/bad", nil)
-		deleteRequest.SetPathValue("id", "bad")
+		deleteRequest.SetPathValue("job_id", "bad")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteJob(responseRecorder, deleteRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
@@ -161,14 +161,14 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 
 		// Bad UUID on retry DLQ
 		retryDLQBadRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/tasks/dlq/bad/retry", nil)
-		retryDLQBadRequest.SetPathValue("id", "bad")
+		retryDLQBadRequest.SetPathValue("execution_id", "bad")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handleRetryDLQ(responseRecorder, retryDLQBadRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
 		// Bad UUID on purge DLQ
 		purgeDLQBadRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/tasks/dlq/bad", nil)
-		purgeDLQBadRequest.SetPathValue("id", "bad")
+		purgeDLQBadRequest.SetPathValue("execution_id", "bad")
 		responseRecorder = httptest.NewRecorder()
 		controlPlaneHandler.handlePurgeDLQ(responseRecorder, purgeDLQBadRequest)
 		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)

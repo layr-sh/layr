@@ -82,21 +82,21 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 
 		// Get without scope -> 403
 		getNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodGet, "/v1/_/function/endpoints/"+randomUUID, nil)
-		getNoScopeRequest.SetPathValue("id", randomUUID)
+		getNoScopeRequest.SetPathValue("endpoint_id", randomUUID)
 		getNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetEndpoint(getNoScopeResponseRecorder, getNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, getNoScopeResponseRecorder.Code)
 
 		// Update without scope -> 403
 		updateNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodPut, "/v1/_/function/endpoints/"+randomUUID, nil)
-		updateNoScopeRequest.SetPathValue("id", randomUUID)
+		updateNoScopeRequest.SetPathValue("endpoint_id", randomUUID)
 		updateNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateNoScopeResponseRecorder, updateNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, updateNoScopeResponseRecorder.Code)
 
 		// Delete without scope -> 403
 		deleteNoScopeRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodDelete, "/v1/_/function/endpoints/"+randomUUID, nil)
-		deleteNoScopeRequest.SetPathValue("id", randomUUID)
+		deleteNoScopeRequest.SetPathValue("endpoint_id", randomUUID)
 		deleteNoScopeResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(deleteNoScopeResponseRecorder, deleteNoScopeRequest)
 		require.Equal(t, http.StatusForbidden, deleteNoScopeResponseRecorder.Code)
@@ -136,7 +136,7 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 
 		// Get - invalid UUID
 		getBadUUIDRequest := httptest.NewRequestWithContext(readCtx, http.MethodGet, "/v1/_/function/endpoints/invalid-uuid", nil)
-		getBadUUIDRequest.SetPathValue("id", "invalid-uuid")
+		getBadUUIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		getBadUUIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetEndpoint(getBadUUIDResponseRecorder, getBadUUIDRequest)
 		require.Equal(t, http.StatusBadRequest, getBadUUIDResponseRecorder.Code)
@@ -144,35 +144,35 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 		// Get - not found
 		notFoundUUID := uuid.New().String()
 		getNotFoundRequest := httptest.NewRequestWithContext(readCtx, http.MethodGet, "/v1/_/function/endpoints/"+notFoundUUID, nil)
-		getNotFoundRequest.SetPathValue("id", notFoundUUID)
+		getNotFoundRequest.SetPathValue("endpoint_id", notFoundUUID)
 		getNotFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetEndpoint(getNotFoundResponseRecorder, getNotFoundRequest)
 		require.Equal(t, http.StatusNotFound, getNotFoundResponseRecorder.Code)
 
 		// Get - valid
 		getValidRequest := httptest.NewRequestWithContext(readCtx, http.MethodGet, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), nil)
-		getValidRequest.SetPathValue("id", storedEndpoint.ID.String())
+		getValidRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		getValidResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetEndpoint(getValidResponseRecorder, getValidRequest)
 		require.Equal(t, http.StatusOK, getValidResponseRecorder.Code)
 
 		// Update - invalid UUID
 		updateBadUUIDRequest := httptest.NewRequestWithContext(writeCtx, http.MethodPut, "/v1/_/function/endpoints/invalid-uuid", nil)
-		updateBadUUIDRequest.SetPathValue("id", "invalid-uuid")
+		updateBadUUIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		updateBadUUIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateBadUUIDResponseRecorder, updateBadUUIDRequest)
 		require.Equal(t, http.StatusBadRequest, updateBadUUIDResponseRecorder.Code)
 
 		// Update - bad JSON
 		updateBadJSONRequest := httptest.NewRequestWithContext(writeCtx, http.MethodPut, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), bytes.NewReader([]byte("{invalid-json")))
-		updateBadJSONRequest.SetPathValue("id", storedEndpoint.ID.String())
+		updateBadJSONRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		updateBadJSONResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateBadJSONResponseRecorder, updateBadJSONRequest)
 		require.Equal(t, http.StatusBadRequest, updateBadJSONResponseRecorder.Code)
 
 		// Update - not found
 		updateNotFoundRequest := httptest.NewRequestWithContext(writeCtx, http.MethodPut, "/v1/_/function/endpoints/"+notFoundUUID, bytes.NewReader([]byte("{}")))
-		updateNotFoundRequest.SetPathValue("id", notFoundUUID)
+		updateNotFoundRequest.SetPathValue("endpoint_id", notFoundUUID)
 		updateNotFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateNotFoundResponseRecorder, updateNotFoundRequest)
 		require.Equal(t, http.StatusNotFound, updateNotFoundResponseRecorder.Code)
@@ -194,21 +194,21 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 		}
 		updatePayloadJSON, _ := json.Marshal(updateEndpointInput)
 		updateValidRequest := httptest.NewRequestWithContext(writeCtx, http.MethodPut, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), bytes.NewReader(updatePayloadJSON))
-		updateValidRequest.SetPathValue("id", storedEndpoint.ID.String())
+		updateValidRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		updateValidResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateValidResponseRecorder, updateValidRequest)
 		require.Equal(t, http.StatusOK, updateValidResponseRecorder.Code)
 
 		// Delete - invalid UUID
 		deleteBadUUIDRequest := httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/function/endpoints/invalid-uuid", nil)
-		deleteBadUUIDRequest.SetPathValue("id", "invalid-uuid")
+		deleteBadUUIDRequest.SetPathValue("endpoint_id", "invalid-uuid")
 		deleteBadUUIDResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(deleteBadUUIDResponseRecorder, deleteBadUUIDRequest)
 		require.Equal(t, http.StatusBadRequest, deleteBadUUIDResponseRecorder.Code)
 
 		// Delete - not found
 		deleteNotFoundRequest := httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/function/endpoints/"+notFoundUUID, nil)
-		deleteNotFoundRequest.SetPathValue("id", notFoundUUID)
+		deleteNotFoundRequest.SetPathValue("endpoint_id", notFoundUUID)
 		deleteNotFoundResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(deleteNotFoundResponseRecorder, deleteNotFoundRequest)
 		require.Equal(t, http.StatusNotFound, deleteNotFoundResponseRecorder.Code)
@@ -226,7 +226,7 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 		require.NoError(t, createUpdateTrgErr)
 
 		failUpdateRequest := httptest.NewRequestWithContext(writeCtx, http.MethodPut, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), strings.NewReader(`{"description":"fail-update"}`))
-		failUpdateRequest.SetPathValue("id", storedEndpoint.ID.String())
+		failUpdateRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		failUpdateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(failUpdateResponseRecorder, failUpdateRequest)
 		require.Equal(t, http.StatusInternalServerError, failUpdateResponseRecorder.Code)
@@ -247,7 +247,7 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 		require.NoError(t, createDeleteTrgErr)
 
 		failDeleteRequest := httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), nil)
-		failDeleteRequest.SetPathValue("id", storedEndpoint.ID.String())
+		failDeleteRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		failDeleteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(failDeleteResponseRecorder, failDeleteRequest)
 		require.Equal(t, http.StatusInternalServerError, failDeleteResponseRecorder.Code)
@@ -257,7 +257,7 @@ func TestFunctionControlPlaneHandlerEndpointsUnit(t *testing.T) {
 
 		// Delete - valid
 		deleteValidRequest := httptest.NewRequestWithContext(writeCtx, http.MethodDelete, "/v1/_/function/endpoints/"+storedEndpoint.ID.String(), nil)
-		deleteValidRequest.SetPathValue("id", storedEndpoint.ID.String())
+		deleteValidRequest.SetPathValue("endpoint_id", storedEndpoint.ID.String())
 		deleteValidResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(deleteValidResponseRecorder, deleteValidRequest)
 		require.Equal(t, http.StatusNoContent, deleteValidResponseRecorder.Code)
@@ -295,21 +295,21 @@ func TestFunctionControlPlaneHandlerEndpointsDatabaseFailureUnit(t *testing.T) {
 
 	// Get DB failure -> 500
 	getRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/"+randomUUID, nil)
-	getRequest.SetPathValue("id", randomUUID)
+	getRequest.SetPathValue("endpoint_id", randomUUID)
 	getResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetEndpoint(getResponseRecorder, getRequest)
 	require.Equal(t, http.StatusInternalServerError, getResponseRecorder.Code)
 
 	// Update DB failure -> 500
 	updateRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPut, "/v1/_/function/endpoints/"+randomUUID, strings.NewReader(`{"entrypoint":"index.js"}`))
-	updateRequest.SetPathValue("id", randomUUID)
+	updateRequest.SetPathValue("endpoint_id", randomUUID)
 	updateResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateEndpoint(updateResponseRecorder, updateRequest)
 	require.Equal(t, http.StatusInternalServerError, updateResponseRecorder.Code)
 
 	// Delete DB failure -> 500
 	deleteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/"+randomUUID, nil)
-	deleteRequest.SetPathValue("id", randomUUID)
+	deleteRequest.SetPathValue("endpoint_id", randomUUID)
 	deleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteEndpoint(deleteResponseRecorder, deleteRequest)
 	require.Equal(t, http.StatusInternalServerError, deleteResponseRecorder.Code)

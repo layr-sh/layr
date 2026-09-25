@@ -63,7 +63,7 @@ func TestFunctionControlPlaneHandlerEndpointsIntegration(t *testing.T) {
 
 		// 3. Get endpoint
 		getRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/_/function/endpoints/"+createdEndpointID.String(), nil)
-		getRequest.SetPathValue("id", createdEndpointID.String())
+		getRequest.SetPathValue("endpoint_id", createdEndpointID.String())
 		getRequest.Header.Set("Authorization", authHeader)
 		getResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleGetEndpoint(getResponseRecorder, getRequest)
@@ -78,7 +78,7 @@ func TestFunctionControlPlaneHandlerEndpointsIntegration(t *testing.T) {
 		}
 		updateJSON, _ := json.Marshal(updateEndpointInput)
 		updateRequest := httptest.NewRequestWithContext(testCtx, http.MethodPut, "/v1/_/function/endpoints/"+createdEndpointID.String(), bytes.NewReader(updateJSON))
-		updateRequest.SetPathValue("id", createdEndpointID.String())
+		updateRequest.SetPathValue("endpoint_id", createdEndpointID.String())
 		updateRequest.Header.Set("Authorization", authHeader)
 		updateResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleUpdateEndpoint(updateResponseRecorder, updateRequest)
@@ -91,7 +91,7 @@ func TestFunctionControlPlaneHandlerEndpointsIntegration(t *testing.T) {
 
 		// 5. Delete endpoint
 		deleteRequest := httptest.NewRequestWithContext(testCtx, http.MethodDelete, "/v1/_/function/endpoints/"+createdEndpointID.String(), nil)
-		deleteRequest.SetPathValue("id", createdEndpointID.String())
+		deleteRequest.SetPathValue("endpoint_id", createdEndpointID.String())
 		deleteRequest.Header.Set("Authorization", authHeader)
 		deleteResponseRecorder := httptest.NewRecorder()
 		controlPlaneHandler.handleDeleteEndpoint(deleteResponseRecorder, deleteRequest)

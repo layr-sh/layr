@@ -82,7 +82,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("image", "presets"),
 		core.RouteSDKMethodName("create"),
 	)
-	core.GetRoute[Preset](router, "/v1/_/image/presets/{id}", service.controlPlaneHandler.handleGetPreset,
+	core.GetRoute[Preset](router, "/v1/_/image/presets/{preset_id}", service.controlPlaneHandler.handleGetPreset,
 		core.RouteTag("Image Control Plane"),
 		core.RouteSummary("Get image preset by ID"),
 		core.RouteDescription("Returns a single transformation preset definition."),
@@ -90,7 +90,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("image", "presets"),
 		core.RouteSDKMethodName("get"),
 	)
-	core.PutRoute[Preset, UpdatePresetInput](router, "/v1/_/image/presets/{id}", service.controlPlaneHandler.handleUpdatePreset,
+	core.PutRoute[Preset, UpdatePresetInput](router, "/v1/_/image/presets/{preset_id}", service.controlPlaneHandler.handleUpdatePreset,
 		core.RouteTag("Image Control Plane"),
 		core.RouteSummary("Update an image preset"),
 		core.RouteDescription("Modifies an existing transformation preset definition."),
@@ -98,7 +98,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("image", "presets"),
 		core.RouteSDKMethodName("update"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/_/image/presets/{id}", service.controlPlaneHandler.handleDeletePreset,
+	core.DeleteRoute[core.Empty](router, "/v1/_/image/presets/{preset_id}", service.controlPlaneHandler.handleDeletePreset,
 		core.RouteTag("Image Control Plane"),
 		core.RouteSummary("Delete an image preset"),
 		core.RouteDescription("Deletes a transformation preset by ID."),

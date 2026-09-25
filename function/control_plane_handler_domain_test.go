@@ -63,7 +63,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, unauthListDomainsResponseRecorder.Code)
 
 	unauthDeleteDomainRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodDelete, "/v1/_/function/domains/01923456-789a-7bc8-9def-0123456789ab", nil)
-	unauthDeleteDomainRequest.SetPathValue("id", "01923456-789a-7bc8-9def-0123456789ab")
+	unauthDeleteDomainRequest.SetPathValue("domain_id", "01923456-789a-7bc8-9def-0123456789ab")
 	unauthDeleteDomainResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomain(unauthDeleteDomainResponseRecorder, unauthDeleteDomainRequest)
 	require.Equal(t, http.StatusForbidden, unauthDeleteDomainResponseRecorder.Code)
@@ -107,13 +107,13 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Delete domain validations
 	invalidDeleteIDRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/domains/invalid-uuid", nil)
-	invalidDeleteIDRequest.SetPathValue("id", "invalid-uuid")
+	invalidDeleteIDRequest.SetPathValue("domain_id", "invalid-uuid")
 	invalidDeleteIDResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomain(invalidDeleteIDResponseRecorder, invalidDeleteIDRequest)
 	require.Equal(t, http.StatusBadRequest, invalidDeleteIDResponseRecorder.Code)
 
 	notFoundDeleteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/domains/01923456-789a-7bc8-9def-0123456789ab", nil)
-	notFoundDeleteRequest.SetPathValue("id", "01923456-789a-7bc8-9def-0123456789ab")
+	notFoundDeleteRequest.SetPathValue("domain_id", "01923456-789a-7bc8-9def-0123456789ab")
 	notFoundDeleteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomain(notFoundDeleteResponseRecorder, notFoundDeleteRequest)
 	require.Equal(t, http.StatusNotFound, notFoundDeleteResponseRecorder.Code)
@@ -121,19 +121,19 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	// 2. Endpoint Domain Routes
 	// Scope denials
 	unauthCreateRouteRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`{}`))
-	unauthCreateRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	unauthCreateRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	unauthCreateRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(unauthCreateRouteResponseRecorder, unauthCreateRouteRequest)
 	require.Equal(t, http.StatusForbidden, unauthCreateRouteResponseRecorder.Code)
 
 	unauthListRoutesRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodGet, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", nil)
-	unauthListRoutesRequest.SetPathValue("id", targetEndpoint.ID.String())
+	unauthListRoutesRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	unauthListRoutesResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListCustomDomainRoutes(unauthListRoutesResponseRecorder, unauthListRoutesRequest)
 	require.Equal(t, http.StatusForbidden, unauthListRoutesResponseRecorder.Code)
 
 	unauthDeleteRouteRequest := httptest.NewRequestWithContext(noScopeCtx, http.MethodDelete, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains/01923456-789a-7bc8-9def-0123456789ab", nil)
-	unauthDeleteRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	unauthDeleteRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	unauthDeleteRouteRequest.SetPathValue("route_id", "01923456-789a-7bc8-9def-0123456789ab")
 	unauthDeleteRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(unauthDeleteRouteResponseRecorder, unauthDeleteRouteRequest)
@@ -141,31 +141,31 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Route validations
 	badEndpointRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/invalid-uuid/domains", strings.NewReader(`{}`))
-	badEndpointRouteRequest.SetPathValue("id", "invalid-uuid")
+	badEndpointRouteRequest.SetPathValue("endpoint_id", "invalid-uuid")
 	badEndpointRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(badEndpointRouteResponseRecorder, badEndpointRouteRequest)
 	require.Equal(t, http.StatusBadRequest, badEndpointRouteResponseRecorder.Code)
 
 	badJSONRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`invalid-json`))
-	badJSONRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	badJSONRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	badJSONRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(badJSONRouteResponseRecorder, badJSONRouteRequest)
 	require.Equal(t, http.StatusBadRequest, badJSONRouteResponseRecorder.Code)
 
 	missingDomainRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`{}`))
-	missingDomainRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	missingDomainRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	missingDomainRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(missingDomainRouteResponseRecorder, missingDomainRouteRequest)
 	require.Equal(t, http.StatusBadRequest, missingDomainRouteResponseRecorder.Code)
 
 	notFoundEndpointRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/01923456-789a-7bc8-9def-0123456789ab/domains", strings.NewReader(`{"custom_domain_id":"`+customDomain.ID.String()+`"}`))
-	notFoundEndpointRouteRequest.SetPathValue("id", "01923456-789a-7bc8-9def-0123456789ab")
+	notFoundEndpointRouteRequest.SetPathValue("endpoint_id", "01923456-789a-7bc8-9def-0123456789ab")
 	notFoundEndpointRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(notFoundEndpointRouteResponseRecorder, notFoundEndpointRouteRequest)
 	require.Equal(t, http.StatusNotFound, notFoundEndpointRouteResponseRecorder.Code)
 
 	notFoundDomainRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`{"custom_domain_id":"01923456-789a-7bc8-9def-0123456789ab"}`))
-	notFoundDomainRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	notFoundDomainRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	notFoundDomainRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(notFoundDomainRouteResponseRecorder, notFoundDomainRouteRequest)
 	require.Equal(t, http.StatusNotFound, notFoundDomainRouteResponseRecorder.Code)
@@ -173,7 +173,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	// Invalid prefix route creation
 	invalidPrefixRouteJSON := `{"custom_domain_id":"` + customDomain.ID.String() + `","path_prefix":"/api?query=1"}`
 	invalidPrefixRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(invalidPrefixRouteJSON))
-	invalidPrefixRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	invalidPrefixRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	invalidPrefixRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(invalidPrefixRouteResponseRecorder, invalidPrefixRouteRequest)
 	require.Equal(t, http.StatusBadRequest, invalidPrefixRouteResponseRecorder.Code)
@@ -181,7 +181,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	// Valid route creation
 	createRouteJSON := `{"custom_domain_id":"` + customDomain.ID.String() + `","path_prefix":"/api"}`
 	validRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(createRouteJSON))
-	validRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	validRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	validRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(validRouteResponseRecorder, validRouteRequest)
 	require.Equal(t, http.StatusCreated, validRouteResponseRecorder.Code)
@@ -192,20 +192,20 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Route conflict
 	conflictRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(createRouteJSON))
-	conflictRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	conflictRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	conflictRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(conflictRouteResponseRecorder, conflictRouteRequest)
 	require.Equal(t, http.StatusConflict, conflictRouteResponseRecorder.Code)
 
 	// List routes
 	invalidEndpointListRoutesRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/invalid-uuid/domains", nil)
-	invalidEndpointListRoutesRequest.SetPathValue("id", "invalid-uuid")
+	invalidEndpointListRoutesRequest.SetPathValue("endpoint_id", "invalid-uuid")
 	invalidEndpointListRoutesResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListCustomDomainRoutes(invalidEndpointListRoutesResponseRecorder, invalidEndpointListRoutesRequest)
 	require.Equal(t, http.StatusBadRequest, invalidEndpointListRoutesResponseRecorder.Code)
 
 	listRoutesRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", nil)
-	listRoutesRequest.SetPathValue("id", targetEndpoint.ID.String())
+	listRoutesRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	listRoutesResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListCustomDomainRoutes(listRoutesResponseRecorder, listRoutesRequest)
 	require.Equal(t, http.StatusOK, listRoutesResponseRecorder.Code)
@@ -216,7 +216,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Delete route validations
 	invalidEndpointDeleteRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/invalid-uuid/domains/invalid-uuid", nil)
-	invalidEndpointDeleteRouteRequest.SetPathValue("id", "invalid-uuid")
+	invalidEndpointDeleteRouteRequest.SetPathValue("endpoint_id", "invalid-uuid")
 	invalidEndpointDeleteRouteRequest.SetPathValue("route_id", "invalid-uuid")
 	invalidEndpointDeleteRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(invalidEndpointDeleteRouteResponseRecorder, invalidEndpointDeleteRouteRequest)
@@ -224,14 +224,14 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Delete route validations
 	invalidDeleteRouteIDRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains/invalid-uuid", nil)
-	invalidDeleteRouteIDRequest.SetPathValue("id", targetEndpoint.ID.String())
+	invalidDeleteRouteIDRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	invalidDeleteRouteIDRequest.SetPathValue("route_id", "invalid-uuid")
 	invalidDeleteRouteIDResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(invalidDeleteRouteIDResponseRecorder, invalidDeleteRouteIDRequest)
 	require.Equal(t, http.StatusBadRequest, invalidDeleteRouteIDResponseRecorder.Code)
 
 	notFoundDeleteRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains/01923456-789a-7bc8-9def-0123456789ab", nil)
-	notFoundDeleteRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	notFoundDeleteRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	notFoundDeleteRouteRequest.SetPathValue("route_id", "01923456-789a-7bc8-9def-0123456789ab")
 	notFoundDeleteRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(notFoundDeleteRouteResponseRecorder, notFoundDeleteRouteRequest)
@@ -239,7 +239,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Delete valid route
 	deleteRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains/"+customDomainRoute.ID.String(), nil)
-	deleteRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	deleteRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	deleteRouteRequest.SetPathValue("route_id", customDomainRoute.ID.String())
 	deleteRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(deleteRouteResponseRecorder, deleteRouteRequest)
@@ -258,7 +258,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	require.NoError(t, createRouteTrgErr)
 
 	failInsertRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`{"custom_domain_id":"`+customDomain.ID.String()+`","path_prefix":"/fail-prefix"}`))
-	failInsertRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	failInsertRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	failInsertRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(failInsertRouteResponseRecorder, failInsertRouteRequest)
 	require.Equal(t, http.StatusInternalServerError, failInsertRouteResponseRecorder.Code)
@@ -268,7 +268,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	// Delete domain
 	deleteDomainRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/domains/"+customDomain.ID.String(), nil)
-	deleteDomainRequest.SetPathValue("id", customDomain.ID.String())
+	deleteDomainRequest.SetPathValue("domain_id", customDomain.ID.String())
 	deleteDomainResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomain(deleteDomainResponseRecorder, deleteDomainRequest)
 	require.Equal(t, http.StatusNoContent, deleteDomainResponseRecorder.Code)
@@ -278,7 +278,7 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 	require.NoError(t, dropCustomDomainsErr)
 
 	failFetchDomainRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", strings.NewReader(`{"custom_domain_id":"`+customDomain.ID.String()+`","path_prefix":"/fail-fetch"}`))
-	failFetchDomainRouteRequest.SetPathValue("id", targetEndpoint.ID.String())
+	failFetchDomainRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 	failFetchDomainRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(failFetchDomainRouteResponseRecorder, failFetchDomainRouteRequest)
 	require.Equal(t, http.StatusInternalServerError, failFetchDomainRouteResponseRecorder.Code)
@@ -315,28 +315,28 @@ func TestFunctionControlPlaneHandlerDomainsDatabaseFailureUnit(t *testing.T) {
 
 	// Delete domain DB failure -> 500
 	deleteDomainRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/domains/"+randomUUID, nil)
-	deleteDomainRequest.SetPathValue("id", randomUUID)
+	deleteDomainRequest.SetPathValue("domain_id", randomUUID)
 	deleteDomainResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomain(deleteDomainResponseRecorder, deleteDomainRequest)
 	require.Equal(t, http.StatusInternalServerError, deleteDomainResponseRecorder.Code)
 
 	// Create route DB failure -> 500
 	createRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/endpoints/"+randomUUID+"/domains", strings.NewReader(`{"custom_domain_id":"`+randomUUID+`"}`))
-	createRouteRequest.SetPathValue("id", randomUUID)
+	createRouteRequest.SetPathValue("endpoint_id", randomUUID)
 	createRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleCreateCustomDomainRoute(createRouteResponseRecorder, createRouteRequest)
 	require.Equal(t, http.StatusInternalServerError, createRouteResponseRecorder.Code)
 
 	// List routes DB failure -> 500
 	listRoutesRequest := httptest.NewRequestWithContext(rootCtx, http.MethodGet, "/v1/_/function/endpoints/"+randomUUID+"/domains", nil)
-	listRoutesRequest.SetPathValue("id", randomUUID)
+	listRoutesRequest.SetPathValue("endpoint_id", randomUUID)
 	listRoutesResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleListCustomDomainRoutes(listRoutesResponseRecorder, listRoutesRequest)
 	require.Equal(t, http.StatusInternalServerError, listRoutesResponseRecorder.Code)
 
 	// Delete route DB failure -> 500
 	deleteRouteRequest := httptest.NewRequestWithContext(rootCtx, http.MethodDelete, "/v1/_/function/endpoints/"+randomUUID+"/domains/"+randomUUID, nil)
-	deleteRouteRequest.SetPathValue("id", randomUUID)
+	deleteRouteRequest.SetPathValue("endpoint_id", randomUUID)
 	deleteRouteRequest.SetPathValue("route_id", randomUUID)
 	deleteRouteResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleDeleteCustomDomainRoute(deleteRouteResponseRecorder, deleteRouteRequest)

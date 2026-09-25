@@ -61,14 +61,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateJob(responseWriter h
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, job)
 }
 
-// handleGetJob handles GET /v1/_/tasks/jobs/{id} returning a single job by UUID.
+// handleGetJob handles GET /v1/_/tasks/jobs/{job_id} returning a single job by UUID.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling get job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobRead) {
 		return
 	}
 
-	jobID, parseErr := uuid.Parse(request.PathValue("id"))
+	jobID, parseErr := uuid.Parse(request.PathValue("job_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid job UUID")
 		return
@@ -89,14 +89,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http
 	core.WriteJSONResponse(responseWriter, http.StatusOK, getJobResponse)
 }
 
-// handleUpdateJob handles PATCH /v1/_/tasks/jobs/{id} updating an existing cron job.
+// handleUpdateJob handles PATCH /v1/_/tasks/jobs/{job_id} updating an existing cron job.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateJob(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling update job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobWrite) {
 		return
 	}
 
-	jobID, parseErr := uuid.Parse(request.PathValue("id"))
+	jobID, parseErr := uuid.Parse(request.PathValue("job_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid job UUID")
 		return
@@ -127,14 +127,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateJob(responseWriter h
 	core.WriteJSONResponse(responseWriter, http.StatusOK, job)
 }
 
-// handleDeleteJob handles DELETE /v1/_/tasks/jobs/{id} removing a job and cancelling pending executions.
+// handleDeleteJob handles DELETE /v1/_/tasks/jobs/{job_id} removing a job and cancelling pending executions.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteJob(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling delete job request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeTasksJobWrite) {
 		return
 	}
 
-	jobID, parseErr := uuid.Parse(request.PathValue("id"))
+	jobID, parseErr := uuid.Parse(request.PathValue("job_id"))
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid job UUID")
 		return

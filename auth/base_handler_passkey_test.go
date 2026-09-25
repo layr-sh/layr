@@ -220,7 +220,7 @@ func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
 
 	// 5. Delete user passkey - authenticated with valid ID on nil DB -> 500
 	validIDDeleteRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodDelete, "/v1/auth/user/passkeys/pk-1", nil)
-	validIDDeleteRequest.SetPathValue("id", "pk-1")
+	validIDDeleteRequest.SetPathValue("passkey_id", "pk-1")
 	validIDDeleteRequest.Header.Set("Authorization", bearerHeader)
 	validIDDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeletePasskey(validIDDeleteResponseRecorder, validIDDeleteRequest)

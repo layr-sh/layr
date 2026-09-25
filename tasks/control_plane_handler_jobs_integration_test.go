@@ -59,7 +59,7 @@ func TestTasksControlPlaneHandlerJobsIntegration(t *testing.T) {
 		require.NoError(t, json.Unmarshal(listResponseRecorder.Body.Bytes(), &listJobsResponse))
 		require.Equal(t, 1, listJobsResponse.Count)
 
-		// 3. GET /v1/_/tasks/jobs/{id}
+		// 3. GET /v1/_/tasks/jobs/{job_id}
 		getRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/jobs/"+createdJob.ID.String(), nil)
 		getRequest.Header.Set("X-Service-Account-Key", authSecretKey)
 		getResponseRecorder := httptest.NewRecorder()
@@ -70,7 +70,7 @@ func TestTasksControlPlaneHandlerJobsIntegration(t *testing.T) {
 		require.NoError(t, json.Unmarshal(getResponseRecorder.Body.Bytes(), &getJobResponse))
 		require.Equal(t, createdJob.ID, getJobResponse.ID)
 
-		// 4. PATCH /v1/_/tasks/jobs/{id}
+		// 4. PATCH /v1/_/tasks/jobs/{job_id}
 		updatePayload := `{"name":"api-cron-job-renamed"}`
 		patchRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/_/tasks/jobs/"+createdJob.ID.String(), bytes.NewReader([]byte(updatePayload)))
 		patchRequest.Header.Set("Content-Type", "application/json")
@@ -79,7 +79,7 @@ func TestTasksControlPlaneHandlerJobsIntegration(t *testing.T) {
 		coreServer.Handler().ServeHTTP(patchResponseRecorder, patchRequest)
 		require.Equal(t, http.StatusOK, patchResponseRecorder.Code)
 
-		// 5. DELETE /v1/_/tasks/jobs/{id}
+		// 5. DELETE /v1/_/tasks/jobs/{job_id}
 		deleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/tasks/jobs/"+createdJob.ID.String(), nil)
 		deleteRequest.Header.Set("X-Service-Account-Key", authSecretKey)
 		deleteResponseRecorder := httptest.NewRecorder()

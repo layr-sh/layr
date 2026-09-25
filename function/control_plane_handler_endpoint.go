@@ -192,14 +192,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateEndpoint(responseWri
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, storedEndpoint)
 }
 
-// handleGetEndpoint handles GET /v1/_/function/endpoints/{id} returning an endpoint definition.
+// handleGetEndpoint handles GET /v1/_/function/endpoints/{endpoint_id} returning an endpoint definition.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetEndpoint(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling get endpoint request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointRead) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -220,14 +220,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetEndpoint(responseWriter
 	core.WriteJSONResponse(responseWriter, http.StatusOK, storedEndpoint)
 }
 
-// handleUpdateEndpoint handles PUT /v1/_/function/endpoints/{id} modifying endpoint metadata.
+// handleUpdateEndpoint handles PUT /v1/_/function/endpoints/{endpoint_id} modifying endpoint metadata.
 func (controlPlaneHandler *ControlPlaneHandler) handleUpdateEndpoint(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling update endpoint request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointWrite) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -301,14 +301,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateEndpoint(responseWri
 	core.WriteJSONResponse(responseWriter, http.StatusOK, existingEndpoint)
 }
 
-// handleDeleteEndpoint handles DELETE /v1/_/function/endpoints/{id} removing an endpoint definition.
+// handleDeleteEndpoint handles DELETE /v1/_/function/endpoints/{endpoint_id} removing an endpoint definition.
 func (controlPlaneHandler *ControlPlaneHandler) handleDeleteEndpoint(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling delete endpoint request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointWrite) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")

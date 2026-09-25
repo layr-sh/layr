@@ -86,14 +86,14 @@ func TestTasksControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 		require.NoError(t, json.Unmarshal(listDLQResponseRecorder.Body.Bytes(), &listDLQResponse))
 		require.Positive(t, listDLQResponse.Count)
 
-		// 6. POST /v1/_/tasks/dlq/{id}/retry
+		// 6. POST /v1/_/tasks/dlq/{execution_id}/retry
 		retryDLQRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/tasks/dlq/"+triggerExecutionResponse.ExecutionID.String()+"/retry", nil)
 		retryDLQRequest.Header.Set("X-Service-Account-Key", authSecretKey)
 		retryDLQResponseRecorder := httptest.NewRecorder()
 		coreServer.Handler().ServeHTTP(retryDLQResponseRecorder, retryDLQRequest)
 		require.Equal(t, http.StatusOK, retryDLQResponseRecorder.Code)
 
-		// 7. Force back to failed and test DELETE /v1/_/tasks/dlq/{id}
+		// 7. Force back to failed and test DELETE /v1/_/tasks/dlq/{execution_id}
 		_, err = kernel.DB().Exec(ctx, "UPDATE tasks.executions SET status = 'failed' WHERE id = $1", triggerExecutionResponse.ExecutionID)
 		require.NoError(t, err)
 

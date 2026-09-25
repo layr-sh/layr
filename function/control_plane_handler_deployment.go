@@ -84,14 +84,14 @@ func packageBundleFilesTo(files map[string]string, writer io.Writer) (map[string
 	return manifest, nil
 }
 
-// handleCreateDeployment handles POST /v1/_/function/endpoints/{id}/deploy uploading and deploying code.
+// handleCreateDeployment handles POST /v1/_/function/endpoints/{endpoint_id}/deploy uploading and deploying code.
 func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling create deployment request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointDeploy) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -244,14 +244,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, deployment)
 }
 
-// handleListDeployments handles GET /v1/_/function/endpoints/{id}/deployments returning deployment history.
+// handleListDeployments handles GET /v1/_/function/endpoints/{endpoint_id}/deployments returning deployment history.
 func (controlPlaneHandler *ControlPlaneHandler) handleListDeployments(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling list deployments request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointRead) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
@@ -309,14 +309,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListDeployments(responseWr
 	})
 }
 
-// handleRollbackDeployment handles POST /v1/_/function/endpoints/{id}/rollback restoring an earlier deployment.
+// handleRollbackDeployment handles POST /v1/_/function/endpoints/{endpoint_id}/rollback restoring an earlier deployment.
 func (controlPlaneHandler *ControlPlaneHandler) handleRollbackDeployment(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling rollback deployment request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeFunctionEndpointDeploy) {
 		return
 	}
 
-	endpointIDString := request.PathValue("id")
+	endpointIDString := request.PathValue("endpoint_id")
 	endpointID, parseErr := uuid.Parse(endpointIDString)
 	if parseErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid endpoint ID")
