@@ -35,7 +35,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleTriggerExecution(responseW
 	triggerExecutionResponse, err := controlPlaneHandler.jobManager.TriggerExecution(requestCtx, triggerExecutionInput)
 	if err != nil {
 		if errors.Is(err, ErrJobNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Job not found")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
@@ -147,7 +147,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRetryDLQ(responseWriter ht
 	retryDLQResponse, err := controlPlaneHandler.jobManager.RetryDLQExecution(requestCtx, executionID)
 	if err != nil {
 		if errors.Is(err, ErrDLQItemNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Execution not found")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
@@ -175,7 +175,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handlePurgeDLQ(responseWriter ht
 	err := controlPlaneHandler.jobManager.PurgeDLQExecution(requestCtx, executionID)
 	if err != nil {
 		if errors.Is(err, ErrDLQItemNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Execution not found")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())

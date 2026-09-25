@@ -41,6 +41,7 @@ type Config struct {
 	Notification ServiceConfig  `yaml:"notification"`
 	Analytics    ServiceConfig  `yaml:"analytics"`
 	Image        ServiceConfig  `yaml:"image"`
+	Function     ServiceConfig  `yaml:"function"`
 	Console      ConsoleConfig  `yaml:"console"`
 }
 
@@ -131,6 +132,7 @@ func DefaultConfig() *Config {
 		Notification: ServiceConfig{Enabled: false},
 		Analytics:    ServiceConfig{Enabled: false},
 		Image:        ServiceConfig{Enabled: false},
+		Function:     ServiceConfig{Enabled: false},
 		Console: ConsoleConfig{
 			Enabled: true,
 		},
@@ -428,6 +430,11 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 			config.Image.Enabled = parseFlag(value)
 			return "image.enabled", true
 		}
+	case "function":
+		if field == "enabled" {
+			config.Function.Enabled = parseFlag(value)
+			return "function.enabled", true
+		}
 	case "console":
 		switch field {
 		case "enabled":
@@ -538,7 +545,8 @@ func (config *Config) HasAnyFunctionalServiceEnabled() bool {
 		config.FileStorage.Enabled ||
 		config.Notification.Enabled ||
 		config.Analytics.Enabled ||
-		config.Image.Enabled
+		config.Image.Enabled ||
+		config.Function.Enabled
 }
 
 // GetFunctionalServices returns a slice of active functional backend service names (excluding console).
@@ -564,6 +572,9 @@ func (config *Config) GetFunctionalServices() []string {
 	}
 	if config.Image.Enabled {
 		list = append(list, "image")
+	}
+	if config.Function.Enabled {
+		list = append(list, "function")
 	}
 	return list
 }
@@ -594,6 +605,8 @@ func (config *Config) IsServiceEnabled(serviceName string) bool {
 		return config.Analytics.Enabled
 	case "image":
 		return config.Image.Enabled
+	case "function":
+		return config.Function.Enabled
 	case "console":
 		return config.Console.Enabled
 	default:
@@ -618,6 +631,8 @@ func (config *Config) EnableService(serviceName string) error {
 		config.Analytics.Enabled = true
 	case "image":
 		config.Image.Enabled = true
+	case "function":
+		config.Function.Enabled = true
 	case "console":
 		config.Console.Enabled = true
 	default:

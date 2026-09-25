@@ -16,7 +16,12 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	rawPath := request.PathValue("path")
 	log.Tracef("handling image transform request: path=%s", rawPath)
 	if signature == "" || rawPath == "" {
-		baseHandler.writeTransformError(responseWriter, request, rawPath, http.StatusBadRequest, "Signature and image path are required")
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(rawPath, TransformFailedEventData{
+			SourceURL:  rawPath,
+			Reason:     "Signature and image path are required",
+			StatusCode: http.StatusBadRequest,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Signature and image path are required")
 		return
 	}
 
@@ -31,20 +36,35 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	allowInsecure := baseHandler.configManager.Get().AllowInsecure
 
 	if !VerifySignature(signingKey, signingSalt, signature, fullPath, allowInsecure) {
-		baseHandler.writeTransformError(responseWriter, request, fullPath, http.StatusForbidden, "Invalid URL signature")
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(fullPath, TransformFailedEventData{
+			SourceURL:  fullPath,
+			Reason:     "Invalid URL signature",
+			StatusCode: http.StatusForbidden,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Invalid URL signature")
 		return
 	}
 
 	// 2. Parse Path & Processing Options
 	optionsString, sourceURL, extensionOverride, parseErr := ParseURLPath(fullPath)
 	if parseErr != nil {
-		baseHandler.writeTransformError(responseWriter, request, fullPath, http.StatusBadRequest, parseErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(fullPath, TransformFailedEventData{
+			SourceURL:  fullPath,
+			Reason:     parseErr.Error(),
+			StatusCode: http.StatusBadRequest,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, parseErr.Error())
 		return
 	}
 
 	processingOptions, optionsErr := ParseProcessingOptions(optionsString, baseHandler.presetManager.ResolveOptions)
 	if optionsErr != nil {
-		baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusBadRequest, optionsErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+			SourceURL:  sourceURL,
+			Reason:     optionsErr.Error(),
+			StatusCode: http.StatusBadRequest,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, optionsErr.Error())
 		return
 	}
 
@@ -94,18 +114,38 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 
 	if fetchErr != nil {
 		if errors.Is(fetchErr, ErrStorageNotFound) {
-			baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusNotFound, "Image asset not found")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+				SourceURL:  sourceURL,
+				Reason:     "Image asset not found",
+				StatusCode: http.StatusNotFound,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Image asset not found")
 			return
 		}
 		if errors.Is(fetchErr, ErrStorageAccessDenied) {
-			baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusForbidden, "Access denied to storage asset")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+				SourceURL:  sourceURL,
+				Reason:     "Access denied",
+				StatusCode: http.StatusForbidden,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied")
 			return
 		}
 		if errors.Is(fetchErr, ErrSSRFBlocked) || errors.Is(fetchErr, ErrDomainNotAllowed) {
-			baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusForbidden, fetchErr.Error())
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+				SourceURL:  sourceURL,
+				Reason:     fetchErr.Error(),
+				StatusCode: http.StatusForbidden,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, fetchErr.Error())
 			return
 		}
-		baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusBadGateway, fetchErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+			SourceURL:  sourceURL,
+			Reason:     fetchErr.Error(),
+			StatusCode: http.StatusBadGateway,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, fetchErr.Error())
 		return
 	}
 	defer func() { _ = bodyReadCloser.Close() }()
@@ -113,7 +153,12 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	// 5. Image Transformation
 	outputBytes, outputContentType, transformErr := baseHandler.engine.Transform(bodyReadCloser, processingOptions)
 	if transformErr != nil {
-		baseHandler.writeTransformError(responseWriter, request, sourceURL, http.StatusUnprocessableEntity, transformErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+			SourceURL:  sourceURL,
+			Reason:     transformErr.Error(),
+			StatusCode: http.StatusUnprocessableEntity,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, transformErr.Error())
 		return
 	}
 
@@ -138,13 +183,4 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	responseWriter.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", baseHandler.configManager.Get().CacheTTLSeconds))
 	responseWriter.WriteHeader(http.StatusOK)
 	_, _ = responseWriter.Write(outputBytes)
-}
-
-func (baseHandler *BaseHandler) writeTransformError(responseWriter http.ResponseWriter, request *http.Request, sourceURL string, statusCode int, message string) {
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
-		SourceURL:  sourceURL,
-		Reason:     message,
-		StatusCode: statusCode,
-	}))
-	core.WriteErrorResponse(responseWriter, request, statusCode, message)
 }

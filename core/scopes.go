@@ -68,6 +68,15 @@ const (
 	ScopeImageSignWrite   = "image:sign.write"
 	ScopeImageStatsRead   = "image:stats.read"
 
+	// Function scopes
+	ScopeFunctionEndpointRead   = "function:endpoint.read"
+	ScopeFunctionEndpointWrite  = "function:endpoint.write"
+	ScopeFunctionEndpointDeploy = "function:endpoint.deploy"
+	ScopeFunctionEndpointInvoke = "function:endpoint.invoke"
+	ScopeFunctionConfigRead     = "function:config.read"
+	ScopeFunctionConfigWrite    = "function:config.write"
+	ScopeFunctionStatsRead      = "function:stats.read"
+
 	// Console scopes
 	ScopeConsoleUserRead  = "console:user.read"
 	ScopeConsoleUserWrite = "console:user.write"

@@ -15,6 +15,10 @@ import (
 	"github.com/go-fuego/fuego"
 )
 
+// HostHandlerFunc defines a function that handles an incoming HTTP request based on its host or domain.
+// It returns true if the request was handled, or false if it should fall through to standard route dispatch.
+type HostHandlerFunc func(responseWriter http.ResponseWriter, request *http.Request) bool
+
 // Server coordinates the Layr HTTP gateway, probes, and API dispatch.
 type Server struct {
 	kernel             *Kernel
@@ -22,6 +26,7 @@ type Server struct {
 	controlPlaneRouter *Router
 	serveMux           *http.ServeMux
 	server             *http.Server
+	hostHandlers       []HostHandlerFunc
 	uptime             time.Time     //nolint:namingclarity
 	requestCount       atomic.Uint64 //nolint:namingclarity
 }
@@ -112,6 +117,21 @@ func NewServer(kernel *Kernel) *Server {
 	}
 
 	return server
+}
+
+// RegisterHostHandler registers a host-based request interceptor on the HTTP server.
+func (server *Server) RegisterHostHandler(hostHandlerFunc HostHandlerFunc) {
+	if server != nil && hostHandlerFunc != nil {
+		server.hostHandlers = append(server.hostHandlers, hostHandlerFunc)
+	}
+}
+
+// HostHandlers returns all registered host-based request interceptors on the HTTP server.
+func (server *Server) HostHandlers() []HostHandlerFunc {
+	if server == nil {
+		return nil
+	}
+	return server.hostHandlers
 }
 
 // Mux returns the underlying HTTP ServeMux for route registration.
@@ -315,6 +335,12 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 						})
 					}
 				}
+			}
+		}
+
+		for _, hostHandler := range server.hostHandlers {
+			if hostHandler(responseWriter, request.WithContext(ctx)) {
+				return
 			}
 		}
 

@@ -440,3 +440,54 @@ func TestCoreWriteJSONResponseUnit(t *testing.T) {
 		t.Fatalf("expected hello world, got %s", decoded["message"])
 	}
 }
+
+func TestCoreServerHostHandlerUnit(t *testing.T) {
+	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	jwtSigner := NewJWTSigner(cryptoKeyManager)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
+
+	var nilServer *Server
+	if nilServer.HostHandlers() != nil {
+		t.Fatal("expected nil from nilServer.HostHandlers()")
+	}
+	nilServer.RegisterHostHandler(nil)
+
+	if len(server.HostHandlers()) != 0 {
+		t.Fatal("expected 0 host handlers initially")
+	}
+	server.RegisterHostHandler(nil)
+	if len(server.HostHandlers()) != 0 {
+		t.Fatal("expected nil host handler ignored")
+	}
+
+	testHostHandler := func(responseWriter http.ResponseWriter, request *http.Request) bool {
+		if request.Host == "subdomain.example.com" {
+			responseWriter.WriteHeader(http.StatusOK)
+			_, _ = responseWriter.Write([]byte("handled-subdomain"))
+			return true
+		}
+		return false
+	}
+	server.RegisterHostHandler(testHostHandler)
+	if len(server.HostHandlers()) != 1 {
+		t.Fatalf("expected 1 host handler, got %d", len(server.HostHandlers()))
+	}
+
+	// Test request matching host handler
+	matchedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/any/subpath", nil)
+	matchedRequest.Host = "subdomain.example.com"
+	matchedResponseRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(matchedResponseRecorder, matchedRequest)
+	if matchedResponseRecorder.Code != http.StatusOK || matchedResponseRecorder.Body.String() != "handled-subdomain" {
+		t.Fatalf("expected host handler to intercept, got code=%d body=%s", matchedResponseRecorder.Code, matchedResponseRecorder.Body.String())
+	}
+
+	// Test request with unhandled host falls through to standard 404
+	unmatchedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/unhandled", nil)
+	unmatchedRequest.Host = "other.example.com"
+	unmatchedResponseRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(unmatchedResponseRecorder, unmatchedRequest)
+	if unmatchedResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 from unhandled route, got %d", unmatchedResponseRecorder.Code)
+	}
+}

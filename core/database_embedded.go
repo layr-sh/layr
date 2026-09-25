@@ -23,7 +23,9 @@ const (
 	EmbeddedDatabaseName = "layr"
 	// EmbeddedDatabasePostgresVersion is the frozen PostgreSQL version used by the embedded engine.
 	EmbeddedDatabasePostgresVersion = embeddedpostgres.V18
+)
 
+const (
 	defaultDirectoryPermission   = 0755
 	embeddedPostgresStartTimeout = 15 * time.Second
 )
@@ -109,11 +111,9 @@ func (embeddedDatabase *EmbeddedDatabase) Stop() error {
 	if embeddedDatabase.postgres == nil {
 		return nil
 	}
-	log.Debugf("shutting down embedded PostgreSQL")
-	log.Infof("Shutting down embedded PostgreSQL...")
+	log.Tracef("Shutting down embedded PostgreSQL...")
 	err := embeddedDatabase.postgres.Stop()
 	embeddedDatabase.postgres = nil
-	log.Tracef("embedded PostgreSQL shutdown complete")
 	return err
 }
 

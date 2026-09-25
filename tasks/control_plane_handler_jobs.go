@@ -78,7 +78,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetJob(responseWriter http
 	getJobResponse, err := controlPlaneHandler.jobManager.GetJob(requestCtx, jobID)
 	if err != nil {
 		if errors.Is(err, ErrJobNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Job not found")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
@@ -112,7 +112,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateJob(responseWriter h
 	job, err := controlPlaneHandler.jobManager.UpdateJob(requestCtx, jobID, updateJobInput)
 	if err != nil {
 		if errors.Is(err, ErrJobNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Job not found")
 			return
 		}
 		if errors.Is(err, ErrJobAlreadyExists) {
@@ -144,7 +144,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteJob(responseWriter h
 	err := controlPlaneHandler.jobManager.DeleteJob(requestCtx, jobID)
 	if err != nil {
 		if errors.Is(err, ErrJobNotFound) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, err.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Job not found")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
