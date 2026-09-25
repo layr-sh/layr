@@ -49,9 +49,9 @@ func TestFilestorageEventUnit(t *testing.T) {
 
 	t.Run("creates bucket deleted event", func(t *testing.T) {
 		t.Parallel()
-		bucketDeletedEventData := BucketDeletedEventData{
-			BucketName: "test-bucket",
-		}
+		bucketDeletedEventData := BucketDeletedEventData(Bucket{
+			Name: "test-bucket",
+		})
 		bucketDeletedEvent := NewBucketDeletedEvent("bucket-3", bucketDeletedEventData)
 		require.Equal(t, "filestorage.bucket.deleted", bucketDeletedEvent.Type)
 		require.NotNil(t, bucketDeletedEvent.ResourceID)
@@ -62,12 +62,14 @@ func TestFilestorageEventUnit(t *testing.T) {
 		t.Parallel()
 		bucketID := uuid.NewV7()
 		objectUploadedEventData := ObjectUploadedEventData{
-			BucketID:       bucketID,
-			BucketName:     "photos",
-			ObjectKey:      "sample.png",
-			ContentType:    "image/png",
-			SizeBytes:      1024,
-			ChecksumSHA256: "abc123sha",
+			Bucket: Bucket{Name: "photos"},
+			Object: Object{
+				BucketID:       bucketID,
+				ObjectKey:      "sample.png",
+				ContentType:    "image/png",
+				SizeBytes:      1024,
+				ChecksumSHA256: "abc123sha",
+			},
 		}
 		objectUploadedEvent := NewObjectUploadedEvent("photos/sample.png", objectUploadedEventData)
 		require.Equal(t, "filestorage.object.uploaded", objectUploadedEvent.Type)
@@ -78,9 +80,9 @@ func TestFilestorageEventUnit(t *testing.T) {
 	t.Run("creates object downloaded event", func(t *testing.T) {
 		t.Parallel()
 		objectDownloadedEventData := ObjectDownloadedEventData{
-			BucketName: "photos",
-			ObjectKey:  "sample.png",
-			SizeBytes:  1024,
+			Bucket:    Bucket{Name: "photos"},
+			ObjectKey: "sample.png",
+			SizeBytes: 1024,
 		}
 		objectDownloadedEvent := NewObjectDownloadedEvent("photos/sample.png", objectDownloadedEventData)
 		require.Equal(t, "filestorage.object.downloaded", objectDownloadedEvent.Type)
@@ -91,8 +93,8 @@ func TestFilestorageEventUnit(t *testing.T) {
 	t.Run("creates object deleted event", func(t *testing.T) {
 		t.Parallel()
 		objectDeletedEventData := ObjectDeletedEventData{
-			BucketName: "photos",
-			ObjectKey:  "sample.png",
+			Bucket:    Bucket{Name: "photos"},
+			ObjectKey: "sample.png",
 		}
 		objectDeletedEvent := NewObjectDeletedEvent("photos/sample.png", objectDeletedEventData)
 		require.Equal(t, "filestorage.object.deleted", objectDeletedEvent.Type)
@@ -103,7 +105,7 @@ func TestFilestorageEventUnit(t *testing.T) {
 	t.Run("creates object upload failed event", func(t *testing.T) {
 		t.Parallel()
 		objectUploadFailedEventData := ObjectUploadFailedEventData{
-			BucketName: "photos",
+			Bucket:     Bucket{Name: "photos"},
 			ObjectKey:  "sample.png",
 			Reason:     "payload too large",
 			StatusCode: 413,
@@ -117,9 +119,9 @@ func TestFilestorageEventUnit(t *testing.T) {
 	t.Run("creates multipart initiated event", func(t *testing.T) {
 		t.Parallel()
 		multipartInitiatedEventData := MultipartInitiatedEventData{
-			UploadID:   "upload-123",
-			BucketName: "photos",
-			ObjectKey:  "sample.png",
+			UploadID:  "upload-123",
+			Bucket:    Bucket{Name: "photos"},
+			ObjectKey: "sample.png",
 		}
 		multipartInitiatedEvent := NewMultipartInitiatedEvent("upload-123", multipartInitiatedEventData)
 		require.Equal(t, "filestorage.multipart.initiated", multipartInitiatedEvent.Type)
@@ -131,7 +133,7 @@ func TestFilestorageEventUnit(t *testing.T) {
 		t.Parallel()
 		multipartCompletedEventData := MultipartCompletedEventData{
 			UploadID:       "upload-123",
-			BucketName:     "photos",
+			Bucket:         Bucket{Name: "photos"},
 			ObjectKey:      "sample.png",
 			SizeBytes:      2048,
 			ChecksumSHA256: "etag123",
@@ -145,9 +147,9 @@ func TestFilestorageEventUnit(t *testing.T) {
 	t.Run("creates multipart aborted event", func(t *testing.T) {
 		t.Parallel()
 		multipartAbortedEventData := MultipartAbortedEventData{
-			UploadID:   "upload-123",
-			BucketName: "photos",
-			ObjectKey:  "sample.png",
+			UploadID:  "upload-123",
+			Bucket:    Bucket{Name: "photos"},
+			ObjectKey: "sample.png",
 		}
 		multipartAbortedEvent := NewMultipartAbortedEvent("upload-123", multipartAbortedEventData)
 		require.Equal(t, "filestorage.multipart.aborted", multipartAbortedEvent.Type)
@@ -159,11 +161,11 @@ func TestFilestorageEventUnit(t *testing.T) {
 		t.Parallel()
 		now := time.Now().UTC()
 		urlPresignedEventData := URLPresignedEventData{
-			BucketName: "photos",
-			ObjectKey:  "sample.png",
-			Operation:  "read",
-			URL:        "/v1/file-storage/objects/photos/sample.png?token=xyz",
-			ExpiresAt:  now,
+			Bucket:    Bucket{Name: "photos"},
+			ObjectKey: "sample.png",
+			Operation: "read",
+			URL:       "/v1/file-storage/objects/photos/sample.png?token=xyz",
+			ExpiresAt: now,
 		}
 		urlPresignedEvent := NewURLPresignedEvent("photos/sample.png", urlPresignedEventData)
 		require.Equal(t, "filestorage.url.presigned", urlPresignedEvent.Type)

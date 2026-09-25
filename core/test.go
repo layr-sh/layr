@@ -319,10 +319,10 @@ func WithEventHookManager(eventHookManager *EventHookManager) TestKernelOption {
 	}
 }
 
-// WithNode configures a custom Node on the test Kernel.
-func WithNode(node *Node) TestKernelOption {
+// WithNodeManager configures a custom NodeManager on the test Kernel.
+func WithNodeManager(nodeManager *NodeManager) TestKernelOption {
 	return func(kernel *Kernel) {
-		kernel.node = node
+		kernel.nodeManager = nodeManager
 	}
 }
 

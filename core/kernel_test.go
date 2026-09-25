@@ -212,7 +212,7 @@ func TestCoreKernelValidateSubsystemsUnit(t *testing.T) {
 		t.Fatal("expected error on uninitialized node registry")
 	}
 
-	kernel.node = &Node{}
+	kernel.nodeManager = &NodeManager{}
 	if err := kernel.ValidateSubsystems(); err == nil {
 		t.Fatal("expected error on uninitialized kv store")
 	}
@@ -281,5 +281,23 @@ func TestCoreKernelWithDBUnit(t *testing.T) {
 	}
 	if kernel.EventHookManager() == nil {
 		t.Error("expected non-nil EventHookManager")
+	}
+
+	// Test nil node
+	if kernel.Node().NodeName != "" {
+		t.Errorf("expected empty Node, got %v", kernel.Node())
+	}
+	if kernel.NodeManager() != nil {
+		t.Error("expected nil NodeManager")
+	}
+
+	// Test non-nil node
+	dummyNodeManager := &NodeManager{node: Node{NodeName: "test-node"}}
+	kernel.nodeManager = dummyNodeManager
+	if kernel.NodeManager() != dummyNodeManager {
+		t.Errorf("expected %v, got %v", dummyNodeManager, kernel.NodeManager())
+	}
+	if kernel.Node().NodeName != "test-node" {
+		t.Errorf("expected test-node, got %s", kernel.Node().NodeName)
 	}
 }

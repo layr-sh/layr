@@ -140,7 +140,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePreset(responseWrite
 	}
 
 	ctx := request.Context()
-	presetName, deleteErr := controlPlaneHandler.presetManager.Delete(ctx, presetID)
+	deletedPreset, deleteErr := controlPlaneHandler.presetManager.Delete(ctx, presetID)
 	if deleteErr != nil {
 		if errors.Is(deleteErr, ErrPresetNotFound) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Preset not found")
@@ -150,7 +150,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePreset(responseWrite
 		return
 	}
 
-	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewPresetDeletedEvent(presetID.String(), PresetDeletedEventData{PresetName: presetName}))
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewPresetDeletedEvent(presetID.String(), PresetDeletedEventData(*deletedPreset)))
 	log.Debugf("preset %s successfully deleted", presetID)
 
 	responseWriter.WriteHeader(http.StatusNoContent)

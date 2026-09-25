@@ -50,8 +50,10 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates job deleted event", func(t *testing.T) {
 		t.Parallel()
 		jobDeletedEventData := JobDeletedEventData{
-			JobID:                  testJobID,
-			JobName:                "nightly-sync",
+			Job: Job{
+				ID:   testJobID,
+				Name: "nightly-sync",
+			},
 			DeletedExecutionsCount: 3,
 		}
 		event := NewJobDeletedEvent(testJobID.String(), jobDeletedEventData)
@@ -62,10 +64,10 @@ func TestTasksEventUnit(t *testing.T) {
 
 	t.Run("creates job paused event", func(t *testing.T) {
 		t.Parallel()
-		jobPausedEventData := JobPausedEventData{
-			JobID:   testJobID,
-			JobName: "nightly-sync",
-		}
+		jobPausedEventData := JobPausedEventData(Job{
+			ID:   testJobID,
+			Name: "nightly-sync",
+		})
 		event := NewJobPausedEvent(testJobID.String(), jobPausedEventData)
 		require.Equal(t, "tasks.job.paused", event.Type)
 		require.NotNil(t, event.ResourceID)
@@ -74,11 +76,11 @@ func TestTasksEventUnit(t *testing.T) {
 
 	t.Run("creates job resumed event", func(t *testing.T) {
 		t.Parallel()
-		jobResumedEventData := JobResumedEventData{
-			JobID:     testJobID,
-			JobName:   "nightly-sync",
+		jobResumedEventData := JobResumedEventData(Job{
+			ID:        testJobID,
+			Name:      "nightly-sync",
 			NextRunAt: now,
-		}
+		})
 		event := NewJobResumedEvent(testJobID.String(), jobResumedEventData)
 		require.Equal(t, "tasks.job.resumed", event.Type)
 		require.NotNil(t, event.ResourceID)
@@ -88,8 +90,10 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates job scheduled event", func(t *testing.T) {
 		t.Parallel()
 		jobScheduledEventData := JobScheduledEventData{
-			JobID:         testJobID,
-			JobName:       "nightly-sync",
+			Job: Job{
+				ID:   testJobID,
+				Name: "nightly-sync",
+			},
 			PreviousRunAt: &now,
 			NextRunAt:     now.Add(time.Hour),
 		}
@@ -99,14 +103,21 @@ func TestTasksEventUnit(t *testing.T) {
 		require.Equal(t, testJobID.String(), *event.ResourceID)
 	})
 
+	testExecution := Execution{
+		ID:          testExecutionID,
+		JobID:       &testJobID,
+		Status:      StatusPending,
+		RunAt:       now,
+		Attempts:    0,
+		MaxAttempts: 3,
+		CreatedAt:   now,
+	}
+
 	t.Run("creates execution enqueued event", func(t *testing.T) {
 		t.Parallel()
 		executionEnqueuedEventData := ExecutionEnqueuedEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
+			Execution:   testExecution,
 			JobName:     "nightly-sync",
-			RunAt:       now,
-			TargetType:  TargetTypeHTTP,
 			IsImmediate: true,
 		}
 		event := NewExecutionEnqueuedEvent(testExecutionID.String(), executionEnqueuedEventData)
@@ -118,11 +129,10 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates execution started event", func(t *testing.T) {
 		t.Parallel()
 		executionStartedEventData := ExecutionStartedEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
-			JobName:     "nightly-sync",
-			Attempt:     1,
-			LockedBy:    "worker-node-1",
+			Execution: testExecution,
+			JobName:   "nightly-sync",
+			Attempt:   1,
+			LockedBy:  "worker-node-1",
 		}
 		event := NewExecutionStartedEvent(testExecutionID.String(), executionStartedEventData)
 		require.Equal(t, "tasks.execution.started", event.Type)
@@ -134,8 +144,7 @@ func TestTasksEventUnit(t *testing.T) {
 		t.Parallel()
 		statusCode := http.StatusOK
 		executionCompletedEventData := ExecutionCompletedEventData{
-			ExecutionID:        testExecutionID,
-			JobID:              &testJobID,
+			Execution:          testExecution,
 			JobName:            "nightly-sync",
 			DurationMs:         150,
 			ResponseStatusCode: &statusCode,
@@ -150,12 +159,11 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates execution failed event", func(t *testing.T) {
 		t.Parallel()
 		executionFailedEventData := ExecutionFailedEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
-			JobName:     "nightly-sync",
-			DurationMs:  200,
-			Attempt:     2,
-			Error:       "connection timeout",
+			Execution:  testExecution,
+			JobName:    "nightly-sync",
+			DurationMs: 200,
+			Attempt:    2,
+			Error:      "connection timeout",
 		}
 		event := NewExecutionFailedEvent(testExecutionID.String(), executionFailedEventData)
 		require.Equal(t, "tasks.execution.failed", event.Type)
@@ -166,8 +174,7 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates execution timed out event", func(t *testing.T) {
 		t.Parallel()
 		executionTimedOutEventData := ExecutionTimedOutEventData{
-			ExecutionID:         testExecutionID,
-			JobID:               &testJobID,
+			Execution:           testExecution,
 			JobName:             "nightly-sync",
 			DurationMs:          30000,
 			TimeoutLimitSeconds: 30,
@@ -182,8 +189,7 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates execution retried event", func(t *testing.T) {
 		t.Parallel()
 		executionRetriedEventData := ExecutionRetriedEventData{
-			ExecutionID:    testExecutionID,
-			JobID:          &testJobID,
+			Execution:      testExecution,
 			JobName:        "nightly-sync",
 			Attempt:        1,
 			MaxAttempts:    3,
@@ -200,9 +206,8 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates execution cancelled event", func(t *testing.T) {
 		t.Parallel()
 		executionCancelledEventData := ExecutionCancelledEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
-			Reason:      "parent job deleted",
+			Execution: testExecution,
+			Reason:    "parent job deleted",
 		}
 		event := NewExecutionCancelledEvent(testExecutionID.String(), executionCancelledEventData)
 		require.Equal(t, "tasks.execution.cancelled", event.Type)
@@ -213,8 +218,7 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates dlq isolated event", func(t *testing.T) {
 		t.Parallel()
 		dlqIsolatedEventData := DLQIsolatedEventData{
-			ExecutionID:   testExecutionID,
-			JobID:         &testJobID,
+			Execution:     testExecution,
 			JobName:       "nightly-sync",
 			TotalAttempts: 3,
 			LastError:     "fatal error",
@@ -228,8 +232,7 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates dlq retried event", func(t *testing.T) {
 		t.Parallel()
 		dlqRetriedEventData := DLQRetriedEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
+			Execution:   testExecution,
 			JobName:     "nightly-sync",
 			TriggeredBy: "control_plane",
 		}
@@ -241,10 +244,7 @@ func TestTasksEventUnit(t *testing.T) {
 
 	t.Run("creates dlq purged event", func(t *testing.T) {
 		t.Parallel()
-		dlqPurgedEventData := DLQPurgedEventData{
-			ExecutionID: testExecutionID,
-			JobID:       &testJobID,
-		}
+		dlqPurgedEventData := DLQPurgedEventData(testExecution)
 		event := NewDLQPurgedEvent(testExecutionID.String(), dlqPurgedEventData)
 		require.Equal(t, "tasks.dlq.purged", event.Type)
 		require.NotNil(t, event.ResourceID)

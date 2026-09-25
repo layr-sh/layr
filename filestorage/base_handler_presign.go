@@ -102,11 +102,11 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 	log.Debugf("presigned url generated for bucket=%s key=%s operation=%s", bucket.Name, presignURLInput.Key, operation)
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewURLPresignedEvent(fmt.Sprintf("%s/%s", bucket.Name, presignURLInput.Key), URLPresignedEventData{
-		BucketName: bucket.Name,
-		ObjectKey:  presignURLInput.Key,
-		Operation:  operation,
-		URL:        presignedURL,
-		ExpiresAt:  expiresAtTime,
+		Bucket:    *bucket,
+		ObjectKey: presignURLInput.Key,
+		Operation: operation,
+		URL:       presignedURL,
+		ExpiresAt: expiresAtTime,
 	}))
 
 	presignURLResponse := PresignURLResponse{

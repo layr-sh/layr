@@ -250,16 +250,9 @@ func (jobManager *JobManager) UpdateJob(ctx context.Context, jobID uuid.UUID, up
 
 	if stateChanged {
 		if isEnabled {
-			jobManager.kernel.EventBus().Publish(ctx, NewJobResumedEvent(job.ID.String(), JobResumedEventData{
-				JobID:     job.ID,
-				JobName:   job.Name,
-				NextRunAt: job.NextRunAt,
-			}))
+			jobManager.kernel.EventBus().Publish(ctx, NewJobResumedEvent(job.ID.String(), JobResumedEventData(job)))
 		} else {
-			jobManager.kernel.EventBus().Publish(ctx, NewJobPausedEvent(job.ID.String(), JobPausedEventData{
-				JobID:   job.ID,
-				JobName: job.Name,
-			}))
+			jobManager.kernel.EventBus().Publish(ctx, NewJobPausedEvent(job.ID.String(), JobPausedEventData(job)))
 		}
 	}
 
@@ -290,8 +283,7 @@ func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) er
 	}
 
 	jobManager.kernel.EventBus().Publish(ctx, NewJobDeletedEvent(jobID.String(), JobDeletedEventData{
-		JobID:                  jobID,
-		JobName:                getJobResponse.Name,
+		Job:                    getJobResponse.Job,
 		DeletedExecutionsCount: deletedExecutionsCount,
 	}))
 	return nil
@@ -301,7 +293,6 @@ func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) er
 func (jobManager *JobManager) TriggerExecution(ctx context.Context, triggerExecutionInput TriggerExecutionInput) (*TriggerExecutionResponse, error) {
 	var targetPayloadValue json.RawMessage
 	var jobName string
-	targetType := TargetTypeHTTP
 
 	if triggerExecutionInput.JobID != nil {
 		getJobResponse, err := jobManager.GetJob(ctx, *triggerExecutionInput.JobID)
@@ -310,7 +301,6 @@ func (jobManager *JobManager) TriggerExecution(ctx context.Context, triggerExecu
 		}
 		targetPayloadValue = getJobResponse.TargetPayload
 		jobName = getJobResponse.Name
-		targetType = getJobResponse.TargetType
 	}
 
 	if triggerExecutionInput.Payload != nil && len(*triggerExecutionInput.Payload) > 0 {
@@ -324,30 +314,42 @@ func (jobManager *JobManager) TriggerExecution(ctx context.Context, triggerExecu
 	tasksConfig := jobManager.configManager.Get()
 	maxAttempts := tasksConfig.RetryMaxAttempts
 
-	var triggerExecutionResponse TriggerExecutionResponse
-	triggerExecutionResponse.Status = StatusPending
+	var execution Execution
 	err := jobManager.kernel.DB().QueryRow(ctx, `
 		INSERT INTO tasks.executions (
 			job_id, status, run_at, payload, attempts, max_attempts, created_at
 		) VALUES (
 			$1, 'pending', clock_timestamp(), $2, 0, $3, clock_timestamp()
 		)
-		RETURNING id, run_at
-	`, triggerExecutionInput.JobID, targetPayloadValue, maxAttempts).Scan(&triggerExecutionResponse.ExecutionID, &triggerExecutionResponse.RunAt)
+		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
+	`, triggerExecutionInput.JobID, targetPayloadValue, maxAttempts).Scan(
+		&execution.ID,
+		&execution.JobID,
+		&execution.Status,
+		&execution.RunAt,
+		&execution.Payload,
+		&execution.Attempts,
+		&execution.MaxAttempts,
+		&execution.LockedAt,
+		&execution.LockedBy,
+		&execution.LastError,
+		&execution.CreatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enqueue immediate execution: %w", err)
 	}
 
-	jobManager.kernel.EventBus().Publish(ctx, NewExecutionEnqueuedEvent(triggerExecutionResponse.ExecutionID.String(), ExecutionEnqueuedEventData{
-		ExecutionID: triggerExecutionResponse.ExecutionID,
-		JobID:       triggerExecutionInput.JobID,
+	jobManager.kernel.EventBus().Publish(ctx, NewExecutionEnqueuedEvent(execution.ID.String(), ExecutionEnqueuedEventData{
+		Execution:   execution,
 		JobName:     jobName,
-		RunAt:       triggerExecutionResponse.RunAt,
-		TargetType:  targetType,
 		IsImmediate: true,
 	}))
 
-	return &triggerExecutionResponse, nil
+	return &TriggerExecutionResponse{
+		ExecutionID: execution.ID,
+		Status:      execution.Status,
+		RunAt:       execution.RunAt,
+	}, nil
 }
 
 // ListExecutions queries execution history logs with optional job filtering and pagination.
@@ -450,11 +452,28 @@ func (jobManager *JobManager) ListDLQ(ctx context.Context, limit, offset int) ([
 
 // RetryDLQExecution resets a failed execution in the DLQ to pending for immediate re-attempt.
 func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID uuid.UUID) (*RetryDLQResponse, error) {
-	var jobID *uuid.UUID
-	var payloadValue json.RawMessage
+	var execution Execution
+	var jobName string
 	err := jobManager.kernel.DB().QueryRow(ctx, `
-		SELECT job_id, payload FROM tasks.executions WHERE id = $1 AND status = 'failed'
-	`, executionID).Scan(&jobID, &payloadValue)
+		SELECT e.id, e.job_id, e.status, e.run_at, e.payload, e.attempts, e.max_attempts, e.locked_at, e.locked_by, e.last_error, e.created_at,
+		       COALESCE(j.name, '')
+		FROM tasks.executions e
+		LEFT JOIN tasks.jobs j ON j.id = e.job_id
+		WHERE e.id = $1 AND e.status = 'failed'
+	`, executionID).Scan(
+		&execution.ID,
+		&execution.JobID,
+		&execution.Status,
+		&execution.RunAt,
+		&execution.Payload,
+		&execution.Attempts,
+		&execution.MaxAttempts,
+		&execution.LockedAt,
+		&execution.LockedBy,
+		&execution.LastError,
+		&execution.CreatedAt,
+		&jobName,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDLQItemNotFound
@@ -462,7 +481,7 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 		return nil, fmt.Errorf("failed to check dlq item: %w", err)
 	}
 
-	_, err = jobManager.kernel.DB().Exec(ctx, `
+	err = jobManager.kernel.DB().QueryRow(ctx, `
 		UPDATE tasks.executions SET
 			status = 'pending',
 			run_at = clock_timestamp(),
@@ -471,21 +490,33 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 			locked_at = NULL,
 			locked_by = NULL
 		WHERE id = $1
-	`, executionID)
+		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
+	`, executionID).Scan(
+		&execution.ID,
+		&execution.JobID,
+		&execution.Status,
+		&execution.RunAt,
+		&execution.Payload,
+		&execution.Attempts,
+		&execution.MaxAttempts,
+		&execution.LockedAt,
+		&execution.LockedBy,
+		&execution.LastError,
+		&execution.CreatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to re-queue dlq item: %w", err)
 	}
 
 	jobManager.kernel.EventBus().Publish(ctx, NewDLQRetriedEvent(executionID.String(), DLQRetriedEventData{
-		ExecutionID: executionID,
-		JobID:       jobID,
+		Execution:   execution,
+		JobName:     jobName,
 		TriggeredBy: "control_plane",
 	}))
 
 	jobManager.kernel.EventBus().Publish(ctx, NewExecutionEnqueuedEvent(executionID.String(), ExecutionEnqueuedEventData{
-		ExecutionID: executionID,
-		JobID:       jobID,
-		RunAt:       time.Now().UTC(),
+		Execution:   execution,
+		JobName:     jobName,
 		IsImmediate: true,
 	}))
 
@@ -498,26 +529,32 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 
 // PurgeDLQExecution removes an execution permanently from the DLQ.
 func (jobManager *JobManager) PurgeDLQExecution(ctx context.Context, executionID uuid.UUID) error {
-	var jobID *uuid.UUID
+	var execution Execution
 	err := jobManager.kernel.DB().QueryRow(ctx, `
-		SELECT job_id FROM tasks.executions WHERE id = $1 AND status = 'failed'
-	`, executionID).Scan(&jobID)
+		DELETE FROM tasks.executions
+		WHERE id = $1 AND status = 'failed'
+		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
+	`, executionID).Scan(
+		&execution.ID,
+		&execution.JobID,
+		&execution.Status,
+		&execution.RunAt,
+		&execution.Payload,
+		&execution.Attempts,
+		&execution.MaxAttempts,
+		&execution.LockedAt,
+		&execution.LockedBy,
+		&execution.LastError,
+		&execution.CreatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 			return ErrDLQItemNotFound
 		}
-		return fmt.Errorf("failed to find dlq item: %w", err)
-	}
-
-	_, err = jobManager.kernel.DB().Exec(ctx, "DELETE FROM tasks.executions WHERE id = $1 AND status = 'failed'", executionID)
-	if err != nil {
 		return fmt.Errorf("failed to purge dlq item: %w", err)
 	}
 
-	jobManager.kernel.EventBus().Publish(ctx, NewDLQPurgedEvent(executionID.String(), DLQPurgedEventData{
-		ExecutionID: executionID,
-		JobID:       jobID,
-	}))
+	jobManager.kernel.EventBus().Publish(ctx, NewDLQPurgedEvent(executionID.String(), DLQPurgedEventData(execution)))
 	return nil
 }
 

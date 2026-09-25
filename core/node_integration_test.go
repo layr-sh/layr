@@ -14,17 +14,17 @@ func TestCoreNodeHeartbeatTickIntegration(t *testing.T) {
 	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
 
 	// Create registry with fast heartbeat (50ms) and reaper (75ms)
-	node := NewNode(db, "heartbeat-test", []string{"data"})
-	node.heartbeatInterval = 50 * time.Millisecond
-	node.reaperInterval = 75 * time.Millisecond
+	nodeManager := NewNodeManager(db, "heartbeat-test", []string{"data"})
+	nodeManager.heartbeatInterval = 50 * time.Millisecond
+	nodeManager.reaperInterval = 75 * time.Millisecond
 
-	if err := node.Register(ctx); err != nil {
+	if err := nodeManager.Register(ctx); err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Wait for at least 2 heartbeat ticks to fire
 	time.Sleep(200 * time.Millisecond)
-	node.Close()
+	nodeManager.Close()
 
 	// Wait for the goroutine to exit
 	time.Sleep(100 * time.Millisecond)
@@ -37,8 +37,8 @@ func TestCoreNodeRegisterErrorIntegration(t *testing.T) {
 	ctx := context.Background()
 
 	// Don't run migrations, so the nodes table doesn't exist
-	node := NewNode(db, "fail-node", []string{"data"})
-	if err := node.Register(ctx); err == nil {
+	nodeManager := NewNodeManager(db, "fail-node", []string{"data"})
+	if err := nodeManager.Register(ctx); err == nil {
 		t.Fatal("expected register failure on missing table")
 	}
 }
@@ -51,14 +51,14 @@ func TestCoreNodeStopCleanupIntegration(t *testing.T) {
 	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
 
 	// Register and immediately close (stopChannel path)
-	node := NewNode(db, "stop-test", []string{"auth"})
-	node.heartbeatInterval = 50 * time.Millisecond
-	if err := node.Register(ctx); err != nil {
+	nodeManager := NewNodeManager(db, "stop-test", []string{"auth"})
+	nodeManager.heartbeatInterval = 50 * time.Millisecond
+	if err := nodeManager.Register(ctx); err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
 	// Close immediately without waiting for heartbeat (tests stopChannel race with ticker)
-	node.Close()
+	nodeManager.Close()
 	time.Sleep(100 * time.Millisecond)
 }
 
@@ -69,11 +69,11 @@ func TestCoreNodeHeartbeatAndReaperErrorIntegration(t *testing.T) {
 	ctx := context.Background()
 	_ = db.RunMigrations(ctx, SystemDatabaseMigrations)
 
-	node := NewNode(db, "error-heartbeat-node", []string{"data"})
-	node.heartbeatInterval = 20 * time.Millisecond
-	node.reaperInterval = 20 * time.Millisecond
+	nodeManager := NewNodeManager(db, "error-heartbeat-node", []string{"data"})
+	nodeManager.heartbeatInterval = 20 * time.Millisecond
+	nodeManager.reaperInterval = 20 * time.Millisecond
 
-	if err := node.Register(ctx); err != nil {
+	if err := nodeManager.Register(ctx); err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestCoreNodeHeartbeatAndReaperErrorIntegration(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Close node to trigger unregister error logging with closed db
-	node.Close()
+	nodeManager.Close()
 }
 
 func TestCoreNodeEventBusIntegration(t *testing.T) {
@@ -111,9 +111,9 @@ func TestCoreNodeEventBusIntegration(t *testing.T) {
 		return nil
 	})
 
-	node := NewNode(db, "event-node", []string{"data", "auth"}).WithEventBus(eventBus)
-	node.heartbeatInterval = 50 * time.Millisecond
-	if err := node.Register(ctx); err != nil {
+	nodeManager := NewNodeManager(db, "event-node", []string{"data", "auth"}).WithEventBus(eventBus)
+	nodeManager.heartbeatInterval = 50 * time.Millisecond
+	if err := nodeManager.Register(ctx); err != nil {
 		t.Fatalf("Register failed: %v", err)
 	}
 
@@ -122,7 +122,7 @@ func TestCoreNodeEventBusIntegration(t *testing.T) {
 		t.Fatal("expected core.node.registered event to be received")
 	}
 
-	node.Close()
+	nodeManager.Close()
 	time.Sleep(100 * time.Millisecond)
 	if !unregisteredReceived {
 		t.Fatal("expected core.node.unregistered event to be received")

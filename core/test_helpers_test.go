@@ -154,7 +154,7 @@ func TestCoreTestKernelOptionsAndAuthHelpersUnit(t *testing.T) {
 		WithEventBus(nil),
 		WithEventManager(nil),
 		WithEventHookManager(nil),
-		WithNode(nil),
+		WithNodeManager(nil),
 		WithServer(nil),
 	)
 	if kernel.KVStore() != kvStore {

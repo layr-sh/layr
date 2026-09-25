@@ -723,11 +723,7 @@ func NewEventHookDeliveryRetriedEvent(resourceID string, eventHookDeliveryRetrie
 }
 
 // NodeRegisteredEventData represents the payload for core.node.registered.
-type NodeRegisteredEventData struct {
-	ID              uuid.UUID `json:"id"`
-	NodeName        string    `json:"node_name"`
-	EnabledServices []string  `json:"enabled_services"`
-}
+type NodeRegisteredEventData Node
 
 // NewNodeRegisteredEvent creates a typed event for node registration in the cluster.
 func NewNodeRegisteredEvent(resourceID string, nodeRegisteredEventData NodeRegisteredEventData) Event {
@@ -735,10 +731,7 @@ func NewNodeRegisteredEvent(resourceID string, nodeRegisteredEventData NodeRegis
 }
 
 // NodeUnregisteredEventData represents the payload for core.node.unregistered.
-type NodeUnregisteredEventData struct {
-	ID       uuid.UUID `json:"id"`
-	NodeName string    `json:"node_name"`
-}
+type NodeUnregisteredEventData Node
 
 // NewNodeUnregisteredEvent creates a typed event for node unregistration from the cluster.
 func NewNodeUnregisteredEvent(resourceID string, nodeUnregisteredEventData NodeUnregisteredEventData) Event {

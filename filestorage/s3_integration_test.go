@@ -504,6 +504,16 @@ func TestFilestorageS3Integration(t *testing.T) {
 		t.Fatal("expected error on AbortMultipartUpload with invalid uploadId")
 	}
 
+	// AbortMultipartUpload non-existent bucket
+	_, missingBucketAbortErr := s3Client.AbortMultipartUpload(ctx, &awss3.AbortMultipartUploadInput{
+		Bucket:   aws.String("non-existent-bucket"),
+		Key:      aws.String("multipart/large.txt"),
+		UploadId: aws.String(uuid.NewV7().String()),
+	})
+	if missingBucketAbortErr == nil {
+		t.Fatal("expected error on AbortMultipartUpload with non-existent bucket")
+	}
+
 	// 17. S3 handlers edge cases and error branches
 	serviceAccountAuthContext := core.AuthContext{
 		ServiceAccountID: serviceAccountID.String(),

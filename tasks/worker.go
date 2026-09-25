@@ -209,11 +209,10 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 	}
 
 	workerQueue.kernel.EventBus().Publish(ctx, NewExecutionStartedEvent(execution.ID.String(), ExecutionStartedEventData{
-		ExecutionID: execution.ID,
-		JobID:       execution.JobID,
-		JobName:     jobName,
-		Attempt:     execution.Attempts + 1,
-		LockedBy:    workerQueue.nodeID,
+		Execution: *execution,
+		JobName:   jobName,
+		Attempt:   execution.Attempts + 1,
+		LockedBy:  workerQueue.nodeID,
 	}))
 	log.Tracef("starting execution %s for job %s (attempt %d)", execution.ID, jobName, execution.Attempts+1)
 
@@ -274,8 +273,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 		`, execution.JobID, execution.ID, responseStatusCode, durationMs, responseBody)
 
 		workerQueue.kernel.EventBus().Publish(ctx, NewExecutionCompletedEvent(execution.ID.String(), ExecutionCompletedEventData{
-			ExecutionID:        execution.ID,
-			JobID:              execution.JobID,
+			Execution:          *execution,
 			JobName:            jobName,
 			DurationMs:         durationMs,
 			ResponseStatusCode: responseStatusCode,
@@ -289,8 +287,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 		if errors.Is(execErr, context.DeadlineExceeded) || strings.Contains(strings.ToLower(errMsg), "deadline exceeded") {
 			logStatus = StatusTimeout
 			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionTimedOutEvent(execution.ID.String(), ExecutionTimedOutEventData{
-				ExecutionID:         execution.ID,
-				JobID:               execution.JobID,
+				Execution:           *execution,
 				JobName:             jobName,
 				DurationMs:          durationMs,
 				TimeoutLimitSeconds: timeoutSeconds,
@@ -299,8 +296,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			log.Warnf("execution %s timed out after %ds", execution.ID, timeoutSeconds)
 		} else {
 			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionFailedEvent(execution.ID.String(), ExecutionFailedEventData{
-				ExecutionID:        execution.ID,
-				JobID:              execution.JobID,
+				Execution:          *execution,
 				JobName:            jobName,
 				DurationMs:         durationMs,
 				ResponseStatusCode: responseStatusCode,
@@ -335,8 +331,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			`, nextAttempt, nextRunAt, errMsg, execution.ID)
 
 			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionRetriedEvent(execution.ID.String(), ExecutionRetriedEventData{
-				ExecutionID:    execution.ID,
-				JobID:          execution.JobID,
+				Execution:      *execution,
 				JobName:        jobName,
 				Attempt:        nextAttempt,
 				MaxAttempts:    execution.MaxAttempts,
@@ -358,8 +353,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			`, nextAttempt, errMsg, execution.ID)
 
 			workerQueue.kernel.EventBus().Publish(ctx, NewDLQIsolatedEvent(execution.ID.String(), DLQIsolatedEventData{
-				ExecutionID:   execution.ID,
-				JobID:         execution.JobID,
+				Execution:     *execution,
 				JobName:       jobName,
 				TotalAttempts: nextAttempt,
 				LastError:     errMsg,
