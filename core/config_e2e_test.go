@@ -58,7 +58,7 @@ console:
 	if !config.Data.Enabled || !config.Auth.Enabled || !config.FileStorage.Enabled || !config.Console.Enabled {
 		t.Fatal("expected quickstart services to be enabled")
 	}
-	if config.Tasks.Enabled || config.Notification.Enabled || config.Analytics.Enabled || config.Image.Enabled {
+	if config.Tasks.Enabled || config.Image.Enabled || config.Function.Enabled {
 		t.Fatal("expected non-quickstart services to remain disabled")
 	}
 }
@@ -100,14 +100,14 @@ func TestCoreConfigMicroservicePodProfilesE2E(t *testing.T) {
 	// Scenario 4: Full Monolith BaaS Pod (`layr start`)
 	monolithConfig := DefaultConfig()
 	monolithConfig.Security.MasterEncryptionKey = validHexKey
-	for _, serviceName := range []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image"} {
+	for _, serviceName := range []string{"data", "auth", "tasks", "file_storage", "image", "function"} {
 		_ = monolithConfig.EnableService(serviceName)
 	}
 	if err := monolithConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate monolith config: %v", err)
 	}
-	if len(monolithConfig.GetFunctionalServices()) != 7 {
-		t.Fatalf("expected exactly 7 functional services, got %v", monolithConfig.GetFunctionalServices())
+	if len(monolithConfig.GetFunctionalServices()) != 6 {
+		t.Fatalf("expected exactly 6 functional services, got %v", monolithConfig.GetFunctionalServices())
 	}
 }
 

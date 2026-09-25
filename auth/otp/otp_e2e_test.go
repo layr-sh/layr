@@ -12,24 +12,24 @@ import (
 	"uuid"
 )
 
-type simulatedNotificationDispatcher struct {
+type simulatedOTPDispatcher struct {
 	mutex    sync.Mutex
 	messages map[string]string
 }
 
-func newSimulatedNotificationDispatcher() *simulatedNotificationDispatcher {
-	return &simulatedNotificationDispatcher{
+func newSimulatedOTPDispatcher() *simulatedOTPDispatcher {
+	return &simulatedOTPDispatcher{
 		messages: make(map[string]string),
 	}
 }
 
-func (dispatcher *simulatedNotificationDispatcher) Send(recipient, message string) {
+func (dispatcher *simulatedOTPDispatcher) Send(recipient, message string) {
 	dispatcher.mutex.Lock()
 	defer dispatcher.mutex.Unlock()
 	dispatcher.messages[recipient] = message
 }
 
-func (dispatcher *simulatedNotificationDispatcher) LastMessage(recipient string) string {
+func (dispatcher *simulatedOTPDispatcher) LastMessage(recipient string) string {
 	dispatcher.mutex.Lock()
 	defer dispatcher.mutex.Unlock()
 	return dispatcher.messages[recipient]
@@ -38,10 +38,10 @@ func (dispatcher *simulatedNotificationDispatcher) LastMessage(recipient string)
 type simulatedAuthServer struct {
 	mutex      sync.Mutex
 	records    map[string]*Record
-	dispatcher *simulatedNotificationDispatcher
+	dispatcher *simulatedOTPDispatcher
 }
 
-func newSimulatedAuthServer(dispatcher *simulatedNotificationDispatcher) *simulatedAuthServer {
+func newSimulatedAuthServer(dispatcher *simulatedOTPDispatcher) *simulatedAuthServer {
 	return &simulatedAuthServer{
 		records:    make(map[string]*Record),
 		dispatcher: dispatcher,
@@ -148,7 +148,7 @@ func executePostRequest(ctx context.Context, t *testing.T, client *http.Client, 
 }
 
 func TestOtpAuthenticationFlowE2E(t *testing.T) {
-	dispatcher := newSimulatedNotificationDispatcher()
+	dispatcher := newSimulatedOTPDispatcher()
 	authServer := newSimulatedAuthServer(dispatcher)
 
 	serveMux := http.NewServeMux()

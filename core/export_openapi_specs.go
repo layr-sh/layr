@@ -14,9 +14,8 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
 	config.Auth.Enabled = true
 	config.FileStorage.Enabled = true
 	config.Tasks.Enabled = true
-	config.Notification.Enabled = true
-	config.Analytics.Enabled = true
 	config.Image.Enabled = true
+	config.Function.Enabled = true
 	config.Console.Enabled = true
 
 	if config.Security.MasterEncryptionKey == "" {

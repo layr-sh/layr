@@ -39,7 +39,7 @@ func TestCoreJWTEndToEndTokenIssuanceAndDiscoveryE2E(t *testing.T) {
 	userRole := "member"
 	userCustomClaims := map[string]any{
 		"subscription_tier": "pro",
-		"features":          []any{"analytics", "storage"},
+		"features":          []any{"function", "file_storage"},
 	}
 
 	accessToken := authJWTSigner.GenerateAccessToken(JWTClaims{

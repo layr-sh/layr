@@ -86,9 +86,6 @@ func NewServer(kernel *Kernel) *Server {
 	// OIDC & OAuth Discovery (Open access)
 	serveMux.Handle("/.well-known/", baseRouter.Mux())
 
-	// Lightweight Analytics Tracking Script (Open access)
-	serveMux.Handle("/analytics-script.js", baseRouter.Mux())
-
 	// Embedded Console SPA (Open access)
 	serveMux.Handle("/console", baseRouter.Mux())
 	serveMux.Handle("/console/", baseRouter.Mux())

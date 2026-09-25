@@ -13,23 +13,17 @@ import (
 
 var protectedSchemas = map[string]bool{
 	"system":             true,
+	"core":               true,
 	"auth":               true,
 	"data":               true,
-	"storage":            true,
-	"scheduler":          true,
-	"notification":       true,
-	"analytics":          true,
+	"file_storage":       true,
+	"tasks":              true,
+	"image":              true,
+	"function":           true,
 	"console":            true,
 	"information_schema": true,
 	"pg_catalog":         true,
 	"pg_toast":           true,
-	"core":               true,
-	"layr_auth":          true,
-	"layr_storage":       true,
-	"layr_scheduler":     true,
-	"layr_notification":  true,
-	"layr_analytics":     true,
-	"layr_console":       true,
 }
 
 // IsProtectedSchema returns true if the schema is reserved for platform internals or PostgreSQL catalog.
