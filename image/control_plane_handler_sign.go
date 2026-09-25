@@ -23,7 +23,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignURL(responseWriter htt
 
 	rawPath := strings.TrimSpace(signURLInput.Path)
 	if rawPath == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Path cannot be empty")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Path is required")
 		return
 	}
 

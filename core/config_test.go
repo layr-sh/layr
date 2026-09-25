@@ -75,8 +75,8 @@ func TestCoreConfigDefaultsUnit(t *testing.T) {
 	if !config.FileStorage.Enabled {
 		t.Fatal("expected file_storage.enabled to default to true")
 	}
-	if config.Tasks.Enabled || config.Notification.Enabled || config.Analytics.Enabled || config.Image.Enabled {
-		t.Fatal("expected tasks, notification, analytics, and image to default to false")
+	if config.Tasks.Enabled || config.Notification.Enabled || config.Analytics.Enabled || config.Image.Enabled || config.Function.Enabled {
+		t.Fatal("expected tasks, notification, analytics, image, and function to default to false")
 	}
 }
 
@@ -101,6 +101,8 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 		{inputName: "Analytics", canonicalField: "analytics"},
 		{inputName: "IMAGE", canonicalField: "image"},
 		{inputName: "Image", canonicalField: "image"},
+		{inputName: "FUNCTION", canonicalField: "function"},
+		{inputName: "Function", canonicalField: "function"},
 		{inputName: "CONSOLE", canonicalField: "console"},
 		{inputName: "Console", canonicalField: "console"},
 	}
@@ -154,8 +156,8 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 		t.Fatalf("expected [console], got %v", enabledServicesWithConsole)
 	}
 
-	// 2. Each of the 7 functional services enabled individually
-	allFunctionalServices := []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image"}
+	// 2. Each of the 8 functional services enabled individually
+	allFunctionalServices := []string{"data", "auth", "tasks", "file_storage", "notification", "analytics", "image", "function"}
 	for _, serviceName := range allFunctionalServices {
 		t.Run(serviceName, func(t *testing.T) {
 			singleServiceConfig := DefaultConfig()
@@ -180,7 +182,7 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 		})
 	}
 
-	// 3. All 7 functional services enabled with console enabled
+	// 3. All 8 functional services enabled with console enabled
 	allEnabledConfig := DefaultConfig()
 	for _, serviceName := range allFunctionalServices {
 		_ = allEnabledConfig.EnableService(serviceName)
@@ -188,17 +190,17 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	if !allEnabledConfig.HasAnyFunctionalServiceEnabled() {
 		t.Fatal("expected HasAnyFunctionalServiceEnabled true when all services are enabled")
 	}
-	if len(allEnabledConfig.GetFunctionalServices()) != 7 {
-		t.Fatalf("expected 7 functional services, got %d", len(allEnabledConfig.GetFunctionalServices()))
+	if len(allEnabledConfig.GetFunctionalServices()) != 8 {
+		t.Fatalf("expected 8 functional services, got %d", len(allEnabledConfig.GetFunctionalServices()))
 	}
-	if len(allEnabledConfig.GetEnabledServices()) != 8 {
-		t.Fatalf("expected 8 total enabled services, got %d", len(allEnabledConfig.GetEnabledServices()))
+	if len(allEnabledConfig.GetEnabledServices()) != 9 {
+		t.Fatalf("expected 9 total enabled services, got %d", len(allEnabledConfig.GetEnabledServices()))
 	}
 
-	// 4. All 7 functional services enabled with console disabled
+	// 4. All 8 functional services enabled with console disabled
 	allEnabledConfig.Console.Enabled = false
-	if len(allEnabledConfig.GetEnabledServices()) != 7 {
-		t.Fatalf("expected 7 total enabled services when console is disabled, got %d", len(allEnabledConfig.GetEnabledServices()))
+	if len(allEnabledConfig.GetEnabledServices()) != 8 {
+		t.Fatalf("expected 8 total enabled services when console is disabled, got %d", len(allEnabledConfig.GetEnabledServices()))
 	}
 }
 
@@ -664,6 +666,7 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 		"LAYR__NOTIFICATION__ENABLED":          "TRUE",
 		"LAYR__ANALYTICS__ENABLED":             "1",
 		"LAYR__IMAGE__ENABLED":                 "YES",
+		"LAYR__FUNCTION__ENABLED":              "true",
 		"LAYR__CONSOLE__ENABLED":               "true",
 		"LAYR__CONSOLE__INITIAL_USER_EMAIL":    "console_user@layr.sh",
 		"LAYR__CONSOLE__INITIAL_USER_PASSWORD": "supersecretconsolepassword",
@@ -718,7 +721,7 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 
 	// Validate Services enablement
 	if !config.Data.Enabled || !config.Auth.Enabled || !config.Tasks.Enabled ||
-		!config.FileStorage.Enabled || !config.Notification.Enabled || !config.Analytics.Enabled || !config.Image.Enabled {
+		!config.FileStorage.Enabled || !config.Notification.Enabled || !config.Analytics.Enabled || !config.Image.Enabled || !config.Function.Enabled {
 		t.Fatal("service boolean overrides failed")
 	}
 

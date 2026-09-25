@@ -415,7 +415,7 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 		t.Fatal("expected error on resolveBucket with canceled context")
 	}
 
-	// Canceled context error on REST handlers (database pool query error -> 500)
+	// Canceled context error on REST handlers (query error -> 500)
 	canceledDownloadRequest := httptest.NewRequestWithContext(canceledCtx, http.MethodGet, "/v1/file-storage/objects/test-rest-bucket/notes/hello.txt", nil)
 	canceledDownloadRequest.SetPathValue("bucket", "test-rest-bucket")
 	canceledDownloadRequest.SetPathValue("key", "notes/hello.txt")

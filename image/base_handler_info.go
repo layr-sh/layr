@@ -14,7 +14,12 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 	rawPath := request.PathValue("path")
 	log.Tracef("handling image info request: path=%s", rawPath)
 	if signature == "" || rawPath == "" {
-		baseHandler.writeInfoError(responseWriter, request, rawPath, http.StatusBadRequest, "Signature and info path are required")
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(rawPath, InspectFailedEventData{
+			SourceURL:  rawPath,
+			Reason:     "Signature and info path are required",
+			StatusCode: http.StatusBadRequest,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Signature and info path are required")
 		return
 	}
 
@@ -29,14 +34,24 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 	allowInsecure := baseHandler.configManager.Get().AllowInsecure
 
 	if !VerifySignature(signingKey, signingSalt, signature, fullPath, allowInsecure) {
-		baseHandler.writeInfoError(responseWriter, request, fullPath, http.StatusForbidden, "Invalid URL signature")
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(fullPath, InspectFailedEventData{
+			SourceURL:  fullPath,
+			Reason:     "Invalid URL signature",
+			StatusCode: http.StatusForbidden,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Invalid URL signature")
 		return
 	}
 
 	// 2. Parse Path & Info Options
 	optionsString, sourceURL, _, parseErr := ParseURLPath(fullPath)
 	if parseErr != nil {
-		baseHandler.writeInfoError(responseWriter, request, fullPath, http.StatusBadRequest, parseErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(fullPath, InspectFailedEventData{
+			SourceURL:  fullPath,
+			Reason:     parseErr.Error(),
+			StatusCode: http.StatusBadRequest,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, parseErr.Error())
 		return
 	}
 
@@ -46,14 +61,29 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 	bodyReadCloser, _, _, fetchErr := baseHandler.fetcher.Fetch(request.Context(), sourceURL, request)
 	if fetchErr != nil {
 		if errors.Is(fetchErr, ErrStorageNotFound) {
-			baseHandler.writeInfoError(responseWriter, request, sourceURL, http.StatusNotFound, "Image asset not found")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
+				SourceURL:  sourceURL,
+				Reason:     "Image asset not found",
+				StatusCode: http.StatusNotFound,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Image asset not found")
 			return
 		}
 		if errors.Is(fetchErr, ErrStorageAccessDenied) {
-			baseHandler.writeInfoError(responseWriter, request, sourceURL, http.StatusForbidden, "Access denied to storage asset")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
+				SourceURL:  sourceURL,
+				Reason:     "Access denied",
+				StatusCode: http.StatusForbidden,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied")
 			return
 		}
-		baseHandler.writeInfoError(responseWriter, request, sourceURL, http.StatusBadGateway, fetchErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
+			SourceURL:  sourceURL,
+			Reason:     fetchErr.Error(),
+			StatusCode: http.StatusBadGateway,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, fetchErr.Error())
 		return
 	}
 	defer func() { _ = bodyReadCloser.Close() }()
@@ -61,7 +91,12 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 	// 4. Introspect Metadata
 	getInfoResponse, inspectErr := baseHandler.engine.Inspect(bodyReadCloser, infoOptions)
 	if inspectErr != nil {
-		baseHandler.writeInfoError(responseWriter, request, sourceURL, http.StatusUnprocessableEntity, inspectErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
+			SourceURL:  sourceURL,
+			Reason:     inspectErr.Error(),
+			StatusCode: http.StatusUnprocessableEntity,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
 		return
 	}
 
@@ -85,7 +120,12 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 		log.Trace("handling multipart image info probe request")
 		const maxMultipartMemory = 32 << 20 // 32MB
 		if parseMultipartErr := request.ParseMultipartForm(maxMultipartMemory); parseMultipartErr != nil {
-			baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusBadRequest, "Failed to parse multipart payload")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+				SourceURL:  "upload",
+				Reason:     "Failed to parse multipart payload",
+				StatusCode: http.StatusBadRequest,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to parse multipart payload")
 			return
 		}
 
@@ -94,14 +134,24 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 			file, _, fileErr = request.FormFile("image")
 		}
 		if fileErr != nil {
-			baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusBadRequest, "No file uploaded in multipart form")
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+				SourceURL:  "upload",
+				Reason:     "No file uploaded in multipart form",
+				StatusCode: http.StatusBadRequest,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "No file uploaded in multipart form")
 			return
 		}
 		defer func() { _ = file.Close() }()
 
 		getInfoResponse, inspectErr := baseHandler.engine.Inspect(file, infoOptions)
 		if inspectErr != nil {
-			baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusUnprocessableEntity, inspectErr.Error())
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+				SourceURL:  "upload",
+				Reason:     inspectErr.Error(),
+				StatusCode: http.StatusUnprocessableEntity,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
 			return
 		}
 
@@ -121,7 +171,12 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 	defer func() { _ = request.Body.Close() }()
 	getInfoResponse, inspectErr := baseHandler.engine.Inspect(request.Body, infoOptions)
 	if inspectErr != nil {
-		baseHandler.writeInfoError(responseWriter, request, "upload", http.StatusUnprocessableEntity, inspectErr.Error())
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+			SourceURL:  "upload",
+			Reason:     inspectErr.Error(),
+			StatusCode: http.StatusUnprocessableEntity,
+		}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
 		return
 	}
 
@@ -133,13 +188,4 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 
 	log.Debugf("raw binary image info probe succeeded: format=%s dimensions=%dx%d", getInfoResponse.Format, getInfoResponse.Width, getInfoResponse.Height)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, getInfoResponse)
-}
-
-func (baseHandler *BaseHandler) writeInfoError(responseWriter http.ResponseWriter, request *http.Request, sourceURL string, statusCode int, message string) {
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent(sourceURL, InspectFailedEventData{
-		SourceURL:  sourceURL,
-		Reason:     message,
-		StatusCode: statusCode,
-	}))
-	core.WriteErrorResponse(responseWriter, request, statusCode, message)
 }

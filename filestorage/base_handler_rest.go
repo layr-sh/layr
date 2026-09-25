@@ -33,7 +33,7 @@ func (baseHandler *BaseHandler) handleDownloadObject(responseWriter http.Respons
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Bucket not found")
 			return
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "download object rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", bucketErr.Error())
 		return
 	}
 
@@ -111,7 +111,7 @@ func (baseHandler *BaseHandler) handleHeadObject(responseWriter http.ResponseWri
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Bucket not found")
 			return
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "head object rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", bucketErr.Error())
 		return
 	}
 
@@ -166,7 +166,7 @@ func (baseHandler *BaseHandler) handleUploadObject(responseWriter http.ResponseW
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Bucket not found")
 			return
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "upload object rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", bucketErr.Error())
 		return
 	}
 
@@ -265,7 +265,7 @@ func (baseHandler *BaseHandler) handleDeleteObject(responseWriter http.ResponseW
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Bucket not found")
 			return
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", "delete object rejected: database pool unavailable")
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", bucketErr.Error())
 		return
 	}
 

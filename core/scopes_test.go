@@ -69,6 +69,18 @@ func TestCoreScopesHasScopeUnit(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Function endpoint write implies read",
+			granted:  []string{ScopeFunctionEndpointWrite},
+			required: ScopeFunctionEndpointRead,
+			expected: true,
+		},
+		{
+			name:     "Function wildcard function:* matches function:endpoint.deploy",
+			granted:  []string{"function:*"},
+			required: ScopeFunctionEndpointDeploy,
+			expected: true,
+		},
+		{
 			name:     "Service wildcard data:* matches data:config.write",
 			granted:  []string{"data:*"},
 			required: "data:config.write",

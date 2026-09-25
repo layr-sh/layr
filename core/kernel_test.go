@@ -25,6 +25,9 @@ func (mock *mockServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRo
 	mock.openAPIRegistered = true
 }
 
+func (mock *mockServiceRunner) RegisterHostRoutes(server *Server) {
+}
+
 func (mock *mockServiceRunner) Stop() {
 	mock.stopped = true
 }

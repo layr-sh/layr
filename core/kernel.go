@@ -199,6 +199,9 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 			return fmt.Errorf("failed to start service: %w", err)
 		}
 		serviceRunner.RegisterRoutes(kernel.server.BaseRouter(), kernel.server.ControlPlaneRouter())
+		if hostRouteRegistrar, ok := serviceRunner.(interface{ RegisterHostRoutes(*Server) }); ok {
+			hostRouteRegistrar.RegisterHostRoutes(kernel.server)
+		}
 	}
 
 	log.Infof("Layr Gateway listening on %s (Services: %v)", config.Server.ListenAddr, config.GetEnabledServices())
