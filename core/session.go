@@ -13,6 +13,11 @@ const (
 	SessionCookieNameSecure = "__Host-session"
 	// SessionCookieNameInsecure is the fallback cookie used over non-HTTPS/plain HTTP connections.
 	SessionCookieNameInsecure = "session"
+
+	// ConsoleCookieNameSecure is the standard isolated __Host cookie for console operators over HTTPS.
+	ConsoleCookieNameSecure = "__Host-console-session"
+	// ConsoleCookieNameInsecure is the fallback cookie used for console operators over non-HTTPS/plain HTTP.
+	ConsoleCookieNameInsecure = "console-session"
 )
 
 type authContextKey struct{}

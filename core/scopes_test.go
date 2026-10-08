@@ -234,3 +234,15 @@ func TestCoreScopesExtractRequestClientIPUnit(t *testing.T) {
 		t.Fatalf("expected 127.0.0.1 for empty remoteAddr, got %s", clientIP)
 	}
 }
+
+func TestCoreConsoleScopesUnit(t *testing.T) {
+	if !HasScope([]string{ScopeConsoleConfigWrite}, ScopeConsoleConfigRead) {
+		t.Fatal("expected console:config.write to satisfy console:config.read")
+	}
+	if HasScope([]string{ScopeConsoleConfigRead}, ScopeConsoleConfigWrite) {
+		t.Fatal("expected console:config.read NOT to satisfy console:config.write")
+	}
+	if !HasScope([]string{"console:*"}, ScopeConsoleConfigRead) {
+		t.Fatal("expected console:* to satisfy console:config.read")
+	}
+}

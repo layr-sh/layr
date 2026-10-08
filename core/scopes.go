@@ -66,8 +66,10 @@ const (
 	ScopeFunctionStatsRead      = "function:stats.read"
 
 	// Console scopes
-	ScopeConsoleUserRead  = "console:user.read"
-	ScopeConsoleUserWrite = "console:user.write"
+	ScopeConsoleUserRead    = "console:user.read"
+	ScopeConsoleUserWrite   = "console:user.write"
+	ScopeConsoleConfigRead  = "console:config.read"
+	ScopeConsoleConfigWrite = "console:config.write"
 )
 
 // HasScope checks if the provided slice of granted scopes satisfies the required scope.
