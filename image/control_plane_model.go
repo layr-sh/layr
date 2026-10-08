@@ -1,20 +1,5 @@
 package image
 
-import (
-	"time"
-	"uuid"
-)
-
-// Preset represents a named transformation preset entity in image.presets.
-type Preset struct {
-	ID                uuid.UUID `json:"id"`
-	Name              string    `json:"name"`
-	ProcessingOptions string    `json:"processing_options"`
-	Description       *string   `json:"description,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
 // CreatePresetInput defines the request body for creating a new preset.
 type CreatePresetInput struct {
 	Name              string  `json:"name"`

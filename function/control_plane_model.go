@@ -2,7 +2,6 @@ package function
 
 import (
 	"errors"
-	"time"
 
 	"uuid"
 )
@@ -77,15 +76,6 @@ type ListExecutionsResponse struct {
 	Count      int         `json:"count"`
 }
 
-// CustomDomain represents a registered custom domain hostname in function.custom_domains.
-type CustomDomain struct {
-	ID        uuid.UUID `json:"id"`
-	Domain    string    `json:"domain"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 // CreateCustomDomainInput defines the payload for registering a standalone custom domain.
 type CreateCustomDomainInput struct {
 	Domain string `json:"domain"`
@@ -95,17 +85,6 @@ type CreateCustomDomainInput struct {
 type ListCustomDomainsResponse struct {
 	Data  []CustomDomain `json:"data"`
 	Total int            `json:"total"`
-}
-
-// CustomDomainRoute represents an endpoint route mapping on a custom domain in function.custom_domain_routes.
-type CustomDomainRoute struct {
-	ID             uuid.UUID `json:"id"`
-	CustomDomainID uuid.UUID `json:"custom_domain_id"`
-	Domain         string    `json:"domain,omitempty"`
-	EndpointID     uuid.UUID `json:"endpoint_id"`
-	PathPrefix     string    `json:"path_prefix"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // CreateCustomDomainRouteInput defines the payload for attaching an endpoint to a custom domain route.

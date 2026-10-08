@@ -4,21 +4,7 @@ package filestorage
 import (
 	"encoding/xml"
 	"time"
-	"uuid"
 )
-
-// Object represents a stored binary asset entity in file_storage.objects.
-type Object struct {
-	ID             uuid.UUID      `json:"id"`
-	BucketID       uuid.UUID      `json:"bucket_id"`
-	ObjectKey      string         `json:"object_key"`
-	ContentType    string         `json:"content_type"`
-	SizeBytes      int64          `json:"size_bytes"`
-	ChecksumSHA256 string         `json:"checksum_sha256"`
-	Metadata       map[string]any `json:"metadata"`
-	CreatedAt      time.Time      `json:"created_at"`
-	LastUpdatedAt  time.Time      `json:"last_updated_at"`
-}
 
 // PresignURLInput specifies parameters for generating a capability token and URL.
 type PresignURLInput struct {
