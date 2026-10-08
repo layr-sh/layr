@@ -18,6 +18,7 @@ func TestFunctionConfigUnit(t *testing.T) {
 
 	t.Run("default config validity", func(t *testing.T) {
 		t.Parallel()
+		require.Equal(t, "runtime", ConfigKey)
 		defaultConfig := DefaultConfig()
 		require.NoError(t, defaultConfig.Validate())
 		require.Equal(t, DefaultRuntime, defaultConfig.DefaultRuntime)

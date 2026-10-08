@@ -59,7 +59,10 @@ func (service *Service) Start(ctx context.Context) error {
 		return fmt.Errorf("context canceled before start: %w", err)
 	}
 
-	return service.configManager.Load(ctx)
+	if err := service.configManager.Load(ctx); err != nil {
+		return fmt.Errorf("failed to load file storage config: %w", err)
+	}
+	return nil
 }
 
 // Stop gracefully shuts down active workers or resources.

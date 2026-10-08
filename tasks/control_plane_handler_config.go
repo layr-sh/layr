@@ -29,7 +29,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 
 	newConfig := controlPlaneHandler.configManager.Get()
 	if err := json.NewDecoder(request.Body).Decode(&newConfig); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
 		return
 	}
 
