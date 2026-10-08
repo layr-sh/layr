@@ -22,9 +22,6 @@ type DatabaseEngine struct {
 	chunkSizeBytes int
 }
 
-// DatabaseDriver aliases DatabaseEngine.
-type DatabaseDriver = DatabaseEngine
-
 // NewDatabaseEngine initializes a database chunk streaming driver.
 func NewDatabaseEngine(kernel *core.Kernel, chunkSizeBytes ...int) *DatabaseEngine {
 	size := DefaultDatabaseChunkSize
