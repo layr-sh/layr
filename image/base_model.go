@@ -1,11 +1,6 @@
 // Package image defines the image optimization, resizing, and transformation engine.
 package image
 
-import (
-	"time"
-	"uuid"
-)
-
 // Supported image output formats.
 const (
 	FormatWebP = "webp"
@@ -35,17 +30,4 @@ type GetInfoResponse struct {
 	EXIF        map[string]any `json:"exif,omitempty"`
 	XMP         string         `json:"xmp,omitempty"`
 	VideoMeta   map[string]any `json:"video_meta,omitempty"`
-}
-
-// CacheEntry represents transformation cache metadata stored in image.cache_entries.
-type CacheEntry struct {
-	ID             uuid.UUID `json:"id"`
-	CacheKey       string    `json:"cache_key"`
-	SourceURL      string    `json:"source_url"`
-	OptionsHash    string    `json:"options_hash"`
-	ContentType    string    `json:"content_type"`
-	ByteSize       int64     `json:"byte_size"`
-	ETag           string    `json:"etag"`
-	LastAccessedAt time.Time `json:"last_accessed_at"`
-	CreatedAt      time.Time `json:"created_at"`
 }

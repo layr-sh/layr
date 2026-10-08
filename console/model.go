@@ -1,4 +1,3 @@
-// Package console provides the administrative control plane, operator identity, and dynamic configuration engine.
 package console
 
 import (
