@@ -62,7 +62,7 @@ func TestTasksControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 
 		var triggerExecutionResponse TriggerExecutionResponse
 		require.NoError(t, json.Unmarshal(triggerResponseRecorder.Body.Bytes(), &triggerExecutionResponse))
-		require.Equal(t, "pending", triggerExecutionResponse.Status)
+		require.Equal(t, StatusPending, triggerExecutionResponse.Status)
 
 		// 3. GET /v1/_/tasks/executions
 		listExecutionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/executions?limit=10&offset=5", nil)

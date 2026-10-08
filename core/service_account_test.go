@@ -32,39 +32,39 @@ func TestCoreServiceAccountContextHelpersUnit(t *testing.T) {
 
 func TestCoreServiceAccountIsIPAllowedUnit(t *testing.T) {
 	// Invalid client IP
-	if isIPAllowed("invalid-ip", []string{"192.168.1.1"}) {
+	if IsIPAllowed("invalid-ip", []string{"192.168.1.1"}) {
 		t.Fatal("expected invalid client IP to be disallowed")
 	}
 
 	// Empty patterns returns false
-	if isIPAllowed("192.168.1.1", nil) {
+	if IsIPAllowed("192.168.1.1", nil) {
 		t.Fatal("expected nil allowed patterns to return false")
 	}
-	if isIPAllowed("192.168.1.1", []string{}) {
+	if IsIPAllowed("192.168.1.1", []string{}) {
 		t.Fatal("expected empty allowed patterns to return false")
 	}
 
 	// Exact IP match
-	if !isIPAllowed("10.0.0.1", []string{"10.0.0.1", "10.0.0.2"}) {
+	if !IsIPAllowed("10.0.0.1", []string{"10.0.0.1", "10.0.0.2"}) {
 		t.Fatal("expected exact IP match to be allowed")
 	}
-	if isIPAllowed("10.0.0.3", []string{"10.0.0.1", "10.0.0.2"}) {
+	if IsIPAllowed("10.0.0.3", []string{"10.0.0.1", "10.0.0.2"}) {
 		t.Fatal("expected non-matching IP to be disallowed")
 	}
 
 	// CIDR match
-	if !isIPAllowed("192.168.1.50", []string{"192.168.1.0/24"}) {
+	if !IsIPAllowed("192.168.1.50", []string{"192.168.1.0/24"}) {
 		t.Fatal("expected IP in CIDR block to be allowed")
 	}
-	if isIPAllowed("192.168.2.50", []string{"192.168.1.0/24"}) {
+	if IsIPAllowed("192.168.2.50", []string{"192.168.1.0/24"}) {
 		t.Fatal("expected IP outside CIDR block to be disallowed")
 	}
 
 	// Malformed CIDR and invalid string patterns
-	if isIPAllowed("192.168.1.1", []string{"invalid/cidr/string"}) {
+	if IsIPAllowed("192.168.1.1", []string{"invalid/cidr/string"}) {
 		t.Fatal("expected invalid CIDR pattern to be ignored")
 	}
-	if isIPAllowed("192.168.1.1", []string{"not-an-ip"}) {
+	if IsIPAllowed("192.168.1.1", []string{"not-an-ip"}) {
 		t.Fatal("expected invalid IP string pattern to be ignored")
 	}
 }

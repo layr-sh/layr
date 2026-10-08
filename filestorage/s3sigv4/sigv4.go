@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -361,33 +360,9 @@ func (validator *Validator) Validate(request *http.Request) (*core.ServiceAccoun
 	}
 
 	clientIP := core.ExtractRequestClientIP(request)
-	if len(serviceAccount.AllowedIPs) > 0 && !isIPAllowed(clientIP, serviceAccount.AllowedIPs) {
+	if len(serviceAccount.AllowedIPs) > 0 && !core.IsIPAllowed(clientIP, serviceAccount.AllowedIPs) {
 		return nil, core.ErrServiceAccountIPBlocked
 	}
 
 	return &serviceAccount, nil
-}
-
-func isIPAllowed(clientIP string, allowedIPs []string) bool {
-	if len(allowedIPs) == 0 {
-		return true
-	}
-	parsedClientIP := net.ParseIP(clientIP)
-	if parsedClientIP == nil {
-		return false
-	}
-
-	for _, allowedRange := range allowedIPs {
-		if strings.Contains(allowedRange, "/") {
-			_, ipNet, err := net.ParseCIDR(allowedRange)
-			if err == nil && ipNet.Contains(parsedClientIP) {
-				return true
-			}
-		} else {
-			if allowedRange == clientIP {
-				return true
-			}
-		}
-	}
-	return false
 }

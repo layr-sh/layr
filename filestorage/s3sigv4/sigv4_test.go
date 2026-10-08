@@ -190,19 +190,19 @@ func TestS3sigv4ValidatePreDatabaseUnit(t *testing.T) {
 }
 
 func TestS3sigv4IPAllowedUnit(t *testing.T) {
-	if !isIPAllowed("192.168.1.50", []string{}) {
+	if !core.IsIPAllowed("192.168.1.50", []string{}) {
 		t.Fatal("expected empty allowed IPs to allow all")
 	}
-	if !isIPAllowed("192.168.1.50", []string{"192.168.1.50"}) {
+	if !core.IsIPAllowed("192.168.1.50", []string{"192.168.1.50"}) {
 		t.Fatal("expected exact IP match to be allowed")
 	}
-	if !isIPAllowed("10.0.0.5", []string{"10.0.0.0/24"}) {
+	if !core.IsIPAllowed("10.0.0.5", []string{"10.0.0.0/24"}) {
 		t.Fatal("expected CIDR match to be allowed")
 	}
-	if isIPAllowed("10.0.1.5", []string{"10.0.0.0/24"}) {
+	if core.IsIPAllowed("10.0.1.5", []string{"10.0.0.0/24"}) {
 		t.Fatal("expected IP outside CIDR to be blocked")
 	}
-	if isIPAllowed("invalid-ip", []string{"10.0.0.0/24"}) {
+	if core.IsIPAllowed("invalid-ip", []string{"10.0.0.0/24"}) {
 		t.Fatal("expected invalid client IP to be blocked")
 	}
 }

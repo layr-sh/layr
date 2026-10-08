@@ -157,19 +157,19 @@ func (workerQueue *WorkerQueue) dequeueNextExecution(ctx context.Context) (*Exec
 	query := `
 		WITH next_task AS (
 			SELECT id FROM tasks.executions
-			WHERE status = 'pending' AND run_at <= clock_timestamp()
+			WHERE status = $1 AND run_at <= clock_timestamp()
 			ORDER BY run_at ASC
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
 		)
 		UPDATE tasks.executions
-		SET status = 'running', locked_at = clock_timestamp(), locked_by = $1
+		SET status = $2, locked_at = clock_timestamp(), locked_by = $3
 		WHERE id = (SELECT id FROM next_task)
 		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
 	`
 
 	var execution Execution
-	err := workerQueue.kernel.DB().QueryRow(ctx, query, currentNodeID).Scan(
+	err := workerQueue.kernel.DB().QueryRow(ctx, query, StatusPending, StatusRunning, currentNodeID).Scan(
 		&execution.ID, &execution.JobID, &execution.Status, &execution.RunAt, &execution.Payload,
 		&execution.Attempts, &execution.MaxAttempts, &execution.LockedAt, &execution.LockedBy,
 		&execution.LastError, &execution.CreatedAt,
@@ -258,19 +258,20 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 		// --- Success ---
 		_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
 			UPDATE tasks.executions SET
-				status = 'completed',
+				status = $1,
 				locked_at = NULL,
 				locked_by = NULL
-			WHERE id = $1
-		`, execution.ID)
+			WHERE id = $2
+		`, StatusCompleted, execution.ID)
 
+		logStatus := StatusSuccess
 		_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
 			INSERT INTO tasks.execution_logs (
 				job_id, execution_id, status, response_status_code, execution_duration_ms, response_body, executed_at
 			) VALUES (
-				$1, $2, 'success', $3, $4, $5, clock_timestamp()
+				$1, $2, $3, $4, $5, $6, clock_timestamp()
 			)
-		`, execution.JobID, execution.ID, responseStatusCode, durationMs, responseBody)
+		`, execution.JobID, execution.ID, logStatus, responseStatusCode, durationMs, responseBody)
 
 		workerQueue.kernel.EventBus().Publish(ctx, NewExecutionCompletedEvent(execution.ID.String(), ExecutionCompletedEventData{
 			Execution:          *execution,
@@ -321,14 +322,14 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 
 			_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
 				UPDATE tasks.executions SET
-					status = 'pending',
-					attempts = $1,
-					run_at = $2,
+					status = $1,
+					attempts = $2,
+					run_at = $3,
 					locked_at = NULL,
 					locked_by = NULL,
-					last_error = $3
-				WHERE id = $4
-			`, nextAttempt, nextRunAt, errMsg, execution.ID)
+					last_error = $4
+				WHERE id = $5
+			`, StatusPending, nextAttempt, nextRunAt, errMsg, execution.ID)
 
 			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionRetriedEvent(execution.ID.String(), ExecutionRetriedEventData{
 				Execution:      *execution,
@@ -344,13 +345,13 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			// Move to Dead-Letter Queue
 			_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
 				UPDATE tasks.executions SET
-					status = 'failed',
-					attempts = $1,
+					status = $1,
+					attempts = $2,
 					locked_at = NULL,
 					locked_by = NULL,
-					last_error = $2
-				WHERE id = $3
-			`, nextAttempt, errMsg, execution.ID)
+					last_error = $3
+				WHERE id = $4
+			`, StatusFailed, nextAttempt, errMsg, execution.ID)
 
 			workerQueue.kernel.EventBus().Publish(ctx, NewDLQIsolatedEvent(execution.ID.String(), DLQIsolatedEventData{
 				Execution:     *execution,

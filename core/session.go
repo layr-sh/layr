@@ -57,7 +57,7 @@ func (authContext AuthContext) IsServiceAccount() bool {
 
 // WithAuthContext stores the authenticated AuthContext in context.
 func WithAuthContext(ctx context.Context, authContext AuthContext) context.Context {
-	isServiceAccount := authContext.ServiceAccountID != "" || authContext.JWT.Role == "service_role" || strings.HasSuffix(authContext.JWT.Audience, ":service_account")
+	isServiceAccount := authContext.IsServiceAccount()
 	if isServiceAccount {
 		if authContext.ServiceAccountID == "" && authContext.JWT.Subject != "" {
 			authContext.ServiceAccountID = authContext.JWT.Subject

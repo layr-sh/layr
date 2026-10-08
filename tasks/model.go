@@ -14,15 +14,14 @@ const (
 	TargetTypeSQL  = "sql"
 )
 
-// Supported execution statuses.
+// Supported execution and log statuses.
 const (
-	StatusPending    = "pending"
-	StatusRunning    = "running"
-	StatusCompleted  = "completed"
-	StatusFailed     = "failed"
-	StatusSuccess    = "success"
-	StatusTimeout    = "timeout"
-	StatusDeadLetter = "dead_letter"
+	StatusPending   = "pending"
+	StatusRunning   = "running"
+	StatusCompleted = "completed"
+	StatusFailed    = "failed"
+	StatusSuccess   = "success"
+	StatusTimeout   = "timeout"
 )
 
 // Job represents a registered recurring cron job entity in tasks.jobs.

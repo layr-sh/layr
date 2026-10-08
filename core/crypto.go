@@ -19,15 +19,12 @@ import (
 
 // Standard HKDF Subkey Contexts
 const (
-	CryptoContextDBEnvelopeAES256GCM       = "db:envelope:aes256gcm:v1"
-	CryptoContextAuthJWTSigning            = "auth:jwt:ed25519:v1"
-	CryptoContextConsoleUserSalt           = "console:user:salt:v1"
-	CryptoContextCoreIPCHMAC               = "core:ipc:hmacsha256:v1"
-	CryptoContextFileStorageChunkAES256GCM = "file_storage:chunk:aes256gcm:v1"
-	CryptoContextPublishableKey            = "client:publishable:v1"
-	CryptoContextImageSigningKey           = "image:signing:key:v1"
-	CryptoContextImageSigningSalt          = "image:signing:salt:v1"
-	CryptoContextTasksWebhookHMAC          = "tasks:webhook:hmacsha256:v1"
+	CryptoContextDBEnvelopeAES256GCM = "db:envelope:aes256gcm:v1"
+	CryptoContextAuthJWTSigning      = "auth:jwt:ed25519:v1"
+	CryptoContextPublishableKey      = "client:publishable:v1"
+	CryptoContextImageSigningKey     = "image:signing:key:v1"
+	CryptoContextImageSigningSalt    = "image:signing:salt:v1"
+	CryptoContextTasksWebhookHMAC    = "tasks:webhook:hmacsha256:v1"
 )
 
 const (

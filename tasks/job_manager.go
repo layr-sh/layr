@@ -319,10 +319,10 @@ func (jobManager *JobManager) TriggerExecution(ctx context.Context, triggerExecu
 		INSERT INTO tasks.executions (
 			job_id, status, run_at, payload, attempts, max_attempts, created_at
 		) VALUES (
-			$1, 'pending', clock_timestamp(), $2, 0, $3, clock_timestamp()
+			$1, $2, clock_timestamp(), $3, 0, $4, clock_timestamp()
 		)
 		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
-	`, triggerExecutionInput.JobID, targetPayloadValue, maxAttempts).Scan(
+	`, triggerExecutionInput.JobID, StatusPending, targetPayloadValue, maxAttempts).Scan(
 		&execution.ID,
 		&execution.JobID,
 		&execution.Status,
@@ -483,15 +483,15 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 
 	err = jobManager.kernel.DB().QueryRow(ctx, `
 		UPDATE tasks.executions SET
-			status = 'pending',
+			status = $1,
 			run_at = clock_timestamp(),
 			attempts = 0,
 			last_error = NULL,
 			locked_at = NULL,
 			locked_by = NULL
-		WHERE id = $1
+		WHERE id = $2
 		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
-	`, executionID).Scan(
+	`, StatusPending, executionID).Scan(
 		&execution.ID,
 		&execution.JobID,
 		&execution.Status,

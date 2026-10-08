@@ -66,8 +66,7 @@ func GenerateServiceAccountSecretKey() (string, string, string) {
 	_, _ = rand.Read(randomBytes)
 	secretKey := hex.EncodeToString(randomBytes)
 	prefix := secretKey[:secretKeyPrefixLength]
-	digest := sha256.Sum256([]byte(secretKey))
-	hash := hex.EncodeToString(digest[:])
+	hash := HashSecretKey(secretKey)
 	return prefix, secretKey, hash
 }
 
@@ -185,7 +184,7 @@ func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Con
 	}
 
 	if len(matchedServiceAccount.AllowedIPs) > 0 && clientIP != "" {
-		if !isIPAllowed(clientIP, matchedServiceAccount.AllowedIPs) {
+		if !IsIPAllowed(clientIP, matchedServiceAccount.AllowedIPs) {
 			log.Warnf("service account authentication rejected: client IP %s not in allowed list %v for account %s", clientIP, matchedServiceAccount.AllowedIPs, matchedServiceAccount.ID)
 			return nil, ErrServiceAccountIPBlocked
 		}
@@ -362,7 +361,8 @@ func (serviceAccountManager *ServiceAccountManager) assertOtherRootExists(ctx co
 	return nil
 }
 
-func isIPAllowed(clientIP string, allowedPatterns []string) bool {
+// IsIPAllowed checks if a client IP matches any allowed exact IP or CIDR pattern.
+func IsIPAllowed(clientIP string, allowedPatterns []string) bool {
 	parsedClientIP := net.ParseIP(strings.TrimSpace(clientIP))
 	if parsedClientIP == nil {
 		return false
