@@ -1,4 +1,3 @@
-// Package function defines the serverless and edge function execution engine.
 package function
 
 import (

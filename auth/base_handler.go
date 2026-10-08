@@ -27,7 +27,7 @@ type BaseHandler struct {
 	*Service
 }
 
-// NewBaseHandler creates a new Auth HTTP BaseHandler extending Service.
+// NewBaseHandler creates a new BaseHandler instance extending Service.
 func NewBaseHandler(service *Service) *BaseHandler {
 	return &BaseHandler{
 		Service: service,

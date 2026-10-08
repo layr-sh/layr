@@ -1,11 +1,11 @@
 package auth
 
-// ControlPlaneHandler exposes protected user and session management endpoints for the control plane.
+// ControlPlaneHandler coordinates all administrative control plane HTTP routes under /v1/_/auth/*.
 type ControlPlaneHandler struct {
 	*Service
 }
 
-// NewControlPlaneHandler creates a control plane handler for auth endpoints extending Service.
+// NewControlPlaneHandler creates a new ControlPlaneHandler instance extending Service.
 func NewControlPlaneHandler(service *Service) *ControlPlaneHandler {
 	return &ControlPlaneHandler{
 		Service: service,

@@ -1,4 +1,3 @@
-// Package tasks provides distributed cron and background task orchestration.
 package tasks
 
 // ControlPlaneHandler coordinates all administrative control plane HTTP routes under /v1/_/tasks/*.
