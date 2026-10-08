@@ -11,11 +11,9 @@ import (
 )
 
 func init() {
-	factory := func(kernel *core.Kernel) (core.ServiceRunner, error) {
+	core.RegisterServiceFactory("console", func(kernel *core.Kernel) (core.ServiceRunner, error) {
 		return NewService(kernel), nil
-	}
-
-	core.RegisterServiceFactory("console", factory)
+	})
 }
 
 // Service encapsulates the console control plane and configuration management service.
