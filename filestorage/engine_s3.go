@@ -21,9 +21,6 @@ type S3Engine struct {
 	kernel *core.Kernel
 }
 
-// S3Driver aliases S3Engine.
-type S3Driver = S3Engine
-
 // NewS3Engine initializes a new S3 proxy driver.
 func NewS3Engine(kernel *core.Kernel) *S3Engine {
 	return &S3Engine{
