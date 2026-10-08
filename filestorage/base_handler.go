@@ -24,9 +24,8 @@ type BaseHandler struct {
 	*Service
 }
 
-// NewBaseHandler initializes the BaseHandler extending Service.
+// NewBaseHandler creates a new BaseHandler instance extending Service.
 func NewBaseHandler(service *Service) *BaseHandler {
-	log.Debug("initializing filestorage base handler")
 	return &BaseHandler{
 		Service: service,
 	}

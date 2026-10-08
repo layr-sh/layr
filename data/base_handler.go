@@ -16,7 +16,7 @@ type BaseHandler struct {
 	*Service
 }
 
-// NewBaseHandler initializes the BaseHandler with service coordinator.
+// NewBaseHandler creates a new BaseHandler instance extending Service.
 func NewBaseHandler(service *Service) *BaseHandler {
 	return &BaseHandler{
 		Service: service,

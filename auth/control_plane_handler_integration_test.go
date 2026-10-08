@@ -6,50 +6,57 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
-func TestAuthControlPlaneHandlerIntegration(t *testing.T) {
+func TestAuthControlPlaneHandlerBaseScopeIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
 	ctx := context.Background()
+	service := NewService(kernel)
+	require.NoError(t, service.Start(ctx))
+	defer service.Stop()
+
+	controlPlaneHandler := service.ControlPlaneHandler()
 	serviceAccountManager := kernel.ServiceAccountManager()
 
-	createdServiceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
-		Name:   "Auth Base Control Plane Service Account",
-		Scopes: []string{core.ScopeAuthUserRead},
+	// 1. Create a service account with ScopeAuthConfigRead scope
+	serviceAccount, accountErr := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
+		Name:   "Read Only Auth Service Account",
+		Scopes: []string{core.ScopeAuthConfigRead, core.ScopeAuthUserRead},
 	})
-	if err != nil {
-		t.Fatalf("failed to create service account: %v", err)
-	}
+	require.NoError(t, accountErr)
 
-	// Valid scope check
-	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)
-	validRequest.Header.Set("Authorization", "Bearer "+createdServiceAccount.SecretKey)
-	if !serviceAccountManager.CheckScope(validRequest, core.ScopeAuthUserRead) {
-		t.Fatal("expected CheckScope to pass with valid service account and scope")
-	}
+	// 2. Test valid scope check
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
+	validRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+	validResponseRecorder := httptest.NewRecorder()
+	require.True(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(validResponseRecorder, validRequest, core.ScopeAuthConfigRead))
 
-	// Missing scope check
-	if serviceAccountManager.CheckScope(validRequest, core.ScopeAuthUserWrite) {
-		t.Fatal("expected CheckScope to fail when required scope is not granted")
-	}
+	// 3. Test invalid scope check
+	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/auth/config", nil)
+	invalidScopeRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+	invalidScopeResponseRecorder := httptest.NewRecorder()
+	require.False(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(invalidScopeResponseRecorder, invalidScopeRequest, core.ScopeAuthConfigWrite))
 
-	// M2M AuthContext scope checks
+	// 4. Test invalid API key token
+	malformedTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
+	malformedTokenRequest.Header.Set("Authorization", "Bearer invalid_api_key_token")
+	malformedTokenResponseRecorder := httptest.NewRecorder()
+	require.False(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(malformedTokenResponseRecorder, malformedTokenRequest, core.ScopeAuthConfigRead))
+
+	// 5. M2M AuthContext scope checks
 	m2mAuthedCtx := core.WithAuthContext(ctx, core.AuthContext{
-		ServiceAccountID: createdServiceAccount.ID,
+		ServiceAccountID: serviceAccount.ID,
 		JWT: core.JWTClaims{
-			Subject: createdServiceAccount.ID,
+			Subject: serviceAccount.ID,
 			Role:    "service_role",
 			Scope:   core.ScopeAuthUserRead,
 		},
 	})
 	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/v1/_/auth/users", nil)
-	if !serviceAccountManager.CheckScope(m2mValidRequest, core.ScopeAuthUserRead) {
-		t.Fatal("expected CheckScope to pass with M2M AuthContext containing auth:user.read")
-	}
-	if serviceAccountManager.CheckScope(m2mValidRequest, core.ScopeAuthUserWrite) {
-		t.Fatal("expected CheckScope to fail with M2M AuthContext missing auth:user.write")
-	}
+	require.True(t, serviceAccountManager.CheckScope(m2mValidRequest, core.ScopeAuthUserRead))
+	require.False(t, serviceAccountManager.CheckScope(m2mValidRequest, core.ScopeAuthUserWrite))
 }

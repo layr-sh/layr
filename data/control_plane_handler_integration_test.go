@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
@@ -15,44 +16,36 @@ func TestDataControlPlaneHandlerBaseScopeIntegration(t *testing.T) {
 
 	ctx := context.Background()
 	service := NewService(kernel)
-	_ = service.Start(ctx)
-	defer func() { service.Stop() }()
+	require.NoError(t, service.Start(ctx))
+	defer service.Stop()
 
 	controlPlaneHandler := service.controlPlaneHandler
 	serviceAccountManager := kernel.ServiceAccountManager()
 
-	// 1. Create a service account with ScopeDataSchemaRead scope
+	// 1. Create a service account with ScopeDataConfigRead scope
 	serviceAccount, err := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
-		Name:   "Read Only SA",
-		Scopes: []string{core.ScopeDataSchemaRead},
+		Name:   "Read Only Data Service Account",
+		Scopes: []string{core.ScopeDataConfigRead, core.ScopeDataSchemaRead},
 	})
-	if err != nil {
-		t.Fatalf("failed to create service account: %v", err)
-	}
+	require.NoError(t, err)
 
 	// 2. Test valid scope check
-	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
+	validRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	validRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	validResponseRecorder := httptest.NewRecorder()
-	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(validResponseRecorder, validRequest, core.ScopeDataSchemaRead) {
-		t.Fatal("expected RequireScope to return true for matching scope")
-	}
+	require.True(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(validResponseRecorder, validRequest, core.ScopeDataConfigRead))
 
 	// 3. Test invalid scope check
-	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/tables", nil)
+	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", nil)
 	invalidScopeRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	invalidScopeResponseRecorder := httptest.NewRecorder()
-	if controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(invalidScopeResponseRecorder, invalidScopeRequest, core.ScopeDataSchemaWrite) {
-		t.Fatal("expected RequireScope to return false for missing scope")
-	}
+	require.False(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(invalidScopeResponseRecorder, invalidScopeRequest, core.ScopeDataConfigWrite))
 
 	// 4. Test invalid API key token
-	malformedTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/tables", nil)
+	malformedTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	malformedTokenRequest.Header.Set("Authorization", "Bearer invalid_api_key_token")
 	malformedTokenResponseRecorder := httptest.NewRecorder()
-	if controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(malformedTokenResponseRecorder, malformedTokenRequest, core.ScopeDataSchemaRead) {
-		t.Fatal("expected RequireScope to return false for invalid token")
-	}
+	require.False(t, controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(malformedTokenResponseRecorder, malformedTokenRequest, core.ScopeDataConfigRead))
 
 	// 5. Test cache invalidation
 	controlPlaneHandler.InvalidateCache(ctx, InvalidateCacheInput{All: true})
