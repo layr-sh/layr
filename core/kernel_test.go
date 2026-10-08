@@ -156,19 +156,19 @@ func TestCoreKernelServiceAccountHelpersUnit(t *testing.T) {
 		t.Fatalf("expected empty key, got %s", key)
 	}
 
-	if isIPAllowed("invalid-ip", []string{"192.168.1.1"}) {
+	if IsIPAllowed("invalid-ip", []string{"192.168.1.1"}) {
 		t.Fatal("expected invalid-ip to be blocked")
 	}
-	if !isIPAllowed("192.168.1.1", []string{"192.168.1.1"}) {
+	if !IsIPAllowed("192.168.1.1", []string{"192.168.1.1"}) {
 		t.Fatal("expected exact IP match to be allowed")
 	}
-	if isIPAllowed("192.168.1.2", []string{"192.168.1.1"}) {
+	if IsIPAllowed("192.168.1.2", []string{"192.168.1.1"}) {
 		t.Fatal("expected different IP to be blocked")
 	}
-	if !isIPAllowed("10.0.5.20", []string{"10.0.0.0/16"}) {
+	if !IsIPAllowed("10.0.5.20", []string{"10.0.0.0/16"}) {
 		t.Fatal("expected CIDR match to be allowed")
 	}
-	if isIPAllowed("11.0.5.20", []string{"10.0.0.0/16"}) {
+	if IsIPAllowed("11.0.5.20", []string{"10.0.0.0/16"}) {
 		t.Fatal("expected non-matching CIDR to be blocked")
 	}
 }

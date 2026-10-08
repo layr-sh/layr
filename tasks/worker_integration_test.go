@@ -53,13 +53,15 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", execution.ID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "completed", status)
+		require.Equal(t, StatusCompleted, status)
 
 		// Verify audit log exists
 		var logCount int
-		err = kernel.DB().QueryRow(ctx, "SELECT count(*) FROM tasks.execution_logs WHERE execution_id = $1", execution.ID).Scan(&logCount)
+		var logStatus string
+		err = kernel.DB().QueryRow(ctx, "SELECT count(*), COALESCE(max(status), '') FROM tasks.execution_logs WHERE execution_id = $1", execution.ID).Scan(&logCount, &logStatus)
 		require.NoError(t, err)
 		require.Equal(t, 1, logCount)
+		require.Equal(t, StatusSuccess, logStatus)
 	})
 
 	t.Run("processes HTTP task to completion and logs audit record", func(t *testing.T) {
@@ -99,7 +101,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", execution.ID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "completed", status)
+		require.Equal(t, StatusCompleted, status)
 		require.Equal(t, int32(1), webhookInvokedInt32.Load())
 	})
 
@@ -129,7 +131,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", triggerExecutionResponse.ExecutionID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 	})
 
 	t.Run("server error retries with backoff until max attempts reached", func(t *testing.T) {
@@ -166,7 +168,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var attempts int
 		err = kernel.DB().QueryRow(ctx, "SELECT status, attempts FROM tasks.executions WHERE id = $1", execution.ID).Scan(&status, &attempts)
 		require.NoError(t, err)
-		require.Equal(t, "pending", status)
+		require.Equal(t, StatusPending, status)
 		require.Equal(t, 1, attempts)
 
 		// Set run_at to past and dequeue for 2nd attempt
@@ -182,7 +184,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 
 		err = kernel.DB().QueryRow(ctx, "SELECT status, attempts FROM tasks.executions WHERE id = $1", execution.ID).Scan(&status, &attempts)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 		require.Equal(t, 2, attempts)
 	})
 
@@ -216,7 +218,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var lastError *string
 		err = kernel.DB().QueryRow(ctx, "SELECT status, last_error FROM tasks.executions WHERE id = $1", executionID).Scan(&status, &lastError)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 		require.NotNil(t, lastError)
 		require.Contains(t, *lastError, "deadline exceeded")
 	})
@@ -244,7 +246,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", adhocExecutionID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "completed", status)
+		require.Equal(t, StatusCompleted, status)
 	})
 
 	t.Run("SQL execution with syntax error triggers permanent error DLQ transition", func(t *testing.T) {
@@ -272,7 +274,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", syntaxErrExecID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 	})
 
 	t.Run("SQL execution with invalid json payload triggers permanent error", func(t *testing.T) {
@@ -300,7 +302,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", badJSONExecID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 	})
 
 	t.Run("HTTP execution with invalid json payload triggers permanent error", func(t *testing.T) {
@@ -328,7 +330,7 @@ func TestTasksWorkerIntegration(t *testing.T) {
 		var status string
 		err = kernel.DB().QueryRow(ctx, "SELECT status FROM tasks.executions WHERE id = $1", badHTTPJSONExecID).Scan(&status)
 		require.NoError(t, err)
-		require.Equal(t, "failed", status)
+		require.Equal(t, StatusFailed, status)
 	})
 
 	t.Run("workerLoop handles concurrency limit backoff and context cancel", func(t *testing.T) {

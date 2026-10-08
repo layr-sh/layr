@@ -60,9 +60,6 @@ func TestCoreCryptoKeyManagerDeriveSubkeyUnit(t *testing.T) {
 	allContexts := []string{
 		CryptoContextDBEnvelopeAES256GCM,
 		CryptoContextAuthJWTSigning,
-		CryptoContextConsoleUserSalt,
-		CryptoContextCoreIPCHMAC,
-		CryptoContextFileStorageChunkAES256GCM,
 		CryptoContextPublishableKey,
 		CryptoContextImageSigningKey,
 		CryptoContextImageSigningSalt,

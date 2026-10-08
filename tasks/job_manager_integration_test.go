@@ -188,7 +188,7 @@ func TestTasksJobManagerIntegration(t *testing.T) {
 		triggerExecutionResponse, err := jobManager.TriggerExecution(ctx, TriggerExecutionInput{JobID: &job.ID})
 		require.NoError(t, err)
 		require.NotNil(t, triggerExecutionResponse)
-		require.Equal(t, "pending", triggerExecutionResponse.Status)
+		require.Equal(t, StatusPending, triggerExecutionResponse.Status)
 
 		// Trigger with payload override
 		overridePayloadValue := json.RawMessage(`{"query": "SELECT 2"}`)
@@ -262,7 +262,7 @@ func TestTasksJobManagerIntegration(t *testing.T) {
 		retryDLQResponse, err := jobManager.RetryDLQExecution(ctx, executionID)
 		require.NoError(t, err)
 		require.Equal(t, executionID, retryDLQResponse.ExecutionID)
-		require.Equal(t, "pending", retryDLQResponse.Status)
+		require.Equal(t, StatusPending, retryDLQResponse.Status)
 
 		// Purge non-existent DLQ execution
 		notFoundPurgeErr := jobManager.PurgeDLQExecution(ctx, uuid.NewV7())
