@@ -1,6 +1,10 @@
 package data
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strings"
 	"testing"
 	"time"
 
@@ -8,8 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDataEventConstructorsUnit(t *testing.T) {
+func TestDataEventUnit(t *testing.T) {
+	t.Parallel()
+
 	t.Run("ConfigUpdatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(DefaultConfig()))
 		assert.Equal(t, "data.config.updated", event.Type)
 		assert.Equal(t, "updated", event.Action)
@@ -19,6 +26,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("CacheFlushedEvent", func(t *testing.T) {
+		t.Parallel()
 		now := time.Now().UTC()
 		event := NewCacheFlushedEvent("*", CacheFlushedEventData{
 			Pattern:   "*",
@@ -33,6 +41,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("CacheInvalidatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewCacheInvalidatedEvent("public.users", CacheInvalidatedEventData{
 			Pattern:           "public.users:*",
 			InvalidationCount: 5,
@@ -45,6 +54,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("TableCreatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewTableCreatedEvent("public.users", TableCreatedEventData{
 			Schema: "public",
 			Table:  "users",
@@ -59,6 +69,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("TableUpdatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewTableUpdatedEvent("public.users", TableUpdatedEventData{
 			Schema: "public",
 			Table:  "users",
@@ -73,6 +84,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("TableDeletedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewTableDeletedEvent("public.users", TableDeletedEventData{
 			Schema: "public",
 			Table:  "users",
@@ -85,6 +97,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("RowCreatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewRowCreatedEvent("user-123", RowCreatedEventData{
 			Schema:     "public",
 			Table:      "users",
@@ -99,6 +112,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("RowUpdatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewRowUpdatedEvent("user-123", RowUpdatedEventData{
 			Schema:     "public",
 			Table:      "users",
@@ -113,6 +127,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("RowDeletedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewRowDeletedEvent("user-123", RowDeletedEventData{
 			Schema: "public",
 			Table:  "users",
@@ -126,6 +141,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("TableTruncatedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewTableTruncatedEvent("public.users", TableTruncatedEventData{
 			Schema: "public",
 			Table:  "users",
@@ -140,6 +156,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("SQLExecutedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewSQLExecutedEvent("raw_sql", SQLExecutedEventData{
 			Query:        "SELECT * FROM users",
 			RowsAffected: 10,
@@ -153,6 +170,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("FunctionExecutedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewFunctionExecutedEvent("public.get_user", FunctionExecutedEventData{
 			Schema:   "public",
 			Function: "get_user",
@@ -168,6 +186,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("KVSetEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewKVSetEvent("session:123", KVSetEventData{
 			Key: "session:123",
 			TTL: 3600,
@@ -181,6 +200,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("KVDeletedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewKVDeletedEvent("session:123", KVDeletedEventData{
 			Key: "session:123",
 		})
@@ -193,6 +213,7 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 	})
 
 	t.Run("KVTouchedEvent", func(t *testing.T) {
+		t.Parallel()
 		event := NewKVTouchedEvent("session:123", KVTouchedEventData{
 			Key: "session:123",
 			TTL: 7200,
@@ -204,4 +225,44 @@ func TestDataEventConstructorsUnit(t *testing.T) {
 		assert.Equal(t, "session:123", *event.ResourceID)
 		assert.Equal(t, "session:123", event.Data["key"])
 	})
+}
+
+func TestDataEventConstructorParameterSignaturesUnit(t *testing.T) {
+	fileSet := token.NewFileSet()
+	parsedFile, err := parser.ParseFile(fileSet, "event.go", nil, 0)
+	if err != nil {
+		t.Fatalf("failed to parse event.go: %v", err)
+	}
+
+	testedCount := 0
+	for _, decl := range parsedFile.Decls {
+		functionDeclaration, ok := decl.(*ast.FuncDecl)
+		if !ok || functionDeclaration.Recv != nil {
+			continue
+		}
+		name := functionDeclaration.Name.Name
+		if !strings.HasPrefix(name, "New") || !strings.HasSuffix(name, "Event") || name == "NewEvent" {
+			continue
+		}
+
+		testedCount++
+		t.Run(name, func(t *testing.T) {
+			params := functionDeclaration.Type.Params.List
+			if len(params) == 0 {
+				t.Fatalf("constructor %s has no parameters", name)
+			}
+			firstParamField := params[0]
+			if len(firstParamField.Names) == 0 {
+				t.Fatalf("constructor %s first parameter has no name", name)
+			}
+			paramName := firstParamField.Names[0].Name
+			if paramName != "resourceID" {
+				t.Errorf("constructor %s first parameter expected 'resourceID', got '%s'", name, paramName)
+			}
+		})
+	}
+
+	if testedCount == 0 {
+		t.Fatal("no constructors found to test")
+	}
 }

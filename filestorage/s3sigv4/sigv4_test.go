@@ -190,8 +190,8 @@ func TestS3sigv4ValidatePreDatabaseUnit(t *testing.T) {
 }
 
 func TestS3sigv4IPAllowedUnit(t *testing.T) {
-	if !core.IsIPAllowed("192.168.1.50", []string{}) {
-		t.Fatal("expected empty allowed IPs to allow all")
+	if core.IsIPAllowed("192.168.1.50", []string{}) {
+		t.Fatal("expected empty allowed IPs to block")
 	}
 	if !core.IsIPAllowed("192.168.1.50", []string{"192.168.1.50"}) {
 		t.Fatal("expected exact IP match to be allowed")

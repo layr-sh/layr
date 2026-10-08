@@ -168,9 +168,7 @@ func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) e
 	}
 
 	configManager.SetMemoryConfig(newConfig)
-	if configManager.kernel != nil && configManager.kernel.EventBus() != nil {
-		configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("image.config", ConfigUpdatedEventData(newConfig)))
-	}
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("image.config", ConfigUpdatedEventData(newConfig)))
 
 	return nil
 }

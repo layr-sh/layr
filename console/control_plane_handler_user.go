@@ -104,9 +104,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateConsoleUser(response
 		return
 	}
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserCreatedEvent(user.ID, UserCreatedEventData(user)))
 
 	core.WriteJSONResponse(responseWriter, http.StatusCreated, user)
 }
@@ -228,9 +226,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConsoleUser(response
 		_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSessionsSQL, userID)
 	}
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserUpdatedEvent(updatedUser.ID, UserUpdatedEventData(updatedUser)))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserUpdatedEvent(updatedUser.ID, UserUpdatedEventData(updatedUser)))
 
 	core.WriteJSONResponse(responseWriter, http.StatusOK, updatedUser)
 }
@@ -273,12 +269,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteConsoleUser(response
 		return
 	}
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserDeletedEvent(userID, UserDeletedEventData{
-			User:                 existingUser,
-			RevokedSessionsCount: sessionCount,
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserDeletedEvent(userID, UserDeletedEventData{
+		User:                 existingUser,
+		RevokedSessionsCount: sessionCount,
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -328,11 +322,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleResetConsoleUserPassword(r
 	const deleteSessionsSQL = `DELETE FROM console.sessions WHERE user_id = $1`
 	_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSessionsSQL, userID)
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserPasswordResetEvent(userID, UserPasswordResetEventData{
-			User: User{ID: userID},
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewUserPasswordResetEvent(userID, UserPasswordResetEventData{
+		User: User{ID: userID},
+	}))
 
 	core.WriteJSONResponse(responseWriter, http.StatusOK, core.Empty{})
 }
@@ -411,13 +403,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteConsoleUserSession(r
 		return
 	}
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(sessionID, SessionRevokedEventData{
-			SessionID: sessionID,
-			UserID:    userID,
-			Reason:    "manual_revocation",
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(sessionID, SessionRevokedEventData{
+		SessionID: sessionID,
+		UserID:    userID,
+		Reason:    "manual_revocation",
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
@@ -443,13 +433,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRevokeConsoleUserSessions(
 		return
 	}
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(userID, SessionRevokedEventData{
-			SessionID: "*",
-			UserID:    userID,
-			Reason:    "bulk_revocation",
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(userID, SessionRevokedEventData{
+		SessionID: "*",
+		UserID:    userID,
+		Reason:    "bulk_revocation",
+	}))
 
 	responseWriter.WriteHeader(http.StatusNoContent)
 }

@@ -192,16 +192,14 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignInConsole(responseWrit
 	const updateLastLoginSQL = `UPDATE console.users SET last_login_at = clock_timestamp(), last_updated_at = clock_timestamp() WHERE id = $1`
 	_, _ = controlPlaneHandler.kernel.DB().Exec(ctx, updateLastLoginSQL, user.ID)
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
-		controlPlaneHandler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
-			ID:        sessionID,
-			User:      user,
-			IPAddress: clientIP,
-			UserAgent: request.UserAgent(),
-			ExpiresAt: expiresAt,
-			CreatedAt: sessionCreatedAt,
-		}))
-	}
+	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
+		ID:        sessionID,
+		User:      user,
+		IPAddress: clientIP,
+		UserAgent: request.UserAgent(),
+		ExpiresAt: expiresAt,
+		CreatedAt: sessionCreatedAt,
+	}))
 
 	signInConsoleResponse := SignInConsoleResponse{
 		User:        user,
@@ -228,7 +226,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignOutConsole(responseWri
 		const deleteSessionSQL = `DELETE FROM console.sessions WHERE session_token_hash = $1`
 		_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSessionSQL, tokenHash)
 
-		if sessionID != "" && controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.EventBus() != nil {
+		if sessionID != "" {
 			controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(sessionID, SessionRevokedEventData{
 				SessionID: sessionID,
 				UserID:    userID,
@@ -290,9 +288,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSetupConsoleMFA(responseWr
 	}
 
 	secret, _ := controlPlaneHandler.totpManager.GenerateSecret()
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.KVStore() != nil {
-		_ = controlPlaneHandler.kernel.KVStore().Set(request.Context(), "console:mfa_setup:"+user.ID, secret, 10*time.Minute)
-	}
+	_ = controlPlaneHandler.kernel.KVStore().Set(request.Context(), "console:mfa_setup:"+user.ID, secret, 10*time.Minute)
 
 	uri := controlPlaneHandler.totpManager.BuildAuthURL(user.Email, secret)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, SetupConsoleMFAResponse{
@@ -317,10 +313,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyConsoleMFA(responseW
 		return
 	}
 
-	var secret string
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.KVStore() != nil {
-		secret, _ = controlPlaneHandler.kernel.KVStore().Get(request.Context(), "console:mfa_setup:"+user.ID)
-	}
+	secret, _ := controlPlaneHandler.kernel.KVStore().Get(request.Context(), "console:mfa_setup:"+user.ID)
 	if secret == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA setup not initiated")
 		return
@@ -335,9 +328,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyConsoleMFA(responseW
 	const updateSecretSQL = `UPDATE console.users SET encrypted_mfa_secret = $1, last_updated_at = clock_timestamp() WHERE id = $2`
 	_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSecretSQL, []byte(encryptedSecret), user.ID)
 
-	if controlPlaneHandler.kernel != nil && controlPlaneHandler.kernel.KVStore() != nil {
-		_ = controlPlaneHandler.kernel.KVStore().Delete(request.Context(), "console:mfa_setup:"+user.ID)
-	}
+	_ = controlPlaneHandler.kernel.KVStore().Delete(request.Context(), "console:mfa_setup:"+user.ID)
 
 	core.WriteJSONResponse(responseWriter, http.StatusOK, core.Empty{})
 }
