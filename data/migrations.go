@@ -305,7 +305,7 @@ DROP SCHEMA IF EXISTS data CASCADE;
 `,
 }
 
-// Migrations contains the DDL migrations for data and reference_data.
+// Migrations contains the database migrations for data.
 var Migrations = []core.DatabaseMigration{
 	DataDatabaseMigration,
 }

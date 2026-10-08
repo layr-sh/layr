@@ -55,7 +55,7 @@ DROP SCHEMA IF EXISTS image CASCADE;
 `,
 }
 
-// Migrations is the list of all image migrations.
+// Migrations contains the database migrations for image.
 var Migrations = []core.DatabaseMigration{
 	ImageDatabaseMigration,
 }

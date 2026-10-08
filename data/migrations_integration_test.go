@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
@@ -15,78 +16,84 @@ func TestDataMigrationsExecutionIntegration(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
+	tablesToCheck := []struct {
+		schema string
+		table  string
+	}{
+		{"data", "config"},
+		{"reference_data", "regions"},
+		{"reference_data", "subregions"},
+		{"reference_data", "countries"},
+		{"reference_data", "currencies"},
+		{"reference_data", "languages"},
+		{"reference_data", "timezones"},
+		{"reference_data", "country_currencies"},
+		{"reference_data", "country_languages"},
+		{"reference_data", "country_timezones"},
+		{"reference_data", "country_borders"},
+		{"reference_data", "country_name_translations"},
+		{"reference_data", "country_native_names"},
+		{"reference_data", "country_demonyms"},
+		{"reference_data", "country_capitals"},
+		{"reference_data", "country_tlds"},
+		{"reference_data", "country_alt_spellings"},
+	}
+	schemasToCheck := []string{"data", "reference_data"}
 
-	// 1. Verify that data.config and reference_data tables exist
+	// 1. Verify that data tables exist
 	t.Run("VerifyDataTablesExist", func(t *testing.T) {
-		var configTableExists bool
-		queryErr := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.tables 
-				WHERE table_schema = 'data' AND table_name = 'config'
-			);
-		`).Scan(&configTableExists)
-		if queryErr != nil || !configTableExists {
-			t.Fatalf("expected data.config table to exist: %v", queryErr)
-		}
-
-		var countriesTableExists bool
-		countriesErr := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.tables 
-				WHERE table_schema = 'reference_data' AND table_name = 'countries'
-			);
-		`).Scan(&countriesTableExists)
-		if countriesErr != nil || !countriesTableExists {
-			t.Fatalf("expected reference_data.countries table to exist: %v", countriesErr)
+		for _, target := range tablesToCheck {
+			var tableExists bool
+			queryErr := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = $1 AND table_name = $2
+				);
+			`, target.schema, target.table).Scan(&tableExists)
+			require.NoError(t, queryErr)
+			require.True(t, tableExists, "expected %s.%s to exist", target.schema, target.table)
 		}
 	})
 
 	// 2. Test rollback of data migrations
 	t.Run("RollbackDataMigrations", func(t *testing.T) {
-		for index := len(Migrations) - 1; index >= 0; index-- {
-			databaseMigration := Migrations[index]
-			if _, downErr := db.Exec(ctx, databaseMigration.DownSQL); downErr != nil {
-				t.Fatalf("failed rollback of migration %d: %v", databaseMigration.Version, downErr)
-			}
+		for idx := len(Migrations) - 1; idx >= 0; idx-- {
+			databaseMigration := Migrations[idx]
+			_, downErr := db.Exec(ctx, databaseMigration.DownSQL)
+			require.NoError(t, downErr)
 		}
 
-		var dataSchemaExists bool
-		if err := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.schemata 
-				WHERE schema_name = 'data'
-			);
-		`).Scan(&dataSchemaExists); err != nil || dataSchemaExists {
-			t.Fatalf("expected data schema to be dropped after rollback, got exists=%v (err: %v)", dataSchemaExists, err)
-		}
-
-		var refSchemaExists bool
-		if err := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.schemata 
-				WHERE schema_name = 'reference_data'
-			);
-		`).Scan(&refSchemaExists); err != nil || refSchemaExists {
-			t.Fatalf("expected reference_data schema to be dropped after rollback, got exists=%v (err: %v)", refSchemaExists, err)
+		// Verify schemas are dropped
+		for _, schemaName := range schemasToCheck {
+			var schemaExists bool
+			err := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.schemata 
+					WHERE schema_name = $1
+				);
+			`, schemaName).Scan(&schemaExists)
+			require.NoError(t, err)
+			require.False(t, schemaExists)
 		}
 	})
 
 	// 3. Re-apply UpSQL
 	t.Run("ReapplyDataMigrations", func(t *testing.T) {
 		for _, databaseMigration := range Migrations {
-			if _, upErr := db.Exec(ctx, databaseMigration.UpSQL); upErr != nil {
-				t.Fatalf("failed re-applying migration %d: %v", databaseMigration.Version, upErr)
-			}
+			_, upErr := db.Exec(ctx, databaseMigration.UpSQL)
+			require.NoError(t, upErr)
 		}
 
-		var configTableExists bool
-		if err := db.QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT FROM information_schema.tables 
-				WHERE table_schema = 'data' AND table_name = 'config'
-			);
-		`).Scan(&configTableExists); err != nil || !configTableExists {
-			t.Fatalf("expected data.config to exist after re-applying migrations")
+		for _, target := range tablesToCheck {
+			var tableExists bool
+			queryErr := db.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_schema = $1 AND table_name = $2
+				);
+			`, target.schema, target.table).Scan(&tableExists)
+			require.NoError(t, queryErr)
+			require.True(t, tableExists, "expected %s.%s to exist after reapply", target.schema, target.table)
 		}
 	})
 }
