@@ -5,28 +5,60 @@ import (
 	"context"
 	"testing"
 
+	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 	"uuid"
 )
 
 func TestFunctionServiceUnit(t *testing.T) {
-	kernel := &core.Kernel{}
-	service := NewService(kernel)
+	t.Parallel()
 
-	require.Equal(t, kernel, service.Kernel())
-	require.NotNil(t, service.ConfigManager())
-	require.NotNil(t, service.Engine())
-	require.NotNil(t, service.BaseHandler())
-	require.NotNil(t, service.ControlPlaneHandler())
+	t.Run("service factory registered and constructs service", func(t *testing.T) {
+		t.Parallel()
+		serviceFactory, ok := core.GetServiceFactory("function")
+		require.True(t, ok)
+		require.NotNil(t, serviceFactory)
 
-	// Test context canceled error on Start
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	cancel()
-	require.Error(t, service.Start(canceledCtx))
+		serviceRunner, createErr := serviceFactory(core.NewTestKernel(nil))
+		require.NoError(t, createErr)
+		require.NotNil(t, serviceRunner)
 
-	// Stop without start does not panic
-	service.Stop()
+		constructedService, isService := serviceRunner.(*Service)
+		require.True(t, isService)
+		require.NotNil(t, constructedService.Kernel())
+		require.NotNil(t, constructedService.ConfigManager())
+		require.NotNil(t, constructedService.Engine())
+		require.NotNil(t, constructedService.BaseHandler())
+		require.NotNil(t, constructedService.ControlPlaneHandler())
+	})
+
+	t.Run("start returns error when context is canceled", func(t *testing.T) {
+		t.Parallel()
+		service := NewService(core.NewTestKernel(nil))
+		require.NotNil(t, service)
+
+		canceledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		startErr := service.Start(canceledCtx)
+		require.Error(t, startErr)
+		require.Contains(t, startErr.Error(), "context canceled before start")
+
+		service.Stop()
+	})
+
+	t.Run("register routes with routers", func(t *testing.T) {
+		t.Parallel()
+		service := NewService(core.NewTestKernel(nil))
+		require.NotNil(t, service)
+
+		baseFuegoEngine := fuego.NewServer()
+		controlPlaneFuegoEngine := fuego.NewServer()
+		baseRouter := core.NewRouter(baseFuegoEngine)
+		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
+		service.RegisterRoutes(baseRouter, controlPlaneRouter)
+	})
 }
 
 func TestFunctionServiceLifecycleAndEventsUnit(t *testing.T) {

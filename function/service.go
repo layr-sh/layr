@@ -10,11 +10,9 @@ import (
 )
 
 func init() {
-	factory := func(kernel *core.Kernel) (core.ServiceRunner, error) {
+	core.RegisterServiceFactory("function", func(kernel *core.Kernel) (core.ServiceRunner, error) {
 		return NewService(kernel), nil
-	}
-
-	core.RegisterServiceFactory("function", factory)
+	})
 }
 
 // Service encapsulates the serverless function execution engine coordinator.

@@ -9,11 +9,9 @@ import (
 )
 
 func init() {
-	factory := func(kernel *core.Kernel) (core.ServiceRunner, error) {
+	core.RegisterServiceFactory("tasks", func(kernel *core.Kernel) (core.ServiceRunner, error) {
 		return NewService(kernel), nil
-	}
-
-	core.RegisterServiceFactory("tasks", factory)
+	})
 }
 
 // Service encapsulates the distributed cron and background task orchestrator service.

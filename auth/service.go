@@ -71,6 +71,10 @@ func NewService(kernel *core.Kernel) *Service {
 
 // Start loads dynamic configuration and initializes HTTP handlers.
 func (service *Service) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before start: %w", err)
+	}
+
 	if err := service.configManager.Load(ctx); err != nil {
 		return fmt.Errorf("failed to load auth config: %w", err)
 	}

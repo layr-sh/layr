@@ -8,11 +8,9 @@ import (
 )
 
 func init() {
-	factory := func(kernel *core.Kernel) (core.ServiceRunner, error) {
+	core.RegisterServiceFactory("image", func(kernel *core.Kernel) (core.ServiceRunner, error) {
 		return NewService(kernel), nil
-	}
-
-	core.RegisterServiceFactory("image", factory)
+	})
 }
 
 // Service encapsulates the Image transformation service coordinator, dependencies, and HTTP handlers.

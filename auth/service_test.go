@@ -6,94 +6,104 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/go-fuego/fuego"
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
 func TestAuthServiceUnit(t *testing.T) {
-	ctx := context.Background()
+	t.Parallel()
 
-	// 1. Verify global service factory registration via init()
-	serviceFactory, exists := core.GetServiceFactory("auth")
-	if !exists || serviceFactory == nil {
-		t.Fatal("expected 'auth' service factory to be registered in core")
-	}
+	t.Run("service factory registered and constructs service", func(t *testing.T) {
+		t.Parallel()
+		serviceFactory, ok := core.GetServiceFactory("auth")
+		require.True(t, ok)
+		require.NotNil(t, serviceFactory)
 
-	// 2. Test Service initialization with dependencies
-	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
-	service := NewService(kernel)
-	if service == nil {
-		t.Fatal("expected NewService with dependencies to return a non-nil Service instance")
-	}
+		serviceRunner, createErr := serviceFactory(core.NewTestKernel(nil))
+		require.NoError(t, createErr)
+		require.NotNil(t, serviceRunner)
 
-	// 3. Test Getters
-	service.Stop()
-	if service.Kernel() == nil {
-		t.Fatal("expected Kernel to return non-nil Kernel")
-	}
-	if service.ConfigManager() == nil {
-		t.Fatal("expected ConfigManager to return a non-nil ConfigManager")
-	}
-	if service.ControlPlaneHandler() == nil {
-		t.Fatal("expected ControlPlaneHandler to return a non-nil ControlPlaneHandler")
-	}
-	if service.BaseHandler() == nil {
-		t.Fatal("expected BaseHandler to return a non-nil Handler")
-	}
-	if service.Hasher() == nil {
-		t.Fatal("expected Hasher to return a non-nil Hasher")
-	}
-	if service.PasskeyManager() == nil {
-		t.Fatal("expected PasskeyManager to return a non-nil PasskeyManager")
-	}
-	if service.TOTPManager() == nil {
-		t.Fatal("expected TOTPManager to return a non-nil TOTPManager")
-	}
-	if service.EmailDispatcher() == nil {
-		t.Fatal("expected EmailDispatcher to return a non-nil EmailDispatcher")
-	}
-	if service.SMSDispatcher() == nil {
-		t.Fatal("expected SMSDispatcher to return a non-nil SMSDispatcher")
-	}
-	if service.HTTPClient() == nil {
-		t.Fatal("expected HTTPClient to return a non-nil HTTPClient")
-	}
-
-	// 4. Test CheckScope branches
-	// Branch A0: AuthContext is a service account -> evaluates HasScope directly
-	m2mAuthedCtx := core.WithAuthContext(ctx, core.AuthContext{
-		ServiceAccountID: "sa_worker_123",
-		JWT: core.JWTClaims{
-			Subject: "sa_worker_123",
-			Role:    "service_role",
-			Scope:   core.ScopeAuthUserRead,
-		},
+		service, isService := serviceRunner.(*Service)
+		require.True(t, isService)
+		require.NotNil(t, service.Kernel())
+		require.NotNil(t, service.ConfigManager())
+		require.NotNil(t, service.ControlPlaneHandler())
+		require.NotNil(t, service.BaseHandler())
+		require.NotNil(t, service.Hasher())
+		require.NotNil(t, service.PasskeyManager())
+		require.NotNil(t, service.TOTPManager())
+		require.NotNil(t, service.EmailDispatcher())
+		require.NotNil(t, service.SMSDispatcher())
+		require.NotNil(t, service.HTTPClient())
+		service.Stop()
 	})
-	m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/v1/test", nil)
-	if !service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserRead) {
-		t.Fatal("expected CheckScope to return true when M2M AuthContext has required scope")
-	}
-	if service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserWrite) {
-		t.Fatal("expected CheckScope to return false when M2M AuthContext lacks required scope")
-	}
 
-	// Branch B: serviceAccountManager present, but request has no service account key -> returns true
-	noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
-	if !service.kernel.ServiceAccountManager().CheckScope(noKeyRequest, "auth:test.scope") {
-		t.Fatal("expected CheckScope to return true when request has no service account key")
-	}
+	t.Run("start returns error when context is canceled", func(t *testing.T) {
+		t.Parallel()
+		service := NewService(core.NewTestKernel(nil))
+		require.NotNil(t, service)
 
-	// Branch C: serviceAccountManager present, request has invalid secret key -> Authenticate fails -> returns false
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
-	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
-	if service.kernel.ServiceAccountManager().CheckScope(invalidKeyRequest, "auth:test.scope") {
-		t.Fatal("expected CheckScope to return false when service account authentication fails")
-	}
+		canceledCtx, cancel := context.WithCancel(context.Background())
+		cancel()
 
-	// 5. Test Start with broken pool (returns error)
-	if err := service.Start(ctx); err == nil {
-		t.Fatal("expected Start with broken pool to fail")
-	}
+		startErr := service.Start(canceledCtx)
+		require.Error(t, startErr)
+		require.Contains(t, startErr.Error(), "context canceled before start")
 
-	// 8. Test Stop
-	service.Stop()
+		service.Stop()
+	})
+
+	t.Run("start returns error with broken database", func(t *testing.T) {
+		t.Parallel()
+		kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+		service := NewService(kernel)
+		require.NotNil(t, service)
+
+		startErr := service.Start(context.Background())
+		require.Error(t, startErr)
+
+		service.Stop()
+	})
+
+	t.Run("register routes with routers", func(t *testing.T) {
+		t.Parallel()
+		service := NewService(core.NewTestKernel(nil))
+		require.NotNil(t, service)
+
+		baseFuegoEngine := fuego.NewServer()
+		controlPlaneFuegoEngine := fuego.NewServer()
+		baseRouter := core.NewRouter(baseFuegoEngine)
+		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
+		service.RegisterRoutes(baseRouter, controlPlaneRouter)
+	})
+
+	t.Run("check scope unit branches", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+		service := NewService(kernel)
+
+		// Branch A0: AuthContext is a service account -> evaluates HasScope directly
+		m2mAuthedCtx := core.WithAuthContext(ctx, core.AuthContext{
+			ServiceAccountID: "sa_worker_123",
+			JWT: core.JWTClaims{
+				Subject: "sa_worker_123",
+				Role:    "service_role",
+				Scope:   core.ScopeAuthUserRead,
+			},
+		})
+		m2mValidRequest := httptest.NewRequestWithContext(m2mAuthedCtx, http.MethodGet, "/v1/test", nil)
+		require.True(t, service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserRead))
+		require.False(t, service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserWrite))
+
+		// Branch B: serviceAccountManager present, but request has no service account key -> returns true
+		noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
+		require.True(t, service.kernel.ServiceAccountManager().CheckScope(noKeyRequest, "auth:test.scope"))
+
+		// Branch C: serviceAccountManager present, request has invalid secret key -> Authenticate fails -> returns false
+		invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
+		invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
+		require.False(t, service.kernel.ServiceAccountManager().CheckScope(invalidKeyRequest, "auth:test.scope"))
+	})
 }
