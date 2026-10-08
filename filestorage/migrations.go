@@ -135,7 +135,7 @@ DROP SCHEMA IF EXISTS file_storage CASCADE;
 `,
 }
 
-// Migrations is the list of all migrations for the file storage subsystem.
+// Migrations contains the database migrations for filestorage.
 var Migrations = []core.DatabaseMigration{
 	FileStorageDatabaseMigration,
 }

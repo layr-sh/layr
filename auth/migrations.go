@@ -109,7 +109,7 @@ DROP SCHEMA IF EXISTS auth CASCADE;
 `,
 }
 
-// Migrations contains the DDL migrations for auth.
+// Migrations contains the database migrations for auth.
 var Migrations = []core.DatabaseMigration{
 	AuthDatabaseMigration,
 }

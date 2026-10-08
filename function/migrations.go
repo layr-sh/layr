@@ -119,7 +119,7 @@ DROP SCHEMA IF EXISTS function CASCADE;
 `,
 }
 
-// Migrations is the list of all function migrations.
+// Migrations contains the database migrations for function.
 var Migrations = []core.DatabaseMigration{
 	FunctionDatabaseMigration,
 }

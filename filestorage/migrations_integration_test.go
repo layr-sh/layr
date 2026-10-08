@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
@@ -15,10 +16,10 @@ func TestFilestorageMigrationsExecutionIntegration(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
+	tablesToCheck := []string{"config", "buckets", "objects", "chunks", "s3_credentials", "multipart_uploads", "multipart_parts"}
 
 	// 1. Verify that file_storage tables exist
 	t.Run("VerifyFileStorageTablesExist", func(t *testing.T) {
-		tablesToCheck := []string{"config", "buckets", "objects", "chunks", "s3_credentials", "multipart_uploads", "multipart_parts"}
 		for _, tableName := range tablesToCheck {
 			var tableExists bool
 			queryErr := db.QueryRow(ctx, `
@@ -27,43 +28,38 @@ func TestFilestorageMigrationsExecutionIntegration(t *testing.T) {
 					WHERE table_schema = 'file_storage' AND table_name = $1
 				);
 			`, tableName).Scan(&tableExists)
-			if queryErr != nil || !tableExists {
-				t.Fatalf("expected file_storage.%s table to exist: %v", tableName, queryErr)
-			}
+			require.NoError(t, queryErr)
+			require.True(t, tableExists, "expected file_storage.%s to exist", tableName)
 		}
 	})
 
 	// 2. Test rollback of file storage migrations
 	t.Run("RollbackFileStorageMigrations", func(t *testing.T) {
-		for index := len(Migrations) - 1; index >= 0; index-- {
-			databaseMigration := Migrations[index]
-			if _, downErr := db.Exec(ctx, databaseMigration.DownSQL); downErr != nil {
-				t.Fatalf("failed rollback of migration %d: %v", databaseMigration.Version, downErr)
-			}
+		for idx := len(Migrations) - 1; idx >= 0; idx-- {
+			databaseMigration := Migrations[idx]
+			_, downErr := db.Exec(ctx, databaseMigration.DownSQL)
+			require.NoError(t, downErr)
 		}
 
-		// Verify file_storage schema was dropped
+		// Verify schema is dropped
 		var schemaExists bool
-		schemaErr := db.QueryRow(ctx, `
+		err := db.QueryRow(ctx, `
 			SELECT EXISTS (
 				SELECT FROM information_schema.schemata 
 				WHERE schema_name = 'file_storage'
 			);
 		`).Scan(&schemaExists)
-		if schemaErr != nil || schemaExists {
-			t.Fatalf("expected file_storage schema to be dropped after rollback, got exists=%v (err: %v)", schemaExists, schemaErr)
-		}
+		require.NoError(t, err)
+		require.False(t, schemaExists)
 	})
 
 	// 3. Re-apply UpSQL
 	t.Run("ReapplyFileStorageMigrations", func(t *testing.T) {
 		for _, databaseMigration := range Migrations {
-			if _, upErr := db.Exec(ctx, databaseMigration.UpSQL); upErr != nil {
-				t.Fatalf("failed re-applying migration %d: %v", databaseMigration.Version, upErr)
-			}
+			_, upErr := db.Exec(ctx, databaseMigration.UpSQL)
+			require.NoError(t, upErr)
 		}
 
-		tablesToCheck := []string{"config", "buckets", "objects", "chunks", "s3_credentials", "multipart_uploads", "multipart_parts"}
 		for _, tableName := range tablesToCheck {
 			var tableExists bool
 			queryErr := db.QueryRow(ctx, `
@@ -72,9 +68,8 @@ func TestFilestorageMigrationsExecutionIntegration(t *testing.T) {
 					WHERE table_schema = 'file_storage' AND table_name = $1
 				);
 			`, tableName).Scan(&tableExists)
-			if queryErr != nil || !tableExists {
-				t.Fatalf("expected file_storage.%s table to exist after reapply: %v", tableName, queryErr)
-			}
+			require.NoError(t, queryErr)
+			require.True(t, tableExists, "expected file_storage.%s to exist after reapply", tableName)
 		}
 	})
 }

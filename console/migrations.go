@@ -1,4 +1,3 @@
-// Package console provides the embedded single-project console user control plane, operational dashboard, and dynamic runtime configuration manager.
 package console
 
 import "layr.sh/core"
@@ -75,7 +74,7 @@ DROP SCHEMA IF EXISTS console CASCADE;
 `,
 }
 
-// Migrations contains all migration definitions for console service.
+// Migrations contains the database migrations for console.
 var Migrations = []core.DatabaseMigration{
 	ConsoleDatabaseMigration,
 }

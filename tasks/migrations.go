@@ -1,4 +1,3 @@
-// Package tasks provides distributed cron and background task orchestration.
 package tasks
 
 import "layr.sh/core"
@@ -79,7 +78,7 @@ DROP SCHEMA IF EXISTS tasks CASCADE;
 `,
 }
 
-// Migrations is the list of all tasks migrations.
+// Migrations contains the database migrations for tasks.
 var Migrations = []core.DatabaseMigration{
 	TasksDatabaseMigration,
 }

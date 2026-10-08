@@ -3,30 +3,22 @@ package function
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestFunctionMigrationsDefinitionUnit(t *testing.T) {
-	if len(Migrations) == 0 {
-		t.Fatal("expected at least one migration defined in Migrations")
-	}
+	t.Parallel()
+
+	require.NotEmpty(t, Migrations)
 
 	for _, databaseMigration := range Migrations {
 		t.Run(fmt.Sprintf("Version_%d", databaseMigration.Version), func(t *testing.T) {
-			if databaseMigration.Service != "function" {
-				t.Fatalf("expected Service 'function', got %q", databaseMigration.Service)
-			}
-			if databaseMigration.Version <= 0 {
-				t.Fatalf("expected positive migration version, got %d", databaseMigration.Version)
-			}
-			if databaseMigration.Description == "" {
-				t.Fatalf("expected non-empty description for migration %d", databaseMigration.Version)
-			}
-			if databaseMigration.UpSQL == "" {
-				t.Fatalf("expected non-empty UpSQL for migration version %d", databaseMigration.Version)
-			}
-			if databaseMigration.DownSQL == "" {
-				t.Fatalf("expected non-empty DownSQL for migration version %d", databaseMigration.Version)
-			}
+			require.Equal(t, "function", databaseMigration.Service)
+			require.Positive(t, databaseMigration.Version)
+			require.NotEmpty(t, databaseMigration.Description)
+			require.NotEmpty(t, databaseMigration.UpSQL)
+			require.NotEmpty(t, databaseMigration.DownSQL)
 		})
 	}
 }
