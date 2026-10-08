@@ -9,7 +9,7 @@ import (
 
 // RegisterRoutes registers all Function data plane and administrative control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	if service.kernel != nil && service.kernel.Server() != nil {
+	if service.kernel.Server() != nil {
 		service.RegisterHostRoutes(service.kernel.Server())
 	}
 	if baseRouter != nil {

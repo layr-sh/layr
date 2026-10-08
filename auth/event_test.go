@@ -10,6 +10,8 @@ import (
 )
 
 func TestAuthEventsUnit(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now().UTC()
 	passwordHash := "secret-hashed-password"
 	email := "test@example.com"
