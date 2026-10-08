@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS tasks.jobs (
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_jobs_enabled_next ON tasks.jobs(next_run_at) WHERE is_enabled = true;
+CREATE INDEX IF NOT EXISTS idx_jobs_enabled_next ON tasks.jobs(next_run_at) WHERE is_enabled = true;
 
 -- 3. Execution Queue
 CREATE TABLE IF NOT EXISTS tasks.executions (
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tasks.executions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_executions_dispatch ON tasks.executions(status, run_at) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_executions_dispatch ON tasks.executions(status, run_at) WHERE status = 'pending';
 
 -- 4. Historical Execution Audit Logs
 CREATE TABLE IF NOT EXISTS tasks.execution_logs (
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS tasks.execution_logs (
     executed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_execution_logs_time ON tasks.execution_logs(job_id, executed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_execution_logs_time ON tasks.execution_logs(job_id, executed_at DESC);
 `,
 	DownSQL: `
 DROP SCHEMA IF EXISTS tasks CASCADE;

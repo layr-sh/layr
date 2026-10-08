@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS auth.users (
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_users_email ON auth.users(email);
-CREATE INDEX IF NOT EXISTS idx_layr_users_phone ON auth.users(phone);
+CREATE INDEX IF NOT EXISTS idx_users_email ON auth.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON auth.users(phone);
 
 -- 3. Federated OAuth Identities (Google, GitHub, Apple, etc.)
 CREATE TABLE IF NOT EXISTS auth.identities (
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS auth.identities (
     UNIQUE(provider, provider_user_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_identities_user_id ON auth.identities(user_id);
+CREATE INDEX IF NOT EXISTS idx_identities_user_id ON auth.identities(user_id);
 
 -- 4. Active Refresh Sessions
 CREATE TABLE IF NOT EXISTS auth.sessions (
@@ -72,9 +72,9 @@ CREATE TABLE IF NOT EXISTS auth.sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_sessions_user ON auth.sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_layr_sessions_hash ON auth.sessions(refresh_token_hash);
-CREATE INDEX IF NOT EXISTS idx_layr_sessions_client_id ON auth.sessions(client_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth.sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_hash ON auth.sessions(refresh_token_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_client_id ON auth.sessions(client_id);
 
 -- 5. WebAuthn Passkey Credentials
 CREATE TABLE IF NOT EXISTS auth.passkeys (
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS auth.passkeys (
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_passkeys_user ON auth.passkeys(user_id);
+CREATE INDEX IF NOT EXISTS idx_passkeys_user ON auth.passkeys(user_id);
 
 -- 6. OTP & Verification Tokens
 CREATE TABLE IF NOT EXISTS auth.otps (
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS auth.otps (
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
-CREATE INDEX IF NOT EXISTS idx_layr_otps_recipient ON auth.otps(recipient, purpose);
+CREATE INDEX IF NOT EXISTS idx_otps_recipient ON auth.otps(recipient, purpose);
 `,
 	DownSQL: `
 DROP SCHEMA IF EXISTS auth CASCADE;
