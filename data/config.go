@@ -183,6 +183,7 @@ func (configManager *ConfigManager) Get() Config {
 
 // Load fetches the runtime config from PostgreSQL or initializes the default if not present.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
+	log.Debug("loading data configuration from database")
 	var rawJSON []byte
 	const selectSQLStatement = `SELECT value FROM data.config WHERE key = $1`
 	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)

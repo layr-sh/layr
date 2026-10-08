@@ -84,7 +84,7 @@ func (service *Service) Start(ctx context.Context) error {
 	}
 
 	if err := service.configManager.Load(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to load data config: %w", err)
 	}
 
 	if err := referencedata.Seed(ctx, service.kernel); err != nil {

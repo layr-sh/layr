@@ -130,3 +130,16 @@ func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
 		t.Fatalf("expected 200 on POST /cache/invalidate with pattern, got %d", patternInvalidateResponseRecorder.Code)
 	}
 }
+
+func TestDataControlPlaneHandlerConfigDatabaseErrorUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+
+	validUpdateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":500}}`)))
+	validResponseRecorder := httptest.NewRecorder()
+	controlPlaneHandler.handleUpdateConfig(validResponseRecorder, validUpdateRequest)
+	if validResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for database error on config update, got %d", validResponseRecorder.Code)
+	}
+}

@@ -89,6 +89,7 @@ func (configManager *ConfigManager) SetMemoryConfig(config Config) {
 
 // Load fetches the runtime config from PostgreSQL or initializes the default if not present.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
+	log.Debug("loading file storage configuration from database")
 	var rawJSON []byte
 	const selectSQLStatement = `SELECT value FROM file_storage.config WHERE key = $1`
 	scanErr := configManager.kernel.DB().QueryRow(ctx, selectSQLStatement, ConfigKey).Scan(&rawJSON)

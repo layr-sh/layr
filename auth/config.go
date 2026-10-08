@@ -582,7 +582,7 @@ func (configManager *ConfigManager) SetMemoryConfig(updatedConfig Config) {
 
 // Load fetches the configuration from auth.config table.
 func (configManager *ConfigManager) Load(ctx context.Context) error {
-	log.Tracef("loading auth configuration from database")
+	log.Debug("loading auth configuration from database")
 
 	var rawJSON []byte
 	err := configManager.kernel.DB().QueryRow(ctx, "SELECT value FROM auth.config WHERE key = $1", ConfigKey).Scan(&rawJSON)
@@ -605,18 +605,16 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 	}
 
 	configManager.SetMemoryConfig(loadedConfig)
-	log.Debugf("successfully loaded and parsed auth config from database")
 	return nil
 }
 
 // Set persists the configuration to auth.config table and updates memory snapshot.
 func (configManager *ConfigManager) Set(ctx context.Context, updatedConfig Config) error {
-	log.Tracef("saving auth configuration to database")
-
 	if err := updatedConfig.Validate(); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
 
+	previousConfig := configManager.Get()
 	configManager.SetMemoryConfig(updatedConfig)
 	activeConfig := configManager.Get()
 
@@ -629,11 +627,11 @@ func (configManager *ConfigManager) Set(ctx context.Context, updatedConfig Confi
 		SET value = EXCLUDED.value, last_updated_at = clock_timestamp();
 	`
 	if _, err := configManager.kernel.DB().Exec(ctx, upsertSQLStatement, ConfigKey, rawJSON); err != nil {
+		configManager.SetMemoryConfig(previousConfig)
 		return fmt.Errorf("failed to persist auth.config: %w", err)
 	}
 
 	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("auth.config", ConfigUpdatedEventData(configManager.GetUnencrypted())))
-	log.Debugf("successfully persisted auth config to database")
 	return nil
 }
 
