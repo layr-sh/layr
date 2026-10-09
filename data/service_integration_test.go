@@ -240,9 +240,6 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
 
-	// Test nil safety
-	dataService.RegisterRoutes(nil, nil)
-
 	// Register actual routes
 	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
 

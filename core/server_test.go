@@ -28,6 +28,8 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	if server.Kernel() == nil {
 		t.Fatal("expected non-nil Kernel from server.Kernel()")
 	}
+	AssertRouterRoutesCompliance(t, server.BaseRouter())
+	AssertRouterRoutesCompliance(t, server.ControlPlaneRouter())
 
 	// Test /healthz
 	healthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)

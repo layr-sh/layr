@@ -8,12 +8,8 @@ import (
 
 // RegisterRoutes registers all Data service REST and OpenAPI 3.1 endpoints on public and control plane routers.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	if baseRouter != nil {
-		service.registerBaseRoutes(baseRouter)
-	}
-	if controlPlaneRouter != nil {
-		service.registerControlPlaneRoutes(controlPlaneRouter)
-	}
+	service.registerBaseRoutes(baseRouter)
+	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {

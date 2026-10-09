@@ -12,12 +12,8 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 	if service.kernel.Server() != nil {
 		service.RegisterHostRoutes(service.kernel.Server())
 	}
-	if baseRouter != nil {
-		service.registerBaseRoutes(baseRouter)
-	}
-	if controlPlaneRouter != nil {
-		service.registerControlPlaneRoutes(controlPlaneRouter)
-	}
+	service.registerBaseRoutes(baseRouter)
+	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {

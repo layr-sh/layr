@@ -9,9 +9,7 @@ import (
 
 // RegisterRoutes registers all Console control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	if controlPlaneRouter != nil {
-		service.registerControlPlaneRoutes(controlPlaneRouter)
-	}
+	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
@@ -40,7 +38,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteDescription("Authenticates a console user with credentials and optional MFA, issuing session cookie."),
 		core.RouteOperationID("console__auth__sign_in"),
 		core.RouteSDKGroupName("console", "auth"),
-		core.RouteSDKMethodName("signIn"),
+		core.RouteSDKMethodName("sign_in"),
 	)
 	core.PostRoute[core.Empty, core.Empty](router, "/v1/_/console/sign-out", service.controlPlaneHandler.handleSignOutConsole,
 		core.RouteTag("Console Auth"),
@@ -50,7 +48,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteNoContentResponse("Signed out"),
 		core.RouteOperationID("console__auth__sign_out"),
 		core.RouteSDKGroupName("console", "auth"),
-		core.RouteSDKMethodName("signOut"),
+		core.RouteSDKMethodName("sign_out"),
 	)
 	core.GetRoute[GetConsoleSessionResponse](router, "/v1/_/console/session", service.controlPlaneHandler.handleGetConsoleSession,
 		core.RouteTag("Console Auth"),
@@ -58,7 +56,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteDescription("Returns operator profile and granted scopes for active console session."),
 		core.RouteOperationID("console__auth__session"),
 		core.RouteSDKGroupName("console", "auth"),
-		core.RouteSDKMethodName("getSession"),
+		core.RouteSDKMethodName("session"),
 	)
 	core.PostRoute[SetupConsoleMFAResponse, core.Empty](router, "/v1/_/console/mfa/setup", service.controlPlaneHandler.handleSetupConsoleMFA,
 		core.RouteTag("Console MFA"),
@@ -67,7 +65,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteNoRequestBody(),
 		core.RouteOperationID("console__mfa__setup"),
 		core.RouteSDKGroupName("console", "mfa"),
-		core.RouteSDKMethodName("setupMFA"),
+		core.RouteSDKMethodName("setup"),
 	)
 	core.PostRoute[core.Empty, VerifyConsoleMFAInput](router, "/v1/_/console/mfa/verify", service.controlPlaneHandler.handleVerifyConsoleMFA,
 		core.RouteTag("Console MFA"),
@@ -75,7 +73,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteDescription("Verifies initial passcode to complete MFA activation."),
 		core.RouteOperationID("console__mfa__verify"),
 		core.RouteSDKGroupName("console", "mfa"),
-		core.RouteSDKMethodName("verifyMFA"),
+		core.RouteSDKMethodName("verify"),
 	)
 	core.DeleteRoute[core.Empty](router, "/v1/_/console/mfa", service.controlPlaneHandler.handleDisableConsoleMFA,
 		core.RouteTag("Console MFA"),
@@ -84,7 +82,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteNoContentResponse("MFA disabled"),
 		core.RouteOperationID("console__mfa__disable"),
 		core.RouteSDKGroupName("console", "mfa"),
-		core.RouteSDKMethodName("disableMFA"),
+		core.RouteSDKMethodName("disable"),
 	)
 
 	// 3. Console Operator Accounts Management (Guarded by console:user.read / console:user.write)
@@ -136,7 +134,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteDescription("Rotates user password and revokes all active operator sessions."),
 		core.RouteOperationID("console__users__password"),
 		core.RouteSDKGroupName("console", "users"),
-		core.RouteSDKMethodName("resetPassword"),
+		core.RouteSDKMethodName("password"),
 	)
 
 	// 4. Console Operator Active Sessions Management
@@ -145,8 +143,8 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSummary("List active operator sessions"),
 		core.RouteDescription("Returns active sessions for a console user."),
 		core.RouteOperationID("console__users__sessions__list"),
-		core.RouteSDKGroupName("console", "users"),
-		core.RouteSDKMethodName("listSessions"),
+		core.RouteSDKGroupName("console", "users", "sessions"),
+		core.RouteSDKMethodName("list"),
 	)
 	core.DeleteRoute[core.Empty](router, "/v1/_/console/users/{user_id}/sessions/{session_id}", service.controlPlaneHandler.handleDeleteConsoleUserSession,
 		core.RouteTag("Console Users"),
@@ -154,8 +152,8 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteDescription("Terminates a single console session."),
 		core.RouteNoContentResponse("Session revoked"),
 		core.RouteOperationID("console__users__sessions__delete"),
-		core.RouteSDKGroupName("console", "users"),
-		core.RouteSDKMethodName("deleteSession"),
+		core.RouteSDKGroupName("console", "users", "sessions"),
+		core.RouteSDKMethodName("delete"),
 	)
 	core.PostRoute[core.Empty, core.Empty](router, "/v1/_/console/users/{user_id}/sessions/revoke", service.controlPlaneHandler.handleRevokeConsoleUserSessions,
 		core.RouteTag("Console Users"),
@@ -164,7 +162,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteNoRequestBody(),
 		core.RouteNoContentResponse("Sessions revoked"),
 		core.RouteOperationID("console__users__sessions__revoke"),
-		core.RouteSDKGroupName("console", "users"),
-		core.RouteSDKMethodName("revokeSessions"),
+		core.RouteSDKGroupName("console", "users", "sessions"),
+		core.RouteSDKMethodName("revoke"),
 	)
 }

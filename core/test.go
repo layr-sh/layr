@@ -2,8 +2,11 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -421,4 +424,76 @@ func WithTestAuthClaims(request *http.Request, jwtClaims JWTClaims) *http.Reques
 		JWT:    jwtClaims,
 	}
 	return request.WithContext(WithAuthContext(request.Context(), authContext))
+}
+
+var snakeCasePattern = regexp.MustCompile(`^[a-z0-9]+(_[a-z0-9]+)*$`)
+
+// ValidateRouterRoutesCompliance checks that all OpenAPI routes registered on the router conform to:
+// 1. RouteOperationID is present, delimited by "__", with all segments in snake_case.
+// 2. RouteSDKGroupName matches the operation ID segments minus the last word, all in snake_case.
+// 3. RouteSDKMethodName matches the last word from the operation ID, in snake_case.
+func ValidateRouterRoutesCompliance(router *Router) error {
+	openAPISpec := router.OutputOpenAPISpec()
+	for path, pathItem := range openAPISpec.Paths.Map() {
+		for method, operation := range pathItem.Operations() {
+			if operation.OperationID == "" {
+				return fmt.Errorf("missing RouteOperationID on %s %s", method, path)
+			}
+			parts := strings.Split(operation.OperationID, "__")
+			for _, part := range parts {
+				if !snakeCasePattern.MatchString(part) {
+					return fmt.Errorf("operation ID segment %q in %q on %s %s must be snake_case", part, operation.OperationID, method, path)
+				}
+			}
+			expectedGroups := parts[:len(parts)-1]
+			expectedMethod := parts[len(parts)-1]
+
+			rawGroups, hasGroups := operation.Extensions["x-sdk-group-name"]
+			if !hasGroups {
+				return fmt.Errorf("missing RouteSDKGroupName (x-sdk-group-name) on %s %s (operation %s)", method, path, operation.OperationID)
+			}
+
+			var actualGroups []string
+			switch g := rawGroups.(type) {
+			case []string:
+				actualGroups = g
+			case []any:
+				for _, item := range g {
+					if str, ok := item.(string); ok {
+						actualGroups = append(actualGroups, str)
+					}
+				}
+			}
+
+			if len(expectedGroups) != len(actualGroups) {
+				return fmt.Errorf("sdk group name length mismatch on %s: expected %v, got %v", operation.OperationID, expectedGroups, actualGroups)
+			}
+			for i, eg := range expectedGroups {
+				if eg != actualGroups[i] {
+					return fmt.Errorf("sdk group name mismatch on %s: expected %v, got %v", operation.OperationID, expectedGroups, actualGroups)
+				}
+			}
+
+			rawMethod, hasMethod := operation.Extensions["x-sdk-method-name"]
+			if !hasMethod {
+				return fmt.Errorf("missing RouteSDKMethodName (x-sdk-method-name) on %s %s (operation %s)", method, path, operation.OperationID)
+			}
+			actualMethod, ok := rawMethod.(string)
+			if !ok {
+				return fmt.Errorf("x-sdk-method-name must be string on %s", operation.OperationID)
+			}
+			if actualMethod != expectedMethod {
+				return fmt.Errorf("sdk method name mismatch on %s: expected %q, got %q", operation.OperationID, expectedMethod, actualMethod)
+			}
+		}
+	}
+	return nil
+}
+
+// AssertRouterRoutesCompliance verifies that all OpenAPI routes registered on the router conform to SDK naming standards.
+func AssertRouterRoutesCompliance(t testing.TB, router *Router) {
+	t.Helper()
+	if err := ValidateRouterRoutesCompliance(router); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -7,12 +7,8 @@ import (
 
 // RegisterRoutes registers all Auth service REST and OpenAPI 3.1 endpoints on public and control plane routers.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	if baseRouter != nil {
-		service.registerBaseRoutes(baseRouter)
-	}
-	if controlPlaneRouter != nil {
-		service.registerControlPlaneRoutes(controlPlaneRouter)
-	}
+	service.registerBaseRoutes(baseRouter)
+	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {
@@ -23,7 +19,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Public OpenID Connect discovery metadata document defining issuer, authorization, token, and JWKS endpoints."),
 		core.RouteOperationID("auth__openid_configuration"),
 		core.RouteSDKGroupName("auth"),
-		core.RouteSDKMethodName("openidConfiguration"),
+		core.RouteSDKMethodName("openid_configuration"),
 	)
 	core.GetRoute[core.JWKS](router, "/.well-known/jwks.json", service.baseHandler.handleGetJWKS,
 		core.RouteTag("OpenID Connect"),
@@ -41,7 +37,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Issues an Ed25519 JWT access token and refresh token for an anonymous guest user with null email/phone and is_anonymous set to true."),
 		core.RouteOperationID("auth__anonymous__sign_in"),
 		core.RouteSDKGroupName("auth", "anonymous"),
-		core.RouteSDKMethodName("signIn"),
+		core.RouteSDKMethodName("sign_in"),
 	)
 
 	// 3. Password Auth
@@ -51,7 +47,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Registers a new application user account with argon2id password hashing, optional auto-sign-in, and welcome email verification."),
 		core.RouteOperationID("auth__sign_up"),
 		core.RouteSDKGroupName("auth"),
-		core.RouteSDKMethodName("signUp"),
+		core.RouteSDKMethodName("sign_up"),
 	)
 	core.PostRoute[AuthTokenResponse, SignInInput](router, "/v1/auth/sign-in", service.baseHandler.handleSignIn,
 		core.RouteTag("Authentication"),
@@ -59,7 +55,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Authenticates an application user with email/phone and password, returning an Ed25519 JWT access token, rotated refresh token, and custom claims resolved via public.auth_claims."),
 		core.RouteOperationID("auth__sign_in"),
 		core.RouteSDKGroupName("auth"),
-		core.RouteSDKMethodName("signIn"),
+		core.RouteSDKMethodName("sign_in"),
 	)
 	core.PostRoute[core.Empty, core.Empty](router, "/v1/auth/sign-out", service.baseHandler.handleSignOut,
 		core.RouteTag("Authentication"),
@@ -69,7 +65,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteNoContentResponse("Signed out successfully"),
 		core.RouteOperationID("auth__sign_out"),
 		core.RouteSDKGroupName("auth"),
-		core.RouteSDKMethodName("signOut"),
+		core.RouteSDKMethodName("sign_out"),
 	)
 	core.PostRoute[AuthTokenResponse, RefreshTokenInput](router, "/v1/auth/token/refresh", service.baseHandler.handleRefreshToken,
 		core.RouteTag("Authentication"),
@@ -85,7 +81,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Initiates password recovery by dispatching a single-use verification code to the registered email or SMS number."),
 		core.RouteNoContentResponse("Password reset code sent"),
 		core.RouteOperationID("auth__password_reset__request"),
-		core.RouteSDKGroupName("auth", "passwordReset"),
+		core.RouteSDKGroupName("auth", "password_reset"),
 		core.RouteSDKMethodName("request"),
 	)
 	core.PostRoute[core.Empty, ConfirmPasswordResetInput](router, "/v1/auth/password-reset/confirm", service.baseHandler.handleConfirmPasswordReset,
@@ -94,7 +90,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Verifies the password recovery code and updates the user's password using argon2id key derivation."),
 		core.RouteNoContentResponse("Password reset confirmed"),
 		core.RouteOperationID("auth__password_reset__confirm"),
-		core.RouteSDKGroupName("auth", "passwordReset"),
+		core.RouteSDKGroupName("auth", "password_reset"),
 		core.RouteSDKMethodName("confirm"),
 	)
 
@@ -104,7 +100,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSummary("Begin WebAuthn passkey registration ceremony"),
 		core.RouteDescription("Begins the WebAuthn ceremony for registering a hardware or biometric passkey, returning a cryptographic challenge."),
 		core.RouteOperationID("auth__passkeys__sign_up__begin"),
-		core.RouteSDKGroupName("auth", "passkeys", "signUp"),
+		core.RouteSDKGroupName("auth", "passkeys", "sign_up"),
 		core.RouteSDKMethodName("begin"),
 	)
 	core.PostRoute[core.Empty, VerifyPasskeySignUpInput](router, "/v1/auth/passkeys/sign-up/verify", service.baseHandler.handleVerifyPasskeySignUp,
@@ -113,7 +109,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Validates the WebAuthn attestation response and stores the public key credential in auth.identities."),
 		core.RouteNoContentResponse("Passkey verified and registered"),
 		core.RouteOperationID("auth__passkeys__sign_up__verify"),
-		core.RouteSDKGroupName("auth", "passkeys", "signUp"),
+		core.RouteSDKGroupName("auth", "passkeys", "sign_up"),
 		core.RouteSDKMethodName("verify"),
 	)
 	core.PostRoute[passkey.SignInOptions, core.Empty](router, "/v1/auth/passkeys/sign-in", service.baseHandler.handleBeginPasskeySignIn,
@@ -122,7 +118,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteDescription("Begins WebAuthn passkey authentication, generating an assertion challenge for the user's registered credential."),
 		core.RouteNoRequestBody(),
 		core.RouteOperationID("auth__passkeys__sign_in__begin"),
-		core.RouteSDKGroupName("auth", "passkeys", "signIn"),
+		core.RouteSDKGroupName("auth", "passkeys", "sign_in"),
 		core.RouteSDKMethodName("begin"),
 	)
 	core.PostRoute[AuthTokenResponse, VerifyPasskeySignInInput](router, "/v1/auth/passkeys/sign-in/verify", service.baseHandler.handleVerifyPasskeySignIn,
@@ -130,7 +126,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSummary("Verify WebAuthn passkey assertion signature"),
 		core.RouteDescription("Verifies WebAuthn assertion signature against stored public key and issues an authenticated session."),
 		core.RouteOperationID("auth__passkeys__sign_in__verify"),
-		core.RouteSDKGroupName("auth", "passkeys", "signIn"),
+		core.RouteSDKGroupName("auth", "passkeys", "sign_in"),
 		core.RouteSDKMethodName("verify"),
 	)
 	core.GetRoute[ListPasskeysResponse](router, "/v1/auth/user/passkeys", service.baseHandler.handleListPasskeys,
@@ -284,7 +280,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteNoRequestBody(),
 		core.RouteOperationID("auth__sessions__revoke_others"),
 		core.RouteSDKGroupName("auth", "sessions"),
-		core.RouteSDKMethodName("revokeOthers"),
+		core.RouteSDKMethodName("revoke_others"),
 	)
 
 	// Session management user-prefixed aliases

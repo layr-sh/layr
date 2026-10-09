@@ -10,77 +10,16 @@ import (
 func TestDataRouterUnit(t *testing.T) {
 	service := NewService(core.NewTestKernel(nil))
 
-	// 1. Test nil safety
-	service.RegisterRoutes(nil, nil)
-
-	isolatedBaseRouter := core.NewRouter(fuego.NewServer())
-	service.RegisterRoutes(isolatedBaseRouter, nil)
-
-	isolatedControlPlaneRouter := core.NewRouter(fuego.NewServer())
-	service.RegisterRoutes(nil, isolatedControlPlaneRouter)
-
-	// 2. Test nil handler safety
-	nilHandlerService := &Service{}
-	nilHandlerBaseRouter := core.NewRouter(fuego.NewServer())
-	nilHandlerControlPlaneRouter := core.NewRouter(fuego.NewServer())
-	nilHandlerService.RegisterRoutes(nilHandlerBaseRouter, nilHandlerControlPlaneRouter)
-
-	// 3. Register both public and control plane routes on fresh routers
+	// 1. Register routes on routers
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
 	service.RegisterRoutes(baseRouter, controlPlaneRouter)
 
-	// 4. Inspect generated OpenAPI specifications
-	baseOpenAPISpec := baseRouter.OutputOpenAPISpec()
-	if baseOpenAPISpec == nil {
-		t.Fatal("expected non-nil public OpenAPI specification")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}") == nil {
-		t.Fatal("expected /v1/data/{schema_name}/{table_name} route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/{schema_name}/{table_name}/{record_id}") == nil {
-		t.Fatal("expected /v1/data/{schema_name}/{table_name}/{record_id} route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/kv/{key}") == nil {
-		t.Fatal("expected /v1/data/kv/{key} route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/kv/mget") == nil {
-		t.Fatal("expected /v1/data/kv/mget route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/kv/mset") == nil {
-		t.Fatal("expected /v1/data/kv/mset route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/data/kv/increment") == nil {
-		t.Fatal("expected /v1/data/kv/increment route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/graphql") == nil {
-		t.Fatal("expected /v1/graphql route in public OpenAPI spec")
-	}
-	if baseOpenAPISpec.Paths.Value("/v1/realtime") == nil {
-		t.Fatal("expected /v1/realtime route in public OpenAPI spec")
-	}
+	// 2. Verify SDK routes naming compliance (snake_case, operation ID namespacing)
+	core.AssertRouterRoutesCompliance(t, baseRouter)
+	core.AssertRouterRoutesCompliance(t, controlPlaneRouter)
 
-	controlPlaneOpenAPISpec := controlPlaneRouter.OutputOpenAPISpec()
-	if controlPlaneOpenAPISpec == nil {
-		t.Fatal("expected non-nil control plane OpenAPI specification")
-	}
-	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/config") == nil {
-		t.Fatal("expected /v1/_/data/config route in control plane OpenAPI spec")
-	}
-	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/cache/flush") == nil {
-		t.Fatal("expected /v1/_/data/cache/flush route in control plane OpenAPI spec")
-	}
-	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/cache/invalidate") == nil {
-		t.Fatal("expected /v1/_/data/cache/invalidate route in control plane OpenAPI spec")
-	}
-	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/tables") == nil {
-		t.Fatal("expected /v1/_/data/tables route in control plane OpenAPI spec")
-	}
-	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/sql") == nil {
-		t.Fatal("expected /v1/_/data/sql route in control plane OpenAPI spec")
-	}
-
-	// 5. Verify payload and response struct definitions
+	// 6. Verify payload and response struct definitions
 	_ = Record{ID: "uuid", Properties: map[string]string{"key": "value"}}
 	_ = ListRecordsResponse{Data: []Record{{ID: "1"}}}
 	_ = GetRecordResponse{Data: Record{ID: "1"}}

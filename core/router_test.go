@@ -28,25 +28,25 @@ func TestCoreRouterWrapperMethodsUnit(t *testing.T) {
 	GetRoute[string](router, "/test-get", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok-get"))
-	}, RouteTag("Test"), RouteSummary("Test GET"), RouteDescription("Test GET Desc"), RouteOperationID("testGet"))
+	}, RouteTag("Test"), RouteSummary("Test GET"), RouteDescription("Test GET Desc"), RouteOperationID("test_get"))
 	PostRoute[string, map[string]string](router, "/test-post", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusCreated)
 		_, _ = responseWriter.Write([]byte("ok-post"))
-	}, RouteTag("Test"), RouteSummary("Test POST"), RouteDescription("Test POST Desc"), RouteOperationID("testPost"))
+	}, RouteTag("Test"), RouteSummary("Test POST"), RouteDescription("Test POST Desc"), RouteOperationID("test_post"))
 	PutRoute[string, map[string]string](router, "/test-put", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok-put"))
-	}, RouteTag("Test"), RouteSummary("Test PUT"), RouteDescription("Test PUT Desc"), RouteOperationID("testPut"))
+	}, RouteTag("Test"), RouteSummary("Test PUT"), RouteDescription("Test PUT Desc"), RouteOperationID("test_put"))
 	DeleteRoute[string](router, "/test-delete", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusNoContent)
-	}, RouteTag("Test"), RouteSummary("Test DELETE"), RouteDescription("Test DELETE Desc"), RouteOperationID("testDelete"))
+	}, RouteTag("Test"), RouteSummary("Test DELETE"), RouteDescription("Test DELETE Desc"), RouteOperationID("test_delete"))
 	HeadRoute[string](router, "/test-head", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
-	}, RouteTag("Test"), RouteSummary("Test HEAD"), RouteDescription("Test HEAD Desc"), RouteOperationID("testHead"))
+	}, RouteTag("Test"), RouteSummary("Test HEAD"), RouteDescription("Test HEAD Desc"), RouteOperationID("test_head"))
 	PatchRoute[string, map[string]string](router, "/test-patch", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok-patch"))
-	}, RouteTag("Test"), RouteSummary("Test PATCH"), RouteDescription("Test PATCH Desc"), RouteOperationID("testPatch"))
+	}, RouteTag("Test"), RouteSummary("Test PATCH"), RouteDescription("Test PATCH Desc"), RouteOperationID("test_patch"))
 
 	// Test invoking registered routes
 	getRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test-get", nil)
@@ -110,7 +110,7 @@ func TestCoreRouterHelpersAndSanitizeOpenAPIUnit(t *testing.T) {
 		RouteResponseModel(http.StatusOK, "model response", map[string]string{}),
 		RouteRequestBodyModel(map[string]string{}, "application/json"),
 		RouteSDKGroupName("data", "cache"),
-		RouteSDKMethodName("testHelper"),
+		RouteSDKMethodName("test_helper"),
 	)
 
 	// Test calling on raw BaseRoute with nil Responses and Extensions to cover initialization
@@ -120,12 +120,12 @@ func TestCoreRouterHelpersAndSanitizeOpenAPIUnit(t *testing.T) {
 	RouteNoContentResponse("raw no content")(secondEmptyBaseRoute)
 	thirdEmptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
 	RouteSDKGroupName("data", "cache")(thirdEmptyBaseRoute)
-	RouteSDKMethodName("customMethod")(thirdEmptyBaseRoute)
+	RouteSDKMethodName("custom_method")(thirdEmptyBaseRoute)
 	// Call again with non-nil Extensions
 	RouteSDKGroupName("data", "store")(thirdEmptyBaseRoute)
-	RouteSDKMethodName("anotherMethod")(thirdEmptyBaseRoute)
+	RouteSDKMethodName("another_method")(thirdEmptyBaseRoute)
 	fourthEmptyBaseRoute := &fuego.BaseRoute{Operation: &openapi3.Operation{}}
-	RouteSDKMethodName("standaloneMethod")(fourthEmptyBaseRoute)
+	RouteSDKMethodName("standalone_method")(fourthEmptyBaseRoute)
 	RouteNoRequestBody()(fourthEmptyBaseRoute)
 
 	// Router OutputOpenAPISpec test on empty engine
@@ -171,4 +171,136 @@ func TestCoreRouterTypedMethodsUnit(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCoreValidateRouterRoutesComplianceUnit(t *testing.T) {
+	dummyHandler := func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusOK)
+	}
+
+	// 1. Success case
+	validRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](validRouter, "/valid", dummyHandler,
+		RouteOperationID("service__sub_module__action_name"),
+		RouteSDKGroupName("service", "sub_module"),
+		RouteSDKMethodName("action_name"),
+	)
+	AssertRouterRoutesCompliance(t, validRouter)
+
+	// 1b. Success case with []any group extensions
+	anyGroupRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](anyGroupRouter, "/any-group", dummyHandler,
+		RouteOperationID("service__sub_module__action_name"),
+		func(baseRoute *fuego.BaseRoute) {
+			if baseRoute.Operation.Extensions == nil {
+				baseRoute.Operation.Extensions = make(map[string]any)
+			}
+			baseRoute.Operation.Extensions["x-sdk-group-name"] = []any{"service", "sub_module"}
+		},
+		RouteSDKMethodName("action_name"),
+	)
+	AssertRouterRoutesCompliance(t, anyGroupRouter)
+
+	// 2. Missing OperationID
+	noOpRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](noOpRouter, "/no-op", dummyHandler)
+	for _, pathItem := range noOpRouter.OutputOpenAPISpec().Paths.Map() {
+		for _, op := range pathItem.Operations() {
+			op.OperationID = ""
+		}
+	}
+	if err := ValidateRouterRoutesCompliance(noOpRouter); err == nil || !strings.Contains(err.Error(), "missing RouteOperationID") {
+		t.Fatalf("expected missing RouteOperationID error, got: %v", err)
+	}
+
+	// 3. Non-snake_case OperationID segment
+	invalidOpRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](invalidOpRouter, "/invalid-op", dummyHandler,
+		RouteOperationID("service__invalidAction"),
+	)
+	if err := ValidateRouterRoutesCompliance(invalidOpRouter); err == nil || !strings.Contains(err.Error(), "must be snake_case") {
+		t.Fatalf("expected non-snake_case error, got: %v", err)
+	}
+
+	// 4. Missing SDK Group Name
+	noGroupRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](noGroupRouter, "/no-group", dummyHandler,
+		RouteOperationID("service__group__action"),
+	)
+	if err := ValidateRouterRoutesCompliance(noGroupRouter); err == nil || !strings.Contains(err.Error(), "missing RouteSDKGroupName") {
+		t.Fatalf("expected missing RouteSDKGroupName error, got: %v", err)
+	}
+
+	// 5. SDK Group Name length mismatch
+	lenMismatchRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](lenMismatchRouter, "/len-mismatch", dummyHandler,
+		RouteOperationID("service__group__action"),
+		RouteSDKGroupName("service"),
+		RouteSDKMethodName("action"),
+	)
+	if err := ValidateRouterRoutesCompliance(lenMismatchRouter); err == nil || !strings.Contains(err.Error(), "length mismatch") {
+		t.Fatalf("expected length mismatch error, got: %v", err)
+	}
+
+	// 6. SDK Group Name content mismatch
+	contentMismatchRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](contentMismatchRouter, "/content-mismatch", dummyHandler,
+		RouteOperationID("service__group__action"),
+		RouteSDKGroupName("service", "other"),
+		RouteSDKMethodName("action"),
+	)
+	if err := ValidateRouterRoutesCompliance(contentMismatchRouter); err == nil || !strings.Contains(err.Error(), "group name mismatch") {
+		t.Fatalf("expected group name mismatch error, got: %v", err)
+	}
+
+	// 7. Missing SDK Method Name
+	noMethodRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](noMethodRouter, "/no-method", dummyHandler,
+		RouteOperationID("service__action"),
+		RouteSDKGroupName("service"),
+	)
+	if err := ValidateRouterRoutesCompliance(noMethodRouter); err == nil || !strings.Contains(err.Error(), "missing RouteSDKMethodName") {
+		t.Fatalf("expected missing RouteSDKMethodName error, got: %v", err)
+	}
+
+	// 8. Non-string SDK Method Name
+	nonStringMethodRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](nonStringMethodRouter, "/non-string-method", dummyHandler,
+		RouteOperationID("service__action"),
+		RouteSDKGroupName("service"),
+		func(baseRoute *fuego.BaseRoute) {
+			baseRoute.Operation.Extensions["x-sdk-method-name"] = 123
+		},
+	)
+	if err := ValidateRouterRoutesCompliance(nonStringMethodRouter); err == nil || !strings.Contains(err.Error(), "must be string") {
+		t.Fatalf("expected non-string method error, got: %v", err)
+	}
+
+	// 9. SDK Method Name value mismatch
+	methodMismatchRouter := NewRouter(fuego.NewServer(fuego.WithAddr("localhost:0")))
+	GetRoute[string](methodMismatchRouter, "/method-mismatch", dummyHandler,
+		RouteOperationID("service__action"),
+		RouteSDKGroupName("service"),
+		RouteSDKMethodName("wrong_action"),
+	)
+	if err := ValidateRouterRoutesCompliance(methodMismatchRouter); err == nil || !strings.Contains(err.Error(), "method name mismatch") {
+		t.Fatalf("expected method name mismatch error, got: %v", err)
+	}
+
+	mockTestReporter := &mockTestReporter{}
+	AssertRouterRoutesCompliance(mockTestReporter, methodMismatchRouter)
+	if !mockTestReporter.failed {
+		t.Fatal("expected mockTestReporter.Fatal to be called")
+	}
+}
+
+type mockTestReporter struct {
+	testing.TB
+	failed bool
+}
+
+func (mock *mockTestReporter) Helper() {}
+
+func (mock *mockTestReporter) Fatal(args ...any) {
+	mock.failed = true
 }
