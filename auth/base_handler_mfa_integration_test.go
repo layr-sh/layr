@@ -13,7 +13,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthMFAFlowIntegration(t *testing.T) {
+func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -328,7 +328,7 @@ func TestAuthMFAFlowIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthMFAChallengeFlowIntegration(t *testing.T) {
+func TestAuthBaseHandlerMFAChallengeFlowIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()

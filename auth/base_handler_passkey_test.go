@@ -13,7 +13,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthPasskeyHandlerUnit(t *testing.T) {
+func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -169,7 +169,7 @@ func (errEntropyReader) Read(_ []byte) (int, error) {
 	return 0, errors.New("entropy failure")
 }
 
-func TestAuthPasskeyManagementHandlerUnit(t *testing.T) {
+func TestAuthBaseHandlerPasskeyManagementUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler

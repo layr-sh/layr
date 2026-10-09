@@ -8,8 +8,12 @@ import (
 
 // RegisterRoutes registers all Image data plane and control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	service.registerBaseRoutes(baseRouter)
-	service.registerControlPlaneRoutes(controlPlaneRouter)
+	if baseRouter != nil {
+		service.registerBaseRoutes(baseRouter)
+	}
+	if controlPlaneRouter != nil {
+		service.registerControlPlaneRoutes(controlPlaneRouter)
+	}
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {

@@ -15,7 +15,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
+func TestAuthBaseHandlerOTPOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	_ = kernel.DB()
@@ -141,7 +141,7 @@ func TestAuthOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
+func TestAuthBaseHandlerOTPFlowAndConversionIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -508,7 +508,7 @@ func TestAuthOTPFlowAndConversionIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthOTPVerifyMFAEnforcedIntegration(t *testing.T) {
+func TestAuthBaseHandlerOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()

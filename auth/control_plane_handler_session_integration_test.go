@@ -114,7 +114,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthControlPlaneRevokeUserSessionsBackChannelIntegration(t *testing.T) {
+func TestAuthControlPlaneHandlerRevokeUserSessionsBackChannelIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 

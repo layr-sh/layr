@@ -71,6 +71,7 @@ func (service *Service) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down active workers or resources.
 func (service *Service) Stop() {
+	log.Trace("stopping image service")
 }
 
 // BaseHandler returns the underlying public HTTP base handler.

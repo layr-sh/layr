@@ -15,7 +15,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthPasswordResetFlowIntegration(t *testing.T) {
+func TestAuthBaseHandlerPasswordResetFlowIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()

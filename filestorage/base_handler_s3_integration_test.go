@@ -18,7 +18,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestFilestorageS3Integration(t *testing.T) {
+func TestFilestorageBaseHandlerS3Integration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 

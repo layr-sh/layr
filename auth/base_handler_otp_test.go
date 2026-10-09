@@ -11,7 +11,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthOTPHandlerUnit(t *testing.T) {
+func TestAuthBaseHandlerOTPUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -196,7 +196,7 @@ func TestAuthOTPHandlerUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOTPThreatValidationUnit(t *testing.T) {
+func TestAuthBaseHandlerOTPThreatValidationUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler

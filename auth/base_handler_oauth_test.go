@@ -22,7 +22,7 @@ func (mock *mockOAuthClient) Do(request *http.Request) (*http.Response, error) {
 	return mock.doFunc(request)
 }
 
-func TestAuthHandlerOAuthUnit(t *testing.T) {
+func TestAuthBaseHandlerOAuthUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -366,7 +366,7 @@ func TestAuthHandlerOAuthUnit(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
+func TestAuthBaseHandlerOAuthAnonymousAuthorizeUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
