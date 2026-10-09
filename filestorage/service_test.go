@@ -70,8 +70,6 @@ func TestFilestorageServiceUnit(t *testing.T) {
 		service := NewService(core.NewTestKernel(nil))
 		require.NotNil(t, service)
 
-		service.RegisterRoutes(nil, nil)
-
 		baseFuegoEngine := fuego.NewServer()
 		controlPlaneFuegoEngine := fuego.NewServer()
 		baseRouter := core.NewRouter(baseFuegoEngine)

@@ -426,7 +426,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("List all service accounts"),
 		RouteDescription("Lists all machine service accounts with status, name, and permission scopes."),
 		RouteOperationID("core__service_accounts__list"),
-		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("list"),
 	)
 	PostRoute[CreateServiceAccountResponse, CreateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts", server.handleCreateServiceAccount,
@@ -435,7 +435,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteDescription("Creates a machine service account, generates a 32-byte hex secret key, and hashes it."),
 		RouteDefaultStatusCode(http.StatusCreated),
 		RouteOperationID("core__service_accounts__create"),
-		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("create"),
 	)
 	GetRoute[ServiceAccount](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleGetServiceAccount,
@@ -443,7 +443,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("Get service account by ID"),
 		RouteDescription("Retrieves a service account by UUID."),
 		RouteOperationID("core__service_accounts__get"),
-		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("get"),
 	)
 	PutRoute[ServiceAccount, UpdateServiceAccountInput](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleUpdateServiceAccount,
@@ -451,7 +451,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("Update service account"),
 		RouteDescription("Updates service account scopes, name, or enabled status while protecting root accounts."),
 		RouteOperationID("core__service_accounts__update"),
-		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("update"),
 	)
 	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/service-accounts/{service_account_id}", server.handleDeleteServiceAccount,
@@ -460,7 +460,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteDescription("Deletes a machine service account, enforcing invariant that at least one root account remains."),
 		RouteNoContentResponse("Service account deleted"),
 		RouteOperationID("core__service_accounts__delete"),
-		RouteSDKGroupName("core", "serviceAccounts"),
+		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("delete"),
 	)
 
@@ -470,7 +470,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("List all event hooks"),
 		RouteDescription("Lists all active event hooks with driver, target URLs/functions, events, and retry policies."),
 		RouteOperationID("core__event_hooks__list"),
-		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKGroupName("core", "event_hooks"),
 		RouteSDKMethodName("list"),
 	)
 	PostRoute[EventHook, CreateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks", server.handleCreateEventHook,
@@ -479,7 +479,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteDescription("Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching."),
 		RouteDefaultStatusCode(http.StatusCreated),
 		RouteOperationID("core__event_hooks__create"),
-		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKGroupName("core", "event_hooks"),
 		RouteSDKMethodName("create"),
 	)
 	GetRoute[EventHook](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleGetEventHook,
@@ -487,7 +487,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("Get event hook by ID"),
 		RouteDescription("Retrieves an event hook by UUID."),
 		RouteOperationID("core__event_hooks__get"),
-		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKGroupName("core", "event_hooks"),
 		RouteSDKMethodName("get"),
 	)
 	PutRoute[EventHook, UpdateEventHookInput](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleUpdateEventHook,
@@ -495,7 +495,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("Update event hook"),
 		RouteDescription("Updates event hook driver, targets, subscribed events, secret, or enabled status."),
 		RouteOperationID("core__event_hooks__update"),
-		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKGroupName("core", "event_hooks"),
 		RouteSDKMethodName("update"),
 	)
 	DeleteRoute[Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}", server.handleDeleteEventHook,
@@ -504,7 +504,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteDescription("Deletes an event hook."),
 		RouteNoContentResponse("Event hook deleted"),
 		RouteOperationID("core__event_hooks__delete"),
-		RouteSDKGroupName("core", "eventHooks"),
+		RouteSDKGroupName("core", "event_hooks"),
 		RouteSDKMethodName("delete"),
 	)
 	GetRoute[ListEventHookDeliveriesResponse](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries", server.handleListEventHookDeliveries,
@@ -512,7 +512,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("List event hook deliveries"),
 		RouteDescription("Queries recent dispatch attempts, response status, and latency for an event hook."),
 		RouteOperationID("core__event_hooks__deliveries__list"),
-		RouteSDKGroupName("core", "eventHooks", "deliveries"),
+		RouteSDKGroupName("core", "event_hooks", "deliveries"),
 		RouteSDKMethodName("list"),
 	)
 	PostRoute[EventHookDelivery, Empty](controlPlaneRouter, "/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry", server.handleRetryEventHookDelivery,
@@ -520,7 +520,7 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteSummary("Retry event hook delivery"),
 		RouteDescription("Manually redrives a past event hook delivery attempt."),
 		RouteOperationID("core__event_hooks__deliveries__retry"),
-		RouteSDKGroupName("core", "eventHooks", "deliveries"),
+		RouteSDKGroupName("core", "event_hooks", "deliveries"),
 		RouteSDKMethodName("retry"),
 	)
 

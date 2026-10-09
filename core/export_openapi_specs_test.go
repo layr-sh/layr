@@ -18,7 +18,9 @@ func (service *dummyServiceWithRegistrar) RegisterRoutes(baseRouter *Router, con
 	GetRoute[string](baseRouter, "/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
 		RouteTag("Dummy"),
 		RouteSummary("Dummy route"),
-		RouteOperationID("getDummy"),
+		RouteOperationID("dummy__get"),
+		RouteSDKGroupName("dummy"),
+		RouteSDKMethodName("get"),
 	)
 }
 

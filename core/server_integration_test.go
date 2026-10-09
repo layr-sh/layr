@@ -314,13 +314,13 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	GetRoute[string](server.BaseRouter(), "/v1/data/records", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok"))
-	}, RouteTag("Data"), RouteSummary("List Data Records"), RouteOperationID("listDataRecords"))
+	}, RouteTag("Data"), RouteSummary("List Data Records"), RouteOperationID("list_data_records"))
 
 	// Register operations on ControlPlaneRouter
 	GetRoute[string](server.ControlPlaneRouter(), "/v1/_/console/status", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte("ok"))
-	}, RouteTag("Console"), RouteSummary("Get Console Status"), RouteOperationID("getConsoleStatus"))
+	}, RouteTag("Console"), RouteSummary("Get Console Status"), RouteOperationID("get_console_status"))
 
 	// 1. Test Public OpenAPI Spec JSON
 	jsonSpecRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/spec.json", nil)
@@ -331,8 +331,8 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 		t.Fatalf("expected /v1/spec.json 200, got %d", jsonSpecResponseRecorder.Code)
 	}
 	jsonSpecResponseBody := jsonSpecResponseRecorder.Body.String()
-	if !strings.Contains(jsonSpecResponseBody, "listDataRecords") || !strings.Contains(jsonSpecResponseBody, "Layr Client API Engine") {
-		t.Fatalf("expected listDataRecords operation in public JSON spec: %s", jsonSpecResponseBody)
+	if !strings.Contains(jsonSpecResponseBody, "list_data_records") || !strings.Contains(jsonSpecResponseBody, "Layr Client API Engine") {
+		t.Fatalf("expected list_data_records operation in public JSON spec: %s", jsonSpecResponseBody)
 	}
 
 	// 2. Test Control Plane OpenAPI Spec JSON
@@ -344,8 +344,8 @@ func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 		t.Fatalf("expected /v1/_/spec.json 200, got %d", controlPlaceJSONSpecResponseRecorder.Code)
 	}
 	controlPlaneJSONSpecResponseBody := controlPlaceJSONSpecResponseRecorder.Body.String()
-	if !strings.Contains(controlPlaneJSONSpecResponseBody, "getConsoleStatus") || !strings.Contains(controlPlaneJSONSpecResponseBody, "Layr Control Plane API Engine") {
-		t.Fatalf("expected getConsoleStatus operation in control plane JSON spec: %s", controlPlaneJSONSpecResponseBody)
+	if !strings.Contains(controlPlaneJSONSpecResponseBody, "get_console_status") || !strings.Contains(controlPlaneJSONSpecResponseBody, "Layr Control Plane API Engine") {
+		t.Fatalf("expected get_console_status operation in control plane JSON spec: %s", controlPlaneJSONSpecResponseBody)
 	}
 
 	// 3. Test Public OpenAPI Spec YAML
