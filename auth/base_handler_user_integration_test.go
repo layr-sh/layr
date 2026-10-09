@@ -16,7 +16,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthUserVerificationIntegration(t *testing.T) {
+func TestAuthBaseHandlerUserVerificationIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()
@@ -511,7 +511,7 @@ func TestAuthUserVerificationIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthUserSelfServiceIntegration(t *testing.T) {
+func TestAuthBaseHandlerUserSelfServiceIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()

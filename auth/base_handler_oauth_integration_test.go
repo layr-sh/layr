@@ -17,7 +17,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthHandlerOAuthLifecycleIntegration(t *testing.T) {
+func TestAuthBaseHandlerOAuthLifecycleIntegration(t *testing.T) {
 	kernel, teardown := core.SetupTestKernel(t, Migrations)
 	defer teardown()
 	db := kernel.DB()

@@ -14,7 +14,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
+func TestAuthBaseHandlerPasskeyCeremoniesIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()
@@ -261,7 +261,7 @@ func TestAuthPasskeyCeremoniesIntegration(t *testing.T) {
 	`)
 }
 
-func TestAuthPasskeyManagementAndHardeningIntegration(t *testing.T) {
+func TestAuthBaseHandlerPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()

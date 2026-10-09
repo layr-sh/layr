@@ -9,14 +9,12 @@ import (
 
 // RegisterRoutes registers all Console control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	service.registerControlPlaneRoutes(controlPlaneRouter)
+	if controlPlaneRouter != nil {
+		service.registerControlPlaneRoutes(controlPlaneRouter)
+	}
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
-	if router == nil {
-		return
-	}
-
 	// 1. Dynamic Runtime Configuration (Guarded by console:config.read / console:config.write)
 	core.GetRoute[Config](router, "/v1/_/console/config", service.controlPlaneHandler.handleGetConfig,
 		core.RouteTag("Console Config"),

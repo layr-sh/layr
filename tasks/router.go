@@ -9,7 +9,9 @@ import (
 
 // RegisterRoutes registers all Tasks control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	service.registerControlPlaneRoutes(controlPlaneRouter)
+	if controlPlaneRouter != nil {
+		service.registerControlPlaneRoutes(controlPlaneRouter)
+	}
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {

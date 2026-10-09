@@ -18,7 +18,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
+func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -449,7 +449,7 @@ func TestAuthHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
+func TestAuthBaseHandlerAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -790,7 +790,7 @@ func TestAuthAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
+func TestAuthBaseHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()

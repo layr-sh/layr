@@ -14,7 +14,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthOIDCHandlerUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	layrConfig := core.DefaultConfig()
 	layrConfig.Project.Name = "TestLayrApp"
@@ -275,7 +275,7 @@ func TestAuthOIDCHandlerUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCEdgeCasesUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	layrConfig := core.DefaultConfig()
 	layrConfig.Project.Name = "TestLayrApp"
@@ -519,7 +519,7 @@ func TestAuthOIDCEdgeCasesUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCClientCredentialsUnit(t *testing.T) {
 	testCtx := context.Background()
 
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
@@ -583,7 +583,7 @@ func TestAuthOIDCClientCredentialsUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCRenderHelperFunctionsUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	config := service.configManager.Get()
@@ -612,7 +612,7 @@ func TestAuthOIDCRenderHelperFunctionsUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCModeQueryParamUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	config := service.configManager.Get()
@@ -637,7 +637,7 @@ func TestAuthOIDCModeQueryParamUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCAuthorizeSubmitUnit(t *testing.T) {
 	ctx := context.Background()
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
@@ -762,7 +762,7 @@ func TestAuthOIDCAuthorizeSubmitUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -794,7 +794,7 @@ func TestAuthOIDCDiscoverySignOutMetadataUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	jwtSigner := kernel.JWTSigner()
 
@@ -839,7 +839,7 @@ func TestAuthOIDCSignOutFrontChannelIframeUnit(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
+func TestAuthBaseHandlerOIDCSignOutPostRedirectValidationUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	jwtSigner := kernel.JWTSigner()
 

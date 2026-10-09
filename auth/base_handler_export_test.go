@@ -9,7 +9,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthHandlerExportUnit(t *testing.T) {
+func TestAuthBaseHandlerExportUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler

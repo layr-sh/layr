@@ -12,7 +12,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthPasswordHandlerUnit(t *testing.T) {
+func TestAuthBaseHandlerPasswordUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -221,7 +221,7 @@ func TestAuthPasswordHandlerUnit(t *testing.T) {
 	}
 }
 
-func TestAuthPasswordThreatValidationUnit(t *testing.T) {
+func TestAuthBaseHandlerPasswordThreatValidationUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler

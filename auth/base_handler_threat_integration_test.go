@@ -15,7 +15,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
+func TestAuthBaseHandlerSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()

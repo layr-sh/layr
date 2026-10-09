@@ -11,7 +11,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestAuthSessionSelfServiceIntegration(t *testing.T) {
+func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
 	defer cleanupDatabase()
 	db := kernel.DB()

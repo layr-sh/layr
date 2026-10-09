@@ -20,7 +20,7 @@ import (
 	"uuid"
 )
 
-func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
+func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -720,7 +720,7 @@ func TestAuthOIDCStandaloneIdentityProviderIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
+func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	_ = kernel.DB()
@@ -1069,7 +1069,7 @@ func TestAuthOIDCClientCredentialsIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
+func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -1431,7 +1431,7 @@ func TestAuthOIDCSignUpAndOTPIntegration(t *testing.T) {
 	}
 }
 
-func TestAuthOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
+func TestAuthBaseHandlerOIDCFederatedSignOutBackChannelIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()

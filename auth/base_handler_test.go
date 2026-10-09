@@ -29,7 +29,7 @@ func (driver *failingTestKVDriver) Set(ctx context.Context, key string, value st
 	return nil
 }
 
-func TestAuthHandlerInitializationUnit(t *testing.T) {
+func TestAuthBaseHandlerInitializationUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -76,7 +76,7 @@ func TestAuthHandlerInitializationUnit(t *testing.T) {
 	baseHandler.verifyDummyPassword("any-pass")
 }
 
-func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
+func TestAuthBaseHandlerCookiesAndHelpersUnit(t *testing.T) {
 	responseRecorder := httptest.NewRecorder()
 	expiresAt := time.Now().Add(time.Hour)
 
@@ -116,7 +116,7 @@ func TestAuthHandlerCookiesAndHelpersUnit(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
+func TestAuthBaseHandlerDeliveryReadinessUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -167,7 +167,7 @@ func TestAuthHandlerDeliveryReadinessUnit(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerResolveCallerUnit(t *testing.T) {
+func TestAuthBaseHandlerResolveCallerUnit(t *testing.T) {
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -188,7 +188,7 @@ func TestAuthHandlerResolveCallerUnit(t *testing.T) {
 	}
 }
 
-func TestAuthHandlerIssueSessionResponseUnit(t *testing.T) {
+func TestAuthBaseHandlerIssueSessionResponseUnit(t *testing.T) {
 	failingDriver := &failingTestKVDriver{TestInMemoryKVDriver: *core.NewTestInMemoryKVDriver()}
 	kvStore := core.NewKVStoreFromDriver(failingDriver)
 
