@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Community Discussions
+    url: https://github.com/layr-sh/layr/discussions
+    about: Please ask and answer questions here.
+
+  - name: Layr Documentation
+    url: https://layr.sh/docs
+    about: Check the documentation for usage of Layr
