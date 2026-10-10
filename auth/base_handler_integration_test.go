@@ -375,7 +375,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 	configManager.SetMemoryConfig(activeConfig)
 
-	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:8080/callback&state=valid-state", nil)
+	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:5297/callback&state=valid-state", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAuthorizeOAuth(oauthAuthResponseRecorder, oauthAuthRequest)

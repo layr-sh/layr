@@ -58,13 +58,13 @@ Open [http://localhost:5297/console](http://localhost:5297/console) to access th
 
 Layr provides official multi-language SDKs with fluent query builders, automatic retries, and symmetric service account elevation (`.cp`):
 
-- 🌐 **[JavaScript / TypeScript SDK](sdks/javascript/README.md)** (`layr-client`)
-- 🐍 **[Python SDK](sdks/python/README.md)** (`layr-client`)
-- 🐹 **[Go SDK](sdks/go/README.md)** (`github.com/layr-sh/layr/sdks/go`)
-- 🦀 **[Rust SDK](sdks/rust/README.md)** (`layr-client`)
-- 🍎 **[Swift SDK](sdks/swift/README.md)** (`LayrClient`)
+- 🌐 **[JavaScript / TypeScript SDK](client-sdk/javascript/README.md)** (`layr-client`)
+- 🐍 **[Python SDK](client-sdk/python/README.md)** (`layr-client`)
+- 🐹 **[Go SDK](client-sdk/go/README.md)** (`github.com/layr-sh/layr/client-sdk/go`)
+- 🦀 **[Rust SDK](client-sdk/rust/README.md)** (`layr-client`)
+- 🍎 **[Swift SDK](client-sdk/swift/README.md)** (`LayrClient`)
 
-For architectural details and usage across all languages, see the **[SDK Ecosystem Overview](sdks/README.md)**.
+For architectural details and usage across all languages, see the **[SDK Ecosystem Overview](client-sdk/README.md)**.
 
 ---
 

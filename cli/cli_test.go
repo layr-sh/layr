@@ -539,7 +539,7 @@ func TestCLIRunCleanShutdownUnit(t *testing.T) {
 
 	validKey := strings.Repeat("a", 64)
 	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
-	t.Setenv("PORT", "18080")
+	t.Setenv("PORT", "15297")
 	t.Setenv("DATABASE_URL", filepath.Join(temporaryDirectory, "data"))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -565,7 +565,7 @@ func TestCLIRunCleanShutdownUnit(t *testing.T) {
 		case <-timeout:
 			t.Fatal("timed out waiting for kernel to start")
 		case <-ticker.C:
-			connection, dialErr := dialer.DialContext(ctx, "tcp", "127.0.0.1:18080")
+			connection, dialErr := dialer.DialContext(ctx, "tcp", "127.0.0.1:15297")
 			if dialErr == nil {
 				_ = connection.Close()
 				cancel()

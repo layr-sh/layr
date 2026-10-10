@@ -660,7 +660,7 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 		capnpConfigManager.SetMemoryConfig(capnpConfig)
 		capnpWorkerdRunner := NewWorkerdRunner(capnpConfigManager)
 		capnpWorkerdRunner.activeDeployments["testEndpoint"] = &Deployment{BundleFormat: "raw"}
-		capnpWorkerdRunner.activePorts["testEndpoint"] = 8080
+		capnpWorkerdRunner.activePorts["testEndpoint"] = 5297
 		compiledCapnpConfig := capnpWorkerdRunner.BuildCapnpConfig()
 		require.Contains(t, compiledCapnpConfig, DefaultWorkerdCompatibilityDate)
 

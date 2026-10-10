@@ -355,7 +355,7 @@ func TestFunctionNormalizeAndValidateDomainUnit(t *testing.T) {
 	require.Error(t, emptyDomainErr)
 
 	// 2. Host with valid port
-	domainWithPort, domainWithPortErr := NormalizeAndValidateDomain("API.Example.COM:8080")
+	domainWithPort, domainWithPortErr := NormalizeAndValidateDomain("API.Example.COM:5297")
 	require.NoError(t, domainWithPortErr)
 	require.Equal(t, "api.example.com", domainWithPort)
 

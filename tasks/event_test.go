@@ -258,7 +258,7 @@ func TestTasksEventUnit(t *testing.T) {
 	t.Run("creates threat ssrf blocked event", func(t *testing.T) {
 		t.Parallel()
 		threatSSRFBlockedEventData := ThreatSSRFBlockedEventData{
-			TargetURL:  "http://127.0.0.1:8080/hook",
+			TargetURL:  "http://127.0.0.1:5297/hook",
 			ResolvedIP: "127.0.0.1",
 			Reason:     "loopback destination forbidden",
 		}

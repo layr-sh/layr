@@ -621,7 +621,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 
 	// 2. Event Hooks HTTP API
 	// POST /v1/_/core/event-hooks
-	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/core/event-hooks", strings.NewReader(`{"name":"HTTP Hook","driver":"http","http_target_url":"http://localhost:8080/hook","event_types":["*"],"signing_secret":"secret123"}`))
+	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/core/event-hooks", strings.NewReader(`{"name":"HTTP Hook","driver":"http","http_target_url":"http://localhost:5297/hook","event_types":["*"],"signing_secret":"secret123"}`))
 	createHookRequest.Header.Set("Content-Type", "application/json")
 	createHookResponseRecorder := httptest.NewRecorder()
 	server.Mux().ServeHTTP(createHookResponseRecorder, createHookRequest)
@@ -871,7 +871,7 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 	tempEventHook, _ := kernel.eventHookManager.Create(ctx, CreateEventHookInput{
 		Name:          "Temp Hook",
 		Driver:        EventHookDriverHTTP,
-		HTTPTargetURL: stringPointer("http://localhost:8080"),
+		HTTPTargetURL: stringPointer("http://localhost:5297"),
 		EventTypes:    []string{"*"},
 	})
 	badUpdateHookBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/core/event-hooks/"+tempEventHook.ID.String(), strings.NewReader(`{"name":""}`))
@@ -1014,7 +1014,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 
 	// Test 6: Create Event Hook
-	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/core/event-hooks", strings.NewReader(`{"name":"Router Hook","driver":"http","http_target_url":"http://localhost:8080/hook","event_types":["*"],"signing_secret":"secret123"}`))
+	createHookRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/core/event-hooks", strings.NewReader(`{"name":"Router Hook","driver":"http","http_target_url":"http://localhost:5297/hook","event_types":["*"],"signing_secret":"secret123"}`))
 	createHookRequest.Header.Set("Content-Type", "application/json")
 	createHookResponseRecorder := httptest.NewRecorder()
 	server.ControlPlaneRouter().Mux().ServeHTTP(createHookResponseRecorder, createHookRequest)

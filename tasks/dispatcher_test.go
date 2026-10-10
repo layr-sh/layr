@@ -59,7 +59,7 @@ func TestTasksDispatcherUnit(t *testing.T) {
 		require.Error(t, validateWebhookTargetURL("http://metadata.google.internal/computeMetadata/v1"))
 		require.Error(t, validateWebhookTargetURL("http://metadata/computeMetadata/v1"))
 		require.Error(t, validateWebhookTargetURL("http://169.254.169.254/hook"))
-		require.NoError(t, validateWebhookTargetURL("http://127.0.0.1:8080/hook"))
+		require.NoError(t, validateWebhookTargetURL("http://127.0.0.1:5297/hook"))
 		require.NoError(t, validateWebhookTargetURL("https://api.example.com/webhook"))
 		require.NoError(t, validateWebhookTargetURL("http://api.example.com/webhook"))
 	})

@@ -36,7 +36,7 @@ func TestKVExtractClientIPUnit(t *testing.T) {
 
 	onlyWhitespaceForwardedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
 	onlyWhitespaceForwardedRequest.Header.Set("X-Forwarded-For", "   ")
-	onlyWhitespaceForwardedRequest.RemoteAddr = "127.0.0.1:8080"
+	onlyWhitespaceForwardedRequest.RemoteAddr = "127.0.0.1:5297"
 	if clientIP := ExtractClientIP(onlyWhitespaceForwardedRequest); clientIP != "127.0.0.1" {
 		t.Fatalf("expected fallback to RemoteAddr 127.0.0.1, got %s", clientIP)
 	}
@@ -57,7 +57,7 @@ func TestKVExtractClientIPUnit(t *testing.T) {
 
 	// 5. RemoteAddr with IPv6 port
 	remoteAddrIPv6Request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
-	remoteAddrIPv6Request.RemoteAddr = "[2001:db8::1]:8080"
+	remoteAddrIPv6Request.RemoteAddr = "[2001:db8::1]:5297"
 	if clientIP := ExtractClientIP(remoteAddrIPv6Request); clientIP != "2001:db8::1" {
 		t.Fatalf("expected 2001:db8::1 from IPv6 RemoteAddr, got %s", clientIP)
 	}
@@ -136,7 +136,7 @@ func TestKVExtractAuthContextUnit(t *testing.T) {
 	})
 	authenticatedRequest := httptest.NewRequestWithContext(authCtx, http.MethodGet, "/", nil)
 	authenticatedRequest.Header.Set("User-Agent", "Mozilla/5.0")
-	authenticatedRequest.RemoteAddr = "10.0.0.1:8080"
+	authenticatedRequest.RemoteAddr = "10.0.0.1:5297"
 
 	authContext := ExtractAuthContext(authenticatedRequest, "test-salt")
 	if authContext.Subject != "usr_1001" || authContext.Role != "editor" || authContext.VisitorHash != "" {
@@ -175,7 +175,7 @@ func TestKVExtractAuthContextUnit(t *testing.T) {
 	})
 	anonymousExplicitRequest := httptest.NewRequestWithContext(anonExplicitCtx, http.MethodGet, "/", nil)
 	anonymousExplicitRequest.Header.Set("User-Agent", "Mozilla/5.0")
-	anonymousExplicitRequest.RemoteAddr = "10.0.0.1:8080"
+	anonymousExplicitRequest.RemoteAddr = "10.0.0.1:5297"
 	anonAuthContext := ExtractAuthContext(anonymousExplicitRequest, "test-salt")
 	if anonAuthContext.Subject != "" || anonAuthContext.Role != "anon" || len(anonAuthContext.VisitorHash) != 64 {
 		t.Fatalf("unexpected explicit anon context: %+v", anonAuthContext)

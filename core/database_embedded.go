@@ -121,7 +121,7 @@ func (embeddedDatabase *EmbeddedDatabase) Stop() error {
 // and dynamically verifies socket availability via net.Listen on both IPv4 and IPv6.
 //
 // Rationale for chosen port ranges:
-//  1. Avoids well-known/registered service ports (0-10000, e.g. Postgres 5432, Redis 6379, HTTP 8080).
+//  1. Avoids well-known/registered service ports (0-10000, e.g. Postgres 5432, Redis 6379, HTTP 5297).
 //  2. Avoids default OS ephemeral port allocation ranges (49152-65535, Linux ip_local_port_range 32768-60999)
 //     to prevent collisions with outbound client sockets.
 //  3. 25000-25999 is predominantly unassigned in the IANA port registry.
