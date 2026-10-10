@@ -8,11 +8,35 @@ import (
 )
 
 func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
-	t.Cleanup(UnloadConfig)
+	keysToCleanup := []string{
+		"LAYR__PROJECT__NAME",
+		"LAYR__PROJECT__DESCRIPTION",
+		"LAYR__SERVER__LISTEN_ADDR",
+		"LAYR__SERVER__BASE_URL",
+		"LAYR__DATABASE__URL",
+		"LAYR__DATABASE__MAX_CONNECTIONS",
+		"LAYR__DATABASE__MIN_CONNECTIONS",
+		"LAYR__DATABASE__CONNECTION_TIMEOUT_MS",
+		"LAYR__DATABASE__IDLE_TIMEOUT_MS",
+		"LAYR__DATABASE__MAX_LIFETIME_MS",
+		"LAYR__DATABASE__HEALTH_CHECK_PERIOD_MS",
+		"LAYR__DATABASE__SSL_MODE",
+		"LAYR__SECURITY__MASTER_ENCRYPTION_KEY",
+		"LAYR__KV_STORE__BACKEND",
+		"LAYR__KV_STORE__URL",
+		"LAYR__ROOT_USER__EMAIL",
+		"LAYR__ROOT_USER__PASSWORD",
+	}
+	t.Cleanup(func() {
+		UnloadConfig()
+		for _, key := range keysToCleanup {
+			_ = os.Unsetenv(key)
+		}
+	})
 	validHexKey := strings.Repeat("0", 64)
 
 	// 1. Non-existent file returns default config with zero error
-	loadedDefaultConfig, defaultErr := LoadConfig("non_existent_file_path.yaml")
+	loadedDefaultConfig, defaultErr := LoadConfig("non_existent_file_path.env")
 	if defaultErr != nil || loadedDefaultConfig == nil {
 		t.Fatalf("expected default configuration on non-existent file, got %v", defaultErr)
 	}
@@ -32,136 +56,103 @@ func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
 		t.Fatal("expected error when attempting to read directory as file")
 	}
 
-	// 4. Valid Complete YAML configuration file
-	completeYAMLFile := filepath.Join(temporaryDirectory, "complete_layr.yaml")
-	completeYAMLContent := `
-version: "1"
-project:
-  name: "production-app"
-  description: "Enterprise multi-service setup"
-server:
-  listen_addr: ":8443"
-  base_url: "https://production-app.internal:8443"
-database:
-  url: "postgres://dbuser:p4ssword@db-primary.internal:5432/layr_prod?sslmode=require"
-  max_connections: 50
-  min_connections: 5
-  connection_timeout_ms: 10000
-  idle_timeout_ms: 600000
-  max_lifetime_ms: 3600000
-  health_check_period_ms: 30000
-  ssl_mode: "require"
-security:
-  master_encryption_key: "` + validHexKey + `"
-kv_store:
-  backend: "redis"
-  url: "redis://redis-master.internal:6379"
-data:
-  enabled: true
-auth:
-  enabled: true
-tasks:
-  enabled: true
-file_storage:
-  enabled: true
-image:
-  enabled: true
-function:
-  enabled: true
-console:
-  enabled: true
-  initial_user_email: "console_user@layr.sh"
-  initial_user_password: "super_secure_initial_password"
+	// 4. Valid Complete .env configuration file
+	completeEnvFile := filepath.Join(temporaryDirectory, "complete.env")
+	completeEnvContent := `
+LAYR__PROJECT__NAME=production-app
+LAYR__PROJECT__DESCRIPTION="Enterprise multi-service setup"
+LAYR__SERVER__LISTEN_ADDR=:8443
+LAYR__SERVER__BASE_URL=https://production-app.internal:8443
+LAYR__DATABASE__URL=postgres://dbuser:p4ssword@db-primary.internal:5432/layr_prod?sslmode=require
+LAYR__DATABASE__MAX_CONNECTIONS=50
+LAYR__DATABASE__MIN_CONNECTIONS=5
+LAYR__DATABASE__CONNECTION_TIMEOUT_MS=10000
+LAYR__DATABASE__IDLE_TIMEOUT_MS=600000
+LAYR__DATABASE__MAX_LIFETIME_MS=3600000
+LAYR__DATABASE__HEALTH_CHECK_PERIOD_MS=30000
+LAYR__DATABASE__SSL_MODE=require
+LAYR__SECURITY__MASTER_ENCRYPTION_KEY=` + validHexKey + `
+LAYR__KV_STORE__BACKEND=redis
+LAYR__KV_STORE__URL=redis://redis-master.internal:6379
+LAYR__ROOT_USER__EMAIL=root_user@layr.sh
+LAYR__ROOT_USER__PASSWORD=super_secure_initial_password
 `
-	if writeErr := os.WriteFile(completeYAMLFile, []byte(completeYAMLContent), 0600); writeErr != nil {
-		t.Fatalf("failed to write complete yaml file: %v", writeErr)
+	if writeErr := os.WriteFile(completeEnvFile, []byte(completeEnvContent), 0600); writeErr != nil {
+		t.Fatalf("failed to write complete env file: %v", writeErr)
 	}
 
-	loadedCompleteConfig, completeErr := LoadConfig(completeYAMLFile)
+	loadedCompleteConfig, completeErr := LoadConfig(completeEnvFile)
 	if completeErr != nil {
-		t.Fatalf("failed to load complete yaml config: %v", completeErr)
+		t.Fatalf("failed to load complete env config: %v", completeErr)
 	}
 	if valueErr := loadedCompleteConfig.Validate(); valueErr != nil {
-		t.Fatalf("validation failed on valid complete yaml config: %v", valueErr)
+		t.Fatalf("validation failed on valid complete env config: %v", valueErr)
 	}
 
 	if loadedCompleteConfig.Project.Name != "production-app" ||
 		loadedCompleteConfig.Server.ListenAddr != ":8443" ||
 		loadedCompleteConfig.Database.MaxConnections != 50 ||
 		loadedCompleteConfig.KVStore.Backend != "redis" ||
+		loadedCompleteConfig.RootUser.Email != "root_user@layr.sh" ||
+		loadedCompleteConfig.RootUser.Password != "super_secure_initial_password" ||
 		len(loadedCompleteConfig.GetFunctionalServices()) != 6 {
 		t.Fatalf("complete config fields mismatch: %+v", loadedCompleteConfig)
 	}
 
-	// 5. Minimal YAML configuration file (omitted fields use defaults)
-	minimalYAMLFile := filepath.Join(temporaryDirectory, "minimal_layr.yaml")
-	minimalYAMLContent := `
-version: "1"
-security:
-  master_encryption_key: "` + validHexKey + `"
-data:
-  enabled: true
-`
-	if minWriteErr := os.WriteFile(minimalYAMLFile, []byte(minimalYAMLContent), 0600); minWriteErr != nil {
-		t.Fatalf("failed to write minimal yaml file: %v", minWriteErr)
+	for _, key := range keysToCleanup {
+		_ = os.Unsetenv(key)
 	}
 
-	loadedMinimalConfig, minErr := LoadConfig(minimalYAMLFile)
+	// 5. Minimal .env configuration file (omitted fields use defaults)
+	minimalEnvFile := filepath.Join(temporaryDirectory, "minimal.env")
+	minimalEnvContent := `
+MASTER_ENCRYPTION_KEY=` + validHexKey + `
+`
+	if minWriteErr := os.WriteFile(minimalEnvFile, []byte(minimalEnvContent), 0600); minWriteErr != nil {
+		t.Fatalf("failed to write minimal env file: %v", minWriteErr)
+	}
+
+	loadedMinimalConfig, minErr := LoadConfig(minimalEnvFile)
 	if minErr != nil {
-		t.Fatalf("failed to load minimal yaml config: %v", minErr)
+		t.Fatalf("failed to load minimal env config: %v", minErr)
 	}
 	if minValueErr := loadedMinimalConfig.Validate(); minValueErr != nil {
-		t.Fatalf("validation failed on valid minimal yaml config: %v", minValueErr)
+		t.Fatalf("validation failed on valid minimal env config: %v", minValueErr)
 	}
-	if loadedMinimalConfig.Project.Name != "layr-app" || loadedMinimalConfig.Server.ListenAddr != ":8080" || loadedMinimalConfig.Database.URL != ".layr/data" {
+	if loadedMinimalConfig.Project.Name != "layr-app" || loadedMinimalConfig.Server.ListenAddr != ":5297" || loadedMinimalConfig.Database.URL != ".layr/data" {
 		t.Fatal("expected minimal config to retain defaults for omitted fields")
-	}
-
-	// 6. Malformed YAML syntax error
-	malformedYAMLFile := filepath.Join(temporaryDirectory, "malformed.yaml")
-	_ = os.WriteFile(malformedYAMLFile, []byte("version: [unclosed_sequence\nproject: {invalid"), 0600)
-	if _, err := LoadConfig(malformedYAMLFile); err == nil {
-		t.Fatal("expected error on malformed YAML syntax")
-	}
-
-	// 7. YAML with invalid data types (e.g. string for integer max_connections)
-	invalidTypesYAMLFile := filepath.Join(temporaryDirectory, "invalid_types.yaml")
-	_ = os.WriteFile(invalidTypesYAMLFile, []byte("version: '1'\ndatabase:\n  max_connections: 'not_an_int'"), 0600)
-	if _, err := LoadConfig(invalidTypesYAMLFile); err == nil {
-		t.Fatal("expected error when unmarshaling invalid data type into max_connections")
 	}
 }
 
 func TestCoreConfigLoadWithEnvironmentOverlayIntegration(t *testing.T) {
-	t.Cleanup(UnloadConfig)
+	t.Cleanup(func() {
+		UnloadConfig()
+		_ = os.Unsetenv("LAYR__DATABASE__URL")
+		_ = os.Unsetenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY")
+		_ = os.Unsetenv("LAYR__PROJECT__NAME")
+		_ = os.Unsetenv("LAYR__SERVER__LISTEN_ADDR")
+	})
 	temporaryDirectory := t.TempDir()
-	yamlFile := filepath.Join(temporaryDirectory, "layr.yaml")
+	envFile := filepath.Join(temporaryDirectory, ".env")
 	validHexKey := strings.Repeat("1", 64)
 
-	yamlContent := `
-version: "1"
-project:
-  name: "file-name"
-server:
-  listen_addr: ":3000"
-database:
-  url: "postgres://file@localhost/db"
-security:
-  master_encryption_key: "` + validHexKey + `"
-data:
-  enabled: true
+	envContent := `
+LAYR__PROJECT__NAME=file-name
+LAYR__SERVER__LISTEN_ADDR=:3000
+LAYR__DATABASE__URL=postgres://file@localhost/db
+LAYR__SECURITY__MASTER_ENCRYPTION_KEY=` + validHexKey + `
 `
-	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0600); err != nil {
-		t.Fatalf("failed to write yaml: %v", err)
+	if err := os.WriteFile(envFile, []byte(envContent), 0600); err != nil {
+		t.Fatalf("failed to write env file: %v", err)
 	}
 
 	// Set environment variables to test overlay precedence over file values
 	t.Setenv("LAYR__PROJECT__NAME", "env-precedence-name")
 	t.Setenv("LAYR__SERVER__LISTEN_ADDR", ":5000")
 
-	loadedConfig, err := LoadConfig(yamlFile)
+	loadedConfig, err := LoadConfig(envFile)
 	if err != nil {
-		t.Fatalf("failed to load yaml: %v", err)
+		t.Fatalf("failed to load env config: %v", err)
 	}
 
 	// LAYR__SERVER__LISTEN_ADDR should take precedence over file value (:3000)

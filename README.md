@@ -44,13 +44,13 @@ Layr provides unbundled primitives that can be enabled independently or combined
 # Install
 # TBD
 
-# Start with zero config (auto-generates layr.yaml and initializes embedded DB)
-layr start
+# Start with zero config (initializes embedded DB and persists environment to .env)
+layr up
 ```
 
 ### 2. Access the Console
 
-Open [http://localhost:8080/console](http://localhost:8080/console) to access the embedded control plane.
+Open [http://localhost:5297/console](http://localhost:5297/console) to access the embedded control plane.
 
 ---
 

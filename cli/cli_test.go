@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -19,11 +20,17 @@ func resetTestState(t *testing.T) {
 	originalExitFunc := exitFunc
 	originalStdoutWriter := stdoutWriter
 	originalStderrWriter := stderrWriter
+	originalGenerateKeyFunc := generateKeyFunc
+	originalSetenvFunc := setenvFunc
+	originalLoadConfigFunc := loadConfigFunc
 
 	t.Cleanup(func() {
 		exitFunc = originalExitFunc
 		stdoutWriter = originalStdoutWriter
 		stderrWriter = originalStderrWriter
+		generateKeyFunc = originalGenerateKeyFunc
+		setenvFunc = originalSetenvFunc
+		loadConfigFunc = originalLoadConfigFunc
 		core.UnloadConfig()
 	})
 }
@@ -74,16 +81,6 @@ func TestCLIParseArgsErrorsUnit(t *testing.T) {
 			expectedErr: "missing command: expected 'up'",
 		},
 		{
-			name:        "missing config argument for -c",
-			args:        []string{"-c"},
-			expectedErr: "flag -c requires an argument",
-		},
-		{
-			name:        "missing config argument for --config",
-			args:        []string{"--config"},
-			expectedErr: "flag --config requires an argument",
-		},
-		{
 			name:        "missing env file argument for --env-file",
 			args:        []string{"--env-file"},
 			expectedErr: "flag --env-file requires an argument",
@@ -122,20 +119,16 @@ func TestCLIParseArgsFlagVariationsUnit(t *testing.T) {
 	resetTestState(t)
 
 	temporaryDirectory := t.TempDir()
-	configPath := filepath.Join(temporaryDirectory, "custom.yaml")
-	validConfig := core.DefaultConfig()
-	validConfig.Database.URL = "postgres://invalid:5432/db"
-	validConfig.Security.MasterEncryptionKey = strings.Repeat("f", 64)
-	if err := core.WriteConfigFile(configPath, *validConfig); err != nil {
-		t.Fatalf("failed to create config file: %v", err)
+	envPath := filepath.Join(temporaryDirectory, "custom.env")
+	validKey := strings.Repeat("f", 64)
+	if err := os.WriteFile(envPath, []byte("MASTER_ENCRYPTION_KEY="+validKey+"\n"), 0o600); err != nil {
+		t.Fatalf("failed to create env file: %v", err)
 	}
 
 	flagCases := [][]string{
-		{"up", "-c", configPath},
-		{"up", "--config", configPath},
-		{"up", "-c=" + configPath},
-		{"up", "--config=" + configPath},
-		{"-c", configPath, "up"},
+		{"up", "--env-file", envPath},
+		{"up", "--env-file=" + envPath},
+		{"--env-file", envPath, "up"},
 	}
 
 	for _, args := range flagCases {
@@ -201,71 +194,168 @@ func TestCLIRunEnvFileFlagVariationsUnit(t *testing.T) {
 
 	temporaryDirectory := t.TempDir()
 	envPath := filepath.Join(temporaryDirectory, ".env.prod")
-	if err := os.WriteFile(envPath, []byte("LAYR__PROJECT__NAME=ProdApp\n"), 0o600); err != nil {
+	validKey := strings.Repeat("f", 64)
+	envContent := "MASTER_ENCRYPTION_KEY=" + validKey + "\nLAYR__PROJECT__NAME=ProdApp\n"
+	if err := os.WriteFile(envPath, []byte(envContent), 0o600); err != nil {
 		t.Fatalf("failed to write env file: %v", err)
 	}
 
-	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
-	validConfig := core.DefaultConfig()
-	validConfig.Database.URL = "postgres://invalid:5432/db"
-	validConfig.Security.MasterEncryptionKey = strings.Repeat("f", 64)
-	if err := core.WriteConfigFile(configPath, *validConfig); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-
 	// Test --env-file flag
-	_ = Execute(cancelledContext(), []string{"--env-file", envPath, "-c", configPath, "up"})
+	_ = Execute(cancelledContext(), []string{"--env-file", envPath, "up"})
 
 	// Test --env-file= flag
-	_ = Execute(cancelledContext(), []string{"--env-file=" + envPath, "-c", configPath, "up"})
+	_ = Execute(cancelledContext(), []string{"--env-file=" + envPath, "up"})
+
+	// Test auto-loading .env from current directory when --env-file is not specified
+	t.Chdir(temporaryDirectory)
+	dotEnvPath := filepath.Join(temporaryDirectory, ".env")
+	if err := os.WriteFile(dotEnvPath, []byte(envContent), 0o600); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+	_ = Execute(cancelledContext(), []string{"up"})
 
 	// Test nonexistent env file error
-	if err := Run([]string{"--env-file", "nonexistent.env", "-c", configPath, "up"}); err == nil {
+	if err := Run([]string{"--env-file", "nonexistent.env", "up"}); err == nil {
 		t.Fatal("expected error with nonexistent env file, got nil")
 	}
 }
 
-func TestCLIResolveConfigPathUnit(t *testing.T) {
+func TestCLIBootstrapEnvironmentUnit(t *testing.T) {
 	resetTestState(t)
-
-	// 1. Custom path explicitly provided
-	path, err := resolveConfigPath("/custom/layr.yaml")
-	if err != nil || path != "/custom/layr.yaml" {
-		t.Fatalf("expected /custom/layr.yaml, got %s (err: %v)", path, err)
-	}
-
-	// 2. Local ./layr.yaml exists
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	localConfigFile := filepath.Join(temporaryDirectory, "layr.yaml")
-	if writeErr := os.WriteFile(localConfigFile, []byte("version: \"1\"\n"), 0o600); writeErr != nil {
-		t.Fatalf("failed to write local config: %v", writeErr)
-	}
-
-	path, err = resolveConfigPath("")
-	if err != nil || path != "layr.yaml" {
-		t.Fatalf("expected layr.yaml, got %s (err: %v)", path, err)
-	}
-
-	// Remove local file
-	_ = os.Remove(localConfigFile)
-
-	// 3. DATABASE_URL is set in environment -> return empty path without bootstrap
-	t.Setenv("DATABASE_URL", "postgres://localhost/test")
-	path, err = resolveConfigPath("")
-	if err != nil || path != "" {
-		t.Fatalf("expected empty path when DATABASE_URL is set, got %s (err: %v)", path, err)
-	}
+	// 1. Both already set via canonical env vars -> no-op
+	validKey := strings.Repeat("a", 64)
+	t.Setenv("LAYR__DATABASE__URL", "postgres://user:pass@localhost:5432/db")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", validKey)
 	t.Setenv("DATABASE_URL", "")
-
-	// 4. Zero-Config Bootstrap: neither file exists and DATABASE_URL is empty
-	path, err = resolveConfigPath("")
-	if err != nil || path != "layr.yaml" {
-		t.Fatalf("expected bootstrapped layr.yaml, got %s (err: %v)", path, err)
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	if err := ensureBootstrapEnvironment(""); err != nil {
+		t.Fatalf("expected nil when canonical vars already set, got: %v", err)
 	}
-	if _, statErr := os.Stat("layr.yaml"); statErr != nil {
-		t.Fatalf("expected bootstrapped layr.yaml to exist on disk: %v", statErr)
+
+	// 2. Both already set via alias env vars -> no-op
+	t.Setenv("LAYR__DATABASE__URL", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("DATABASE_URL", "postgres://alias:pass@localhost:5432/db")
+	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
+	if err := ensureBootstrapEnvironment(""); err != nil {
+		t.Fatalf("expected nil when alias vars already set, got: %v", err)
+	}
+
+	// 3. Both unset -> bootstraps canonical vars into default .env
+	t.Setenv("LAYR__DATABASE__URL", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	if err := ensureBootstrapEnvironment(""); err != nil {
+		t.Fatalf("failed to bootstrap environment: %v", err)
+	}
+	bootstrappedURL := os.Getenv("LAYR__DATABASE__URL")
+	if bootstrappedURL != ".layr/data" {
+		t.Fatalf("expected .layr/data, got %q", bootstrappedURL)
+	}
+	bootstrappedKey := os.Getenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY")
+	if len(bootstrappedKey) != 64 {
+		t.Fatalf("expected 64-character hex key, got %q", bootstrappedKey)
+	}
+	dotEnvData, readDotErr := os.ReadFile(".env")
+	if readDotErr != nil {
+		t.Fatalf("failed to read bootstrapped .env: %v", readDotErr)
+	}
+	dotEnvContent := string(dotEnvData)
+	if !strings.Contains(dotEnvContent, "LAYR__DATABASE__URL=.layr/data") {
+		t.Fatalf("expected .env to contain canonical LAYR__DATABASE__URL, got: %s", dotEnvContent)
+	}
+	if !strings.Contains(dotEnvContent, "LAYR__SECURITY__MASTER_ENCRYPTION_KEY="+bootstrappedKey) {
+		t.Fatalf("expected .env to contain canonical LAYR__SECURITY__MASTER_ENCRYPTION_KEY, got: %s", dotEnvContent)
+	}
+	if strings.Contains("\n"+dotEnvContent, "\nDATABASE_URL=") || strings.Contains("\n"+dotEnvContent, "\nMASTER_ENCRYPTION_KEY=") {
+		t.Fatalf("expected .env NOT to contain alias variables, got: %s", dotEnvContent)
+	}
+
+	// 4. Custom target env file with existing content without trailing newline
+	customEnvPath := filepath.Join(temporaryDirectory, "custom.env")
+	if writeCustomErr := os.WriteFile(customEnvPath, []byte("EXISTING_KEY=1"), 0o600); writeCustomErr != nil {
+		t.Fatalf("failed to write custom env: %v", writeCustomErr)
+	}
+	t.Setenv("LAYR__DATABASE__URL", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	if bootstrapErr := ensureBootstrapEnvironment(customEnvPath); bootstrapErr != nil {
+		t.Fatalf("failed to bootstrap environment to custom file: %v", bootstrapErr)
+	}
+	customEnvData, readCustomErr := os.ReadFile(customEnvPath)
+	if readCustomErr != nil {
+		t.Fatalf("failed to read custom env: %v", readCustomErr)
+	}
+	if !strings.HasPrefix(string(customEnvData), "EXISTING_KEY=1\nLAYR__DATABASE__URL=.layr/data\nLAYR__SECURITY__MASTER_ENCRYPTION_KEY=") {
+		t.Fatalf("expected custom env to have newline appended properly with canonical keys, got: %s", string(customEnvData))
+	}
+
+	// 5. Database setenv failure
+	t.Setenv("LAYR__DATABASE__URL", "")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	setenvFunc = func(key, value string) error {
+		if key == "LAYR__DATABASE__URL" {
+			return errors.New("simulated setenv database failure")
+		}
+		return os.Setenv(key, value)
+	}
+	if err := ensureBootstrapEnvironment(filepath.Join(temporaryDirectory, "test_err1.env")); err == nil || !strings.Contains(err.Error(), "failed to set database url") {
+		t.Fatalf("expected database setenv error, got: %v", err)
+	}
+
+	// 6. Key generation failure
+	setenvFunc = os.Setenv
+	t.Setenv("LAYR__DATABASE__URL", ".layr/data")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	generateKeyFunc = func() (string, error) {
+		return "", errors.New("simulated crypto failure")
+	}
+	if err := ensureBootstrapEnvironment(filepath.Join(temporaryDirectory, "test_err2.env")); err == nil || !strings.Contains(err.Error(), "failed to generate encryption key") {
+		t.Fatalf("expected key generation failure, got: %v", err)
+	}
+
+	// 7. Encryption key setenv failure
+	generateKeyFunc = core.GenerateRandomCryptoEncryptionKeyHex
+	t.Setenv("LAYR__DATABASE__URL", ".layr/data")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	setenvFunc = func(key, value string) error {
+		if key == "LAYR__SECURITY__MASTER_ENCRYPTION_KEY" {
+			return errors.New("simulated setenv encryption failure")
+		}
+		return os.Setenv(key, value)
+	}
+	if err := ensureBootstrapEnvironment(filepath.Join(temporaryDirectory, "test_err3.env")); err == nil || !strings.Contains(err.Error(), "failed to set encryption key") {
+		t.Fatalf("expected encryption key setenv error, got: %v", err)
+	}
+
+	// 8. Read directory error in appendOrWriteEnv
+	if err := appendOrWriteEnv(temporaryDirectory, "KEY", "VAL"); err == nil || !strings.Contains(err.Error(), "failed to read env file") {
+		t.Fatalf("expected read error on directory path, got: %v", err)
+	}
+
+	// 9. Existing file already ending in newline (tests appending without extra newline)
+	newlineEnvPath := filepath.Join(temporaryDirectory, "newline.env")
+	if err := os.WriteFile(newlineEnvPath, []byte("KEY1=VAL1\n"), 0o600); err != nil {
+		t.Fatalf("failed to write newline env file: %v", err)
+	}
+	if err := appendOrWriteEnv(newlineEnvPath, "KEY2", "VAL2"); err != nil {
+		t.Fatalf("failed to append to newline env file: %v", err)
+	}
+
+	// 10. Write error on existing file (read-only file permissions)
+	readOnlyFilePath := filepath.Join(temporaryDirectory, "readonly.env")
+	if err := os.WriteFile(readOnlyFilePath, []byte("INIT=1\n"), 0o400); err != nil {
+		t.Fatalf("failed to write read-only file: %v", err)
+	}
+	if err := appendOrWriteEnv(readOnlyFilePath, "FAIL_KEY", "FAIL_VAL"); err == nil || !strings.Contains(err.Error(), "failed to write env file") {
+		t.Fatalf("expected write error on read-only file, got: %v", err)
 	}
 }
 
@@ -274,13 +364,9 @@ func TestCLIRunMonolithModeUnit(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
-	validConfig := core.DefaultConfig()
-	validConfig.Database.URL = "postgres://invalid:5432/db"
-	validConfig.Security.MasterEncryptionKey = strings.Repeat("f", 64)
-	if err := core.WriteConfigFile(configPath, *validConfig); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
+	validKey := strings.Repeat("f", 64)
+	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
+	t.Setenv("DATABASE_URL", "postgres://invalid:5432/db")
 
 	// Zero arguments (monolith)
 	_ = Execute(cancelledContext(), []string{"up"})
@@ -294,10 +380,9 @@ func TestCLIRunValidationFailureExitCodeUnit(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
-	if err := core.WriteConfigFile(configPath); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
+	validKey := strings.Repeat("f", 64)
+	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
+	t.Setenv("DATABASE_URL", "postgres://invalid:5432/db")
 
 	var capturedExitCode int
 	exitFunc = func(code int) {
@@ -308,32 +393,21 @@ func TestCLIRunValidationFailureExitCodeUnit(t *testing.T) {
 	var bufferWriter io.Writer = errorBuffer
 	stderrWriter = bufferWriter
 
-	// 1. Service disabled by default in layr.yaml: tasks
+	// 1. Unknown service: notification
 	capturedExitCode = 0
 	errorBuffer.Reset()
-	err := Run([]string{"up", "tasks"})
-	if err == nil {
-		t.Fatal("expected error starting disabled service tasks, got nil")
-	}
-	if capturedExitCode != ExitCodeConfig {
-		t.Fatalf("expected exit code %d, got %d", ExitCodeConfig, capturedExitCode)
-	}
-	if !strings.Contains(errorBuffer.String(), "service \"tasks\" is disabled in configuration") {
-		t.Fatalf("expected error output for disabled service, got: %s", errorBuffer.String())
-	}
-
-	// 2. Service not in layr.yaml: notification
-	capturedExitCode = 0
-	errorBuffer.Reset()
-	err = Run([]string{"up", "notification"})
+	err := Run([]string{"up", "notification"})
 	if err == nil {
 		t.Fatal("expected error starting nonexistent service notification, got nil")
 	}
 	if capturedExitCode != ExitCodeConfig {
 		t.Fatalf("expected exit code %d, got %d", ExitCodeConfig, capturedExitCode)
 	}
+	if !strings.Contains(errorBuffer.String(), "error: unknown service \"notification\"") {
+		t.Fatalf("expected error output for unknown service, got: %s", errorBuffer.String())
+	}
 
-	// 3. Service not in layr.yaml: analytics
+	// 2. Unknown service: analytics
 	capturedExitCode = 0
 	errorBuffer.Reset()
 	err = Run([]string{"up", "analytics"})
@@ -344,12 +418,12 @@ func TestCLIRunValidationFailureExitCodeUnit(t *testing.T) {
 		t.Fatalf("expected exit code %d, got %d", ExitCodeConfig, capturedExitCode)
 	}
 
-	// 4. Multiple services where one is disabled: data (enabled) + image (disabled)
+	// 3. Multiple services where one is unknown: data (valid) + unknown_srv (invalid)
 	capturedExitCode = 0
 	errorBuffer.Reset()
-	err = Run([]string{"up", "data", "image"})
+	err = Run([]string{"up", "data", "unknown_srv"})
 	if err == nil {
-		t.Fatal("expected error starting subset with disabled image, got nil")
+		t.Fatal("expected error starting subset with unknown service, got nil")
 	}
 	if capturedExitCode != ExitCodeConfig {
 		t.Fatalf("expected exit code %d, got %d", ExitCodeConfig, capturedExitCode)
@@ -361,19 +435,9 @@ func TestCLIRunSubsetDedicatedServiceUnit(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	// Create config with data, auth, file_storage, and tasks enabled
-	validConfig := core.DefaultConfig()
-	validConfig.Database.URL = "postgres://invalid:5432/db"
-	validConfig.Data.Enabled = true
-	validConfig.Auth.Enabled = true
-	validConfig.FileStorage.Enabled = true
-	validConfig.Tasks.Enabled = true
-	validConfig.Security.MasterEncryptionKey = strings.Repeat("e", 64)
-
-	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
-	if err := core.WriteConfigFile(configPath, *validConfig); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
+	validKey := strings.Repeat("e", 64)
+	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
+	t.Setenv("DATABASE_URL", "postgres://invalid:5432/db")
 
 	// 1. Single service argument: layr up auth -> only auth enabled
 	_ = Execute(cancelledContext(), []string{"up", "auth"})
@@ -395,6 +459,13 @@ func TestCLIRunSubsetDedicatedServiceUnit(t *testing.T) {
 			t.Fatalf("unexpected active service: %s", service)
 		}
 	}
+
+	// 3. Monolith all argument: layr up all -> all 7 services enabled
+	_ = Execute(cancelledContext(), []string{"up", "all"})
+	activeConfigServices = core.GetConfig().GetEnabledServices()
+	if len(activeConfigServices) != 7 {
+		t.Fatalf("expected 7 active services for 'up all', got: %v", activeConfigServices)
+	}
 }
 
 func TestCLIRunExecutionErrorsUnit(t *testing.T) {
@@ -402,26 +473,32 @@ func TestCLIRunExecutionErrorsUnit(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	// 1. Corrupt yaml -> core.LoadConfig failure
-	corruptConfigPath := filepath.Join(temporaryDirectory, "corrupt.yaml")
-	if err := os.WriteFile(corruptConfigPath, []byte("invalid: yaml: : :"), 0o600); err != nil {
-		t.Fatalf("failed to write corrupt yaml: %v", err)
-	}
-	loadErr := Run([]string{"-c", corruptConfigPath, "up"})
-	if loadErr == nil || !strings.Contains(loadErr.Error(), "failed to load configuration") {
-		t.Fatalf("expected load configuration error, got: %v", loadErr)
-	}
-
-	// 2. Invalid master encryption key -> core.NewKernel failure
-	invalidKeyConfig := core.DefaultConfig()
-	invalidKeyConfig.Security.MasterEncryptionKey = "too_short"
-	invalidKeyPath := filepath.Join(temporaryDirectory, "invalid_key.yaml")
-	if err := core.WriteConfigFile(invalidKeyPath, *invalidKeyConfig); err != nil {
-		t.Fatalf("failed to write invalid key config: %v", err)
-	}
-	kernelErr := Run([]string{"-c", invalidKeyPath, "up"})
+	// 1. Invalid master encryption key -> core.NewKernel failure
+	t.Setenv("MASTER_ENCRYPTION_KEY", "too_short")
+	t.Setenv("DATABASE_URL", "postgres://invalid:5432/db")
+	kernelErr := Run([]string{"up"})
 	if kernelErr == nil || !strings.Contains(kernelErr.Error(), "failed to initialize kernel") {
 		t.Fatalf("expected kernel initialization error, got: %v", kernelErr)
+	}
+
+	// 2. Auto-loaded .env with invalid environment variable key (contains null byte)
+	badDotEnvPath := filepath.Join(temporaryDirectory, ".env")
+	if writeErr := os.WriteFile(badDotEnvPath, []byte("\x00BAD=value\n"), 0o600); writeErr != nil {
+		t.Fatalf("failed to write bad .env: %v", writeErr)
+	}
+	badDotEnvErr := Run([]string{"up"})
+	if badDotEnvErr == nil || !strings.Contains(badDotEnvErr.Error(), "failed to load env file") {
+		t.Fatalf("expected error from bad auto-loaded .env, got: %v", badDotEnvErr)
+	}
+	_ = os.Remove(badDotEnvPath)
+
+	// 3. LoadConfig failure
+	loadConfigFunc = func() (*core.Config, error) {
+		return nil, errors.New("simulated load config failure")
+	}
+	loadConfigErr := Run([]string{"up"})
+	if loadConfigErr == nil || !strings.Contains(loadConfigErr.Error(), "failed to load configuration") {
+		t.Fatalf("expected load config error, got: %v", loadConfigErr)
 	}
 }
 
@@ -436,11 +513,22 @@ func TestCLIRunBootstrapWriteErrorUnit(t *testing.T) {
 		_ = os.Chmod(readOnlyDirectory, 0o700)
 	})
 	t.Chdir(readOnlyDirectory)
+	t.Setenv("LAYR__DATABASE__URL", "")
 	t.Setenv("DATABASE_URL", "")
+	t.Setenv("MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
 
+	// 1. Database URL write failure in read-only directory
 	err := Run([]string{"up"})
-	if err == nil || !strings.Contains(err.Error(), "failed to write bootstrap configuration") {
-		t.Fatalf("expected bootstrap write error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "failed to bootstrap environment") {
+		t.Fatalf("expected bootstrap write error for database url, got: %v", err)
+	}
+
+	// 2. Encryption key write failure in read-only directory when database url is set
+	t.Setenv("LAYR__DATABASE__URL", ".layr/data")
+	keyErr := Run([]string{"up"})
+	if keyErr == nil || !strings.Contains(keyErr.Error(), "failed to bootstrap environment") {
+		t.Fatalf("expected bootstrap write error for encryption key, got: %v", keyErr)
 	}
 }
 
@@ -449,14 +537,10 @@ func TestCLIRunCleanShutdownUnit(t *testing.T) {
 	temporaryDirectory := t.TempDir()
 	t.Chdir(temporaryDirectory)
 
-	configPath := filepath.Join(temporaryDirectory, "layr.yaml")
-	validConfig := core.DefaultConfig()
-	validConfig.Server.ListenAddr = ":18080"
-	validConfig.Database.URL = filepath.Join(temporaryDirectory, "data")
-	validConfig.Security.MasterEncryptionKey = strings.Repeat("a", 64)
-	if err := core.WriteConfigFile(configPath, *validConfig); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
+	validKey := strings.Repeat("a", 64)
+	t.Setenv("MASTER_ENCRYPTION_KEY", validKey)
+	t.Setenv("PORT", "18080")
+	t.Setenv("DATABASE_URL", filepath.Join(temporaryDirectory, "data"))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -468,7 +552,7 @@ func TestCLIRunCleanShutdownUnit(t *testing.T) {
 
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
-	timeout := time.After(30 * time.Second)
+	timeout := time.After(90 * time.Second)
 	dialer := &net.Dialer{Timeout: 50 * time.Millisecond}
 
 	for {

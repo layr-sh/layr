@@ -21,8 +21,12 @@ import (
 	_ "layr.sh/tasks"       // registers tasks service factory
 )
 
-// ExitCodeConfig represents the exit code for configuration errors (EX_CONFIG = 78).
-const ExitCodeConfig = core.ConfigFailureExitCode
+const (
+	// ExitCodeConfig represents the exit code for configuration errors (EX_CONFIG = 78).
+	ExitCodeConfig = core.ConfigFailureExitCode
+
+	defaultEnvFilePermission = 0o600
+)
 
 const usageHelp = `Usage: layr <command> [flags] [services...]
 
@@ -33,19 +37,20 @@ Services:
   data, auth, tasks, file_storage, image, function, console, all
 
 Flags:
-  -c, --config <path>    Custom path to layr.yaml (default: ./layr.yaml)
       --env-file <path>  Load environment variables from specific file
   -h, --help             Show help
 `
 
 var (
-	exitFunc     = os.Exit
-	stderrWriter = io.Writer(os.Stderr)
-	stdoutWriter = io.Writer(os.Stdout)
+	exitFunc        = os.Exit
+	stderrWriter    = io.Writer(os.Stderr)
+	stdoutWriter    = io.Writer(os.Stdout)
+	generateKeyFunc = core.GenerateRandomCryptoEncryptionKeyHex
+	setenvFunc      = os.Setenv
+	loadConfigFunc  = func() (*core.Config, error) { return core.LoadConfig() }
 )
 
 type cliOptions struct {
-	configPath  string
 	envFilePath string
 	command     string
 	services    []string
@@ -73,38 +78,34 @@ func Execute(ctx context.Context, args []string) error {
 		if envErr := LoadEnvFile(options.envFilePath); envErr != nil {
 			return envErr
 		}
+	} else if _, err := os.Stat(".env"); err == nil {
+		if envErr := LoadEnvFile(".env"); envErr != nil {
+			return envErr
+		}
 	}
 
-	configPath, pathErr := resolveConfigPath(options.configPath)
-	if pathErr != nil {
-		return pathErr
+	if err := ensureBootstrapEnvironment(options.envFilePath); err != nil {
+		return fmt.Errorf("failed to bootstrap environment: %w", err)
 	}
 
-	config, loadErr := core.LoadConfig(configPath)
+	config, loadErr := loadConfigFunc()
 	if loadErr != nil {
 		return fmt.Errorf("failed to load configuration: %w", loadErr)
 	}
 
 	if !isMonolithMode(options.services) {
+		var activeServices []string
 		for _, serviceName := range options.services {
-			if !config.IsServiceEnabled(serviceName) {
-				_, _ = fmt.Fprintf(stderrWriter, "error: service %q is disabled in configuration\n", serviceName)
+			serviceName = strings.ToLower(strings.TrimSpace(serviceName))
+			if !core.IsValidService(serviceName) {
+				_, _ = fmt.Fprintf(stderrWriter, "error: unknown service %q\n", serviceName)
 				exitFunc(ExitCodeConfig)
-				return fmt.Errorf("service %q is disabled in configuration: exit %d", serviceName, ExitCodeConfig)
+				return fmt.Errorf("unknown service %q: exit %d", serviceName, ExitCodeConfig)
 			}
+			activeServices = append(activeServices, serviceName)
 		}
 
-		config.Data.Enabled = false
-		config.Auth.Enabled = false
-		config.FileStorage.Enabled = false
-		config.Tasks.Enabled = false
-		config.Image.Enabled = false
-		config.Function.Enabled = false
-		config.Console.Enabled = false
-
-		for _, serviceName := range options.services {
-			_ = config.EnableService(serviceName)
-		}
+		config.SetEnabledServices(activeServices)
 		core.SetLoadedConfig(config)
 	}
 
@@ -122,38 +123,71 @@ func Execute(ctx context.Context, args []string) error {
 
 // LoadEnvFile loads environment variables from a file into the process environment.
 func LoadEnvFile(path string) error {
-	fileData, err := os.ReadFile(path)
+	if err := core.LoadEnvFile(path); err != nil {
+		return fmt.Errorf("failed to load env file: %w", err)
+	}
+	return nil
+}
+
+func ensureBootstrapEnvironment(targetEnvFile string) error {
+	if targetEnvFile == "" {
+		targetEnvFile = ".env"
+	}
+
+	databaseURL := os.Getenv("LAYR__DATABASE__URL")
+	if databaseURL == "" {
+		databaseURL = os.Getenv("DATABASE_URL")
+	}
+	if databaseURL == "" {
+		const defaultDatabaseURL = ".layr/data"
+		if err := appendOrWriteEnv(targetEnvFile, "LAYR__DATABASE__URL", defaultDatabaseURL); err != nil {
+			return fmt.Errorf("failed to persist database url: %w", err)
+		}
+		if err := setenvFunc("LAYR__DATABASE__URL", defaultDatabaseURL); err != nil {
+			return fmt.Errorf("failed to set database url environment variable: %w", err)
+		}
+	}
+
+	masterEncryptionKey := os.Getenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY")
+	if masterEncryptionKey == "" {
+		masterEncryptionKey = os.Getenv("MASTER_ENCRYPTION_KEY")
+	}
+	if masterEncryptionKey == "" {
+		key, err := generateKeyFunc()
+		if err != nil {
+			return fmt.Errorf("failed to generate encryption key: %w", err)
+		}
+		if err := appendOrWriteEnv(targetEnvFile, "LAYR__SECURITY__MASTER_ENCRYPTION_KEY", key); err != nil {
+			return fmt.Errorf("failed to persist encryption key: %w", err)
+		}
+		if err := setenvFunc("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", key); err != nil {
+			return fmt.Errorf("failed to set encryption key environment variable: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func appendOrWriteEnv(path, key, value string) error {
+	line := fmt.Sprintf("%s=%s\n", key, value)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read env file %s: %w", path, err)
-	}
-
-	for _, line := range strings.Split(string(fileData), "\n") {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
-			continue
-		}
-
-		key, value, ok := strings.Cut(trimmedLine, "=")
-		if !ok {
-			continue
-		}
-
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-
-		if len(value) >= 2 {
-			first := value[0]
-			last := value[len(value)-1]
-			if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
-				value = value[1 : len(value)-1]
+		if os.IsNotExist(err) {
+			if writeErr := os.WriteFile(path, []byte(line), defaultEnvFilePermission); writeErr != nil {
+				return fmt.Errorf("failed to write env file: %w", writeErr)
 			}
+			return nil
 		}
-
-		if setErr := os.Setenv(key, value); setErr != nil {
-			return fmt.Errorf("failed to set environment variable %s: %w", key, setErr)
-		}
+		return fmt.Errorf("failed to read env file: %w", err)
 	}
-
+	content := string(data)
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	content += line
+	if writeErr := os.WriteFile(path, []byte(content), defaultEnvFilePermission); writeErr != nil {
+		return fmt.Errorf("failed to write env file: %w", writeErr)
+	}
 	return nil
 }
 
@@ -166,16 +200,6 @@ func parseArgs(args []string) (cliOptions, error) {
 		switch {
 		case arg == "-h" || arg == "--help" || arg == "help":
 			options.showHelp = true
-		case arg == "-c" || arg == "--config":
-			if index+1 >= len(args) {
-				return options, fmt.Errorf("flag %s requires an argument", arg)
-			}
-			index++
-			options.configPath = args[index]
-		case strings.HasPrefix(arg, "-c="):
-			options.configPath = strings.TrimPrefix(arg, "-c=")
-		case strings.HasPrefix(arg, "--config="):
-			options.configPath = strings.TrimPrefix(arg, "--config=")
 		case arg == "--env-file":
 			if index+1 >= len(args) {
 				return options, fmt.Errorf("flag %s requires an argument", arg)
@@ -206,25 +230,6 @@ func parseArgs(args []string) (cliOptions, error) {
 
 	options.services = positional[1:]
 	return options, nil
-}
-
-func resolveConfigPath(customPath string) (string, error) {
-	if customPath != "" {
-		return customPath, nil
-	}
-
-	if _, err := os.Stat("layr.yaml"); err == nil {
-		return "layr.yaml", nil
-	}
-
-	if os.Getenv("DATABASE_URL") == "" {
-		if err := core.WriteConfigFile("layr.yaml"); err != nil {
-			return "", fmt.Errorf("failed to write bootstrap configuration: %w", err)
-		}
-		return "layr.yaml", nil
-	}
-
-	return "", nil
 }
 
 func isMonolithMode(services []string) bool {

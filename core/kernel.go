@@ -380,14 +380,18 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 		return fmt.Errorf("failed to count console users: %w", err)
 	}
 
+	config := GetConfig()
 	log.Debugf("checking console root account status")
 	if count > 0 {
+		if os.Getenv("LAYR__ROOT_USER__EMAIL") != "" || os.Getenv("LAYR__ROOT_USER__PASSWORD") != "" || config.RootUser.Password != "" || (config.RootUser.Email != "" && config.RootUser.Email != "root@layr.local") {
+			stdlog.Printf("Initial root user already exists; ignoring root user environment variables (LAYR__ROOT_USER__EMAIL, LAYR__ROOT_USER__PASSWORD)")
+			log.Infof("initial root user already exists; ignoring root user environment variables")
+		}
 		return nil
 	}
 
-	config := GetConfig()
-	email := config.Console.InitialUserEmail
-	plainPassword := config.Console.InitialUserPassword
+	email := config.RootUser.Email
+	plainPassword := config.RootUser.Password
 
 	if email == "" {
 		email = "root@layr.local"

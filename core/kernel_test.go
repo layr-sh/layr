@@ -35,9 +35,7 @@ func (mock *mockServiceRunner) Stop() {
 func TestCoreKernelValidationUnit(t *testing.T) {
 	// 1. Invalid config with zero functional services -> must fail
 	invalidConfig := DefaultConfig()
-	invalidConfig.Data.Enabled = false
-	invalidConfig.Auth.Enabled = false
-	invalidConfig.FileStorage.Enabled = false
+	invalidConfig.SetEnabledServices([]string{"console"})
 	invalidConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(invalidConfig)
 	defer UnloadConfig()
@@ -49,7 +47,6 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 
 	// 2. Invalid master encryption key
 	invalidMasterEncryptionKeyConfig := DefaultConfig()
-	invalidMasterEncryptionKeyConfig.Data.Enabled = true
 	invalidMasterEncryptionKeyConfig.Security.MasterEncryptionKey = "short"
 	SetLoadedConfig(invalidMasterEncryptionKeyConfig)
 
@@ -60,7 +57,6 @@ func TestCoreKernelValidationUnit(t *testing.T) {
 
 	// 3. Valid config
 	validConfig := DefaultConfig()
-	validConfig.Data.Enabled = true
 	validConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(validConfig)
 
@@ -92,7 +88,6 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 	}
 
 	validConfig := DefaultConfig()
-	validConfig.Data.Enabled = true
 	validConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(validConfig)
 	defer UnloadConfig()
@@ -255,7 +250,6 @@ func TestCoreKernelValidateSubsystemsUnit(t *testing.T) {
 
 func TestCoreKernelWithDBUnit(t *testing.T) {
 	validConfig := DefaultConfig()
-	validConfig.Data.Enabled = true
 	validConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(validConfig)
 	defer UnloadConfig()

@@ -26,7 +26,6 @@ func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = dataDirectory
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -80,7 +79,6 @@ func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
 
 func TestCoreKernelFailureEmbeddedBadPathIntegration(t *testing.T) {
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	config.Database.URL = "/dev/null/forbidden/path"
 	SetLoadedConfig(config)
@@ -96,7 +94,6 @@ func TestCoreKernelFailureEmbeddedBadPathIntegration(t *testing.T) {
 
 func TestCoreKernelFailureExternalBadURLIntegration(t *testing.T) {
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	config.Database.URL = "postgres://invalid:invalid@127.0.0.1:19999/db?sslmode=disable"
 	SetLoadedConfig(config)
@@ -136,12 +133,6 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
-	config.Auth.Enabled = true
-	config.FileStorage.Enabled = true
-	config.Tasks.Enabled = true
-	config.Image.Enabled = true
-	config.Function.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -204,10 +195,6 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
-	config.Auth.Enabled = true
-	config.FileStorage.Enabled = true
-	config.Tasks.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -270,7 +257,6 @@ func TestCoreKernelServerErrorIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	config.Server.ListenAddr = listener.Addr().String()
 	SetLoadedConfig(config)
@@ -306,7 +292,6 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -336,7 +321,6 @@ func TestCoreKernelMigrationErrorIntegration(t *testing.T) {
 	// Test KV store error with invalid redis URL
 	badKVConfig := DefaultConfig()
 	badKVConfig.Database.URL = databaseURL
-	badKVConfig.Data.Enabled = true
 	badKVConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	badKVConfig.KVStore.Backend = "redis"
 	badKVConfig.KVStore.URL = "redis://invalid-host:9999"
@@ -381,7 +365,6 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -428,7 +411,6 @@ func (plainRunner *plainMockRunner) Stop() {}
 
 func TestCoreKernelStopWithFullSubsystemsIntegration(t *testing.T) {
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -475,7 +457,6 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -590,7 +571,6 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -973,7 +953,6 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	config := DefaultConfig()
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	config.Data.Enabled = true
 	SetLoadedConfig(config)
 	defer UnloadConfig()
 
@@ -1471,7 +1450,7 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	postgresContainer, err := tcpostgres.Run(ctx,
+	postgresContainer, startContainerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
 		tcpostgres.WithDatabase("layr"),
 		tcpostgres.WithUsername("layr"),
@@ -1481,19 +1460,19 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 				WithOccurrence(2).
 				WithStartupTimeout(60*time.Second)),
 	)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
+	if startContainerErr != nil {
+		t.Fatalf("failed to start postgres container: %v", startContainerErr)
 	}
 	defer func() { _ = postgresContainer.Terminate(context.WithoutCancel(ctx)) }()
 
-	databaseURL, err := postgresContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("failed to get connection string: %v", err)
+	databaseURL, connStrErr := postgresContainer.ConnectionString(ctx, "sslmode=disable")
+	if connStrErr != nil {
+		t.Fatalf("failed to get connection string: %v", connStrErr)
 	}
 
-	db, err := NewDatabasePool(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("failed to create db connection pool: %v", err)
+	db, dbErr := NewDatabasePool(ctx, databaseURL)
+	if dbErr != nil {
+		t.Fatalf("failed to create db connection pool: %v", dbErr)
 	}
 	defer db.Close()
 
@@ -1556,12 +1535,21 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 		t.Fatalf("idempotent bootstrapRootAccount failed: %v", err)
 	}
 
+	// 7b. Idempotent re-run when count > 0 with root user env set (shows clear message that root user env is ignored)
+	t.Setenv("LAYR__ROOT_USER__EMAIL", "ignored@layr.sh")
+	t.Setenv("LAYR__ROOT_USER__PASSWORD", "IgnoredPassword123!")
+	if err := kernel.bootstrapRootAccount(ctx); err != nil {
+		t.Fatalf("idempotent bootstrapRootAccount with env failed: %v", err)
+	}
+	t.Setenv("LAYR__ROOT_USER__EMAIL", "")
+	t.Setenv("LAYR__ROOT_USER__PASSWORD", "")
+
 	// 8. Successful custom bootstrap
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
 	customConfig := DefaultConfig()
-	customConfig.Console.InitialUserEmail = "console_user@custom.org"
-	customConfig.Console.InitialUserPassword = "MyCustomPassword123!"
+	customConfig.RootUser.Email = "console_user@custom.org"
+	customConfig.RootUser.Password = "MyCustomPassword123!"
 	SetLoadedConfig(customConfig)
 	defer UnloadConfig()
 	customKernel := &Kernel{
@@ -1570,5 +1558,40 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	}
 	if err := customKernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("custom bootstrapRootAccount failed: %v", err)
+	}
+
+	// 9. Successful env var bootstrap (LAYR__ROOT_USER__EMAIL & LAYR__ROOT_USER__PASSWORD)
+	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
+	_, _ = db.Exec(ctx, "DELETE FROM console.users")
+	t.Setenv("LAYR__ROOT_USER__EMAIL", "env_user@custom.org")
+	t.Setenv("LAYR__ROOT_USER__PASSWORD", "EnvCustomPassword123!")
+	envConfig, loadEnvErr := LoadConfig()
+	if loadEnvErr != nil {
+		t.Fatalf("failed to load env config: %v", loadEnvErr)
+	}
+	SetLoadedConfig(envConfig)
+	if err := customKernel.bootstrapRootAccount(ctx); err != nil {
+		t.Fatalf("env bootstrapRootAccount failed: %v", err)
+	}
+	var envUserEmail string
+	_ = db.QueryRow(ctx, "SELECT email FROM console.users WHERE email = 'env_user@custom.org'").Scan(&envUserEmail)
+	if envUserEmail != "env_user@custom.org" {
+		t.Fatalf("expected env_user@custom.org in database, got %q", envUserEmail)
+	}
+
+	// 10. Bootstrap with empty email fallback to default root@layr.local
+	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
+	_, _ = db.Exec(ctx, "DELETE FROM console.users")
+	emptyEmailConfig := DefaultConfig()
+	emptyEmailConfig.RootUser.Email = ""
+	emptyEmailConfig.RootUser.Password = "EmptyEmailPassword123!"
+	SetLoadedConfig(emptyEmailConfig)
+	if err := customKernel.bootstrapRootAccount(ctx); err != nil {
+		t.Fatalf("empty email bootstrapRootAccount failed: %v", err)
+	}
+	var defaultUserEmail string
+	_ = db.QueryRow(ctx, "SELECT email FROM console.users WHERE email = 'root@layr.local'").Scan(&defaultUserEmail)
+	if defaultUserEmail != "root@layr.local" {
+		t.Fatalf("expected root@layr.local in database for empty email fallback, got %q", defaultUserEmail)
 	}
 }
