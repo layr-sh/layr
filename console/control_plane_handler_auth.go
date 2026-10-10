@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"layr.sh/core"
 )
 
@@ -141,8 +141,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignInConsole(responseWrit
 				return
 			}
 		} else {
-			ticketUUID, _ := uuid.NewV7()
-			mfaTicket := "console_mfa_tk_" + ticketUUID.String()
+			ticketUUID := uuid.NewV7().String()
+			mfaTicket := "console_mfa_tk_" + ticketUUID
 			_ = controlPlaneHandler.kernel.KVStore().Set(ctx, "console:mfa_ticket:"+mfaTicket, user.ID, consoleMFATicketTTL)
 			core.WriteJSONResponse(responseWriter, http.StatusOK, SignInConsoleResponse{
 				MFARequired: true,
