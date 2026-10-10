@@ -365,7 +365,7 @@ func TestAuthEmailWebhookDeliveryUnit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		body, _ := io.ReadAll(request.Body)
 		receivedBody = string(body)
-		receivedSignature = request.Header.Get("X-Layr-Signature")
+		receivedSignature = request.Header.Get("Webhook-Signature")
 		responseWriter.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -400,7 +400,7 @@ func TestAuthEmailWebhookDeliveryUnit(t *testing.T) {
 		t.Fatalf("unexpected webhook payload: %s", receivedBody)
 	}
 	if !strings.HasPrefix(receivedSignature, "t=") || !strings.Contains(receivedSignature, "v1=") {
-		t.Fatalf("expected X-Layr-Signature header, got: %s", receivedSignature)
+		t.Fatalf("expected Webhook-Signature header, got: %s", receivedSignature)
 	}
 
 	// Test missing URL error

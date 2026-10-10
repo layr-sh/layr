@@ -117,7 +117,9 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 	var cacheTTL int
 	if operationNode.CacheTTL > 0 {
 		cacheTTL = operationNode.CacheTTL
-	} else if ttlHeader := request.Header.Get("X-Layr-Cache-TTL"); ttlHeader != "" {
+	} else if ttlHeader := request.Header.Get("Cache-TTL"); ttlHeader != "" {
+		cacheTTL, _ = strconv.Atoi(ttlHeader)
+	} else if ttlHeader := request.Header.Get("X-Cache-TTL"); ttlHeader != "" {
 		cacheTTL, _ = strconv.Atoi(ttlHeader)
 	} else if config.Cache.Enabled && config.Cache.QueryTTLSeconds > 0 {
 		cacheTTL = config.Cache.QueryTTLSeconds
@@ -125,10 +127,10 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 
 	keySuffix := operationNode.CacheKeySuffix
 	if keySuffix == "" {
-		keySuffix = request.Header.Get("X-Layr-Cache-Key-Suffix")
+		keySuffix = request.Header.Get("Cache-Key-Suffix")
 	}
 	if keySuffix == "" {
-		keySuffix = request.Header.Get("X-Layr-Cache-Key")
+		keySuffix = request.Header.Get("X-Cache-Key-Suffix")
 	}
 
 	ctx := request.Context()
@@ -145,12 +147,12 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 		userVisibleKey = datakv.BuildGraphQLQueryKeyWithVersion(executeGraphQLInput.Query, executeGraphQLInput.Variables, keySuffix, tableVersion)
 		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleKey)
-		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleKey)
+		responseWriter.Header().Set("Cache-Key", userVisibleKey)
 
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
 			log.Debug("cache hit for GraphQL query")
 			responseWriter.Header().Set("Content-Type", "application/json")
-			responseWriter.Header().Set("X-Layr-Cache", "HIT")
+			responseWriter.Header().Set("Cache-Status", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
 			_, _ = responseWriter.Write([]byte(cached))
 			return
@@ -196,9 +198,9 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if isCacheActive && cacheTTL > 0 && operationNode.Type == graphql.QueryOperationType {
-		responseWriter.Header().Set("X-Layr-Cache", "MISS")
+		responseWriter.Header().Set("Cache-Status", "MISS")
 		if userVisibleKey != "" {
-			responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleKey)
+			responseWriter.Header().Set("Cache-Key", userVisibleKey)
 		}
 	}
 

@@ -25,17 +25,27 @@ type capturingResponseWriter struct {
 
 func (capturingWriter *capturingResponseWriter) WriteHeader(code int) {
 	capturingWriter.statusCode = code
-	if rawStdout := capturingWriter.Header().Get("X-Layr-Stdout"); rawStdout != "" {
+	rawStdout := capturingWriter.Header().Get("Stdout")
+	if rawStdout == "" {
+		rawStdout = capturingWriter.Header().Get("X-Stdout")
+	}
+	if rawStdout != "" {
 		if unescaped, unescapeErr := url.QueryUnescape(rawStdout); unescapeErr == nil {
 			capturingWriter.stdout = unescaped
 		}
-		capturingWriter.Header().Del("X-Layr-Stdout")
+		capturingWriter.Header().Del("Stdout")
+		capturingWriter.Header().Del("X-Stdout")
 	}
-	if rawStderr := capturingWriter.Header().Get("X-Layr-Stderr"); rawStderr != "" {
+	rawStderr := capturingWriter.Header().Get("Stderr")
+	if rawStderr == "" {
+		rawStderr = capturingWriter.Header().Get("X-Stderr")
+	}
+	if rawStderr != "" {
 		if unescaped, unescapeErr := url.QueryUnescape(rawStderr); unescapeErr == nil {
 			capturingWriter.stderr = unescaped
 		}
-		capturingWriter.Header().Del("X-Layr-Stderr")
+		capturingWriter.Header().Del("Stderr")
+		capturingWriter.Header().Del("X-Stderr")
 	}
 	capturingWriter.ResponseWriter.WriteHeader(code)
 }
@@ -254,6 +264,6 @@ func injectAuthHeaders(request *http.Request) {
 
 	authContextJSON, marshalErr := json.Marshal(authContext)
 	if marshalErr == nil {
-		request.Header.Set("X-Layr-Auth-Context", string(authContextJSON))
+		request.Header.Set("Auth-Context", string(authContextJSON))
 	}
 }

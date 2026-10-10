@@ -82,14 +82,14 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	listResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(listResponseRecorder, listRequest)
 	assert.Equal(t, http.StatusOK, listResponseRecorder.Code)
-	assert.Equal(t, "3", listResponseRecorder.Header().Get("X-Total-Count"))
-	assert.Equal(t, "MISS", listResponseRecorder.Header().Get("X-Layr-Cache"))
+	assert.Equal(t, "3", listResponseRecorder.Header().Get("Total-Count"))
+	assert.Equal(t, "MISS", listResponseRecorder.Header().Get("Cache-Status"))
 
 	// List again -> HIT
 	secondListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(secondListResponseRecorder, listRequest)
 	assert.Equal(t, http.StatusOK, secondListResponseRecorder.Code)
-	assert.Equal(t, "HIT", secondListResponseRecorder.Header().Get("X-Layr-Cache"))
+	assert.Equal(t, "HIT", secondListResponseRecorder.Header().Get("Cache-Status"))
 
 	// List when MaxCachedQueries exceeded skips caching
 	tableConfig := service.GetConfigManager().Get()
@@ -99,7 +99,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	capListRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?limit=2", nil)
 	capListRequest.SetPathValue("schema_name", "public")
 	capListRequest.SetPathValue("table_name", "items")
-	capListRequest.Header.Set("X-Layr-Cache-TTL", "60")
+	capListRequest.Header.Set("Cache-TTL", "60")
 	capListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(capListResponseRecorder, capListRequest)
 	assert.Equal(t, http.StatusOK, capListResponseRecorder.Code)
@@ -231,11 +231,21 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	listHeaderRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	listHeaderRequest.SetPathValue("schema_name", "public")
 	listHeaderRequest.SetPathValue("table_name", "items")
-	listHeaderRequest.Header.Set("X-Layr-Cache-TTL", "60")
-	listHeaderRequest.Header.Set("X-Layr-Cache-Key-Suffix", "hdr-suf")
+	listHeaderRequest.Header.Set("Cache-TTL", "60")
+	listHeaderRequest.Header.Set("Cache-Key-Suffix", "hdr-suf")
 	listHeaderResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(listHeaderResponseRecorder, listHeaderRequest)
 	assert.Equal(t, http.StatusOK, listHeaderResponseRecorder.Code)
+
+	// Fallback X-Cache-TTL and X-Cache-Key-Suffix
+	listFallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
+	listFallbackRequest.SetPathValue("schema_name", "public")
+	listFallbackRequest.SetPathValue("table_name", "items")
+	listFallbackRequest.Header.Set("X-Cache-TTL", "60")
+	listFallbackRequest.Header.Set("X-Cache-Key-Suffix", "fallback-suf")
+	listFallbackResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleListRecords(listFallbackResponseRecorder, listFallbackRequest)
+	assert.Equal(t, http.StatusOK, listFallbackResponseRecorder.Code)
 
 	// 14. Service account RLS bypass
 	serviceAccount, _ := serviceAccountManager.Create(ctx, core.CreateServiceAccountInput{
@@ -436,7 +446,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	emptyCountResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(emptyCountResponseRecorder, emptyCountRequest)
 	assert.Equal(t, http.StatusOK, emptyCountResponseRecorder.Code)
-	assert.Equal(t, "0", emptyCountResponseRecorder.Header().Get("X-Total-Count"))
+	assert.Equal(t, "0", emptyCountResponseRecorder.Header().Get("Total-Count"))
 
 	// 22. JSONB and bytea columns in scanRowsToJSONMaps
 	_, err = db.Exec(ctx, `
@@ -576,7 +586,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, `CREATE OR REPLACE FUNCTION public.echo_test(msg text) RETURNS text LANGUAGE sql AS $$ SELECT msg $$;`)
 	rpcBodyReader := bytes.NewReader([]byte(`{"msg":"hello world"}`))
 	rpcRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/echo_test", rpcBodyReader)
-	rpcRequest.Header.Set("X-Layr-Invalidate-Tables", "users, public.products")
+	rpcRequest.Header.Set("Cache-Invalidate-Tables", "users, public.products")
 	rpcRequest.SetPathValue("schema_name", "public")
 	rpcRequest.SetPathValue("function_name", "echo_test")
 	rpcResponseRecorder := httptest.NewRecorder()
@@ -637,7 +647,7 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	rpcMutationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/data/public/rpc/rpc_update_status", bytes.NewReader([]byte(`{"item_status":"updated"}`)))
 	rpcMutationRequest.SetPathValue("schema_name", "public")
 	rpcMutationRequest.SetPathValue("function_name", "rpc_update_status")
-	rpcMutationRequest.Header.Set("X-Layr-Invalidate-Tables", "rpc_demo_items")
+	rpcMutationRequest.Header.Set("X-Cache-Invalidate-Tables", "rpc_demo_items")
 	rpcMutationResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteFunction(rpcMutationResponseRecorder, rpcMutationRequest)
 	assert.Equal(t, http.StatusNoContent, rpcMutationResponseRecorder.Code)

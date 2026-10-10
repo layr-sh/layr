@@ -63,7 +63,7 @@ func (runner *mockFailingRunner) Forward(responseWriter http.ResponseWriter, _ *
 	if runner.shouldFail {
 		return errors.New("execution crashed")
 	}
-	responseWriter.Header().Set("X-Layr-Test", "true")
+	responseWriter.Header().Set("X-Test", "true")
 	if runner.statusCode != 0 {
 		responseWriter.WriteHeader(runner.statusCode)
 		return nil

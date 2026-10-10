@@ -187,7 +187,10 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 
 		clientIP := ExtractRequestClientIP(request)
 		userAgent := request.UserAgent()
-		requestID := request.Header.Get("X-Request-ID")
+		requestID := request.Header.Get("Request-ID")
+		if requestID == "" {
+			requestID = request.Header.Get("X-Request-ID")
+		}
 		if requestID == "" {
 			requestID = uuid.NewV7().String()
 		}
@@ -237,7 +240,11 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 						currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(cookie.Value)
 					}
 					if currentRefreshTokenHash == "" {
-						if refreshTokenHeader := request.Header.Get("X-Refresh-Token"); refreshTokenHeader != "" {
+						refreshTokenHeader := request.Header.Get("Refresh-Token")
+						if refreshTokenHeader == "" {
+							refreshTokenHeader = request.Header.Get("X-Refresh-Token")
+						}
+						if refreshTokenHeader != "" {
 							currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(refreshTokenHeader)
 						}
 					}
@@ -295,8 +302,9 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 				sessionRefreshToken = cookie.Value
 			}
 			if sessionRefreshToken == "" {
-				if tokenHeader := request.Header.Get("X-Refresh-Token"); tokenHeader != "" {
-					sessionRefreshToken = tokenHeader
+				sessionRefreshToken = request.Header.Get("Refresh-Token")
+				if sessionRefreshToken == "" {
+					sessionRefreshToken = request.Header.Get("X-Refresh-Token")
 				}
 			}
 
@@ -345,7 +353,7 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 	})
 }
 
-// PublishableKeyMiddleware validates X-Layr-Client-Publishable-Key (or Service Account fallback) on public /v1/* routes.
+// PublishableKeyMiddleware validates Publishable-Key (or fallback X-Publishable-Key / Service Account) on public /v1/* routes.
 func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		path := request.URL.Path
@@ -362,7 +370,10 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			return
 		}
 
-		publishableKey := request.Header.Get("X-Layr-Client-Publishable-Key")
+		publishableKey := request.Header.Get("Publishable-Key")
+		if publishableKey == "" {
+			publishableKey = request.Header.Get("X-Publishable-Key")
+		}
 		isValid := server.kernel.cryptoKeyManager.VerifyPublishableKey(publishableKey)
 		if !isValid {
 			authContext := GetAuthContext(request.Context())

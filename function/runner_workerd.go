@@ -781,7 +781,7 @@ if (typeof userModule === "function") {
 
 export default {
   async fetch(request, env, ctx) {
-    const authHeader = request.headers.get("x-layr-auth-context");
+    const authHeader = request.headers.get("auth-context") || request.headers.get("x-auth-context");
     let authData = null;
     if (authHeader) {
       try {
@@ -835,8 +835,8 @@ export default {
       if (stdoutStr || stderrStr) {
         let modified = false;
         try {
-          if (stdoutStr) finalResponse.headers.set("x-layr-stdout", stdoutStr);
-          if (stderrStr) finalResponse.headers.set("x-layr-stderr", stderrStr);
+          if (stdoutStr) finalResponse.headers.set("stdout", stdoutStr);
+          if (stderrStr) finalResponse.headers.set("stderr", stderrStr);
           modified = true;
         } catch (_) {
           // Headers are immutable (e.g. from upstream fetch subrequest)
@@ -845,8 +845,8 @@ export default {
         if (!modified) {
           const isNullBodyStatus = finalResponse.status === 101 || finalResponse.status === 204 || finalResponse.status === 205 || finalResponse.status === 304;
           const newHeaders = new Headers(finalResponse.headers);
-          if (stdoutStr) newHeaders.set("x-layr-stdout", stdoutStr);
-          if (stderrStr) newHeaders.set("x-layr-stderr", stderrStr);
+          if (stdoutStr) newHeaders.set("stdout", stdoutStr);
+          if (stderrStr) newHeaders.set("stderr", stderrStr);
 
           const responseInit = {
             status: finalResponse.status,

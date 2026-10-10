@@ -714,10 +714,10 @@ func (eventHookManager *EventHookManager) executeHTTPAttempt(ctx context.Context
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Layr-Event-Hook/1.0")
-	request.Header.Set("X-Layr-Signature", signature)
-	request.Header.Set("X-Layr-Timestamp", timestamp)
-	request.Header.Set("X-Layr-Event", event.Type)
-	request.Header.Set("X-Layr-Delivery-Id", deliveryID.String())
+	request.Header.Set("Webhook-Signature", signature)
+	request.Header.Set("Webhook-Timestamp", timestamp)
+	request.Header.Set("Webhook-Event", event.Type)
+	request.Header.Set("Webhook-Delivery-ID", deliveryID.String())
 
 	response, err := eventHookManager.httpClient.Do(request)
 	if err != nil {

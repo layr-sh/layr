@@ -66,33 +66,33 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	// 4. Query with Cache TTL
 	cachedQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	cachedQueryRequest.Header.Set("Content-Type", "application/json")
-	cachedQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
-	cachedQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
+	cachedQueryRequest.Header.Set("Cache-TTL", "60")
+	cachedQueryRequest.Header.Set("Cache-Key-Suffix", "test-suffix")
 	cachedQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(cachedQueryResponseRecorder, cachedQueryRequest)
 
 	assert.Equal(t, http.StatusOK, cachedQueryResponseRecorder.Code)
-	assert.Equal(t, "MISS", cachedQueryResponseRecorder.Header().Get("X-Layr-Cache"))
+	assert.Equal(t, "MISS", cachedQueryResponseRecorder.Header().Get("Cache-Status"))
 
 	// Query again -> HIT
 	hitQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
 	hitQueryRequest.Header.Set("Content-Type", "application/json")
-	hitQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
-	hitQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "test-suffix")
+	hitQueryRequest.Header.Set("Cache-TTL", "60")
+	hitQueryRequest.Header.Set("Cache-Key-Suffix", "test-suffix")
 	hitQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(hitQueryResponseRecorder, hitQueryRequest)
 	assert.Equal(t, http.StatusOK, hitQueryResponseRecorder.Code)
-	assert.Equal(t, "HIT", hitQueryResponseRecorder.Header().Get("X-Layr-Cache"))
+	assert.Equal(t, "HIT", hitQueryResponseRecorder.Header().Get("Cache-Status"))
 
-	// Caching skipped when MaxCachedQueries exceeded
+	// Caching skipped when MaxCachedQueries exceeded (test fallback X-Cache-TTL and X-Cache-Key-Suffix)
 	appConfig := service.GetConfigManager().Get()
 	appConfig.Cache.MaxCachedQueries = 2
 	service.GetConfigManager().SetMemoryConfig(appConfig)
 	_ = kernel.KVStore().Set(ctx, "cache:query_count", "5", 0)
 	capQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"query { posts { id } }"}`)))
 	capQueryRequest.Header.Set("Content-Type", "application/json")
-	capQueryRequest.Header.Set("X-Layr-Cache-TTL", "60")
-	capQueryRequest.Header.Set("X-Layr-Cache-Key-Suffix", "cap-suffix")
+	capQueryRequest.Header.Set("X-Cache-TTL", "60")
+	capQueryRequest.Header.Set("X-Cache-Key-Suffix", "cap-suffix")
 	capQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(capQueryResponseRecorder, capQueryRequest)
 	assert.Equal(t, http.StatusOK, capQueryResponseRecorder.Code)

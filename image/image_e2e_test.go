@@ -100,7 +100,7 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 
 	// 6. Data Plane: Execute Dynamic Image Transformation
 	transformRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, signURLResponse.URL, nil)
-	transformRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	transformRequest.Header.Set("Publishable-Key", publishableKey)
 	transformResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(transformResponseRecorder, transformRequest)
 	require.Equal(t, http.StatusOK, transformResponseRecorder.Code)
@@ -112,14 +112,14 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 	// 7. Data Plane: Test ETag 304 Cache Revalidation
 	revalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, signURLResponse.URL, nil)
 	revalidateRequest.Header.Set("If-None-Match", eTag)
-	revalidateRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	revalidateRequest.Header.Set("X-Publishable-Key", publishableKey)
 	revalidateResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(revalidateResponseRecorder, revalidateRequest)
 	require.Equal(t, http.StatusNotModified, revalidateResponseRecorder.Code)
 
 	// 8. Data Plane: Inspect metadata via POST /v1/image/info
 	infoProbeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/image/info", bytes.NewReader(pngBytes))
-	infoProbeRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	infoProbeRequest.Header.Set("Publishable-Key", publishableKey)
 	infoProbeResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(infoProbeResponseRecorder, infoProbeRequest)
 	require.Equal(t, http.StatusOK, infoProbeResponseRecorder.Code)

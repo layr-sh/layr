@@ -65,7 +65,7 @@ func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 	// 2. Set up HTTP hook receiver
 	httpHookDeliveredSignal := make(chan string, 1)
 	httpHookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		httpHookDeliveredSignal <- request.Header.Get("X-Layr-Event")
+		httpHookDeliveredSignal <- request.Header.Get("Webhook-Event")
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte(`{"status":"received"}`))
 	}))

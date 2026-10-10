@@ -257,7 +257,11 @@ func (handler *BaseHandler) executePutKV(responseWriter http.ResponseWriter, req
 		if parsedTTL, parseErr := strconv.Atoi(rawTTL); parseErr == nil && parsedTTL > 0 {
 			ttlSeconds = parsedTTL
 		}
-	} else if ttlHeader := request.Header.Get("X-Layr-Cache-TTL"); ttlHeader != "" {
+	} else if ttlHeader := request.Header.Get("Cache-TTL"); ttlHeader != "" {
+		if parsedTTL, parseErr := strconv.Atoi(ttlHeader); parseErr == nil && parsedTTL > 0 {
+			ttlSeconds = parsedTTL
+		}
+	} else if ttlHeader := request.Header.Get("X-Cache-TTL"); ttlHeader != "" {
 		if parsedTTL, parseErr := strconv.Atoi(ttlHeader); parseErr == nil && parsedTTL > 0 {
 			ttlSeconds = parsedTTL
 		}

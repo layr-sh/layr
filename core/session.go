@@ -102,10 +102,14 @@ func IsSecureRequest(request *http.Request) bool {
 	if request.TLS != nil {
 		return true
 	}
-	return strings.EqualFold(request.Header.Get("X-Forwarded-Proto"), "https")
+	proto := request.Header.Get("Forwarded-Proto")
+	if proto == "" {
+		proto = request.Header.Get("X-Forwarded-Proto")
+	}
+	return strings.EqualFold(proto, "https")
 }
 
-// ExtractRequestClientIP extracts the canonical client IP from headers (X-Forwarded-For, X-Real-IP) or RemoteAddr.
+// ExtractRequestClientIP extracts the canonical client IP from headers (Forwarded-For, X-Forwarded-For, Real-IP, X-Real-IP) or RemoteAddr.
 func ExtractRequestClientIP(request *http.Request) string {
 	if request == nil {
 		return "127.0.0.1"
@@ -115,7 +119,11 @@ func ExtractRequestClientIP(request *http.Request) string {
 		trustProxy = activeConfig.Server.TrustProxyHeaders
 	}
 	if trustProxy {
-		if forwardedFor := request.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		forwardedFor := request.Header.Get("Forwarded-For")
+		if forwardedFor == "" {
+			forwardedFor = request.Header.Get("X-Forwarded-For")
+		}
+		if forwardedFor != "" {
 			parts := strings.Split(forwardedFor, ",")
 			if len(parts) > 0 {
 				ipAddress := strings.TrimSpace(parts[0])
@@ -124,7 +132,11 @@ func ExtractRequestClientIP(request *http.Request) string {
 				}
 			}
 		}
-		if realIP := request.Header.Get("X-Real-IP"); realIP != "" {
+		realIP := request.Header.Get("Real-IP")
+		if realIP == "" {
+			realIP = request.Header.Get("X-Real-IP")
+		}
+		if realIP != "" {
 			ipAddress := strings.TrimSpace(realIP)
 			if ipAddress != "" {
 				return ipAddress

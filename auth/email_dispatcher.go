@@ -747,7 +747,7 @@ func (dispatcher *EmailDispatcher) sendViaWebhook(ctx context.Context, emailDisp
 		mac := hmac.New(sha256.New, []byte(signingSecret)) //nolint:namingclarity
 		mac.Write([]byte(signaturePayload))
 		signature := hex.EncodeToString(mac.Sum(nil))
-		request.Header.Set("X-Layr-Signature", fmt.Sprintf("t=%s,v1=%s", timestamp, signature))
+		request.Header.Set("Webhook-Signature", fmt.Sprintf("t=%s,v1=%s", timestamp, signature))
 	}
 
 	client := dispatcher.httpClient

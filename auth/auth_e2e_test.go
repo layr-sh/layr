@@ -43,7 +43,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	})
 	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupPayload))
 	signupRequest.Header.Set("Content-Type", "application/json")
-	signupRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signupRequest.Header.Set("Publishable-Key", publishableKey)
 	signupResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signupResponseRecorder, signupRequest)
 
@@ -66,7 +66,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	})
 	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	signinRequest.Header.Set("Content-Type", "application/json")
-	signinRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signinRequest.Header.Set("Publishable-Key", publishableKey)
 	signinResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signinResponseRecorder, signinRequest)
 
@@ -95,7 +95,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	})
 	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
 	refreshRequest.Header.Set("Content-Type", "application/json")
-	refreshRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	refreshRequest.Header.Set("Publishable-Key", publishableKey)
 	refreshResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(refreshResponseRecorder, refreshRequest)
 
@@ -120,7 +120,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	// 6. Old Refresh Token Must Now Fail
 	revokedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", bytes.NewReader(refreshPayload))
 	revokedRefreshRequest.Header.Set("Content-Type", "application/json")
-	revokedRefreshRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	revokedRefreshRequest.Header.Set("Publishable-Key", publishableKey)
 	revokedRefreshResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(revokedRefreshResponseRecorder, revokedRefreshRequest)
 
@@ -158,7 +158,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	})
 	signupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-up", bytes.NewReader(signupPayload))
 	signupRequest.Header.Set("Content-Type", "application/json")
-	signupRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signupRequest.Header.Set("Publishable-Key", publishableKey)
 	signupResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signupResponseRecorder, signupRequest)
 	if signupResponseRecorder.Code != http.StatusOK && signupResponseRecorder.Code != http.StatusCreated {
@@ -174,7 +174,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	})
 	signInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signInPayload))
 	signInRequest.Header.Set("Content-Type", "application/json")
-	signInRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signInRequest.Header.Set("X-Publishable-Key", publishableKey)
 	signInRequest.Header.Set("User-Agent", "Secondary-Device-Tablet")
 	signInResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signInResponseRecorder, signInRequest)
@@ -354,7 +354,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	})
 	signinRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	signinRequest.Header.Set("Content-Type", "application/json")
-	signinRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	signinRequest.Header.Set("Publishable-Key", publishableKey)
 	signinResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(signinResponseRecorder, signinRequest)
 	if signinResponseRecorder.Code != http.StatusOK {
@@ -389,7 +389,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	// Verify user cannot log in anymore
 	postDeleteSigninRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", bytes.NewReader(signinPayload))
 	postDeleteSigninRequest.Header.Set("Content-Type", "application/json")
-	postDeleteSigninRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	postDeleteSigninRequest.Header.Set("Publishable-Key", publishableKey)
 	postDeleteSigninResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(postDeleteSigninResponseRecorder, postDeleteSigninRequest)
 	if postDeleteSigninResponseRecorder.Code != http.StatusUnauthorized {

@@ -26,6 +26,12 @@ func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 		t.Fatal("expected TLS request to be secure")
 	}
 
+	forwardedProtoDefaultRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
+	forwardedProtoDefaultRequest.Header.Set("Forwarded-Proto", "https")
+	if !IsSecureRequest(forwardedProtoDefaultRequest) {
+		t.Fatal("expected Forwarded-Proto https to be secure")
+	}
+
 	forwardedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
 	forwardedRequest.Header.Set("X-Forwarded-Proto", "https")
 	if !IsSecureRequest(forwardedRequest) {
@@ -49,10 +55,22 @@ func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 		t.Fatalf("expected 127.0.0.1 for nil, got %s", clientIP)
 	}
 
+	forwardedForDefaultRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	forwardedForDefaultRequest.Header.Set("Forwarded-For", "203.0.113.1, 70.41.3.18")
+	if clientIP := ExtractRequestClientIP(forwardedForDefaultRequest); clientIP != "203.0.113.1" {
+		t.Fatalf("expected 203.0.113.1, got %s", clientIP)
+	}
+
 	forwardedForRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	forwardedForRequest.Header.Set("X-Forwarded-For", "203.0.113.1, 70.41.3.18")
 	if clientIP := ExtractRequestClientIP(forwardedForRequest); clientIP != "203.0.113.1" {
 		t.Fatalf("expected 203.0.113.1, got %s", clientIP)
+	}
+
+	realIPDefaultRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	realIPDefaultRequest.Header.Set("Real-IP", "198.51.100.1")
+	if clientIP := ExtractRequestClientIP(realIPDefaultRequest); clientIP != "198.51.100.1" {
+		t.Fatalf("expected 198.51.100.1, got %s", clientIP)
 	}
 
 	realIPRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)

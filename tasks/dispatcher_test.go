@@ -112,7 +112,7 @@ func TestTasksDispatcherUnit(t *testing.T) {
 		t.Parallel()
 		receivedHeader := ""
 		testServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			receivedHeader = request.Header.Get("X-Layr-Signature")
+			receivedHeader = request.Header.Get("Webhook-Signature")
 			bodyBytes, readErr := io.ReadAll(request.Body)
 			if readErr != nil {
 				http.Error(responseWriter, readErr.Error(), http.StatusInternalServerError)
