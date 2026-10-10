@@ -85,7 +85,7 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 	// 5. Control Plane: Sign Image Transformation Path using preset
 	transformationPath := "/pr:banner_card/plain/e2e-gallery/photos/banner.png@webp"
 	signPayload := `{"path":"` + transformationPath + `"}`
-	signRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/image/sign", bytes.NewReader([]byte(signPayload)))
+	signRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/image/url/sign", bytes.NewReader([]byte(signPayload)))
 	signRequest.Header.Set("Content-Type", "application/json")
 	signRequest.Header.Set("X-Service-Account-Key", authKey)
 	signResponseRecorder := httptest.NewRecorder()

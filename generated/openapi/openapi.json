@@ -699,47 +699,6 @@
         ],
         "type": "object"
       },
-      "CreatePresignedURLInput": {
-        "description": "CreatePresignedURLInput schema",
-        "properties": {
-          "bucket": {
-            "type": "string"
-          },
-          "expires_in_seconds": {
-            "type": "integer"
-          },
-          "key": {
-            "type": "string"
-          },
-          "operation": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "bucket",
-          "expires_in_seconds",
-          "key",
-          "operation"
-        ],
-        "type": "object"
-      },
-      "CreatePresignedURLResponse": {
-        "description": "CreatePresignedURLResponse schema",
-        "properties": {
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "expires_at",
-          "url"
-        ],
-        "type": "object"
-      },
       "CreateRecordInput": {
         "description": "CreateRecordInput schema",
         "properties": {
@@ -3246,6 +3205,47 @@
           "name",
           "processing_options",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "PresignURLInput": {
+        "description": "PresignURLInput schema",
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket",
+          "expires_in_seconds",
+          "key",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "PresignURLResponse": {
+        "description": "PresignURLResponse schema",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expires_at",
+          "url"
         ],
         "type": "object"
       },
@@ -8597,10 +8597,42 @@
         "x-sdk-method-name": "update"
       }
     },
-    "/v1/_/image/sign": {
+    "/v1/_/image/stats": {
+      "get": {
+        "description": "Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics.",
+        "operationId": "image__stats__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get image service telemetry statistics",
+        "tags": [
+          "Image Control Plane"
+        ],
+        "x-sdk-group-name": [
+          "image",
+          "stats"
+        ],
+        "x-sdk-method-name": "get"
+      }
+    },
+    "/v1/_/image/url/sign": {
       "post": {
         "description": "Generates a cryptographically signed HMAC-SHA256 URL for an image transformation path.",
-        "operationId": "image__sign__create",
+        "operationId": "image__url__sign",
         "requestBody": {
           "content": {
             "*/*": {
@@ -8635,41 +8667,9 @@
         ],
         "x-sdk-group-name": [
           "image",
-          "sign"
+          "url"
         ],
-        "x-sdk-method-name": "create"
-      }
-    },
-    "/v1/_/image/stats": {
-      "get": {
-        "description": "Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics.",
-        "operationId": "image__stats__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetStatsResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetStatsResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Get image service telemetry statistics",
-        "tags": [
-          "Image Control Plane"
-        ],
-        "x-sdk-group-name": [
-          "image",
-          "stats"
-        ],
-        "x-sdk-method-name": "get"
+        "x-sdk-method-name": "sign"
       }
     },
     "/v1/_/tasks/config": {
@@ -11795,19 +11795,19 @@
         "x-sdk-method-name": "upload_put"
       }
     },
-    "/v1/file-storage/presigned-url": {
+    "/v1/file-storage/url/presign": {
       "post": {
         "description": "Generates a cryptographically signed URL allowing temporary read or write access.",
-        "operationId": "file_storage__presigned_url__create",
+        "operationId": "file_storage__url__presign",
         "requestBody": {
           "content": {
             "*/*": {
               "schema": {
-                "$ref": "#/components/schemas/CreatePresignedURLInput"
+                "$ref": "#/components/schemas/PresignURLInput"
               }
             }
           },
-          "description": "Request body for filestorage.CreatePresignedURLInput",
+          "description": "Request body for filestorage.PresignURLInput",
           "required": true
         },
         "responses": {
@@ -11815,12 +11815,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
+                  "$ref": "#/components/schemas/PresignURLResponse"
                 }
               },
               "application/xml": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
+                  "$ref": "#/components/schemas/PresignURLResponse"
                 }
               }
             },
@@ -11833,9 +11833,9 @@
         ],
         "x-sdk-group-name": [
           "file_storage",
-          "presigned_url"
+          "url"
         ],
-        "x-sdk-method-name": "create"
+        "x-sdk-method-name": "presign"
       }
     },
     "/v1/graphql": {

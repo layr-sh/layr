@@ -7219,10 +7219,42 @@
         "x-sdk-method-name": "update"
       }
     },
-    "/v1/_/image/sign": {
+    "/v1/_/image/stats": {
+      "get": {
+        "description": "Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics.",
+        "operationId": "image__stats__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get image service telemetry statistics",
+        "tags": [
+          "Image Control Plane"
+        ],
+        "x-sdk-group-name": [
+          "image",
+          "stats"
+        ],
+        "x-sdk-method-name": "get"
+      }
+    },
+    "/v1/_/image/url/sign": {
       "post": {
         "description": "Generates a cryptographically signed HMAC-SHA256 URL for an image transformation path.",
-        "operationId": "image__sign__create",
+        "operationId": "image__url__sign",
         "requestBody": {
           "content": {
             "*/*": {
@@ -7257,41 +7289,9 @@
         ],
         "x-sdk-group-name": [
           "image",
-          "sign"
+          "url"
         ],
-        "x-sdk-method-name": "create"
-      }
-    },
-    "/v1/_/image/stats": {
-      "get": {
-        "description": "Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics.",
-        "operationId": "image__stats__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetStatsResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetStatsResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Get image service telemetry statistics",
-        "tags": [
-          "Image Control Plane"
-        ],
-        "x-sdk-group-name": [
-          "image",
-          "stats"
-        ],
-        "x-sdk-method-name": "get"
+        "x-sdk-method-name": "sign"
       }
     },
     "/v1/_/tasks/config": {

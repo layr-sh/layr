@@ -16,21 +16,21 @@ const (
 	maxPresignedExpirationSeconds     = 604800
 )
 
-// handleCreatePresignedURL handles POST /v1/file-storage/presigned-url.
-func (baseHandler *BaseHandler) handleCreatePresignedURL(responseWriter http.ResponseWriter, request *http.Request) {
+// handlePresignURL handles POST /v1/file-storage/url/presign.
+func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling presigned URL request")
-	var createPresignedURLInput CreatePresignedURLInput
-	if decodeErr := json.NewDecoder(request.Body).Decode(&createPresignedURLInput); decodeErr != nil {
+	var presignURLInput PresignURLInput
+	if decodeErr := json.NewDecoder(request.Body).Decode(&presignURLInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	if createPresignedURLInput.Bucket == "" || createPresignedURLInput.Key == "" {
+	if presignURLInput.Bucket == "" || presignURLInput.Key == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Bucket and key parameters are required")
 		return
 	}
 
-	operation := strings.ToLower(createPresignedURLInput.Operation)
+	operation := strings.ToLower(presignURLInput.Operation)
 	switch operation {
 	case "get":
 		operation = "read"
@@ -72,7 +72,7 @@ func (baseHandler *BaseHandler) handleCreatePresignedURL(responseWriter http.Res
 	}
 
 	ctx := request.Context()
-	bucket, bucketErr := baseHandler.resolveBucket(ctx, createPresignedURLInput.Bucket)
+	bucket, bucketErr := baseHandler.resolveBucket(ctx, presignURLInput.Bucket)
 	if bucketErr != nil {
 		if errors.Is(bucketErr, ErrBucketNotFound) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Bucket not found")
@@ -82,7 +82,7 @@ func (baseHandler *BaseHandler) handleCreatePresignedURL(responseWriter http.Res
 		return
 	}
 
-	expiresInSeconds := createPresignedURLInput.ExpiresInSeconds
+	expiresInSeconds := presignURLInput.ExpiresInSeconds
 	if expiresInSeconds <= 0 {
 		expiresInSeconds = defaultPresignedExpirationSeconds
 	}
@@ -94,25 +94,25 @@ func (baseHandler *BaseHandler) handleCreatePresignedURL(responseWriter http.Res
 	expiresUnix := expiresAtTime.Unix()
 
 	signingKey := baseHandler.presignSecretKey()
-	token := baseHandler.computePresignSignature(signingKey, bucket.Name, createPresignedURLInput.Key, operation, expiresUnix)
+	token := baseHandler.computePresignSignature(signingKey, bucket.Name, presignURLInput.Key, operation, expiresUnix)
 
 	presignedURL := fmt.Sprintf("/v1/file-storage/objects/%s/%s?token=%s&expires=%d&op=%s",
-		bucket.Name, createPresignedURLInput.Key, token, expiresUnix, operation)
+		bucket.Name, presignURLInput.Key, token, expiresUnix, operation)
 
-	log.Debugf("presigned url generated for bucket=%s key=%s operation=%s", bucket.Name, createPresignedURLInput.Key, operation)
+	log.Debugf("presigned url generated for bucket=%s key=%s operation=%s", bucket.Name, presignURLInput.Key, operation)
 
-	baseHandler.kernel.EventBus().Publish(ctx, NewURLPresignedEvent(fmt.Sprintf("%s/%s", bucket.Name, createPresignedURLInput.Key), URLPresignedEventData{
+	baseHandler.kernel.EventBus().Publish(ctx, NewURLPresignedEvent(fmt.Sprintf("%s/%s", bucket.Name, presignURLInput.Key), URLPresignedEventData{
 		Bucket:    *bucket,
-		ObjectKey: createPresignedURLInput.Key,
+		ObjectKey: presignURLInput.Key,
 		Operation: operation,
 		URL:       presignedURL,
 		ExpiresAt: expiresAtTime,
 	}))
 
-	createPresignedURLResponse := CreatePresignedURLResponse{
+	presignURLResponse := PresignURLResponse{
 		URL:       presignedURL,
 		ExpiresAt: expiresAtTime,
 	}
 
-	core.WriteJSONResponse(responseWriter, http.StatusOK, createPresignedURLResponse)
+	core.WriteJSONResponse(responseWriter, http.StatusOK, presignURLResponse)
 }

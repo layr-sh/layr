@@ -109,13 +109,13 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	)
 
 	// 3. Cryptographic URL Signing
-	core.PostRoute[SignURLResponse, SignURLInput](router, "/v1/_/image/sign", service.controlPlaneHandler.handleSignURL,
+	core.PostRoute[SignURLResponse, SignURLInput](router, "/v1/_/image/url/sign", service.controlPlaneHandler.handleSignURL,
 		core.RouteTag("Image Control Plane"),
 		core.RouteSummary("Sign an image transformation path"),
 		core.RouteDescription("Generates a cryptographically signed HMAC-SHA256 URL for an image transformation path."),
-		core.RouteOperationID("image__sign__create"),
-		core.RouteSDKGroupName("image", "sign"),
-		core.RouteSDKMethodName("create"),
+		core.RouteOperationID("image__url__sign"),
+		core.RouteSDKGroupName("image", "url"),
+		core.RouteSDKMethodName("sign"),
 	)
 
 	// 4. Performance & Telemetry Statistics
