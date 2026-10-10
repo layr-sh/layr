@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# scripts/sdk/check_drifts
+# Continuous drift detection gate verifying:
+# 1. OpenAPI Specification Drift (Go route controllers -> generated/openapi/)
+# 2. SDK Documentation Drift (Go route controllers -> client-sdk/README.md)
+# 3. SDK Codegen Drift (OpenAPI spec -> client-sdk/*/generated/)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${ROOT_DIR}"
+
+SDK_DIR="./client-sdk"
+
+echo "=== Layr SDK Drift Verification ==="
+
+# 1. Spec Drift Gate
+echo "==> [Gate 1/3] Verifying OpenAPI Specification Consistency..."
+./scripts/sdk/generate-openapi-specs --output-dir=generated/openapi
+
+if ! git diff --exit-code generated/openapi/ > /dev/null 2>&1; then
+  echo "Error: OpenAPI specification drift detected."
+  echo "The committed OpenAPI specifications in generated/openapi/ differ from Go route controllers."
+  echo "Run: ./scripts/sdk/generate-openapi-specs --output-dir=generated/openapi and commit the changes."
+  git diff --stat generated/openapi/
+  exit 1
+fi
+echo "Gate 1 Passed: OpenAPI specifications match route controllers."
+
+# 2. SDK Documentation Drift Gate
+echo "==> [Gate 2/3] Verifying SDK Documentation Consistency..."
+if ! ./scripts/sdk/generate-dev-references --check > /dev/null 2>&1; then
+  echo "Error: SDK documentation drift detected."
+  echo "Run: ./scripts/sdk/generate-dev-references and commit the changes."
+  exit 1
+fi
+echo "Gate 2 Passed: SDK documentation matches route controllers."
+
+# 3. SDK Codegen Drift Gate
+echo "==> [Gate 3/3] Verifying SDK Code Generation Consistency..."
+./scripts/sdk/generate --all > /dev/null 2>&1
+
+DRIFTED_SDKS=()
+for lang_dir in "${SDK_DIR}/javascript/generated" "${SDK_DIR}/python/generated" "${SDK_DIR}/go/generated" "${SDK_DIR}/rust/generated" "${SDK_DIR}/swift/generated"; do
+  if [[ -d "${lang_dir}" ]] && ! git diff --exit-code "${lang_dir}" > /dev/null 2>&1; then
+    DRIFTED_SDKS+=("${lang_dir}")
+  fi
+done
+
+if [[ ${#DRIFTED_SDKS[@]} -gt 0 ]]; then
+  echo "Error: SDK codegen drift detected."
+  echo "The following generated SDK directories differ from fresh codegen output:"
+  for sdk in "${DRIFTED_SDKS[@]}"; do
+    echo "  - ${sdk}"
+  done
+  echo "Run: ./scripts/sdk/generate --all and commit the changes."
+  exit 1
+fi
+echo "Gate 3 Passed: All language SDKs match fresh codegen output."
+
+echo "All drift gates passed."
