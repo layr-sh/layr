@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# scripts/sdk/generate
+# Unified base code generation engine compiling OpenAPI 3.1 specifications into Layer 1 base SDKs.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+cd "${ROOT_DIR}"
+
+SDK_DIR="./client-sdk"
+SPEC_FILE="generated/openapi/openapi.json"
+
+TARGET_JS=false
+TARGET_PY=false
+TARGET_GO=false
+TARGET_RS=false
+TARGET_SWIFT=false
+
+if [[ $# -eq 0 ]]; then
+  TARGET_JS=true
+  TARGET_PY=true
+  TARGET_GO=true
+  TARGET_RS=true
+  TARGET_SWIFT=true
+else
+  for arg in "$@"; do
+    case "${arg}" in
+      --js|--javascript|--ts|--typescript)
+        TARGET_JS=true
+        ;;
+      --py|--python)
+        TARGET_PY=true
+        ;;
+      --go)
+        TARGET_GO=true
+        ;;
+      --rs|--rust)
+        TARGET_RS=true
+        ;;
+      --swift)
+        TARGET_SWIFT=true
+        ;;
+      --all)
+        TARGET_JS=true
+        TARGET_PY=true
+        TARGET_GO=true
+        TARGET_RS=true
+        TARGET_SWIFT=true
+        ;;
+      *)
+        echo "Error: unknown flag: ${arg}"
+        echo "Usage: $0 [--js|--javascript] [--py|--python] [--go] [--rs|--rust] [--swift] [--all]"
+        exit 1
+        ;;
+    esac
+  done
+fi
+
+echo "==> Step 1: Exporting & Validating OpenAPI 3.1 Specifications..."
+./scripts/sdk/generate-openapi-specs --output-dir=generated/openapi
+
+if [[ ! -f "${SPEC_FILE}" ]]; then
+  echo "Error: spec file not found at ${SPEC_FILE}"
+  exit 1
+fi
+
+clean_cruft() {
+  local target_dir="$1"
+  rm -rf "${target_dir}/.openapi-generator"
+  rm -f "${target_dir}/.openapi-generator-ignore"
+  if [[ "${target_dir}" == *"generated"* ]]; then
+    rm -f "${target_dir}/.gitignore"
+  fi
+  rm -f "${target_dir}/.travis.yml"
+  rm -f "${target_dir}/git_push.sh"
+}
+
+# 1. JavaScript / TypeScript Target
+if [[ "${TARGET_JS}" == true ]]; then
+  OUT_DIR="${SDK_DIR}/javascript/generated"
+  echo "==> Generating JavaScript / TypeScript SDK (typescript-fetch) -> ${OUT_DIR}..."
+  rm -rf "${OUT_DIR}"
+  mkdir -p "${OUT_DIR}"
+  npx -y @openapitools/openapi-generator-cli generate \
+    -i "${SPEC_FILE}" \
+    -g typescript-fetch \
+    -o "${OUT_DIR}" \
+    --additional-properties=supportsES6=true,typescriptThreePlus=true
+  clean_cruft "${OUT_DIR}"
+  echo "JavaScript / TypeScript SDK generated successfully."
+fi
+
+# 2. Python Target
+if [[ "${TARGET_PY}" == true ]]; then
+  OUT_DIR="${SDK_DIR}/python/generated"
+  echo "==> Generating Python SDK (python) -> ${OUT_DIR}..."
+  rm -rf "${OUT_DIR}"
+  mkdir -p "${OUT_DIR}"
+  npx -y @openapitools/openapi-generator-cli generate \
+    -i "${SPEC_FILE}" \
+    -g python \
+    -o "${SDK_DIR}/python" \
+    --additional-properties=packageName=generated,generateSourceCodeOnly=true
+  clean_cruft "${OUT_DIR}"
+  clean_cruft "${SDK_DIR}/python"
+  rm -rf "${SDK_DIR}/python/generated_README.md" "${OUT_DIR}/docs" "${OUT_DIR}/test"
+  echo "Python SDK generated successfully."
+fi
+
+# 3. Go Target
+if [[ "${TARGET_GO}" == true ]]; then
+  OUT_DIR="${SDK_DIR}/go/generated"
+  echo "==> Generating Go SDK (go) -> ${OUT_DIR}..."
+  rm -rf "${OUT_DIR}"
+  mkdir -p "${OUT_DIR}"
+  npx -y @openapitools/openapi-generator-cli generate \
+    -i "${SPEC_FILE}" \
+    -g go \
+    -o "${OUT_DIR}" \
+    --additional-properties=packageName=generated,isGoSubmodule=true
+  clean_cruft "${OUT_DIR}"
+  rm -f "${OUT_DIR}/go.mod" "${OUT_DIR}/go.sum" "${OUT_DIR}/README.md"
+  rm -rf "${OUT_DIR}/docs" "${OUT_DIR}/test"
+  echo "Go SDK generated successfully."
+fi
+
+# 4. Rust Target
+if [[ "${TARGET_RS}" == true ]]; then
+  OUT_DIR="${SDK_DIR}/rust/generated"
+  echo "==> Generating Rust SDK (rust) -> ${OUT_DIR}..."
+  rm -rf "${OUT_DIR}"
+  mkdir -p "${OUT_DIR}"
+  npx -y @openapitools/openapi-generator-cli generate \
+    -i "${SPEC_FILE}" \
+    -g rust \
+    -o "${OUT_DIR}" \
+    --additional-properties=packageName=generated
+  clean_cruft "${OUT_DIR}"
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed -i '' -E 's/\{([a-zA-Z0-9_]+)\.\.\.\}/{\1}/g' "${OUT_DIR}/src/apis/"*.rs
+    sed -i '' -E 's/([a-zA-Z0-9_]+)\.\.\.=/ \1=/g' "${OUT_DIR}/src/apis/"*.rs
+  else
+    sed -i -E 's/\{([a-zA-Z0-9_]+)\.\.\.\}/{\1}/g' "${OUT_DIR}/src/apis/"*.rs
+    sed -i -E 's/([a-zA-Z0-9_]+)\.\.\.=/ \1=/g' "${OUT_DIR}/src/apis/"*.rs
+  fi
+  echo "Rust SDK generated successfully."
+fi
+
+# 5. Swift Target
+if [[ "${TARGET_SWIFT}" == true ]]; then
+  OUT_DIR="${SDK_DIR}/swift/generated"
+  echo "==> Generating Swift SDK (swift6) -> ${OUT_DIR}..."
+  rm -rf "${OUT_DIR}"
+  mkdir -p "${OUT_DIR}"
+  npx -y @openapitools/openapi-generator-cli generate \
+    -i "${SPEC_FILE}" \
+    -g swift6 \
+    -o "${OUT_DIR}" \
+    --additional-properties=projectName=Generated,responseAs=AsyncAwait
+  clean_cruft "${OUT_DIR}"
+  echo "Swift SDK generated successfully."
+fi
+
+echo "All requested SDKs generated successfully from ${SPEC_FILE}."
