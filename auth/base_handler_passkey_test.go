@@ -82,7 +82,7 @@ func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
 		t.Fatalf("expected 200 on passkey sign-up with default user name, got: %d", emptyNamePasskeyResponseRecorder.Code)
 	}
 
-	// 4. Passkey SignUp Verify Bad JSON & Mismatched User ID
+	// 4. Passkey SignUp Verify Bad JSON, Expired Challenge & Mismatched Authenticated User
 	badJSONPasskeyVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{invalid`))
 	badJSONPasskeyVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(badJSONPasskeyVerifyResponseRecorder, badJSONPasskeyVerifyRequest)
@@ -90,9 +90,17 @@ func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
 		t.Fatalf("expected 400 on bad JSON in passkey verify, got: %d", badJSONPasskeyVerifyResponseRecorder.Code)
 	}
 
+	invalidChallengePasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"unknown-or-expired-challenge"}`))
+	invalidChallengePasskeyResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleVerifyPasskeySignUp(invalidChallengePasskeyResponseRecorder, invalidChallengePasskeyRequest)
+	if invalidChallengePasskeyResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on unknown challenge in passkey verify, got: %d", invalidChallengePasskeyResponseRecorder.Code)
+	}
+
 	challenge1, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge1, testUserUUID, 0)
-	mismatchUserPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"mismatched-user-uuid","challenge":"`+challenge1+`"}`))
+	mismatchAuthCtx := core.WithAuthContext(context.Background(), core.AuthContext{UserID: "mismatched-user-uuid"})
+	mismatchUserPasskeyRequest := httptest.NewRequestWithContext(mismatchAuthCtx, http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge1+`"}`))
 	mismatchUserPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(mismatchUserPasskeyResponseRecorder, mismatchUserPasskeyRequest)
 	if mismatchUserPasskeyResponseRecorder.Code != http.StatusBadRequest {
@@ -102,7 +110,7 @@ func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
 	// 5. Passkey SignUp Verify Empty Friendly Name on Nil Pool -> 500
 	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge2, testUserUUID, 0)
-	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"user_id":"`+testUserUUID+`","challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
+	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
 	emptyFriendlyPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(emptyFriendlyPasskeyResponseRecorder, emptyFriendlyPasskeyRequest)
 	if emptyFriendlyPasskeyResponseRecorder.Code != http.StatusInternalServerError {

@@ -41,6 +41,9 @@ func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
 	RegisterServiceFactory("test_dummy_error", func(kernel *Kernel) (ServiceRunner, error) {
 		return nil, assert.AnError
 	})
+	RegisterServiceFactory("test_dummy_registrar_dup", func(kernel *Kernel) (ServiceRunner, error) {
+		return &dummyServiceWithRegistrar{}, nil
+	})
 
 	openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpecs := ExportOpenAPISpecs()
 	require.NotNil(t, openAPISpec)
@@ -112,4 +115,77 @@ func TestCoreExportOpenAPISpecsMergeEdgeCasesUnit(t *testing.T) {
 	require.NotNil(t, mergedOpenAPISpecs)
 	assert.NotNil(t, mergedOpenAPISpecs.Paths.Find("/control"))
 	assert.NotNil(t, mergedOpenAPISpecs.Components.Schemas["ControlSchema"])
+}
+
+func TestCoreSanitizeOpenAPISpecUnit(t *testing.T) {
+	// 1. Nil spec and nil schema
+	sanitizeOpenAPISpec(nil)
+	sanitizeSchemaValue(nil)
+
+	// 2. Spec with standalone "null" type in components and properties
+	testOpenAPISpec := &openapi3.T{
+		OpenAPI: "3.1.0",
+		Components: &openapi3.Components{
+			Schemas: openapi3.Schemas{
+				"": &openapi3.SchemaRef{Value: openapi3.NewObjectSchema()},
+				"NullSchema": &openapi3.SchemaRef{
+					Value: &openapi3.Schema{
+						Type: &openapi3.Types{"null"},
+					},
+				},
+				"ParentSchema": &openapi3.SchemaRef{
+					Value: &openapi3.Schema{
+						Properties: openapi3.Schemas{
+							"child": &openapi3.SchemaRef{
+								Value: &openapi3.Schema{
+									Type: &openapi3.Types{"null"},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Paths: openapi3.NewPaths(),
+	}
+
+	// 3. Paths with nil path item, broken ref in request body and responses
+	brokenRequestBodyRef := &openapi3.RequestBodyRef{
+		Value: &openapi3.RequestBody{
+			Content: openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Ref: "#/components/schemas/",
+					},
+				},
+			},
+		},
+	}
+	brokenResponseRef := &openapi3.ResponseRef{
+		Value: &openapi3.Response{
+			Content: openapi3.Content{
+				"application/json": &openapi3.MediaType{
+					Schema: &openapi3.SchemaRef{
+						Ref: "#/components/schemas/",
+					},
+				},
+			},
+		},
+	}
+	responses := openapi3.NewResponses()
+	responses.Set("200", brokenResponseRef)
+
+	testOpenAPISpec.Paths.Set("/nil-item", nil)
+	testOpenAPISpec.Paths.Set("/test", &openapi3.PathItem{
+		Post: &openapi3.Operation{
+			RequestBody: brokenRequestBodyRef,
+			Responses:   responses,
+		},
+	})
+
+	sanitizeOpenAPISpec(testOpenAPISpec)
+	assert.NotContains(t, testOpenAPISpec.Components.Schemas, "")
+	assert.Equal(t, &openapi3.Types{"object"}, testOpenAPISpec.Components.Schemas["NullSchema"].Value.Type)
+	assert.Empty(t, brokenRequestBodyRef.Value.Content["application/json"].Schema.Ref)
+	assert.Empty(t, brokenResponseRef.Value.Content["application/json"].Schema.Ref)
 }

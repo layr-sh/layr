@@ -68,19 +68,17 @@ type RefreshTokenInput struct {
 
 // RequestPasswordResetInput defines password reset request input.
 type RequestPasswordResetInput struct {
-	Recipient    string `json:"recipient"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
+	Email        string `json:"email,omitempty"`
+	Phone        string `json:"phone,omitempty"`
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
 // ConfirmPasswordResetInput defines password reset confirmation input.
 type ConfirmPasswordResetInput struct {
-	Recipient string `json:"recipient"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Code      string `json:"code"`
-	Password  string `json:"password"`
+	Email    string `json:"email,omitempty"`
+	Phone    string `json:"phone,omitempty"`
+	Code     string `json:"code"`
+	Password string `json:"password"`
 }
 
 // UpdateUserPasswordInput represents the payload to set or change an account password.
@@ -111,23 +109,23 @@ type UpdateUserPhoneInput struct {
 
 // RequestEmailVerificationInput represents the payload to request an email verification code.
 type RequestEmailVerificationInput struct {
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 }
 
 // ConfirmEmailVerificationInput represents the payload to confirm email verification with a code.
 type ConfirmEmailVerificationInput struct {
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 	Code  string `json:"code"`
 }
 
 // RequestPhoneVerificationInput represents the payload to request a phone verification code.
 type RequestPhoneVerificationInput struct {
-	Phone string `json:"phone"`
+	Phone string `json:"phone,omitempty"`
 }
 
 // ConfirmPhoneVerificationInput represents the payload to confirm phone verification with a code.
 type ConfirmPhoneVerificationInput struct {
-	Phone string `json:"phone"`
+	Phone string `json:"phone,omitempty"`
 	Code  string `json:"code"`
 }
 
@@ -189,18 +187,17 @@ type ChallengeMFAInput struct {
 
 // BeginPasskeySignUpInput defines input for passkey sign up ceremony.
 type BeginPasskeySignUpInput struct {
-	UserID   string `json:"user_id"`
-	UserName string `json:"user_name"`
+	UserID   string `json:"user_id,omitempty"`
+	UserName string `json:"user_name,omitempty"`
 }
 
 // VerifyPasskeySignUpInput defines input to verify and store passkey credentials.
 type VerifyPasskeySignUpInput struct {
-	UserID       string   `json:"user_id"`
 	Challenge    string   `json:"challenge"`
 	CredentialID string   `json:"credential_id"`
 	PublicKey    string   `json:"public_key"`
-	FriendlyName string   `json:"friendly_name"`
-	Transports   []string `json:"transports"`
+	FriendlyName string   `json:"friendly_name,omitempty"`
+	Transports   []string `json:"transports,omitempty"`
 }
 
 // VerifyPasskeySignInInput defines input to complete passkey assertion ceremony.

@@ -73,15 +73,14 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 		return
 	}
 
-	if verifyPasskeySignUpInput.UserID == "" {
-		if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
-			verifyPasskeySignUpInput.UserID = authContext.UserID
-		}
-	}
-
 	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignUpInput.Challenge)
 	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignUpInput.Challenge)
-	if err != nil || (expectedUserID != "" && expectedUserID != verifyPasskeySignUpInput.UserID) {
+	if err != nil || expectedUserID == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
+		return
+	}
+
+	if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" && authContext.UserID != expectedUserID {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
@@ -95,7 +94,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	ctx := request.Context()
 
 	anonymousUser, _ := handler.resolveAnonymousCaller(request)
-	targetUserID := verifyPasskeySignUpInput.UserID
+	targetUserID := expectedUserID
 	isAnonymousConversion := false
 	if anonymousUser != nil {
 		targetUserID = anonymousUser.ID

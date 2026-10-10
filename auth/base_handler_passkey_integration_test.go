@@ -69,7 +69,6 @@ func TestAuthBaseHandlerPasskeyCeremoniesIntegration(t *testing.T) {
 	// 2. Complete Sign-up Flow (New User)
 	credentialID := "credential-alice-12345"
 	verifySignUpPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
-		UserID:       newUserID,
 		Challenge:    challenge,
 		CredentialID: credentialID,
 		PublicKey:    "public-key-alice-blob",
@@ -158,7 +157,6 @@ func TestAuthBaseHandlerPasskeyCeremoniesIntegration(t *testing.T) {
 
 	anonChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(anonUserID)
 	anonVerifyPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
-		UserID:       anonUserID,
 		Challenge:    anonChallenge,
 		CredentialID: "credential-anon-999",
 		PublicKey:    "public-key-anon-blob",
@@ -184,7 +182,6 @@ func TestAuthBaseHandlerPasskeyCeremoniesIntegration(t *testing.T) {
 	canceledCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	canceledPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
-		UserID:       newUserID,
 		Challenge:    canceledChallenge,
 		CredentialID: "cred-canceled",
 		PublicKey:    "pub-canceled",
@@ -243,7 +240,6 @@ func TestAuthBaseHandlerPasskeyCeremoniesIntegration(t *testing.T) {
 	`)
 	failChallenge, _ := baseHandler.passkeyManager.GenerateChallenge(newUserID)
 	failVerifyPayload, _ := json.Marshal(VerifyPasskeySignUpInput{
-		UserID:       newUserID,
 		Challenge:    failChallenge,
 		CredentialID: "cred-fail-insert",
 		PublicKey:    "pub-key-fail",
@@ -343,7 +339,6 @@ func TestAuthBaseHandlerPasskeyManagementAndHardeningIntegration(t *testing.T) {
 	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(userID)
 	credentialID2 := "cred-bob-session-2"
 	verify2Payload, _ := json.Marshal(VerifyPasskeySignUpInput{
-		UserID:       userID,
 		Challenge:    challenge2,
 		CredentialID: credentialID2,
 		PublicKey:    "",

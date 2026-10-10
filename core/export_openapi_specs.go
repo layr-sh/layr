@@ -102,10 +102,6 @@ func sanitizeOpenAPISpec(openAPISpec *openapi3.T) {
 				continue
 			}
 			for _, operation := range pathItem.Operations() {
-				if operation == nil {
-					continue
-				}
-
 				// Check operation request bodies
 				if operation.RequestBody != nil && operation.RequestBody.Value != nil {
 					for _, mediaType := range operation.RequestBody.Value.Content {

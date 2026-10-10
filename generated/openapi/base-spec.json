@@ -46,10 +46,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "user_id",
-          "user_name"
-        ],
         "type": "object"
       },
       "ChallengeMFAInput": {
@@ -79,8 +75,7 @@
           }
         },
         "required": [
-          "code",
-          "email"
+          "code"
         ],
         "type": "object"
       },
@@ -98,17 +93,11 @@
           },
           "phone": {
             "type": "string"
-          },
-          "recipient": {
-            "type": "string"
           }
         },
         "required": [
           "code",
-          "email",
-          "password",
-          "phone",
-          "recipient"
+          "password"
         ],
         "type": "object"
       },
@@ -123,8 +112,7 @@
           }
         },
         "required": [
-          "code",
-          "phone"
+          "code"
         ],
         "type": "object"
       },
@@ -873,9 +861,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "email"
-        ],
         "type": "object"
       },
       "RequestPasswordResetInput": {
@@ -889,16 +874,8 @@
           },
           "phone": {
             "type": "string"
-          },
-          "recipient": {
-            "type": "string"
           }
         },
-        "required": [
-          "email",
-          "phone",
-          "recipient"
-        ],
         "type": "object"
       },
       "RequestPhoneVerificationInput": {
@@ -908,9 +885,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "phone"
-        ],
         "type": "object"
       },
       "RevokeOtherSessionsResponse": {
@@ -1464,18 +1438,12 @@
               "array",
               "null"
             ]
-          },
-          "user_id": {
-            "type": "string"
           }
         },
         "required": [
           "challenge",
           "credential_id",
-          "friendly_name",
-          "public_key",
-          "transports",
-          "user_id"
+          "public_key"
         ],
         "type": "object"
       },
@@ -1998,7 +1966,7 @@
     },
     "/v1/auth/passkeys/sign-up/verify": {
       "post": {
-        "description": "Validates the WebAuthn attestation response and stores the public key credential in auth.identities.",
+        "description": "Validates the WebAuthn attestation response, stores credentials, and issues an authenticated session.",
         "operationId": "auth__passkeys__sign_up__verify",
         "requestBody": {
           "content": {
@@ -2016,19 +1984,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Empty"
+                  "$ref": "#/components/schemas/AuthTokenResponse"
                 }
               },
               "application/xml": {
                 "schema": {
-                  "$ref": "#/components/schemas/Empty"
+                  "$ref": "#/components/schemas/AuthTokenResponse"
                 }
               }
             },
             "description": "OK"
-          },
-          "204": {
-            "description": "Passkey verified and registered"
           }
         },
         "summary": "Verify WebAuthn passkey registration attestation",
@@ -2133,126 +2098,6 @@
           "password_reset"
         ],
         "x-sdk-method-name": "request"
-      }
-    },
-    "/v1/auth/sessions": {
-      "get": {
-        "description": "Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker.",
-        "operationId": "auth__sessions__list",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListSessionsResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListSessionsResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "List active sessions for current user",
-        "tags": [
-          "Authentication"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "sessions"
-        ],
-        "x-sdk-method-name": "list"
-      }
-    },
-    "/v1/auth/sessions/revoke-others": {
-      "post": {
-        "description": "Revokes all active sessions for the current user except the currently active device session.",
-        "operationId": "auth__sessions__revoke_others",
-        "requestBody": {
-          "content": {
-            "*/*": {
-              "schema": {
-                "$ref": "#/components/schemas/Empty"
-              }
-            }
-          },
-          "description": "Request body for core.Empty",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RevokeOtherSessionsResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/RevokeOtherSessionsResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Sign out of all other devices",
-        "tags": [
-          "Authentication"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "sessions"
-        ],
-        "x-sdk-method-name": "revoke_others"
-      }
-    },
-    "/v1/auth/sessions/{session_id}": {
-      "delete": {
-        "description": "Revokes an active session by session ID belonging to the authenticated user.",
-        "operationId": "auth__sessions__revoke",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Empty"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/Empty"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "204": {
-            "description": "Session revoked"
-          }
-        },
-        "summary": "Revoke specific user session",
-        "tags": [
-          "Authentication"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "sessions"
-        ],
-        "x-sdk-method-name": "revoke"
       }
     },
     "/v1/auth/sign-in": {
@@ -2995,6 +2840,129 @@
           "properties"
         ],
         "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/auth/user/sessions": {
+      "get": {
+        "description": "Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker.",
+        "operationId": "auth__user__sessions__list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSessionsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSessionsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List active sessions for current user",
+        "tags": [
+          "User Self-Service"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "user",
+          "sessions"
+        ],
+        "x-sdk-method-name": "list"
+      }
+    },
+    "/v1/auth/user/sessions/revoke-others": {
+      "post": {
+        "description": "Revokes all active sessions for the current user except the currently active device session.",
+        "operationId": "auth__user__sessions__revoke_others",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOtherSessionsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeOtherSessionsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Sign out of all other devices",
+        "tags": [
+          "User Self-Service"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "user",
+          "sessions"
+        ],
+        "x-sdk-method-name": "revoke_others"
+      }
+    },
+    "/v1/auth/user/sessions/{session_id}": {
+      "delete": {
+        "description": "Revokes an active session by session ID belonging to the authenticated user.",
+        "operationId": "auth__user__sessions__revoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Session revoked"
+          }
+        },
+        "summary": "Revoke specific user session",
+        "tags": [
+          "User Self-Service"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "user",
+          "sessions"
+        ],
+        "x-sdk-method-name": "revoke"
       }
     },
     "/v1/data/kv/increment": {

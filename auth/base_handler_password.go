@@ -291,10 +291,7 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(requestPasswordResetInput.Recipient))
-	if recipient == "" {
-		recipient = strings.TrimSpace(strings.ToLower(requestPasswordResetInput.Email))
-	}
+	recipient := strings.TrimSpace(strings.ToLower(requestPasswordResetInput.Email))
 	if recipient == "" {
 		recipient = strings.TrimSpace(requestPasswordResetInput.Phone)
 	}
@@ -388,10 +385,7 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 		return
 	}
 
-	recipient := strings.TrimSpace(strings.ToLower(confirmPasswordResetInput.Recipient))
-	if recipient == "" {
-		recipient = strings.TrimSpace(strings.ToLower(confirmPasswordResetInput.Email))
-	}
+	recipient := strings.TrimSpace(strings.ToLower(confirmPasswordResetInput.Email))
 	if recipient == "" {
 		recipient = strings.TrimSpace(confirmPasswordResetInput.Phone)
 	}

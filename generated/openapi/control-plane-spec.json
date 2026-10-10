@@ -4061,7 +4061,7 @@
     "/v1/_/console/users/{user_id}/password": {
       "post": {
         "description": "Rotates user password and revokes all active operator sessions.",
-        "operationId": "console__users__password",
+        "operationId": "console__users__reset_password",
         "parameters": [
           {
             "in": "path",
@@ -4108,7 +4108,7 @@
           "console",
           "users"
         ],
-        "x-sdk-method-name": "password"
+        "x-sdk-method-name": "reset_password"
       }
     },
     "/v1/_/console/users/{user_id}/sessions": {
