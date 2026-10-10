@@ -1019,15 +1019,6 @@
         ],
         "type": "object"
       },
-      "SetupMFAInput": {
-        "description": "SetupMFAInput schema",
-        "properties": {
-          "user_id": {
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "SetupMFAResponse": {
         "description": "SetupMFAResponse schema",
         "properties": {
@@ -1395,9 +1386,6 @@
         "properties": {
           "code": {
             "type": "string"
-          },
-          "user_id": {
-            "type": "string"
           }
         },
         "required": [
@@ -1591,11 +1579,11 @@
           "content": {
             "*/*": {
               "schema": {
-                "$ref": "#/components/schemas/SetupMFAInput"
+                "$ref": "#/components/schemas/Empty"
               }
             }
           },
-          "description": "Request body for auth.SetupMFAInput",
+          "description": "Request body for core.Empty",
           "required": true
         },
         "responses": {

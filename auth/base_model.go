@@ -167,11 +167,6 @@ type VerifyOTPInput struct {
 	CaptchaToken string `json:"captcha_token,omitempty"`
 }
 
-// SetupMFAInput defines input for TOTP MFA setup.
-type SetupMFAInput struct {
-	UserID string `json:"user_id,omitempty"`
-}
-
 // SetupMFAResponse defines response payload for TOTP MFA setup.
 type SetupMFAResponse struct {
 	Secret        string `json:"secret"`
@@ -183,8 +178,7 @@ type SetupMFAResponse struct {
 
 // VerifyMFAInput defines input for TOTP MFA verification.
 type VerifyMFAInput struct {
-	UserID string `json:"user_id,omitempty"`
-	Code   string `json:"code"`
+	Code string `json:"code"`
 }
 
 // ChallengeMFAInput defines input to satisfy an MFA challenge during sign-in.

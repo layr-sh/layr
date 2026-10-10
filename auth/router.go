@@ -169,10 +169,11 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 6. Multi-Factor Authentication
-	core.PostRoute[SetupMFAResponse, SetupMFAInput](router, "/v1/auth/mfa", service.baseHandler.handleSetupMFA,
+	core.PostRoute[SetupMFAResponse, core.Empty](router, "/v1/auth/mfa", service.baseHandler.handleSetupMFA,
 		core.RouteTag("Multi-Factor Authentication"),
 		core.RouteSummary("Generate TOTP secret and setup URI for authenticator apps"),
 		core.RouteDescription("Generates a cryptographic TOTP secret and QR-code URI for Google Authenticator or 1Password enrollment."),
+		core.RouteNoRequestBody(),
 		core.RouteOperationID("auth__mfa__setup"),
 		core.RouteSDKGroupName("auth", "mfa"),
 		core.RouteSDKMethodName("setup"),
