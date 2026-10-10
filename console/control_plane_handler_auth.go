@@ -9,8 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"layr.sh/core"
 )
+
+const consoleMFATicketTTL = 5 * time.Minute
 
 func (controlPlaneHandler *ControlPlaneHandler) extractConsoleToken(request *http.Request) string {
 	if request == nil {
@@ -131,17 +134,31 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignInConsole(responseWrit
 	}
 
 	if user.MFAEnabled {
-		if signInConsoleInput.MFACode == nil || strings.TrimSpace(*signInConsoleInput.MFACode) == "" {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "MFA code required")
-			return
-		}
-		decryptedSecret, decErr := controlPlaneHandler.kernel.CryptoKeyManager().DecryptField(string(encryptedMFASecret))
-		if decErr != nil || !controlPlaneHandler.totpManager.ValidateCode(string(decryptedSecret), *signInConsoleInput.MFACode, time.Now().UTC(), 1) {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
+		if signInConsoleInput.MFACode != nil && strings.TrimSpace(*signInConsoleInput.MFACode) != "" {
+			decryptedSecret, decErr := controlPlaneHandler.kernel.CryptoKeyManager().DecryptField(string(encryptedMFASecret))
+			if decErr != nil || !controlPlaneHandler.totpManager.ValidateCode(string(decryptedSecret), *signInConsoleInput.MFACode, time.Now().UTC(), 1) {
+				core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
+				return
+			}
+		} else {
+			ticketUUID, _ := uuid.NewV7()
+			mfaTicket := "console_mfa_tk_" + ticketUUID.String()
+			_ = controlPlaneHandler.kernel.KVStore().Set(ctx, "console:mfa_ticket:"+mfaTicket, user.ID, consoleMFATicketTTL)
+			core.WriteJSONResponse(responseWriter, http.StatusOK, SignInConsoleResponse{
+				MFARequired: true,
+				MFATicket:   mfaTicket,
+				Factor:      "totp",
+			})
 			return
 		}
 	}
 
+	controlPlaneHandler.issueConsoleSessionResponse(responseWriter, request, user)
+}
+
+// issueConsoleSessionResponse creates a console session, sets auth cookies, and returns the SignInConsoleResponse.
+func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(responseWriter http.ResponseWriter, request *http.Request, user User) {
+	ctx := request.Context()
 	rawToken := controlPlaneHandler.kernel.JWTSigner().GenerateRefreshToken()
 	tokenHash := controlPlaneHandler.kernel.JWTSigner().HashRefreshToken(rawToken)
 
@@ -277,7 +294,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleSession(response
 	core.WriteJSONResponse(responseWriter, http.StatusOK, getConsoleSessionResponse)
 }
 
-// handleSetupConsoleMFA handles POST /v1/_/console/mfa/setup.
+// handleSetupConsoleMFA handles POST /v1/_/console/mfa.
 func (controlPlaneHandler *ControlPlaneHandler) handleSetupConsoleMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling setup console MFA request")
 
@@ -347,4 +364,77 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDisableConsoleMFA(response
 	_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), disableSQL, user.ID)
 
 	responseWriter.WriteHeader(http.StatusNoContent)
+}
+
+// handleChallengeConsoleMFA handles POST /v1/_/console/mfa/challenge.
+func (controlPlaneHandler *ControlPlaneHandler) handleChallengeConsoleMFA(responseWriter http.ResponseWriter, request *http.Request) {
+	log.Trace("handling console MFA challenge verification request")
+
+	var challengeConsoleMFAInput ChallengeConsoleMFAInput
+	if request.Body != nil && request.ContentLength != 0 {
+		if err := json.NewDecoder(request.Body).Decode(&challengeConsoleMFAInput); err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+			return
+		}
+	}
+
+	ticket := strings.TrimSpace(challengeConsoleMFAInput.MFATicket)
+	code := strings.TrimSpace(challengeConsoleMFAInput.Code)
+	if ticket == "" || code == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA ticket and code are required")
+		return
+	}
+
+	ctx := request.Context()
+	ticketKey := "console:mfa_ticket:" + ticket
+	userID, err := controlPlaneHandler.kernel.KVStore().Get(ctx, ticketKey)
+	if err != nil || userID == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
+		return
+	}
+
+	_ = controlPlaneHandler.kernel.KVStore().Delete(ctx, ticketKey)
+
+	const selectUserSQL = `
+		SELECT id, email, password_hash, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		FROM console.users
+		WHERE id = $1
+	`
+	var user User
+	var passwordHash string
+	var encryptedMFASecret []byte
+
+	err = controlPlaneHandler.kernel.DB().QueryRow(ctx, selectUserSQL, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&passwordHash,
+		&encryptedMFASecret,
+		&user.IsEnabled,
+		&user.LastLoginAt,
+		&user.CreatedAt,
+		&user.LastUpdatedAt,
+	)
+	if err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
+		return
+	}
+	user.MFAEnabled = len(encryptedMFASecret) > 0
+
+	if !user.IsEnabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Account is disabled")
+		return
+	}
+
+	if !user.MFAEnabled || len(encryptedMFASecret) == 0 {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "MFA is not enabled on this account")
+		return
+	}
+
+	decryptedSecret, decErr := controlPlaneHandler.kernel.CryptoKeyManager().DecryptField(string(encryptedMFASecret))
+	if decErr != nil || !controlPlaneHandler.totpManager.ValidateCode(string(decryptedSecret), code, time.Now().UTC(), 1) {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
+		return
+	}
+
+	controlPlaneHandler.issueConsoleSessionResponse(responseWriter, request, user)
 }

@@ -152,7 +152,7 @@ func TestConsoleFullLifecycleE2E(t *testing.T) {
 	require.NotEmpty(t, getConsoleSessionResponse.Session.ID)
 
 	// 9. Console Operator: Setup, Verify, and Test TOTP MFA Lifecycle
-	setupMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa/setup", nil)
+	setupMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa", nil)
 	setupMFARequest.AddCookie(sessionCookie)
 	setupMFAResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(setupMFAResponseRecorder, setupMFARequest)
@@ -176,15 +176,32 @@ func TestConsoleFullLifecycleE2E(t *testing.T) {
 	coreServer.Handler().ServeHTTP(verifyMFAResponseRecorder, verifyMFARequest)
 	require.Equal(t, http.StatusOK, verifyMFAResponseRecorder.Code)
 
-	// Sign In now requires MFA code -> missing MFA returns 401
+	// Sign In without MFA code -> returns 200 with MFARequired: true and ticket
 	missingMFASignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-in", bytes.NewReader([]byte(signInPayload)))
 	missingMFASignInRequest.Header.Set("Content-Type", "application/json")
 	missingMFAResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(missingMFAResponseRecorder, missingMFASignInRequest)
-	require.Equal(t, http.StatusUnauthorized, missingMFAResponseRecorder.Code)
+	require.Equal(t, http.StatusOK, missingMFAResponseRecorder.Code)
 
-	// Sign In with valid MFA code -> succeeds
-	validMFASignInPayload := fmt.Sprintf(`{"email":"platform-admin-renamed@layr.sh","password":"%s","mfa_code":"%s"}`, initialPassword, validMFACode)
+	var mfaPromptSignInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(missingMFAResponseRecorder.Body.Bytes(), &mfaPromptSignInConsoleResponse))
+	require.True(t, mfaPromptSignInConsoleResponse.MFARequired)
+	require.NotEmpty(t, mfaPromptSignInConsoleResponse.MFATicket)
+
+	// Complete 2FA via /v1/_/console/mfa/challenge -> 200
+	challengeCode, challengeCodeErr := consoleService.totpManager.GenerateCode(setupConsoleMFAResponse.Secret, time.Now().UTC())
+	require.NoError(t, challengeCodeErr)
+	challengePayload := fmt.Sprintf(`{"mfa_ticket":"%s","code":"%s"}`, mfaPromptSignInConsoleResponse.MFATicket, challengeCode)
+	challengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa/challenge", bytes.NewReader([]byte(challengePayload)))
+	challengeRequest.Header.Set("Content-Type", "application/json")
+	challengeResponseRecorder := httptest.NewRecorder()
+	coreServer.Handler().ServeHTTP(challengeResponseRecorder, challengeRequest)
+	require.Equal(t, http.StatusOK, challengeResponseRecorder.Code)
+
+	// Sign In with valid direct MFA code -> succeeds
+	directTOTPCode, directTOTPErr := consoleService.totpManager.GenerateCode(setupConsoleMFAResponse.Secret, time.Now().UTC())
+	require.NoError(t, directTOTPErr)
+	validMFASignInPayload := fmt.Sprintf(`{"email":"platform-admin-renamed@layr.sh","password":"%s","mfa_code":"%s"}`, initialPassword, directTOTPCode)
 	validMFASignInRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-in", bytes.NewReader([]byte(validMFASignInPayload)))
 	validMFASignInRequest.Header.Set("Content-Type", "application/json")
 	validMFAResponseRecorder := httptest.NewRecorder()

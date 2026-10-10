@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -92,7 +93,7 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 		require.NotEmpty(t, getConsoleSessionResponse.Scopes)
 
 		// 3. Initiate MFA Setup
-		setupMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa/setup", nil)
+		setupMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa", nil)
 		setupMFARequest.AddCookie(activeSessionCookie)
 		setupMFAResponseRecorder := httptest.NewRecorder()
 		coreServer.Handler().ServeHTTP(setupMFAResponseRecorder, setupMFARequest)
@@ -116,12 +117,27 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 		coreServer.Handler().ServeHTTP(verifyMFAResponseRecorder, verifyMFARequest)
 		require.Equal(t, http.StatusOK, verifyMFAResponseRecorder.Code)
 
-		// 5. Sign In again without MFA code -> 401
+		// 5. Sign In again without MFA code -> returns 200 with MFARequired: true
 		signInNoMFAResponseRecorder := httptest.NewRecorder()
 		signInNoMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-in", bytes.NewReader([]byte(signInPayload)))
 		signInNoMFARequest.Header.Set("Content-Type", "application/json")
 		coreServer.Handler().ServeHTTP(signInNoMFAResponseRecorder, signInNoMFARequest)
-		require.Equal(t, http.StatusUnauthorized, signInNoMFAResponseRecorder.Code)
+		require.Equal(t, http.StatusOK, signInNoMFAResponseRecorder.Code)
+
+		var mfaPromptSignInConsoleResponse SignInConsoleResponse
+		require.NoError(t, json.Unmarshal(signInNoMFAResponseRecorder.Body.Bytes(), &mfaPromptSignInConsoleResponse))
+		require.True(t, mfaPromptSignInConsoleResponse.MFARequired)
+		require.NotEmpty(t, mfaPromptSignInConsoleResponse.MFATicket)
+
+		// 5.1 Complete 2FA via /v1/_/console/mfa/challenge -> 200
+		challengeCode, challengeCodeErr := service.totpManager.GenerateCode(mfaSecret, time.Now().UTC())
+		require.NoError(t, challengeCodeErr)
+		challengePayload := fmt.Sprintf(`{"mfa_ticket":"%s","code":"%s"}`, mfaPromptSignInConsoleResponse.MFATicket, challengeCode)
+		challengeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa/challenge", bytes.NewReader([]byte(challengePayload)))
+		challengeRequest.Header.Set("Content-Type", "application/json")
+		challengeResponseRecorder := httptest.NewRecorder()
+		coreServer.Handler().ServeHTTP(challengeResponseRecorder, challengeRequest)
+		require.Equal(t, http.StatusOK, challengeResponseRecorder.Code)
 
 		// 6. Sign In again with invalid MFA code -> 401
 		signInBadMFAPayload := `{"email":"operator@layr.sh","password":"ConsolePass123!","mfa_code":"000000"}`
