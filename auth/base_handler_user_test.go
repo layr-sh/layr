@@ -30,6 +30,7 @@ func TestAuthBaseHandlerUserUnit(t *testing.T) {
 		{"DeleteUser", http.MethodDelete, baseHandler.handleDeleteUser},
 		{"UpdateUserEmail", http.MethodPatch, baseHandler.handleUpdateUserEmail},
 		{"UpdateUserPhone", http.MethodPatch, baseHandler.handleUpdateUserPhone},
+		{"ExportUser", http.MethodPost, baseHandler.handleExportUser},
 	}
 
 	for _, userEndpoint := range userEndpoints {
@@ -300,5 +301,14 @@ func TestAuthBaseHandlerUserUnit(t *testing.T) {
 	}
 	if restoredProps["role"] != "admin" || restoredProps["email"] != "custom@example.com" || restoredProps["encrypted_secret"] != "custom_encrypted_val" {
 		t.Fatalf("expected arbitrary developer properties preserved intact: %+v", restoredProps)
+	}
+
+	// POST /v1/auth/user/export on non-existent user / broken pool -> 404
+	exportRequest := httptest.NewRequestWithContext(authedCtx, http.MethodPost, "/v1/auth/user/export", nil)
+	exportRequest.Header.Set("Authorization", "Bearer "+validToken)
+	exportResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleExportUser(exportResponseRecorder, exportRequest)
+	if exportResponseRecorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on export user not found, got: %d", exportResponseRecorder.Code)
 	}
 }

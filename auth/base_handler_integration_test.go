@@ -391,7 +391,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected successful oauth callback, got: %d (body: %s)", oauthCallbackResponseRecorder.Code, oauthCallbackResponseRecorder.Body.String())
 	}
 
-	// 10. User Export via POST /v1/auth/users/{user_id}/export
+	// 10. User Export via POST /v1/auth/user/export
 	_, err = db.Exec(ctx, `
 		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
 		VALUES ($1, 'github', 'gh_user_123', '{"login":"alice"}'::jsonb, clock_timestamp(), clock_timestamp())
@@ -400,8 +400,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("failed to insert test identity for export: %v", err)
 	}
 
-	exportRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
-	exportRequest.SetPathValue("user_id", signupAuthTokenResponse.User.ID)
+	exportRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/user/export", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
 	exportRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(exportResponseRecorder, exportRequest)
@@ -429,8 +428,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 			Role:    "authenticated",
 		},
 	})
-	nonExistentExportRequest := httptest.NewRequestWithContext(nonExistentCtx, http.MethodPost, "/v1/auth/users/"+nonExistentUserID+"/export", nil)
-	nonExistentExportRequest.SetPathValue("user_id", nonExistentUserID)
+	nonExistentExportRequest := httptest.NewRequestWithContext(nonExistentCtx, http.MethodPost, "/v1/auth/user/export", nil)
 	nonExistentExportRequest.Header.Set("Authorization", "Bearer "+nonExistentToken)
 	nonExistentExportResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExportUser(nonExistentExportResponseRecorder, nonExistentExportRequest)

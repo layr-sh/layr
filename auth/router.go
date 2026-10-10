@@ -244,18 +244,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	router.Mux().HandleFunc("GET /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
 	router.Mux().HandleFunc("POST /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
 
-	// 8. GDPR Export
-	core.PostRoute[ExportUserResponse, core.Empty](router, "/v1/auth/users/{user_id}/export", service.baseHandler.handleExportUser,
-		core.RouteTag("GDPR Compliance"),
-		core.RouteSummary("Export comprehensive user account data graph"),
-		core.RouteDescription("Exports all personal data, sessions, and identities associated with the user in compliance with GDPR Article 20."),
-		core.RouteNoRequestBody(),
-		core.RouteOperationID("auth__users__export"),
-		core.RouteSDKGroupName("auth", "users"),
-		core.RouteSDKMethodName("export"),
-	)
-
-	// 9. Device & Session Management
+	// 8. Device & Session Management
 	core.GetRoute[ListSessionsResponse](router, "/v1/auth/sessions", service.baseHandler.handleListSessions,
 		core.RouteTag("Authentication"),
 		core.RouteSummary("List active sessions for current user"),
@@ -288,7 +277,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	router.Mux().HandleFunc("DELETE /v1/auth/user/sessions/{session_id}", service.baseHandler.handleRevokeSession)
 	router.Mux().HandleFunc("POST /v1/auth/user/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
 
-	// 10. User Self-Service Account Management
+	// 9. User Self-Service Account Management
 	core.GetRoute[GetUserResponse](router, "/v1/auth/user", service.baseHandler.handleGetUser,
 		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Get authenticated user"),
@@ -296,6 +285,15 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteOperationID("auth__user__get"),
 		core.RouteSDKGroupName("auth", "user"),
 		core.RouteSDKMethodName("get"),
+	)
+	core.PostRoute[ExportUserResponse, core.Empty](router, "/v1/auth/user/export", service.baseHandler.handleExportUser,
+		core.RouteTag("User Self-Service"),
+		core.RouteSummary("Export comprehensive current user account data graph"),
+		core.RouteDescription("Exports all personal data, sessions, and identities associated with the authenticated user in compliance with GDPR Article 20."),
+		core.RouteNoRequestBody(),
+		core.RouteOperationID("auth__user__export"),
+		core.RouteSDKGroupName("auth", "user"),
+		core.RouteSDKMethodName("export"),
 	)
 	core.PatchRoute[UpdateUserPropertiesResponse, UpdateUserPropertiesInput](router, "/v1/auth/user/properties", service.baseHandler.handleUpdateUserProperties,
 		core.RouteTag("User Self-Service"),

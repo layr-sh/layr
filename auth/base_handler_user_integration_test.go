@@ -640,7 +640,30 @@ func TestAuthBaseHandlerUserSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected updated properties in response, got: %+v", updateUserPropertiesResponse.Properties)
 	}
 
-	// 5. PATCH /v1/auth/user/password - Validations
+	// 5. POST /v1/auth/user/export - Export comprehensive user account data graph
+	_, _ = db.Exec(ctx, `
+		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
+		VALUES ($1, 'github', 'gh_selfservice_123', '{"login":"selfservice"}'::jsonb, clock_timestamp(), clock_timestamp())
+	`, userID)
+	exportRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/export", nil), userID, "user", false)
+	exportRequest.Header.Set("Authorization", "Bearer "+accessToken)
+	exportResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleExportUser(exportResponseRecorder, exportRequest)
+	if exportResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on user export, got: %d (%s)", exportResponseRecorder.Code, exportResponseRecorder.Body.String())
+	}
+	var exportUserResponse ExportUserResponse
+	if decodeErr := json.NewDecoder(exportResponseRecorder.Body).Decode(&exportUserResponse); decodeErr != nil {
+		t.Fatalf("failed to decode user export response: %v", decodeErr)
+	}
+	if exportUserResponse.User.ID != userID {
+		t.Fatalf("expected exported user ID %s, got: %s", userID, exportUserResponse.User.ID)
+	}
+	if len(exportUserResponse.Identities) == 0 {
+		t.Fatal("expected exported identities to be populated")
+	}
+
+	// 6. PATCH /v1/auth/user/password - Validations
 	// Wrong current password -> 400
 	wrongPasswordPayload, _ := json.Marshal(UpdateUserPasswordInput{
 		CurrentPassword: "WrongPassword999!",

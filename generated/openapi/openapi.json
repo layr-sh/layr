@@ -699,6 +699,47 @@
         ],
         "type": "object"
       },
+      "CreatePresignedURLInput": {
+        "description": "CreatePresignedURLInput schema",
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket",
+          "expires_in_seconds",
+          "key",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "CreatePresignedURLResponse": {
+        "description": "CreatePresignedURLResponse schema",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expires_at",
+          "url"
+        ],
+        "type": "object"
+      },
       "CreateRecordInput": {
         "description": "CreateRecordInput schema",
         "properties": {
@@ -3542,47 +3583,6 @@
           "name",
           "processing_options",
           "updated_at"
-        ],
-        "type": "object"
-      },
-      "PresignURLInput": {
-        "description": "PresignURLInput schema",
-        "properties": {
-          "bucket": {
-            "type": "string"
-          },
-          "expires_in_seconds": {
-            "type": "integer"
-          },
-          "key": {
-            "type": "string"
-          },
-          "operation": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "bucket",
-          "expires_in_seconds",
-          "key",
-          "operation"
-        ],
-        "type": "object"
-      },
-      "PresignURLResponse": {
-        "description": "PresignURLResponse schema",
-        "properties": {
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "expires_at",
-          "url"
         ],
         "type": "object"
       },
@@ -11257,6 +11257,49 @@
         "x-sdk-method-name": "request"
       }
     },
+    "/v1/auth/user/export": {
+      "post": {
+        "description": "Exports all personal data, sessions, and identities associated with the authenticated user in compliance with GDPR Article 20.",
+        "operationId": "auth__user__export",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportUserResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportUserResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Export comprehensive current user account data graph",
+        "tags": [
+          "User Self-Service"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "user"
+        ],
+        "x-sdk-method-name": "export"
+      }
+    },
     "/v1/auth/user/passkeys": {
       "get": {
         "description": "Retrieves all registered WebAuthn passkey credentials belonging to the authenticated user.",
@@ -11574,59 +11617,6 @@
           "properties"
         ],
         "x-sdk-method-name": "update"
-      }
-    },
-    "/v1/auth/users/{user_id}/export": {
-      "post": {
-        "description": "Exports all personal data, sessions, and identities associated with the user in compliance with GDPR Article 20.",
-        "operationId": "auth__users__export",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "user_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "*/*": {
-              "schema": {
-                "$ref": "#/components/schemas/Empty"
-              }
-            }
-          },
-          "description": "Request body for core.Empty",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportUserResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExportUserResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Export comprehensive user account data graph",
-        "tags": [
-          "GDPR Compliance"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "users"
-        ],
-        "x-sdk-method-name": "export"
       }
     },
     "/v1/data/kv/increment": {
@@ -12733,19 +12723,19 @@
         "x-sdk-method-name": "upload_put"
       }
     },
-    "/v1/file-storage/presign": {
+    "/v1/file-storage/presigned-url": {
       "post": {
         "description": "Generates a cryptographically signed URL allowing temporary read or write access.",
-        "operationId": "file_storage__presign__create",
+        "operationId": "file_storage__presigned_url__create",
         "requestBody": {
           "content": {
             "*/*": {
               "schema": {
-                "$ref": "#/components/schemas/PresignURLInput"
+                "$ref": "#/components/schemas/CreatePresignedURLInput"
               }
             }
           },
-          "description": "Request body for filestorage.PresignURLInput",
+          "description": "Request body for filestorage.CreatePresignedURLInput",
           "required": true
         },
         "responses": {
@@ -12753,12 +12743,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PresignURLResponse"
+                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
                 }
               },
               "application/xml": {
                 "schema": {
-                  "$ref": "#/components/schemas/PresignURLResponse"
+                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
                 }
               }
             },
@@ -12771,7 +12761,7 @@
         ],
         "x-sdk-group-name": [
           "file_storage",
-          "presign"
+          "presigned_url"
         ],
         "x-sdk-method-name": "create"
       }
