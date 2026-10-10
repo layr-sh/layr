@@ -375,17 +375,22 @@ var defaultPasswordHasher = password.NewHasher()
 
 func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	var count int
-	err := kernel.db.QueryRow(ctx, "SELECT COUNT(*) FROM console.users").Scan(&count)
+	query := `
+		SELECT COUNT(*)
+		FROM console.users u
+		JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE sa.scopes @> '["*"]'::jsonb
+	`
+	err := kernel.db.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
-		return fmt.Errorf("failed to count console users: %w", err)
+		return fmt.Errorf("failed to count console root accounts: %w", err)
 	}
 
 	config := GetConfig()
 	log.Debugf("checking console root account status")
 	if count > 0 {
 		if os.Getenv("LAYR__ROOT_USER__EMAIL") != "" || os.Getenv("LAYR__ROOT_USER__PASSWORD") != "" || config.RootUser.Password != "" || (config.RootUser.Email != "" && config.RootUser.Email != "root@layr.local") {
-			stdlog.Printf("Initial root user already exists; ignoring root user environment variables (LAYR__ROOT_USER__EMAIL, LAYR__ROOT_USER__PASSWORD)")
-			log.Infof("initial root user already exists; ignoring root user environment variables")
+			log.Debugf("initial root user already exists; ignoring root user environment variables")
 		}
 		return nil
 	}

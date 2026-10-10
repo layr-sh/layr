@@ -52,7 +52,7 @@ func TestTasksDispatcherIntegration(t *testing.T) {
 	t.Run("ExecuteHTTPAttempt executes against local HTTP server", func(t *testing.T) {
 		capturedHeader := ""
 		testServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-			capturedHeader = request.Header.Get("X-Layr-Signature")
+			capturedHeader = request.Header.Get("Webhook-Signature")
 			bodyBytes, readErr := io.ReadAll(request.Body)
 			if readErr != nil {
 				http.Error(responseWriter, readErr.Error(), http.StatusInternalServerError)

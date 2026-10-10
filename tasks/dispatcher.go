@@ -73,12 +73,12 @@ func (dispatcher *Dispatcher) ExecuteHTTPAttempt(ctx context.Context, targetURL 
 
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("User-Agent", "Layr-Tasks/1.0")
-	request.Header.Set("X-Layr-Signature", signature)
-	request.Header.Set("X-Layr-Timestamp", timestamp)
+	request.Header.Set("Webhook-Signature", signature)
+	request.Header.Set("Webhook-Timestamp", timestamp)
 	if jobID != nil {
-		request.Header.Set("X-Layr-Job-ID", jobID.String())
+		request.Header.Set("Webhook-Job-ID", jobID.String())
 	}
-	request.Header.Set("X-Layr-Execution-ID", executionID.String())
+	request.Header.Set("Webhook-Execution-ID", executionID.String())
 
 	for headerKey, headerValue := range headers {
 		request.Header.Set(headerKey, headerValue)

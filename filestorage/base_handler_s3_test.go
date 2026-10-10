@@ -20,7 +20,7 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 
 	t.Run("s3 error formatting unit", func(t *testing.T) {
 		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3/test-bucket", nil)
-		request.Header.Set("X-Request-ID", "req-12345")
+		request.Header.Set("Request-ID", "req-12345")
 		responseRecorder := httptest.NewRecorder()
 
 		baseHandler.writeS3ErrorResponse(responseRecorder, request, http.StatusForbidden, "AccessDenied", "Access denied to bucket.")
@@ -35,6 +35,17 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 
 		if s3ErrorResponse.Code != "AccessDenied" || s3ErrorResponse.RequestID != "req-12345" {
 			t.Fatalf("unexpected S3 error response: %+v", s3ErrorResponse)
+		}
+
+		// Fallback X-Request-ID
+		fallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3/test-bucket", nil)
+		fallbackRequest.Header.Set("X-Request-ID", "fallback-req-67890")
+		fallbackResponseRecorder := httptest.NewRecorder()
+		baseHandler.writeS3ErrorResponse(fallbackResponseRecorder, fallbackRequest, http.StatusForbidden, "AccessDenied", "Access denied.")
+		var fallbackS3ErrorResponse S3ErrorResponse
+		_ = xml.NewDecoder(fallbackResponseRecorder.Body).Decode(&fallbackS3ErrorResponse)
+		if fallbackS3ErrorResponse.RequestID != "fallback-req-67890" {
+			t.Fatalf("unexpected S3 fallback request ID: %s", fallbackS3ErrorResponse.RequestID)
 		}
 	})
 

@@ -135,7 +135,7 @@ func TestCoreKernelServiceFactoryAndGettersUnit(t *testing.T) {
 
 func TestCoreKernelServiceAccountHelpersUnit(t *testing.T) {
 	keyHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	keyHeaderRequest.Header.Set("X-Layr-Service-Account-Key", "12345")
+	keyHeaderRequest.Header.Set("Service-Account-Key", "12345")
 	if key := ExtractRequestServiceAccountKey(keyHeaderRequest); key != "12345" {
 		t.Fatalf("expected 12345, got %s", key)
 	}

@@ -68,16 +68,27 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 	t.Run("handleInvokeEndpoint execution tracking and logs", func(t *testing.T) {
 		// Test capturingResponseWriter with implicit WriteHeader
 		capturingResponseRecorder := httptest.NewRecorder()
-		capturingResponseRecorder.Header().Set("X-Layr-Stdout", "test%20stdout")
-		capturingResponseRecorder.Header().Set("X-Layr-Stderr", "test%20stderr")
+		capturingResponseRecorder.Header().Set("Stdout", "test%20stdout")
+		capturingResponseRecorder.Header().Set("Stderr", "test%20stderr")
 		recordedResponseWriter := &capturingResponseWriter{ResponseWriter: capturingResponseRecorder}
 		_, writeErr := recordedResponseWriter.Write([]byte("raw worker body"))
 		require.NoError(t, writeErr)
 		require.Equal(t, http.StatusOK, recordedResponseWriter.statusCode)
 		require.Equal(t, "test stdout", recordedResponseWriter.stdout)
 		require.Equal(t, "test stderr", recordedResponseWriter.stderr)
-		require.Empty(t, capturingResponseRecorder.Header().Get("X-Layr-Stdout"))
-		require.Empty(t, capturingResponseRecorder.Header().Get("X-Layr-Stderr"))
+		require.Empty(t, capturingResponseRecorder.Header().Get("Stdout"))
+		require.Empty(t, capturingResponseRecorder.Header().Get("Stderr"))
+
+		// Test capturingResponseWriter with fallback X-Stdout and X-Stderr
+		fallbackResponseRecorder := httptest.NewRecorder()
+		fallbackResponseRecorder.Header().Set("X-Stdout", "fb%20stdout")
+		fallbackResponseRecorder.Header().Set("X-Stderr", "fb%20stderr")
+		fallbackRecordedWriter := &capturingResponseWriter{ResponseWriter: fallbackResponseRecorder}
+		fallbackRecordedWriter.WriteHeader(http.StatusOK)
+		require.Equal(t, "fb stdout", fallbackRecordedWriter.stdout)
+		require.Equal(t, "fb stderr", fallbackRecordedWriter.stderr)
+		require.Empty(t, fallbackResponseRecorder.Header().Get("X-Stdout"))
+		require.Empty(t, fallbackResponseRecorder.Header().Get("X-Stderr"))
 
 		// Test capturingResponseWriter with underlying write error
 		failingCapturingResponseWriter := &capturingResponseWriter{ResponseWriter: &failingResponseWriter{}}
@@ -195,7 +206,7 @@ func TestFunctionInjectAuthHeadersUnit(t *testing.T) {
 	// 1. Unauthenticated caller
 	unauthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	injectAuthHeaders(unauthRequest)
-	require.NotEmpty(t, unauthRequest.Header.Get("X-Layr-Auth-Context"))
+	require.NotEmpty(t, unauthRequest.Header.Get("Auth-Context"))
 
 	// 2. End-User authenticated caller
 	userCtx := core.WithAuthContext(context.Background(), core.AuthContext{
@@ -208,7 +219,7 @@ func TestFunctionInjectAuthHeadersUnit(t *testing.T) {
 	})
 	userRequest := httptest.NewRequestWithContext(userCtx, http.MethodGet, "/test", nil)
 	injectAuthHeaders(userRequest)
-	require.Contains(t, userRequest.Header.Get("X-Layr-Auth-Context"), "usr_100")
+	require.Contains(t, userRequest.Header.Get("Auth-Context"), "usr_100")
 
 	// 3. Service Account authenticated caller
 	serviceAccountCtx := core.WithAuthContext(context.Background(), core.AuthContext{
@@ -221,5 +232,5 @@ func TestFunctionInjectAuthHeadersUnit(t *testing.T) {
 	})
 	serviceAccountRequest := httptest.NewRequestWithContext(serviceAccountCtx, http.MethodGet, "/test", nil)
 	injectAuthHeaders(serviceAccountRequest)
-	require.Contains(t, serviceAccountRequest.Header.Get("X-Layr-Auth-Context"), "sa_200")
+	require.Contains(t, serviceAccountRequest.Header.Get("Auth-Context"), "sa_200")
 }

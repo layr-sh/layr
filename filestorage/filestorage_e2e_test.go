@@ -126,7 +126,7 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 
 	// 7. Data Plane: Anonymous Download via Presigned URL (no service account headers)
 	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, presignURLResponse.URL, nil)
-	presignedDownloadRequest.Header.Set("X-Layr-Client-Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
+	presignedDownloadRequest.Header.Set("Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
 	presignedDownloadResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(presignedDownloadResponseRecorder, presignedDownloadRequest)
 	if presignedDownloadResponseRecorder.Code != http.StatusOK {

@@ -81,9 +81,9 @@ func TestCoreServiceAccountGenerateSecretKeyUnit(t *testing.T) {
 }
 
 func TestCoreServiceAccountExtractRequestKeyUnit(t *testing.T) {
-	// ExtractRequestServiceAccountKey from X-Layr-Service-Account-Key header
+	// ExtractRequestServiceAccountKey from Service-Account-Key header
 	keyHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	keyHeaderRequest.Header.Set("X-Layr-Service-Account-Key", "a1b2c3d4e5f6789012345678abcdef01")
+	keyHeaderRequest.Header.Set("Service-Account-Key", "a1b2c3d4e5f6789012345678abcdef01")
 	if key := ExtractRequestServiceAccountKey(keyHeaderRequest); key != "a1b2c3d4e5f6789012345678abcdef01" {
 		t.Fatalf("expected a1b2c3d4e5f6789012345678abcdef01, got %s", key)
 	}

@@ -109,7 +109,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 
 	// Public Ingress HTTP execution with URL query params
 	invokeEsmRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/crypto-worker/hash?name=antigravity", nil)
-	invokeEsmRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	invokeEsmRequest.Header.Set("Publishable-Key", publishableKey)
 	invokeEsmResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(invokeEsmResponseRecorder, invokeEsmRequest)
 	require.Equal(t, http.StatusOK, invokeEsmResponseRecorder.Code)
@@ -161,7 +161,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.Equal(t, http.StatusCreated, deployV2ResponseRecorder.Code)
 
 	invokeV2Request := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/crypto-worker/status", nil)
-	invokeV2Request.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	invokeV2Request.Header.Set("Publishable-Key", publishableKey)
 	invokeV2ResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(invokeV2ResponseRecorder, invokeV2Request)
 	require.Equal(t, http.StatusOK, invokeV2ResponseRecorder.Code)
@@ -178,7 +178,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.Equal(t, http.StatusOK, rollbackResponseRecorder.Code)
 
 	invokeRollbackRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/crypto-worker/hash?name=rollback", nil)
-	invokeRollbackRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	invokeRollbackRequest.Header.Set("X-Publishable-Key", publishableKey)
 	invokeRollbackResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(invokeRollbackResponseRecorder, invokeRollbackRequest)
 	require.Equal(t, http.StatusOK, invokeRollbackResponseRecorder.Code)
@@ -254,7 +254,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 
 	// 4. Test Core EventHook triggering function over HTTP webhook
 	eventServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		request.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+		request.Header.Set("Publishable-Key", publishableKey)
 		coreServer.Handler().ServeHTTP(responseWriter, request)
 	}))
 	defer eventServer.Close()

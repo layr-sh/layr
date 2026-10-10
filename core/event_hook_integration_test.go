@@ -84,9 +84,9 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 	lastTimestamp := ""
 
 	httpServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		lastSignature = request.Header.Get("X-Layr-Signature")
-		lastTimestamp = request.Header.Get("X-Layr-Timestamp")
-		receivedEvents <- request.Header.Get("X-Layr-Event")
+		lastSignature = request.Header.Get("Webhook-Signature")
+		lastTimestamp = request.Header.Get("Webhook-Timestamp")
+		receivedEvents <- request.Header.Get("Webhook-Event")
 		responseWriter.WriteHeader(http.StatusOK)
 		_, _ = responseWriter.Write([]byte(`{"success":true}`))
 	}))
@@ -180,7 +180,7 @@ func TestCoreEventHookFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected successful delivery, got: %+v", httpEventHookDelivery)
 	}
 	if len(lastSignature) == 0 || len(lastTimestamp) == 0 {
-		t.Fatal("expected X-Layr-Signature and X-Layr-Timestamp headers to be sent")
+		t.Fatal("expected Webhook-Signature and Webhook-Timestamp headers to be sent")
 	}
 
 	// Deliver to SQL Hook

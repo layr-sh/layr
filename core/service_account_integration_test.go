@@ -250,7 +250,7 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 	serverMiddlewareHandler := server.middleware(testHandler)
 
 	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", authTestServiceAccount.SecretKey)
+	serviceAccountRequest.Header.Set("Service-Account-Key", authTestServiceAccount.SecretKey)
 	serverMiddlewareHandler.ServeHTTP(httptest.NewRecorder(), serviceAccountRequest)
 
 	if capturedAuthContext.JWT.Subject != authTestServiceAccount.ID || capturedAuthContext.JWT.Role != "service_role" {

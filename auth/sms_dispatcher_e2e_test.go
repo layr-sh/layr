@@ -104,7 +104,7 @@ func TestAuthSMSSignInOTPDispatchWebhookE2E(t *testing.T) {
 	payloadDelivered := make(chan map[string]any, 1)
 
 	webhookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		signatureHeader := request.Header.Get("X-Layr-Signature")
+		signatureHeader := request.Header.Get("Webhook-Signature")
 		if signatureHeader == "" || !strings.Contains(signatureHeader, "v1=") {
 			http.Error(responseWriter, "missing or invalid signature", http.StatusBadRequest)
 			return

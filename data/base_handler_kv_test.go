@@ -368,12 +368,20 @@ func TestDataBaseHandlerKVUnit(t *testing.T) {
 		baseHandler.handleUpdateKV(responseRecorder, putEmptyRequest)
 		assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
 
-		// PUT X-Layr-Cache-TTL header
+		// PUT Cache-TTL header
 		putHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/data/kv/put_header", bytes.NewReader([]byte("raw_val")))
-		putHeaderRequest.Header.Set("X-Layr-Cache-TTL", "60")
+		putHeaderRequest.Header.Set("Cache-TTL", "60")
 		putHeaderRequest.SetPathValue("key", "put_header")
 		responseRecorder = httptest.NewRecorder()
 		baseHandler.handleUpdateKV(responseRecorder, putHeaderRequest)
+		assert.Equal(t, http.StatusOK, responseRecorder.Code)
+
+		// PUT fallback X-Cache-TTL header
+		putFallbackHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/data/kv/put_header_fallback", bytes.NewReader([]byte("raw_val")))
+		putFallbackHeaderRequest.Header.Set("X-Cache-TTL", "60")
+		putFallbackHeaderRequest.SetPathValue("key", "put_header_fallback")
+		responseRecorder = httptest.NewRecorder()
+		baseHandler.handleUpdateKV(responseRecorder, putFallbackHeaderRequest)
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
 		// PUT SetNX error

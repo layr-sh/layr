@@ -97,11 +97,20 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	// Test base client endpoint with valid publishable key -> 200
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 	clientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
-	clientRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	clientRequest.Header.Set("Publishable-Key", publishableKey)
 	clientResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientResponseRecorder, clientRequest)
 	if clientResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected client endpoint 200 with valid key, got %d", clientResponseRecorder.Code)
+	}
+
+	// Test fallback X-Publishable-Key header -> 200
+	fallbackClientRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/client-test", nil)
+	fallbackClientRequest.Header.Set("X-Publishable-Key", publishableKey)
+	fallbackClientResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(fallbackClientResponseRecorder, fallbackClientRequest)
+	if fallbackClientResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected client endpoint 200 with fallback key, got %d", fallbackClientResponseRecorder.Code)
 	}
 
 	// Test base client endpoint with valid authenticated JWT in Authorization header -> 200
@@ -217,7 +226,7 @@ func TestCoreServerStartAndShutdownErrorsUnit(t *testing.T) {
 	go func() {
 		inFlightRequest, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+tcpListener.Addr().String()+"/v1/blocking-test", nil)
 		if requestErr == nil {
-			inFlightRequest.Header.Set("X-Layr-Client-Publishable-Key", cryptoKeyManager.DerivePublishableKey())
+			inFlightRequest.Header.Set("Publishable-Key", cryptoKeyManager.DerivePublishableKey())
 			response, clientErr := http.DefaultClient.Do(inFlightRequest)
 			if clientErr == nil {
 				_ = response.Body.Close()
@@ -248,7 +257,7 @@ func TestCoreServerPanicRecoveryUnit(t *testing.T) {
 	})
 
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/panic-endpoint", nil)
-	request.Header.Set("X-Layr-Client-Publishable-Key", cryptoKeyManager.DerivePublishableKey())
+	request.Header.Set("Publishable-Key", cryptoKeyManager.DerivePublishableKey())
 	responseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(responseRecorder, request)
 
@@ -301,7 +310,7 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	userRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	userRequest.Header.Set("Authorization", "Bearer "+userToken)
-	userRequest.Header.Set("X-Refresh-Token", "test-refresh-token")
+	userRequest.Header.Set("Refresh-Token", "test-refresh-token")
 	userResponseRecorder := httptest.NewRecorder()
 	middlewareHandler.ServeHTTP(userResponseRecorder, userRequest)
 
@@ -334,6 +343,14 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 	middlewareHandler.ServeHTTP(httptest.NewRecorder(), userInsecureCookieRequest)
 	if capturedAuthContext.RefreshTokenHash != jwtSigner.HashRefreshToken("insec-refresh-cookie") {
 		t.Fatalf("expected insecure cookie refresh hash, got: %s", capturedAuthContext.RefreshTokenHash)
+	}
+
+	userFallbackRefreshRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	userFallbackRefreshRequest.Header.Set("Authorization", "Bearer "+userToken)
+	userFallbackRefreshRequest.Header.Set("X-Refresh-Token", "fallback-refresh-token")
+	middlewareHandler.ServeHTTP(httptest.NewRecorder(), userFallbackRefreshRequest)
+	if capturedAuthContext.RefreshTokenHash != jwtSigner.HashRefreshToken("fallback-refresh-token") {
+		t.Fatalf("expected fallback refresh token hash, got: %s", capturedAuthContext.RefreshTokenHash)
 	}
 
 	// 3. M2M JWT Token via Bearer

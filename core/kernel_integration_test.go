@@ -510,6 +510,7 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 
 	if cleanupDB, err := NewDatabasePool(ctx, databaseURL); err == nil && cleanupDB != nil {
 		_, _ = cleanupDB.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT fail_service_account_bootstrap")
+		_, _ = cleanupDB.Exec(ctx, "DELETE FROM console.users")
 		cleanupDB.Close()
 	}
 
@@ -1513,6 +1514,29 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 		t.Fatal("expected error on create service account constraint failure")
 	}
 	_, _ = db.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT test_service_account_fail")
+	_, _ = db.Exec(ctx, "DELETE FROM console.users")
+
+	// 5b. Non-root user with non-root service account does NOT block root account bootstrap
+	nonRootUserID := uuid.NewV7().String()
+	_, _ = db.Exec(ctx, "INSERT INTO console.users (id, email, password_hash, is_enabled) VALUES ($1, 'nonroot@layr.local', 'hash', true)", nonRootUserID)
+	_, _ = kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+		ConsoleUserID: &nonRootUserID,
+		Name:          "Non-root Service Account",
+		Scopes:        []string{"data:read"},
+	})
+	if err := kernel.bootstrapRootAccount(ctx); err != nil {
+		t.Fatalf("failed bootstrapRootAccount when non-root user exists: %v", err)
+	}
+	var rootAccountCount int
+	_ = db.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM console.users u
+		JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE sa.scopes @> '["*"]'::jsonb
+	`).Scan(&rootAccountCount)
+	if rootAccountCount != 1 {
+		t.Fatalf("expected 1 root account, got %d", rootAccountCount)
+	}
 
 	// Clean up tables for successful default run
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")

@@ -162,7 +162,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 2. With invalid publishable key -> 401 Unauthorized
 	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
-	invalidKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", "invalid_publishable_key_123456789")
+	invalidKeyRequest.Header.Set("Publishable-Key", "invalid_publishable_key_123456789")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(invalidKeyResponseRecorder, invalidKeyRequest)
 
@@ -173,7 +173,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	// 3. With valid derived publishable key -> 200 OK and live DB query result
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
 	validKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
-	validKeyRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	validKeyRequest.Header.Set("Publishable-Key", publishableKey)
 	validKeyResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(validKeyResponseRecorder, validKeyRequest)
 
@@ -192,7 +192,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		t.Fatalf("failed to create test service account: %v", createErr)
 	}
 	serviceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
-	serviceAccountRequest.Header.Set("X-Layr-Service-Account-Key", createdServiceAccount.SecretKey)
+	serviceAccountRequest.Header.Set("Service-Account-Key", createdServiceAccount.SecretKey)
 	serviceAccountResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(serviceAccountResponseRecorder, serviceAccountRequest)
 
@@ -202,7 +202,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 4b. With unauthenticated service account key -> 401 Unauthorized
 	unauthServiceAccountRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/db-check", nil)
-	unauthServiceAccountRequest.Header.Set("X-Layr-Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	unauthServiceAccountRequest.Header.Set("Service-Account-Key", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	unauthServiceAccountResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(unauthServiceAccountResponseRecorder, unauthServiceAccountRequest)
 	if unauthServiceAccountResponseRecorder.Code != http.StatusUnauthorized {
@@ -255,7 +255,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 5a. With secure session cookie
 	secureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
-	secureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	secureCookieRequest.Header.Set("Publishable-Key", publishableKey)
 	secureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameSecure, Value: liveRefreshToken})
 	secureCookieResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(secureCookieResponseRecorder, secureCookieRequest)
@@ -269,7 +269,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 	// 5b. With insecure session cookie
 	insecureCookieRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
-	insecureCookieRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
+	insecureCookieRequest.Header.Set("Publishable-Key", publishableKey)
 	insecureCookieRequest.AddCookie(&http.Cookie{Name: SessionCookieNameInsecure, Value: liveRefreshToken})
 	insecureCookieResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(insecureCookieResponseRecorder, insecureCookieRequest)
@@ -281,18 +281,29 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 		t.Fatalf("expected authenticated session context with insecure cookie, got: %+v", capturedAuthContext)
 	}
 
-	// 5c. With X-Refresh-Token header
+	// 5c. With Refresh-Token header (and fallback X-Refresh-Token)
 	refreshHeaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
-	refreshHeaderRequest.Header.Set("X-Layr-Client-Publishable-Key", publishableKey)
-	refreshHeaderRequest.Header.Set("X-Refresh-Token", liveRefreshToken)
+	refreshHeaderRequest.Header.Set("Publishable-Key", publishableKey)
+	refreshHeaderRequest.Header.Set("Refresh-Token", liveRefreshToken)
 	refreshHeaderResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(refreshHeaderResponseRecorder, refreshHeaderRequest)
 
 	if refreshHeaderResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 with X-Refresh-Token header, got %d", refreshHeaderResponseRecorder.Code)
+		t.Fatalf("expected 200 with Refresh-Token header, got %d", refreshHeaderResponseRecorder.Code)
 	}
 	if capturedAuthContext.UserID != testUserID {
-		t.Fatalf("expected authenticated session context with X-Refresh-Token, got: %+v", capturedAuthContext)
+		t.Fatalf("expected authenticated session context with Refresh-Token, got: %+v", capturedAuthContext)
+	}
+
+	// Fallback X-Refresh-Token header
+	fallbackRefreshRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/auth-check", nil)
+	fallbackRefreshRequest.Header.Set("Publishable-Key", publishableKey)
+	fallbackRefreshRequest.Header.Set("X-Refresh-Token", liveRefreshToken)
+	fallbackRefreshResponseRecorder := httptest.NewRecorder()
+	server.server.Handler.ServeHTTP(fallbackRefreshResponseRecorder, fallbackRefreshRequest)
+
+	if fallbackRefreshResponseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected 200 with fallback X-Refresh-Token header, got %d", fallbackRefreshResponseRecorder.Code)
 	}
 }
 

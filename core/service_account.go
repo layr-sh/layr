@@ -385,9 +385,9 @@ func IsIPAllowed(clientIP string, allowedPatterns []string) bool {
 	return false
 }
 
-// ExtractRequestServiceAccountKey extracts service account key from X-Layr-Service-Account-Key or Bearer Authorization header.
+// ExtractRequestServiceAccountKey extracts service account key from Service-Account-Key (fallback X-Service-Account-Key) or Bearer Authorization header.
 func ExtractRequestServiceAccountKey(request *http.Request) string {
-	if key := request.Header.Get("X-Layr-Service-Account-Key"); key != "" {
+	if key := request.Header.Get("Service-Account-Key"); key != "" {
 		return strings.TrimSpace(key)
 	}
 	if key := request.Header.Get("X-Service-Account-Key"); key != "" {

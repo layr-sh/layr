@@ -174,7 +174,10 @@ func (baseHandler *BaseHandler) writeS3ErrorResponse(responseWriter http.Respons
 	if statusCode >= http.StatusInternalServerError || code == "InternalError" {
 		message = "Service temporarily unavailable"
 	}
-	requestID := request.Header.Get("X-Request-ID")
+	requestID := request.Header.Get("Request-ID")
+	if requestID == "" {
+		requestID = request.Header.Get("X-Request-ID")
+	}
 	if requestID == "" {
 		requestID = "s3-" + uuid.NewV7().String()
 	}

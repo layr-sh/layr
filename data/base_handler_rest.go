@@ -50,7 +50,11 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		if parsedTTL, parseErr := strconv.Atoi(ttlRaw); parseErr == nil && parsedTTL > 0 {
 			cacheTTL = parsedTTL
 		}
-	} else if ttlHeader := request.Header.Get("X-Layr-Cache-TTL"); ttlHeader != "" {
+	} else if ttlHeader := request.Header.Get("Cache-TTL"); ttlHeader != "" {
+		if parsedTTL, parseErr := strconv.Atoi(ttlHeader); parseErr == nil && parsedTTL > 0 {
+			cacheTTL = parsedTTL
+		}
+	} else if ttlHeader := request.Header.Get("X-Cache-TTL"); ttlHeader != "" {
 		if parsedTTL, parseErr := strconv.Atoi(ttlHeader); parseErr == nil && parsedTTL > 0 {
 			cacheTTL = parsedTTL
 		}
@@ -65,10 +69,10 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		keySuffix = request.URL.Query().Get("cache_key")
 	}
 	if keySuffix == "" {
-		keySuffix = request.Header.Get("X-Layr-Cache-Key-Suffix")
+		keySuffix = request.Header.Get("Cache-Key-Suffix")
 	}
 	if keySuffix == "" {
-		keySuffix = request.Header.Get("X-Layr-Cache-Key")
+		keySuffix = request.Header.Get("X-Cache-Key-Suffix")
 	}
 
 	ctx := request.Context()
@@ -81,12 +85,12 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 		userVisibleCacheKey = rest.GenerateUserVisibleRESTKeyWithVersion(schema, table, queryParams, keySuffix, tableVersion)
 		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleCacheKey)
-		responseWriter.Header().Set("X-Layr-Cache-Key", userVisibleCacheKey)
+		responseWriter.Header().Set("Cache-Key", userVisibleCacheKey)
 
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
 			log.Debugf("cache hit for %s.%s", schema, table)
 			responseWriter.Header().Set("Content-Type", "application/json")
-			responseWriter.Header().Set("X-Layr-Cache", "HIT")
+			responseWriter.Header().Set("Cache-Status", "HIT")
 			responseWriter.WriteHeader(http.StatusOK)
 			_, _ = responseWriter.Write([]byte(cached))
 			return
@@ -121,7 +125,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		if countErr == nil {
 			var totalCount int64
 			if scanErr := tx.QueryRow(ctx, countSQLStatement.SQL, countSQLStatement.Args...).Scan(&totalCount); scanErr == nil {
-				responseWriter.Header().Set("X-Total-Count", fmt.Sprintf("%d", totalCount))
+				responseWriter.Header().Set("Total-Count", fmt.Sprintf("%d", totalCount))
 				end := queryParams.Offset + len(results) - 1
 				if end < queryParams.Offset {
 					end = queryParams.Offset
@@ -151,7 +155,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 				counterExpiry = 5 * time.Minute
 			}
 			_, _ = handler.kernel.KVStore().Increment(ctx, "cache:query_count", counterExpiry)
-			responseWriter.Header().Set("X-Layr-Cache", "MISS")
+			responseWriter.Header().Set("Cache-Status", "MISS")
 		}
 	}
 
@@ -671,7 +675,10 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 	}
 	tx = nil
 
-	invalidateHeader := request.Header.Get("X-Layr-Invalidate-Tables")
+	invalidateHeader := request.Header.Get("Cache-Invalidate-Tables")
+	if invalidateHeader == "" {
+		invalidateHeader = request.Header.Get("X-Cache-Invalidate-Tables")
+	}
 	if invalidateHeader == "" {
 		invalidateHeader = request.URL.Query().Get("invalidate_tables")
 	}

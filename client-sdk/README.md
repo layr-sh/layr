@@ -90,9 +90,9 @@ Every outgoing HTTP request must inject the correct security headers based on cl
 
 | Header Name | Token Type | Target Security Domain |
 | --- | --- | --- |
-| `X-Layr-Publishable-Key` | Public API Key (`your-publishable-key`) | Browser / mobile client; enforces PostgreSQL Row-Level Security (RLS) |
+| `Publishable-Key` (fallback `X-Publishable-Key`) | Public API Key (`your-publishable-key`) | Browser / mobile client; enforces PostgreSQL Row-Level Security (RLS) |
 | `Authorization: Bearer <token>` | User Session JWT | Authenticated user session; enforces PostgreSQL RLS |
-| `X-Layr-Service-Account-Key` | Service Account Secret (`your-service-account-key`) | Machine-to-machine backend; bypasses RLS, allows `.cp` operations |
+| `Service-Account-Key` (fallback `X-Service-Account-Key`) | Service Account Secret (`your-service-account-key`) | Machine-to-machine backend; bypasses RLS, allows `.cp` operations |
 
 > [!IMPORTANT]
 > **Zero Prefix Invariant:** Any key, both publishable key and service account key in Layr, must never contain a prefix (never `pk_`, `pk_dev_`, `pk_live_`, `sa_`, `sak_`, `layr_sec_`, or `layr_sa_`). Keys are always un-prefixed raw 32-byte hex strings.
@@ -128,9 +128,9 @@ Using the **JavaScript/TypeScript SDK (`client-sdk/javascript`) as the canonical
 - [ ] **Endpoint URL Normalization (`normalizeEndpointURL`):**
   - Trims trailing slashes (`/+$`) and defaults to `http://localhost:5297` if empty.
 - [ ] **Bifurcated Header Injection (`buildHeaders`):**
-  - Injects `X-Layr-Publishable-Key` for public client requests.
+  - Injects `Publishable-Key` for public client requests.
   - Injects `Authorization: Bearer <token>` for user sessions (defensively strips redundant leading `Bearer` prefix if passed).
-  - Injects `X-Layr-Service-Account-Key` for elevated machine-to-machine calls.
+  - Injects `Service-Account-Key` for elevated machine-to-machine calls.
   - Merges custom user headers without overwriting security headers unless explicitly configured.
 - [ ] **Problem Details Error Handling (`LayrAPIError`):**
   - Parses standard Layr's error JSON responses.
@@ -171,7 +171,7 @@ Using the **JavaScript/TypeScript SDK (`client-sdk/javascript`) as the canonical
 
 - [ ] **Elevation Helper (`withServiceAccount` / `WithServiceAccount`):**
   - Accepts a service instance and `options: { serviceAccountKey }`.
-  - Injects `X-Layr-Service-Account-Key` header and attaches the `.cp` (Go: `.CP`) namespace.
+  - Injects `Service-Account-Key` header and attaches the `.cp` (Go: `.CP`) namespace.
 - [ ] **Protected Control Plane Services:**
   - **Data `.cp`:**
     ...
