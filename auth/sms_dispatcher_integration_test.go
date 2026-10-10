@@ -103,12 +103,12 @@ func TestAuthSMSDynamicPostgreSQLHookIntegration(t *testing.T) {
 	// 4. Test built-in defaults when runtime config templates are empty
 	emptyTemplateSMSDispatcherConfig := &SMSDispatcherConfig{Driver: &driverWebhook}
 	text = smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "321654", "", emptyTemplateSMSDispatcherConfig)
-	if text != "Your layr-app password reset code is: 321654" {
+	if text != "Your Layr App password reset code is: 321654" {
 		t.Fatalf("expected default text for password reset when runtime config empty, got: %s", text)
 	}
 
 	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "654321", "", emptyTemplateSMSDispatcherConfig)
-	if text != "Your layr-app sign in verification code is: 654321" {
+	if text != "Your Layr App sign in verification code is: 654321" {
 		t.Fatalf("expected default text when runtime config empty, got: %s", text)
 	}
 }
