@@ -1554,26 +1554,38 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 		t.Fatalf("expected 1 linked service account, got %d", serviceAccountCount)
 	}
 
+	// Verify initial root account file was created
+	fileData, err := os.ReadFile(initialRootAccountFilePath)
+	if err != nil {
+		t.Fatalf("expected initial root account file to exist: %v", err)
+	}
+	if !strings.Contains(string(fileData), "Initial console root account created:") ||
+		!strings.Contains(string(fileData), "root@layr.local") ||
+		!strings.Contains(string(fileData), "Service Account Key:") {
+		t.Fatalf("unexpected content in initial root account file: %s", string(fileData))
+	}
+	_ = os.Remove(initialRootAccountFilePath)
+
 	// 7. Idempotent re-run when count > 0
 	if err := kernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("idempotent bootstrapRootAccount failed: %v", err)
 	}
 
-	// 7b. Idempotent re-run when count > 0 with root user env set (shows clear message that root user env is ignored)
-	t.Setenv("LAYR__ROOT_USER__EMAIL", "ignored@layr.sh")
-	t.Setenv("LAYR__ROOT_USER__PASSWORD", "IgnoredPassword123!")
+	// 7b. Idempotent re-run when count > 0 with console root user env set (shows clear message that root user env is ignored)
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL", "ignored@layr.sh")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD", "IgnoredPassword123!")
 	if err := kernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("idempotent bootstrapRootAccount with env failed: %v", err)
 	}
-	t.Setenv("LAYR__ROOT_USER__EMAIL", "")
-	t.Setenv("LAYR__ROOT_USER__PASSWORD", "")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL", "")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD", "")
 
 	// 8. Successful custom bootstrap
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
 	customConfig := DefaultConfig()
-	customConfig.RootUser.Email = "console_user@custom.org"
-	customConfig.RootUser.Password = "MyCustomPassword123!"
+	customConfig.Console.InitialRootUser.Email = "console_user@custom.org"
+	customConfig.Console.InitialRootUser.Password = "MyCustomPassword123!"
 	SetLoadedConfig(customConfig)
 	defer UnloadConfig()
 	customKernel := &Kernel{
@@ -1584,11 +1596,11 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 		t.Fatalf("custom bootstrapRootAccount failed: %v", err)
 	}
 
-	// 9. Successful env var bootstrap (LAYR__ROOT_USER__EMAIL & LAYR__ROOT_USER__PASSWORD)
+	// 9. Successful env var bootstrap (LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL & LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD)
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
-	t.Setenv("LAYR__ROOT_USER__EMAIL", "env_user@custom.org")
-	t.Setenv("LAYR__ROOT_USER__PASSWORD", "EnvCustomPassword123!")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL", "env_user@custom.org")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD", "EnvCustomPassword123!")
 	envConfig, loadEnvErr := LoadConfig()
 	if loadEnvErr != nil {
 		t.Fatalf("failed to load env config: %v", loadEnvErr)
@@ -1607,8 +1619,8 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	_, _ = db.Exec(ctx, "DELETE FROM core.service_accounts")
 	_, _ = db.Exec(ctx, "DELETE FROM console.users")
 	emptyEmailConfig := DefaultConfig()
-	emptyEmailConfig.RootUser.Email = ""
-	emptyEmailConfig.RootUser.Password = "EmptyEmailPassword123!"
+	emptyEmailConfig.Console.InitialRootUser.Email = ""
+	emptyEmailConfig.Console.InitialRootUser.Password = "EmptyEmailPassword123!"
 	SetLoadedConfig(emptyEmailConfig)
 	if err := customKernel.bootstrapRootAccount(ctx); err != nil {
 		t.Fatalf("empty email bootstrapRootAccount failed: %v", err)
@@ -1618,4 +1630,223 @@ func TestCoreKernelBootstrapRootAccountIntegration(t *testing.T) {
 	if defaultUserEmail != "root@layr.local" {
 		t.Fatalf("expected root@layr.local in database for empty email fallback, got %q", defaultUserEmail)
 	}
+}
+
+func TestCoreKernelConsoleRootUserIntegration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+
+	// Clear any initial users created by migrations/bootstrap
+	_, _ = kernel.db.Exec(ctx, "DELETE FROM core.service_accounts")
+	_, _ = kernel.db.Exec(ctx, "DELETE FROM console.users")
+
+	// 1. List on empty database
+	emptyUsers, listEmptyErr := kernel.ListConsoleRootUsers(ctx)
+	if listEmptyErr != nil {
+		t.Fatalf("failed to list empty console root users: %v", listEmptyErr)
+	}
+	if len(emptyUsers) != 0 {
+		t.Fatalf("expected 0 users, got %d", len(emptyUsers))
+	}
+
+	// 2. CreateConsoleRootUser validation errors
+	if _, _, _, createValidationErr := kernel.CreateConsoleRootUser(ctx, "", "password123"); createValidationErr == nil {
+		t.Fatal("expected error on empty email for CreateConsoleRootUser")
+	}
+
+	// 3. CreateConsoleRootUser with provided password
+	firstConsoleRootUser, firstServiceAccount, pw1, firstCreateErr := kernel.CreateConsoleRootUser(ctx, "root1@layr.local", "SuperSecure123!")
+	if firstCreateErr != nil {
+		t.Fatalf("failed to create root user 1: %v", firstCreateErr)
+	}
+	if firstConsoleRootUser.Email != "root1@layr.local" {
+		t.Fatalf("expected email root1@layr.local, got %s", firstConsoleRootUser.Email)
+	}
+	if pw1 != "SuperSecure123!" {
+		t.Fatalf("expected password SuperSecure123!, got %s", pw1)
+	}
+	if firstServiceAccount == nil || firstServiceAccount.SecretKey == "" {
+		t.Fatal("expected non-nil service account with secret key")
+	}
+	if !HasScope(firstServiceAccount.Scopes, ScopeRoot) {
+		t.Fatalf("expected root service account to have %s scope, got %v", ScopeRoot, firstServiceAccount.Scopes)
+	}
+
+	// 4. Duplicate email creation error
+	if _, _, _, dupErr := kernel.CreateConsoleRootUser(ctx, "root1@layr.local", "anotherpass"); dupErr == nil {
+		t.Fatal("expected error on duplicate email for CreateConsoleRootUser")
+	}
+
+	// 5. CreateConsoleRootUser with generated password (empty password input)
+	secondConsoleRootUser, secondServiceAccount, pw2, secondCreateErr := kernel.CreateConsoleRootUser(ctx, "root2@layr.local", "")
+	if secondCreateErr != nil {
+		t.Fatalf("failed to create root user 2 with generated password: %v", secondCreateErr)
+	}
+	if secondConsoleRootUser.Email != "root2@layr.local" {
+		t.Fatalf("expected email root2@layr.local, got %s", secondConsoleRootUser.Email)
+	}
+	if len(pw2) != 16 {
+		t.Fatalf("expected 16-character generated password, got length %d: %q", len(pw2), pw2)
+	}
+	if secondServiceAccount == nil || secondServiceAccount.SecretKey == "" {
+		t.Fatal("expected non-nil service account with secret key for user2")
+	}
+
+	// 6. Create a non-root console user (no linked service account with * scope)
+	nonRootUserID := uuid.NewV7().String()
+	_, nonRootInsertErr := kernel.db.Exec(ctx, "INSERT INTO console.users (id, email, password_hash, is_enabled) VALUES ($1, 'standard@layr.local', 'hash', true)", nonRootUserID)
+	if nonRootInsertErr != nil {
+		t.Fatalf("failed to insert non-root console user: %v", nonRootInsertErr)
+	}
+	// Give them a non-root service account
+	_, nonRootServiceAccountErr := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+		ConsoleUserID: &nonRootUserID,
+		Name:          "Standard Service Account",
+		Scopes:        []string{"data:read"},
+	})
+	if nonRootServiceAccountErr != nil {
+		t.Fatalf("failed to create standard service account: %v", nonRootServiceAccountErr)
+	}
+
+	// 7. ListConsoleRootUsers should only return root accounts (user1 and user2, NOT standard@layr.local)
+	consoleRootUsers, listUsersErr := kernel.ListConsoleRootUsers(ctx)
+	if listUsersErr != nil {
+		t.Fatalf("failed to list console root users: %v", listUsersErr)
+	}
+	if len(consoleRootUsers) != 2 {
+		t.Fatalf("expected exactly 2 root users, got %d", len(consoleRootUsers))
+	}
+	if consoleRootUsers[0].Email == "standard@layr.local" || consoleRootUsers[1].Email == "standard@layr.local" {
+		t.Fatal("standard user without root scope must not appear in console root user list")
+	}
+
+	// 8. ResetConsoleRootUserPassword validation & error branches
+	if _, resetEmptyErr := kernel.ResetConsoleRootUserPassword(ctx, "", "newpassword"); resetEmptyErr == nil {
+		t.Fatal("expected error on empty email for ResetConsoleRootUserPassword")
+	}
+	if _, resetNonexistentErr := kernel.ResetConsoleRootUserPassword(ctx, "nonexistent@layr.local", "newpassword"); resetNonexistentErr == nil {
+		t.Fatal("expected error on nonexistent email for ResetConsoleRootUserPassword")
+	}
+	if _, resetNonRootErr := kernel.ResetConsoleRootUserPassword(ctx, "standard@layr.local", "newpassword"); resetNonRootErr == nil {
+		t.Fatal("expected error when resetting non-root console user via ResetConsoleRootUserPassword")
+	}
+
+	// 9. ResetConsoleRootUserPassword with provided password
+	resetPW, resetPassErr := kernel.ResetConsoleRootUserPassword(ctx, "root1@layr.local", "NewPassword456!")
+	if resetPassErr != nil {
+		t.Fatalf("failed to reset password for root1: %v", resetPassErr)
+	}
+	if resetPW != "NewPassword456!" {
+		t.Fatalf("expected NewPassword456!, got %s", resetPW)
+	}
+	// Verify password hash updated in DB
+	var hash1 string
+	_ = kernel.db.QueryRow(ctx, "SELECT password_hash FROM console.users WHERE id = $1", firstConsoleRootUser.ID).Scan(&hash1)
+	if ok, _ := defaultPasswordHasher.Verify("NewPassword456!", hash1); !ok {
+		t.Fatal("new password does not match persisted hash")
+	}
+
+	// 10. ResetConsoleRootUserPassword with generated password (empty password input)
+	genResetPW, genResetPassErr := kernel.ResetConsoleRootUserPassword(ctx, "root2@layr.local", "")
+	if genResetPassErr != nil {
+		t.Fatalf("failed to reset password with generated password for root2: %v", genResetPassErr)
+	}
+	if len(genResetPW) != 16 {
+		t.Fatalf("expected 16-character generated password, got length %d: %q", len(genResetPW), genResetPW)
+	}
+
+	// 11. DeleteConsoleRootUser validation & error branches
+	if delEmptyErr := kernel.DeleteConsoleRootUser(ctx, ""); delEmptyErr == nil {
+		t.Fatal("expected error on empty email for DeleteConsoleRootUser")
+	}
+	if delNonexistentErr := kernel.DeleteConsoleRootUser(ctx, "nonexistent@layr.local"); delNonexistentErr == nil {
+		t.Fatal("expected error on nonexistent email for DeleteConsoleRootUser")
+	}
+	if delNonRootErr := kernel.DeleteConsoleRootUser(ctx, "standard@layr.local"); delNonRootErr == nil {
+		t.Fatal("expected error when deleting non-root user via DeleteConsoleRootUser")
+	}
+
+	// 12. DeleteConsoleRootUser success and cascade verification
+	if deleteSuccessErr := kernel.DeleteConsoleRootUser(ctx, "root1@layr.local"); deleteSuccessErr != nil {
+		t.Fatalf("failed to delete root1: %v", deleteSuccessErr)
+	}
+	// Verify user is gone
+	var countUsers int
+	_ = kernel.db.QueryRow(ctx, "SELECT COUNT(*) FROM console.users WHERE id = $1", firstConsoleRootUser.ID).Scan(&countUsers)
+	if countUsers != 0 {
+		t.Fatalf("expected user to be deleted from console.users, found %d", countUsers)
+	}
+	// Verify linked service account cascaded
+	var countServiceAccounts int
+	_ = kernel.db.QueryRow(ctx, "SELECT COUNT(*) FROM core.service_accounts WHERE id = $1", firstServiceAccount.ID).Scan(&countServiceAccounts)
+	if countServiceAccounts != 0 {
+		t.Fatalf("expected linked service account to be cascade deleted, found %d", countServiceAccounts)
+	}
+
+	// 13. Broken DB error paths
+	brokenKernel := SetupTestKernelWithBrokenDB(t, nil)
+	if _, _, _, brokenCreateErr := brokenKernel.CreateConsoleRootUser(ctx, "fail@layr.local", "pass"); brokenCreateErr == nil {
+		t.Fatal("expected error on broken DB CreateConsoleRootUser")
+	}
+	if _, brokenListErr := brokenKernel.ListConsoleRootUsers(ctx); brokenListErr == nil {
+		t.Fatal("expected error on broken DB ListConsoleRootUsers")
+	}
+	if _, brokenResetErr := brokenKernel.ResetConsoleRootUserPassword(ctx, "fail@layr.local", "pass"); brokenResetErr == nil {
+		t.Fatal("expected error on broken DB ResetConsoleRootUserPassword")
+	}
+	if brokenDelErr := brokenKernel.DeleteConsoleRootUser(ctx, "fail@layr.local"); brokenDelErr == nil {
+		t.Fatal("expected error on broken DB DeleteConsoleRootUser")
+	}
+
+	// 14. InitDatabase idempotency on active DB
+	if initDbErr := kernel.InitDatabase(ctx); initDbErr != nil {
+		t.Fatalf("InitDatabase on active kernel failed: %v", initDbErr)
+	}
+}
+
+func TestCoreKernelConsoleRootUserFailureBranchesIntegration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+
+	// 1. Hasher failure during Create
+	defaultPasswordHasher.SetRandomReader(&coreErrReader{})
+	_, _, _, hasherErr := kernel.CreateConsoleRootUser(ctx, "hasherfail@layr.local", "pass")
+	if hasherErr == nil {
+		t.Fatal("expected error on hasher failure in CreateConsoleRootUser")
+	}
+	defaultPasswordHasher.SetRandomReader(nil)
+
+	// 2. Insert console user constraint failure
+	_, _ = kernel.db.Exec(ctx, "ALTER TABLE console.users ADD CONSTRAINT test_create_fail CHECK (email != 'constraintfail@layr.local')")
+	_, _, _, insertConstraintErr := kernel.CreateConsoleRootUser(ctx, "constraintfail@layr.local", "pass")
+	if insertConstraintErr == nil {
+		t.Fatal("expected error on insert constraint failure in CreateConsoleRootUser")
+	}
+	_, _ = kernel.db.Exec(ctx, "ALTER TABLE console.users DROP CONSTRAINT test_create_fail")
+
+	// 3. Service account creation failure
+	_, _ = kernel.db.Exec(ctx, "ALTER TABLE core.service_accounts ADD CONSTRAINT test_sa_fail CHECK (name != 'Root Service Account')")
+	_, _, _, serviceAccountConstraintErr := kernel.CreateConsoleRootUser(ctx, "safail@layr.local", "pass")
+	if serviceAccountConstraintErr == nil {
+		t.Fatal("expected error on service account constraint failure in CreateConsoleRootUser")
+	}
+	_, _ = kernel.db.Exec(ctx, "ALTER TABLE core.service_accounts DROP CONSTRAINT test_sa_fail")
+
+	// 4. Hasher failure during Reset
+	_, _, _, createForResetErr := kernel.CreateConsoleRootUser(ctx, "resetfail@layr.local", "pass")
+	if createForResetErr != nil {
+		t.Fatalf("failed to create reset user: %v", createForResetErr)
+	}
+	defaultPasswordHasher.SetRandomReader(&coreErrReader{})
+	_, resetHasherErr := kernel.ResetConsoleRootUserPassword(ctx, "resetfail@layr.local", "newpass")
+	if resetHasherErr == nil {
+		t.Fatal("expected error on hasher failure in ResetConsoleRootUserPassword")
+	}
+	defaultPasswordHasher.SetRandomReader(nil)
 }

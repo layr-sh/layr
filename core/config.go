@@ -24,7 +24,7 @@ type Config struct {
 	Database DatabaseConfig `json:"database"`
 	Security SecurityConfig `json:"security"`
 	KVStore  KVStoreConfig  `json:"kv_store"`
-	RootUser RootUserConfig `json:"root_user"`
+	Console  ConsoleConfig  `json:"console"`
 
 	enabledServices []string
 }
@@ -69,8 +69,13 @@ type KVStoreConfig struct {
 	ClusterURLs []string `json:"cluster_urls"` // Cluster Redis URLs
 }
 
-// RootUserConfig defines the initial root user credentials for administrative access.
-type RootUserConfig struct {
+// ConsoleConfig defines administrative console configuration.
+type ConsoleConfig struct {
+	InitialRootUser InitialConsoleRootUserConfig `json:"initial_root_user"`
+}
+
+// InitialConsoleRootUserConfig defines the initial console root user credentials for administrative access.
+type InitialConsoleRootUserConfig struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
@@ -103,9 +108,11 @@ func DefaultConfig() *Config {
 		KVStore: KVStoreConfig{
 			Backend: "database",
 		},
-		RootUser: RootUserConfig{
-			Email:    "root@layr.local",
-			Password: "",
+		Console: ConsoleConfig{
+			InitialRootUser: InitialConsoleRootUserConfig{
+				Email:    "root@layr.local",
+				Password: "",
+			},
 		},
 		enabledServices: DefaultServices(),
 	}
@@ -253,7 +260,7 @@ func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 			field := ""
 			expectedKeyPartsLen := 3
 			if len(keyParts) >= expectedKeyPartsLen {
-				field = strings.ToLower(keyParts[2])
+				field = strings.ToLower(strings.Join(keyParts[2:], "__"))
 			}
 			if canonicalTarget, ok := applyEnvConfigField(config, section, field, parts[1]); ok {
 				if shouldLog {
@@ -358,14 +365,14 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 				return "kv_store.cluster_urls", true
 			}
 		}
-	case "root_user", "rootuser":
+	case "console":
 		switch field {
-		case "email":
-			config.RootUser.Email = value
-			return "root_user.email", true
-		case "password":
-			config.RootUser.Password = value
-			return "root_user.password", true
+		case "initial_root_user__email", "initial_root_user.email", "initial_root_user_email":
+			config.Console.InitialRootUser.Email = value
+			return "console.initial_root_user.email", true
+		case "initial_root_user__password", "initial_root_user.password", "initial_root_user_password":
+			config.Console.InitialRootUser.Password = value
+			return "console.initial_root_user.password", true
 		}
 	}
 	return "", false

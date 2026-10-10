@@ -24,6 +24,8 @@ func resetTestState(t *testing.T) {
 	originalSetenvFunc := setenvFunc
 	originalLoadConfigFunc := loadConfigFunc
 
+	originalNewKernelFunc := newKernelFunc
+
 	t.Cleanup(func() {
 		exitFunc = originalExitFunc
 		stdoutWriter = originalStdoutWriter
@@ -31,6 +33,7 @@ func resetTestState(t *testing.T) {
 		generateKeyFunc = originalGenerateKeyFunc
 		setenvFunc = originalSetenvFunc
 		loadConfigFunc = originalLoadConfigFunc
+		newKernelFunc = originalNewKernelFunc
 		core.UnloadConfig()
 	})
 }
@@ -78,7 +81,7 @@ func TestCLIParseArgsErrorsUnit(t *testing.T) {
 		{
 			name:        "empty arguments",
 			args:        []string{},
-			expectedErr: "missing command: expected 'up'",
+			expectedErr: "missing command: expected 'up' or 'console'",
 		},
 		{
 			name:        "missing env file argument for --env-file",
@@ -93,12 +96,47 @@ func TestCLIParseArgsErrorsUnit(t *testing.T) {
 		{
 			name:        "disallowed start command",
 			args:        []string{"start"},
-			expectedErr: "unknown command \"start\": expected 'up'",
+			expectedErr: "unknown command \"start\": expected 'up' or 'console'",
 		},
 		{
 			name:        "unknown command",
 			args:        []string{"restart"},
-			expectedErr: "unknown command \"restart\": expected 'up'",
+			expectedErr: "unknown command \"restart\": expected 'up' or 'console'",
+		},
+		{
+			name:        "console missing subcommand",
+			args:        []string{"console"},
+			expectedErr: "missing console subcommand: expected 'root-user'",
+		},
+		{
+			name:        "console unknown subcommand",
+			args:        []string{"console", "unknown"},
+			expectedErr: "unknown console subcommand \"unknown\": expected 'root-user'",
+		},
+		{
+			name:        "console root-user missing action",
+			args:        []string{"console", "root-user"},
+			expectedErr: "missing root-user action: expected 'create', 'list', 'reset-password', or 'delete'",
+		},
+		{
+			name:        "console root-user unknown action",
+			args:        []string{"console", "root-user", "unknown"},
+			expectedErr: "unknown root-user action \"unknown\": expected 'create', 'list', 'reset-password', or 'delete'",
+		},
+		{
+			name:        "console root-user create missing email",
+			args:        []string{"console", "root-user", "create"},
+			expectedErr: "missing email argument for create",
+		},
+		{
+			name:        "console root-user reset-password missing email",
+			args:        []string{"console", "root-user", "reset-password"},
+			expectedErr: "missing email argument for reset-password",
+		},
+		{
+			name:        "console root-user delete missing email",
+			args:        []string{"console", "root-user", "delete"},
+			expectedErr: "missing email argument for delete",
 		},
 	}
 
@@ -580,5 +618,149 @@ func TestCLIRunCleanShutdownUnit(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestCLIConsoleRootUserUnit(t *testing.T) {
+	resetTestState(t)
+
+	outputBuffer := &bytes.Buffer{}
+	var bufferWriter io.Writer = outputBuffer
+	stdoutWriter = bufferWriter
+
+	kernel, cleanup := core.SetupTestKernel(t, nil)
+	defer cleanup()
+
+	// Clear console.users & service_accounts
+	ctx := context.Background()
+	_, _ = kernel.DB().Exec(ctx, "DELETE FROM core.service_accounts")
+	_, _ = kernel.DB().Exec(ctx, "DELETE FROM console.users")
+
+	defaultKernelConstructor := newKernelFunc
+	if constructedKernel, constructErr := defaultKernelConstructor(kernel.DB()); constructErr != nil || constructedKernel == nil {
+		t.Fatalf("expected valid kernel from default newKernelFunc: %v", constructErr)
+	}
+
+	newKernelFunc = func(db *core.DatabasePool) (*core.Kernel, error) {
+		return kernel, nil
+	}
+
+	// 1. List when empty
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "list"}); err != nil {
+		t.Fatalf("expected nil error on empty list, got: %v", err)
+	}
+	if !strings.Contains(outputBuffer.String(), "No console root users found.") {
+		t.Fatalf("expected 'No console root users found.', got: %s", outputBuffer.String())
+	}
+
+	// 2. Create with custom password
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "create", "admin@layr.sh", "MyCustomPassword123!"}); err != nil {
+		t.Fatalf("expected nil error on create, got: %v", err)
+	}
+	createOutput := outputBuffer.String()
+	if !strings.Contains(createOutput, "Console root user created:") ||
+		!strings.Contains(createOutput, "admin@layr.sh") ||
+		!strings.Contains(createOutput, "MyCustomPassword123!") ||
+		!strings.Contains(createOutput, "Service Account Key:") {
+		t.Fatalf("unexpected create output: %s", createOutput)
+	}
+
+	// 3. Create with generated password
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "create", "admin2@layr.sh"}); err != nil {
+		t.Fatalf("expected nil error on create with generated password, got: %v", err)
+	}
+	generatedCreateOutput := outputBuffer.String()
+	if !strings.Contains(generatedCreateOutput, "Console root user created:") ||
+		!strings.Contains(generatedCreateOutput, "admin2@layr.sh") {
+		t.Fatalf("unexpected create output: %s", generatedCreateOutput)
+	}
+
+	// 4. Duplicate create error
+	if err := Run([]string{"console", "root-user", "create", "admin@layr.sh"}); err == nil {
+		t.Fatal("expected error on duplicate email create")
+	}
+
+	// 5. List when users exist
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "list"}); err != nil {
+		t.Fatalf("expected nil error on list, got: %v", err)
+	}
+	listOutput := outputBuffer.String()
+	if !strings.Contains(listOutput, "EMAIL") ||
+		!strings.Contains(listOutput, "ENABLED") ||
+		!strings.Contains(listOutput, "admin@layr.sh") ||
+		!strings.Contains(listOutput, "admin2@layr.sh") {
+		t.Fatalf("unexpected list output: %s", listOutput)
+	}
+
+	// 6. Reset password with custom password
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "reset-password", "admin@layr.sh", "BrandNewPass789!"}); err != nil {
+		t.Fatalf("expected nil error on reset-password, got: %v", err)
+	}
+	resetOutput := outputBuffer.String()
+	if !strings.Contains(resetOutput, "Console root user password reset successfully:") ||
+		!strings.Contains(resetOutput, "admin@layr.sh") ||
+		!strings.Contains(resetOutput, "BrandNewPass789!") {
+		t.Fatalf("unexpected reset output: %s", resetOutput)
+	}
+
+	// 7. Reset password with generated password
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "reset-password", "admin2@layr.sh"}); err != nil {
+		t.Fatalf("expected nil error on reset-password with generated pw, got: %v", err)
+	}
+	generatedResetOutput := outputBuffer.String()
+	if !strings.Contains(generatedResetOutput, "Console root user password reset successfully:") ||
+		!strings.Contains(generatedResetOutput, "admin2@layr.sh") {
+		t.Fatalf("unexpected reset output: %s", generatedResetOutput)
+	}
+
+	// 8. Reset password non-existent user error
+	if err := Run([]string{"console", "root-user", "reset-password", "nobody@layr.sh"}); err == nil {
+		t.Fatal("expected error on reset password for nonexistent user")
+	}
+
+	// 9. Delete root user
+	outputBuffer.Reset()
+	if err := Run([]string{"console", "root-user", "delete", "admin@layr.sh"}); err != nil {
+		t.Fatalf("expected nil error on delete, got: %v", err)
+	}
+	deleteOutput := outputBuffer.String()
+	if !strings.Contains(deleteOutput, `Console root user "admin@layr.sh" deleted successfully.`) {
+		t.Fatalf("unexpected delete output: %s", deleteOutput)
+	}
+
+	// 10. Delete non-existent user error
+	if err := Run([]string{"console", "root-user", "delete", "admin@layr.sh"}); err == nil {
+		t.Fatal("expected error deleting already deleted user")
+	}
+
+	// 11. Kernel initialization failure
+	newKernelFunc = func(db *core.DatabasePool) (*core.Kernel, error) {
+		return nil, errors.New("kernel constructor failure")
+	}
+	if err := Run([]string{"console", "root-user", "list"}); err == nil {
+		t.Fatal("expected error when kernel constructor fails")
+	}
+
+	// 12. InitDatabase failure with broken DB
+	brokenKernel := core.SetupTestKernelWithBrokenDB(t, nil)
+	newKernelFunc = func(db *core.DatabasePool) (*core.Kernel, error) {
+		return brokenKernel, nil
+	}
+	if err := Run([]string{"console", "root-user", "list"}); err == nil {
+		t.Fatal("expected error when InitDatabase/query fails")
+	}
+
+	// 13. executeConsoleRootUser unsupported action
+	newKernelFunc = func(db *core.DatabasePool) (*core.Kernel, error) {
+		return kernel, nil
+	}
+	if err := executeConsoleRootUser(ctx, cliOptions{consoleRootUserAction: "unsupported"}); err == nil {
+		t.Fatal("expected error on unsupported root user action")
 	}
 }

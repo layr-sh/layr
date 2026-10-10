@@ -8,17 +8,22 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/auth/password"
 )
 
 const (
 	defaultDatabaseConnectionTimeout = 30 * time.Second
 	defaultKernelShutdownTimeout     = 10 * time.Second
+	initialRootAccountDirPermission  = 0o755
+	initialRootAccountFilePermission = 0o600
 )
 
 // ServiceRunner defines the lifecycle interface for Layr modular services.
@@ -111,53 +116,8 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 
 	config := GetConfig()
 
-	// Connect pgxpool if not provided upfront
-	if kernel.db == nil {
-		databaseURL := config.Database.URL
-
-		// Embedded PostgreSQL handling
-		if IsEmbeddedDatabasePath(databaseURL) {
-			kernel.embeddedDB = NewEmbeddedDatabase(databaseURL)
-			bootedURL, bootErr := kernel.embeddedDB.Start(ctx)
-			if bootErr != nil {
-				return fmt.Errorf("embedded postgresql engine failed to boot: %w", bootErr)
-			}
-			databaseURL = bootedURL
-		}
-
-		// Connect pgxpool (derive pool lifecycle timeout from the caller's context)
-		dbCtx, dbCancel := context.WithTimeout(ctx, defaultDatabaseConnectionTimeout)
-		defer dbCancel()
-		var connectErr error
-		db, connectErr := NewDatabasePool(dbCtx, databaseURL, DatabasePoolOptions{
-			MaxConns:            int32(config.Database.MaxConnections),
-			MinConns:            int32(config.Database.MinConnections),
-			ConnectionTimeoutMs: config.Database.ConnectionTimeoutMs,
-			MaxConnIdleTime:     time.Duration(config.Database.IdleTimeoutMs) * time.Millisecond,
-			MaxConnLifetime:     time.Duration(config.Database.MaxLifetimeMs) * time.Millisecond,
-			HealthCheckPeriod:   time.Duration(config.Database.HealthCheckPeriodMs) * time.Millisecond,
-			SSLMode:             config.Database.SSLMode,
-			SSLRootCert:         config.Database.SSLRootCert,
-			SSLCert:             config.Database.SSLCert,
-			SSLKey:              config.Database.SSLKey,
-		})
-		if connectErr != nil {
-			return fmt.Errorf("database connection failed: %w", connectErr)
-		}
-		kernel.db = db
-
-		kernel.serviceAccountManager = NewServiceAccountManager(db)
-		kernel.eventBus = NewEventBus(db, kernel.cryptoKeyManager)
-		kernel.eventManager = kernel.eventBus.EventManager()
-		kernel.eventHookManager = kernel.eventBus.EventHookManager()
-	}
-
-	// Run Core Migrations
-	log.Infof("Executing foundational migrations...")
-	allMigrations := GetRegisteredDatabaseMigrations()
-
-	if migrationErr := kernel.db.RunMigrations(ctx, allMigrations); migrationErr != nil {
-		return fmt.Errorf("database migration failed: %w", migrationErr)
+	if initErr := kernel.InitDatabase(ctx); initErr != nil {
+		return initErr
 	}
 
 	// Register Node in Cluster
@@ -371,7 +331,219 @@ func (kernel *Kernel) Stop(ctx context.Context) {
 	})
 }
 
-var defaultPasswordHasher = password.NewHasher()
+// InitDatabase initializes the database connection pool (embedded or external),
+// foundational managers, and executes core migrations.
+func (kernel *Kernel) InitDatabase(ctx context.Context) error {
+	config := GetConfig()
+
+	// Connect pgxpool if not provided upfront
+	if kernel.db == nil {
+		databaseURL := config.Database.URL
+
+		// Embedded PostgreSQL handling
+		if IsEmbeddedDatabasePath(databaseURL) {
+			kernel.embeddedDB = NewEmbeddedDatabase(databaseURL)
+			bootedURL, bootErr := kernel.embeddedDB.Start(ctx)
+			if bootErr != nil {
+				return fmt.Errorf("embedded postgresql engine failed to boot: %w", bootErr)
+			}
+			databaseURL = bootedURL
+		}
+
+		// Connect pgxpool (derive pool lifecycle timeout from the caller's context)
+		dbCtx, dbCancel := context.WithTimeout(ctx, defaultDatabaseConnectionTimeout)
+		defer dbCancel()
+		var connectErr error
+		db, connectErr := NewDatabasePool(dbCtx, databaseURL, DatabasePoolOptions{
+			MaxConns:            int32(config.Database.MaxConnections),
+			MinConns:            int32(config.Database.MinConnections),
+			ConnectionTimeoutMs: config.Database.ConnectionTimeoutMs,
+			MaxConnIdleTime:     time.Duration(config.Database.IdleTimeoutMs) * time.Millisecond,
+			MaxConnLifetime:     time.Duration(config.Database.MaxLifetimeMs) * time.Millisecond,
+			HealthCheckPeriod:   time.Duration(config.Database.HealthCheckPeriodMs) * time.Millisecond,
+			SSLMode:             config.Database.SSLMode,
+			SSLRootCert:         config.Database.SSLRootCert,
+			SSLCert:             config.Database.SSLCert,
+			SSLKey:              config.Database.SSLKey,
+		})
+		if connectErr != nil {
+			return fmt.Errorf("database connection failed: %w", connectErr)
+		}
+		kernel.db = db
+
+		kernel.serviceAccountManager = NewServiceAccountManager(db)
+		kernel.eventBus = NewEventBus(db, kernel.cryptoKeyManager)
+		kernel.eventManager = kernel.eventBus.EventManager()
+		kernel.eventHookManager = kernel.eventBus.EventHookManager()
+	}
+
+	// Run Core Migrations
+	log.Infof("Executing foundational migrations...")
+	allMigrations := GetRegisteredDatabaseMigrations()
+
+	if migrationErr := kernel.db.RunMigrations(ctx, allMigrations); migrationErr != nil {
+		return fmt.Errorf("database migration failed: %w", migrationErr)
+	}
+
+	return nil
+}
+
+// ConsoleRootUser represents a console root user record.
+type ConsoleRootUser struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	IsEnabled bool      `json:"is_enabled"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+var (
+	defaultPasswordHasher      = password.NewHasher()
+	initialRootAccountFilePath = filepath.Join(".layr", "initial-root-account.txt")
+)
+
+// CreateConsoleRootUser creates a new console user and links a service account with wildcard (*) scope.
+func (kernel *Kernel) CreateConsoleRootUser(ctx context.Context, email, plainPassword string) (*ConsoleRootUser, *CreateServiceAccountResponse, string, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, nil, "", errors.New("email is required")
+	}
+
+	var existingID string
+	checkErr := kernel.db.QueryRow(ctx, "SELECT id FROM console.users WHERE email = $1", email).Scan(&existingID)
+	if checkErr == nil {
+		return nil, nil, "", fmt.Errorf("console user with email %q already exists", email)
+	}
+
+	if plainPassword == "" {
+		randomPassword, _ := GenerateRandomCryptoEncryptionKeyHex()
+		plainPassword = randomPassword[:16]
+	}
+
+	hash, err := defaultPasswordHasher.Hash(plainPassword)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to hash password for bootstrap user: %w", err)
+	}
+
+	consoleRootUserID := uuid.NewV7().String()
+	_, err = kernel.db.Exec(ctx, `
+		INSERT INTO console.users (id, email, password_hash, is_enabled)
+		VALUES ($1, $2, $3, true)
+	`, consoleRootUserID, email, hash)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to insert bootstrap console user: %w", err)
+	}
+
+	rootDescription := "Root Service Account (" + email + ")"
+	createdServiceAccount, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
+		ConsoleUserID: &consoleRootUserID,
+		Name:          "Root Service Account",
+		Description:   &rootDescription,
+		Scopes:        []string{ScopeRoot},
+	})
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("failed to create linked root service account: %w", err)
+	}
+
+	consoleRootUser := &ConsoleRootUser{
+		ID:        consoleRootUserID,
+		Email:     email,
+		IsEnabled: true,
+		CreatedAt: time.Now().UTC(),
+	}
+	return consoleRootUser, createdServiceAccount, plainPassword, nil
+}
+
+// ListConsoleRootUsers lists all console root users (console users with linked wildcard * scope service account).
+func (kernel *Kernel) ListConsoleRootUsers(ctx context.Context) ([]ConsoleRootUser, error) {
+	query := `
+		SELECT DISTINCT u.id, u.email, u.is_enabled, u.created_at
+		FROM console.users u
+		JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE sa.scopes @> '["*"]'::jsonb
+		ORDER BY u.created_at ASC
+	`
+	rows, err := kernel.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query console root users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []ConsoleRootUser
+	for rows.Next() {
+		var consoleRootUser ConsoleRootUser
+		_ = rows.Scan(&consoleRootUser.ID, &consoleRootUser.Email, &consoleRootUser.IsEnabled, &consoleRootUser.CreatedAt)
+		users = append(users, consoleRootUser)
+	}
+	return users, nil
+}
+
+// ResetConsoleRootUserPassword updates the password for an existing console root user.
+func (kernel *Kernel) ResetConsoleRootUserPassword(ctx context.Context, email, newPassword string) (string, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return "", errors.New("email is required")
+	}
+
+	var userID string
+	query := `
+		SELECT u.id
+		FROM console.users u
+		JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE u.email = $1 AND sa.scopes @> '["*"]'::jsonb
+		LIMIT 1
+	`
+	err := kernel.db.QueryRow(ctx, query, email).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("console root user %q not found", email)
+		}
+		return "", fmt.Errorf("failed to query console root user: %w", err)
+	}
+
+	if newPassword == "" {
+		randomPassword, _ := GenerateRandomCryptoEncryptionKeyHex()
+		newPassword = randomPassword[:16]
+	}
+
+	hash, err := defaultPasswordHasher.Hash(newPassword)
+	if err != nil {
+		return "", fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	_, err = kernel.db.Exec(ctx, `
+		UPDATE console.users
+		SET password_hash = $1, last_updated_at = clock_timestamp()
+		WHERE id = $2
+	`, hash, userID)
+	return newPassword, err
+}
+
+// DeleteConsoleRootUser deletes a console root user and automatically cascades its linked service account.
+func (kernel *Kernel) DeleteConsoleRootUser(ctx context.Context, email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return errors.New("email is required")
+	}
+
+	var userID string
+	query := `
+		SELECT u.id
+		FROM console.users u
+		JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE u.email = $1 AND sa.scopes @> '["*"]'::jsonb
+		LIMIT 1
+	`
+	err := kernel.db.QueryRow(ctx, query, email).Scan(&userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("console root user %q not found", email)
+		}
+		return fmt.Errorf("failed to query console root user: %w", err)
+	}
+
+	_, err = kernel.db.Exec(ctx, `DELETE FROM console.users WHERE id = $1`, userID)
+	return err
+}
 
 func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	var count int
@@ -389,46 +561,24 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	config := GetConfig()
 	log.Debugf("checking console root account status")
 	if count > 0 {
-		if os.Getenv("LAYR__ROOT_USER__EMAIL") != "" || os.Getenv("LAYR__ROOT_USER__PASSWORD") != "" || config.RootUser.Password != "" || (config.RootUser.Email != "" && config.RootUser.Email != "root@layr.local") {
-			log.Debugf("initial root user already exists; ignoring root user environment variables")
+		if os.Getenv("LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL") != "" || os.Getenv("LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD") != "" ||
+			os.Getenv("LAYR__ROOT_USER__EMAIL") != "" || os.Getenv("LAYR__ROOT_USER__PASSWORD") != "" ||
+			config.Console.InitialRootUser.Password != "" || (config.Console.InitialRootUser.Email != "" && config.Console.InitialRootUser.Email != "root@layr.local") {
+			log.Debugf("initial console root user already exists; ignoring console root user environment variables")
 		}
 		return nil
 	}
 
-	email := config.RootUser.Email
-	plainPassword := config.RootUser.Password
+	email := config.Console.InitialRootUser.Email
+	plainPassword := config.Console.InitialRootUser.Password
 
 	if email == "" {
 		email = "root@layr.local"
 	}
-	if plainPassword == "" {
-		randomPassword, _ := GenerateRandomCryptoEncryptionKeyHex()
-		plainPassword = randomPassword[:16]
-	}
 
-	hash, err := defaultPasswordHasher.Hash(plainPassword)
+	_, createdServiceAccount, plainPassword, err := kernel.CreateConsoleRootUser(ctx, email, plainPassword)
 	if err != nil {
-		return fmt.Errorf("failed to hash password for bootstrap user: %w", err)
-	}
-
-	rootUserID := uuid.NewV7().String()
-	_, err = kernel.db.Exec(ctx, `
-		INSERT INTO console.users (id, email, password_hash, is_enabled)
-		VALUES ($1, $2, $3, true)
-	`, rootUserID, email, hash)
-	if err != nil {
-		return fmt.Errorf("failed to insert bootstrap console user: %w", err)
-	}
-
-	rootDescription := "Root Service Account (" + email + ")"
-	createdServiceAccount, err := kernel.serviceAccountManager.Create(ctx, CreateServiceAccountInput{
-		ConsoleUserID: &rootUserID,
-		Name:          "Root Service Account",
-		Description:   &rootDescription,
-		Scopes:        []string{ScopeRoot},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create linked root service account: %w", err)
+		return fmt.Errorf("failed to create bootstrap console root user: %w", err)
 	}
 
 	log.Tracef("created linked root service account (id: %s)", createdServiceAccount.ID)
@@ -436,6 +586,12 @@ func (kernel *Kernel) bootstrapRootAccount(ctx context.Context) error {
 	stdlog.Printf("  Email:               %s", email)
 	stdlog.Printf("  Password:            %s", plainPassword)
 	stdlog.Printf("  Service Account Key: %s", createdServiceAccount.SecretKey)
+
+	content := fmt.Sprintf("Initial console root account created:\n  Email:               %s\n  Password:            %s\n  Service Account Key: %s\n",
+		email, plainPassword, createdServiceAccount.SecretKey)
+	if mkdirErr := os.MkdirAll(filepath.Dir(initialRootAccountFilePath), initialRootAccountDirPermission); mkdirErr == nil {
+		_ = os.WriteFile(initialRootAccountFilePath, []byte(content), initialRootAccountFilePermission)
+	}
 
 	return nil
 }
