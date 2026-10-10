@@ -157,8 +157,6 @@ Standard base APIs are callable on their service client instance (from hooks suc
 #### `auth` (Auth Service — via `useAuth(client)`)
 
 - Root methods (`auth.*`):
-  - [ ] `auth.jwks()`: JSON Web Key Set (JWKS) public verification keys (`GET /.well-known/jwks.json` | `auth__jwks`)
-  - [ ] `auth.openid_configuration()`: OpenID Connect discovery document (`GET /.well-known/openid-configuration` | `auth__openid_configuration`)
   - [ ] `auth.sign_in()`: Authenticate with email/phone and password (`POST /v1/auth/sign-in` | `auth__sign_in`)
   - [ ] `auth.sign_out()`: Revoke active session and refresh token (`POST /v1/auth/sign-out` | `auth__sign_out`)
   - [ ] `auth.sign_up()`: Register a new user with email/phone and password (`POST /v1/auth/sign-up` | `auth__sign_up`)
@@ -172,11 +170,7 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `auth.mfa.setup()`: Generate TOTP secret and setup URI for authenticator apps (`POST /v1/auth/mfa` | `auth__mfa__setup`)
   - [ ] `auth.mfa.verify()`: Verify 2FA TOTP code and enable MFA on account (`POST /v1/auth/mfa/verify` | `auth__mfa__verify`)
 
-- Subgroup `auth.oauth.*`:
-  - [ ] `auth.oauth.authorize()`: Redirect to third-party OAuth provider authorization URL (`GET /v1/auth/oauth/{provider}/authorize` | `auth__oauth__authorize`)
-
 - Subgroup `auth.oidc.*`:
-  - [ ] `auth.oidc.authorize()`: OpenID Connect authorization endpoint and Universal Sign-In page (`GET /v1/auth/oauth/authorize` | `auth__oidc__authorize`)
   - [ ] `auth.oidc.token()`: Exchange authorization code or refresh token for OpenID Connect tokens (`POST /v1/auth/oauth/token` | `auth__oidc__token`)
   - [ ] `auth.oidc.userinfo()`: Retrieve OpenID Connect Core 1.0 user claims (`GET /v1/auth/oauth/userinfo` | `auth__oidc__userinfo`)
 
@@ -236,16 +230,12 @@ Standard base APIs are callable on their service client instance (from hooks suc
 #### `core` (Core Service — via `useCore(client)`)
 
 - Root methods (`core.*`):
-  - [ ] `core.healthz()`: Liveness probe (`GET /healthz` | `core__healthz`)
   - [ ] `core.manifest()`: Get dynamic cluster manifest and enabled services (`GET /v1/manifest` | `core__manifest`)
-  - [ ] `core.metrics()`: Prometheus metrics exposition (`GET /metrics` | `core__metrics`)
-  - [ ] `core.readyz()`: Readiness probe (`GET /readyz` | `core__readyz`)
 
 #### `data` (Data Service — via `useData(client)`)
 
 - Root methods (`data.*`):
   - [ ] `data.graphql()`: Execute GraphQL query or mutation (`POST /v1/graphql` | `data__graphql`)
-  - [ ] `data.realtime()`: Connect to real-time Change Data Capture (CDC) WebSocket (`GET /v1/realtime` | `data__realtime`)
 
 - Subgroup `data.kv.*`:
   - [ ] `data.kv.delete()`: Delete an ephemeral KV entry (`DELETE /v1/data/kv/{key}` | `data__kv__delete`)
@@ -281,33 +271,6 @@ Standard base APIs are callable on their service client instance (from hooks suc
 - Subgroup `fileStorage.presigned_url.*`:
   - [ ] `fileStorage.presigned_url.create()`: Mint a presigned capability URL (`POST /v1/file-storage/presigned-url` | `file_storage__presigned_url__create`)
 
-- Subgroup `fileStorage.s3.*`:
-  - [ ] `fileStorage.s3.delete_multiple()`: S3 DeleteMultipleObjects (`POST /v1/file-storage/s3/{bucket}` | `file_storage__s3__delete_multiple`)
-  - [ ] `fileStorage.s3.delete_object()`: S3 DeleteObject or AbortMultipartUpload (`DELETE /v1/file-storage/s3/{bucket}/{key...}` | `file_storage__s3__delete_object`)
-  - [ ] `fileStorage.s3.get_object()`: S3 GetObject (`GET /v1/file-storage/s3/{bucket}/{key...}` | `file_storage__s3__get_object`)
-  - [ ] `fileStorage.s3.head_bucket()`: S3 HeadBucket (`HEAD /v1/file-storage/s3/{bucket}` | `file_storage__s3__head_bucket`)
-  - [ ] `fileStorage.s3.head_object()`: S3 HeadObject (`HEAD /v1/file-storage/s3/{bucket}/{key...}` | `file_storage__s3__head_object`)
-  - [ ] `fileStorage.s3.list_bucket()`: S3 ListObjectsV2 (`GET /v1/file-storage/s3/{bucket}` | `file_storage__s3__list_bucket`)
-  - [ ] `fileStorage.s3.list_buckets()`: S3 ListAllMyBuckets (`GET /v1/file-storage/s3` | `file_storage__s3__list_buckets`)
-  - [ ] `fileStorage.s3.post_object()`: S3 Multipart Initiate or Complete (`POST /v1/file-storage/s3/{bucket}/{key...}` | `file_storage__s3__post_object`)
-  - [ ] `fileStorage.s3.put_object()`: S3 PutObject or UploadPart (`PUT /v1/file-storage/s3/{bucket}/{key...}` | `file_storage__s3__put_object`)
-
-#### `function` (Function Service — via `useFunction(client)`)
-
-- Subgroup `function.proxy.*`:
-  - [ ] `function.proxy.delete()`: Reverse proxy DELETE to endpoint (`DELETE /v1/function/{endpoint_name}/{path...}` | `function__proxy__delete`)
-  - [ ] `function.proxy.get()`: Reverse proxy GET to endpoint (`GET /v1/function/{endpoint_name}/{path...}` | `function__proxy__get`)
-  - [ ] `function.proxy.head()`: Reverse proxy HEAD to endpoint (`HEAD /v1/function/{endpoint_name}/{path...}` | `function__proxy__head`)
-  - [ ] `function.proxy.patch()`: Reverse proxy PATCH to endpoint (`PATCH /v1/function/{endpoint_name}/{path...}` | `function__proxy__patch`)
-  - [ ] `function.proxy.post()`: Reverse proxy POST to endpoint (`POST /v1/function/{endpoint_name}/{path...}` | `function__proxy__post`)
-  - [ ] `function.proxy.put()`: Reverse proxy PUT to endpoint (`PUT /v1/function/{endpoint_name}/{path...}` | `function__proxy__put`)
-  - [ ] `function.proxy.root_delete()`: Reverse proxy DELETE to endpoint root (`DELETE /v1/function/{endpoint_name}` | `function__proxy__root_delete`)
-  - [ ] `function.proxy.root_get()`: Reverse proxy GET to endpoint root (`GET /v1/function/{endpoint_name}` | `function__proxy__root_get`)
-  - [ ] `function.proxy.root_head()`: Reverse proxy HEAD to endpoint root (`HEAD /v1/function/{endpoint_name}` | `function__proxy__root_head`)
-  - [ ] `function.proxy.root_patch()`: Reverse proxy PATCH to endpoint root (`PATCH /v1/function/{endpoint_name}` | `function__proxy__root_patch`)
-  - [ ] `function.proxy.root_post()`: Reverse proxy POST to endpoint root (`POST /v1/function/{endpoint_name}` | `function__proxy__root_post`)
-  - [ ] `function.proxy.root_put()`: Reverse proxy PUT to endpoint root (`PUT /v1/function/{endpoint_name}` | `function__proxy__root_put`)
-
 #### `image` (Image Service — via `useImage(client)`)
 
 - Subgroup `image.info.*`:
@@ -316,6 +279,10 @@ Standard base APIs are callable on their service client instance (from hooks suc
 
 - Subgroup `image.transform.*`:
   - [ ] `image.transform.get()`: Transform and optimize an image (`GET /v1/image/{signature}/{path...}` | `image__transform__get`)
+
+#### `function` (Function Service — via `useFunction(client)`)
+
+The Function service has no base plane endpoints. All function operations exist on the control plane via `function.cp.*` upon service account elevation (`withServiceAccount(useFunction(client), ...)`).
 
 #### `tasks` (Tasks Service — via `useTasks(client)`)
 
@@ -408,19 +375,9 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 
 #### `console.cp` (Console Control Plane — via `withServiceAccount(useConsole(client), ...)`)
 
-- Subgroup `console.cp.auth.*`:
-  - [ ] `console.cp.auth.session()`: Get current console session profile (`GET /v1/_/console/session` | `console__auth__session`)
-  - [ ] `console.cp.auth.sign_in()`: Sign in as console operator (`POST /v1/_/console/sign-in` | `console__auth__sign_in`)
-  - [ ] `console.cp.auth.sign_out()`: Sign out active console session (`POST /v1/_/console/sign-out` | `console__auth__sign_out`)
-
 - Subgroup `console.cp.config.*`:
   - [ ] `console.cp.config.get()`: Get runtime configuration (`GET /v1/_/console/config` | `console__config__get`)
   - [ ] `console.cp.config.update()`: Update runtime configuration (`PUT /v1/_/console/config` | `console__config__update`)
-
-- Subgroup `console.cp.mfa.*`:
-  - [ ] `console.cp.mfa.disable()`: Disable TOTP MFA (`DELETE /v1/_/console/mfa` | `console__mfa__disable`)
-  - [ ] `console.cp.mfa.setup()`: Initiate TOTP MFA enrollment (`POST /v1/_/console/mfa/setup` | `console__mfa__setup`)
-  - [ ] `console.cp.mfa.verify()`: Verify and activate TOTP MFA (`POST /v1/_/console/mfa/verify` | `console__mfa__verify`)
 
 - Subgroup `console.cp.users.*`:
   - [ ] `console.cp.users.create()`: Create console operator account (`POST /v1/_/console/users` | `console__users__create`)
@@ -460,9 +417,6 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - [ ] `core.cp.service_accounts.update()`: Update service account (`PUT /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__update`)
 
 #### `data.cp` (Data Control Plane — via `withServiceAccount(useData(client), ...)`)
-
-- Root methods (`data.cp.*`):
-  - [ ] `data.cp.sql()`: Execute raw SQL query or DDL script from Console scratchpad (`POST /v1/_/data/sql` | `data__sql`)
 
 - Subgroup `data.cp.cache.*`:
   - [ ] `data.cp.cache.flush()`: Flush all global query and schema reflection caches (`POST /v1/_/data/cache/flush` | `data__cache__flush`)

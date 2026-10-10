@@ -71,6 +71,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 
 	// 3. S3 Compatibility Gateway
 	core.GetRoute[ListS3BucketsResponse](router, "/v1/file-storage/s3", service.baseHandler.handleListS3Buckets,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 ListAllMyBuckets"),
 		core.RouteDescription("Returns XML listing of all storage buckets for the authenticated service account."),
@@ -79,6 +80,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("list_buckets"),
 	)
 	core.HeadRoute[core.Empty](router, "/v1/file-storage/s3/{bucket}", service.baseHandler.handleHeadS3Bucket,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 HeadBucket"),
 		core.RouteDescription("Checks if a bucket exists and caller has permission to access it."),
@@ -87,6 +89,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("head_bucket"),
 	)
 	core.GetRoute[ListS3BucketResponse](router, "/v1/file-storage/s3/{bucket}", service.baseHandler.handleListS3Bucket,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 ListObjectsV2"),
 		core.RouteDescription("Lists objects within a bucket using standard S3 ListObjectsV2 XML response."),
@@ -95,6 +98,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("list_bucket"),
 	)
 	core.PostRoute[DeleteMultipleS3ObjectsResponse, DeleteMultipleS3ObjectsInput](router, "/v1/file-storage/s3/{bucket}", service.baseHandler.handleDeleteMultipleS3Objects,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 DeleteMultipleObjects"),
 		core.RouteDescription("Deletes multiple objects specified in the XML request payload."),
@@ -103,6 +107,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("delete_multiple"),
 	)
 	core.GetRoute[core.Empty](router, "/v1/file-storage/s3/{bucket}/{key...}", service.baseHandler.handleGetS3Object,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 GetObject"),
 		core.RouteDescription("Downloads object stream using AWS S3 protocol with SigV4."),
@@ -112,6 +117,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("get_object"),
 	)
 	core.HeadRoute[core.Empty](router, "/v1/file-storage/s3/{bucket}/{key...}", service.baseHandler.handleHeadS3Object,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 HeadObject"),
 		core.RouteDescription("Retrieves object metadata headers using AWS S3 protocol with SigV4."),
@@ -120,6 +126,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("head_object"),
 	)
 	core.PutRoute[core.Empty, core.Empty](router, "/v1/file-storage/s3/{bucket}/{key...}", service.baseHandler.handlePutS3Object,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 PutObject or UploadPart"),
 		core.RouteDescription("Uploads an object or multipart chunk using AWS S3 protocol with SigV4."),
@@ -128,6 +135,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("put_object"),
 	)
 	core.PostRoute[core.Empty, core.Empty](router, "/v1/file-storage/s3/{bucket}/{key...}", service.baseHandler.handlePostS3Object,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 Multipart Initiate or Complete"),
 		core.RouteDescription("Initiates or completes an S3 multipart upload session."),
@@ -136,6 +144,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("post_object"),
 	)
 	core.DeleteRoute[core.Empty](router, "/v1/file-storage/s3/{bucket}/{key...}", service.baseHandler.handleDeleteS3Object,
+		core.RouteHide(),
 		core.RouteTag("File Storage S3 Gateway"),
 		core.RouteSummary("S3 DeleteObject or AbortMultipartUpload"),
 		core.RouteDescription("Deletes an object or aborts a multipart upload using AWS S3 protocol with SigV4."),

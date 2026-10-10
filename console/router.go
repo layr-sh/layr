@@ -33,6 +33,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 
 	// 2. Console Authentication & Session Lifecycle
 	core.PostRoute[SignInConsoleResponse, SignInConsoleInput](router, "/v1/_/console/sign-in", service.controlPlaneHandler.handleSignInConsole,
+		core.RouteHide(),
 		core.RouteTag("Console Auth"),
 		core.RouteSummary("Sign in as console operator"),
 		core.RouteDescription("Authenticates a console user with credentials and optional MFA, issuing session cookie."),
@@ -41,6 +42,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKMethodName("sign_in"),
 	)
 	core.PostRoute[core.Empty, core.Empty](router, "/v1/_/console/sign-out", service.controlPlaneHandler.handleSignOutConsole,
+		core.RouteHide(),
 		core.RouteTag("Console Auth"),
 		core.RouteSummary("Sign out active console session"),
 		core.RouteDescription("Terminates active console session and clears authentication cookies."),
@@ -51,6 +53,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKMethodName("sign_out"),
 	)
 	core.GetRoute[GetConsoleSessionResponse](router, "/v1/_/console/session", service.controlPlaneHandler.handleGetConsoleSession,
+		core.RouteHide(),
 		core.RouteTag("Console Auth"),
 		core.RouteSummary("Get current console session profile"),
 		core.RouteDescription("Returns operator profile and granted scopes for active console session."),
@@ -59,6 +62,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKMethodName("session"),
 	)
 	core.PostRoute[SetupConsoleMFAResponse, core.Empty](router, "/v1/_/console/mfa/setup", service.controlPlaneHandler.handleSetupConsoleMFA,
+		core.RouteHide(),
 		core.RouteTag("Console MFA"),
 		core.RouteSummary("Initiate TOTP MFA enrollment"),
 		core.RouteDescription("Generates a TOTP secret and provisioning URI for authenticator setup."),
@@ -68,6 +72,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKMethodName("setup"),
 	)
 	core.PostRoute[core.Empty, VerifyConsoleMFAInput](router, "/v1/_/console/mfa/verify", service.controlPlaneHandler.handleVerifyConsoleMFA,
+		core.RouteHide(),
 		core.RouteTag("Console MFA"),
 		core.RouteSummary("Verify and activate TOTP MFA"),
 		core.RouteDescription("Verifies initial passcode to complete MFA activation."),
@@ -76,6 +81,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKMethodName("verify"),
 	)
 	core.DeleteRoute[core.Empty](router, "/v1/_/console/mfa", service.controlPlaneHandler.handleDisableConsoleMFA,
+		core.RouteHide(),
 		core.RouteTag("Console MFA"),
 		core.RouteSummary("Disable TOTP MFA"),
 		core.RouteDescription("Removes active multi-factor authentication configuration."),

@@ -19,6 +19,7 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 func (service *Service) registerBaseRoutes(router *core.Router) {
 	// Proxy routes for subpaths
 	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy GET to endpoint"),
 		core.RouteDescription("Proxies public HTTP GET requests directly to the active endpoint isolate."),
@@ -27,6 +28,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("get"),
 	)
 	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy POST to endpoint"),
 		core.RouteDescription("Proxies public HTTP POST requests directly to the active endpoint isolate."),
@@ -35,6 +37,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("post"),
 	)
 	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PUT to endpoint"),
 		core.RouteDescription("Proxies public HTTP PUT requests directly to the active endpoint isolate."),
@@ -43,6 +46,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("put"),
 	)
 	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy DELETE to endpoint"),
 		core.RouteDescription("Proxies public HTTP DELETE requests directly to the active endpoint isolate."),
@@ -51,6 +55,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("delete"),
 	)
 	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PATCH to endpoint"),
 		core.RouteDescription("Proxies public HTTP PATCH requests directly to the active endpoint isolate."),
@@ -59,6 +64,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("patch"),
 	)
 	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}/{path...}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy HEAD to endpoint"),
 		core.RouteDescription("Proxies public HTTP HEAD requests directly to the active endpoint isolate."),
@@ -69,6 +75,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 
 	// Proxy routes for root endpoint path
 	core.GetRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy GET to endpoint root"),
 		core.RouteDescription("Proxies public HTTP GET requests directly to the active endpoint root."),
@@ -77,6 +84,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("root_get"),
 	)
 	core.PostRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy POST to endpoint root"),
 		core.RouteDescription("Proxies public HTTP POST requests directly to the active endpoint root."),
@@ -85,6 +93,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("root_post"),
 	)
 	core.PutRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PUT to endpoint root"),
 		core.RouteDescription("Proxies public HTTP PUT requests directly to the active endpoint root."),
@@ -93,6 +102,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("root_put"),
 	)
 	core.DeleteRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy DELETE to endpoint root"),
 		core.RouteDescription("Proxies public HTTP DELETE requests directly to the active endpoint root."),
@@ -101,6 +111,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("root_delete"),
 	)
 	core.PatchRoute[InvokeEndpointResponse, InvokeEndpointInput](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy PATCH to endpoint root"),
 		core.RouteDescription("Proxies public HTTP PATCH requests directly to the active endpoint root."),
@@ -109,6 +120,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("root_patch"),
 	)
 	core.HeadRoute[InvokeEndpointResponse](router, "/v1/function/{endpoint_name}", service.baseHandler.handleInvokeEndpoint,
+		core.RouteHide(),
 		core.RouteTag("Function Data Plane"),
 		core.RouteSummary("Reverse proxy HEAD to endpoint root"),
 		core.RouteDescription("Proxies public HTTP HEAD requests directly to the active endpoint root."),

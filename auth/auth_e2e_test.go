@@ -80,7 +80,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	}
 
 	// 3. Authenticated Profile Access via User Export
-	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/users/"+signupAuthTokenResponse.User.ID+"/export", nil)
+	exportRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/user/export", nil)
 	exportRequest.Header.Set("Authorization", "Bearer "+signinAuthTokenResponse.AccessToken)
 	exportResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(exportResponseRecorder, exportRequest)

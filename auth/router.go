@@ -14,6 +14,7 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 func (service *Service) registerBaseRoutes(router *core.Router) {
 	// 1. OIDC Discovery & JWKS
 	core.GetRoute[OIDCConfiguration](router, "/.well-known/openid-configuration", service.baseHandler.handleGetOIDCDiscovery,
+		core.RouteHide(),
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("OpenID Connect discovery document"),
 		core.RouteDescription("Public OpenID Connect discovery metadata document defining issuer, authorization, token, and JWKS endpoints."),
@@ -22,6 +23,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("openid_configuration"),
 	)
 	core.GetRoute[core.JWKS](router, "/.well-known/jwks.json", service.baseHandler.handleGetJWKS,
+		core.RouteHide(),
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("JSON Web Key Set (JWKS) public verification keys"),
 		core.RouteDescription("Public JSON Web Key Set (JWKS) containing active Ed25519 public verification keys."),
@@ -203,6 +205,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 
 	// 7. OAuth & OpenID Connect
 	core.GetRoute[core.Empty](router, "/v1/auth/oauth/authorize", service.baseHandler.handleAuthorizeOIDC,
+		core.RouteHide(),
 		core.RouteTag("OpenID Connect"),
 		core.RouteSummary("OpenID Connect authorization endpoint and Universal Sign-In page"),
 		core.RouteDescription("Renders the hosted Universal Sign-In page or performs SSO active session bypass redirect with authorization code."),
@@ -212,6 +215,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("authorize"),
 	)
 	core.GetRoute[core.Empty](router, "/v1/auth/oauth/{provider}/authorize", service.baseHandler.handleAuthorizeOAuth,
+		core.RouteHide(),
 		core.RouteTag("OAuth"),
 		core.RouteSummary("Redirect to third-party OAuth provider authorization URL"),
 		core.RouteDescription("Redirects the client browser to the third-party OAuth2 / OIDC provider authorization URL with PKCE challenge."),

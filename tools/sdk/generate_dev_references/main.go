@@ -207,7 +207,10 @@ func renderPlaneOperations(markdownBuffer *bytes.Buffer, operations []OperationR
 	}
 
 	if !isControlPlane {
-		fmt.Fprintln(markdownBuffer, "#### `tasks` (Tasks Service — via `useTasks(client)`)")
+		fmt.Fprintln(markdownBuffer, "#### `function` (Function Service — via `useFunction(client)`)")
+		fmt.Fprintln(markdownBuffer, "\nThe Function service has no base plane endpoints. All function operations exist on the control plane via `function.cp.*` upon service account elevation (`withServiceAccount(useFunction(client), ...)`).")
+
+		fmt.Fprintln(markdownBuffer, "\n#### `tasks` (Tasks Service — via `useTasks(client)`)")
 		fmt.Fprintln(markdownBuffer, "\nThe Tasks service has no base plane endpoints. All tasks operations exist on the control plane via `tasks.cp.*` upon service account elevation (`withServiceAccount(useTasks(client), ...)`).")
 
 		fmt.Fprintln(markdownBuffer, "\n#### `console` (Console Service — via `useConsole(client)`)")

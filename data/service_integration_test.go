@@ -258,7 +258,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 		t.Fatal("expected non-nil control plane spec")
 	}
 	if controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/tables") == nil ||
-		controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/sql") == nil {
+		controlPlaneOpenAPISpec.Paths.Value("/v1/_/data/config") == nil {
 		t.Fatal("expected control spec to contain Data service paths")
 	}
 
