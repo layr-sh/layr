@@ -24,8 +24,8 @@ func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
 		"LAYR__SECURITY__MASTER_ENCRYPTION_KEY",
 		"LAYR__KV_STORE__BACKEND",
 		"LAYR__KV_STORE__URL",
-		"LAYR__ROOT_USER__EMAIL",
-		"LAYR__ROOT_USER__PASSWORD",
+		"LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL",
+		"LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD",
 	}
 	t.Cleanup(func() {
 		UnloadConfig()
@@ -74,8 +74,8 @@ LAYR__DATABASE__SSL_MODE=require
 LAYR__SECURITY__MASTER_ENCRYPTION_KEY=` + validHexKey + `
 LAYR__KV_STORE__BACKEND=redis
 LAYR__KV_STORE__URL=redis://redis-master.internal:6379
-LAYR__ROOT_USER__EMAIL=root_user@layr.sh
-LAYR__ROOT_USER__PASSWORD=super_secure_initial_password
+LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL=root_user@layr.sh
+LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD=super_secure_initial_password
 `
 	if writeErr := os.WriteFile(completeEnvFile, []byte(completeEnvContent), 0600); writeErr != nil {
 		t.Fatalf("failed to write complete env file: %v", writeErr)
@@ -93,8 +93,8 @@ LAYR__ROOT_USER__PASSWORD=super_secure_initial_password
 		loadedCompleteConfig.Server.ListenAddr != ":8443" ||
 		loadedCompleteConfig.Database.MaxConnections != 50 ||
 		loadedCompleteConfig.KVStore.Backend != "redis" ||
-		loadedCompleteConfig.RootUser.Email != "root_user@layr.sh" ||
-		loadedCompleteConfig.RootUser.Password != "super_secure_initial_password" ||
+		loadedCompleteConfig.Console.InitialRootUser.Email != "root_user@layr.sh" ||
+		loadedCompleteConfig.Console.InitialRootUser.Password != "super_secure_initial_password" ||
 		len(loadedCompleteConfig.GetFunctionalServices()) != 6 {
 		t.Fatalf("complete config fields mismatch: %+v", loadedCompleteConfig)
 	}

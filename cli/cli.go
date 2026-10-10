@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"text/tabwriter"
 
 	"layr.sh/core"
 
@@ -26,12 +27,24 @@ const (
 	ExitCodeConfig = core.ConfigFailureExitCode
 
 	defaultEnvFilePermission = 0o600
+
+	minArgsConsoleRootUserAction       = 3
+	minArgsConsoleRootUserEmail        = 4
+	minArgsConsoleRootUserWithPassword = 5
+	tabWriterPadding                   = 2
 )
 
 const usageHelp = `Usage: layr <command> [flags] [services...]
 
 Commands:
-  up [services...]     Starts the Layr runtime engine with specified services (monolith if none)
+  up [services...]                                   Starts the Layr runtime engine with specified services (monolith if none)
+  console root-user <subcommand> [flags] [args...]   Manage console root user accounts
+
+Console Root User Subcommands:
+  create <email> [password]                          Create a new console root user
+  list                                               List all console root users
+  reset-password <email> [new-password]              Reset password for a console root user
+  delete <email>                                     Delete a console root user
 
 Services:
   data, auth, tasks, file_storage, image, function, console, all
@@ -48,13 +61,17 @@ var (
 	generateKeyFunc = core.GenerateRandomCryptoEncryptionKeyHex
 	setenvFunc      = os.Setenv
 	loadConfigFunc  = func() (*core.Config, error) { return core.LoadConfig() }
+	newKernelFunc   = func(db *core.DatabasePool) (*core.Kernel, error) { return core.NewKernel(db) }
 )
 
 type cliOptions struct {
-	envFilePath string
-	command     string
-	services    []string
-	showHelp    bool
+	showHelp                bool
+	envFilePath             string
+	command                 string
+	upServices              []string
+	consoleRootUserAction   string
+	consoleRootUserEmail    string
+	consoleRootUserPassword string
 }
 
 // Run parses command-line arguments and executes the Layr CLI.
@@ -93,9 +110,13 @@ func Execute(ctx context.Context, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", loadErr)
 	}
 
-	if !isMonolithMode(options.services) {
+	if options.command == "console" {
+		return executeConsoleRootUser(ctx, options)
+	}
+
+	if !isMonolithMode(options.upServices) {
 		var activeServices []string
-		for _, serviceName := range options.services {
+		for _, serviceName := range options.upServices {
 			serviceName = strings.ToLower(strings.TrimSpace(serviceName))
 			if !core.IsValidService(serviceName) {
 				_, _ = fmt.Fprintf(stderrWriter, "error: unknown service %q\n", serviceName)
@@ -220,23 +241,122 @@ func parseArgs(args []string) (cliOptions, error) {
 	}
 
 	if len(positional) == 0 {
-		return options, errors.New("missing command: expected 'up'")
+		return options, errors.New("missing command: expected 'up' or 'console'")
 	}
 
 	options.command = positional[0]
-	if options.command != "up" {
-		return options, fmt.Errorf("unknown command %q: expected 'up'", options.command)
+	switch options.command {
+	case "up":
+		options.upServices = positional[1:]
+		return options, nil
+	case "console":
+		if len(positional) < 2 {
+			return options, errors.New("missing console subcommand: expected 'root-user'")
+		}
+		if positional[1] != "root-user" {
+			return options, fmt.Errorf("unknown console subcommand %q: expected 'root-user'", positional[1])
+		}
+		if len(positional) < minArgsConsoleRootUserAction {
+			return options, errors.New("missing root-user action: expected 'create', 'list', 'reset-password', or 'delete'")
+		}
+		action := positional[2]
+		options.consoleRootUserAction = action
+		switch action {
+		case "create":
+			if len(positional) < minArgsConsoleRootUserEmail || strings.TrimSpace(positional[3]) == "" {
+				return options, errors.New("missing email argument for create")
+			}
+			options.consoleRootUserEmail = positional[3]
+			if len(positional) >= minArgsConsoleRootUserWithPassword {
+				options.consoleRootUserPassword = positional[4]
+			}
+		case "list":
+			// no additional arguments required
+		case "reset-password":
+			if len(positional) < minArgsConsoleRootUserEmail || strings.TrimSpace(positional[3]) == "" {
+				return options, errors.New("missing email argument for reset-password")
+			}
+			options.consoleRootUserEmail = positional[3]
+			if len(positional) >= minArgsConsoleRootUserWithPassword {
+				options.consoleRootUserPassword = positional[4]
+			}
+		case "delete":
+			if len(positional) < minArgsConsoleRootUserEmail || strings.TrimSpace(positional[3]) == "" {
+				return options, errors.New("missing email argument for delete")
+			}
+			options.consoleRootUserEmail = positional[3]
+		default:
+			return options, fmt.Errorf("unknown root-user action %q: expected 'create', 'list', 'reset-password', or 'delete'", action)
+		}
+		return options, nil
+	default:
+		return options, fmt.Errorf("unknown command %q: expected 'up' or 'console'", options.command)
 	}
-
-	options.services = positional[1:]
-	return options, nil
 }
 
-func isMonolithMode(services []string) bool {
-	if len(services) == 0 {
+func executeConsoleRootUser(ctx context.Context, options cliOptions) error {
+	kernel, kernelErr := newKernelFunc(nil)
+	if kernelErr != nil {
+		return fmt.Errorf("failed to initialize kernel: %w", kernelErr)
+	}
+
+	if initErr := kernel.InitDatabase(ctx); initErr != nil {
+		return fmt.Errorf("failed to initialize database: %w", initErr)
+	}
+
+	switch options.consoleRootUserAction {
+	case "create":
+		consoleRootUser, serviceAccount, plainPassword, createErr := kernel.CreateConsoleRootUser(ctx, options.consoleRootUserEmail, options.consoleRootUserPassword)
+		if createErr != nil {
+			return fmt.Errorf("failed to create console root user: %w", createErr)
+		}
+		_, _ = fmt.Fprintln(stdoutWriter, "Console root user created:")
+		_, _ = fmt.Fprintf(stdoutWriter, "  Email:               %s\n", consoleRootUser.Email)
+		_, _ = fmt.Fprintf(stdoutWriter, "  Password:            %s\n", plainPassword)
+		_, _ = fmt.Fprintf(stdoutWriter, "  Service Account Key: %s\n", serviceAccount.SecretKey)
+		return nil
+
+	case "list":
+		users, _ := kernel.ListConsoleRootUsers(ctx)
+		if len(users) == 0 {
+			_, _ = fmt.Fprintln(stdoutWriter, "No console root users found.")
+			return nil
+		}
+		writer := tabwriter.NewWriter(stdoutWriter, 0, 0, tabWriterPadding, ' ', 0)
+		_, _ = fmt.Fprintln(writer, "EMAIL\tENABLED\tCREATED AT")
+		for _, consoleRootUser := range users {
+			_, _ = fmt.Fprintf(writer, "%s\t%t\t%s\n", consoleRootUser.Email, consoleRootUser.IsEnabled, consoleRootUser.CreatedAt.UTC().Format("2006-01-02 15:04:05"))
+		}
+		_ = writer.Flush()
+		return nil
+
+	case "reset-password":
+		plainPassword, resetErr := kernel.ResetConsoleRootUserPassword(ctx, options.consoleRootUserEmail, options.consoleRootUserPassword)
+		if resetErr != nil {
+			return fmt.Errorf("failed to reset console root user password: %w", resetErr)
+		}
+		_, _ = fmt.Fprintln(stdoutWriter, "Console root user password reset successfully:")
+		_, _ = fmt.Fprintf(stdoutWriter, "  Email:    %s\n", options.consoleRootUserEmail)
+		_, _ = fmt.Fprintf(stdoutWriter, "  Password: %s\n", plainPassword)
+		return nil
+
+	case "delete":
+		if deleteErr := kernel.DeleteConsoleRootUser(ctx, options.consoleRootUserEmail); deleteErr != nil {
+			return fmt.Errorf("failed to delete console root user: %w", deleteErr)
+		}
+		_, _ = fmt.Fprintf(stdoutWriter, "Console root user %q deleted successfully.\n", options.consoleRootUserEmail)
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported root-user action %q", options.consoleRootUserAction)
+	}
+}
+
+func isMonolithMode(upServices []string) bool {
+	if len(upServices) == 0 {
 		return true
 	}
-	for _, service := range services {
+	for _, service := range upServices {
 		if strings.EqualFold(service, "all") {
 			return true
 		}

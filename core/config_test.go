@@ -612,9 +612,9 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 		"LAYR__KV_STORE__BACKEND":      "REDIS",
 		"LAYR__KV_STORE__URL":          "redis://custom:6379",
 		"LAYR__KV_STORE__CLUSTER_URLS": "  redis://cluster-1:6379 , , redis://cluster-2:6379  , ",
-		// Root User
-		"LAYR__ROOT_USER__EMAIL":    "console_user@layr.sh",
-		"LAYR__ROOT_USER__PASSWORD": "supersecretconsolepassword",
+		// Console Initial Root User
+		"LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL":    "console_user@layr.sh",
+		"LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD": "supersecretconsolepassword",
 	}
 
 	for environmentKey, environmentValue := range environmentMap {
@@ -664,10 +664,10 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 		t.Fatalf("kv store overrides failed: %+v", config.KVStore)
 	}
 
-	// Validate Root User fields
-	if config.RootUser.Email != "console_user@layr.sh" ||
-		config.RootUser.Password != "supersecretconsolepassword" {
-		t.Fatalf("root_user overrides failed: %+v", config.RootUser)
+	// Validate Console Initial Root User fields
+	if config.Console.InitialRootUser.Email != "console_user@layr.sh" ||
+		config.Console.InitialRootUser.Password != "supersecretconsolepassword" {
+		t.Fatalf("console overrides failed: %+v", config.Console)
 	}
 }
 
@@ -745,8 +745,7 @@ func TestCoreConfigApplyEnvConfigOverridesAliasesAndMalformedInputsUnit(t *testi
 	applyEnvConfigField(config, "unknown_section", "field", "value")
 	applyEnvConfigField(config, "project", "unknown_field", "value")
 	applyEnvConfigField(config, "security", "unknown_field", "value")
-	applyEnvConfigField(config, "root_user", "unknown_field", "value")
-	applyEnvConfigField(config, "rootuser", "unknown_field", "value")
+	applyEnvConfigField(config, "console", "unknown_field", "value")
 }
 
 func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
@@ -812,15 +811,15 @@ func TestCoreConfigLoadConfigUnit(t *testing.T) {
 	if defaultConfig.Server.ListenAddr != ":5297" {
 		t.Errorf("expected default listen addr ':5297', got %q", defaultConfig.Server.ListenAddr)
 	}
-	if defaultConfig.RootUser.Email != "root@layr.local" {
-		t.Errorf("expected default root user email 'root@layr.local', got %q", defaultConfig.RootUser.Email)
+	if defaultConfig.Console.InitialRootUser.Email != "root@layr.local" {
+		t.Errorf("expected default root user email 'root@layr.local', got %q", defaultConfig.Console.InitialRootUser.Email)
 	}
 
 	// 2. Load with environment variable overrides
 	t.Setenv("PORT", "9123")
 	t.Setenv("LAYR__PROJECT__NAME", "Env Written App")
-	t.Setenv("LAYR__ROOT_USER__EMAIL", "custom_root@layr.sh")
-	t.Setenv("LAYR__ROOT_USER__PASSWORD", "custom_password")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__EMAIL", "custom_root@layr.sh")
+	t.Setenv("LAYR__CONSOLE__INITIAL_ROOT_USER__PASSWORD", "custom_password")
 
 	loadedConfig, loadErr := LoadConfig()
 	if loadErr != nil {
@@ -833,11 +832,11 @@ func TestCoreConfigLoadConfigUnit(t *testing.T) {
 	if loadedConfig.Project.Name != "Env Written App" {
 		t.Errorf("expected project name 'Env Written App', got %q", loadedConfig.Project.Name)
 	}
-	if loadedConfig.RootUser.Email != "custom_root@layr.sh" {
-		t.Errorf("expected root user email 'custom_root@layr.sh', got %q", loadedConfig.RootUser.Email)
+	if loadedConfig.Console.InitialRootUser.Email != "custom_root@layr.sh" {
+		t.Errorf("expected root user email 'custom_root@layr.sh', got %q", loadedConfig.Console.InitialRootUser.Email)
 	}
-	if loadedConfig.RootUser.Password != "custom_password" {
-		t.Errorf("expected root user password 'custom_password', got %q", loadedConfig.RootUser.Password)
+	if loadedConfig.Console.InitialRootUser.Password != "custom_password" {
+		t.Errorf("expected root user password 'custom_password', got %q", loadedConfig.Console.InitialRootUser.Password)
 	}
 
 	// 3. Load with non-existent env file path ignores missing file
