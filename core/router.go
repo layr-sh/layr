@@ -109,6 +109,11 @@ func RouteSDKMethodName(name string) RouteOption {
 	}
 }
 
+// RouteHide hides the route from the exported OpenAPI specification and client SDK generation.
+func RouteHide() RouteOption {
+	return fuego.OptionHide()
+}
+
 // Router wraps the underlying OpenAPI and HTTP router engine.
 type Router struct {
 	engine *fuego.Server

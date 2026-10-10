@@ -159,6 +159,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 
 	// 4. Real-Time CDC WebSocket
 	core.GetRoute[core.Empty](router, "/v1/realtime", service.baseHandler.handleConnectRealtime,
+		core.RouteHide(),
 		core.RouteTag("Data Real-Time"),
 		core.RouteSummary("Connect to real-time Change Data Capture (CDC) WebSocket"),
 		core.RouteDescription("Live bidirectional WebSocket channel streaming PostgreSQL CDC events."),
@@ -325,6 +326,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 
 	// 4. Console SQL Scratchpad
 	core.PostRoute[ExecuteSQLResponse, ExecuteSQLInput](router, "/v1/_/data/sql", service.controlPlaneHandler.handleExecuteSQL,
+		core.RouteHide(),
 		core.RouteTag("Data Schema DDL"),
 		core.RouteSummary("Execute raw SQL query or DDL script from Console scratchpad"),
 		core.RouteDescription("Executes arbitrary SQL queries or migrations within a controlled transaction block with execution timing."),

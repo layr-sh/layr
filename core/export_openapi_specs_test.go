@@ -51,10 +51,14 @@ func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
 	assert.NotEmpty(t, controlPlaneOpenAPISpec.Paths.Map())
 	assert.NotEmpty(t, unifiedOpenAPISpecs.Paths.Map())
 
-	// Public probe route should be present in public and unified
-	assert.NotNil(t, openAPISpec.Paths.Find("/healthz"))
-	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/healthz"))
-	assert.Nil(t, controlPlaneOpenAPISpec.Paths.Find("/healthz"))
+	// Public manifest route should be present in public and unified
+	assert.NotNil(t, openAPISpec.Paths.Find("/v1/manifest"))
+	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/v1/manifest"))
+	assert.Nil(t, controlPlaneOpenAPISpec.Paths.Find("/v1/manifest"))
+
+	// Hidden probe route should be absent from OpenAPI specs
+	assert.Nil(t, openAPISpec.Paths.Find("/healthz"))
+	assert.Nil(t, unifiedOpenAPISpecs.Paths.Find("/healthz"))
 
 	// Control plane route should be present in control and unified
 	assert.NotNil(t, controlPlaneOpenAPISpec.Paths.Find("/v1/_/core/service-accounts"))

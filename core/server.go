@@ -395,6 +395,7 @@ func (server *Server) registerBaseRoutes() {
 	baseRouter := server.baseRouter
 
 	GetRoute[GetHealthResponse](baseRouter, "/healthz", server.handleGetHealth,
+		RouteHide(),
 		RouteTag("Probes"),
 		RouteSummary("Liveness probe"),
 		RouteDescription("Returns 200 OK if the Layr gateway process is running and responsive."),
@@ -403,6 +404,7 @@ func (server *Server) registerBaseRoutes() {
 		RouteSDKMethodName("healthz"),
 	)
 	GetRoute[GetReadinessResponse](baseRouter, "/readyz", server.handleGetReadiness,
+		RouteHide(),
 		RouteTag("Probes"),
 		RouteSummary("Readiness probe"),
 		RouteDescription("Returns 200 OK if PostgreSQL connection db is healthy and accepting queries; returns 503 Service Unavailable if unready."),
@@ -411,6 +413,7 @@ func (server *Server) registerBaseRoutes() {
 		RouteSDKMethodName("readyz"),
 	)
 	GetRoute[string](baseRouter, "/metrics", server.handleGetMetrics,
+		RouteHide(),
 		RouteTag("Observability"),
 		RouteSummary("Prometheus metrics exposition"),
 		RouteDescription("Prometheus text exposition format (version 0.0.4) exposing process uptime, HTTP requests handled, and allocated heap memory."),
