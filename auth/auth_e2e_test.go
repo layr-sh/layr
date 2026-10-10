@@ -17,7 +17,6 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 
 	ctx := context.Background()
 	layrConfig := core.DefaultConfig()
-	layrConfig.Auth.Enabled = true
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 
@@ -136,7 +135,6 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 
 	ctx := context.Background()
 	layrConfig := core.DefaultConfig()
-	layrConfig.Auth.Enabled = true
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 
@@ -237,7 +235,6 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 
 	ctx := context.Background()
 	layrConfig := core.DefaultConfig()
-	layrConfig.Auth.Enabled = true
 	core.SetLoadedConfig(layrConfig)
 	defer core.UnloadConfig()
 

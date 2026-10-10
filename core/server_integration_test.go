@@ -44,7 +44,6 @@ func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 	}
 
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -122,7 +121,6 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	}
 
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -300,8 +298,6 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 
 func TestCoreServerDualRoutersAndOpenAPISpecsIntegration(t *testing.T) {
 	config := DefaultConfig()
-	config.Data.Enabled = true
-	config.Auth.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()

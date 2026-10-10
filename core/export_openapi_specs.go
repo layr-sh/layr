@@ -10,13 +10,6 @@ import (
 func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
 	log.Debug("exporting OpenAPI 3.1 specifications")
 	config := DefaultConfig()
-	config.Data.Enabled = true
-	config.Auth.Enabled = true
-	config.FileStorage.Enabled = true
-	config.Tasks.Enabled = true
-	config.Image.Enabled = true
-	config.Function.Enabled = true
-	config.Console.Enabled = true
 
 	if config.Security.MasterEncryptionKey == "" {
 		config.Security.MasterEncryptionKey, _ = GenerateRandomCryptoEncryptionKeyHex()

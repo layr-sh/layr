@@ -6,93 +6,73 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
 	// ConfigFailureExitCode is the exit code for configuration failures according to sysexits.h
 	ConfigFailureExitCode = 78
-
-	defaultConfigFileDirectoryPermission = 0o755
-	defaultConfigFilePermission          = 0o644
 )
 
-var (
-	yamlMarshal = yaml.Marshal
-)
-
-// Config represents the Tier 1 configuration (layr.yaml + LAYR__ env vars).
+// Config represents the Tier 1 configuration (environment variables and defaults).
 type Config struct {
-	Version     string         `yaml:"version"`
-	Project     ProjectConfig  `yaml:"project"`
-	Server      ServerConfig   `yaml:"server"`
-	Database    DatabaseConfig `yaml:"database"`
-	Security    SecurityConfig `yaml:"security"`
-	KVStore     KVStoreConfig  `yaml:"kv_store"`
-	Data        ServiceConfig  `yaml:"data"`
-	Auth        ServiceConfig  `yaml:"auth"`
-	FileStorage ServiceConfig  `yaml:"file_storage"`
-	Tasks       ServiceConfig  `yaml:"tasks"`
-	Image       ServiceConfig  `yaml:"image"`
-	Function    ServiceConfig  `yaml:"function"`
-	Console     ConsoleConfig  `yaml:"console"`
+	Version  string         `json:"version"`
+	Project  ProjectConfig  `json:"project"`
+	Server   ServerConfig   `json:"server"`
+	Database DatabaseConfig `json:"database"`
+	Security SecurityConfig `json:"security"`
+	KVStore  KVStoreConfig  `json:"kv_store"`
+	RootUser RootUserConfig `json:"root_user"`
+
+	enabledServices []string
 }
 
 // ProjectConfig holds general project metadata.
 type ProjectConfig struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // ServerConfig defines the HTTP server network listener and base URL.
 type ServerConfig struct {
-	ListenAddr        string `yaml:"listen_addr"`
-	BaseURL           string `yaml:"base_url"`
-	TrustProxyHeaders bool   `yaml:"trust_proxy_headers"`
+	ListenAddr        string `json:"listen_addr"`
+	BaseURL           string `json:"base_url"`
+	TrustProxyHeaders bool   `json:"trust_proxy_headers"`
 }
 
 // DatabaseConfig defines PostgreSQL connection and pool parameters.
 type DatabaseConfig struct {
-	URL                 string `yaml:"url"`                    // postgres://... or .layr/data
-	MaxConnections      int    `yaml:"max_connections"`        // Default: 25, Min: 1, Max: 1000
-	MinConnections      int    `yaml:"min_connections"`        // Default: 2, Min: 0, Max: max_connections
-	ConnectionTimeoutMs int    `yaml:"connection_timeout_ms"`  // Default: 5000ms, Max: 60000ms
-	IdleTimeoutMs       int    `yaml:"idle_timeout_ms"`        // Default: 300000ms (5m)
-	MaxLifetimeMs       int    `yaml:"max_lifetime_ms"`        // Default: 1800000ms (30m)
-	HealthCheckPeriodMs int    `yaml:"health_check_period_ms"` // Default: 15000ms (15s)
-	SSLMode             string `yaml:"ssl_mode"`               // disable | allow | prefer | require | verify-ca | verify-full
-	SSLRootCert         string `yaml:"ssl_root_cert"`          // CA certificate path or inline PEM
-	SSLCert             string `yaml:"ssl_cert"`               // Client certificate path or inline PEM
-	SSLKey              string `yaml:"ssl_key"`                // Client private key path or inline PEM
+	URL                 string `json:"url"`                    // postgres://... or .layr/data
+	MaxConnections      int    `json:"max_connections"`        // Default: 25, Min: 1, Max: 1000
+	MinConnections      int    `json:"min_connections"`        // Default: 2, Min: 0, Max: max_connections
+	ConnectionTimeoutMs int    `json:"connection_timeout_ms"`  // Default: 5000ms, Max: 60000ms
+	IdleTimeoutMs       int    `json:"idle_timeout_ms"`        // Default: 300000ms (5m)
+	MaxLifetimeMs       int    `json:"max_lifetime_ms"`        // Default: 1800000ms (30m)
+	HealthCheckPeriodMs int    `json:"health_check_period_ms"` // Default: 15000ms (15s)
+	SSLMode             string `json:"ssl_mode"`               // disable | allow | prefer | require | verify-ca | verify-full
+	SSLRootCert         string `json:"ssl_root_cert"`          // CA certificate path or inline PEM
+	SSLCert             string `json:"ssl_cert"`               // Client certificate path or inline PEM
+	SSLKey              string `json:"ssl_key"`                // Client private key path or inline PEM
 }
 
 // SecurityConfig contains cryptographic encryption settings.
 type SecurityConfig struct {
-	MasterEncryptionKey string `yaml:"master_encryption_key"`
+	MasterEncryptionKey string `json:"master_encryption_key"`
 }
 
 // KVStoreConfig defines key-value store connection options.
 type KVStoreConfig struct {
-	Backend     string   `yaml:"backend"`      // database | redis
-	URL         string   `yaml:"url"`          // Standalone Redis URL
-	ClusterURLs []string `yaml:"cluster_urls"` // Cluster Redis URLs
+	Backend     string   `json:"backend"`      // database | redis
+	URL         string   `json:"url"`          // Standalone Redis URL
+	ClusterURLs []string `json:"cluster_urls"` // Cluster Redis URLs
 }
 
-// ServiceConfig controls the enablement state of an individual functional service.
-type ServiceConfig struct {
-	Enabled bool `yaml:"enabled"`
-}
-
-// ConsoleConfig controls the embedded administrative console settings.
-type ConsoleConfig struct {
-	Enabled             bool   `yaml:"enabled"`
-	InitialUserEmail    string `yaml:"initial_user_email"`
-	InitialUserPassword string `yaml:"initial_user_password"`
+// RootUserConfig defines the initial root user credentials for administrative access.
+type RootUserConfig struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // DefaultConfig returns default configuration.
@@ -104,8 +84,8 @@ func DefaultConfig() *Config {
 			Description: "Layr Application",
 		},
 		Server: ServerConfig{
-			ListenAddr:        ":8080",
-			BaseURL:           "http://localhost:8080",
+			ListenAddr:        ":5297",
+			BaseURL:           "http://localhost:5297",
 			TrustProxyHeaders: true,
 		},
 		Database: DatabaseConfig{
@@ -123,15 +103,11 @@ func DefaultConfig() *Config {
 		KVStore: KVStoreConfig{
 			Backend: "database",
 		},
-		Data:        ServiceConfig{Enabled: true},
-		Auth:        ServiceConfig{Enabled: true},
-		FileStorage: ServiceConfig{Enabled: true},
-		Tasks:       ServiceConfig{Enabled: false},
-		Image:       ServiceConfig{Enabled: false},
-		Function:    ServiceConfig{Enabled: false},
-		Console: ConsoleConfig{
-			Enabled: true,
+		RootUser: RootUserConfig{
+			Email:    "root@layr.local",
+			Password: "",
 		},
+		enabledServices: DefaultServices(),
 	}
 }
 
@@ -140,25 +116,20 @@ var (
 	rwMutex      sync.RWMutex
 )
 
-// LoadConfig loads config from a file path, applies environment variable overlays,
+// LoadConfig loads configuration from environment variables (optionally loading an env file first)
 // and caches the loaded configuration in lifetime memory.
-func LoadConfig(path string) (*Config, error) {
-	log.Debugf("loading configuration from %q", path)
-	config := DefaultConfig()
-
-	if path != "" {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
-			}
-		} else {
-			if err := yaml.Unmarshal(data, config); err != nil {
-				return nil, fmt.Errorf("failed to parse config yaml: %w", err)
+func LoadConfig(optionalEnvFile ...string) (*Config, error) {
+	if len(optionalEnvFile) > 0 && optionalEnvFile[0] != "" {
+		envPath := optionalEnvFile[0]
+		log.Debugf("loading configuration from env file %q", envPath)
+		if err := LoadEnvFile(envPath); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
 			}
 		}
 	}
 
+	config := DefaultConfig()
 	applyEnvConfigOverrides(config, true)
 
 	rwMutex.Lock()
@@ -169,49 +140,45 @@ func LoadConfig(path string) (*Config, error) {
 	return config, nil
 }
 
-// WriteConfigFile writes the configuration to a file in YAML format.
-// If optionalConfig is omitted, DefaultConfig() is used with environment variable overrides applied.
-func WriteConfigFile(path string, optionalConfig ...Config) error {
-	if path == "" {
-		return errors.New("config file path cannot be empty")
+// LoadEnvFile loads environment variables from a file into the process environment.
+func LoadEnvFile(path string) error {
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read env file %s: %w", path, err)
 	}
 
-	var targetConfig *Config
-	if len(optionalConfig) > 0 {
-		targetConfig = &optionalConfig[0]
-	} else {
-		targetConfig = DefaultConfig()
-		applyEnvConfigOverrides(targetConfig, false)
-	}
+	for _, line := range strings.Split(string(fileData), "\n") {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, "#") {
+			continue
+		}
 
-	if targetConfig.Security.MasterEncryptionKey == "" {
-		masterEncryptionKey, _ := GenerateRandomCryptoEncryptionKeyHex()
-		targetConfig.Security.MasterEncryptionKey = masterEncryptionKey
-	}
+		key, value, ok := strings.Cut(trimmedLine, "=")
+		if !ok {
+			continue
+		}
 
-	directory := filepath.Dir(path)
-	if directory != "" && directory != "." {
-		if err := os.MkdirAll(directory, defaultConfigFileDirectoryPermission); err != nil {
-			return fmt.Errorf("failed to create directory for config file %s: %w", path, err)
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+
+		if len(value) >= 2 {
+			first := value[0]
+			last := value[len(value)-1]
+			if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+
+		if existingValue, exists := os.LookupEnv(key); exists && existingValue != "" {
+			continue
+		}
+
+		if setErr := os.Setenv(key, value); setErr != nil {
+			return fmt.Errorf("failed to set environment variable %s: %w", key, setErr)
 		}
 	}
 
-	data, err := yamlMarshal(targetConfig)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config to yaml: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, defaultConfigFilePermission); err != nil {
-		return fmt.Errorf("failed to write config file %s: %w", path, err)
-	}
-
 	return nil
-}
-
-// CreateConfigFile creates a configuration file in YAML format.
-// It is an alias for WriteConfigFile.
-func CreateConfigFile(path string, optionalConfig ...Config) error {
-	return WriteConfigFile(path, optionalConfig...)
 }
 
 // GetConfig returns the loaded configuration from lifetime memory, or DefaultConfig() if not yet loaded.
@@ -280,7 +247,7 @@ func applyEnvConfigOverrides(config *Config, shouldLog bool) {
 	// Dynamic LAYR__<SECTION>__<FIELD> overrides
 	for _, entry := range os.Environ() {
 		parts := strings.SplitN(entry, "=", 2)
-		if len(parts) == 2 && strings.HasPrefix(parts[0], "LAYR__") {
+		if len(parts) == 2 && strings.HasPrefix(parts[0], "LAYR__") && parts[1] != "" {
 			keyParts := strings.Split(parts[0], "__")
 			section := strings.ToLower(keyParts[1])
 			field := ""
@@ -391,61 +358,23 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 				return "kv_store.cluster_urls", true
 			}
 		}
-	case "data":
-		if field == "enabled" {
-			config.Data.Enabled = parseFlag(value)
-			return "data.enabled", true
-		}
-	case "auth":
-		if field == "enabled" {
-			config.Auth.Enabled = parseFlag(value)
-			return "auth.enabled", true
-		}
-	case "tasks":
-		if field == "enabled" {
-			config.Tasks.Enabled = parseFlag(value)
-			return "tasks.enabled", true
-		}
-	case "file_storage", "filestorage":
-		if field == "enabled" {
-			config.FileStorage.Enabled = parseFlag(value)
-			return "file_storage.enabled", true
-		}
-	case "image":
-		if field == "enabled" {
-			config.Image.Enabled = parseFlag(value)
-			return "image.enabled", true
-		}
-	case "function":
-		if field == "enabled" {
-			config.Function.Enabled = parseFlag(value)
-			return "function.enabled", true
-		}
-	case "console":
+	case "root_user", "rootuser":
 		switch field {
-		case "enabled":
-			config.Console.Enabled = parseFlag(value)
-			return "console.enabled", true
-		case "initial_user_email":
-			config.Console.InitialUserEmail = value
-			return "console.initial_user_email", true
-		case "initial_user_password":
-			config.Console.InitialUserPassword = value
-			return "console.initial_user_password", true
+		case "email":
+			config.RootUser.Email = value
+			return "root_user.email", true
+		case "password":
+			config.RootUser.Password = value
+			return "root_user.password", true
 		}
 	}
 	return "", false
 }
 
-func parseFlag(value string) bool {
-	value = strings.ToLower(strings.TrimSpace(value))
-	return value == "true" || value == "1" || value == "yes" || value == "on"
-}
-
-// ServerBaseURL returns the configured base HTTP URL (e.g. http://localhost:8080).
+// ServerBaseURL returns the configured base HTTP URL (e.g. http://localhost:5297).
 func (config *Config) ServerBaseURL() string {
 	if config == nil || config.Server.BaseURL == "" {
-		return "http://localhost:8080"
+		return "http://localhost:5297"
 	}
 	return config.Server.BaseURL
 }
@@ -523,90 +452,76 @@ func (config *Config) Validate() error {
 	return nil
 }
 
-// HasAnyFunctionalServiceEnabled checks if at least one functional service is active.
-func (config *Config) HasAnyFunctionalServiceEnabled() bool {
-	return config.Data.Enabled ||
-		config.Auth.Enabled ||
-		config.Tasks.Enabled ||
-		config.FileStorage.Enabled ||
-		config.Image.Enabled ||
-		config.Function.Enabled
+// DefaultServices returns the default service names enabled in monolithic mode.
+func DefaultServices() []string {
+	return []string{"data", "auth", "file_storage", "tasks", "image", "function", "console"}
 }
 
-// GetFunctionalServices returns a slice of active functional backend service names (excluding console).
-func (config *Config) GetFunctionalServices() []string {
-	var list []string
-	if config.Data.Enabled {
-		list = append(list, "data")
-	}
-	if config.Auth.Enabled {
-		list = append(list, "auth")
-	}
-	if config.Tasks.Enabled {
-		list = append(list, "tasks")
-	}
-	if config.FileStorage.Enabled {
-		list = append(list, "file_storage")
-	}
-	if config.Image.Enabled {
-		list = append(list, "image")
-	}
-	if config.Function.Enabled {
-		list = append(list, "function")
-	}
-	return list
-}
-
-// GetEnabledServices returns a slice of active service names including console.
-func (config *Config) GetEnabledServices() []string {
-	list := config.GetFunctionalServices()
-	if config.Console.Enabled {
-		list = append(list, "console")
-	}
-	return list
-}
-
-// IsServiceEnabled checks if a specific service is enabled in configuration.
-func (config *Config) IsServiceEnabled(serviceName string) bool {
-	switch strings.ToLower(serviceName) {
-	case "data":
-		return config.Data.Enabled
-	case "auth":
-		return config.Auth.Enabled
-	case "tasks":
-		return config.Tasks.Enabled
-	case "file_storage", "filestorage":
-		return config.FileStorage.Enabled
-	case "image":
-		return config.Image.Enabled
-	case "function":
-		return config.Function.Enabled
-	case "console":
-		return config.Console.Enabled
+// IsValidService checks whether the given service name is a recognized Layr service.
+func IsValidService(serviceName string) bool {
+	switch strings.ToLower(strings.TrimSpace(serviceName)) {
+	case "data", "auth", "file_storage", "tasks", "image", "function", "console":
+		return true
 	default:
 		return false
 	}
 }
 
+// SetEnabledServices sets the list of active services for this configuration instance.
+func (config *Config) SetEnabledServices(services []string) {
+	if len(services) == 0 {
+		config.enabledServices = make([]string, 0)
+		return
+	}
+	config.enabledServices = make([]string, len(services))
+	copy(config.enabledServices, services)
+}
+
+// GetEnabledServices returns a slice of active service names including console.
+func (config *Config) GetEnabledServices() []string {
+	if config.enabledServices == nil {
+		return DefaultServices()
+	}
+	copied := make([]string, len(config.enabledServices))
+	copy(copied, config.enabledServices)
+	return copied
+}
+
+// GetFunctionalServices returns a slice of active functional backend service names (excluding console).
+func (config *Config) GetFunctionalServices() []string {
+	var list []string
+	for _, service := range config.GetEnabledServices() {
+		if strings.ToLower(service) != "console" {
+			list = append(list, service)
+		}
+	}
+	return list
+}
+
+// HasAnyFunctionalServiceEnabled checks if at least one functional service is active.
+func (config *Config) HasAnyFunctionalServiceEnabled() bool {
+	return len(config.GetFunctionalServices()) > 0
+}
+
+// IsServiceEnabled checks if a specific service is enabled in configuration.
+func (config *Config) IsServiceEnabled(serviceName string) bool {
+	target := strings.ToLower(strings.TrimSpace(serviceName))
+	for _, service := range config.GetEnabledServices() {
+		if strings.ToLower(service) == target {
+			return true
+		}
+	}
+	return false
+}
+
 // EnableService dynamically enables a service on config struct.
 func (config *Config) EnableService(serviceName string) error {
-	switch strings.ToLower(serviceName) {
-	case "data":
-		config.Data.Enabled = true
-	case "auth":
-		config.Auth.Enabled = true
-	case "tasks":
-		config.Tasks.Enabled = true
-	case "file_storage", "filestorage":
-		config.FileStorage.Enabled = true
-	case "image":
-		config.Image.Enabled = true
-	case "function":
-		config.Function.Enabled = true
-	case "console":
-		config.Console.Enabled = true
-	default:
-		return fmt.Errorf("unknown service '%s'", serviceName)
+	normalized := strings.ToLower(strings.TrimSpace(serviceName))
+	if !IsValidService(normalized) {
+		return fmt.Errorf("unknown service %q", serviceName)
+	}
+	if !config.IsServiceEnabled(normalized) {
+		config.enabledServices = append(config.GetEnabledServices(), normalized)
 	}
 	return nil
 }

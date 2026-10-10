@@ -13,7 +13,6 @@ import (
 
 func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()

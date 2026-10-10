@@ -2,8 +2,8 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,11 +24,11 @@ func TestCoreConfigDefaultsUnit(t *testing.T) {
 	}
 
 	// Verify server defaults
-	if config.Server.ListenAddr != ":8080" {
-		t.Fatalf("expected listen addr ':8080', got '%s'", config.Server.ListenAddr)
+	if config.Server.ListenAddr != ":5297" {
+		t.Fatalf("expected listen addr ':5297', got '%s'", config.Server.ListenAddr)
 	}
-	if config.Server.BaseURL != "http://localhost:8080" {
-		t.Fatalf("expected base url 'http://localhost:8080', got '%s'", config.Server.BaseURL)
+	if config.Server.BaseURL != "http://localhost:5297" {
+		t.Fatalf("expected base url 'http://localhost:5297', got '%s'", config.Server.BaseURL)
 	}
 
 	// Verify database defaults
@@ -62,21 +62,16 @@ func TestCoreConfigDefaultsUnit(t *testing.T) {
 		t.Fatalf("expected kv_store backend 'database', got '%s'", config.KVStore.Backend)
 	}
 
-	// Verify Console, Data, Auth, and FileStorage default to true, other functional services default to false
-	if !config.Console.Enabled {
-		t.Fatal("expected console.enabled to default to true")
+	// Verify all default services are enabled
+	if len(config.GetEnabledServices()) != 7 {
+		t.Fatalf("expected 7 default enabled services, got %d", len(config.GetEnabledServices()))
 	}
-	if !config.Data.Enabled {
-		t.Fatal("expected data.enabled to default to true")
-	}
-	if !config.Auth.Enabled {
-		t.Fatal("expected auth.enabled to default to true")
-	}
-	if !config.FileStorage.Enabled {
-		t.Fatal("expected file_storage.enabled to default to true")
-	}
-	if config.Tasks.Enabled || config.Image.Enabled || config.Function.Enabled {
-		t.Fatal("expected tasks, image, and function to default to false")
+	for _, expectedService := range DefaultServices() {
+		t.Run(expectedService, func(t *testing.T) {
+			if !config.IsServiceEnabled(expectedService) {
+				t.Fatalf("expected default service %q to be enabled", expectedService)
+			}
+		})
 	}
 }
 
@@ -94,7 +89,7 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 		{inputName: "TASKS", canonicalField: "tasks"},
 		{inputName: "Tasks", canonicalField: "tasks"},
 		{inputName: "FILE_STORAGE", canonicalField: "file_storage"},
-		{inputName: "FileStorage", canonicalField: "file_storage"},
+		{inputName: "File_Storage", canonicalField: "file_storage"},
 		{inputName: "IMAGE", canonicalField: "image"},
 		{inputName: "Image", canonicalField: "image"},
 		{inputName: "FUNCTION", canonicalField: "function"},
@@ -106,14 +101,22 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 	for _, tableTest := range caseVariations {
 		t.Run(tableTest.inputName, func(t *testing.T) {
 			config := DefaultConfig()
+			config.SetEnabledServices([]string{})
 			if err := config.EnableService(tableTest.inputName); err != nil {
 				t.Fatalf("expected success enabling service '%s', got: %v", tableTest.inputName, err)
+			}
+			// Redundant enablement must succeed and be a no-op
+			if err := config.EnableService(tableTest.inputName); err != nil {
+				t.Fatalf("expected success re-enabling service '%s', got: %v", tableTest.inputName, err)
 			}
 			if !config.IsServiceEnabled(tableTest.inputName) {
 				t.Fatalf("expected service '%s' to be reported as enabled", tableTest.inputName)
 			}
 			if !config.IsServiceEnabled(tableTest.canonicalField) {
 				t.Fatalf("expected canonical service '%s' to be reported as enabled", tableTest.canonicalField)
+			}
+			if !IsValidService(tableTest.inputName) {
+				t.Fatalf("expected IsValidService to be true for '%s'", tableTest.inputName)
 			}
 		})
 	}
@@ -131,18 +134,19 @@ func TestCoreConfigEnableServiceEdgeCasesUnit(t *testing.T) {
 			if config.IsServiceEnabled(invalidName) {
 				t.Fatalf("expected invalid service '%s' to not be enabled", invalidName)
 			}
+			if IsValidService(invalidName) {
+				t.Fatalf("expected IsValidService to be false for '%s'", invalidName)
+			}
 		})
 	}
 }
 
 func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
-	// 1. Zero functional services enabled
+	// 1. Zero functional services enabled (console only)
 	config := DefaultConfig()
-	config.Data.Enabled = false
-	config.Auth.Enabled = false
-	config.FileStorage.Enabled = false
+	config.SetEnabledServices([]string{"console"})
 	if config.HasAnyFunctionalServiceEnabled() {
-		t.Fatal("expected HasAnyFunctionalServiceEnabled to be false on fresh default config")
+		t.Fatal("expected HasAnyFunctionalServiceEnabled to be false when only console is enabled")
 	}
 	if len(config.GetFunctionalServices()) != 0 {
 		t.Fatalf("expected 0 functional services, got %d", len(config.GetFunctionalServices()))
@@ -157,13 +161,7 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	for _, serviceName := range allFunctionalServices {
 		t.Run(serviceName, func(t *testing.T) {
 			singleServiceConfig := DefaultConfig()
-			singleServiceConfig.Data.Enabled = false
-			singleServiceConfig.Auth.Enabled = false
-			singleServiceConfig.FileStorage.Enabled = false
-			singleServiceConfig.Console.Enabled = false
-			if err := singleServiceConfig.EnableService(serviceName); err != nil {
-				t.Fatalf("failed to enable service '%s': %v", serviceName, err)
-			}
+			singleServiceConfig.SetEnabledServices([]string{serviceName})
 			if !singleServiceConfig.HasAnyFunctionalServiceEnabled() {
 				t.Fatalf("expected HasAnyFunctionalServiceEnabled true for '%s'", serviceName)
 			}
@@ -180,9 +178,7 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 
 	// 3. All 6 functional services enabled with console enabled
 	allEnabledConfig := DefaultConfig()
-	for _, serviceName := range allFunctionalServices {
-		_ = allEnabledConfig.EnableService(serviceName)
-	}
+	allEnabledConfig.SetEnabledServices([]string{"data", "auth", "tasks", "file_storage", "image", "function", "console"})
 	if !allEnabledConfig.HasAnyFunctionalServiceEnabled() {
 		t.Fatal("expected HasAnyFunctionalServiceEnabled true when all services are enabled")
 	}
@@ -194,9 +190,22 @@ func TestCoreConfigServiceQueriesAndAggregationUnit(t *testing.T) {
 	}
 
 	// 4. All 6 functional services enabled with console disabled
-	allEnabledConfig.Console.Enabled = false
+	allEnabledConfig.SetEnabledServices([]string{"data", "auth", "tasks", "file_storage", "image", "function"})
 	if len(allEnabledConfig.GetEnabledServices()) != 6 {
 		t.Fatalf("expected 6 total enabled services when console is disabled, got %d", len(allEnabledConfig.GetEnabledServices()))
+	}
+
+	// 5. SetEnabledServices(nil) defaults to empty slice
+	emptyConfig := DefaultConfig()
+	emptyConfig.SetEnabledServices(nil)
+	if len(emptyConfig.GetEnabledServices()) != 0 {
+		t.Fatalf("expected 0 services when SetEnabledServices(nil) is called, got %d", len(emptyConfig.GetEnabledServices()))
+	}
+
+	// 6. Config with uninitialized enabledServices slice returns DefaultServices()
+	uninitializedConfig := &Config{}
+	if len(uninitializedConfig.GetEnabledServices()) != 7 {
+		t.Fatalf("expected DefaultServices() on uninitialized config, got %d", len(uninitializedConfig.GetEnabledServices()))
 	}
 }
 
@@ -207,7 +216,6 @@ func TestCoreConfigValidationVersionEdgeCasesUnit(t *testing.T) {
 	for _, invalidVersion := range invalidVersions {
 		t.Run(fmt.Sprintf("%q", invalidVersion), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Version = invalidVersion
 
@@ -225,7 +233,6 @@ func TestCoreConfigValidationDatabaseURLEdgeCasesUnit(t *testing.T) {
 	for _, invalidURL := range invalidURLs {
 		t.Run(fmt.Sprintf("%q", invalidURL), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.URL = invalidURL
 
@@ -244,7 +251,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, invalidMax := range invalidMaxConnections {
 		t.Run(fmt.Sprintf("InvalidMaxConn_%d", invalidMax), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxConnections = invalidMax
 			if err := config.Validate(); err == nil {
@@ -257,7 +263,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validMax := range []int{1, 100, 1000} {
 		t.Run(fmt.Sprintf("ValidMaxConn_%d", validMax), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxConnections = validMax
 			config.Database.MinConnections = 1
@@ -280,7 +285,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, tableTest := range invalidMinConnections {
 		t.Run(fmt.Sprintf("InvalidMinConn_%d_Max_%d", tableTest.min, tableTest.max), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxConnections = tableTest.max
 			config.Database.MinConnections = tableTest.min
@@ -294,7 +298,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validMin := range []int{0, 25} {
 		t.Run(fmt.Sprintf("ValidMinConn_%d", validMin), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxConnections = 25
 			config.Database.MinConnections = validMin
@@ -309,7 +312,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, timeout := range invalidConnectionTimeouts {
 		t.Run(fmt.Sprintf("InvalidConnTimeout_%d", timeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.ConnectionTimeoutMs = timeout
 			if err := config.Validate(); err == nil {
@@ -320,7 +322,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validTimeout := range []int{100, 5000, 60000} {
 		t.Run(fmt.Sprintf("ValidConnTimeout_%d", validTimeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.ConnectionTimeoutMs = validTimeout
 			if err := config.Validate(); err != nil {
@@ -334,7 +335,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, timeout := range invalidIdleTimeouts {
 		t.Run(fmt.Sprintf("InvalidIdleTimeout_%d", timeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.IdleTimeoutMs = timeout
 			if err := config.Validate(); err == nil {
@@ -345,7 +345,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validTimeout := range []int{1000, 300000, 86400000} {
 		t.Run(fmt.Sprintf("ValidIdleTimeout_%d", validTimeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.IdleTimeoutMs = validTimeout
 			if err := config.Validate(); err != nil {
@@ -359,7 +358,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, timeout := range invalidMaxLifetimes {
 		t.Run(fmt.Sprintf("InvalidMaxLifetime_%d", timeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxLifetimeMs = timeout
 			if err := config.Validate(); err == nil {
@@ -370,7 +368,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validTimeout := range []int{1000, 1800000, 86400000} {
 		t.Run(fmt.Sprintf("ValidMaxLifetime_%d", validTimeout), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.MaxLifetimeMs = validTimeout
 			if err := config.Validate(); err != nil {
@@ -384,7 +381,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, period := range invalidHealthChecks {
 		t.Run(fmt.Sprintf("InvalidHealthCheck_%d", period), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.HealthCheckPeriodMs = period
 			if err := config.Validate(); err == nil {
@@ -395,7 +391,6 @@ func TestCoreConfigValidationDatabasePoolBoundariesUnit(t *testing.T) {
 	for _, validPeriod := range []int{1000, 15000, 3600000} {
 		t.Run(fmt.Sprintf("ValidHealthCheck_%d", validPeriod), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.HealthCheckPeriodMs = validPeriod
 			if err := config.Validate(); err != nil {
@@ -413,7 +408,6 @@ func TestCoreConfigValidationSSLModeEdgeCasesUnit(t *testing.T) {
 	for _, sslMode := range validSSLModes {
 		t.Run(fmt.Sprintf("Valid_%s", sslMode), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.SSLMode = sslMode
 
@@ -428,7 +422,6 @@ func TestCoreConfigValidationSSLModeEdgeCasesUnit(t *testing.T) {
 	for _, sslMode := range invalidSSLModes {
 		t.Run(fmt.Sprintf("Invalid_%s", sslMode), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.Database.SSLMode = sslMode
 
@@ -444,7 +437,6 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 	for _, emptyKey := range []string{"", "   ", "\t\n"} {
 		t.Run(fmt.Sprintf("%q", emptyKey), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = emptyKey
 			if err := config.Validate(); err == nil {
 				t.Fatalf("expected validation error for empty master key '%s'", emptyKey)
@@ -464,7 +456,6 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 	for _, invalidLengthKey := range invalidLengthKeys {
 		t.Run(fmt.Sprintf("Len_%d", len(invalidLengthKey)), func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = invalidLengthKey
 			if err := config.Validate(); err == nil {
 				t.Fatalf("expected validation error for master key with length %d", len(invalidLengthKey))
@@ -483,7 +474,6 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 	for _, invalidHexKey := range invalidHexKeys {
 		t.Run(invalidHexKey, func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = invalidHexKey
 			if err := config.Validate(); err == nil {
 				t.Fatalf("expected validation error for non-hex master key: %s", invalidHexKey)
@@ -501,7 +491,6 @@ func TestCoreConfigValidationMasterEncryptionKeyEdgeCasesUnit(t *testing.T) {
 	for _, validHexKey := range validHexKeys {
 		t.Run(validHexKey, func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			if err := config.Validate(); err != nil {
 				t.Fatalf("expected valid configuration for hex key, got: %v", err)
@@ -517,7 +506,6 @@ func TestCoreConfigValidationKVStoreEdgeCasesUnit(t *testing.T) {
 	for _, invalidBackend := range []string{"memcached", "memory", "dynamodb", "bad_backend", "123"} {
 		t.Run(invalidBackend, func(t *testing.T) {
 			config := DefaultConfig()
-			config.Data.Enabled = true
 			config.Security.MasterEncryptionKey = validHexKey
 			config.KVStore.Backend = invalidBackend
 			if err := config.Validate(); err == nil {
@@ -528,7 +516,6 @@ func TestCoreConfigValidationKVStoreEdgeCasesUnit(t *testing.T) {
 
 	// Redis backend with missing URL and missing ClusterURLs
 	config := DefaultConfig()
-	config.Data.Enabled = true
 	config.Security.MasterEncryptionKey = validHexKey
 	config.KVStore.Backend = "redis"
 	config.KVStore.URL = ""
@@ -577,11 +564,8 @@ func TestCoreConfigValidationMinimumFunctionalServiceInvariantUnit(t *testing.T)
 
 	// Zero functional services enabled (even if Console is enabled)
 	zeroServiceConfig := DefaultConfig()
-	zeroServiceConfig.Data.Enabled = false
-	zeroServiceConfig.Auth.Enabled = false
-	zeroServiceConfig.FileStorage.Enabled = false
+	zeroServiceConfig.SetEnabledServices([]string{"console"})
 	zeroServiceConfig.Security.MasterEncryptionKey = validHexKey
-	zeroServiceConfig.Console.Enabled = true
 	if err := zeroServiceConfig.Validate(); err == nil {
 		t.Fatal("expected Minimum Functional Service Invariant error when zero functional services enabled")
 	}
@@ -592,35 +576,9 @@ func TestCoreConfigValidationMinimumFunctionalServiceInvariantUnit(t *testing.T)
 		t.Run(serviceName, func(t *testing.T) {
 			validServiceConfig := DefaultConfig()
 			validServiceConfig.Security.MasterEncryptionKey = validHexKey
-			_ = validServiceConfig.EnableService(serviceName)
+			validServiceConfig.SetEnabledServices([]string{serviceName})
 			if err := validServiceConfig.Validate(); err != nil {
 				t.Fatalf("expected service '%s' to satisfy minimum functional service invariant, got: %v", serviceName, err)
-			}
-		})
-	}
-}
-
-func TestCoreConfigParseBooleanExhaustiveEdgeCasesUnit(t *testing.T) {
-	truthyCases := []string{
-		"true", "TRUE", "True", "tRuE", "1", "yes", "YES", "Yes", "yEs", "on", "ON", "On",
-		"  true  ", "\t1\t", " yes\n", " ON ",
-	}
-	for _, truthyCase := range truthyCases {
-		t.Run(fmt.Sprintf("%q", truthyCase), func(t *testing.T) {
-			if !parseFlag(truthyCase) {
-				t.Fatalf("expected truthy result for input '%s'", truthyCase)
-			}
-		})
-	}
-
-	falsyCases := []string{
-		"false", "FALSE", "False", "0", "no", "NO", "No", "off", "OFF", "Off",
-		"", "   ", "\t\n", "none", "null", "undefined", "invalid", "-1", "2", "truee", "yess", "00",
-	}
-	for _, falsyCase := range falsyCases {
-		t.Run(fmt.Sprintf("%q", falsyCase), func(t *testing.T) {
-			if parseFlag(falsyCase) {
-				t.Fatalf("expected falsy result for input '%s'", falsyCase)
 			}
 		})
 	}
@@ -654,16 +612,9 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 		"LAYR__KV_STORE__BACKEND":      "REDIS",
 		"LAYR__KV_STORE__URL":          "redis://custom:6379",
 		"LAYR__KV_STORE__CLUSTER_URLS": "  redis://cluster-1:6379 , , redis://cluster-2:6379  , ",
-		// Services
-		"LAYR__DATA__ENABLED":                  "true",
-		"LAYR__AUTH__ENABLED":                  "1",
-		"LAYR__TASKS__ENABLED":                 "yes",
-		"LAYR__FILE_STORAGE__ENABLED":          "on",
-		"LAYR__IMAGE__ENABLED":                 "YES",
-		"LAYR__FUNCTION__ENABLED":              "true",
-		"LAYR__CONSOLE__ENABLED":               "true",
-		"LAYR__CONSOLE__INITIAL_USER_EMAIL":    "console_user@layr.sh",
-		"LAYR__CONSOLE__INITIAL_USER_PASSWORD": "supersecretconsolepassword",
+		// Root User
+		"LAYR__ROOT_USER__EMAIL":    "console_user@layr.sh",
+		"LAYR__ROOT_USER__PASSWORD": "supersecretconsolepassword",
 	}
 
 	for environmentKey, environmentValue := range environmentMap {
@@ -713,22 +664,21 @@ func TestCoreConfigApplyEnvConfigOverridesExhaustiveFieldsUnit(t *testing.T) {
 		t.Fatalf("kv store overrides failed: %+v", config.KVStore)
 	}
 
-	// Validate Services enablement
-	if !config.Data.Enabled || !config.Auth.Enabled || !config.Tasks.Enabled ||
-		!config.FileStorage.Enabled || !config.Image.Enabled || !config.Function.Enabled {
-		t.Fatal("service boolean overrides failed")
-	}
-
-	// Validate Console fields
-	if !config.Console.Enabled ||
-		config.Console.InitialUserEmail != "console_user@layr.sh" ||
-		config.Console.InitialUserPassword != "supersecretconsolepassword" {
-		t.Fatalf("console overrides failed: %+v", config.Console)
+	// Validate Root User fields
+	if config.RootUser.Email != "console_user@layr.sh" ||
+		config.RootUser.Password != "supersecretconsolepassword" {
+		t.Fatalf("root_user overrides failed: %+v", config.RootUser)
 	}
 }
 
 func TestCoreConfigApplyEnvConfigOverridesAliasesAndMalformedInputsUnit(t *testing.T) {
 	validHexKey := strings.Repeat("9", 64)
+
+	// Ensure ambient LAYR__ vars do not overshadow aliases under test
+	t.Setenv("LAYR__DATABASE__URL", "")
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "")
+	t.Setenv("LAYR__SERVER__LISTEN_ADDR", "")
+	t.Setenv("LAYR__SERVER__BASE_URL", "")
 
 	// Test Top-level aliases: DATABASE_URL, MASTER_ENCRYPTION_KEY, PORT, BASE_URL
 	t.Setenv("DATABASE_URL", "postgres://alias@localhost:5432/aliasdb")
@@ -795,7 +745,8 @@ func TestCoreConfigApplyEnvConfigOverridesAliasesAndMalformedInputsUnit(t *testi
 	applyEnvConfigField(config, "unknown_section", "field", "value")
 	applyEnvConfigField(config, "project", "unknown_field", "value")
 	applyEnvConfigField(config, "security", "unknown_field", "value")
-	applyEnvConfigField(config, "console", "unknown_field", "value")
+	applyEnvConfigField(config, "root_user", "unknown_field", "value")
+	applyEnvConfigField(config, "rootuser", "unknown_field", "value")
 }
 
 func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
@@ -809,8 +760,8 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 	}
 
 	// ServerBaseURL verification on default
-	if defaultConfig.ServerBaseURL() != "http://localhost:8080" {
-		t.Fatalf("expected http://localhost:8080, got: %s", defaultConfig.ServerBaseURL())
+	if defaultConfig.ServerBaseURL() != "http://localhost:5297" {
+		t.Fatalf("expected http://localhost:5297, got: %s", defaultConfig.ServerBaseURL())
 	}
 
 	// SetLoadedConfig custom config
@@ -830,12 +781,12 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 
 	// Nil receiver or empty base url ServerBaseURL
 	var nilConfig *Config
-	if nilConfig.ServerBaseURL() != "http://localhost:8080" {
+	if nilConfig.ServerBaseURL() != "http://localhost:5297" {
 		t.Fatalf("expected fallback for nil config, got: %s", nilConfig.ServerBaseURL())
 	}
 
 	emptyBaseURLConfig := &Config{}
-	if emptyBaseURLConfig.ServerBaseURL() != "http://localhost:8080" {
+	if emptyBaseURLConfig.ServerBaseURL() != "http://localhost:5297" {
 		t.Fatalf("expected fallback for empty base url, got: %s", emptyBaseURLConfig.ServerBaseURL())
 	}
 
@@ -847,21 +798,33 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 	}
 }
 
-func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
+func TestCoreConfigLoadConfigUnit(t *testing.T) {
 	t.Cleanup(UnloadConfig)
-	tempDir := t.TempDir()
-	targetPath := filepath.Join(tempDir, "sub", "config.yaml")
 
-	t.Setenv("PORT", "9123")
-	t.Setenv("LAYR__PROJECT__NAME", "Env Written App")
-
-	if writeErr := WriteConfigFile(targetPath); writeErr != nil {
-		t.Fatalf("unexpected write config file error: %v", writeErr)
+	// 1. Default config when no env vars set
+	defaultConfig, defaultErr := LoadConfig()
+	if defaultErr != nil {
+		t.Fatalf("unexpected load config error: %v", defaultErr)
+	}
+	if defaultConfig.Project.Name != "layr-app" {
+		t.Errorf("expected default project name 'layr-app', got %q", defaultConfig.Project.Name)
+	}
+	if defaultConfig.Server.ListenAddr != ":5297" {
+		t.Errorf("expected default listen addr ':5297', got %q", defaultConfig.Server.ListenAddr)
+	}
+	if defaultConfig.RootUser.Email != "root@layr.local" {
+		t.Errorf("expected default root user email 'root@layr.local', got %q", defaultConfig.RootUser.Email)
 	}
 
-	loadedConfig, loadErr := LoadConfig(targetPath)
+	// 2. Load with environment variable overrides
+	t.Setenv("PORT", "9123")
+	t.Setenv("LAYR__PROJECT__NAME", "Env Written App")
+	t.Setenv("LAYR__ROOT_USER__EMAIL", "custom_root@layr.sh")
+	t.Setenv("LAYR__ROOT_USER__PASSWORD", "custom_password")
+
+	loadedConfig, loadErr := LoadConfig()
 	if loadErr != nil {
-		t.Fatalf("unexpected load config file error: %v", loadErr)
+		t.Fatalf("unexpected load config error: %v", loadErr)
 	}
 
 	if loadedConfig.Server.ListenAddr != ":9123" {
@@ -870,125 +833,80 @@ func TestCoreConfigWriteConfigFileDefaultUnit(t *testing.T) {
 	if loadedConfig.Project.Name != "Env Written App" {
 		t.Errorf("expected project name 'Env Written App', got %q", loadedConfig.Project.Name)
 	}
-	const expectedKeyLength = 64
-	if len(loadedConfig.Security.MasterEncryptionKey) != expectedKeyLength {
-		t.Errorf("expected 64-char hex master encryption key, got %q", loadedConfig.Security.MasterEncryptionKey)
+	if loadedConfig.RootUser.Email != "custom_root@layr.sh" {
+		t.Errorf("expected root user email 'custom_root@layr.sh', got %q", loadedConfig.RootUser.Email)
+	}
+	if loadedConfig.RootUser.Password != "custom_password" {
+		t.Errorf("expected root user password 'custom_password', got %q", loadedConfig.RootUser.Password)
+	}
+
+	// 3. Load with non-existent env file path ignores missing file
+	nonExistentConfig, nonExistentErr := LoadConfig("nonexistent_env_file.env")
+	if nonExistentErr != nil || nonExistentConfig == nil {
+		t.Fatalf("expected nil error on nonexistent env file, got %v", nonExistentErr)
+	}
+
+	// 4. Load with empty string path
+	emptyConfig, emptyErr := LoadConfig("")
+	if emptyErr != nil || emptyConfig == nil {
+		t.Fatalf("expected nil error on empty path, got %v", emptyErr)
+	}
+
+	// 5. Load with directory path returns error
+	tempDir := t.TempDir()
+	if _, dirErr := LoadConfig(tempDir); dirErr == nil {
+		t.Fatal("expected error when loading directory as env file, got nil")
 	}
 }
 
-func TestCoreConfigWriteConfigFileCustomUnit(t *testing.T) {
-	t.Cleanup(UnloadConfig)
+func TestCoreConfigLoadEnvFileUnit(t *testing.T) {
 	tempDir := t.TempDir()
-	targetPath := filepath.Join(tempDir, "custom.yaml")
+	envPath := filepath.Join(tempDir, ".env.test")
 
-	customConfig := *DefaultConfig()
-	customConfig.Project.Name = "Explicit Custom App"
-	customConfig.Server.ListenAddr = ":443"
-	customConfig.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-
-	if writeErr := WriteConfigFile(targetPath, customConfig); writeErr != nil {
-		t.Fatalf("unexpected write error: %v", writeErr)
+	content := `
+# Comment line
+KEY_PLAIN=value_plain
+KEY_DOUBLE="value_double"
+KEY_SINGLE='value_single'
+KEY_TRIMMED =  value_trimmed  
+INVALID_LINE_NO_EQUALS
+# Another comment
+`
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write test env file: %v", err)
 	}
 
-	loadedConfig, loadErr := LoadConfig(targetPath)
-	if loadErr != nil {
-		t.Fatalf("unexpected load error: %v", loadErr)
+	if err := LoadEnvFile(envPath); err != nil {
+		t.Fatalf("LoadEnvFile failed: %v", err)
 	}
 
-	if loadedConfig.Project.Name != "Explicit Custom App" {
-		t.Errorf("expected 'Explicit Custom App', got %q", loadedConfig.Project.Name)
+	if envValue := os.Getenv("KEY_PLAIN"); envValue != "value_plain" {
+		t.Fatalf("expected KEY_PLAIN to be value_plain, got %q", envValue)
 	}
-	if loadedConfig.Server.ListenAddr != ":443" {
-		t.Errorf("expected ':443', got %q", loadedConfig.Server.ListenAddr)
+	if envValue := os.Getenv("KEY_DOUBLE"); envValue != "value_double" {
+		t.Fatalf("expected KEY_DOUBLE to be value_double, got %q", envValue)
 	}
-	if loadedConfig.Security.MasterEncryptionKey != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
-		t.Errorf("expected preserved master encryption key, got %q", loadedConfig.Security.MasterEncryptionKey)
+	if envValue := os.Getenv("KEY_SINGLE"); envValue != "value_single" {
+		t.Fatalf("expected KEY_SINGLE to be value_single, got %q", envValue)
 	}
-
-	emptyKeyPath := filepath.Join(tempDir, "custom_empty_key.yaml")
-	customEmptyMasterEncryptionKeyConfig := *DefaultConfig()
-	customEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey = ""
-	if writeEmptyErr := WriteConfigFile(emptyKeyPath, customEmptyMasterEncryptionKeyConfig); writeEmptyErr != nil {
-		t.Fatalf("unexpected write error: %v", writeEmptyErr)
-	}
-	loadedEmptyMasterEncryptionKeyConfig, loadEmptyErr := LoadConfig(emptyKeyPath)
-	if loadEmptyErr != nil {
-		t.Fatalf("unexpected load error: %v", loadEmptyErr)
-	}
-	const expectedKeyLength = 64
-	if len(loadedEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey) != expectedKeyLength {
-		t.Errorf("expected generated 64-char hex key, got %q", loadedEmptyMasterEncryptionKeyConfig.Security.MasterEncryptionKey)
-	}
-}
-
-func TestCoreConfigWriteConfigFileEnvSecurityKeyUnit(t *testing.T) {
-	t.Cleanup(UnloadConfig)
-	tempDir := t.TempDir()
-	targetPath := filepath.Join(tempDir, "env_security.yaml")
-
-	expectedKey := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", expectedKey)
-
-	if writeErr := WriteConfigFile(targetPath); writeErr != nil {
-		t.Fatalf("unexpected write error: %v", writeErr)
+	if envValue := os.Getenv("KEY_TRIMMED"); envValue != "value_trimmed" {
+		t.Fatalf("expected KEY_TRIMMED to be value_trimmed, got %q", envValue)
 	}
 
-	loadedConfig, loadErr := LoadConfig(targetPath)
-	if loadErr != nil {
-		t.Fatalf("unexpected load error: %v", loadErr)
+	// Missing env file
+	missingErr := LoadEnvFile(filepath.Join(tempDir, "nonexistent.env"))
+	if missingErr == nil {
+		t.Fatal("expected error reading nonexistent env file, got nil")
 	}
 
-	if loadedConfig.Security.MasterEncryptionKey != expectedKey {
-		t.Errorf("expected master encryption key from env %q, got %q", expectedKey, loadedConfig.Security.MasterEncryptionKey)
+	// Invalid environment variable key (null byte fails os.Setenv)
+	badKeyPath := filepath.Join(tempDir, ".env.bad")
+	if err := os.WriteFile(badKeyPath, []byte("\x00BAD=value"), 0o600); err != nil {
+		t.Fatalf("failed to write bad env file: %v", err)
 	}
-}
-
-func TestCoreConfigCreateConfigFileAliasUnit(t *testing.T) {
-	t.Cleanup(UnloadConfig)
-	tempDir := t.TempDir()
-	targetPath := filepath.Join(tempDir, "alias.yaml")
-
-	if createErr := CreateConfigFile(targetPath); createErr != nil {
-		t.Fatalf("unexpected create error: %v", createErr)
-	}
-
-	loadedConfig, loadErr := LoadConfig(targetPath)
-	if loadErr != nil {
-		t.Fatalf("unexpected load error: %v", loadErr)
-	}
-
-	if loadedConfig.Project.Name != "layr-app" {
-		t.Errorf("expected 'layr-app', got %q", loadedConfig.Project.Name)
-	}
-}
-
-func TestCoreConfigWriteConfigFileErrorsUnit(t *testing.T) {
-	// Empty path error
-	if emptyPathErr := WriteConfigFile(""); emptyPathErr == nil {
-		t.Fatal("expected error for empty path, got nil")
-	}
-
-	// Directory creation error
-	invalidDirPath := filepath.Join("/dev/null", "cannot_mkdir", "config.yaml")
-	if dirCreationErr := WriteConfigFile(invalidDirPath); dirCreationErr == nil {
-		t.Fatal("expected error creating directory under /dev/null, got nil")
-	}
-
-	// Write file error (target path is an existing directory)
-	tempDir := t.TempDir()
-	if writeDirErr := WriteConfigFile(tempDir); writeDirErr == nil {
-		t.Fatal("expected error writing to directory path, got nil")
-	}
-
-	// YAML marshal error
-	originalMarshal := yamlMarshal
-	defer func() { yamlMarshal = originalMarshal }()
-	yamlMarshal = func(_ any) ([]byte, error) {
-		return nil, errors.New("simulated marshal error")
-	}
-	marshalErrorPath := filepath.Join(tempDir, "marshal_fail.yaml")
-	if marshalErr := WriteConfigFile(marshalErrorPath); marshalErr == nil {
-		t.Fatal("expected marshal error, got nil")
+	badKeyErr := LoadEnvFile(badKeyPath)
+	if badKeyErr == nil {
+		t.Fatal("expected error setting invalid environment variable, got nil")
 	}
 }
 
@@ -997,9 +915,6 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 	var buffer bytes.Buffer
 	log.SetOutput(&buffer)
 	defer log.SetOutput(nil)
-
-	tempDir := t.TempDir()
-	targetConfigFile := filepath.Join(tempDir, "verbose_test.yaml")
 
 	// Test programmatic SetVerboseLogging
 	log.SetVerboseLogging(true)
@@ -1012,17 +927,8 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 	t.Setenv("LAYR__PROJECT__NAME", "Verbose App")
 	t.Setenv("LAYR__SERVER__LISTEN_ADDR", ":8888")
 
-	// 1. WriteConfigFile must NEVER print "Overriding %s from ENV" messages
-	if writeErr := WriteConfigFile(targetConfigFile); writeErr != nil {
-		t.Fatalf("unexpected write error: %v", writeErr)
-	}
-	if buffer.Len() != 0 {
-		t.Errorf("expected WriteConfigFile NOT to log any override messages, but got:\n%s", buffer.String())
-	}
-	buffer.Reset()
-
-	// 2. LoadConfig MUST print "Overriding %s from ENV" messages when verbose logging is enabled
-	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+	// 1. LoadConfig MUST print "Overriding %s from ENV" messages when verbose logging is enabled
+	if _, loadErr := LoadConfig(); loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 
@@ -1043,22 +949,22 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 		})
 	}
 
-	// 3. Test disabled logging: LoadConfig must not log
+	// 2. Test disabled logging: LoadConfig must not log
 	log.SetVerboseLogging(false)
 	buffer.Reset()
 	t.Setenv("LOG_LEVEL", "")
 	t.Setenv("LAYR_LOG_LEVEL", "")
-	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+	if _, loadErr := LoadConfig(); loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 	if buffer.Len() != 0 {
 		t.Errorf("expected no logs when verbose logging is disabled, got %q", buffer.String())
 	}
 
-	// 4. Test enabled via LOG_LEVEL=debug environment variable: LoadConfig must log
+	// 3. Test enabled via LOG_LEVEL=debug environment variable: LoadConfig must log
 	t.Setenv("LOG_LEVEL", "debug")
 	buffer.Reset()
-	if _, loadErr := LoadConfig(targetConfigFile); loadErr != nil {
+	if _, loadErr := LoadConfig(); loadErr != nil {
 		t.Fatalf("unexpected load error: %v", loadErr)
 	}
 	if !strings.Contains(buffer.String(), "Overriding server.port from ENV") {
