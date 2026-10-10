@@ -105,11 +105,10 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "passkeys", "sign_up"),
 		core.RouteSDKMethodName("begin"),
 	)
-	core.PostRoute[core.Empty, VerifyPasskeySignUpInput](router, "/v1/auth/passkeys/sign-up/verify", service.baseHandler.handleVerifyPasskeySignUp,
+	core.PostRoute[AuthTokenResponse, VerifyPasskeySignUpInput](router, "/v1/auth/passkeys/sign-up/verify", service.baseHandler.handleVerifyPasskeySignUp,
 		core.RouteTag("Passkeys"),
 		core.RouteSummary("Verify WebAuthn passkey registration attestation"),
-		core.RouteDescription("Validates the WebAuthn attestation response and stores the public key credential in auth.identities."),
-		core.RouteNoContentResponse("Passkey verified and registered"),
+		core.RouteDescription("Validates the WebAuthn attestation response, stores credentials, and issues an authenticated session."),
 		core.RouteOperationID("auth__passkeys__sign_up__verify"),
 		core.RouteSDKGroupName("auth", "passkeys", "sign_up"),
 		core.RouteSDKMethodName("verify"),
@@ -250,37 +249,37 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	router.Mux().HandleFunc("POST /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
 
 	// 8. Device & Session Management
-	core.GetRoute[ListSessionsResponse](router, "/v1/auth/sessions", service.baseHandler.handleListSessions,
-		core.RouteTag("Authentication"),
+	core.GetRoute[ListSessionsResponse](router, "/v1/auth/user/sessions", service.baseHandler.handleListSessions,
+		core.RouteTag("User Self-Service"),
 		core.RouteSummary("List active sessions for current user"),
 		core.RouteDescription("Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker."),
-		core.RouteOperationID("auth__sessions__list"),
-		core.RouteSDKGroupName("auth", "sessions"),
+		core.RouteOperationID("auth__user__sessions__list"),
+		core.RouteSDKGroupName("auth", "user", "sessions"),
 		core.RouteSDKMethodName("list"),
 	)
-	core.DeleteRoute[core.Empty](router, "/v1/auth/sessions/{session_id}", service.baseHandler.handleRevokeSession,
-		core.RouteTag("Authentication"),
+	core.DeleteRoute[core.Empty](router, "/v1/auth/user/sessions/{session_id}", service.baseHandler.handleRevokeSession,
+		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Revoke specific user session"),
 		core.RouteDescription("Revokes an active session by session ID belonging to the authenticated user."),
 		core.RouteNoContentResponse("Session revoked"),
-		core.RouteOperationID("auth__sessions__revoke"),
-		core.RouteSDKGroupName("auth", "sessions"),
+		core.RouteOperationID("auth__user__sessions__revoke"),
+		core.RouteSDKGroupName("auth", "user", "sessions"),
 		core.RouteSDKMethodName("revoke"),
 	)
-	core.PostRoute[RevokeOtherSessionsResponse, core.Empty](router, "/v1/auth/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions,
-		core.RouteTag("Authentication"),
+	core.PostRoute[RevokeOtherSessionsResponse, core.Empty](router, "/v1/auth/user/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions,
+		core.RouteTag("User Self-Service"),
 		core.RouteSummary("Sign out of all other devices"),
 		core.RouteDescription("Revokes all active sessions for the current user except the currently active device session."),
 		core.RouteNoRequestBody(),
-		core.RouteOperationID("auth__sessions__revoke_others"),
-		core.RouteSDKGroupName("auth", "sessions"),
+		core.RouteOperationID("auth__user__sessions__revoke_others"),
+		core.RouteSDKGroupName("auth", "user", "sessions"),
 		core.RouteSDKMethodName("revoke_others"),
 	)
 
-	// Session management user-prefixed aliases
-	router.Mux().HandleFunc("GET /v1/auth/user/sessions", service.baseHandler.handleListSessions)
-	router.Mux().HandleFunc("DELETE /v1/auth/user/sessions/{session_id}", service.baseHandler.handleRevokeSession)
-	router.Mux().HandleFunc("POST /v1/auth/user/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
+	// Backward-compatibility aliases for legacy /v1/auth/sessions paths
+	router.Mux().HandleFunc("GET /v1/auth/sessions", service.baseHandler.handleListSessions)
+	router.Mux().HandleFunc("DELETE /v1/auth/sessions/{session_id}", service.baseHandler.handleRevokeSession)
+	router.Mux().HandleFunc("POST /v1/auth/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
 
 	// 9. User Self-Service Account Management
 	core.GetRoute[GetUserResponse](router, "/v1/auth/user", service.baseHandler.handleGetUser,

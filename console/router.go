@@ -147,9 +147,9 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteTag("Console Users"),
 		core.RouteSummary("Reset console operator password"),
 		core.RouteDescription("Rotates user password and revokes all active operator sessions."),
-		core.RouteOperationID("console__users__password"),
+		core.RouteOperationID("console__users__reset_password"),
 		core.RouteSDKGroupName("console", "users"),
-		core.RouteSDKMethodName("password"),
+		core.RouteSDKMethodName("reset_password"),
 	)
 
 	// 4. Console Operator Active Sessions Management

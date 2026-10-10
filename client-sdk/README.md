@@ -190,11 +190,6 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `auth.password_reset.confirm()`: Confirm password reset with verification code and new password (`POST /v1/auth/password-reset/confirm` | `auth__password_reset__confirm`)
   - [ ] `auth.password_reset.request()`: Request a password reset verification code via email or SMS (`POST /v1/auth/password-reset/request` | `auth__password_reset__request`)
 
-- Subgroup `auth.sessions.*`:
-  - [ ] `auth.sessions.list()`: List active sessions for current user (`GET /v1/auth/sessions` | `auth__sessions__list`)
-  - [ ] `auth.sessions.revoke()`: Revoke specific user session (`DELETE /v1/auth/sessions/{session_id}` | `auth__sessions__revoke`)
-  - [ ] `auth.sessions.revoke_others()`: Sign out of all other devices (`POST /v1/auth/sessions/revoke-others` | `auth__sessions__revoke_others`)
-
 - Subgroup `auth.token.*`:
   - [ ] `auth.token.refresh()`: Exchange refresh token for fresh JWT access token (`POST /v1/auth/token/refresh` | `auth__token__refresh`)
 
@@ -226,6 +221,11 @@ Standard base APIs are callable on their service client instance (from hooks suc
 
 - Subgroup `auth.user.properties.*`:
   - [ ] `auth.user.properties.update()`: Update user personal properties (`PATCH /v1/auth/user/properties` | `auth__user__properties__update`)
+
+- Subgroup `auth.user.sessions.*`:
+  - [ ] `auth.user.sessions.list()`: List active sessions for current user (`GET /v1/auth/user/sessions` | `auth__user__sessions__list`)
+  - [ ] `auth.user.sessions.revoke()`: Revoke specific user session (`DELETE /v1/auth/user/sessions/{session_id}` | `auth__user__sessions__revoke`)
+  - [ ] `auth.user.sessions.revoke_others()`: Sign out of all other devices (`POST /v1/auth/user/sessions/revoke-others` | `auth__user__sessions__revoke_others`)
 
 #### `core` (Core Service — via `useCore(client)`)
 
@@ -384,7 +384,7 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - [ ] `console.cp.users.delete()`: Delete console operator account (`DELETE /v1/_/console/users/{user_id}` | `console__users__delete`)
   - [ ] `console.cp.users.get()`: Get console operator account details (`GET /v1/_/console/users/{user_id}` | `console__users__get`)
   - [ ] `console.cp.users.list()`: List console operator accounts (`GET /v1/_/console/users` | `console__users__list`)
-  - [ ] `console.cp.users.password()`: Reset console operator password (`POST /v1/_/console/users/{user_id}/password` | `console__users__password`)
+  - [ ] `console.cp.users.reset_password()`: Reset console operator password (`POST /v1/_/console/users/{user_id}/password` | `console__users__reset_password`)
   - [ ] `console.cp.users.update()`: Update console operator account (`PUT /v1/_/console/users/{user_id}` | `console__users__update`)
 
 - Subgroup `console.cp.users.sessions.*`:

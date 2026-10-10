@@ -275,7 +275,6 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	_ = json.NewDecoder(passkeyOptionsResponseRecorder.Body).Decode(&passkeyOptions)
 
 	passkeyVerifyPayload := map[string]any{
-		"user_id":       signupAuthTokenResponse.User.ID,
 		"challenge":     passkeyOptions.Challenge,
 		"credential_id": "cred-id-12345",
 		"public_key":    "public-key-es256",
