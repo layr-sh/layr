@@ -206,6 +206,7 @@ Standard base APIs are callable on their service client instance (from hooks suc
 
 - Subgroup `auth.user.*`:
   - [ ] `auth.user.delete()`: Permanently delete authenticated user account (`DELETE /v1/auth/user` | `auth__user__delete`)
+  - [ ] `auth.user.export()`: Export comprehensive current user account data graph (`POST /v1/auth/user/export` | `auth__user__export`)
   - [ ] `auth.user.get()`: Get authenticated user (`GET /v1/auth/user` | `auth__user__get`)
 
 - Subgroup `auth.user.email.*`:
@@ -231,9 +232,6 @@ Standard base APIs are callable on their service client instance (from hooks suc
 
 - Subgroup `auth.user.properties.*`:
   - [ ] `auth.user.properties.update()`: Update user personal properties (`PATCH /v1/auth/user/properties` | `auth__user__properties__update`)
-
-- Subgroup `auth.users.*`:
-  - [ ] `auth.users.export()`: Export comprehensive user account data graph (`POST /v1/auth/users/{user_id}/export` | `auth__users__export`)
 
 #### `core` (Core Service — via `useCore(client)`)
 
@@ -280,8 +278,8 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `fileStorage.objects.upload_post()`: Upload a file object via POST (`POST /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_post`)
   - [ ] `fileStorage.objects.upload_put()`: Upload a file object via PUT (`PUT /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_put`)
 
-- Subgroup `fileStorage.presign.*`:
-  - [ ] `fileStorage.presign.create()`: Mint a presigned capability URL (`POST /v1/file-storage/presign` | `file_storage__presign__create`)
+- Subgroup `fileStorage.presigned_url.*`:
+  - [ ] `fileStorage.presigned_url.create()`: Mint a presigned capability URL (`POST /v1/file-storage/presigned-url` | `file_storage__presigned_url__create`)
 
 - Subgroup `fileStorage.s3.*`:
   - [ ] `fileStorage.s3.delete_multiple()`: S3 DeleteMultipleObjects (`POST /v1/file-storage/s3/{bucket}` | `file_storage__s3__delete_multiple`)

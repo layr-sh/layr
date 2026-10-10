@@ -60,12 +60,12 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 2. Presigned URL Capability Minting
-	core.PostRoute[PresignURLResponse, PresignURLInput](router, "/v1/file-storage/presign", service.baseHandler.handlePresignURL,
+	core.PostRoute[CreatePresignedURLResponse, CreatePresignedURLInput](router, "/v1/file-storage/presigned-url", service.baseHandler.handleCreatePresignedURL,
 		core.RouteTag("File Storage Capability"),
 		core.RouteSummary("Mint a presigned capability URL"),
 		core.RouteDescription("Generates a cryptographically signed URL allowing temporary read or write access."),
-		core.RouteOperationID("file_storage__presign__create"),
-		core.RouteSDKGroupName("file_storage", "presign"),
+		core.RouteOperationID("file_storage__presigned_url__create"),
+		core.RouteSDKGroupName("file_storage", "presigned_url"),
 		core.RouteSDKMethodName("create"),
 	)
 

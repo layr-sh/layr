@@ -124,54 +124,54 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 
 	// 5. Presign URL for Object Download
 	presignInputJSON := `{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read","expires_in_seconds":600}`
-	presignRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presign", bytes.NewReader([]byte(presignInputJSON)))
+	presignRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignInputJSON)))
 	presignRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(presignResponseRecorder, presignRequest)
+	baseHandler.handleCreatePresignedURL(presignResponseRecorder, presignRequest)
 	if presignResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on presign url, got %d: %s", presignResponseRecorder.Code, presignResponseRecorder.Body.String())
 	}
 
-	var presignURLResponse PresignURLResponse
-	if decodeErr := json.NewDecoder(presignResponseRecorder.Body).Decode(&presignURLResponse); decodeErr != nil {
+	var createPresignedURLResponse CreatePresignedURLResponse
+	if decodeErr := json.NewDecoder(presignResponseRecorder.Body).Decode(&createPresignedURLResponse); decodeErr != nil {
 		t.Fatalf("failed to decode presign response: %v", decodeErr)
 	}
-	if presignURLResponse.URL == "" {
+	if createPresignedURLResponse.URL == "" {
 		t.Fatalf("expected non-empty presigned url")
 	}
 
 	// 5.1 Presign URL with operation "get" and default expiration
 	presignGetInputJSON := `{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"get","expires_in_seconds":0}`
-	presignGetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presign", bytes.NewReader([]byte(presignGetInputJSON)))
+	presignGetRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignGetInputJSON)))
 	presignGetRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignGetResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(presignGetResponseRecorder, presignGetRequest)
+	baseHandler.handleCreatePresignedURL(presignGetResponseRecorder, presignGetRequest)
 	if presignGetResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on presign get url, got %d", presignGetResponseRecorder.Code)
 	}
 
 	// 5.2 Presign URL with operation "put" and maximum expiration cap
 	presignPutInputJSON := `{"bucket":"test-rest-bucket","key":"notes/put.txt","operation":"put","expires_in_seconds":9999999}`
-	presignPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presign", bytes.NewReader([]byte(presignPutInputJSON)))
+	presignPutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignPutInputJSON)))
 	presignPutRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignPutResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(presignPutResponseRecorder, presignPutRequest)
+	baseHandler.handleCreatePresignedURL(presignPutResponseRecorder, presignPutRequest)
 	if presignPutResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on presign put url, got %d", presignPutResponseRecorder.Code)
 	}
 
 	// 5.3 Presign URL on non-existent bucket -> 404
 	presignMissingBucketInputJSON := `{"bucket":"non-existent-bucket","key":"notes/file.txt","operation":"read"}`
-	presignMissingBucketRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presign", bytes.NewReader([]byte(presignMissingBucketInputJSON)))
+	presignMissingBucketRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignMissingBucketInputJSON)))
 	presignMissingBucketRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignMissingBucketResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(presignMissingBucketResponseRecorder, presignMissingBucketRequest)
+	baseHandler.handleCreatePresignedURL(presignMissingBucketResponseRecorder, presignMissingBucketRequest)
 	if presignMissingBucketResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on presign non-existent bucket, got %d", presignMissingBucketResponseRecorder.Code)
 	}
 
 	// 6. Anonymous Download via Presigned URL
-	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, presignURLResponse.URL, nil)
+	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, createPresignedURLResponse.URL, nil)
 	presignedDownloadRequest.SetPathValue("bucket", "test-rest-bucket")
 	presignedDownloadRequest.SetPathValue("key", "notes/hello.txt")
 	presignedDownloadResponseRecorder := httptest.NewRecorder()
@@ -295,18 +295,18 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 
 	// 15. Presigned URL for Write Operation
 	presignWriteInputJSON := `{"bucket":"test-rest-bucket","key":"presigned-upload.txt","operation":"write","expires_in_seconds":600}`
-	presignWriteRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presign", bytes.NewReader([]byte(presignWriteInputJSON)))
+	presignWriteRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignWriteInputJSON)))
 	presignWriteRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignWriteResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(presignWriteResponseRecorder, presignWriteRequest)
+	baseHandler.handleCreatePresignedURL(presignWriteResponseRecorder, presignWriteRequest)
 	if presignWriteResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on presign write, got %d: %s", presignWriteResponseRecorder.Code, presignWriteResponseRecorder.Body.String())
 	}
 
-	var presignWritePresignURLResponse PresignURLResponse
-	_ = json.NewDecoder(presignWriteResponseRecorder.Body).Decode(&presignWritePresignURLResponse)
+	var writeCreatePresignedURLResponse CreatePresignedURLResponse
+	_ = json.NewDecoder(presignWriteResponseRecorder.Body).Decode(&writeCreatePresignedURLResponse)
 
-	presignedUploadRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, presignWritePresignURLResponse.URL, bytes.NewReader([]byte("uploaded-via-presigned-url")))
+	presignedUploadRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, writeCreatePresignedURLResponse.URL, bytes.NewReader([]byte("uploaded-via-presigned-url")))
 	presignedUploadRequest.SetPathValue("bucket", "test-rest-bucket")
 	presignedUploadRequest.SetPathValue("key", "presigned-upload.txt")
 	presignedUploadResponseRecorder := httptest.NewRecorder()
@@ -464,11 +464,11 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	serviceAccountPresignRequest := httptest.NewRequestWithContext(
 		core.WithAuthContext(ctx, serviceAccountAuthContext),
 		http.MethodPost,
-		"/v1/file-storage/presign",
+		"/v1/file-storage/presigned-url",
 		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
 	)
 	serviceAccountPresignResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(serviceAccountPresignResponseRecorder, serviceAccountPresignRequest)
+	baseHandler.handleCreatePresignedURL(serviceAccountPresignResponseRecorder, serviceAccountPresignRequest)
 	if serviceAccountPresignResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on sa presign, got %d", serviceAccountPresignResponseRecorder.Code)
 	}
@@ -484,11 +484,11 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	userPresignRequest := httptest.NewRequestWithContext(
 		core.WithAuthContext(ctx, userAuthContext),
 		http.MethodPost,
-		"/v1/file-storage/presign",
+		"/v1/file-storage/presigned-url",
 		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
 	)
 	userPresignResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(userPresignResponseRecorder, userPresignRequest)
+	baseHandler.handleCreatePresignedURL(userPresignResponseRecorder, userPresignRequest)
 	if userPresignResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 on user presign, got %d", userPresignResponseRecorder.Code)
 	}
@@ -497,11 +497,11 @@ func TestFilestorageBaseHandlerRESTIntegration(t *testing.T) {
 	canceledPresignRequest := httptest.NewRequestWithContext(
 		core.WithAuthContext(canceledCtx, userAuthContext),
 		http.MethodPost,
-		"/v1/file-storage/presign",
+		"/v1/file-storage/presigned-url",
 		bytes.NewReader([]byte(`{"bucket":"test-rest-bucket","key":"notes/hello.txt","operation":"read"}`)),
 	)
 	canceledPresignResponseRecorder := httptest.NewRecorder()
-	baseHandler.handlePresignURL(canceledPresignResponseRecorder, canceledPresignRequest)
+	baseHandler.handleCreatePresignedURL(canceledPresignResponseRecorder, canceledPresignRequest)
 	if canceledPresignResponseRecorder.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 on canceled presign, got %d", canceledPresignResponseRecorder.Code)
 	}
