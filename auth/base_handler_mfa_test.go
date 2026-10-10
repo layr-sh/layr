@@ -21,7 +21,7 @@ func TestAuthBaseHandlerMFAUnit(t *testing.T) {
 	disabledConfig.MFA.Enabled = false
 	configManager.SetMemoryConfig(disabledConfig)
 
-	mfaSetupDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/setup", strings.NewReader(`{}`))
+	mfaSetupDisabledRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa", strings.NewReader(`{}`))
 	mfaSetupDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(mfaSetupDisabledResponseRecorder, mfaSetupDisabledRequest)
 	if mfaSetupDisabledResponseRecorder.Code != http.StatusForbidden {
@@ -41,7 +41,7 @@ func TestAuthBaseHandlerMFAUnit(t *testing.T) {
 	configManager.SetMemoryConfig(enabledConfig)
 
 	// 2. Missing bearer -> 401
-	missingBearerMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/setup", nil)
+	missingBearerMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa", nil)
 	missingBearerMFASetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(missingBearerMFASetupResponseRecorder, missingBearerMFASetupRequest)
 	if missingBearerMFASetupResponseRecorder.Code != http.StatusUnauthorized {
@@ -56,7 +56,7 @@ func TestAuthBaseHandlerMFAUnit(t *testing.T) {
 	}
 
 	// 3. Invalid token -> 401
-	invalidTokenMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa/setup", nil)
+	invalidTokenMFASetupRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/mfa", nil)
 	invalidTokenMFASetupRequest.Header.Set("Authorization", "Bearer invalid-token")
 	invalidTokenMFASetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(invalidTokenMFASetupResponseRecorder, invalidTokenMFASetupRequest)
@@ -82,7 +82,7 @@ func TestAuthBaseHandlerMFAUnit(t *testing.T) {
 	bearerHeader := "Bearer " + validToken
 	authContext := core.AuthContext{UserID: testUserUUID, JWT: core.JWTClaims{Subject: testUserUUID, Role: "authenticated"}}
 
-	validTokenMFASetupRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa/setup", nil)
+	validTokenMFASetupRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa", nil)
 	validTokenMFASetupRequest.Header.Set("Authorization", bearerHeader)
 	validTokenMFASetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(validTokenMFASetupResponseRecorder, validTokenMFASetupRequest)
@@ -114,7 +114,7 @@ func TestAuthBaseHandlerMFAUnit(t *testing.T) {
 	customIssuerConfig.MFA.Issuer = "MyCustomIssuer"
 	configManager.SetMemoryConfig(customIssuerConfig)
 
-	customIssuerMFARequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa/setup", nil)
+	customIssuerMFARequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/mfa", nil)
 	customIssuerMFARequest.Header.Set("Authorization", bearerHeader)
 	customIssuerMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(customIssuerMFAResponseRecorder, customIssuerMFARequest)

@@ -62,11 +62,7 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 	}, 900)
 
 	// 1. Setup MFA
-	mfaSetupPayload := map[string]any{
-		"user_id": userID,
-	}
-	encodedMFASetup, _ := json.Marshal(mfaSetupPayload)
-	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
+	mfaSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa", nil), userID, "authenticated", false)
 	mfaSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
@@ -99,11 +95,10 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 
 	// 2. Verify with wrong code -> 401
 	wrongVerifyPayload := map[string]any{
-		"user_id": userID,
-		"code":    "000000",
+		"code": "000000",
 	}
 	encodedWrongVerify, _ := json.Marshal(wrongVerifyPayload)
-	wrongVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedWrongVerify))
+	wrongVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedWrongVerify)), userID, "authenticated", false)
 	wrongVerifyRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	wrongVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(wrongVerifyResponseRecorder, wrongVerifyRequest)
@@ -157,7 +152,7 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 	// 4. Test locked user -> 423
 	lockedUntil := time.Now().UTC().Add(time.Hour)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET locked_until = $1 WHERE id = $2", lockedUntil, userID)
-	lockedSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", nil), userID, "authenticated", false)
+	lockedSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa", nil), userID, "authenticated", false)
 	lockedSetupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	lockedSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(lockedSetupResponseRecorder, lockedSetupRequest)
@@ -195,23 +190,19 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 	}
 
 	// 7. Non-existent user -> 404
+	nonExistentUserID := "01918a24-9999-7000-8000-000000000099"
 	nonExistentVerifyPayload := map[string]any{
-		"user_id": "01918a24-9999-7000-8000-000000000099",
-		"code":    "123456",
+		"code": "123456",
 	}
 	encodedNonExistent, _ := json.Marshal(nonExistentVerifyPayload)
-	nonExistentVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedNonExistent))
+	nonExistentVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedNonExistent)), nonExistentUserID, "authenticated", false)
 	nonExistentVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(nonExistentVerifyResponseRecorder, nonExistentVerifyRequest)
 	if nonExistentVerifyResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 on non-existent user verify, got: %d", nonExistentVerifyResponseRecorder.Code)
 	}
 
-	nonExistentSetupPayload := map[string]any{
-		"user_id": "01918a24-9999-7000-8000-000000000099",
-	}
-	encodedNonExistentSetup, _ := json.Marshal(nonExistentSetupPayload)
-	nonExistentSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedNonExistentSetup))
+	nonExistentSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa", nil), nonExistentUserID, "authenticated", false)
 	nonExistentSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(nonExistentSetupResponseRecorder, nonExistentSetupRequest)
 	if nonExistentSetupResponseRecorder.Code != http.StatusNotFound {
@@ -233,11 +224,7 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 		t.Fatalf("failed to insert phone-only test user: %v", err)
 	}
 
-	phoneSetupPayload := map[string]any{
-		"user_id": phoneUserID,
-	}
-	encodedPhoneSetup, _ := json.Marshal(phoneSetupPayload)
-	phoneSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedPhoneSetup))
+	phoneSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa", nil), phoneUserID, "authenticated", false)
 	phoneSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(phoneSetupResponseRecorder, phoneSetupRequest)
 	if phoneSetupResponseRecorder.Code != http.StatusOK {
@@ -255,11 +242,10 @@ func TestAuthBaseHandlerMFAFlowIntegration(t *testing.T) {
 
 	phoneTOTPCode, _ := baseHandler.totpManager.GenerateCode(phoneSetupMFAResponse.Secret, time.Now())
 	phoneVerifyPayload := map[string]any{
-		"user_id": phoneUserID,
-		"code":    phoneTOTPCode,
+		"code": phoneTOTPCode,
 	}
 	encodedPhoneVerify, _ := json.Marshal(phoneVerifyPayload)
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedPhoneVerify))
+	phoneVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedPhoneVerify)), phoneUserID, "authenticated", false)
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyMFA(phoneVerifyResponseRecorder, phoneVerifyRequest)
 	if phoneVerifyResponseRecorder.Code != http.StatusOK {
@@ -390,7 +376,7 @@ func TestAuthBaseHandlerMFAChallengeFlowIntegration(t *testing.T) {
 		Role:    "authenticated",
 	}, 900)
 
-	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader([]byte(`{}`)))
+	setupRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/v1/auth/mfa", nil)
 	setupRequest.Header.Set("Authorization", "Bearer "+validAccessToken)
 	setupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(setupResponseRecorder, setupRequest)

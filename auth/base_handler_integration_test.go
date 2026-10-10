@@ -315,17 +315,13 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 8. TOTP MFA Setup & Verify
-	mfaSetupPayload := map[string]any{
-		"user_id": signupAuthTokenResponse.User.ID,
-	}
-	encodedMFASetup, _ := json.Marshal(mfaSetupPayload)
-	mfaSetupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/setup", bytes.NewReader(encodedMFASetup))
+	mfaSetupRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa", nil), signupAuthTokenResponse.User.ID, "authenticated", false)
 	mfaSetupRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 	mfaSetupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSetupMFA(mfaSetupResponseRecorder, mfaSetupRequest)
 
 	if mfaSetupResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK on /mfa/setup, got: %d (body: %s)", mfaSetupResponseRecorder.Code, mfaSetupResponseRecorder.Body.String())
+		t.Fatalf("expected 200 OK on /v1/auth/mfa, got: %d (body: %s)", mfaSetupResponseRecorder.Code, mfaSetupResponseRecorder.Body.String())
 	}
 
 	var mfaSetupResponse struct {
@@ -336,16 +332,15 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	currentTOTPCode, err := baseHandler.totpManager.GenerateCode(mfaSetupResponse.Secret, time.Now())
 	if err == nil && currentTOTPCode != "" {
 		mfaVerifyPayload := map[string]any{
-			"user_id": signupAuthTokenResponse.User.ID,
-			"code":    currentTOTPCode,
+			"code": currentTOTPCode,
 		}
 		encodedMFAVerify, _ := json.Marshal(mfaVerifyPayload)
-		mfaVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedMFAVerify))
+		mfaVerifyRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/mfa/verify", bytes.NewReader(encodedMFAVerify)), signupAuthTokenResponse.User.ID, "authenticated", false)
 		mfaVerifyRequest.Header.Set("Authorization", "Bearer "+loginAuthTokenResponse.AccessToken)
 		mfaVerifyResponseRecorder := httptest.NewRecorder()
 		baseHandler.handleVerifyMFA(mfaVerifyResponseRecorder, mfaVerifyRequest)
 		if mfaVerifyResponseRecorder.Code != http.StatusOK {
-			t.Fatalf("expected 200 OK on /mfa/verify, got: %d (body: %s)", mfaVerifyResponseRecorder.Code, mfaVerifyResponseRecorder.Body.String())
+			t.Fatalf("expected 200 OK on /v1/auth/mfa/verify, got: %d (body: %s)", mfaVerifyResponseRecorder.Code, mfaVerifyResponseRecorder.Body.String())
 		}
 	}
 

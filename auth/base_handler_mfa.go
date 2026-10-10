@@ -18,20 +18,12 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 		return
 	}
 
-	var setupMFAInput SetupMFAInput
-	if request.Body != nil && request.ContentLength != 0 {
-		_ = json.NewDecoder(request.Body).Decode(&setupMFAInput)
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
+		return
 	}
-
-	userID := strings.TrimSpace(setupMFAInput.UserID)
-	if userID == "" {
-		authContext := core.GetAuthContext(request.Context())
-		if authContext.UserID == "" {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
-			return
-		}
-		userID = authContext.UserID
-	}
+	userID := authContext.UserID
 
 	ctx := request.Context()
 	var user User
@@ -99,22 +91,20 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 		return
 	}
 
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.UserID == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
+		return
+	}
+	userID := authContext.UserID
+
 	var verifyMFAInput VerifyMFAInput
 	if request.Body != nil && request.ContentLength != 0 {
 		_ = json.NewDecoder(request.Body).Decode(&verifyMFAInput)
 	}
 
-	userID := strings.TrimSpace(verifyMFAInput.UserID)
-	if userID == "" {
-		authContext := core.GetAuthContext(request.Context())
-		if authContext.UserID == "" {
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
-			return
-		}
-		userID = authContext.UserID
-	}
-
-	if verifyMFAInput.Code == "" {
+	code := strings.TrimSpace(verifyMFAInput.Code)
+	if code == "" {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Code required")
 		return
 	}
@@ -158,7 +148,7 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 		return
 	}
 
-	if !handler.totpManager.ValidateCode(string(secretBytes), verifyMFAInput.Code, time.Now().UTC(), 1) {
+	if !handler.totpManager.ValidateCode(string(secretBytes), code, time.Now().UTC(), 1) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid MFA code")
 		return
 	}
