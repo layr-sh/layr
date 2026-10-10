@@ -9,10 +9,13 @@ type SignInConsoleInput struct {
 
 // SignInConsoleResponse returns authentication credentials and session details upon sign-in.
 type SignInConsoleResponse struct {
-	User        User   `json:"user"`
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
-	TokenType   string `json:"token_type"`
+	User        User   `json:"user,omitempty"`
+	AccessToken string `json:"access_token,omitempty"`
+	ExpiresIn   int    `json:"expires_in,omitempty"`
+	TokenType   string `json:"token_type,omitempty"`
+	MFARequired bool   `json:"mfa_required,omitempty"`
+	MFATicket   string `json:"mfa_ticket,omitempty"`
+	Factor      string `json:"factor,omitempty"`
 }
 
 // GetConsoleSessionResponse returns profile and status of the currently authenticated console session.
@@ -48,6 +51,12 @@ type SetupConsoleMFAResponse struct {
 // VerifyConsoleMFAInput holds the TOTP code to verify and activate MFA.
 type VerifyConsoleMFAInput struct {
 	Code string `json:"code"`
+}
+
+// ChallengeConsoleMFAInput holds the MFA ticket and TOTP code to verify.
+type ChallengeConsoleMFAInput struct {
+	MFATicket string `json:"mfa_ticket"`
+	Code      string `json:"code"`
 }
 
 // ListConsoleUsersResponse represents a list of console user accounts.

@@ -61,7 +61,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("console", "auth"),
 		core.RouteSDKMethodName("session"),
 	)
-	core.PostRoute[SetupConsoleMFAResponse, core.Empty](router, "/v1/_/console/mfa/setup", service.controlPlaneHandler.handleSetupConsoleMFA,
+	core.PostRoute[SetupConsoleMFAResponse, core.Empty](router, "/v1/_/console/mfa", service.controlPlaneHandler.handleSetupConsoleMFA,
 		core.RouteHide(),
 		core.RouteTag("Console MFA"),
 		core.RouteSummary("Initiate TOTP MFA enrollment"),
@@ -79,6 +79,15 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteOperationID("console__mfa__verify"),
 		core.RouteSDKGroupName("console", "mfa"),
 		core.RouteSDKMethodName("verify"),
+	)
+	core.PostRoute[SignInConsoleResponse, ChallengeConsoleMFAInput](router, "/v1/_/console/mfa/challenge", service.controlPlaneHandler.handleChallengeConsoleMFA,
+		core.RouteHide(),
+		core.RouteTag("Console MFA"),
+		core.RouteSummary("Verify MFA challenge ticket with TOTP code"),
+		core.RouteDescription("Verifies the short-lived MFA challenge ticket and TOTP code after password sign-in and issues an authenticated console session."),
+		core.RouteOperationID("console__mfa__challenge"),
+		core.RouteSDKGroupName("console", "mfa"),
+		core.RouteSDKMethodName("challenge"),
 	)
 	core.DeleteRoute[core.Empty](router, "/v1/_/console/mfa", service.controlPlaneHandler.handleDisableConsoleMFA,
 		core.RouteHide(),
