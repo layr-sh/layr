@@ -35,11 +35,11 @@ func TestAuthBaseHandlerOIDCUnit(t *testing.T) {
 
 	// 2. Custom host discovery via config
 	customConfig := core.DefaultConfig()
-	customConfig.Server.BaseURL = "http://layr.local:8080"
+	customConfig.Server.BaseURL = "http://layr.local:5297"
 	core.SetLoadedConfig(customConfig)
 	customResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetOIDCDiscovery(customResponseRecorder, discoveryRequest)
-	if customResponseRecorder.Code != http.StatusOK || !strings.Contains(customResponseRecorder.Body.String(), "http://layr.local:8080") {
+	if customResponseRecorder.Code != http.StatusOK || !strings.Contains(customResponseRecorder.Body.String(), "http://layr.local:5297") {
 		t.Fatalf("expected custom host in OIDC discovery, got: %s", customResponseRecorder.Body.String())
 	}
 	core.SetLoadedConfig(layrConfig)

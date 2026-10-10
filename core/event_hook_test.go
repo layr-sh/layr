@@ -64,7 +64,7 @@ func TestCoreEventHookValidateTargetURLUnit(t *testing.T) {
 	}{
 		{"valid http", "http://example.com/webhook", false},
 		{"valid https", "https://api.example.com/v1/hook", false},
-		{"valid loopback ip", "http://127.0.0.1:8080/events", false},
+		{"valid loopback ip", "http://127.0.0.1:5297/events", false},
 		{"invalid url syntax", "://invalid-url", true},
 		{"invalid scheme ftp", "ftp://example.com/hook", true},
 		{"missing hostname", "http:///path-only", true},
