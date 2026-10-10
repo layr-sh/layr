@@ -110,7 +110,7 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 
 	// 6. Data Plane: Mint Presigned Read Capability URL
 	presignPayload := `{"bucket":"e2e-lifecycle-bucket","key":"reports/annual.pdf","operation":"read","expires_in_seconds":300}`
-	presignRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(presignPayload)))
+	presignRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte(presignPayload)))
 	presignRequest.Header.Set("Content-Type", "application/json")
 	presignRequest.Header.Set("X-Service-Account-Key", serviceAccountSecretKey)
 	presignResponseRecorder := httptest.NewRecorder()
@@ -119,13 +119,13 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 		t.Fatalf("expected 200 OK on presign url, got %d: %s", presignResponseRecorder.Code, presignResponseRecorder.Body.String())
 	}
 
-	var createPresignedURLResponse CreatePresignedURLResponse
-	if decodeErr := json.NewDecoder(presignResponseRecorder.Body).Decode(&createPresignedURLResponse); decodeErr != nil {
+	var presignURLResponse PresignURLResponse
+	if decodeErr := json.NewDecoder(presignResponseRecorder.Body).Decode(&presignURLResponse); decodeErr != nil {
 		t.Fatalf("failed to decode presign response: %v", decodeErr)
 	}
 
 	// 7. Data Plane: Anonymous Download via Presigned URL (no service account headers)
-	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, createPresignedURLResponse.URL, nil)
+	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, presignURLResponse.URL, nil)
 	presignedDownloadRequest.Header.Set("Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
 	presignedDownloadResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(presignedDownloadResponseRecorder, presignedDownloadRequest)

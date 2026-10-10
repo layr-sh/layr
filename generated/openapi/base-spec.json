@@ -128,47 +128,6 @@
         ],
         "type": "object"
       },
-      "CreatePresignedURLInput": {
-        "description": "CreatePresignedURLInput schema",
-        "properties": {
-          "bucket": {
-            "type": "string"
-          },
-          "expires_in_seconds": {
-            "type": "integer"
-          },
-          "key": {
-            "type": "string"
-          },
-          "operation": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "bucket",
-          "expires_in_seconds",
-          "key",
-          "operation"
-        ],
-        "type": "object"
-      },
-      "CreatePresignedURLResponse": {
-        "description": "CreatePresignedURLResponse schema",
-        "properties": {
-          "expires_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "expires_at",
-          "url"
-        ],
-        "type": "object"
-      },
       "CreateRecordInput": {
         "description": "CreateRecordInput schema",
         "properties": {
@@ -834,6 +793,47 @@
           "id",
           "last_used_at",
           "transports"
+        ],
+        "type": "object"
+      },
+      "PresignURLInput": {
+        "description": "PresignURLInput schema",
+        "properties": {
+          "bucket": {
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "type": "integer"
+          },
+          "key": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "bucket",
+          "expires_in_seconds",
+          "key",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "PresignURLResponse": {
+        "description": "PresignURLResponse schema",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expires_at",
+          "url"
         ],
         "type": "object"
       },
@@ -4113,19 +4113,19 @@
         "x-sdk-method-name": "upload_put"
       }
     },
-    "/v1/file-storage/presigned-url": {
+    "/v1/file-storage/url/presign": {
       "post": {
         "description": "Generates a cryptographically signed URL allowing temporary read or write access.",
-        "operationId": "file_storage__presigned_url__create",
+        "operationId": "file_storage__url__presign",
         "requestBody": {
           "content": {
             "*/*": {
               "schema": {
-                "$ref": "#/components/schemas/CreatePresignedURLInput"
+                "$ref": "#/components/schemas/PresignURLInput"
               }
             }
           },
-          "description": "Request body for filestorage.CreatePresignedURLInput",
+          "description": "Request body for filestorage.PresignURLInput",
           "required": true
         },
         "responses": {
@@ -4133,12 +4133,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
+                  "$ref": "#/components/schemas/PresignURLResponse"
                 }
               },
               "application/xml": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatePresignedURLResponse"
+                  "$ref": "#/components/schemas/PresignURLResponse"
                 }
               }
             },
@@ -4151,9 +4151,9 @@
         ],
         "x-sdk-group-name": [
           "file_storage",
-          "presigned_url"
+          "url"
         ],
-        "x-sdk-method-name": "create"
+        "x-sdk-method-name": "presign"
       }
     },
     "/v1/graphql": {

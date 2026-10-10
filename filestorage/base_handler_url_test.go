@@ -12,50 +12,50 @@ import (
 	"layr.sh/core"
 )
 
-func TestFilestorageBaseHandlerPresignedURLUnit(t *testing.T) {
+func TestFilestorageBaseHandlerURLUnit(t *testing.T) {
 	kernel := core.NewTestKernel(nil)
 	service := NewService(kernel)
 	baseHandler := service.BaseHandler()
 	ctx := context.Background()
 
 	t.Run("invalid json body", func(t *testing.T) {
-		invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte("{invalid-json")))
+		invalidJSONRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte("{invalid-json")))
 		invalidJSONResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleCreatePresignedURL(invalidJSONResponseRecorder, invalidJSONRequest)
+		baseHandler.handlePresignURL(invalidJSONResponseRecorder, invalidJSONRequest)
 		if invalidJSONResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for invalid json, got %d", invalidJSONResponseRecorder.Code)
 		}
 	})
 
 	t.Run("missing bucket or key", func(t *testing.T) {
-		missingBucketRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(`{"bucket":"","key":"test.txt","operation":"read"}`)))
+		missingBucketRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte(`{"bucket":"","key":"test.txt","operation":"read"}`)))
 		missingBucketResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleCreatePresignedURL(missingBucketResponseRecorder, missingBucketRequest)
+		baseHandler.handlePresignURL(missingBucketResponseRecorder, missingBucketRequest)
 		if missingBucketResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing bucket, got %d", missingBucketResponseRecorder.Code)
 		}
 
-		missingKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"","operation":"read"}`)))
+		missingKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"","operation":"read"}`)))
 		missingKeyResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleCreatePresignedURL(missingKeyResponseRecorder, missingKeyRequest)
+		baseHandler.handlePresignURL(missingKeyResponseRecorder, missingKeyRequest)
 		if missingKeyResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for missing key, got %d", missingKeyResponseRecorder.Code)
 		}
 	})
 
 	t.Run("invalid operation", func(t *testing.T) {
-		badOperationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"invalid_op"}`)))
+		badOperationRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"invalid_op"}`)))
 		badOperationResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleCreatePresignedURL(badOperationResponseRecorder, badOperationRequest)
+		baseHandler.handlePresignURL(badOperationResponseRecorder, badOperationRequest)
 		if badOperationResponseRecorder.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for bad operation, got %d", badOperationResponseRecorder.Code)
 		}
 	})
 
 	t.Run("unauthorized caller", func(t *testing.T) {
-		unauthorizedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/presigned-url", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)))
+		unauthorizedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/file-storage/url/presign", bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)))
 		unauthorizedResponseRecorder := httptest.NewRecorder()
-		baseHandler.handleCreatePresignedURL(unauthorizedResponseRecorder, unauthorizedRequest)
+		baseHandler.handlePresignURL(unauthorizedResponseRecorder, unauthorizedRequest)
 		if unauthorizedResponseRecorder.Code != http.StatusForbidden {
 			t.Fatalf("expected 403 for unauthorized caller, got %d", unauthorizedResponseRecorder.Code)
 		}
@@ -109,7 +109,7 @@ func TestFilestorageBaseHandlerPresignedURLUnit(t *testing.T) {
 		}
 	})
 
-	t.Run("disabled filestorage configuration returns 403 on presigned-url", func(t *testing.T) {
+	t.Run("disabled filestorage configuration returns 403 on url presign", func(t *testing.T) {
 		disabledService := NewService(kernel)
 		disabledService.ConfigManager().SetMemoryConfig(Config{Enabled: false})
 		disabledBaseHandler := disabledService.BaseHandler()
@@ -117,13 +117,13 @@ func TestFilestorageBaseHandlerPresignedURLUnit(t *testing.T) {
 		disabledRequest := httptest.NewRequestWithContext(
 			ctx,
 			http.MethodPost,
-			"/v1/file-storage/presigned-url",
+			"/v1/file-storage/url/presign",
 			bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)),
 		)
 		disabledResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handleCreatePresignedURL(disabledResponseRecorder, disabledRequest)
+		disabledBaseHandler.handlePresignURL(disabledResponseRecorder, disabledRequest)
 		if disabledResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on presigned-url when disabled, got %d", disabledResponseRecorder.Code)
+			t.Fatalf("expected 403 on url presign when disabled, got %d", disabledResponseRecorder.Code)
 		}
 	})
 }

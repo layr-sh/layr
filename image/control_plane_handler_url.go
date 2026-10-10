@@ -8,7 +8,7 @@ import (
 	"layr.sh/core"
 )
 
-// handleSignURL handles POST /v1/_/image/sign generating a signed image URL.
+// handleSignURL handles POST /v1/_/image/url/sign generating a signed image URL.
 func (controlPlaneHandler *ControlPlaneHandler) handleSignURL(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling sign image URL request")
 	if !controlPlaneHandler.kernel.ServiceAccountManager().RequireScope(responseWriter, request, core.ScopeImageSignWrite) {

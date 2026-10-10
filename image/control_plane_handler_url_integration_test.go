@@ -12,7 +12,7 @@ import (
 	"layr.sh/core"
 )
 
-func TestImageControlPlaneHandlerSignIntegration(t *testing.T) {
+func TestImageControlPlaneHandlerURLIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
@@ -35,7 +35,7 @@ func TestImageControlPlaneHandlerSignIntegration(t *testing.T) {
 
 	t.Run("sign url integration", func(t *testing.T) {
 		signPayload := `{"path":"/rs:fit:300:300/plain/my-bucket/pic.png@webp"}`
-		signRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/image/sign", bytes.NewReader([]byte(signPayload)))
+		signRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/image/url/sign", bytes.NewReader([]byte(signPayload)))
 		signRequest.Header.Set("Content-Type", "application/json")
 		signRequest.Header.Set("X-Service-Account-Key", authKey)
 		signResponseRecorder := httptest.NewRecorder()

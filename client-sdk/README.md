@@ -268,8 +268,8 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `fileStorage.objects.upload_post()`: Upload a file object via POST (`POST /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_post`)
   - [ ] `fileStorage.objects.upload_put()`: Upload a file object via PUT (`PUT /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_put`)
 
-- Subgroup `fileStorage.presigned_url.*`:
-  - [ ] `fileStorage.presigned_url.create()`: Mint a presigned capability URL (`POST /v1/file-storage/presigned-url` | `file_storage__presigned_url__create`)
+- Subgroup `fileStorage.url.*`:
+  - [ ] `fileStorage.url.presign()`: Mint a presigned capability URL (`POST /v1/file-storage/url/presign` | `file_storage__url__presign`)
 
 #### `image` (Image Service — via `useImage(client)`)
 
@@ -512,11 +512,11 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - [ ] `image.cp.presets.list()`: List image presets (`GET /v1/_/image/presets` | `image__presets__list`)
   - [ ] `image.cp.presets.update()`: Update an image preset (`PUT /v1/_/image/presets/{preset_id}` | `image__presets__update`)
 
-- Subgroup `image.cp.sign.*`:
-  - [ ] `image.cp.sign.create()`: Sign an image transformation path (`POST /v1/_/image/sign` | `image__sign__create`)
-
 - Subgroup `image.cp.stats.*`:
   - [ ] `image.cp.stats.get()`: Get image service telemetry statistics (`GET /v1/_/image/stats` | `image__stats__get`)
+
+- Subgroup `image.cp.url.*`:
+  - [ ] `image.cp.url.sign()`: Sign an image transformation path (`POST /v1/_/image/url/sign` | `image__url__sign`)
 
 #### `tasks.cp` (Tasks Control Plane — via `withServiceAccount(useTasks(client), ...)`)
 

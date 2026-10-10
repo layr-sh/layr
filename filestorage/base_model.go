@@ -6,16 +6,16 @@ import (
 	"time"
 )
 
-// CreatePresignedURLInput specifies parameters for generating a capability token and URL.
-type CreatePresignedURLInput struct {
+// PresignURLInput specifies parameters for generating a capability token and URL.
+type PresignURLInput struct {
 	Bucket           string `json:"bucket"`
 	Key              string `json:"key"`
 	Operation        string `json:"operation"` // "GET" or "PUT"
 	ExpiresInSeconds int    `json:"expires_in_seconds"`
 }
 
-// CreatePresignedURLResponse represents the generated presigned capability URL.
-type CreatePresignedURLResponse struct {
+// PresignURLResponse represents the generated presigned capability URL.
+type PresignURLResponse struct {
 	URL       string    `json:"url"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
