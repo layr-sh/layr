@@ -197,13 +197,13 @@ func TestAuthSMSTemplateResolutionConfigUnit(t *testing.T) {
 
 	// 1. Password reset custom template
 	text := smsDispatcher.resolvePasswordResetTemplate(ctx, "+15551234567", "333444", "user-0", smsDispatcherConfig)
-	if text != "Reset password for +15551234567 with code 333444 on layr-app" {
+	if text != "Reset password for +15551234567 with code 333444 on Layr App" {
 		t.Fatalf("unexpected custom password reset text: %s", text)
 	}
 
 	// 2. Sign in OTP custom template
 	text = smsDispatcher.resolveSignInOTPTemplate(ctx, "+15551234567", "888999", "user-1", smsDispatcherConfig)
-	if text != "Sign in code for +15551234567 is 888999 on layr-app" {
+	if text != "Sign in code for +15551234567 is 888999 on Layr App" {
 		t.Fatalf("unexpected custom sign in OTP text: %s", text)
 	}
 

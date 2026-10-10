@@ -238,7 +238,7 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 
 	// 1. Password Reset custom template
 	resolvedSubject, html, text := emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "999888", "user-1", emailDispatcherConfig)
-	if resolvedSubject != "Reset for alice@example.com on layr-app" || html != "<p>Code: 999888</p>" || text != "Code: 999888" {
+	if resolvedSubject != "Reset for alice@example.com on Layr App" || html != "<p>Code: 999888</p>" || text != "Code: 999888" {
 		t.Fatalf("unexpected template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
 	}
 
@@ -280,7 +280,7 @@ func TestAuthEmailTemplateResolutionConfigUnit(t *testing.T) {
 
 	// 4. Suspicious activity custom template
 	resolvedSubject, html, text = emailDispatcher.resolveSuspiciousActivityTemplate(ctx, "david@example.com", "user-4", "192.168.1.1", "Mozilla/5.0", emailDispatcherConfig)
-	if resolvedSubject != "Suspicious login on layr-app for david@example.com" || !strings.Contains(html, "192.168.1.1") || !strings.Contains(text, "Mozilla/5.0") {
+	if resolvedSubject != "Suspicious login on Layr App for david@example.com" || !strings.Contains(html, "192.168.1.1") || !strings.Contains(text, "Mozilla/5.0") {
 		t.Fatalf("unexpected suspicious activity template resolution: subject=%s, html=%s, text=%s", resolvedSubject, html, text)
 	}
 

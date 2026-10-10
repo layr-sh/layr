@@ -122,7 +122,7 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 
 	// 2. Test hook returning NULL -> falls back to runtime config templates
 	subject, _, text = emailDispatcher.resolveSignInOTPTemplate(ctx, "bob@example.com", "null_fallback", "", emailDispatcherConfig)
-	if subject != "Runtime Config Sign In OTP: layr-app" {
+	if subject != "Runtime Config Sign In OTP: Layr App" {
 		t.Fatalf("expected runtime config template subject when hook returns NULL, got: %s", subject)
 	}
 	if text != "Runtime OTP Text: null_fallback" {
@@ -135,7 +135,7 @@ func TestAuthEmailDynamicPostgreSQLHookIntegration(t *testing.T) {
 	}
 
 	subject, _, _ = emailDispatcher.resolvePasswordResetTemplate(ctx, "alice@example.com", "456789", "", emailDispatcherConfig)
-	if subject != "Runtime Config Reset: layr-app" {
+	if subject != "Runtime Config Reset: Layr App" {
 		t.Fatalf("expected runtime config subject after hook dropped, got: %s", subject)
 	}
 

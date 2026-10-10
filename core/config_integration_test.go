@@ -40,8 +40,8 @@ func TestCoreConfigLoadFromDiskExhaustiveIntegration(t *testing.T) {
 	if defaultErr != nil || loadedDefaultConfig == nil {
 		t.Fatalf("expected default configuration on non-existent file, got %v", defaultErr)
 	}
-	if loadedDefaultConfig.Project.Name != "layr-app" {
-		t.Fatalf("expected default project name 'layr-app', got '%s'", loadedDefaultConfig.Project.Name)
+	if loadedDefaultConfig.Project.Name != "Layr App" {
+		t.Fatalf("expected default project name 'Layr App', got '%s'", loadedDefaultConfig.Project.Name)
 	}
 
 	// 2. Empty string path returns default config
@@ -119,7 +119,7 @@ MASTER_ENCRYPTION_KEY=` + validHexKey + `
 	if minValueErr := loadedMinimalConfig.Validate(); minValueErr != nil {
 		t.Fatalf("validation failed on valid minimal env config: %v", minValueErr)
 	}
-	if loadedMinimalConfig.Project.Name != "layr-app" || loadedMinimalConfig.Server.ListenAddr != ":5297" || loadedMinimalConfig.Database.URL != ".layr/data" {
+	if loadedMinimalConfig.Project.Name != "Layr App" || loadedMinimalConfig.Server.ListenAddr != ":5297" || loadedMinimalConfig.Database.URL != ".layr/data" {
 		t.Fatal("expected minimal config to retain defaults for omitted fields")
 	}
 }

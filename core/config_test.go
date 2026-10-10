@@ -16,11 +16,11 @@ func TestCoreConfigDefaultsUnit(t *testing.T) {
 	if config.Version != "1" {
 		t.Fatalf("expected version '1', got '%s'", config.Version)
 	}
-	if config.Project.Name != "layr-app" {
-		t.Fatalf("expected project name 'layr-app', got '%s'", config.Project.Name)
+	if config.Project.Name != "Layr App" {
+		t.Fatalf("expected project name 'Layr App', got '%s'", config.Project.Name)
 	}
-	if config.Project.Description != "Layr Application" {
-		t.Fatalf("expected project description 'Layr Application', got '%s'", config.Project.Description)
+	if config.Project.Description != "" {
+		t.Fatalf("expected project description '', got '%s'", config.Project.Description)
 	}
 
 	// Verify server defaults
@@ -755,7 +755,7 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 
 	// Default fallback when not loaded
 	defaultConfig := GetConfig()
-	if defaultConfig == nil || defaultConfig.Project.Name != "layr-app" {
+	if defaultConfig == nil || defaultConfig.Project.Name != "Layr App" {
 		t.Fatalf("expected Default config when not loaded, got: %v", defaultConfig)
 	}
 
@@ -793,7 +793,7 @@ func TestCoreConfigGetAndLifecycleUnit(t *testing.T) {
 	// UnloadConfig clears back to nil
 	UnloadConfig()
 	afterUnloadConfigConfig := GetConfig()
-	if afterUnloadConfigConfig.Project.Name != "layr-app" {
+	if afterUnloadConfigConfig.Project.Name != "Layr App" {
 		t.Fatalf("expected Default after UnloadConfig, got: %s", afterUnloadConfigConfig.Project.Name)
 	}
 }
@@ -806,8 +806,8 @@ func TestCoreConfigLoadConfigUnit(t *testing.T) {
 	if defaultErr != nil {
 		t.Fatalf("unexpected load config error: %v", defaultErr)
 	}
-	if defaultConfig.Project.Name != "layr-app" {
-		t.Errorf("expected default project name 'layr-app', got %q", defaultConfig.Project.Name)
+	if defaultConfig.Project.Name != "Layr App" {
+		t.Errorf("expected default project name 'Layr App', got %q", defaultConfig.Project.Name)
 	}
 	if defaultConfig.Server.ListenAddr != ":5297" {
 		t.Errorf("expected default listen addr ':5297', got %q", defaultConfig.Server.ListenAddr)

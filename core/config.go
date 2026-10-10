@@ -80,8 +80,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		Version: "1",
 		Project: ProjectConfig{
-			Name:        "layr-app",
-			Description: "Layr Application",
+			Name:        "Layr App",
+			Description: "",
 		},
 		Server: ServerConfig{
 			ListenAddr:        ":5297",
