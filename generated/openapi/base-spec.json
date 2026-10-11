@@ -1465,7 +1465,7 @@
   "paths": {
     "/v1/auth/anonymous": {
       "post": {
-        "description": "Issues an Ed25519 JWT access token and refresh token for an anonymous guest user with null email/phone and is_anonymous set to true.",
+        "description": "Creates an ephemeral guest user account in auth.users with role 'authenticated', is_anonymous set to true, null email/phone, and optional initial profile properties. Publishes auth.user.signed_up event and issues an Ed25519 JWT access token, rotated refresh token in auth.sessions, and authentication cookies.",
         "operationId": "auth__anonymous__sign_in",
         "requestBody": {
           "content": {
@@ -1495,9 +1495,9 @@
             "description": "OK"
           }
         },
-        "summary": "Sign in or initialize an anonymous guest user account",
+        "summary": "Initialize or sign in an anonymous guest user account",
         "tags": [
-          "Authentication"
+          "Anonymous"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1508,7 +1508,7 @@
     },
     "/v1/auth/mfa": {
       "delete": {
-        "description": "Disables TOTP multi-factor authentication, clears the user's encrypted MFA secret, and emits auth.mfa.disabled.",
+        "description": "Disables TOTP multi-factor authentication on auth.users for the authenticated user, clears the encrypted MFA secret, and publishes auth.mfa.disabled event. Requires authenticated user session.",
         "operationId": "auth__mfa__disable",
         "responses": {
           "200": {
@@ -1532,7 +1532,7 @@
         },
         "summary": "Disable multi-factor authentication on user account",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1541,7 +1541,7 @@
         "x-sdk-method-name": "disable"
       },
       "post": {
-        "description": "Generates a cryptographic TOTP secret and QR-code URI for Google Authenticator or 1Password enrollment.",
+        "description": "Generates a cryptographic RFC 6238 TOTP secret, stores it temporarily encrypted in the session cache, and returns an otpauth:// URI and QR code payload compatible with Google Authenticator, 1Password, or Authy. Requires authenticated user session.",
         "operationId": "auth__mfa__setup",
         "requestBody": {
           "content": {
@@ -1571,9 +1571,9 @@
             "description": "OK"
           }
         },
-        "summary": "Generate TOTP secret and setup URI for authenticator apps",
+        "summary": "Generate TOTP secret and setup URI for authenticator enrollment",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1584,7 +1584,7 @@
     },
     "/v1/auth/mfa/challenge": {
       "post": {
-        "description": "Verifies the short-lived MFA challenge ticket and TOTP code after password sign-in and issues an authenticated session.",
+        "description": "Verifies a 6-digit TOTP passcode against the user's enrolled MFA secret using a short-lived challenge ticket (5-minute TTL) issued during password sign-in. On verification, issues an Ed25519 JWT access token, rotated refresh token, and creates a session record in auth.sessions.",
         "operationId": "auth__mfa__challenge",
         "requestBody": {
           "content": {
@@ -1614,9 +1614,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify MFA challenge ticket with TOTP code",
+        "summary": "Verify MFA challenge ticket with TOTP passcode",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1627,7 +1627,7 @@
     },
     "/v1/auth/mfa/verify": {
       "post": {
-        "description": "Verifies the 6-digit TOTP code and marks MFA as enrolled on the user account.",
+        "description": "Validates the initial 6-digit TOTP code against the pending setup secret, sets mfa_enabled to true on auth.users, stores the AES-encrypted secret permanently, and publishes auth.mfa.enabled event. Requires authenticated user session.",
         "operationId": "auth__mfa__verify",
         "requestBody": {
           "content": {
@@ -1657,9 +1657,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify 2FA TOTP code and enable MFA on account",
+        "summary": "Verify initial TOTP code to complete MFA enrollment",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1670,7 +1670,7 @@
     },
     "/v1/auth/oauth/token": {
       "post": {
-        "description": "Issues access token, refresh token, and ID token in exchange for an authorization code with PKCE verification.",
+        "description": "Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications.",
         "operationId": "auth__oidc__token",
         "requestBody": {
           "content": {
@@ -1702,7 +1702,7 @@
         },
         "summary": "Exchange authorization code or refresh token for OpenID Connect tokens",
         "tags": [
-          "OpenID Connect"
+          "OIDC"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1713,7 +1713,7 @@
     },
     "/v1/auth/oauth/userinfo": {
       "get": {
-        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, name) for the authenticated caller.",
+        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.",
         "operationId": "auth__oidc__userinfo",
         "responses": {
           "200": {
@@ -1734,7 +1734,7 @@
         },
         "summary": "Retrieve OpenID Connect Core 1.0 user claims",
         "tags": [
-          "OpenID Connect"
+          "OIDC"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1745,7 +1745,7 @@
     },
     "/v1/auth/otp": {
       "post": {
-        "description": "Sends a 6-digit one-time password (OTP) verification code via configured SMS or email provider.",
+        "description": "Generates a single-use 6-digit numeric OTP with configurable TTL and rate limiting, hashes it with Argon2id, stores it in auth.otps, and dispatches it via configured email or SMS provider (Twilio, Vonage, SendGrid, Resend, or SMTP).",
         "operationId": "auth__otp__send",
         "requestBody": {
           "content": {
@@ -1778,9 +1778,9 @@
             "description": "OTP verification code dispatched"
           }
         },
-        "summary": "Request a 6-digit one-time password code via email or SMS",
+        "summary": "Request a one-time password verification code via email or SMS",
         "tags": [
-          "Passwordless"
+          "OTP"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1791,7 +1791,7 @@
     },
     "/v1/auth/otp/verify": {
       "post": {
-        "description": "Validates the 6-digit OTP code against argon2id hash and issues an authenticated session.",
+        "description": "Validates the 6-digit OTP code against stored Argon2id hash in auth.otps. On successful verification, marks contact method verified, issues an Ed25519 JWT access token and rotated refresh token, and creates an active session in auth.sessions.",
         "operationId": "auth__otp__verify",
         "requestBody": {
           "content": {
@@ -1821,9 +1821,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify 6-digit OTP code and issue authenticated session",
+        "summary": "Verify one-time password code and issue authenticated session",
         "tags": [
-          "Passwordless"
+          "OTP"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1834,7 +1834,7 @@
     },
     "/v1/auth/passkeys/sign-in": {
       "post": {
-        "description": "Begins WebAuthn passkey authentication, generating an assertion challenge for the user's registered credential.",
+        "description": "Initiates WebAuthn / FIDO2 assertion ceremony, generating a cryptographic challenge and credential request options for the client browser or authenticator hardware.",
         "operationId": "auth__passkeys__sign_in__begin",
         "requestBody": {
           "content": {
@@ -1866,7 +1866,7 @@
         },
         "summary": "Begin WebAuthn passkey authentication ceremony",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign In"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1878,7 +1878,7 @@
     },
     "/v1/auth/passkeys/sign-in/verify": {
       "post": {
-        "description": "Verifies WebAuthn assertion signature against stored public key and issues an authenticated session.",
+        "description": "Verifies the client's WebAuthn assertion signature against the registered public key and signature counter stored in auth.passkeys. Issues an Ed25519 JWT access token, refresh token, and session record in auth.sessions.",
         "operationId": "auth__passkeys__sign_in__verify",
         "requestBody": {
           "content": {
@@ -1908,9 +1908,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify WebAuthn passkey assertion signature",
+        "summary": "Verify WebAuthn passkey assertion signature and issue session",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign In"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1922,7 +1922,7 @@
     },
     "/v1/auth/passkeys/sign-up": {
       "post": {
-        "description": "Begins the WebAuthn ceremony for registering a hardware or biometric passkey, returning a cryptographic challenge.",
+        "description": "Initiates WebAuthn / FIDO2 credential creation ceremony, generating an attestation challenge, relying party metadata, and user entity options for hardware or platform passkey enrollment.",
         "operationId": "auth__passkeys__sign_up__begin",
         "requestBody": {
           "content": {
@@ -1954,7 +1954,7 @@
         },
         "summary": "Begin WebAuthn passkey registration ceremony",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign Up"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -1966,7 +1966,7 @@
     },
     "/v1/auth/passkeys/sign-up/verify": {
       "post": {
-        "description": "Validates the WebAuthn attestation response, stores credentials, and issues an authenticated session.",
+        "description": "Validates client attestation response and public key, stores credential record in auth.passkeys, creates user identity, and issues an authenticated session with Ed25519 JWT tokens.",
         "operationId": "auth__passkeys__sign_up__verify",
         "requestBody": {
           "content": {
@@ -1996,9 +1996,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify WebAuthn passkey registration attestation",
+        "summary": "Verify WebAuthn passkey registration attestation and store credential",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign Up"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2010,7 +2010,7 @@
     },
     "/v1/auth/password-reset/confirm": {
       "post": {
-        "description": "Verifies the password recovery code and updates the user's password using argon2id key derivation.",
+        "description": "Verifies single-use password recovery verification code, enforces password complexity and breach checks, updates password hash using Argon2id key derivation in auth.users, and revokes existing sessions.",
         "operationId": "auth__password_reset__confirm",
         "requestBody": {
           "content": {
@@ -2045,7 +2045,7 @@
         },
         "summary": "Confirm password reset with verification code and new password",
         "tags": [
-          "Authentication"
+          "Password Reset"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2056,7 +2056,7 @@
     },
     "/v1/auth/password-reset/request": {
       "post": {
-        "description": "Initiates password recovery by dispatching a single-use verification code to the registered email or SMS number.",
+        "description": "Initiates password recovery for registered user, generating an Argon2id-hashed single-use verification code with cooldown guards and dispatching it to registered email or SMS destination.",
         "operationId": "auth__password_reset__request",
         "requestBody": {
           "content": {
@@ -2091,7 +2091,7 @@
         },
         "summary": "Request a password reset verification code via email or SMS",
         "tags": [
-          "Authentication"
+          "Password Reset"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2102,7 +2102,7 @@
     },
     "/v1/auth/sign-in": {
       "post": {
-        "description": "Authenticates an application user with email/phone and password, returning an Ed25519 JWT access token, rotated refresh token, and custom claims resolved via public.auth_claims.",
+        "description": "Authenticates application user with email or normalized E.164 phone and password. Verifies Argon2id hash, checks account lockout status and breach flags. If MFA is enrolled, returns an ephemeral mfa_ticket challenge; otherwise issues Ed25519 JWT access token, refresh token in auth.sessions, and session cookies.",
         "operationId": "auth__sign_in",
         "requestBody": {
           "content": {
@@ -2132,9 +2132,9 @@
             "description": "OK"
           }
         },
-        "summary": "Authenticate with email/phone and password",
+        "summary": "Authenticate with email or phone and password",
         "tags": [
-          "Authentication"
+          "Sign In"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -2144,7 +2144,7 @@
     },
     "/v1/auth/sign-out": {
       "post": {
-        "description": "Revokes the active refresh token and invalidates the session record in auth.sessions.",
+        "description": "Revokes active refresh token, deletes corresponding session record from auth.sessions, clears session cookies, and emits auth.user.signed_out event.",
         "operationId": "auth__sign_out",
         "requestBody": {
           "content": {
@@ -2179,7 +2179,7 @@
         },
         "summary": "Revoke active session and refresh token",
         "tags": [
-          "Authentication"
+          "Sign Out"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -2189,7 +2189,7 @@
     },
     "/v1/auth/sign-up": {
       "post": {
-        "description": "Registers a new application user account with argon2id password hashing, optional auto-sign-in, and welcome email verification.",
+        "description": "Registers a new application user account with email or normalized E.164 phone, password complexity validation, breach detection, and Argon2id key derivation. Supports seamless upgrade of anonymous guest accounts. Dispatches verification code if confirmation is required; otherwise issues Ed25519 JWT tokens.",
         "operationId": "auth__sign_up",
         "requestBody": {
           "content": {
@@ -2219,9 +2219,9 @@
             "description": "OK"
           }
         },
-        "summary": "Register a new user with email/phone and password",
+        "summary": "Register a new application user with password",
         "tags": [
-          "Authentication"
+          "Sign Up"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -2231,7 +2231,7 @@
     },
     "/v1/auth/token/refresh": {
       "post": {
-        "description": "Exchanges a valid refresh token for a freshly signed Ed25519 JWT access token with updated claims resolved via public.auth_claims.",
+        "description": "Validates submitted refresh token against SHA-256 hash in auth.sessions, checks session expiry and user lock status, rotates refresh token, and issues a freshly signed Ed25519 JWT access token with updated claims resolved from public.auth_claims.",
         "operationId": "auth__token__refresh",
         "requestBody": {
           "content": {
@@ -2263,7 +2263,7 @@
         },
         "summary": "Exchange refresh token for fresh JWT access token",
         "tags": [
-          "Authentication"
+          "Token"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2274,7 +2274,7 @@
     },
     "/v1/auth/user": {
       "delete": {
-        "description": "Deletes the user account, cascading active sessions, passkeys, and identities, and revoking authentication cookies.",
+        "description": "Permanently deletes the authenticated user from auth.users, cascading deletion across auth.sessions, auth.identities, auth.passkeys, and user properties. Clears authentication cookies and emits auth.user.deleted event. Requires authenticated user session.",
         "operationId": "auth__user__delete",
         "responses": {
           "200": {
@@ -2298,7 +2298,7 @@
         },
         "summary": "Permanently delete authenticated user account",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2307,7 +2307,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves the authenticated user, verification status, and MFA enrollment status.",
+        "description": "Retrieves authenticated user profile from auth.users, including email, phone, verification timestamps, role, custom properties JSON, MFA enrollment status, and lockout flags. Requires authenticated user session.",
         "operationId": "auth__user__get",
         "responses": {
           "200": {
@@ -2326,9 +2326,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get authenticated user",
+        "summary": "Get profile and verification details of authenticated user",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2339,7 +2339,7 @@
     },
     "/v1/auth/user/email": {
       "patch": {
-        "description": "Asserts email uniqueness, generates a single-use verification code, and dispatches it to the new email address.",
+        "description": "Asserts uniqueness of the new email address, generates an Argon2id-hashed single-use verification code, and dispatches it to the requested email. The address is updated once verified. Requires authenticated user session.",
         "operationId": "auth__user__email__update",
         "requestBody": {
           "content": {
@@ -2372,9 +2372,9 @@
             "description": "Email verification code sent"
           }
         },
-        "summary": "Request to update authenticated user email",
+        "summary": "Request update of authenticated user email address",
         "tags": [
-          "User Self-Service"
+          "User Email"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2386,7 +2386,7 @@
     },
     "/v1/auth/user/email/verification/confirm": {
       "post": {
-        "description": "Verifies the email code and marks the user's email as verified.",
+        "description": "Verifies submitted single-use code against pending email verification record, sets email_verified_at timestamp in auth.users, and updates primary email if part of an address change flow. Requires authenticated user session.",
         "operationId": "auth__user__email__verification__confirm",
         "requestBody": {
           "content": {
@@ -2419,9 +2419,9 @@
             "description": "Email successfully verified"
           }
         },
-        "summary": "Confirm email verification with code",
+        "summary": "Confirm email verification code",
         "tags": [
-          "User Self-Service"
+          "User Email Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2434,7 +2434,7 @@
     },
     "/v1/auth/user/email/verification/request": {
       "post": {
-        "description": "Dispatches a single-use verification code to the recipient's email address.",
+        "description": "Generates and dispatches a single-use verification code to the authenticated user's registered unverified email address. Rate-limited by IP and user cooldowns. Requires authenticated user session.",
         "operationId": "auth__user__email__verification__request",
         "requestBody": {
           "content": {
@@ -2467,9 +2467,9 @@
             "description": "Email verification code sent"
           }
         },
-        "summary": "Request an email verification code",
+        "summary": "Request an email verification code for current email",
         "tags": [
-          "User Self-Service"
+          "User Email Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2482,7 +2482,7 @@
     },
     "/v1/auth/user/export": {
       "post": {
-        "description": "Exports all personal data, sessions, and identities associated with the authenticated user in compliance with GDPR Article 20.",
+        "description": "Exports full personal data graph associated with the authenticated user, including profile metadata, linked authentication identities, active sessions, and passkey registrations in portable JSON format. Requires authenticated user session.",
         "operationId": "auth__user__export",
         "requestBody": {
           "content": {
@@ -2512,9 +2512,9 @@
             "description": "OK"
           }
         },
-        "summary": "Export comprehensive current user account data graph",
+        "summary": "Export comprehensive user account data graph (GDPR Article 20)",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2525,7 +2525,7 @@
     },
     "/v1/auth/user/passkeys": {
       "get": {
-        "description": "Retrieves all registered WebAuthn passkey credentials belonging to the authenticated user.",
+        "description": "Retrieves all registered WebAuthn / FIDO2 passkey credentials for the authenticated user from auth.passkeys, including credential IDs, friendly names, creation timestamps, and last used dates. Requires authenticated user session.",
         "operationId": "auth__user__passkeys__list",
         "responses": {
           "200": {
@@ -2552,7 +2552,7 @@
         },
         "summary": "List registered passkeys for current user",
         "tags": [
-          "Passkeys"
+          "User Passkeys"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2564,7 +2564,7 @@
     },
     "/v1/auth/user/passkeys/{passkey_id}": {
       "delete": {
-        "description": "Revokes and deletes a registered WebAuthn passkey credential belonging to the authenticated user.",
+        "description": "Deletes a registered WebAuthn passkey credential from auth.passkeys belonging to the authenticated user. Prohibits deleting credentials belonging to other users. Requires authenticated user session.",
         "operationId": "auth__user__passkeys__delete",
         "parameters": [
           {
@@ -2596,9 +2596,9 @@
             "description": "Passkey revoked"
           }
         },
-        "summary": "Revoke a registered passkey",
+        "summary": "Revoke a registered passkey credential",
         "tags": [
-          "Passkeys"
+          "User Passkeys"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2610,7 +2610,7 @@
     },
     "/v1/auth/user/password": {
       "patch": {
-        "description": "Updates the user's password, verifying current password if one is already set. Prohibited on anonymous accounts.",
+        "description": "Updates the account password in auth.users. Verifies current password if one is already set, enforces password complexity and breach checks, and rehashes with Argon2id. Prohibited on anonymous accounts. Requires authenticated user session.",
         "operationId": "auth__user__password__update",
         "requestBody": {
           "content": {
@@ -2643,9 +2643,9 @@
             "description": "Password updated successfully"
           }
         },
-        "summary": "Change or set account password",
+        "summary": "Change or set password for current user",
         "tags": [
-          "User Self-Service"
+          "User Password"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2657,7 +2657,7 @@
     },
     "/v1/auth/user/phone": {
       "patch": {
-        "description": "Asserts phone uniqueness, generates a single-use verification code, and dispatches it via SMS to the new phone number.",
+        "description": "Normalizes new phone number to E.164, verifies uniqueness in auth.users, generates single-use verification code, and dispatches via SMS. Requires authenticated user session.",
         "operationId": "auth__user__phone__update",
         "requestBody": {
           "content": {
@@ -2690,9 +2690,9 @@
             "description": "Phone verification code sent"
           }
         },
-        "summary": "Request to update authenticated user phone number",
+        "summary": "Request update of authenticated user phone number",
         "tags": [
-          "User Self-Service"
+          "User Phone"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2704,7 +2704,7 @@
     },
     "/v1/auth/user/phone/verification/confirm": {
       "post": {
-        "description": "Verifies the phone code and marks the user's phone number as verified.",
+        "description": "Verifies submitted single-use SMS code against pending verification record, updates phone_verified_at in auth.users, and marks phone as verified. Requires authenticated user session.",
         "operationId": "auth__user__phone__verification__confirm",
         "requestBody": {
           "content": {
@@ -2737,9 +2737,9 @@
             "description": "Phone successfully verified"
           }
         },
-        "summary": "Confirm phone verification with code",
+        "summary": "Confirm phone verification code",
         "tags": [
-          "User Self-Service"
+          "User Phone Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2752,7 +2752,7 @@
     },
     "/v1/auth/user/phone/verification/request": {
       "post": {
-        "description": "Dispatches a single-use verification code via SMS to the recipient's phone number.",
+        "description": "Generates and dispatches a single-use verification code via SMS to the authenticated user's registered phone number. Requires authenticated user session.",
         "operationId": "auth__user__phone__verification__request",
         "requestBody": {
           "content": {
@@ -2785,9 +2785,9 @@
             "description": "Phone verification code sent"
           }
         },
-        "summary": "Request a phone verification code",
+        "summary": "Request a phone verification code for current phone",
         "tags": [
-          "User Self-Service"
+          "User Phone Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2800,7 +2800,7 @@
     },
     "/v1/auth/user/properties": {
       "patch": {
-        "description": "Merges personal custom properties into the authenticated user.",
+        "description": "Performs shallow merge of custom JSON properties into the properties column of auth.users for the authenticated user, validating JSON size limits. Requires authenticated user session.",
         "operationId": "auth__user__properties__update",
         "requestBody": {
           "content": {
@@ -2830,9 +2830,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update user personal properties",
+        "summary": "Update custom personal properties on user profile",
         "tags": [
-          "User Self-Service"
+          "User Properties"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2844,7 +2844,7 @@
     },
     "/v1/auth/user/sessions": {
       "get": {
-        "description": "Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker.",
+        "description": "Returns active sessions from auth.sessions for the authenticated user, detailing IP address, user agent, creation date, expiry timestamp, and a flag indicating the current device session. Requires authenticated user session.",
         "operationId": "auth__user__sessions__list",
         "responses": {
           "200": {
@@ -2865,7 +2865,7 @@
         },
         "summary": "List active sessions for current user",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2877,7 +2877,7 @@
     },
     "/v1/auth/user/sessions/revoke-others": {
       "post": {
-        "description": "Revokes all active sessions for the current user except the currently active device session.",
+        "description": "Revokes all active sessions in auth.sessions belonging to the authenticated user except the current device session, invalidating other refresh tokens immediately. Requires authenticated user session.",
         "operationId": "auth__user__sessions__revoke_others",
         "requestBody": {
           "content": {
@@ -2907,9 +2907,9 @@
             "description": "OK"
           }
         },
-        "summary": "Sign out of all other devices",
+        "summary": "Sign out of all other devices and sessions",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2921,7 +2921,7 @@
     },
     "/v1/auth/user/sessions/{session_id}": {
       "delete": {
-        "description": "Revokes an active session by session ID belonging to the authenticated user.",
+        "description": "Deletes a specific session record from auth.sessions belonging to the authenticated user, terminating access for that device. Requires authenticated user session.",
         "operationId": "auth__user__sessions__revoke",
         "parameters": [
           {
@@ -2953,9 +2953,9 @@
             "description": "Session revoked"
           }
         },
-        "summary": "Revoke specific user session",
+        "summary": "Revoke a specific user session by ID",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -2967,7 +2967,7 @@
     },
     "/v1/data/kv/increment": {
       "post": {
-        "description": "Atomically increments or decrements an integer counter in the KV cache with custom step and TTL preservation.",
+        "description": "Atomically modifies an integer counter in the KV store by step value (positive or negative) with optional TTL preservation, returning the updated integer.",
         "operationId": "data__kv__increment",
         "requestBody": {
           "content": {
@@ -2997,9 +2997,9 @@
             "description": "OK"
           }
         },
-        "summary": "Atomically increment or decrement a KV key",
+        "summary": "Atomically increment or decrement an integer counter",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3010,7 +3010,7 @@
     },
     "/v1/data/kv/mget": {
       "post": {
-        "description": "Batch fetches multiple keys from the ephemeral KV cache in a single atomic pipelined round-trip.",
+        "description": "Fetches values for an array of keys from the distributed ephemeral KV cache in a single atomic pipelined round-trip, maintaining tenant/session key isolation.",
         "operationId": "data__kv__mget",
         "requestBody": {
           "content": {
@@ -3040,9 +3040,9 @@
             "description": "OK"
           }
         },
-        "summary": "Multi-get KV entries by list of keys",
+        "summary": "Batch get multiple ephemeral KV entries",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3053,7 +3053,7 @@
     },
     "/v1/data/kv/mset": {
       "post": {
-        "description": "Batch stores multiple key-value entries in the ephemeral KV store in a single round-trip.",
+        "description": "Stores multiple key-value pairs with optional individual TTLs in the distributed KV cache in a single atomic round-trip.",
         "operationId": "data__kv__mset",
         "requestBody": {
           "content": {
@@ -3083,9 +3083,9 @@
             "description": "OK"
           }
         },
-        "summary": "Batch set multiple KV entries",
+        "summary": "Batch set multiple ephemeral KV entries",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3096,7 +3096,7 @@
     },
     "/v1/data/kv/{key}": {
       "delete": {
-        "description": "Evicts an entry from the ephemeral key-value cache.",
+        "description": "Evicts a key-value entry from the distributed KV cache.",
         "operationId": "data__kv__delete",
         "parameters": [
           {
@@ -3130,7 +3130,7 @@
         },
         "summary": "Delete an ephemeral KV entry",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3139,7 +3139,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves an ephemeral key-value entry with session/tenant isolation from the distributed KV store.",
+        "description": "Retrieves a key-value entry with session/tenant isolation from the distributed KV store. Returns 404 if expired or not found.",
         "operationId": "data__kv__get",
         "parameters": [
           {
@@ -3170,7 +3170,7 @@
         },
         "summary": "Get an ephemeral KV entry by key",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3179,7 +3179,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Updates expiration TTL of an existing key without modifying its value.",
+        "description": "Updates the expiration TTL of an existing key in the KV cache without altering its stored payload.",
         "operationId": "data__kv__touch",
         "parameters": [
           {
@@ -3219,9 +3219,9 @@
             "description": "OK"
           }
         },
-        "summary": "Refresh TTL of an ephemeral KV entry",
+        "summary": "Refresh TTL of an existing KV entry",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3230,7 +3230,7 @@
         "x-sdk-method-name": "touch"
       },
       "post": {
-        "description": "Stores a key-value entry in the ephemeral KV store with { value, ttl } JSON envelope and optional SetNX.",
+        "description": "Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).",
         "operationId": "data__kv__set",
         "parameters": [
           {
@@ -3270,9 +3270,9 @@
             "description": "OK"
           }
         },
-        "summary": "Set an ephemeral KV entry with envelope",
+        "summary": "Set an ephemeral KV entry with JSON envelope",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3281,7 +3281,7 @@
         "x-sdk-method-name": "set"
       },
       "put": {
-        "description": "Stores raw request body directly in the ephemeral KV store with optional ?ttl= query parameter and SetNX.",
+        "description": "Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.",
         "operationId": "data__kv__put",
         "parameters": [
           {
@@ -3321,9 +3321,9 @@
             "description": "OK"
           }
         },
-        "summary": "Put raw ephemeral KV entry",
+        "summary": "Put raw ephemeral KV entry with query TTL",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3334,7 +3334,7 @@
     },
     "/v1/data/{schema_name}/rpc/{function_name}": {
       "get": {
-        "description": "Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims using query parameters.",
+        "description": "Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.",
         "operationId": "data__rpc__query",
         "parameters": [
           {
@@ -3371,9 +3371,9 @@
             "description": "OK"
           }
         },
-        "summary": "Execute database stored function or procedure (read-only)",
+        "summary": "Execute read-only database stored function or procedure",
         "tags": [
-          "Data REST Gateway"
+          "RPC"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3382,7 +3382,7 @@
         "x-sdk-method-name": "query"
       },
       "post": {
-        "description": "Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims.",
+        "description": "Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.",
         "operationId": "data__rpc__mutation",
         "parameters": [
           {
@@ -3430,9 +3430,9 @@
             "description": "OK"
           }
         },
-        "summary": "Execute database stored function or procedure",
+        "summary": "Execute database stored function or procedure with JSON payload",
         "tags": [
-          "Data REST Gateway"
+          "RPC"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3443,7 +3443,7 @@
     },
     "/v1/data/{schema_name}/{table_name}": {
       "get": {
-        "description": "Queries PostgreSQL table with dynamic filters, JSON path filtering, pagination, and sorting with RLS enforcement.",
+        "description": "Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.",
         "operationId": "data__records__list",
         "parameters": [
           {
@@ -3480,9 +3480,9 @@
             "description": "OK"
           }
         },
-        "summary": "Query multiple rows with pagination, filtering, and sorting",
+        "summary": "Query table rows with dynamic filtering, sorting, and pagination",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3491,7 +3491,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Inserts a single row or batch of records into PostgreSQL, automatically applying defaults and returning inserted tuples.",
+        "description": "Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.",
         "operationId": "data__records__create",
         "parameters": [
           {
@@ -3541,7 +3541,7 @@
         },
         "summary": "Insert single or bulk rows with RETURNING *",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3552,7 +3552,7 @@
     },
     "/v1/data/{schema_name}/{table_name}/{record_id}": {
       "delete": {
-        "description": "Deletes a row by primary key from PostgreSQL subject to RLS DELETE policies.",
+        "description": "Deletes a row by primary key from PostgreSQL subject to caller RLS DELETE ... USING policies, invalidating table query caches and broadcasting CDC events.",
         "operationId": "data__records__delete",
         "parameters": [
           {
@@ -3602,7 +3602,7 @@
         },
         "summary": "Delete a row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3611,7 +3611,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves a single row from PostgreSQL by its UUID or primary key with RLS enforcement.",
+        "description": "Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.",
         "operationId": "data__records__get",
         "parameters": [
           {
@@ -3658,7 +3658,7 @@
         },
         "summary": "Get a single row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3667,7 +3667,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Applies a partial update to a row identified by primary key, validating against RLS UPDATE policies.",
+        "description": "Applies partial column updates to a row identified by primary key, validating against RLS UPDATE ... USING ... WITH CHECK policies, invalidating cached queries, and broadcasting CDC changes.",
         "operationId": "data__records__update",
         "parameters": [
           {
@@ -3725,7 +3725,7 @@
         },
         "summary": "Partially update a row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3734,7 +3734,7 @@
         "x-sdk-method-name": "update"
       },
       "put": {
-        "description": "Updates a row identified by primary key, validating against RLS UPDATE policies.",
+        "description": "Replaces column values for a row identified by primary key, validating against RLS UPDATE policies, invalidating table query caches, and broadcasting CDC changes.",
         "operationId": "data__records__put",
         "parameters": [
           {
@@ -3790,9 +3790,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update a row by primary key",
+        "summary": "Update entire row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -3803,7 +3803,7 @@
     },
     "/v1/file-storage/objects/{bucket}/{key...}": {
       "delete": {
-        "description": "Permanently removes the object from the file storage backend.",
+        "description": "Deletes file object binary payload from the storage backend (database or S3) and removes its metadata row from file_storage.objects. Emits file_storage.object.deleted event.",
         "operationId": "file_storage__objects__delete",
         "parameters": [
           {
@@ -3844,9 +3844,9 @@
             "description": "Object deleted"
           }
         },
-        "summary": "Delete a file object",
+        "summary": "Permanently delete a file object",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -3855,7 +3855,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Streams binary object content from the configured file storage backend with byte-range support.",
+        "description": "Streams binary object payload from configured backend (PostgreSQL database bytea or S3) with HTTP Range header support, Content-Type, Content-Length, and ETag validation. Enforces public bucket policy or valid capability credentials.",
         "operationId": "file_storage__objects__download",
         "parameters": [
           {
@@ -3889,9 +3889,9 @@
             "description": "File binary stream"
           }
         },
-        "summary": "Download a file object",
+        "summary": "Download a file object with byte-range support",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -3900,7 +3900,7 @@
         "x-sdk-method-name": "download"
       },
       "head": {
-        "description": "Returns HTTP headers for the object including Content-Length, Content-Type, and ETag.",
+        "description": "Returns HTTP metadata headers (Content-Length, Content-Type, ETag, Last-Modified) for a stored file without streaming body payload.",
         "operationId": "file_storage__objects__head",
         "parameters": [
           {
@@ -3940,7 +3940,7 @@
         },
         "summary": "Inspect file object metadata headers",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -3949,7 +3949,7 @@
         "x-sdk-method-name": "head"
       },
       "post": {
-        "description": "Uploads binary payload into the specified bucket.",
+        "description": "Uploads binary object payload into the target bucket, enforcing size guards and MIME validation. Stores in backend, writes metadata to file_storage.objects, and emits object created/updated event.",
         "operationId": "file_storage__objects__upload_post",
         "parameters": [
           {
@@ -4000,7 +4000,7 @@
         },
         "summary": "Upload a file object via POST",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -4009,7 +4009,7 @@
         "x-sdk-method-name": "upload_post"
       },
       "put": {
-        "description": "Uploads binary payload into the specified bucket.",
+        "description": "Stores binary payload in the specified bucket, enforcing bucket file size limits and MIME allowlists. Creates or updates metadata record in file_storage.objects and emits file_storage.object.created or file_storage.object.updated event.",
         "operationId": "file_storage__objects__upload_put",
         "parameters": [
           {
@@ -4060,7 +4060,7 @@
         },
         "summary": "Upload a file object via PUT",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -4071,7 +4071,7 @@
     },
     "/v1/file-storage/url/presign": {
       "post": {
-        "description": "Generates a cryptographically signed URL allowing temporary read or write access.",
+        "description": "Generates a cryptographically signed HMAC-SHA256 capability URL granting temporary read (GET) or write (PUT) access to a specific bucket and key path with configurable expiration TTL.",
         "operationId": "file_storage__url__presign",
         "requestBody": {
           "content": {
@@ -4101,9 +4101,9 @@
             "description": "OK"
           }
         },
-        "summary": "Mint a presigned capability URL",
+        "summary": "Mint a presigned capability URL for temporary file access",
         "tags": [
-          "File Storage Capability"
+          "URLs"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -4114,7 +4114,7 @@
     },
     "/v1/graphql": {
       "post": {
-        "description": "Dynamic GraphQL introspection and query engine over PostgreSQL catalog.",
+        "description": "Dynamic introspection and execution engine over PostgreSQL tables, supporting complex nested selections, arguments, variables, query depth limits (max depth guard), complexity budgets, and native RLS session context injection.",
         "operationId": "data__graphql",
         "requestBody": {
           "content": {
@@ -4146,7 +4146,7 @@
         },
         "summary": "Execute GraphQL query or mutation",
         "tags": [
-          "Data GraphQL"
+          "GraphQL"
         ],
         "x-sdk-group-name": [
           "data"
@@ -4156,7 +4156,7 @@
     },
     "/v1/image/info": {
       "post": {
-        "description": "Extracts dimensions, format, colorspace, EXIF, and structural metadata from an uploaded image payload.",
+        "description": "Probes and extracts dimensions, format, file size, colorspace, and EXIF metadata from an uploaded image binary payload.",
         "operationId": "image__info__post",
         "requestBody": {
           "content": {
@@ -4188,7 +4188,7 @@
         },
         "summary": "Inspect image metadata from binary upload",
         "tags": [
-          "Image Data Plane"
+          "Info"
         ],
         "x-sdk-group-name": [
           "image",
@@ -4199,7 +4199,7 @@
     },
     "/v1/image/info/{signature}/{path...}": {
       "get": {
-        "description": "Extracts dimensions, format, colorspace, EXIF, and structural metadata from a remote or local image path.",
+        "description": "Extracts structural metadata (width, height, format, file size, colorspace, EXIF, orientation) from a remote or storage image path using cryptographic signature verification.",
         "operationId": "image__info__get",
         "parameters": [
           {
@@ -4239,7 +4239,7 @@
         },
         "summary": "Inspect image metadata by path",
         "tags": [
-          "Image Data Plane"
+          "Info"
         ],
         "x-sdk-group-name": [
           "image",
@@ -4250,7 +4250,7 @@
     },
     "/v1/image/{signature}/{path...}": {
       "get": {
-        "description": "Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications.",
+        "description": "Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications. Verifies HMAC-SHA256 signature if enabled, caches transformed result, and streams binary image with appropriate Content-Type header.",
         "operationId": "image__transform__get",
         "parameters": [
           {
@@ -4284,9 +4284,9 @@
             "description": "Transformed image binary stream"
           }
         },
-        "summary": "Transform and optimize an image",
+        "summary": "Transform and optimize an image dynamically",
         "tags": [
-          "Image Data Plane"
+          "Transform"
         ],
         "x-sdk-group-name": [
           "image",
@@ -4297,7 +4297,7 @@
     },
     "/v1/manifest": {
       "get": {
-        "description": "Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization.",
+        "description": "Returns cluster metadata, list of enabled platform services, public server base URL, and the derived publishable key required for SDK client initialization. Unrestricted public endpoint.",
         "operationId": "core__manifest",
         "responses": {
           "200": {
@@ -4318,7 +4318,7 @@
         },
         "summary": "Get dynamic cluster manifest and enabled services",
         "tags": [
-          "Discovery"
+          "Manifest"
         ],
         "x-sdk-group-name": [
           "core"

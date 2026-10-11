@@ -157,34 +157,34 @@ Standard base APIs are callable on their service client instance (from hooks suc
 #### `auth` (Auth Service — via `useAuth(client)`)
 
 - Root methods (`auth.*`):
-  - [ ] `auth.sign_in()`: Authenticate with email/phone and password (`POST /v1/auth/sign-in` | `auth__sign_in`)
+  - [ ] `auth.sign_in()`: Authenticate with email or phone and password (`POST /v1/auth/sign-in` | `auth__sign_in`)
   - [ ] `auth.sign_out()`: Revoke active session and refresh token (`POST /v1/auth/sign-out` | `auth__sign_out`)
-  - [ ] `auth.sign_up()`: Register a new user with email/phone and password (`POST /v1/auth/sign-up` | `auth__sign_up`)
+  - [ ] `auth.sign_up()`: Register a new application user with password (`POST /v1/auth/sign-up` | `auth__sign_up`)
 
 - Subgroup `auth.anonymous.*`:
-  - [ ] `auth.anonymous.sign_in()`: Sign in or initialize an anonymous guest user account (`POST /v1/auth/anonymous` | `auth__anonymous__sign_in`)
+  - [ ] `auth.anonymous.sign_in()`: Initialize or sign in an anonymous guest user account (`POST /v1/auth/anonymous` | `auth__anonymous__sign_in`)
 
 - Subgroup `auth.mfa.*`:
-  - [ ] `auth.mfa.challenge()`: Verify MFA challenge ticket with TOTP code (`POST /v1/auth/mfa/challenge` | `auth__mfa__challenge`)
+  - [ ] `auth.mfa.challenge()`: Verify MFA challenge ticket with TOTP passcode (`POST /v1/auth/mfa/challenge` | `auth__mfa__challenge`)
   - [ ] `auth.mfa.disable()`: Disable multi-factor authentication on user account (`DELETE /v1/auth/mfa` | `auth__mfa__disable`)
-  - [ ] `auth.mfa.setup()`: Generate TOTP secret and setup URI for authenticator apps (`POST /v1/auth/mfa` | `auth__mfa__setup`)
-  - [ ] `auth.mfa.verify()`: Verify 2FA TOTP code and enable MFA on account (`POST /v1/auth/mfa/verify` | `auth__mfa__verify`)
+  - [ ] `auth.mfa.setup()`: Generate TOTP secret and setup URI for authenticator enrollment (`POST /v1/auth/mfa` | `auth__mfa__setup`)
+  - [ ] `auth.mfa.verify()`: Verify initial TOTP code to complete MFA enrollment (`POST /v1/auth/mfa/verify` | `auth__mfa__verify`)
 
 - Subgroup `auth.oidc.*`:
   - [ ] `auth.oidc.token()`: Exchange authorization code or refresh token for OpenID Connect tokens (`POST /v1/auth/oauth/token` | `auth__oidc__token`)
   - [ ] `auth.oidc.userinfo()`: Retrieve OpenID Connect Core 1.0 user claims (`GET /v1/auth/oauth/userinfo` | `auth__oidc__userinfo`)
 
 - Subgroup `auth.otp.*`:
-  - [ ] `auth.otp.send()`: Request a 6-digit one-time password code via email or SMS (`POST /v1/auth/otp` | `auth__otp__send`)
-  - [ ] `auth.otp.verify()`: Verify 6-digit OTP code and issue authenticated session (`POST /v1/auth/otp/verify` | `auth__otp__verify`)
+  - [ ] `auth.otp.send()`: Request a one-time password verification code via email or SMS (`POST /v1/auth/otp` | `auth__otp__send`)
+  - [ ] `auth.otp.verify()`: Verify one-time password code and issue authenticated session (`POST /v1/auth/otp/verify` | `auth__otp__verify`)
 
 - Subgroup `auth.passkeys.sign_in.*`:
   - [ ] `auth.passkeys.sign_in.begin()`: Begin WebAuthn passkey authentication ceremony (`POST /v1/auth/passkeys/sign-in` | `auth__passkeys__sign_in__begin`)
-  - [ ] `auth.passkeys.sign_in.verify()`: Verify WebAuthn passkey assertion signature (`POST /v1/auth/passkeys/sign-in/verify` | `auth__passkeys__sign_in__verify`)
+  - [ ] `auth.passkeys.sign_in.verify()`: Verify WebAuthn passkey assertion signature and issue session (`POST /v1/auth/passkeys/sign-in/verify` | `auth__passkeys__sign_in__verify`)
 
 - Subgroup `auth.passkeys.sign_up.*`:
   - [ ] `auth.passkeys.sign_up.begin()`: Begin WebAuthn passkey registration ceremony (`POST /v1/auth/passkeys/sign-up` | `auth__passkeys__sign_up__begin`)
-  - [ ] `auth.passkeys.sign_up.verify()`: Verify WebAuthn passkey registration attestation (`POST /v1/auth/passkeys/sign-up/verify` | `auth__passkeys__sign_up__verify`)
+  - [ ] `auth.passkeys.sign_up.verify()`: Verify WebAuthn passkey registration attestation and store credential (`POST /v1/auth/passkeys/sign-up/verify` | `auth__passkeys__sign_up__verify`)
 
 - Subgroup `auth.password_reset.*`:
   - [ ] `auth.password_reset.confirm()`: Confirm password reset with verification code and new password (`POST /v1/auth/password-reset/confirm` | `auth__password_reset__confirm`)
@@ -195,37 +195,37 @@ Standard base APIs are callable on their service client instance (from hooks suc
 
 - Subgroup `auth.user.*`:
   - [ ] `auth.user.delete()`: Permanently delete authenticated user account (`DELETE /v1/auth/user` | `auth__user__delete`)
-  - [ ] `auth.user.export()`: Export comprehensive current user account data graph (`POST /v1/auth/user/export` | `auth__user__export`)
-  - [ ] `auth.user.get()`: Get authenticated user (`GET /v1/auth/user` | `auth__user__get`)
+  - [ ] `auth.user.export()`: Export comprehensive user account data graph (GDPR Article 20) (`POST /v1/auth/user/export` | `auth__user__export`)
+  - [ ] `auth.user.get()`: Get profile and verification details of authenticated user (`GET /v1/auth/user` | `auth__user__get`)
 
 - Subgroup `auth.user.email.*`:
-  - [ ] `auth.user.email.update()`: Request to update authenticated user email (`PATCH /v1/auth/user/email` | `auth__user__email__update`)
+  - [ ] `auth.user.email.update()`: Request update of authenticated user email address (`PATCH /v1/auth/user/email` | `auth__user__email__update`)
 
 - Subgroup `auth.user.email.verification.*`:
-  - [ ] `auth.user.email.verification.confirm()`: Confirm email verification with code (`POST /v1/auth/user/email/verification/confirm` | `auth__user__email__verification__confirm`)
-  - [ ] `auth.user.email.verification.request()`: Request an email verification code (`POST /v1/auth/user/email/verification/request` | `auth__user__email__verification__request`)
+  - [ ] `auth.user.email.verification.confirm()`: Confirm email verification code (`POST /v1/auth/user/email/verification/confirm` | `auth__user__email__verification__confirm`)
+  - [ ] `auth.user.email.verification.request()`: Request an email verification code for current email (`POST /v1/auth/user/email/verification/request` | `auth__user__email__verification__request`)
 
 - Subgroup `auth.user.passkeys.*`:
-  - [ ] `auth.user.passkeys.delete()`: Revoke a registered passkey (`DELETE /v1/auth/user/passkeys/{passkey_id}` | `auth__user__passkeys__delete`)
+  - [ ] `auth.user.passkeys.delete()`: Revoke a registered passkey credential (`DELETE /v1/auth/user/passkeys/{passkey_id}` | `auth__user__passkeys__delete`)
   - [ ] `auth.user.passkeys.list()`: List registered passkeys for current user (`GET /v1/auth/user/passkeys` | `auth__user__passkeys__list`)
 
 - Subgroup `auth.user.password.*`:
-  - [ ] `auth.user.password.update()`: Change or set account password (`PATCH /v1/auth/user/password` | `auth__user__password__update`)
+  - [ ] `auth.user.password.update()`: Change or set password for current user (`PATCH /v1/auth/user/password` | `auth__user__password__update`)
 
 - Subgroup `auth.user.phone.*`:
-  - [ ] `auth.user.phone.update()`: Request to update authenticated user phone number (`PATCH /v1/auth/user/phone` | `auth__user__phone__update`)
+  - [ ] `auth.user.phone.update()`: Request update of authenticated user phone number (`PATCH /v1/auth/user/phone` | `auth__user__phone__update`)
 
 - Subgroup `auth.user.phone.verification.*`:
-  - [ ] `auth.user.phone.verification.confirm()`: Confirm phone verification with code (`POST /v1/auth/user/phone/verification/confirm` | `auth__user__phone__verification__confirm`)
-  - [ ] `auth.user.phone.verification.request()`: Request a phone verification code (`POST /v1/auth/user/phone/verification/request` | `auth__user__phone__verification__request`)
+  - [ ] `auth.user.phone.verification.confirm()`: Confirm phone verification code (`POST /v1/auth/user/phone/verification/confirm` | `auth__user__phone__verification__confirm`)
+  - [ ] `auth.user.phone.verification.request()`: Request a phone verification code for current phone (`POST /v1/auth/user/phone/verification/request` | `auth__user__phone__verification__request`)
 
 - Subgroup `auth.user.properties.*`:
-  - [ ] `auth.user.properties.update()`: Update user personal properties (`PATCH /v1/auth/user/properties` | `auth__user__properties__update`)
+  - [ ] `auth.user.properties.update()`: Update custom personal properties on user profile (`PATCH /v1/auth/user/properties` | `auth__user__properties__update`)
 
 - Subgroup `auth.user.sessions.*`:
   - [ ] `auth.user.sessions.list()`: List active sessions for current user (`GET /v1/auth/user/sessions` | `auth__user__sessions__list`)
-  - [ ] `auth.user.sessions.revoke()`: Revoke specific user session (`DELETE /v1/auth/user/sessions/{session_id}` | `auth__user__sessions__revoke`)
-  - [ ] `auth.user.sessions.revoke_others()`: Sign out of all other devices (`POST /v1/auth/user/sessions/revoke-others` | `auth__user__sessions__revoke_others`)
+  - [ ] `auth.user.sessions.revoke()`: Revoke a specific user session by ID (`DELETE /v1/auth/user/sessions/{session_id}` | `auth__user__sessions__revoke`)
+  - [ ] `auth.user.sessions.revoke_others()`: Sign out of all other devices and sessions (`POST /v1/auth/user/sessions/revoke-others` | `auth__user__sessions__revoke_others`)
 
 #### `core` (Core Service — via `useCore(client)`)
 
@@ -240,36 +240,36 @@ Standard base APIs are callable on their service client instance (from hooks suc
 - Subgroup `data.kv.*`:
   - [ ] `data.kv.delete()`: Delete an ephemeral KV entry (`DELETE /v1/data/kv/{key}` | `data__kv__delete`)
   - [ ] `data.kv.get()`: Get an ephemeral KV entry by key (`GET /v1/data/kv/{key}` | `data__kv__get`)
-  - [ ] `data.kv.increment()`: Atomically increment or decrement a KV key (`POST /v1/data/kv/increment` | `data__kv__increment`)
-  - [ ] `data.kv.mget()`: Multi-get KV entries by list of keys (`POST /v1/data/kv/mget` | `data__kv__mget`)
-  - [ ] `data.kv.mset()`: Batch set multiple KV entries (`POST /v1/data/kv/mset` | `data__kv__mset`)
-  - [ ] `data.kv.put()`: Put raw ephemeral KV entry (`PUT /v1/data/kv/{key}` | `data__kv__put`)
-  - [ ] `data.kv.set()`: Set an ephemeral KV entry with envelope (`POST /v1/data/kv/{key}` | `data__kv__set`)
-  - [ ] `data.kv.touch()`: Refresh TTL of an ephemeral KV entry (`PATCH /v1/data/kv/{key}` | `data__kv__touch`)
+  - [ ] `data.kv.increment()`: Atomically increment or decrement an integer counter (`POST /v1/data/kv/increment` | `data__kv__increment`)
+  - [ ] `data.kv.mget()`: Batch get multiple ephemeral KV entries (`POST /v1/data/kv/mget` | `data__kv__mget`)
+  - [ ] `data.kv.mset()`: Batch set multiple ephemeral KV entries (`POST /v1/data/kv/mset` | `data__kv__mset`)
+  - [ ] `data.kv.put()`: Put raw ephemeral KV entry with query TTL (`PUT /v1/data/kv/{key}` | `data__kv__put`)
+  - [ ] `data.kv.set()`: Set an ephemeral KV entry with JSON envelope (`POST /v1/data/kv/{key}` | `data__kv__set`)
+  - [ ] `data.kv.touch()`: Refresh TTL of an existing KV entry (`PATCH /v1/data/kv/{key}` | `data__kv__touch`)
 
 - Subgroup `data.records.*`:
   - [ ] `data.records.create()`: Insert single or bulk rows with RETURNING * (`POST /v1/data/{schema_name}/{table_name}` | `data__records__create`)
   - [ ] `data.records.delete()`: Delete a row by primary key (`DELETE /v1/data/{schema_name}/{table_name}/{record_id}` | `data__records__delete`)
   - [ ] `data.records.get()`: Get a single row by primary key (`GET /v1/data/{schema_name}/{table_name}/{record_id}` | `data__records__get`)
-  - [ ] `data.records.list()`: Query multiple rows with pagination, filtering, and sorting (`GET /v1/data/{schema_name}/{table_name}` | `data__records__list`)
-  - [ ] `data.records.put()`: Update a row by primary key (`PUT /v1/data/{schema_name}/{table_name}/{record_id}` | `data__records__put`)
+  - [ ] `data.records.list()`: Query table rows with dynamic filtering, sorting, and pagination (`GET /v1/data/{schema_name}/{table_name}` | `data__records__list`)
+  - [ ] `data.records.put()`: Update entire row by primary key (`PUT /v1/data/{schema_name}/{table_name}/{record_id}` | `data__records__put`)
   - [ ] `data.records.update()`: Partially update a row by primary key (`PATCH /v1/data/{schema_name}/{table_name}/{record_id}` | `data__records__update`)
 
 - Subgroup `data.rpc.*`:
-  - [ ] `data.rpc.mutation()`: Execute database stored function or procedure (`POST /v1/data/{schema_name}/rpc/{function_name}` | `data__rpc__mutation`)
-  - [ ] `data.rpc.query()`: Execute database stored function or procedure (read-only) (`GET /v1/data/{schema_name}/rpc/{function_name}` | `data__rpc__query`)
+  - [ ] `data.rpc.mutation()`: Execute database stored function or procedure with JSON payload (`POST /v1/data/{schema_name}/rpc/{function_name}` | `data__rpc__mutation`)
+  - [ ] `data.rpc.query()`: Execute read-only database stored function or procedure (`GET /v1/data/{schema_name}/rpc/{function_name}` | `data__rpc__query`)
 
 #### `fileStorage` (File Storage Service — via `useFileStorage(client)`)
 
 - Subgroup `fileStorage.objects.*`:
-  - [ ] `fileStorage.objects.delete()`: Delete a file object (`DELETE /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__delete`)
-  - [ ] `fileStorage.objects.download()`: Download a file object (`GET /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__download`)
+  - [ ] `fileStorage.objects.delete()`: Permanently delete a file object (`DELETE /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__delete`)
+  - [ ] `fileStorage.objects.download()`: Download a file object with byte-range support (`GET /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__download`)
   - [ ] `fileStorage.objects.head()`: Inspect file object metadata headers (`HEAD /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__head`)
   - [ ] `fileStorage.objects.upload_post()`: Upload a file object via POST (`POST /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_post`)
   - [ ] `fileStorage.objects.upload_put()`: Upload a file object via PUT (`PUT /v1/file-storage/objects/{bucket}/{key...}` | `file_storage__objects__upload_put`)
 
 - Subgroup `fileStorage.url.*`:
-  - [ ] `fileStorage.url.presign()`: Mint a presigned capability URL (`POST /v1/file-storage/url/presign` | `file_storage__url__presign`)
+  - [ ] `fileStorage.url.presign()`: Mint a presigned capability URL for temporary file access (`POST /v1/file-storage/url/presign` | `file_storage__url__presign`)
 
 #### `image` (Image Service — via `useImage(client)`)
 
@@ -278,7 +278,7 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `image.info.post()`: Inspect image metadata from binary upload (`POST /v1/image/info` | `image__info__post`)
 
 - Subgroup `image.transform.*`:
-  - [ ] `image.transform.get()`: Transform and optimize an image (`GET /v1/image/{signature}/{path...}` | `image__transform__get`)
+  - [ ] `image.transform.get()`: Transform and optimize an image dynamically (`GET /v1/image/{signature}/{path...}` | `image__transform__get`)
 
 #### `function` (Function Service — via `useFunction(client)`)
 
@@ -358,16 +358,16 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 #### `auth.cp` (Auth Control Plane — via `withServiceAccount(useAuth(client), ...)`)
 
 - Subgroup `auth.cp.config.*`:
-  - [ ] `auth.cp.config.get()`: Retrieve dynamic runtime auth configuration (`GET /v1/_/auth/config` | `auth__config__get`)
-  - [ ] `auth.cp.config.update()`: Update dynamic runtime auth configuration with write-only secrets (`PUT /v1/_/auth/config` | `auth__config__update`)
+  - [ ] `auth.cp.config.get()`: Retrieve dynamic runtime authentication configuration (`GET /v1/_/auth/config` | `auth__config__get`)
+  - [ ] `auth.cp.config.update()`: Update dynamic runtime authentication configuration (`PUT /v1/_/auth/config` | `auth__config__update`)
 
 - Subgroup `auth.cp.users.*`:
-  - [ ] `auth.cp.users.create()`: Create a new application user account (`POST /v1/_/auth/users` | `auth__users__create`)
-  - [ ] `auth.cp.users.delete()`: Delete application user and cascade related sessions/identities (`DELETE /v1/_/auth/users/{user_id}` | `auth__users__delete`)
-  - [ ] `auth.cp.users.get()`: Get detailed user record by UUID (`GET /v1/_/auth/users/{user_id}` | `auth__users__get`)
+  - [ ] `auth.cp.users.create()`: Create an application user account via control plane (`POST /v1/_/auth/users` | `auth__users__create`)
+  - [ ] `auth.cp.users.delete()`: Permanently delete an application user and cascade sessions (`DELETE /v1/_/auth/users/{user_id}` | `auth__users__delete`)
+  - [ ] `auth.cp.users.get()`: Get detailed application user record by UUID (`GET /v1/_/auth/users/{user_id}` | `auth__users__get`)
   - [ ] `auth.cp.users.list()`: List registered application users with filtering and pagination (`GET /v1/_/auth/users` | `auth__users__list`)
-  - [ ] `auth.cp.users.lock()`: Lock application user and revoke active sessions (`POST /v1/_/auth/users/{user_id}/lock` | `auth__users__lock`)
-  - [ ] `auth.cp.users.unlock()`: Unlock application user and restore access (`DELETE /v1/_/auth/users/{user_id}/lock` | `auth__users__unlock`)
+  - [ ] `auth.cp.users.lock()`: Lock application user account and revoke active sessions (`POST /v1/_/auth/users/{user_id}/lock` | `auth__users__lock`)
+  - [ ] `auth.cp.users.unlock()`: Unlock application user account and restore login access (`DELETE /v1/_/auth/users/{user_id}/lock` | `auth__users__unlock`)
 
 - Subgroup `auth.cp.users.sessions.*`:
   - [ ] `auth.cp.users.sessions.list()`: List active sessions for an application user (`GET /v1/_/auth/users/{user_id}/sessions` | `auth__users__sessions__list`)
@@ -376,51 +376,51 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 #### `console.cp` (Console Control Plane — via `withServiceAccount(useConsole(client), ...)`)
 
 - Subgroup `console.cp.config.*`:
-  - [ ] `console.cp.config.get()`: Get runtime configuration (`GET /v1/_/console/config` | `console__config__get`)
-  - [ ] `console.cp.config.update()`: Update runtime configuration (`PUT /v1/_/console/config` | `console__config__update`)
+  - [ ] `console.cp.config.get()`: Get dynamic runtime console configuration (`GET /v1/_/console/config` | `console__config__get`)
+  - [ ] `console.cp.config.update()`: Update dynamic runtime console configuration (`PUT /v1/_/console/config` | `console__config__update`)
 
 - Subgroup `console.cp.users.*`:
-  - [ ] `console.cp.users.create()`: Create console operator account (`POST /v1/_/console/users` | `console__users__create`)
-  - [ ] `console.cp.users.delete()`: Delete console operator account (`DELETE /v1/_/console/users/{user_id}` | `console__users__delete`)
-  - [ ] `console.cp.users.get()`: Get console operator account details (`GET /v1/_/console/users/{user_id}` | `console__users__get`)
-  - [ ] `console.cp.users.list()`: List console operator accounts (`GET /v1/_/console/users` | `console__users__list`)
-  - [ ] `console.cp.users.reset_password()`: Reset console operator password (`POST /v1/_/console/users/{user_id}/password` | `console__users__reset_password`)
-  - [ ] `console.cp.users.update()`: Update console operator account (`PUT /v1/_/console/users/{user_id}` | `console__users__update`)
+  - [ ] `console.cp.users.create()`: Create console user account (`POST /v1/_/console/users` | `console__users__create`)
+  - [ ] `console.cp.users.delete()`: Delete console user account and cascade sessions (`DELETE /v1/_/console/users/{user_id}` | `console__users__delete`)
+  - [ ] `console.cp.users.get()`: Get console user account details by UUID (`GET /v1/_/console/users/{user_id}` | `console__users__get`)
+  - [ ] `console.cp.users.list()`: List console user accounts (`GET /v1/_/console/users` | `console__users__list`)
+  - [ ] `console.cp.users.reset_password()`: Reset console user password and revoke sessions (`POST /v1/_/console/users/{user_id}/password` | `console__users__reset_password`)
+  - [ ] `console.cp.users.update()`: Update console user account properties (`PUT /v1/_/console/users/{user_id}` | `console__users__update`)
 
 - Subgroup `console.cp.users.sessions.*`:
-  - [ ] `console.cp.users.sessions.delete()`: Revoke specific operator session (`DELETE /v1/_/console/users/{user_id}/sessions/{session_id}` | `console__users__sessions__delete`)
-  - [ ] `console.cp.users.sessions.list()`: List active operator sessions (`GET /v1/_/console/users/{user_id}/sessions` | `console__users__sessions__list`)
-  - [ ] `console.cp.users.sessions.revoke()`: Revoke all operator sessions (`POST /v1/_/console/users/{user_id}/sessions/revoke` | `console__users__sessions__revoke`)
+  - [ ] `console.cp.users.sessions.delete()`: Revoke a specific console user session (`DELETE /v1/_/console/users/{user_id}/sessions/{session_id}` | `console__users__sessions__delete`)
+  - [ ] `console.cp.users.sessions.list()`: List active sessions for a console user (`GET /v1/_/console/users/{user_id}/sessions` | `console__users__sessions__list`)
+  - [ ] `console.cp.users.sessions.revoke()`: Revoke all active sessions for a console user (`POST /v1/_/console/users/{user_id}/sessions/revoke` | `console__users__sessions__revoke`)
 
 #### `core.cp` (Core Control Plane — via `withServiceAccount(useCore(client), ...)`)
 
 - Subgroup `core.cp.event_hooks.*`:
-  - [ ] `core.cp.event_hooks.create()`: Create a new event hook (`POST /v1/_/core/event-hooks` | `core__event_hooks__create`)
-  - [ ] `core.cp.event_hooks.delete()`: Delete event hook (`DELETE /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__delete`)
-  - [ ] `core.cp.event_hooks.get()`: Get event hook by ID (`GET /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__get`)
-  - [ ] `core.cp.event_hooks.list()`: List all event hooks (`GET /v1/_/core/event-hooks` | `core__event_hooks__list`)
-  - [ ] `core.cp.event_hooks.update()`: Update event hook (`PUT /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__update`)
+  - [ ] `core.cp.event_hooks.create()`: Create an event hook subscription (`POST /v1/_/core/event-hooks` | `core__event_hooks__create`)
+  - [ ] `core.cp.event_hooks.delete()`: Delete event hook subscription (`DELETE /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__delete`)
+  - [ ] `core.cp.event_hooks.get()`: Get event hook subscription details by UUID (`GET /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__get`)
+  - [ ] `core.cp.event_hooks.list()`: List event hook subscriptions (`GET /v1/_/core/event-hooks` | `core__event_hooks__list`)
+  - [ ] `core.cp.event_hooks.update()`: Update event hook subscription (`PUT /v1/_/core/event-hooks/{event_hook_id}` | `core__event_hooks__update`)
 
 - Subgroup `core.cp.event_hooks.deliveries.*`:
-  - [ ] `core.cp.event_hooks.deliveries.list()`: List event hook deliveries (`GET /v1/_/core/event-hooks/{event_hook_id}/deliveries` | `core__event_hooks__deliveries__list`)
-  - [ ] `core.cp.event_hooks.deliveries.retry()`: Retry event hook delivery (`POST /v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry` | `core__event_hooks__deliveries__retry`)
+  - [ ] `core.cp.event_hooks.deliveries.list()`: List delivery audit logs for an event hook (`GET /v1/_/core/event-hooks/{event_hook_id}/deliveries` | `core__event_hooks__deliveries__list`)
+  - [ ] `core.cp.event_hooks.deliveries.retry()`: Retry a past event hook delivery attempt (`POST /v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry` | `core__event_hooks__deliveries__retry`)
 
 - Subgroup `core.cp.events.*`:
-  - [ ] `core.cp.events.get()`: Get event by ID (`GET /v1/_/core/events/{event_id}` | `core__events__get`)
-  - [ ] `core.cp.events.list()`: List events (`GET /v1/_/core/events` | `core__events__list`)
+  - [ ] `core.cp.events.get()`: Get individual event record by UUID (`GET /v1/_/core/events/{event_id}` | `core__events__get`)
+  - [ ] `core.cp.events.list()`: Query immutable system and domain audit events (`GET /v1/_/core/events` | `core__events__list`)
 
 - Subgroup `core.cp.service_accounts.*`:
-  - [ ] `core.cp.service_accounts.create()`: Create a new machine service account (`POST /v1/_/core/service-accounts` | `core__service_accounts__create`)
-  - [ ] `core.cp.service_accounts.delete()`: Delete service account (`DELETE /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__delete`)
-  - [ ] `core.cp.service_accounts.get()`: Get service account by ID (`GET /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__get`)
-  - [ ] `core.cp.service_accounts.list()`: List all service accounts (`GET /v1/_/core/service-accounts` | `core__service_accounts__list`)
-  - [ ] `core.cp.service_accounts.update()`: Update service account (`PUT /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__update`)
+  - [ ] `core.cp.service_accounts.create()`: Create a machine service account (`POST /v1/_/core/service-accounts` | `core__service_accounts__create`)
+  - [ ] `core.cp.service_accounts.delete()`: Delete machine service account (`DELETE /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__delete`)
+  - [ ] `core.cp.service_accounts.get()`: Get machine service account details by UUID (`GET /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__get`)
+  - [ ] `core.cp.service_accounts.list()`: List machine service accounts (`GET /v1/_/core/service-accounts` | `core__service_accounts__list`)
+  - [ ] `core.cp.service_accounts.update()`: Update machine service account properties and scopes (`PUT /v1/_/core/service-accounts/{service_account_id}` | `core__service_accounts__update`)
 
 #### `data.cp` (Data Control Plane — via `withServiceAccount(useData(client), ...)`)
 
 - Subgroup `data.cp.cache.*`:
   - [ ] `data.cp.cache.flush()`: Flush all global query and schema reflection caches (`POST /v1/_/data/cache/flush` | `data__cache__flush`)
-  - [ ] `data.cp.cache.invalidate()`: Programmatically invalidate specific table or catalog caches (`POST /v1/_/data/cache/invalidate` | `data__cache__invalidate`)
+  - [ ] `data.cp.cache.invalidate()`: Invalidate specific table or catalog caches (`POST /v1/_/data/cache/invalidate` | `data__cache__invalidate`)
 
 - Subgroup `data.cp.config.*`:
   - [ ] `data.cp.config.get()`: Retrieve dynamic data service configuration (`GET /v1/_/data/config` | `data__config__get`)
@@ -428,37 +428,37 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 
 - Subgroup `data.cp.tables.*`:
   - [ ] `data.cp.tables.create()`: Create a new PostgreSQL table with UUIDv7 primary key (`POST /v1/_/data/tables` | `data__tables__create`)
-  - [ ] `data.cp.tables.delete()`: Drop a table (`DELETE /v1/_/data/tables/{schema_name}/{table_name}` | `data__tables__delete`)
+  - [ ] `data.cp.tables.delete()`: Drop a table and cascade constraints (`DELETE /v1/_/data/tables/{schema_name}/{table_name}` | `data__tables__delete`)
   - [ ] `data.cp.tables.get()`: Inspect table schema, columns, indexes, and constraints (`GET /v1/_/data/tables/{schema_name}/{table_name}` | `data__tables__get`)
-  - [ ] `data.cp.tables.list()`: List all user tables across configured schemas (`GET /v1/_/data/tables` | `data__tables__list`)
+  - [ ] `data.cp.tables.list()`: List all database tables across configured schemas (`GET /v1/_/data/tables` | `data__tables__list`)
 
 - Subgroup `data.cp.tables.columns.*`:
-  - [ ] `data.cp.tables.columns.create()`: Add a new column to a table (`POST /v1/_/data/tables/{schema_name}/{table_name}/columns` | `data__tables__columns__create`)
-  - [ ] `data.cp.tables.columns.delete()`: Drop a column from a table (`DELETE /v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}` | `data__tables__columns__delete`)
-  - [ ] `data.cp.tables.columns.update()`: Alter column type, default, nullable, or rename (`PATCH /v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}` | `data__tables__columns__update`)
+  - [ ] `data.cp.tables.columns.create()`: Add a new column to a table schema (`POST /v1/_/data/tables/{schema_name}/{table_name}/columns` | `data__tables__columns__create`)
+  - [ ] `data.cp.tables.columns.delete()`: Drop a column from a table schema (`DELETE /v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}` | `data__tables__columns__delete`)
+  - [ ] `data.cp.tables.columns.update()`: Alter column type, default, nullability, or rename (`PATCH /v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}` | `data__tables__columns__update`)
 
 - Subgroup `data.cp.tables.indexes.*`:
-  - [ ] `data.cp.tables.indexes.create()`: Create an index on a table (`POST /v1/_/data/tables/{schema_name}/{table_name}/indexes` | `data__tables__indexes__create`)
+  - [ ] `data.cp.tables.indexes.create()`: Create an index on table columns (`POST /v1/_/data/tables/{schema_name}/{table_name}/indexes` | `data__tables__indexes__create`)
   - [ ] `data.cp.tables.indexes.delete()`: Drop an index from a table (`DELETE /v1/_/data/tables/{schema_name}/{table_name}/indexes/{index_name}` | `data__tables__indexes__delete`)
-  - [ ] `data.cp.tables.indexes.list()`: List indexes on a table (`GET /v1/_/data/tables/{schema_name}/{table_name}/indexes` | `data__tables__indexes__list`)
+  - [ ] `data.cp.tables.indexes.list()`: List indexes defined on a table (`GET /v1/_/data/tables/{schema_name}/{table_name}/indexes` | `data__tables__indexes__list`)
 
 - Subgroup `data.cp.tables.policies.*`:
   - [ ] `data.cp.tables.policies.create()`: Create a Row-Level Security policy on a table (`POST /v1/_/data/tables/{schema_name}/{table_name}/policies` | `data__tables__policies__create`)
   - [ ] `data.cp.tables.policies.delete()`: Drop an RLS policy from a table (`DELETE /v1/_/data/tables/{schema_name}/{table_name}/policies/{policy_name}` | `data__tables__policies__delete`)
-  - [ ] `data.cp.tables.policies.list()`: List RLS policies on a table (`GET /v1/_/data/tables/{schema_name}/{table_name}/policies` | `data__tables__policies__list`)
+  - [ ] `data.cp.tables.policies.list()`: List Row-Level Security policies on a table (`GET /v1/_/data/tables/{schema_name}/{table_name}/policies` | `data__tables__policies__list`)
 
 - Subgroup `data.cp.tables.rls.*`:
-  - [ ] `data.cp.tables.rls.update()`: Toggle Row-Level Security (ENABLE / DISABLE / FORCE) (`PATCH /v1/_/data/tables/{schema_name}/{table_name}/rls` | `data__tables__rls__update`)
+  - [ ] `data.cp.tables.rls.update()`: Toggle Row-Level Security enforcement mode on a table (`PATCH /v1/_/data/tables/{schema_name}/{table_name}/rls` | `data__tables__rls__update`)
 
 #### `fileStorage.cp` (File Storage Control Plane — via `withServiceAccount(useFileStorage(client), ...)`)
 
 - Subgroup `fileStorage.cp.buckets.*`:
-  - [ ] `fileStorage.cp.buckets.create()`: Create a new storage bucket (`POST /v1/_/file-storage/buckets` | `file_storage__buckets__create`)
-  - [ ] `fileStorage.cp.buckets.delete()`: Delete a storage bucket (`DELETE /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__delete`)
-  - [ ] `fileStorage.cp.buckets.get()`: Get bucket details by name (`GET /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__get`)
-  - [ ] `fileStorage.cp.buckets.list()`: List all storage buckets (`GET /v1/_/file-storage/buckets` | `file_storage__buckets__list`)
-  - [ ] `fileStorage.cp.buckets.list_objects()`: List objects in a bucket (`GET /v1/_/file-storage/buckets/{bucket}/objects` | `file_storage__buckets__list_objects`)
-  - [ ] `fileStorage.cp.buckets.update()`: Update bucket settings (`PATCH /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__update`)
+  - [ ] `fileStorage.cp.buckets.create()`: Create a storage bucket with backend configuration (`POST /v1/_/file-storage/buckets` | `file_storage__buckets__create`)
+  - [ ] `fileStorage.cp.buckets.delete()`: Delete a storage bucket and cascade contained objects (`DELETE /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__delete`)
+  - [ ] `fileStorage.cp.buckets.get()`: Get storage bucket details by name (`GET /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__get`)
+  - [ ] `fileStorage.cp.buckets.list()`: List all storage buckets and backend configurations (`GET /v1/_/file-storage/buckets` | `file_storage__buckets__list`)
+  - [ ] `fileStorage.cp.buckets.list_objects()`: List objects stored within a bucket (`GET /v1/_/file-storage/buckets/{bucket}/objects` | `file_storage__buckets__list_objects`)
+  - [ ] `fileStorage.cp.buckets.update()`: Update storage bucket configuration and constraints (`PATCH /v1/_/file-storage/buckets/{bucket}` | `file_storage__buckets__update`)
 
 - Subgroup `fileStorage.cp.config.*`:
   - [ ] `fileStorage.cp.config.get()`: Get runtime file storage configuration (`GET /v1/_/file-storage/config` | `file_storage__config__get`)
@@ -467,81 +467,81 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 #### `function.cp` (Function Control Plane — via `withServiceAccount(useFunction(client), ...)`)
 
 - Subgroup `function.cp.config.*`:
-  - [ ] `function.cp.config.get()`: Get runtime configuration (`GET /v1/_/function/config` | `function__config__get`)
-  - [ ] `function.cp.config.update()`: Update runtime configuration (`PUT /v1/_/function/config` | `function__config__update`)
+  - [ ] `function.cp.config.get()`: Get runtime function configuration (`GET /v1/_/function/config` | `function__config__get`)
+  - [ ] `function.cp.config.update()`: Update runtime function configuration (`PUT /v1/_/function/config` | `function__config__update`)
 
 - Subgroup `function.cp.deployments.*`:
-  - [ ] `function.cp.deployments.create()`: Deploy endpoint (`POST /v1/_/function/endpoints/{endpoint_id}/deploy` | `function__deployments__create`)
-  - [ ] `function.cp.deployments.list()`: List deployments (`GET /v1/_/function/endpoints/{endpoint_id}/deployments` | `function__deployments__list`)
-  - [ ] `function.cp.deployments.rollback()`: Rollback deployment (`POST /v1/_/function/endpoints/{endpoint_id}/rollback` | `function__deployments__rollback`)
+  - [ ] `function.cp.deployments.create()`: Create immutable deployment and hot-reload runner (`POST /v1/_/function/endpoints/{endpoint_id}/deploy` | `function__deployments__create`)
+  - [ ] `function.cp.deployments.list()`: List immutable deployments for an endpoint (`GET /v1/_/function/endpoints/{endpoint_id}/deployments` | `function__deployments__list`)
+  - [ ] `function.cp.deployments.rollback()`: Rollback endpoint to a previous deployment revision (`POST /v1/_/function/endpoints/{endpoint_id}/rollback` | `function__deployments__rollback`)
 
 - Subgroup `function.cp.domains.*`:
-  - [ ] `function.cp.domains.create()`: Create custom domain (`POST /v1/_/function/domains` | `function__domains__create`)
-  - [ ] `function.cp.domains.delete()`: Delete custom domain (`DELETE /v1/_/function/domains/{domain_id}` | `function__domains__delete`)
-  - [ ] `function.cp.domains.list()`: List custom domains (`GET /v1/_/function/domains` | `function__domains__list`)
+  - [ ] `function.cp.domains.create()`: Register a standalone custom domain (`POST /v1/_/function/domains` | `function__domains__create`)
+  - [ ] `function.cp.domains.delete()`: Delete custom domain and cascade attached routes (`DELETE /v1/_/function/domains/{domain_id}` | `function__domains__delete`)
+  - [ ] `function.cp.domains.list()`: List registered custom domains (`GET /v1/_/function/domains` | `function__domains__list`)
 
 - Subgroup `function.cp.endpoint_domains.*`:
-  - [ ] `function.cp.endpoint_domains.create()`: Create custom domain route (`POST /v1/_/function/endpoints/{endpoint_id}/domains` | `function__endpoint_domains__create`)
-  - [ ] `function.cp.endpoint_domains.delete()`: Delete custom domain route (`DELETE /v1/_/function/endpoints/{endpoint_id}/domains/{route_id}` | `function__endpoint_domains__delete`)
-  - [ ] `function.cp.endpoint_domains.list()`: List custom domain routes (`GET /v1/_/function/endpoints/{endpoint_id}/domains` | `function__endpoint_domains__list`)
+  - [ ] `function.cp.endpoint_domains.create()`: Attach endpoint route to custom domain with path prefix (`POST /v1/_/function/endpoints/{endpoint_id}/domains` | `function__endpoint_domains__create`)
+  - [ ] `function.cp.endpoint_domains.delete()`: Remove endpoint route mapping from custom domain (`DELETE /v1/_/function/endpoints/{endpoint_id}/domains/{route_id}` | `function__endpoint_domains__delete`)
+  - [ ] `function.cp.endpoint_domains.list()`: List custom domain routes attached to an endpoint (`GET /v1/_/function/endpoints/{endpoint_id}/domains` | `function__endpoint_domains__list`)
 
 - Subgroup `function.cp.endpoints.*`:
-  - [ ] `function.cp.endpoints.create()`: Create endpoint (`POST /v1/_/function/endpoints` | `function__endpoints__create`)
-  - [ ] `function.cp.endpoints.delete()`: Delete endpoint (`DELETE /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__delete`)
-  - [ ] `function.cp.endpoints.executions()`: List endpoint execution logs (`GET /v1/_/function/endpoints/{endpoint_id}/executions` | `function__endpoints__executions`)
-  - [ ] `function.cp.endpoints.get()`: Get endpoint (`GET /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__get`)
-  - [ ] `function.cp.endpoints.list()`: List endpoints (`GET /v1/_/function/endpoints` | `function__endpoints__list`)
-  - [ ] `function.cp.endpoints.update()`: Update endpoint (`PUT /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__update`)
+  - [ ] `function.cp.endpoints.create()`: Register a new serverless endpoint (`POST /v1/_/function/endpoints` | `function__endpoints__create`)
+  - [ ] `function.cp.endpoints.delete()`: Delete serverless endpoint and unload runtime isolates (`DELETE /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__delete`)
+  - [ ] `function.cp.endpoints.executions()`: Query execution history logs for a specific endpoint (`GET /v1/_/function/endpoints/{endpoint_id}/executions` | `function__endpoints__executions`)
+  - [ ] `function.cp.endpoints.get()`: Get serverless endpoint definition by ID (`GET /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__get`)
+  - [ ] `function.cp.endpoints.list()`: List all registered serverless endpoints (`GET /v1/_/function/endpoints` | `function__endpoints__list`)
+  - [ ] `function.cp.endpoints.update()`: Update serverless endpoint definition (`PUT /v1/_/function/endpoints/{endpoint_id}` | `function__endpoints__update`)
 
 - Subgroup `function.cp.executions.*`:
-  - [ ] `function.cp.executions.list()`: List execution history logs (`GET /v1/_/function/executions` | `function__executions__list`)
+  - [ ] `function.cp.executions.list()`: Query execution history logs across all endpoints (`GET /v1/_/function/executions` | `function__executions__list`)
 
 - Subgroup `function.cp.stats.*`:
-  - [ ] `function.cp.stats.get()`: Get runtime statistics (`GET /v1/_/function/stats` | `function__stats__get`)
+  - [ ] `function.cp.stats.get()`: Get function runtime telemetry and worker statistics (`GET /v1/_/function/stats` | `function__stats__get`)
 
 #### `image.cp` (Image Control Plane — via `withServiceAccount(useImage(client), ...)`)
 
 - Subgroup `image.cp.config.*`:
-  - [ ] `image.cp.config.get()`: Get runtime image configuration (`GET /v1/_/image/config` | `image__config__get`)
-  - [ ] `image.cp.config.update()`: Update runtime image configuration (`PUT /v1/_/image/config` | `image__config__update`)
+  - [ ] `image.cp.config.get()`: Get runtime image service configuration (`GET /v1/_/image/config` | `image__config__get`)
+  - [ ] `image.cp.config.update()`: Update runtime image service configuration (`PUT /v1/_/image/config` | `image__config__update`)
 
 - Subgroup `image.cp.presets.*`:
-  - [ ] `image.cp.presets.create()`: Create an image preset (`POST /v1/_/image/presets` | `image__presets__create`)
-  - [ ] `image.cp.presets.delete()`: Delete an image preset (`DELETE /v1/_/image/presets/{preset_id}` | `image__presets__delete`)
-  - [ ] `image.cp.presets.get()`: Get image preset by ID (`GET /v1/_/image/presets/{preset_id}` | `image__presets__get`)
-  - [ ] `image.cp.presets.list()`: List image presets (`GET /v1/_/image/presets` | `image__presets__list`)
-  - [ ] `image.cp.presets.update()`: Update an image preset (`PUT /v1/_/image/presets/{preset_id}` | `image__presets__update`)
+  - [ ] `image.cp.presets.create()`: Create a named image transformation preset (`POST /v1/_/image/presets` | `image__presets__create`)
+  - [ ] `image.cp.presets.delete()`: Delete an image transformation preset (`DELETE /v1/_/image/presets/{preset_id}` | `image__presets__delete`)
+  - [ ] `image.cp.presets.get()`: Get image transformation preset by ID (`GET /v1/_/image/presets/{preset_id}` | `image__presets__get`)
+  - [ ] `image.cp.presets.list()`: List configured image transformation presets (`GET /v1/_/image/presets` | `image__presets__list`)
+  - [ ] `image.cp.presets.update()`: Update an image transformation preset (`PUT /v1/_/image/presets/{preset_id}` | `image__presets__update`)
 
 - Subgroup `image.cp.stats.*`:
   - [ ] `image.cp.stats.get()`: Get image service telemetry statistics (`GET /v1/_/image/stats` | `image__stats__get`)
 
 - Subgroup `image.cp.url.*`:
-  - [ ] `image.cp.url.sign()`: Sign an image transformation path (`POST /v1/_/image/url/sign` | `image__url__sign`)
+  - [ ] `image.cp.url.sign()`: Generate a cryptographically signed image URL (`POST /v1/_/image/url/sign` | `image__url__sign`)
 
 #### `tasks.cp` (Tasks Control Plane — via `withServiceAccount(useTasks(client), ...)`)
 
 - Subgroup `tasks.cp.config.*`:
-  - [ ] `tasks.cp.config.get()`: Get runtime tasks configuration (`GET /v1/_/tasks/config` | `tasks__config__get`)
-  - [ ] `tasks.cp.config.update()`: Update runtime tasks configuration (`PUT /v1/_/tasks/config` | `tasks__config__update`)
+  - [ ] `tasks.cp.config.get()`: Get runtime tasks orchestrator configuration (`GET /v1/_/tasks/config` | `tasks__config__get`)
+  - [ ] `tasks.cp.config.update()`: Update runtime tasks orchestrator configuration (`PUT /v1/_/tasks/config` | `tasks__config__update`)
 
 - Subgroup `tasks.cp.dlq.*`:
-  - [ ] `tasks.cp.dlq.list()`: List failed tasks in DLQ (`GET /v1/_/tasks/dlq` | `tasks__dlq__list`)
-  - [ ] `tasks.cp.dlq.purge()`: Purge a task from DLQ (`DELETE /v1/_/tasks/dlq/{execution_id}` | `tasks__dlq__purge`)
-  - [ ] `tasks.cp.dlq.retry()`: Re-queue a failed task from DLQ (`POST /v1/_/tasks/dlq/{execution_id}/retry` | `tasks__dlq__retry`)
+  - [ ] `tasks.cp.dlq.list()`: List dead-lettered failed task executions (`GET /v1/_/tasks/dlq` | `tasks__dlq__list`)
+  - [ ] `tasks.cp.dlq.purge()`: Permanently purge a failed task from the DLQ (`DELETE /v1/_/tasks/dlq/{execution_id}` | `tasks__dlq__purge`)
+  - [ ] `tasks.cp.dlq.retry()`: Re-queue a failed task execution from the DLQ (`POST /v1/_/tasks/dlq/{execution_id}/retry` | `tasks__dlq__retry`)
 
 - Subgroup `tasks.cp.executions.*`:
-  - [ ] `tasks.cp.executions.create()`: Trigger an immediate execution (`POST /v1/_/tasks/executions` | `tasks__executions__create`)
+  - [ ] `tasks.cp.executions.create()`: Trigger an immediate out-of-schedule execution (`POST /v1/_/tasks/executions` | `tasks__executions__create`)
   - [ ] `tasks.cp.executions.list()`: Query execution audit logs (`GET /v1/_/tasks/executions` | `tasks__executions__list`)
 
 - Subgroup `tasks.cp.jobs.*`:
   - [ ] `tasks.cp.jobs.create()`: Register a new recurring cron job (`POST /v1/_/tasks/jobs` | `tasks__jobs__create`)
-  - [ ] `tasks.cp.jobs.delete()`: Delete a cron job (`DELETE /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__delete`)
-  - [ ] `tasks.cp.jobs.get()`: Get cron job details by ID (`GET /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__get`)
+  - [ ] `tasks.cp.jobs.delete()`: Delete a cron job and cancel queued executions (`DELETE /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__delete`)
+  - [ ] `tasks.cp.jobs.get()`: Get cron job definition by ID (`GET /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__get`)
   - [ ] `tasks.cp.jobs.list()`: List all recurring cron jobs (`GET /v1/_/tasks/jobs` | `tasks__jobs__list`)
-  - [ ] `tasks.cp.jobs.update()`: Update an existing cron job (`PATCH /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__update`)
+  - [ ] `tasks.cp.jobs.update()`: Update an existing cron job definition (`PATCH /v1/_/tasks/jobs/{job_id}` | `tasks__jobs__update`)
 
 - Subgroup `tasks.cp.stats.*`:
-  - [ ] `tasks.cp.stats.get()`: Get operational telemetry statistics (`GET /v1/_/tasks/stats` | `tasks__stats__get`)
+  - [ ] `tasks.cp.stats.get()`: Get operational task telemetry and queue statistics (`GET /v1/_/tasks/stats` | `tasks__stats__get`)
 
 <!-- END_GENERATED_CONTROL_PLANE_METHODS -->
 
