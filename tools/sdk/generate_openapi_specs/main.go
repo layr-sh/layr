@@ -98,7 +98,7 @@ func main() {
 	}
 
 	// Validate unified spec
-	unifiedOpsCount, err := validateSpecOperations(unifiedOpenAPISpec, "openapi.json")
+	unifiedOpsCount, err := validateSpecOperations(unifiedOpenAPISpec, "unified-spec.json")
 	if err != nil {
 		log.Fatalf("Unified spec validation failed: %v", err)
 	}
@@ -136,7 +136,7 @@ func main() {
 	fmt.Printf("Exported control plane OpenAPI spec: %s (%d paths, %d operations)\n", controlPlaneSpecPath, controlPlaneOpenAPISpec.Paths.Len(), controlPlaneOpsCount)
 
 	// 3. Export Unified Spec
-	unifiedSpecPath := filepath.Join(*outputDirectoryFlag, "openapi.json")
+	unifiedSpecPath := filepath.Join(*outputDirectoryFlag, "unified-spec.json")
 	unifiedPayloadJSON, marshalErr := json.MarshalIndent(unifiedOpenAPISpec, "", "  ")
 	if marshalErr != nil {
 		log.Fatalf("Failed to serialize unified spec: %v", marshalErr)
