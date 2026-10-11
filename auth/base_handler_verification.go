@@ -42,7 +42,7 @@ func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.R
 	err := handler.kernel.DB().QueryRow(ctx, "SELECT id, email_verified_at FROM auth.users WHERE email = $1", recipientEmail).Scan(&existingUserID, &emailVerifiedAt)
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
-			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email is already in use by another account")
 			return
 		}
 		if emailVerifiedAt != nil && authUserID == existingUserID {
@@ -103,7 +103,7 @@ func (handler *BaseHandler) handleConfirmEmailVerification(responseWriter http.R
 	log.Trace("handling verify email request")
 	var confirmEmailVerificationInput ConfirmEmailVerificationInput
 	if err := json.NewDecoder(request.Body).Decode(&confirmEmailVerificationInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -265,7 +265,7 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 		return
 	}
 	recipientPhone = normalizedPhone
@@ -282,7 +282,7 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 	targetUserID := existingUserID
 	if authUserID != "" {
 		if err == nil && existingUserID != authUserID {
-			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use")
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Phone number is already in use by another account")
 			return
 		}
 		targetUserID = authUserID
@@ -344,7 +344,7 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 	log.Trace("handling verify phone request")
 	var confirmPhoneVerificationInput ConfirmPhoneVerificationInput
 	if err := json.NewDecoder(request.Body).Decode(&confirmPhoneVerificationInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -364,7 +364,7 @@ func (handler *BaseHandler) handleConfirmPhoneVerification(responseWriter http.R
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 		return
 	}
 	recipientPhone = normalizedPhone
@@ -502,7 +502,7 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 
 	var updateUserEmailInput UpdateUserEmailInput
 	if err := json.NewDecoder(request.Body).Decode(&updateUserEmailInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -589,7 +589,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 
 	var updateUserPhoneInput UpdateUserPhoneInput
 	if err := json.NewDecoder(request.Body).Decode(&updateUserPhoneInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -601,7 +601,7 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 
 	normalizedPhone, err := NormalizePhone(recipientPhone)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 		return
 	}
 	recipientPhone = normalizedPhone

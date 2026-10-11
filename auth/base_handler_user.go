@@ -71,7 +71,7 @@ func (handler *BaseHandler) handleUpdateUserProperties(responseWriter http.Respo
 
 	var updateUserPropertiesInput UpdateUserPropertiesInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPropertiesInput); decodeErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", decodeErr.Error())
 		return
 	}
 

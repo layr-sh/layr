@@ -182,7 +182,7 @@ func (handler *BaseHandler) handleRevokeOtherSessions(responseWriter http.Respon
 			return
 		}
 
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current session identifier required to revoke other devices")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Current session identifier is required to revoke other devices")
 		return
 	}
 
@@ -244,7 +244,7 @@ func (handler *BaseHandler) handleRefreshToken(responseWriter http.ResponseWrite
 	var refreshTokenInput RefreshTokenInput
 	if request.Body != nil && request.ContentLength != 0 {
 		if err := json.NewDecoder(request.Body).Decode(&refreshTokenInput); err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 			return
 		}
 	}
@@ -252,7 +252,7 @@ func (handler *BaseHandler) handleRefreshToken(responseWriter http.ResponseWrite
 		refreshTokenInput.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 	if refreshTokenInput.RefreshToken == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token is required")
 		return
 	}
 

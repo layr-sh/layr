@@ -25,7 +25,7 @@ func (handler *BaseHandler) handleBeginPasskeySignUp(responseWriter http.Respons
 	var beginPasskeySignUpInput BeginPasskeySignUpInput
 	if request.Body != nil && request.ContentLength != 0 {
 		if err := json.NewDecoder(request.Body).Decode(&beginPasskeySignUpInput); err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 			return
 		}
 	}
@@ -37,7 +37,7 @@ func (handler *BaseHandler) handleBeginPasskeySignUp(responseWriter http.Respons
 	}
 
 	if beginPasskeySignUpInput.UserID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "User ID is required")
 		return
 	}
 
@@ -69,14 +69,18 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 
 	var verifyPasskeySignUpInput VerifyPasskeySignUpInput
 	if err := json.NewDecoder(request.Body).Decode(&verifyPasskeySignUpInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
 	expectedUserID, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignUpInput.Challenge)
 	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignUpInput.Challenge)
 	if err != nil || expectedUserID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
+		debugMsg := "empty expected user ID"
+		if err != nil {
+			debugMsg = err.Error()
+		}
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge", debugMsg)
 		return
 	}
 
@@ -198,12 +202,12 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 
 	var verifyPasskeySignInInput VerifyPasskeySignInInput
 	if err := json.NewDecoder(request.Body).Decode(&verifyPasskeySignInInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
 	if _, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignInInput.Challenge); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge", err.Error())
 		return
 	}
 	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignInInput.Challenge)
@@ -333,7 +337,7 @@ func (handler *BaseHandler) handleDeletePasskey(responseWriter http.ResponseWrit
 
 	passkeyID := strings.TrimSpace(request.PathValue("passkey_id"))
 	if passkeyID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Passkey ID is required")
 		return
 	}
 

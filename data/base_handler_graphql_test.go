@@ -149,7 +149,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "closed pool")
+		assert.Contains(t, responseRecorder.Body.String(), "Service temporarily unavailable")
 	})
 
 	t.Run("writeGraphQLDBError", func(t *testing.T) {
@@ -255,7 +255,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		responseRecorder := httptest.NewRecorder()
 		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 		assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-		assert.Contains(t, responseRecorder.Body.String(), "closed pool")
+		assert.Contains(t, responseRecorder.Body.String(), "Service temporarily unavailable")
 	})
 
 	t.Run("DefaultAndMaxLimitEnforcement", func(t *testing.T) {

@@ -26,7 +26,7 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 
 	var sendOTPInput SendOTPInput
 	if err := json.NewDecoder(request.Body).Decode(&sendOTPInput); err != nil || sendOTPInput.Recipient == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient email or phone number is required")
 		return
 	}
 
@@ -62,7 +62,7 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		recipient = normalizedPhone
@@ -137,7 +137,7 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 
 	var verifyOTPInput VerifyOTPInput
 	if err := json.NewDecoder(request.Body).Decode(&verifyOTPInput); err != nil || verifyOTPInput.Recipient == "" || verifyOTPInput.Code == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Recipient and code are required")
 		return
 	}
 
@@ -169,7 +169,7 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		recipient = normalizedPhone

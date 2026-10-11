@@ -272,7 +272,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 
 	onConflict := request.URL.Query().Get("on_conflict")
 	if onConflict != "" && !common.IsValidIdentifier(onConflict) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid query parameter")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid query parameters")
 		return
 	}
 
