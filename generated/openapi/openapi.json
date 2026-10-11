@@ -4682,7 +4682,7 @@
   "paths": {
     "/v1/_/auth/config": {
       "get": {
-        "description": "Retrieves dynamic runtime authentication configuration with secrets projected as boolean indicators.",
+        "description": "Returns active dynamic authentication settings from auth.config including password strength rules, session TTLs, rate limits, MFA policies, and enabled OAuth providers, with client secrets projected as boolean indicators. Requires auth:config.read scope.",
         "operationId": "auth__config__get",
         "responses": {
           "200": {
@@ -4701,9 +4701,9 @@
             "description": "OK"
           }
         },
-        "summary": "Retrieve dynamic runtime auth configuration",
+        "summary": "Retrieve dynamic runtime authentication configuration",
         "tags": [
-          "Auth Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4712,7 +4712,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates dynamic runtime auth configuration, envelope-encrypting new secrets with master encryption key.",
+        "description": "Updates dynamic authentication configuration parameters in auth.config without requiring server restarts. Automatically envelope-encrypts newly supplied third-party OAuth provider secrets with AES-256-GCM using the master encryption key. Requires auth:config.write scope.",
         "operationId": "auth__config__update",
         "requestBody": {
           "content": {
@@ -4742,9 +4742,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update dynamic runtime auth configuration with write-only secrets",
+        "summary": "Update dynamic runtime authentication configuration",
         "tags": [
-          "Auth Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4755,7 +4755,7 @@
     },
     "/v1/_/auth/users": {
       "get": {
-        "description": "Lists registered application users with pagination, role filters, and search capabilities.",
+        "description": "Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.",
         "operationId": "auth__users__list",
         "responses": {
           "200": {
@@ -4776,7 +4776,7 @@
         },
         "summary": "List registered application users with filtering and pagination",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4785,7 +4785,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a new application user account directly through the control plane.",
+        "description": "Directly provisions a new user record in auth.users with specified email, normalized phone, Argon2id password hash, role, custom properties, and email/phone verification flags. Emits auth.user.created event. Requires auth:user.write scope.",
         "operationId": "auth__users__create",
         "requestBody": {
           "content": {
@@ -4815,9 +4815,9 @@
             "description": "OK"
           }
         },
-        "summary": "Create a new application user account",
+        "summary": "Create an application user account via control plane",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4828,7 +4828,7 @@
     },
     "/v1/_/auth/users/{user_id}": {
       "delete": {
-        "description": "Permanently deletes user account and cascades deletion to sessions and identities.",
+        "description": "Permanently deletes application user from auth.users, cascading deletion to all active sessions, linked identities, and passkeys. Emits auth.user.deleted event. Requires auth:user.write scope.",
         "operationId": "auth__users__delete",
         "parameters": [
           {
@@ -4860,9 +4860,9 @@
             "description": "User deleted"
           }
         },
-        "summary": "Delete application user and cascade related sessions/identities",
+        "summary": "Permanently delete an application user and cascade sessions",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4871,7 +4871,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves full user account details including identities, verification status, and lockout metadata.",
+        "description": "Retrieves complete user record from auth.users by UUID, including verification timestamps, role, custom properties JSON, MFA status, lockout metadata, and linked authentication identities. Requires auth:user.read scope.",
         "operationId": "auth__users__get",
         "parameters": [
           {
@@ -4900,9 +4900,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get detailed user record by UUID",
+        "summary": "Get detailed application user record by UUID",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4913,7 +4913,7 @@
     },
     "/v1/_/auth/users/{user_id}/lock": {
       "delete": {
-        "description": "Unlocks user account and restores login capabilities.",
+        "description": "Clears locked_until timestamp in auth.users, restoring authentication capabilities for a user previously locked by control plane action or brute-force protection. Requires auth:user.write scope.",
         "operationId": "auth__users__unlock",
         "parameters": [
           {
@@ -4942,9 +4942,9 @@
             "description": "OK"
           }
         },
-        "summary": "Unlock application user and restore access",
+        "summary": "Unlock application user account and restore login access",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -4953,7 +4953,7 @@
         "x-sdk-method-name": "unlock"
       },
       "post": {
-        "description": "Locks user account to prevent authentication and revokes all active sessions immediately.",
+        "description": "Sets locked_until timestamp on auth.users to prevent further authentication, and immediately deletes all active sessions in auth.sessions. Emits auth.user.locked event. Requires auth:user.write scope.",
         "operationId": "auth__users__lock",
         "parameters": [
           {
@@ -4993,9 +4993,9 @@
             "description": "OK"
           }
         },
-        "summary": "Lock application user and revoke active sessions",
+        "summary": "Lock application user account and revoke active sessions",
         "tags": [
-          "Auth User Management"
+          "Users"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -5006,7 +5006,7 @@
     },
     "/v1/_/auth/users/{user_id}/sessions": {
       "get": {
-        "description": "Lists all active sessions for a specific user, including IP address, user agent, and expiration time.",
+        "description": "Returns all active sessions from auth.sessions for the specified user ID, detailing client IP, user agent, expiration time, and creation timestamp. Requires auth:user.read scope.",
         "operationId": "auth__users__sessions__list",
         "parameters": [
           {
@@ -5037,7 +5037,7 @@
         },
         "summary": "List active sessions for an application user",
         "tags": [
-          "Auth Session Management"
+          "Users Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -5049,7 +5049,7 @@
     },
     "/v1/_/auth/users/{user_id}/sessions/revoke": {
       "post": {
-        "description": "Revokes all active sessions and refresh tokens for the specified user.",
+        "description": "Deletes all active sessions from auth.sessions for the specified user ID, invalidating all outstanding refresh tokens and forcing re-authentication. Requires auth:user.write scope.",
         "operationId": "auth__users__sessions__revoke",
         "parameters": [
           {
@@ -5094,7 +5094,7 @@
         },
         "summary": "Revoke all active sessions for an application user",
         "tags": [
-          "Auth Session Management"
+          "Users Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -5106,7 +5106,7 @@
     },
     "/v1/_/console/config": {
       "get": {
-        "description": "Returns active dynamic console configuration settings.",
+        "description": "Returns active runtime console configuration settings including session duration, MFA enforcement policy, and allowed origins. Requires console:config.read scope.",
         "operationId": "console__config__get",
         "responses": {
           "200": {
@@ -5125,9 +5125,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get runtime configuration",
+        "summary": "Get dynamic runtime console configuration",
         "tags": [
-          "Console Config"
+          "Config"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5136,7 +5136,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Mutates dynamic runtime console configuration.",
+        "description": "Mutates runtime console configuration parameters in console.config, validating structure and applying settings dynamically across cluster nodes. Requires console:config.write scope.",
         "operationId": "console__config__update",
         "requestBody": {
           "content": {
@@ -5166,9 +5166,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update runtime configuration",
+        "summary": "Update dynamic runtime console configuration",
         "tags": [
-          "Console Config"
+          "Config"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5179,7 +5179,7 @@
     },
     "/v1/_/console/users": {
       "get": {
-        "description": "Returns all registered console operator users.",
+        "description": "Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.",
         "operationId": "console__users__list",
         "responses": {
           "200": {
@@ -5204,9 +5204,9 @@
             "description": "OK"
           }
         },
-        "summary": "List console operator accounts",
+        "summary": "List console user accounts",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5215,7 +5215,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a new console operator with credentials.",
+        "description": "Creates a new console user account in console.users with email and Argon2id password hash (minimum 8 characters). Publishes console.user.created event. Requires console:user.write scope.",
         "operationId": "console__users__create",
         "requestBody": {
           "content": {
@@ -5245,9 +5245,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create console operator account",
+        "summary": "Create console user account",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5258,7 +5258,7 @@
     },
     "/v1/_/console/users/{user_id}": {
       "delete": {
-        "description": "Deletes a console operator and cascades session revocation.",
+        "description": "Permanently deletes console user account from console.users, automatically cascading revocation of all active sessions in console.sessions. Emits console.user.deleted event. Requires console:user.write scope.",
         "operationId": "console__users__delete",
         "parameters": [
           {
@@ -5290,9 +5290,9 @@
             "description": "User deleted"
           }
         },
-        "summary": "Delete console operator account",
+        "summary": "Delete console user account and cascade sessions",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5301,7 +5301,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Returns a single console operator user by ID.",
+        "description": "Retrieves a single console user account from console.users by UUID, including email, enabled status, MFA enrollment flag, and timestamps. Requires console:user.read scope.",
         "operationId": "console__users__get",
         "parameters": [
           {
@@ -5330,9 +5330,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get console operator account details",
+        "summary": "Get console user account details by UUID",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5341,7 +5341,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Modifies email or active status of a console user.",
+        "description": "Modifies email or enabled status of a console user in console.users. If account is disabled, immediately revokes all active sessions in console.sessions. Emits console.user.updated event. Requires console:user.write scope.",
         "operationId": "console__users__update",
         "parameters": [
           {
@@ -5381,9 +5381,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update console operator account",
+        "summary": "Update console user account properties",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5394,7 +5394,7 @@
     },
     "/v1/_/console/users/{user_id}/password": {
       "post": {
-        "description": "Rotates user password and revokes all active operator sessions.",
+        "description": "Updates password hash in console.users using Argon2id key derivation and revokes all active sessions in console.sessions, forcing re-login across all devices. Emits console.user.password_reset event. Requires console:user.write scope.",
         "operationId": "console__users__reset_password",
         "parameters": [
           {
@@ -5434,9 +5434,9 @@
             "description": "OK"
           }
         },
-        "summary": "Reset console operator password",
+        "summary": "Reset console user password and revoke sessions",
         "tags": [
-          "Console Users"
+          "Users"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5447,7 +5447,7 @@
     },
     "/v1/_/console/users/{user_id}/sessions": {
       "get": {
-        "description": "Returns active sessions for a console user.",
+        "description": "Returns all active sessions from console.sessions for the specified console user, including client IP address, user-agent string, creation timestamp, and expiration time. Requires console:user.read scope.",
         "operationId": "console__users__sessions__list",
         "parameters": [
           {
@@ -5482,9 +5482,9 @@
             "description": "OK"
           }
         },
-        "summary": "List active operator sessions",
+        "summary": "List active sessions for a console user",
         "tags": [
-          "Console Users"
+          "Users Sessions"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5496,7 +5496,7 @@
     },
     "/v1/_/console/users/{user_id}/sessions/revoke": {
       "post": {
-        "description": "Terminates all active sessions for a console operator.",
+        "description": "Terminates all active sessions in console.sessions for the specified console user, immediately invalidating cookie tokens. Emits console.user.sessions.revoked_all event. Requires console:user.write scope.",
         "operationId": "console__users__sessions__revoke",
         "parameters": [
           {
@@ -5539,9 +5539,9 @@
             "description": "Sessions revoked"
           }
         },
-        "summary": "Revoke all operator sessions",
+        "summary": "Revoke all active sessions for a console user",
         "tags": [
-          "Console Users"
+          "Users Sessions"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5553,7 +5553,7 @@
     },
     "/v1/_/console/users/{user_id}/sessions/{session_id}": {
       "delete": {
-        "description": "Terminates a single console session.",
+        "description": "Terminates a single session by session UUID from console.sessions for the specified console user. Emits console.user.session.revoked event. Requires console:user.write scope.",
         "operationId": "console__users__sessions__delete",
         "parameters": [
           {
@@ -5593,9 +5593,9 @@
             "description": "Session revoked"
           }
         },
-        "summary": "Revoke specific operator session",
+        "summary": "Revoke a specific console user session",
         "tags": [
-          "Console Users"
+          "Users Sessions"
         ],
         "x-sdk-group-name": [
           "console",
@@ -5607,7 +5607,7 @@
     },
     "/v1/_/core/event-hooks": {
       "get": {
-        "description": "Lists all active event hooks with driver, target URLs/functions, events, and retry policies.",
+        "description": "Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.",
         "operationId": "core__event_hooks__list",
         "responses": {
           "200": {
@@ -5632,9 +5632,9 @@
             "description": "OK"
           }
         },
-        "summary": "List all event hooks",
+        "summary": "List event hook subscriptions",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5643,7 +5643,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates an event hook subscription for SQL stored procedure or HTTP webhook dispatching.",
+        "description": "Creates an event hook subscription in core.event_hooks for SQL stored procedures (sql driver) or HTTP webhooks (http driver) with HMAC-SHA256 signing secret encryption, wildcard event patterns, timeout guards, and retry policies. Requires core:event-hook.write scope.",
         "operationId": "core__event_hooks__create",
         "requestBody": {
           "content": {
@@ -5673,9 +5673,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create a new event hook",
+        "summary": "Create an event hook subscription",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5686,7 +5686,7 @@
     },
     "/v1/_/core/event-hooks/{event_hook_id}": {
       "delete": {
-        "description": "Deletes an event hook.",
+        "description": "Permanently removes an event hook subscription from core.event_hooks, immediately unbinding event dispatches. Delivery history is preserved or cascaded according to retention rules. Requires core:event-hook.write scope.",
         "operationId": "core__event_hooks__delete",
         "parameters": [
           {
@@ -5718,9 +5718,9 @@
             "description": "Event hook deleted"
           }
         },
-        "summary": "Delete event hook",
+        "summary": "Delete event hook subscription",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5729,7 +5729,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves an event hook by UUID.",
+        "description": "Retrieves event hook configuration by UUID from core.event_hooks, including driver type, target endpoint, subscribed event patterns, retry limits, and secret configuration indicator. Requires core:event-hook.read scope.",
         "operationId": "core__event_hooks__get",
         "parameters": [
           {
@@ -5758,9 +5758,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get event hook by ID",
+        "summary": "Get event hook subscription details by UUID",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5769,7 +5769,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates event hook driver, targets, subscribed events, secret, or enabled status.",
+        "description": "Modifies event hook parameters in core.event_hooks including target URL or stored procedure, subscribed event patterns, retry count (0-10), timeout (1-60s), signing secret, or enabled status. Requires core:event-hook.write scope.",
         "operationId": "core__event_hooks__update",
         "parameters": [
           {
@@ -5809,9 +5809,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update event hook",
+        "summary": "Update event hook subscription",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5822,7 +5822,7 @@
     },
     "/v1/_/core/event-hooks/{event_hook_id}/deliveries": {
       "get": {
-        "description": "Queries recent dispatch attempts, response status, and latency for an event hook.",
+        "description": "Queries the 100 most recent dispatch attempts for an event hook from core.event_hook_deliveries, detailing event ID, payload, HTTP status code, duration in milliseconds, error messages, and delivery state. Requires core:event-hook.read scope.",
         "operationId": "core__event_hooks__deliveries__list",
         "parameters": [
           {
@@ -5857,9 +5857,9 @@
             "description": "OK"
           }
         },
-        "summary": "List event hook deliveries",
+        "summary": "List delivery audit logs for an event hook",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks Deliveries"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5871,7 +5871,7 @@
     },
     "/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry": {
       "post": {
-        "description": "Manually redrives a past event hook delivery attempt.",
+        "description": "Manually redrives an event hook delivery using the recorded event payload, re-dispatching via the configured driver (SQL procedure or HTTP POST webhook) and recording the new attempt outcome. Requires core:event-hook.write scope.",
         "operationId": "core__event_hooks__deliveries__retry",
         "parameters": [
           {
@@ -5919,9 +5919,9 @@
             "description": "OK"
           }
         },
-        "summary": "Retry event hook delivery",
+        "summary": "Retry a past event hook delivery attempt",
         "tags": [
-          "Core Control Plane"
+          "Event Hooks Deliveries"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5933,7 +5933,7 @@
     },
     "/v1/_/core/events": {
       "get": {
-        "description": "Queries immutable system and domain events with multi-field filtering and pagination.",
+        "description": "Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.",
         "operationId": "core__events__list",
         "responses": {
           "200": {
@@ -5958,9 +5958,9 @@
             "description": "OK"
           }
         },
-        "summary": "List events",
+        "summary": "Query immutable system and domain audit events",
         "tags": [
-          "Core Control Plane"
+          "Events"
         ],
         "x-sdk-group-name": [
           "core",
@@ -5971,7 +5971,7 @@
     },
     "/v1/_/core/events/{event_id}": {
       "get": {
-        "description": "Retrieves an individual event entry by UUID.",
+        "description": "Retrieves a specific canonical event record by UUID from core.events, including event type, actor principal, transport context (IP, user agent, request ID), and structured payload data. Requires core:event.read scope.",
         "operationId": "core__events__get",
         "parameters": [
           {
@@ -6000,9 +6000,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get event by ID",
+        "summary": "Get individual event record by UUID",
         "tags": [
-          "Core Control Plane"
+          "Events"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6013,7 +6013,7 @@
     },
     "/v1/_/core/service-accounts": {
       "get": {
-        "description": "Lists all machine service accounts with status, name, and permission scopes.",
+        "description": "Lists all machine service accounts from core.service_accounts with name, key prefix, granted permission scopes, enabled status, IP allowlists, and expiration timestamps. Requires core:service-account.read scope.",
         "operationId": "core__service_accounts__list",
         "responses": {
           "200": {
@@ -6038,9 +6038,9 @@
             "description": "OK"
           }
         },
-        "summary": "List all service accounts",
+        "summary": "List machine service accounts",
         "tags": [
-          "Core Control Plane"
+          "Service Accounts"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6049,7 +6049,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a machine service account, generates a 32-byte hex secret key, and hashes it.",
+        "description": "Creates a machine service account, generates a high-entropy 32-byte hex secret key, hashes it with SHA-256 for storage in core.service_accounts, and returns the plaintext secret key once. Supports scope constraints and CIDR IP restrictions. Requires core:service-account.write scope.",
         "operationId": "core__service_accounts__create",
         "requestBody": {
           "content": {
@@ -6079,9 +6079,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create a new machine service account",
+        "summary": "Create a machine service account",
         "tags": [
-          "Core Control Plane"
+          "Service Accounts"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6092,7 +6092,7 @@
     },
     "/v1/_/core/service-accounts/{service_account_id}": {
       "delete": {
-        "description": "Deletes a machine service account, enforcing invariant that at least one root account remains.",
+        "description": "Deletes a machine service account from core.service_accounts. Enforces strict safety invariants: prevents deleting accounts owned by console users and ensures at least one active root account remains. Requires core:service-account.write scope.",
         "operationId": "core__service_accounts__delete",
         "parameters": [
           {
@@ -6124,9 +6124,9 @@
             "description": "Service account deleted"
           }
         },
-        "summary": "Delete service account",
+        "summary": "Delete machine service account",
         "tags": [
-          "Core Control Plane"
+          "Service Accounts"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6135,7 +6135,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves a service account by UUID.",
+        "description": "Retrieves a machine service account by UUID from core.service_accounts, returning metadata, permission scopes, key prefix, and allowed IP patterns. Plaintext key is not recoverable. Requires core:service-account.read scope.",
         "operationId": "core__service_accounts__get",
         "parameters": [
           {
@@ -6164,9 +6164,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get service account by ID",
+        "summary": "Get machine service account details by UUID",
         "tags": [
-          "Core Control Plane"
+          "Service Accounts"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6175,7 +6175,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates service account scopes, name, or enabled status while protecting root accounts.",
+        "description": "Modifies name, description, permission scopes, IP allowlist, or enabled status in core.service_accounts. Enforces safety invariant that at least one enabled root account with wildcard * scope remains. Requires core:service-account.write scope.",
         "operationId": "core__service_accounts__update",
         "parameters": [
           {
@@ -6215,9 +6215,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update service account",
+        "summary": "Update machine service account properties and scopes",
         "tags": [
-          "Core Control Plane"
+          "Service Accounts"
         ],
         "x-sdk-group-name": [
           "core",
@@ -6228,7 +6228,7 @@
     },
     "/v1/_/data/cache/flush": {
       "post": {
-        "description": "Flushes in-memory and distributed query result caches across all cluster nodes.",
+        "description": "Flushes in-memory and distributed table reflection metadata, query result caches, and composite version counters across all cluster nodes. Requires data:cache.write scope.",
         "operationId": "data__cache__flush",
         "requestBody": {
           "content": {
@@ -6260,7 +6260,7 @@
         },
         "summary": "Flush all global query and schema reflection caches",
         "tags": [
-          "Data Control Plane"
+          "Cache"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6271,7 +6271,7 @@
     },
     "/v1/_/data/cache/invalidate": {
       "post": {
-        "description": "Invalidates reflection and query caches for a specific table or schema pattern.",
+        "description": "Invalidates schema reflection and query caches for a specific schema, table name, or pattern, bumping composite table cache versions. Requires data:cache.write scope.",
         "operationId": "data__cache__invalidate",
         "requestBody": {
           "content": {
@@ -6301,9 +6301,9 @@
             "description": "OK"
           }
         },
-        "summary": "Programmatically invalidate specific table or catalog caches",
+        "summary": "Invalidate specific table or catalog caches",
         "tags": [
-          "Data Control Plane"
+          "Cache"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6314,7 +6314,7 @@
     },
     "/v1/_/data/config": {
       "get": {
-        "description": "Retrieves dynamic runtime data service settings including exposed schemas, pool sizes, and cache TTL rules.",
+        "description": "Returns dynamic data service configuration settings including exposed schema names, connection pool sizes, REST limit defaults, and cache TTL parameters. Requires data:config.read scope.",
         "operationId": "data__config__get",
         "responses": {
           "200": {
@@ -6335,7 +6335,7 @@
         },
         "summary": "Retrieve dynamic data service configuration",
         "tags": [
-          "Data Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6344,7 +6344,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates dynamic runtime data service configuration without requiring server restarts.",
+        "description": "Updates operational data service parameters in data.config, dynamically tuning connection limits, exposed schemas, and cache behaviors without server downtime. Requires data:config.write scope.",
         "operationId": "data__config__update",
         "requestBody": {
           "content": {
@@ -6376,7 +6376,7 @@
         },
         "summary": "Update dynamic data service configuration",
         "tags": [
-          "Data Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6387,7 +6387,7 @@
     },
     "/v1/_/data/tables": {
       "get": {
-        "description": "Queries PostgreSQL information_schema and pg_catalog to list tables, primary keys, and approximate row counts.",
+        "description": "Queries PostgreSQL information_schema and pg_catalog to return tables, primary key column names, approximate row counts, and RLS enabled statuses across exposed schemas. Requires data:schema.read scope.",
         "operationId": "data__tables__list",
         "responses": {
           "200": {
@@ -6406,9 +6406,9 @@
             "description": "OK"
           }
         },
-        "summary": "List all user tables across configured schemas",
+        "summary": "List all database tables across configured schemas",
         "tags": [
-          "Data Schema DDL"
+          "Tables"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6417,7 +6417,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Executes DDL to create a table adhering to Layr invariants (UUIDv7 primary keys and timestamps).",
+        "description": "Executes DDL to provision a table adhering to Layr conventions (UUIDv7 primary keys, created_at, and last_updated_at timestamps), invalidating catalog caches and emitting data.table.created event. Requires data:schema.write scope.",
         "operationId": "data__tables__create",
         "requestBody": {
           "content": {
@@ -6449,7 +6449,7 @@
         },
         "summary": "Create a new PostgreSQL table with UUIDv7 primary key",
         "tags": [
-          "Data Schema DDL"
+          "Tables"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6460,7 +6460,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}": {
       "delete": {
-        "description": "Drops a table and its associated constraints, indexes, and triggers from PostgreSQL.",
+        "description": "Executes DROP TABLE CASCADE in PostgreSQL, removing the table, associated indexes, triggers, and foreign key constraints. Invalidates catalog caches and emits data.table.deleted event. Requires data:schema.write scope.",
         "operationId": "data__tables__delete",
         "parameters": [
           {
@@ -6497,9 +6497,9 @@
             "description": "OK"
           }
         },
-        "summary": "Drop a table",
+        "summary": "Drop a table and cascade constraints",
         "tags": [
-          "Data Schema DDL"
+          "Tables"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6508,7 +6508,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves column definitions, foreign keys, indexes, and RLS policies for a specific table.",
+        "description": "Retrieves complete architectural schema for a table, detailing columns (types, nullability, defaults), primary/foreign key constraints, indexes, and active RLS policies. Requires data:schema.read scope.",
         "operationId": "data__tables__get",
         "parameters": [
           {
@@ -6547,7 +6547,7 @@
         },
         "summary": "Inspect table schema, columns, indexes, and constraints",
         "tags": [
-          "Data Schema DDL"
+          "Tables"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6558,7 +6558,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/columns": {
       "post": {
-        "description": "Alters table schema to add a new column with type validation and optional default values.",
+        "description": "Executes ALTER TABLE ADD COLUMN with validated PostgreSQL data type, nullability constraint, and optional default expression. Invalidates schema reflection caches and emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__columns__create",
         "parameters": [
           {
@@ -6606,9 +6606,9 @@
             "description": "OK"
           }
         },
-        "summary": "Add a new column to a table",
+        "summary": "Add a new column to a table schema",
         "tags": [
-          "Data Schema DDL"
+          "Tables Columns"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6620,7 +6620,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}": {
       "delete": {
-        "description": "Drops a column from a table schema.",
+        "description": "Executes ALTER TABLE DROP COLUMN CASCADE, dropping the column and dependent views or indexes. Invalidates reflection caches and emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__columns__delete",
         "parameters": [
           {
@@ -6665,9 +6665,9 @@
             "description": "OK"
           }
         },
-        "summary": "Drop a column from a table",
+        "summary": "Drop a column from a table schema",
         "tags": [
-          "Data Schema DDL"
+          "Tables Columns"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6677,7 +6677,7 @@
         "x-sdk-method-name": "delete"
       },
       "patch": {
-        "description": "Alters column attributes or renames a column.",
+        "description": "Alters column attributes (data type conversion, set/drop default, set/drop NOT NULL) or renames the column. Invalidates table metadata caches and emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__columns__update",
         "parameters": [
           {
@@ -6733,9 +6733,9 @@
             "description": "OK"
           }
         },
-        "summary": "Alter column type, default, nullable, or rename",
+        "summary": "Alter column type, default, nullability, or rename",
         "tags": [
-          "Data Schema DDL"
+          "Tables Columns"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6747,7 +6747,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/indexes": {
       "get": {
-        "description": "Lists all indexes defined on the specified table.",
+        "description": "Queries pg_indexes to return all index definitions, methods, uniqueness constraints, and column lists for the specified table. Requires data:schema.read scope.",
         "operationId": "data__tables__indexes__list",
         "parameters": [
           {
@@ -6784,9 +6784,9 @@
             "description": "OK"
           }
         },
-        "summary": "List indexes on a table",
+        "summary": "List indexes defined on a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables Indexes"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6796,7 +6796,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a B-Tree, GIN, GiST, or BRIN index on table columns.",
+        "description": "Executes CREATE INDEX supporting B-Tree, GIN, GiST, or BRIN index methods, unique constraints, and multi-column expressions. Emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__indexes__create",
         "parameters": [
           {
@@ -6844,9 +6844,9 @@
             "description": "OK"
           }
         },
-        "summary": "Create an index on a table",
+        "summary": "Create an index on table columns",
         "tags": [
-          "Data Schema DDL"
+          "Tables Indexes"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6858,7 +6858,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/indexes/{index_name}": {
       "delete": {
-        "description": "Drops an index from PostgreSQL.",
+        "description": "Executes DROP INDEX in PostgreSQL, removing the index and invalidating query planner metadata. Emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__indexes__delete",
         "parameters": [
           {
@@ -6905,7 +6905,7 @@
         },
         "summary": "Drop an index from a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables Indexes"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6917,7 +6917,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/policies": {
       "get": {
-        "description": "Lists Row-Level Security policies with USING and WITH CHECK SQL expressions.",
+        "description": "Queries pg_policies to list active Row-Level Security (RLS) policies, detailing command targets (SELECT, INSERT, UPDATE, DELETE), roles, USING filters, and WITH CHECK expressions. Requires data:schema.read scope.",
         "operationId": "data__tables__policies__list",
         "parameters": [
           {
@@ -6954,9 +6954,9 @@
             "description": "OK"
           }
         },
-        "summary": "List RLS policies on a table",
+        "summary": "List Row-Level Security policies on a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables Policies"
         ],
         "x-sdk-group-name": [
           "data",
@@ -6966,7 +6966,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates an RLS policy defining declarative access rules for roles and commands.",
+        "description": "Executes CREATE POLICY in PostgreSQL, attaching declarative row-level access control rules for specific database roles and SQL commands with USING and WITH CHECK expressions. Emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__policies__create",
         "parameters": [
           {
@@ -7016,7 +7016,7 @@
         },
         "summary": "Create a Row-Level Security policy on a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables Policies"
         ],
         "x-sdk-group-name": [
           "data",
@@ -7028,7 +7028,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/policies/{policy_name}": {
       "delete": {
-        "description": "Drops an RLS policy from a table.",
+        "description": "Executes DROP POLICY on the specified table, removing the security policy from PostgreSQL enforcement. Emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__policies__delete",
         "parameters": [
           {
@@ -7075,7 +7075,7 @@
         },
         "summary": "Drop an RLS policy from a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables Policies"
         ],
         "x-sdk-group-name": [
           "data",
@@ -7087,7 +7087,7 @@
     },
     "/v1/_/data/tables/{schema_name}/{table_name}/rls": {
       "patch": {
-        "description": "Toggles Row-Level Security enforcement mode on a table.",
+        "description": "Executes ALTER TABLE to ENABLE, DISABLE, or FORCE Row-Level Security (RLS) enforcement on the table. Invalidates table metadata and emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__rls__update",
         "parameters": [
           {
@@ -7135,9 +7135,9 @@
             "description": "OK"
           }
         },
-        "summary": "Toggle Row-Level Security (ENABLE / DISABLE / FORCE)",
+        "summary": "Toggle Row-Level Security enforcement mode on a table",
         "tags": [
-          "Data Schema DDL"
+          "Tables RLS"
         ],
         "x-sdk-group-name": [
           "data",
@@ -7149,7 +7149,7 @@
     },
     "/v1/_/file-storage/buckets": {
       "get": {
-        "description": "Returns all configured storage buckets and their backend configurations.",
+        "description": "Returns all configured storage buckets from file_storage.buckets, detailing backend type (database or s3), public access flag, file size limits, and allowed MIME types. Requires storage:bucket.read scope.",
         "operationId": "file_storage__buckets__list",
         "responses": {
           "200": {
@@ -7168,9 +7168,9 @@
             "description": "OK"
           }
         },
-        "summary": "List all storage buckets",
+        "summary": "List all storage buckets and backend configurations",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7179,7 +7179,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a new bucket with either database or S3 backend.",
+        "description": "Provisions a new storage bucket in file_storage.buckets with database or S3 backend settings, size limits, allowed MIME types, and public access policy. Emits file_storage.bucket.created event. Requires storage:bucket.write scope.",
         "operationId": "file_storage__buckets__create",
         "requestBody": {
           "content": {
@@ -7209,9 +7209,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create a new storage bucket",
+        "summary": "Create a storage bucket with backend configuration",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7222,7 +7222,7 @@
     },
     "/v1/_/file-storage/buckets/{bucket}": {
       "delete": {
-        "description": "Deletes a bucket and cascades deletion to all contained objects.",
+        "description": "Deletes a storage bucket from file_storage.buckets and permanently cascades deletion of all stored objects from the backend and database. Emits file_storage.bucket.deleted event. Requires storage:bucket.write scope.",
         "operationId": "file_storage__buckets__delete",
         "parameters": [
           {
@@ -7254,9 +7254,9 @@
             "description": "Bucket deleted"
           }
         },
-        "summary": "Delete a storage bucket",
+        "summary": "Delete a storage bucket and cascade contained objects",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7265,7 +7265,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Returns configuration and status for a specific bucket.",
+        "description": "Retrieves configuration, size limits, allowed MIME types, backend type, and public access status for a specific bucket from file_storage.buckets. Requires storage:bucket.read scope.",
         "operationId": "file_storage__buckets__get",
         "parameters": [
           {
@@ -7294,9 +7294,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get bucket details by name",
+        "summary": "Get storage bucket details by name",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7305,7 +7305,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Updates bucket properties such as public flag, backend config, or size limits.",
+        "description": "Modifies bucket settings in file_storage.buckets including public flag, file size limit, allowed MIME types, and backend configuration. Emits file_storage.bucket.updated event. Requires storage:bucket.write scope.",
         "operationId": "file_storage__buckets__update",
         "parameters": [
           {
@@ -7345,9 +7345,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update bucket settings",
+        "summary": "Update storage bucket configuration and constraints",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7358,7 +7358,7 @@
     },
     "/v1/_/file-storage/buckets/{bucket}/objects": {
       "get": {
-        "description": "Returns metadata of objects stored within a specific bucket.",
+        "description": "Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.",
         "operationId": "file_storage__buckets__list_objects",
         "parameters": [
           {
@@ -7387,9 +7387,9 @@
             "description": "OK"
           }
         },
-        "summary": "List objects in a bucket",
+        "summary": "List objects stored within a bucket",
         "tags": [
-          "File Storage Control Plane"
+          "Buckets"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7400,7 +7400,7 @@
     },
     "/v1/_/file-storage/config": {
       "get": {
-        "description": "Returns dynamic runtime settings for the file storage subsystem.",
+        "description": "Returns dynamic operational configuration settings for the file storage subsystem including global size limits and default backends. Requires storage:config.read scope.",
         "operationId": "file_storage__config__get",
         "responses": {
           "200": {
@@ -7421,7 +7421,7 @@
         },
         "summary": "Get runtime file storage configuration",
         "tags": [
-          "File Storage Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7430,7 +7430,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates dynamic runtime settings for the file storage subsystem.",
+        "description": "Updates dynamic operational configuration for the file storage subsystem in storage.config, tuning global upload limits and backends without restart. Requires storage:config.write scope.",
         "operationId": "file_storage__config__update",
         "requestBody": {
           "content": {
@@ -7462,7 +7462,7 @@
         },
         "summary": "Update runtime file storage configuration",
         "tags": [
-          "File Storage Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -7473,7 +7473,7 @@
     },
     "/v1/_/function/config": {
       "get": {
-        "description": "Returns the dynamic operational configuration for the function runtime subsystem.",
+        "description": "Returns operational function runtime settings including default isolate timeouts, memory limits, runner concurrency, and isolate pool capacities. Requires function:config.read scope.",
         "operationId": "function__config__get",
         "responses": {
           "200": {
@@ -7492,9 +7492,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get runtime configuration",
+        "summary": "Get runtime function configuration",
         "tags": [
-          "Function Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7503,7 +7503,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Modifies dynamic operational configuration settings for the function runtime subsystem.",
+        "description": "Modifies operational function runtime settings in function.config, tuning concurrency limits, memory caps, and execution timeouts without restarting the gateway. Requires function:config.write scope.",
         "operationId": "function__config__update",
         "requestBody": {
           "content": {
@@ -7533,9 +7533,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update runtime configuration",
+        "summary": "Update runtime function configuration",
         "tags": [
-          "Function Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7546,7 +7546,7 @@
     },
     "/v1/_/function/domains": {
       "get": {
-        "description": "Returns all registered custom domains.",
+        "description": "Returns all registered custom domain definitions from function.custom_domains with hostnames and verification states. Requires function:endpoint.read scope.",
         "operationId": "function__domains__list",
         "responses": {
           "200": {
@@ -7565,9 +7565,9 @@
             "description": "OK"
           }
         },
-        "summary": "List custom domains",
+        "summary": "List registered custom domains",
         "tags": [
-          "Function Control Plane"
+          "Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7576,7 +7576,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Registers a standalone custom domain hostname.",
+        "description": "Registers a standalone custom domain hostname in function.custom_domains with verification status and TLS configuration. Emits function.domain.created event. Requires function:endpoint.write scope.",
         "operationId": "function__domains__create",
         "requestBody": {
           "content": {
@@ -7606,9 +7606,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create custom domain",
+        "summary": "Register a standalone custom domain",
         "tags": [
-          "Function Control Plane"
+          "Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7619,7 +7619,7 @@
     },
     "/v1/_/function/domains/{domain_id}": {
       "delete": {
-        "description": "Removes a registered custom domain and cascades its routes.",
+        "description": "Deletes a custom domain from function.custom_domains, cascading removal of all attached endpoint route mappings. Emits function.domain.deleted event. Requires function:endpoint.write scope.",
         "operationId": "function__domains__delete",
         "parameters": [
           {
@@ -7651,9 +7651,9 @@
             "description": "Custom domain deleted"
           }
         },
-        "summary": "Delete custom domain",
+        "summary": "Delete custom domain and cascade attached routes",
         "tags": [
-          "Function Control Plane"
+          "Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7664,7 +7664,7 @@
     },
     "/v1/_/function/endpoints": {
       "get": {
-        "description": "Returns all registered serverless endpoints.",
+        "description": "Returns all registered serverless endpoints from function.endpoints with route names, runtime engines, timeout guards, memory limits, active deployment IDs, and status. Requires function:endpoint.read scope.",
         "operationId": "function__endpoints__list",
         "responses": {
           "200": {
@@ -7683,9 +7683,9 @@
             "description": "OK"
           }
         },
-        "summary": "List endpoints",
+        "summary": "List all registered serverless endpoints",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7694,7 +7694,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Registers a new serverless endpoint definition.",
+        "description": "Provisions a new serverless endpoint definition in function.endpoints with route path, name, runtime environment (Node, Deno, Python, Go), timeout guards, memory limits, and environment variables. Emits function.endpoint.created event. Requires function:endpoint.write scope.",
         "operationId": "function__endpoints__create",
         "requestBody": {
           "content": {
@@ -7724,9 +7724,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create endpoint",
+        "summary": "Register a new serverless endpoint",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7737,7 +7737,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}": {
       "delete": {
-        "description": "Permanently removes an endpoint definition and unloads it from running runtimes.",
+        "description": "Permanently deletes an endpoint from function.endpoints, unloads running worker isolates, cascades historical deployments, and removes custom domain routes. Emits function.endpoint.deleted event. Requires function:endpoint.write scope.",
         "operationId": "function__endpoints__delete",
         "parameters": [
           {
@@ -7769,9 +7769,9 @@
             "description": "Endpoint deleted"
           }
         },
-        "summary": "Delete endpoint",
+        "summary": "Delete serverless endpoint and unload runtime isolates",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7780,7 +7780,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Returns details of a single serverless endpoint definition.",
+        "description": "Retrieves complete definition of a serverless endpoint from function.endpoints by ID or name, including runtime configuration, environment variables, and active deployment version. Requires function:endpoint.read scope.",
         "operationId": "function__endpoints__get",
         "parameters": [
           {
@@ -7809,9 +7809,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get endpoint",
+        "summary": "Get serverless endpoint definition by ID",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7820,7 +7820,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Modifies an existing serverless endpoint definition.",
+        "description": "Modifies an existing serverless endpoint definition in function.endpoints, updating environment variables, timeout guards, or memory limits. Emits function.endpoint.updated event. Requires function:endpoint.write scope.",
         "operationId": "function__endpoints__update",
         "parameters": [
           {
@@ -7860,9 +7860,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update endpoint",
+        "summary": "Update serverless endpoint definition",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7873,7 +7873,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/deploy": {
       "post": {
-        "description": "Uploads an immutable code bundle and hot-reloads it in the active runtime runner.",
+        "description": "Uploads and registers an immutable code bundle in function.deployments, increments revision version, sets it as the active deployment pointer, and immediately hot-reloads runtime worker isolates. Emits function.deployment.created event. Requires function:endpoint.deploy scope.",
         "operationId": "function__deployments__create",
         "parameters": [
           {
@@ -7913,9 +7913,9 @@
             "description": "Created"
           }
         },
-        "summary": "Deploy endpoint",
+        "summary": "Create immutable deployment and hot-reload runner",
         "tags": [
-          "Function Control Plane"
+          "Deployments"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7926,7 +7926,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/deployments": {
       "get": {
-        "description": "Returns immutable deployment version history for an endpoint.",
+        "description": "Returns version history of immutable code deployments for an endpoint from function.deployments, detailing revision numbers, creation timestamps, and active flags. Requires function:endpoint.read scope.",
         "operationId": "function__deployments__list",
         "parameters": [
           {
@@ -7955,9 +7955,9 @@
             "description": "OK"
           }
         },
-        "summary": "List deployments",
+        "summary": "List immutable deployments for an endpoint",
         "tags": [
-          "Function Control Plane"
+          "Deployments"
         ],
         "x-sdk-group-name": [
           "function",
@@ -7968,7 +7968,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/domains": {
       "get": {
-        "description": "Returns all custom domain routes attached to an endpoint.",
+        "description": "Returns all custom domain route mappings from function.custom_domain_routes configured for a specific serverless endpoint. Requires function:endpoint.read scope.",
         "operationId": "function__endpoint_domains__list",
         "parameters": [
           {
@@ -7997,9 +7997,9 @@
             "description": "OK"
           }
         },
-        "summary": "List custom domain routes",
+        "summary": "List custom domain routes attached to an endpoint",
         "tags": [
-          "Function Control Plane"
+          "Endpoint Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8008,7 +8008,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Attaches an endpoint to a custom domain route with a path prefix.",
+        "description": "Maps a custom domain hostname and URL path prefix to a specific serverless endpoint in function.custom_domain_routes, enabling custom domain routing. Requires function:endpoint.write scope.",
         "operationId": "function__endpoint_domains__create",
         "parameters": [
           {
@@ -8048,9 +8048,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create custom domain route",
+        "summary": "Attach endpoint route to custom domain with path prefix",
         "tags": [
-          "Function Control Plane"
+          "Endpoint Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8061,7 +8061,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/domains/{route_id}": {
       "delete": {
-        "description": "Removes an endpoint route mapping from a custom domain.",
+        "description": "Removes a specific domain route mapping from function.custom_domain_routes, unbinding the custom path prefix from the endpoint. Requires function:endpoint.write scope.",
         "operationId": "function__endpoint_domains__delete",
         "parameters": [
           {
@@ -8101,9 +8101,9 @@
             "description": "Custom domain route deleted"
           }
         },
-        "summary": "Delete custom domain route",
+        "summary": "Remove endpoint route mapping from custom domain",
         "tags": [
-          "Function Control Plane"
+          "Endpoint Domains"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8114,7 +8114,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/executions": {
       "get": {
-        "description": "Returns historical invocation logs for a specific endpoint including status codes, duration, stdout, and stderr.",
+        "description": "Returns historical invocation audit records from function.executions for a specific endpoint, detailing response codes, durations, memory usage, and execution log streams. Requires function:endpoint.read scope.",
         "operationId": "function__endpoints__executions",
         "parameters": [
           {
@@ -8143,9 +8143,9 @@
             "description": "OK"
           }
         },
-        "summary": "List endpoint execution logs",
+        "summary": "Query execution history logs for a specific endpoint",
         "tags": [
-          "Function Control Plane"
+          "Endpoints"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8156,7 +8156,7 @@
     },
     "/v1/_/function/endpoints/{endpoint_id}/rollback": {
       "post": {
-        "description": "Restores an earlier immutable deployment version as active.",
+        "description": "Atomically updates the active deployment pointer in function.endpoints to an earlier immutable deployment version, instantly hot-reloading runtime runner isolates. Emits function.deployment.rollback event. Requires function:endpoint.deploy scope.",
         "operationId": "function__deployments__rollback",
         "parameters": [
           {
@@ -8196,9 +8196,9 @@
             "description": "OK"
           }
         },
-        "summary": "Rollback deployment",
+        "summary": "Rollback endpoint to a previous deployment revision",
         "tags": [
-          "Function Control Plane"
+          "Deployments"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8209,7 +8209,7 @@
     },
     "/v1/_/function/executions": {
       "get": {
-        "description": "Returns historical invocation logs including status codes, duration, stdout, and stderr.",
+        "description": "Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.",
         "operationId": "function__executions__list",
         "responses": {
           "200": {
@@ -8228,9 +8228,9 @@
             "description": "OK"
           }
         },
-        "summary": "List execution history logs",
+        "summary": "Query execution history logs across all endpoints",
         "tags": [
-          "Function Control Plane"
+          "Executions"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8241,7 +8241,7 @@
     },
     "/v1/_/function/stats": {
       "get": {
-        "description": "Returns telemetry, active isolates count, memory usage, and runner statuses.",
+        "description": "Returns real-time runtime statistics including active worker isolates count, memory consumption, runner queue depth, and throughput metrics. Requires function:stats.read scope.",
         "operationId": "function__stats__get",
         "responses": {
           "200": {
@@ -8260,9 +8260,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get runtime statistics",
+        "summary": "Get function runtime telemetry and worker statistics",
         "tags": [
-          "Function Control Plane"
+          "Stats"
         ],
         "x-sdk-group-name": [
           "function",
@@ -8273,7 +8273,7 @@
     },
     "/v1/_/image/config": {
       "get": {
-        "description": "Returns the dynamic operational configuration settings for the image service.",
+        "description": "Returns operational image service settings including compression quality defaults, maximum resolution limits, allowed source domains, and signature enforcement policy. Requires image:config.read scope.",
         "operationId": "image__config__get",
         "responses": {
           "200": {
@@ -8292,9 +8292,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get runtime image configuration",
+        "summary": "Get runtime image service configuration",
         "tags": [
-          "Image Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8303,7 +8303,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Modifies dynamic operational configuration settings such as quality, resolution limits, and domain allowlists.",
+        "description": "Modifies operational image service parameters in image.config, updating compression quality, resolution limits, and domain allowlists without restarting the service. Requires image:config.write scope.",
         "operationId": "image__config__update",
         "requestBody": {
           "content": {
@@ -8333,9 +8333,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update runtime image configuration",
+        "summary": "Update runtime image service configuration",
         "tags": [
-          "Image Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8346,7 +8346,7 @@
     },
     "/v1/_/image/presets": {
       "get": {
-        "description": "Returns all configured transformation presets.",
+        "description": "Returns all configured transformation presets from image.presets with preset names, processing option strings, and creation timestamps. Requires image:preset.read scope.",
         "operationId": "image__presets__list",
         "responses": {
           "200": {
@@ -8365,9 +8365,9 @@
             "description": "OK"
           }
         },
-        "summary": "List image presets",
+        "summary": "List configured image transformation presets",
         "tags": [
-          "Image Control Plane"
+          "Presets"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8376,7 +8376,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a new named transformation preset with processing option definitions.",
+        "description": "Creates a new transformation preset in image.presets defining reusable imgproxy processing options (dimensions, crop mode, quality, format). Emits image.preset.created event. Requires image:preset.write scope.",
         "operationId": "image__presets__create",
         "requestBody": {
           "content": {
@@ -8406,9 +8406,9 @@
             "description": "Created"
           }
         },
-        "summary": "Create an image preset",
+        "summary": "Create a named image transformation preset",
         "tags": [
-          "Image Control Plane"
+          "Presets"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8419,7 +8419,7 @@
     },
     "/v1/_/image/presets/{preset_id}": {
       "delete": {
-        "description": "Deletes a transformation preset by ID.",
+        "description": "Deletes a transformation preset by ID from image.presets. Emits image.preset.deleted event. Requires image:preset.write scope.",
         "operationId": "image__presets__delete",
         "parameters": [
           {
@@ -8451,9 +8451,9 @@
             "description": "Preset deleted"
           }
         },
-        "summary": "Delete an image preset",
+        "summary": "Delete an image transformation preset",
         "tags": [
-          "Image Control Plane"
+          "Presets"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8462,7 +8462,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Returns a single transformation preset definition.",
+        "description": "Retrieves a single transformation preset definition by ID from image.presets. Requires image:preset.read scope.",
         "operationId": "image__presets__get",
         "parameters": [
           {
@@ -8491,9 +8491,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get image preset by ID",
+        "summary": "Get image transformation preset by ID",
         "tags": [
-          "Image Control Plane"
+          "Presets"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8502,7 +8502,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Modifies an existing transformation preset definition.",
+        "description": "Modifies the transformation options or friendly name of an existing preset in image.presets. Emits image.preset.updated event. Requires image:preset.write scope.",
         "operationId": "image__presets__update",
         "parameters": [
           {
@@ -8542,9 +8542,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update an image preset",
+        "summary": "Update an image transformation preset",
         "tags": [
-          "Image Control Plane"
+          "Presets"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8555,7 +8555,7 @@
     },
     "/v1/_/image/stats": {
       "get": {
-        "description": "Returns real-time cache hit ratios, throughput metrics, and memory utilization statistics.",
+        "description": "Returns real-time operational statistics including image cache hit ratios, processing latency, memory usage, and transformation throughput. Requires image:stats.read scope.",
         "operationId": "image__stats__get",
         "responses": {
           "200": {
@@ -8576,7 +8576,7 @@
         },
         "summary": "Get image service telemetry statistics",
         "tags": [
-          "Image Control Plane"
+          "Stats"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8587,7 +8587,7 @@
     },
     "/v1/_/image/url/sign": {
       "post": {
-        "description": "Generates a cryptographically signed HMAC-SHA256 URL for an image transformation path.",
+        "description": "Generates a cryptographically signed HMAC-SHA256 signature and URL path for an image transformation request using the master image key. Requires image:sign.write scope.",
         "operationId": "image__url__sign",
         "requestBody": {
           "content": {
@@ -8617,9 +8617,9 @@
             "description": "OK"
           }
         },
-        "summary": "Sign an image transformation path",
+        "summary": "Generate a cryptographically signed image URL",
         "tags": [
-          "Image Control Plane"
+          "URLs"
         ],
         "x-sdk-group-name": [
           "image",
@@ -8630,7 +8630,7 @@
     },
     "/v1/_/tasks/config": {
       "get": {
-        "description": "Returns dynamic concurrency limits, timeout guards, and backoff settings.",
+        "description": "Returns operational task configuration settings including worker concurrency limits, poller interval, default timeout guards, and exponential retry backoff parameters. Requires tasks:config.read scope.",
         "operationId": "tasks__config__get",
         "responses": {
           "200": {
@@ -8649,9 +8649,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get runtime tasks configuration",
+        "summary": "Get runtime tasks orchestrator configuration",
         "tags": [
-          "Tasks Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8660,7 +8660,7 @@
         "x-sdk-method-name": "get"
       },
       "put": {
-        "description": "Updates dynamic operational parameters including concurrency and retry backoff limits.",
+        "description": "Updates operational task configuration in tasks.config, dynamically adjusting worker concurrency, polling intervals, and retry backoff limits without restarting workers. Requires tasks:config.write scope.",
         "operationId": "tasks__config__update",
         "requestBody": {
           "content": {
@@ -8690,9 +8690,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update runtime tasks configuration",
+        "summary": "Update runtime tasks orchestrator configuration",
         "tags": [
-          "Tasks Control Plane"
+          "Config"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8703,7 +8703,7 @@
     },
     "/v1/_/tasks/dlq": {
       "get": {
-        "description": "Inspects dead-lettered executions that exhausted all retry attempts.",
+        "description": "Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.",
         "operationId": "tasks__dlq__list",
         "responses": {
           "200": {
@@ -8722,9 +8722,9 @@
             "description": "OK"
           }
         },
-        "summary": "List failed tasks in DLQ",
+        "summary": "List dead-lettered failed task executions",
         "tags": [
-          "Tasks Control Plane"
+          "DLQ"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8735,7 +8735,7 @@
     },
     "/v1/_/tasks/dlq/{execution_id}": {
       "delete": {
-        "description": "Permanently removes a failed execution from the dead-letter queue.",
+        "description": "Permanently removes a failed execution record from tasks.executions / dead-letter queue. Requires tasks:execution.write scope.",
         "operationId": "tasks__dlq__purge",
         "parameters": [
           {
@@ -8767,9 +8767,9 @@
             "description": "DLQ execution purged"
           }
         },
-        "summary": "Purge a task from DLQ",
+        "summary": "Permanently purge a failed task from the DLQ",
         "tags": [
-          "Tasks Control Plane"
+          "DLQ"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8780,7 +8780,7 @@
     },
     "/v1/_/tasks/dlq/{execution_id}/retry": {
       "post": {
-        "description": "Resets a dead-lettered execution to pending for immediate re-attempt.",
+        "description": "Resets a dead-lettered execution in tasks.executions to 'pending' status for immediate worker retry pickup. Requires tasks:execution.write scope.",
         "operationId": "tasks__dlq__retry",
         "parameters": [
           {
@@ -8820,9 +8820,9 @@
             "description": "OK"
           }
         },
-        "summary": "Re-queue a failed task from DLQ",
+        "summary": "Re-queue a failed task execution from the DLQ",
         "tags": [
-          "Tasks Control Plane"
+          "DLQ"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8833,7 +8833,7 @@
     },
     "/v1/_/tasks/executions": {
       "get": {
-        "description": "Returns historical execution status logs, durations, and errors.",
+        "description": "Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.",
         "operationId": "tasks__executions__list",
         "responses": {
           "200": {
@@ -8854,7 +8854,7 @@
         },
         "summary": "Query execution audit logs",
         "tags": [
-          "Tasks Control Plane"
+          "Executions"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8863,7 +8863,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Manually enqueues an execution for immediate processing out-of-schedule.",
+        "description": "Manually enqueues an execution for a job in tasks.executions with status 'pending' for immediate worker dispatch out-of-schedule. Requires tasks:execution.write scope.",
         "operationId": "tasks__executions__create",
         "requestBody": {
           "content": {
@@ -8893,9 +8893,9 @@
             "description": "Accepted"
           }
         },
-        "summary": "Trigger an immediate execution",
+        "summary": "Trigger an immediate out-of-schedule execution",
         "tags": [
-          "Tasks Control Plane"
+          "Executions"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8906,7 +8906,7 @@
     },
     "/v1/_/tasks/jobs": {
       "get": {
-        "description": "Returns all registered recurring cron jobs with next run countdowns.",
+        "description": "Returns all registered recurring cron jobs from tasks.jobs, detailing cron schedule expressions, target drivers (http, function, sql), target payloads, timezone, next execution countdowns, and active status. Requires tasks:job.read scope.",
         "operationId": "tasks__jobs__list",
         "responses": {
           "200": {
@@ -8927,7 +8927,7 @@
         },
         "summary": "List all recurring cron jobs",
         "tags": [
-          "Tasks Control Plane"
+          "Jobs"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8936,7 +8936,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Creates a new recurring cron job schedule definition with target parameters.",
+        "description": "Creates a recurring cron job in tasks.jobs with 5-field cron expression, target execution driver (http webhook, serverless function, or SQL stored procedure), payload JSON, timeout guards, retry limits, and timezone. Calculates next run timestamp and emits tasks.job.created event. Requires tasks:job.write scope.",
         "operationId": "tasks__jobs__create",
         "requestBody": {
           "content": {
@@ -8968,7 +8968,7 @@
         },
         "summary": "Register a new recurring cron job",
         "tags": [
-          "Tasks Control Plane"
+          "Jobs"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -8979,7 +8979,7 @@
     },
     "/v1/_/tasks/jobs/{job_id}": {
       "delete": {
-        "description": "Deletes a job definition and cancels associated pending queued executions.",
+        "description": "Deletes a cron job definition from tasks.jobs and cancels any associated pending executions in tasks.executions. Emits tasks.job.deleted event. Requires tasks:job.write scope.",
         "operationId": "tasks__jobs__delete",
         "parameters": [
           {
@@ -9011,9 +9011,9 @@
             "description": "Job deleted"
           }
         },
-        "summary": "Delete a cron job",
+        "summary": "Delete a cron job and cancel queued executions",
         "tags": [
-          "Tasks Control Plane"
+          "Jobs"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -9022,7 +9022,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Returns a single cron job definition with next execution countdown.",
+        "description": "Retrieves a single cron job definition from tasks.jobs by ID, including cron expression, target payload, execution driver, next run countdown, and status. Requires tasks:job.read scope.",
         "operationId": "tasks__jobs__get",
         "parameters": [
           {
@@ -9051,9 +9051,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get cron job details by ID",
+        "summary": "Get cron job definition by ID",
         "tags": [
-          "Tasks Control Plane"
+          "Jobs"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -9062,7 +9062,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Modifies schedule expressions, timezone, payloads, or active status.",
+        "description": "Modifies cron schedule expressions, timezone, target payloads, retry parameters, or active status in tasks.jobs. Recalculates next run timestamp and emits tasks.job.updated event. Requires tasks:job.write scope.",
         "operationId": "tasks__jobs__update",
         "parameters": [
           {
@@ -9102,9 +9102,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update an existing cron job",
+        "summary": "Update an existing cron job definition",
         "tags": [
-          "Tasks Control Plane"
+          "Jobs"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -9115,7 +9115,7 @@
     },
     "/v1/_/tasks/stats": {
       "get": {
-        "description": "Returns real-time job counts, queue depths, DLQ sizes, and success rates.",
+        "description": "Returns real-time task statistics including total job counts, active queue depth, currently running executions, DLQ size, and execution success rate. Requires tasks:stats.read scope.",
         "operationId": "tasks__stats__get",
         "responses": {
           "200": {
@@ -9134,9 +9134,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get operational telemetry statistics",
+        "summary": "Get operational task telemetry and queue statistics",
         "tags": [
-          "Tasks Control Plane"
+          "Stats"
         ],
         "x-sdk-group-name": [
           "tasks",
@@ -9147,7 +9147,7 @@
     },
     "/v1/auth/anonymous": {
       "post": {
-        "description": "Issues an Ed25519 JWT access token and refresh token for an anonymous guest user with null email/phone and is_anonymous set to true.",
+        "description": "Creates an ephemeral guest user account in auth.users with role 'authenticated', is_anonymous set to true, null email/phone, and optional initial profile properties. Publishes auth.user.signed_up event and issues an Ed25519 JWT access token, rotated refresh token in auth.sessions, and authentication cookies.",
         "operationId": "auth__anonymous__sign_in",
         "requestBody": {
           "content": {
@@ -9177,9 +9177,9 @@
             "description": "OK"
           }
         },
-        "summary": "Sign in or initialize an anonymous guest user account",
+        "summary": "Initialize or sign in an anonymous guest user account",
         "tags": [
-          "Authentication"
+          "Anonymous"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9190,7 +9190,7 @@
     },
     "/v1/auth/mfa": {
       "delete": {
-        "description": "Disables TOTP multi-factor authentication, clears the user's encrypted MFA secret, and emits auth.mfa.disabled.",
+        "description": "Disables TOTP multi-factor authentication on auth.users for the authenticated user, clears the encrypted MFA secret, and publishes auth.mfa.disabled event. Requires authenticated user session.",
         "operationId": "auth__mfa__disable",
         "responses": {
           "200": {
@@ -9214,7 +9214,7 @@
         },
         "summary": "Disable multi-factor authentication on user account",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9223,7 +9223,7 @@
         "x-sdk-method-name": "disable"
       },
       "post": {
-        "description": "Generates a cryptographic TOTP secret and QR-code URI for Google Authenticator or 1Password enrollment.",
+        "description": "Generates a cryptographic RFC 6238 TOTP secret, stores it temporarily encrypted in the session cache, and returns an otpauth:// URI and QR code payload compatible with Google Authenticator, 1Password, or Authy. Requires authenticated user session.",
         "operationId": "auth__mfa__setup",
         "requestBody": {
           "content": {
@@ -9253,9 +9253,9 @@
             "description": "OK"
           }
         },
-        "summary": "Generate TOTP secret and setup URI for authenticator apps",
+        "summary": "Generate TOTP secret and setup URI for authenticator enrollment",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9266,7 +9266,7 @@
     },
     "/v1/auth/mfa/challenge": {
       "post": {
-        "description": "Verifies the short-lived MFA challenge ticket and TOTP code after password sign-in and issues an authenticated session.",
+        "description": "Verifies a 6-digit TOTP passcode against the user's enrolled MFA secret using a short-lived challenge ticket (5-minute TTL) issued during password sign-in. On verification, issues an Ed25519 JWT access token, rotated refresh token, and creates a session record in auth.sessions.",
         "operationId": "auth__mfa__challenge",
         "requestBody": {
           "content": {
@@ -9296,9 +9296,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify MFA challenge ticket with TOTP code",
+        "summary": "Verify MFA challenge ticket with TOTP passcode",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9309,7 +9309,7 @@
     },
     "/v1/auth/mfa/verify": {
       "post": {
-        "description": "Verifies the 6-digit TOTP code and marks MFA as enrolled on the user account.",
+        "description": "Validates the initial 6-digit TOTP code against the pending setup secret, sets mfa_enabled to true on auth.users, stores the AES-encrypted secret permanently, and publishes auth.mfa.enabled event. Requires authenticated user session.",
         "operationId": "auth__mfa__verify",
         "requestBody": {
           "content": {
@@ -9339,9 +9339,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify 2FA TOTP code and enable MFA on account",
+        "summary": "Verify initial TOTP code to complete MFA enrollment",
         "tags": [
-          "Multi-Factor Authentication"
+          "MFA"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9352,7 +9352,7 @@
     },
     "/v1/auth/oauth/token": {
       "post": {
-        "description": "Issues access token, refresh token, and ID token in exchange for an authorization code with PKCE verification.",
+        "description": "Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications.",
         "operationId": "auth__oidc__token",
         "requestBody": {
           "content": {
@@ -9384,7 +9384,7 @@
         },
         "summary": "Exchange authorization code or refresh token for OpenID Connect tokens",
         "tags": [
-          "OpenID Connect"
+          "OIDC"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9395,7 +9395,7 @@
     },
     "/v1/auth/oauth/userinfo": {
       "get": {
-        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, name) for the authenticated caller.",
+        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.",
         "operationId": "auth__oidc__userinfo",
         "responses": {
           "200": {
@@ -9416,7 +9416,7 @@
         },
         "summary": "Retrieve OpenID Connect Core 1.0 user claims",
         "tags": [
-          "OpenID Connect"
+          "OIDC"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9427,7 +9427,7 @@
     },
     "/v1/auth/otp": {
       "post": {
-        "description": "Sends a 6-digit one-time password (OTP) verification code via configured SMS or email provider.",
+        "description": "Generates a single-use 6-digit numeric OTP with configurable TTL and rate limiting, hashes it with Argon2id, stores it in auth.otps, and dispatches it via configured email or SMS provider (Twilio, Vonage, SendGrid, Resend, or SMTP).",
         "operationId": "auth__otp__send",
         "requestBody": {
           "content": {
@@ -9460,9 +9460,9 @@
             "description": "OTP verification code dispatched"
           }
         },
-        "summary": "Request a 6-digit one-time password code via email or SMS",
+        "summary": "Request a one-time password verification code via email or SMS",
         "tags": [
-          "Passwordless"
+          "OTP"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9473,7 +9473,7 @@
     },
     "/v1/auth/otp/verify": {
       "post": {
-        "description": "Validates the 6-digit OTP code against argon2id hash and issues an authenticated session.",
+        "description": "Validates the 6-digit OTP code against stored Argon2id hash in auth.otps. On successful verification, marks contact method verified, issues an Ed25519 JWT access token and rotated refresh token, and creates an active session in auth.sessions.",
         "operationId": "auth__otp__verify",
         "requestBody": {
           "content": {
@@ -9503,9 +9503,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify 6-digit OTP code and issue authenticated session",
+        "summary": "Verify one-time password code and issue authenticated session",
         "tags": [
-          "Passwordless"
+          "OTP"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9516,7 +9516,7 @@
     },
     "/v1/auth/passkeys/sign-in": {
       "post": {
-        "description": "Begins WebAuthn passkey authentication, generating an assertion challenge for the user's registered credential.",
+        "description": "Initiates WebAuthn / FIDO2 assertion ceremony, generating a cryptographic challenge and credential request options for the client browser or authenticator hardware.",
         "operationId": "auth__passkeys__sign_in__begin",
         "requestBody": {
           "content": {
@@ -9548,7 +9548,7 @@
         },
         "summary": "Begin WebAuthn passkey authentication ceremony",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign In"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9560,7 +9560,7 @@
     },
     "/v1/auth/passkeys/sign-in/verify": {
       "post": {
-        "description": "Verifies WebAuthn assertion signature against stored public key and issues an authenticated session.",
+        "description": "Verifies the client's WebAuthn assertion signature against the registered public key and signature counter stored in auth.passkeys. Issues an Ed25519 JWT access token, refresh token, and session record in auth.sessions.",
         "operationId": "auth__passkeys__sign_in__verify",
         "requestBody": {
           "content": {
@@ -9590,9 +9590,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify WebAuthn passkey assertion signature",
+        "summary": "Verify WebAuthn passkey assertion signature and issue session",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign In"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9604,7 +9604,7 @@
     },
     "/v1/auth/passkeys/sign-up": {
       "post": {
-        "description": "Begins the WebAuthn ceremony for registering a hardware or biometric passkey, returning a cryptographic challenge.",
+        "description": "Initiates WebAuthn / FIDO2 credential creation ceremony, generating an attestation challenge, relying party metadata, and user entity options for hardware or platform passkey enrollment.",
         "operationId": "auth__passkeys__sign_up__begin",
         "requestBody": {
           "content": {
@@ -9636,7 +9636,7 @@
         },
         "summary": "Begin WebAuthn passkey registration ceremony",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign Up"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9648,7 +9648,7 @@
     },
     "/v1/auth/passkeys/sign-up/verify": {
       "post": {
-        "description": "Validates the WebAuthn attestation response, stores credentials, and issues an authenticated session.",
+        "description": "Validates client attestation response and public key, stores credential record in auth.passkeys, creates user identity, and issues an authenticated session with Ed25519 JWT tokens.",
         "operationId": "auth__passkeys__sign_up__verify",
         "requestBody": {
           "content": {
@@ -9678,9 +9678,9 @@
             "description": "OK"
           }
         },
-        "summary": "Verify WebAuthn passkey registration attestation",
+        "summary": "Verify WebAuthn passkey registration attestation and store credential",
         "tags": [
-          "Passkeys"
+          "Passkeys Sign Up"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9692,7 +9692,7 @@
     },
     "/v1/auth/password-reset/confirm": {
       "post": {
-        "description": "Verifies the password recovery code and updates the user's password using argon2id key derivation.",
+        "description": "Verifies single-use password recovery verification code, enforces password complexity and breach checks, updates password hash using Argon2id key derivation in auth.users, and revokes existing sessions.",
         "operationId": "auth__password_reset__confirm",
         "requestBody": {
           "content": {
@@ -9727,7 +9727,7 @@
         },
         "summary": "Confirm password reset with verification code and new password",
         "tags": [
-          "Authentication"
+          "Password Reset"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9738,7 +9738,7 @@
     },
     "/v1/auth/password-reset/request": {
       "post": {
-        "description": "Initiates password recovery by dispatching a single-use verification code to the registered email or SMS number.",
+        "description": "Initiates password recovery for registered user, generating an Argon2id-hashed single-use verification code with cooldown guards and dispatching it to registered email or SMS destination.",
         "operationId": "auth__password_reset__request",
         "requestBody": {
           "content": {
@@ -9773,7 +9773,7 @@
         },
         "summary": "Request a password reset verification code via email or SMS",
         "tags": [
-          "Authentication"
+          "Password Reset"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9784,7 +9784,7 @@
     },
     "/v1/auth/sign-in": {
       "post": {
-        "description": "Authenticates an application user with email/phone and password, returning an Ed25519 JWT access token, rotated refresh token, and custom claims resolved via public.auth_claims.",
+        "description": "Authenticates application user with email or normalized E.164 phone and password. Verifies Argon2id hash, checks account lockout status and breach flags. If MFA is enrolled, returns an ephemeral mfa_ticket challenge; otherwise issues Ed25519 JWT access token, refresh token in auth.sessions, and session cookies.",
         "operationId": "auth__sign_in",
         "requestBody": {
           "content": {
@@ -9814,9 +9814,9 @@
             "description": "OK"
           }
         },
-        "summary": "Authenticate with email/phone and password",
+        "summary": "Authenticate with email or phone and password",
         "tags": [
-          "Authentication"
+          "Sign In"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -9826,7 +9826,7 @@
     },
     "/v1/auth/sign-out": {
       "post": {
-        "description": "Revokes the active refresh token and invalidates the session record in auth.sessions.",
+        "description": "Revokes active refresh token, deletes corresponding session record from auth.sessions, clears session cookies, and emits auth.user.signed_out event.",
         "operationId": "auth__sign_out",
         "requestBody": {
           "content": {
@@ -9861,7 +9861,7 @@
         },
         "summary": "Revoke active session and refresh token",
         "tags": [
-          "Authentication"
+          "Sign Out"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -9871,7 +9871,7 @@
     },
     "/v1/auth/sign-up": {
       "post": {
-        "description": "Registers a new application user account with argon2id password hashing, optional auto-sign-in, and welcome email verification.",
+        "description": "Registers a new application user account with email or normalized E.164 phone, password complexity validation, breach detection, and Argon2id key derivation. Supports seamless upgrade of anonymous guest accounts. Dispatches verification code if confirmation is required; otherwise issues Ed25519 JWT tokens.",
         "operationId": "auth__sign_up",
         "requestBody": {
           "content": {
@@ -9901,9 +9901,9 @@
             "description": "OK"
           }
         },
-        "summary": "Register a new user with email/phone and password",
+        "summary": "Register a new application user with password",
         "tags": [
-          "Authentication"
+          "Sign Up"
         ],
         "x-sdk-group-name": [
           "auth"
@@ -9913,7 +9913,7 @@
     },
     "/v1/auth/token/refresh": {
       "post": {
-        "description": "Exchanges a valid refresh token for a freshly signed Ed25519 JWT access token with updated claims resolved via public.auth_claims.",
+        "description": "Validates submitted refresh token against SHA-256 hash in auth.sessions, checks session expiry and user lock status, rotates refresh token, and issues a freshly signed Ed25519 JWT access token with updated claims resolved from public.auth_claims.",
         "operationId": "auth__token__refresh",
         "requestBody": {
           "content": {
@@ -9945,7 +9945,7 @@
         },
         "summary": "Exchange refresh token for fresh JWT access token",
         "tags": [
-          "Authentication"
+          "Token"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9956,7 +9956,7 @@
     },
     "/v1/auth/user": {
       "delete": {
-        "description": "Deletes the user account, cascading active sessions, passkeys, and identities, and revoking authentication cookies.",
+        "description": "Permanently deletes the authenticated user from auth.users, cascading deletion across auth.sessions, auth.identities, auth.passkeys, and user properties. Clears authentication cookies and emits auth.user.deleted event. Requires authenticated user session.",
         "operationId": "auth__user__delete",
         "responses": {
           "200": {
@@ -9980,7 +9980,7 @@
         },
         "summary": "Permanently delete authenticated user account",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -9989,7 +9989,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves the authenticated user, verification status, and MFA enrollment status.",
+        "description": "Retrieves authenticated user profile from auth.users, including email, phone, verification timestamps, role, custom properties JSON, MFA enrollment status, and lockout flags. Requires authenticated user session.",
         "operationId": "auth__user__get",
         "responses": {
           "200": {
@@ -10008,9 +10008,9 @@
             "description": "OK"
           }
         },
-        "summary": "Get authenticated user",
+        "summary": "Get profile and verification details of authenticated user",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10021,7 +10021,7 @@
     },
     "/v1/auth/user/email": {
       "patch": {
-        "description": "Asserts email uniqueness, generates a single-use verification code, and dispatches it to the new email address.",
+        "description": "Asserts uniqueness of the new email address, generates an Argon2id-hashed single-use verification code, and dispatches it to the requested email. The address is updated once verified. Requires authenticated user session.",
         "operationId": "auth__user__email__update",
         "requestBody": {
           "content": {
@@ -10054,9 +10054,9 @@
             "description": "Email verification code sent"
           }
         },
-        "summary": "Request to update authenticated user email",
+        "summary": "Request update of authenticated user email address",
         "tags": [
-          "User Self-Service"
+          "User Email"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10068,7 +10068,7 @@
     },
     "/v1/auth/user/email/verification/confirm": {
       "post": {
-        "description": "Verifies the email code and marks the user's email as verified.",
+        "description": "Verifies submitted single-use code against pending email verification record, sets email_verified_at timestamp in auth.users, and updates primary email if part of an address change flow. Requires authenticated user session.",
         "operationId": "auth__user__email__verification__confirm",
         "requestBody": {
           "content": {
@@ -10101,9 +10101,9 @@
             "description": "Email successfully verified"
           }
         },
-        "summary": "Confirm email verification with code",
+        "summary": "Confirm email verification code",
         "tags": [
-          "User Self-Service"
+          "User Email Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10116,7 +10116,7 @@
     },
     "/v1/auth/user/email/verification/request": {
       "post": {
-        "description": "Dispatches a single-use verification code to the recipient's email address.",
+        "description": "Generates and dispatches a single-use verification code to the authenticated user's registered unverified email address. Rate-limited by IP and user cooldowns. Requires authenticated user session.",
         "operationId": "auth__user__email__verification__request",
         "requestBody": {
           "content": {
@@ -10149,9 +10149,9 @@
             "description": "Email verification code sent"
           }
         },
-        "summary": "Request an email verification code",
+        "summary": "Request an email verification code for current email",
         "tags": [
-          "User Self-Service"
+          "User Email Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10164,7 +10164,7 @@
     },
     "/v1/auth/user/export": {
       "post": {
-        "description": "Exports all personal data, sessions, and identities associated with the authenticated user in compliance with GDPR Article 20.",
+        "description": "Exports full personal data graph associated with the authenticated user, including profile metadata, linked authentication identities, active sessions, and passkey registrations in portable JSON format. Requires authenticated user session.",
         "operationId": "auth__user__export",
         "requestBody": {
           "content": {
@@ -10194,9 +10194,9 @@
             "description": "OK"
           }
         },
-        "summary": "Export comprehensive current user account data graph",
+        "summary": "Export comprehensive user account data graph (GDPR Article 20)",
         "tags": [
-          "User Self-Service"
+          "User"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10207,7 +10207,7 @@
     },
     "/v1/auth/user/passkeys": {
       "get": {
-        "description": "Retrieves all registered WebAuthn passkey credentials belonging to the authenticated user.",
+        "description": "Retrieves all registered WebAuthn / FIDO2 passkey credentials for the authenticated user from auth.passkeys, including credential IDs, friendly names, creation timestamps, and last used dates. Requires authenticated user session.",
         "operationId": "auth__user__passkeys__list",
         "responses": {
           "200": {
@@ -10234,7 +10234,7 @@
         },
         "summary": "List registered passkeys for current user",
         "tags": [
-          "Passkeys"
+          "User Passkeys"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10246,7 +10246,7 @@
     },
     "/v1/auth/user/passkeys/{passkey_id}": {
       "delete": {
-        "description": "Revokes and deletes a registered WebAuthn passkey credential belonging to the authenticated user.",
+        "description": "Deletes a registered WebAuthn passkey credential from auth.passkeys belonging to the authenticated user. Prohibits deleting credentials belonging to other users. Requires authenticated user session.",
         "operationId": "auth__user__passkeys__delete",
         "parameters": [
           {
@@ -10278,9 +10278,9 @@
             "description": "Passkey revoked"
           }
         },
-        "summary": "Revoke a registered passkey",
+        "summary": "Revoke a registered passkey credential",
         "tags": [
-          "Passkeys"
+          "User Passkeys"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10292,7 +10292,7 @@
     },
     "/v1/auth/user/password": {
       "patch": {
-        "description": "Updates the user's password, verifying current password if one is already set. Prohibited on anonymous accounts.",
+        "description": "Updates the account password in auth.users. Verifies current password if one is already set, enforces password complexity and breach checks, and rehashes with Argon2id. Prohibited on anonymous accounts. Requires authenticated user session.",
         "operationId": "auth__user__password__update",
         "requestBody": {
           "content": {
@@ -10325,9 +10325,9 @@
             "description": "Password updated successfully"
           }
         },
-        "summary": "Change or set account password",
+        "summary": "Change or set password for current user",
         "tags": [
-          "User Self-Service"
+          "User Password"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10339,7 +10339,7 @@
     },
     "/v1/auth/user/phone": {
       "patch": {
-        "description": "Asserts phone uniqueness, generates a single-use verification code, and dispatches it via SMS to the new phone number.",
+        "description": "Normalizes new phone number to E.164, verifies uniqueness in auth.users, generates single-use verification code, and dispatches via SMS. Requires authenticated user session.",
         "operationId": "auth__user__phone__update",
         "requestBody": {
           "content": {
@@ -10372,9 +10372,9 @@
             "description": "Phone verification code sent"
           }
         },
-        "summary": "Request to update authenticated user phone number",
+        "summary": "Request update of authenticated user phone number",
         "tags": [
-          "User Self-Service"
+          "User Phone"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10386,7 +10386,7 @@
     },
     "/v1/auth/user/phone/verification/confirm": {
       "post": {
-        "description": "Verifies the phone code and marks the user's phone number as verified.",
+        "description": "Verifies submitted single-use SMS code against pending verification record, updates phone_verified_at in auth.users, and marks phone as verified. Requires authenticated user session.",
         "operationId": "auth__user__phone__verification__confirm",
         "requestBody": {
           "content": {
@@ -10419,9 +10419,9 @@
             "description": "Phone successfully verified"
           }
         },
-        "summary": "Confirm phone verification with code",
+        "summary": "Confirm phone verification code",
         "tags": [
-          "User Self-Service"
+          "User Phone Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10434,7 +10434,7 @@
     },
     "/v1/auth/user/phone/verification/request": {
       "post": {
-        "description": "Dispatches a single-use verification code via SMS to the recipient's phone number.",
+        "description": "Generates and dispatches a single-use verification code via SMS to the authenticated user's registered phone number. Requires authenticated user session.",
         "operationId": "auth__user__phone__verification__request",
         "requestBody": {
           "content": {
@@ -10467,9 +10467,9 @@
             "description": "Phone verification code sent"
           }
         },
-        "summary": "Request a phone verification code",
+        "summary": "Request a phone verification code for current phone",
         "tags": [
-          "User Self-Service"
+          "User Phone Verification"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10482,7 +10482,7 @@
     },
     "/v1/auth/user/properties": {
       "patch": {
-        "description": "Merges personal custom properties into the authenticated user.",
+        "description": "Performs shallow merge of custom JSON properties into the properties column of auth.users for the authenticated user, validating JSON size limits. Requires authenticated user session.",
         "operationId": "auth__user__properties__update",
         "requestBody": {
           "content": {
@@ -10512,9 +10512,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update user personal properties",
+        "summary": "Update custom personal properties on user profile",
         "tags": [
-          "User Self-Service"
+          "User Properties"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10526,7 +10526,7 @@
     },
     "/v1/auth/user/sessions": {
       "get": {
-        "description": "Lists active devices and sessions for the authenticated user with IP, user-agent, creation timestamp, and current session marker.",
+        "description": "Returns active sessions from auth.sessions for the authenticated user, detailing IP address, user agent, creation date, expiry timestamp, and a flag indicating the current device session. Requires authenticated user session.",
         "operationId": "auth__user__sessions__list",
         "responses": {
           "200": {
@@ -10547,7 +10547,7 @@
         },
         "summary": "List active sessions for current user",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10559,7 +10559,7 @@
     },
     "/v1/auth/user/sessions/revoke-others": {
       "post": {
-        "description": "Revokes all active sessions for the current user except the currently active device session.",
+        "description": "Revokes all active sessions in auth.sessions belonging to the authenticated user except the current device session, invalidating other refresh tokens immediately. Requires authenticated user session.",
         "operationId": "auth__user__sessions__revoke_others",
         "requestBody": {
           "content": {
@@ -10589,9 +10589,9 @@
             "description": "OK"
           }
         },
-        "summary": "Sign out of all other devices",
+        "summary": "Sign out of all other devices and sessions",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10603,7 +10603,7 @@
     },
     "/v1/auth/user/sessions/{session_id}": {
       "delete": {
-        "description": "Revokes an active session by session ID belonging to the authenticated user.",
+        "description": "Deletes a specific session record from auth.sessions belonging to the authenticated user, terminating access for that device. Requires authenticated user session.",
         "operationId": "auth__user__sessions__revoke",
         "parameters": [
           {
@@ -10635,9 +10635,9 @@
             "description": "Session revoked"
           }
         },
-        "summary": "Revoke specific user session",
+        "summary": "Revoke a specific user session by ID",
         "tags": [
-          "User Self-Service"
+          "User Sessions"
         ],
         "x-sdk-group-name": [
           "auth",
@@ -10649,7 +10649,7 @@
     },
     "/v1/data/kv/increment": {
       "post": {
-        "description": "Atomically increments or decrements an integer counter in the KV cache with custom step and TTL preservation.",
+        "description": "Atomically modifies an integer counter in the KV store by step value (positive or negative) with optional TTL preservation, returning the updated integer.",
         "operationId": "data__kv__increment",
         "requestBody": {
           "content": {
@@ -10679,9 +10679,9 @@
             "description": "OK"
           }
         },
-        "summary": "Atomically increment or decrement a KV key",
+        "summary": "Atomically increment or decrement an integer counter",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10692,7 +10692,7 @@
     },
     "/v1/data/kv/mget": {
       "post": {
-        "description": "Batch fetches multiple keys from the ephemeral KV cache in a single atomic pipelined round-trip.",
+        "description": "Fetches values for an array of keys from the distributed ephemeral KV cache in a single atomic pipelined round-trip, maintaining tenant/session key isolation.",
         "operationId": "data__kv__mget",
         "requestBody": {
           "content": {
@@ -10722,9 +10722,9 @@
             "description": "OK"
           }
         },
-        "summary": "Multi-get KV entries by list of keys",
+        "summary": "Batch get multiple ephemeral KV entries",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10735,7 +10735,7 @@
     },
     "/v1/data/kv/mset": {
       "post": {
-        "description": "Batch stores multiple key-value entries in the ephemeral KV store in a single round-trip.",
+        "description": "Stores multiple key-value pairs with optional individual TTLs in the distributed KV cache in a single atomic round-trip.",
         "operationId": "data__kv__mset",
         "requestBody": {
           "content": {
@@ -10765,9 +10765,9 @@
             "description": "OK"
           }
         },
-        "summary": "Batch set multiple KV entries",
+        "summary": "Batch set multiple ephemeral KV entries",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10778,7 +10778,7 @@
     },
     "/v1/data/kv/{key}": {
       "delete": {
-        "description": "Evicts an entry from the ephemeral key-value cache.",
+        "description": "Evicts a key-value entry from the distributed KV cache.",
         "operationId": "data__kv__delete",
         "parameters": [
           {
@@ -10812,7 +10812,7 @@
         },
         "summary": "Delete an ephemeral KV entry",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10821,7 +10821,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves an ephemeral key-value entry with session/tenant isolation from the distributed KV store.",
+        "description": "Retrieves a key-value entry with session/tenant isolation from the distributed KV store. Returns 404 if expired or not found.",
         "operationId": "data__kv__get",
         "parameters": [
           {
@@ -10852,7 +10852,7 @@
         },
         "summary": "Get an ephemeral KV entry by key",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10861,7 +10861,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Updates expiration TTL of an existing key without modifying its value.",
+        "description": "Updates the expiration TTL of an existing key in the KV cache without altering its stored payload.",
         "operationId": "data__kv__touch",
         "parameters": [
           {
@@ -10901,9 +10901,9 @@
             "description": "OK"
           }
         },
-        "summary": "Refresh TTL of an ephemeral KV entry",
+        "summary": "Refresh TTL of an existing KV entry",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10912,7 +10912,7 @@
         "x-sdk-method-name": "touch"
       },
       "post": {
-        "description": "Stores a key-value entry in the ephemeral KV store with { value, ttl } JSON envelope and optional SetNX.",
+        "description": "Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).",
         "operationId": "data__kv__set",
         "parameters": [
           {
@@ -10952,9 +10952,9 @@
             "description": "OK"
           }
         },
-        "summary": "Set an ephemeral KV entry with envelope",
+        "summary": "Set an ephemeral KV entry with JSON envelope",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -10963,7 +10963,7 @@
         "x-sdk-method-name": "set"
       },
       "put": {
-        "description": "Stores raw request body directly in the ephemeral KV store with optional ?ttl= query parameter and SetNX.",
+        "description": "Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.",
         "operationId": "data__kv__put",
         "parameters": [
           {
@@ -11003,9 +11003,9 @@
             "description": "OK"
           }
         },
-        "summary": "Put raw ephemeral KV entry",
+        "summary": "Put raw ephemeral KV entry with query TTL",
         "tags": [
-          "Data KV"
+          "KV"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11016,7 +11016,7 @@
     },
     "/v1/data/{schema_name}/rpc/{function_name}": {
       "get": {
-        "description": "Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims using query parameters.",
+        "description": "Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.",
         "operationId": "data__rpc__query",
         "parameters": [
           {
@@ -11053,9 +11053,9 @@
             "description": "OK"
           }
         },
-        "summary": "Execute database stored function or procedure (read-only)",
+        "summary": "Execute read-only database stored function or procedure",
         "tags": [
-          "Data REST Gateway"
+          "RPC"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11064,7 +11064,7 @@
         "x-sdk-method-name": "query"
       },
       "post": {
-        "description": "Invokes a PostgreSQL stored procedure or RPC with caller RLS session claims.",
+        "description": "Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.",
         "operationId": "data__rpc__mutation",
         "parameters": [
           {
@@ -11112,9 +11112,9 @@
             "description": "OK"
           }
         },
-        "summary": "Execute database stored function or procedure",
+        "summary": "Execute database stored function or procedure with JSON payload",
         "tags": [
-          "Data REST Gateway"
+          "RPC"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11125,7 +11125,7 @@
     },
     "/v1/data/{schema_name}/{table_name}": {
       "get": {
-        "description": "Queries PostgreSQL table with dynamic filters, JSON path filtering, pagination, and sorting with RLS enforcement.",
+        "description": "Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.",
         "operationId": "data__records__list",
         "parameters": [
           {
@@ -11162,9 +11162,9 @@
             "description": "OK"
           }
         },
-        "summary": "Query multiple rows with pagination, filtering, and sorting",
+        "summary": "Query table rows with dynamic filtering, sorting, and pagination",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11173,7 +11173,7 @@
         "x-sdk-method-name": "list"
       },
       "post": {
-        "description": "Inserts a single row or batch of records into PostgreSQL, automatically applying defaults and returning inserted tuples.",
+        "description": "Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.",
         "operationId": "data__records__create",
         "parameters": [
           {
@@ -11223,7 +11223,7 @@
         },
         "summary": "Insert single or bulk rows with RETURNING *",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11234,7 +11234,7 @@
     },
     "/v1/data/{schema_name}/{table_name}/{record_id}": {
       "delete": {
-        "description": "Deletes a row by primary key from PostgreSQL subject to RLS DELETE policies.",
+        "description": "Deletes a row by primary key from PostgreSQL subject to caller RLS DELETE ... USING policies, invalidating table query caches and broadcasting CDC events.",
         "operationId": "data__records__delete",
         "parameters": [
           {
@@ -11284,7 +11284,7 @@
         },
         "summary": "Delete a row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11293,7 +11293,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Retrieves a single row from PostgreSQL by its UUID or primary key with RLS enforcement.",
+        "description": "Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.",
         "operationId": "data__records__get",
         "parameters": [
           {
@@ -11340,7 +11340,7 @@
         },
         "summary": "Get a single row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11349,7 +11349,7 @@
         "x-sdk-method-name": "get"
       },
       "patch": {
-        "description": "Applies a partial update to a row identified by primary key, validating against RLS UPDATE policies.",
+        "description": "Applies partial column updates to a row identified by primary key, validating against RLS UPDATE ... USING ... WITH CHECK policies, invalidating cached queries, and broadcasting CDC changes.",
         "operationId": "data__records__update",
         "parameters": [
           {
@@ -11407,7 +11407,7 @@
         },
         "summary": "Partially update a row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11416,7 +11416,7 @@
         "x-sdk-method-name": "update"
       },
       "put": {
-        "description": "Updates a row identified by primary key, validating against RLS UPDATE policies.",
+        "description": "Replaces column values for a row identified by primary key, validating against RLS UPDATE policies, invalidating table query caches, and broadcasting CDC changes.",
         "operationId": "data__records__put",
         "parameters": [
           {
@@ -11472,9 +11472,9 @@
             "description": "OK"
           }
         },
-        "summary": "Update a row by primary key",
+        "summary": "Update entire row by primary key",
         "tags": [
-          "Data REST Gateway"
+          "Records"
         ],
         "x-sdk-group-name": [
           "data",
@@ -11485,7 +11485,7 @@
     },
     "/v1/file-storage/objects/{bucket}/{key...}": {
       "delete": {
-        "description": "Permanently removes the object from the file storage backend.",
+        "description": "Deletes file object binary payload from the storage backend (database or S3) and removes its metadata row from file_storage.objects. Emits file_storage.object.deleted event.",
         "operationId": "file_storage__objects__delete",
         "parameters": [
           {
@@ -11526,9 +11526,9 @@
             "description": "Object deleted"
           }
         },
-        "summary": "Delete a file object",
+        "summary": "Permanently delete a file object",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11537,7 +11537,7 @@
         "x-sdk-method-name": "delete"
       },
       "get": {
-        "description": "Streams binary object content from the configured file storage backend with byte-range support.",
+        "description": "Streams binary object payload from configured backend (PostgreSQL database bytea or S3) with HTTP Range header support, Content-Type, Content-Length, and ETag validation. Enforces public bucket policy or valid capability credentials.",
         "operationId": "file_storage__objects__download",
         "parameters": [
           {
@@ -11571,9 +11571,9 @@
             "description": "File binary stream"
           }
         },
-        "summary": "Download a file object",
+        "summary": "Download a file object with byte-range support",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11582,7 +11582,7 @@
         "x-sdk-method-name": "download"
       },
       "head": {
-        "description": "Returns HTTP headers for the object including Content-Length, Content-Type, and ETag.",
+        "description": "Returns HTTP metadata headers (Content-Length, Content-Type, ETag, Last-Modified) for a stored file without streaming body payload.",
         "operationId": "file_storage__objects__head",
         "parameters": [
           {
@@ -11622,7 +11622,7 @@
         },
         "summary": "Inspect file object metadata headers",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11631,7 +11631,7 @@
         "x-sdk-method-name": "head"
       },
       "post": {
-        "description": "Uploads binary payload into the specified bucket.",
+        "description": "Uploads binary object payload into the target bucket, enforcing size guards and MIME validation. Stores in backend, writes metadata to file_storage.objects, and emits object created/updated event.",
         "operationId": "file_storage__objects__upload_post",
         "parameters": [
           {
@@ -11682,7 +11682,7 @@
         },
         "summary": "Upload a file object via POST",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11691,7 +11691,7 @@
         "x-sdk-method-name": "upload_post"
       },
       "put": {
-        "description": "Uploads binary payload into the specified bucket.",
+        "description": "Stores binary payload in the specified bucket, enforcing bucket file size limits and MIME allowlists. Creates or updates metadata record in file_storage.objects and emits file_storage.object.created or file_storage.object.updated event.",
         "operationId": "file_storage__objects__upload_put",
         "parameters": [
           {
@@ -11742,7 +11742,7 @@
         },
         "summary": "Upload a file object via PUT",
         "tags": [
-          "File Storage REST"
+          "Objects"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11753,7 +11753,7 @@
     },
     "/v1/file-storage/url/presign": {
       "post": {
-        "description": "Generates a cryptographically signed URL allowing temporary read or write access.",
+        "description": "Generates a cryptographically signed HMAC-SHA256 capability URL granting temporary read (GET) or write (PUT) access to a specific bucket and key path with configurable expiration TTL.",
         "operationId": "file_storage__url__presign",
         "requestBody": {
           "content": {
@@ -11783,9 +11783,9 @@
             "description": "OK"
           }
         },
-        "summary": "Mint a presigned capability URL",
+        "summary": "Mint a presigned capability URL for temporary file access",
         "tags": [
-          "File Storage Capability"
+          "URLs"
         ],
         "x-sdk-group-name": [
           "file_storage",
@@ -11796,7 +11796,7 @@
     },
     "/v1/graphql": {
       "post": {
-        "description": "Dynamic GraphQL introspection and query engine over PostgreSQL catalog.",
+        "description": "Dynamic introspection and execution engine over PostgreSQL tables, supporting complex nested selections, arguments, variables, query depth limits (max depth guard), complexity budgets, and native RLS session context injection.",
         "operationId": "data__graphql",
         "requestBody": {
           "content": {
@@ -11828,7 +11828,7 @@
         },
         "summary": "Execute GraphQL query or mutation",
         "tags": [
-          "Data GraphQL"
+          "GraphQL"
         ],
         "x-sdk-group-name": [
           "data"
@@ -11838,7 +11838,7 @@
     },
     "/v1/image/info": {
       "post": {
-        "description": "Extracts dimensions, format, colorspace, EXIF, and structural metadata from an uploaded image payload.",
+        "description": "Probes and extracts dimensions, format, file size, colorspace, and EXIF metadata from an uploaded image binary payload.",
         "operationId": "image__info__post",
         "requestBody": {
           "content": {
@@ -11870,7 +11870,7 @@
         },
         "summary": "Inspect image metadata from binary upload",
         "tags": [
-          "Image Data Plane"
+          "Info"
         ],
         "x-sdk-group-name": [
           "image",
@@ -11881,7 +11881,7 @@
     },
     "/v1/image/info/{signature}/{path...}": {
       "get": {
-        "description": "Extracts dimensions, format, colorspace, EXIF, and structural metadata from a remote or local image path.",
+        "description": "Extracts structural metadata (width, height, format, file size, colorspace, EXIF, orientation) from a remote or storage image path using cryptographic signature verification.",
         "operationId": "image__info__get",
         "parameters": [
           {
@@ -11921,7 +11921,7 @@
         },
         "summary": "Inspect image metadata by path",
         "tags": [
-          "Image Data Plane"
+          "Info"
         ],
         "x-sdk-group-name": [
           "image",
@@ -11932,7 +11932,7 @@
     },
     "/v1/image/{signature}/{path...}": {
       "get": {
-        "description": "Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications.",
+        "description": "Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications. Verifies HMAC-SHA256 signature if enabled, caches transformed result, and streams binary image with appropriate Content-Type header.",
         "operationId": "image__transform__get",
         "parameters": [
           {
@@ -11966,9 +11966,9 @@
             "description": "Transformed image binary stream"
           }
         },
-        "summary": "Transform and optimize an image",
+        "summary": "Transform and optimize an image dynamically",
         "tags": [
-          "Image Data Plane"
+          "Transform"
         ],
         "x-sdk-group-name": [
           "image",
@@ -11979,7 +11979,7 @@
     },
     "/v1/manifest": {
       "get": {
-        "description": "Returns dynamic cluster manifest, enabled service flags, project metadata, and publishable key for SDK initialization.",
+        "description": "Returns cluster metadata, list of enabled platform services, public server base URL, and the derived publishable key required for SDK client initialization. Unrestricted public endpoint.",
         "operationId": "core__manifest",
         "responses": {
           "200": {
@@ -12000,7 +12000,7 @@
         },
         "summary": "Get dynamic cluster manifest and enabled services",
         "tags": [
-          "Discovery"
+          "Manifest"
         ],
         "x-sdk-group-name": [
           "core"
