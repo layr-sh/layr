@@ -29,7 +29,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 
 	var signUpInput SignUpInput
 	if err := json.NewDecoder(request.Body).Decode(&signUpInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -38,7 +38,7 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	if signUpInput.Phone != "" {
 		normalizedPhone, err := NormalizePhone(signUpInput.Phone)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		signUpInput.Phone = normalizedPhone
@@ -160,7 +160,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	log.Trace("handling sign-in request")
 	var signInInput SignInInput
 	if err := json.NewDecoder(request.Body).Decode(&signInInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -168,7 +168,7 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	if identifier == "" && signInInput.Phone != "" {
 		normalizedPhone, err := NormalizePhone(signInInput.Phone)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		identifier = normalizedPhone
@@ -287,7 +287,7 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 
 	var requestPasswordResetInput RequestPasswordResetInput
 	if err := json.NewDecoder(request.Body).Decode(&requestPasswordResetInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -316,7 +316,7 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 		}
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		recipient = normalizedPhone
@@ -381,7 +381,7 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 
 	var confirmPasswordResetInput ConfirmPasswordResetInput
 	if err := json.NewDecoder(request.Body).Decode(&confirmPasswordResetInput); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 		return
 	}
 
@@ -397,7 +397,7 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 	if !strings.Contains(recipient, "@") {
 		normalizedPhone, err := NormalizePhone(recipient)
 		if err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid phone number format: must be in E.164 format with country code", err.Error())
 			return
 		}
 		recipient = normalizedPhone
@@ -508,7 +508,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 
 	var updateUserPasswordInput UpdateUserPasswordInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&updateUserPasswordInput); decodeErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON payload")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", decodeErr.Error())
 		return
 	}
 
@@ -525,7 +525,7 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		WHERE id = $1
 	`, userID).Scan(&isCallerAnonymous, &email, &phone, &existingPasswordHash, &lockedUntil)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", err.Error())
 		return
 	}
 

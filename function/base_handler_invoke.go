@@ -153,13 +153,13 @@ func (baseHandler *BaseHandler) handleInvokeEndpoint(responseWriter http.Respons
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Endpoint not found")
 			return
 		}
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, getErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", getErr.Error())
 		return
 	}
 
 	activeDeployment, depErr := baseHandler.fetchActiveDeployment(requestCtx, storedEndpoint.ID)
 	if depErr != nil && !errors.Is(depErr, ErrNoActiveDeployment) {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, depErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", depErr.Error())
 		return
 	}
 
@@ -210,7 +210,7 @@ func (baseHandler *BaseHandler) invokeEndpoint(
 		errorMessage = &forwardErrorMessage
 		if statusCode < http.StatusBadRequest {
 			statusCode = http.StatusBadGateway
-			core.WriteErrorResponse(capturingWriter, request, http.StatusBadGateway, forwardErrorMessage)
+			core.WriteErrorResponse(capturingWriter, request, http.StatusBadGateway, "Bad gateway", forwardErrorMessage)
 		}
 	}
 

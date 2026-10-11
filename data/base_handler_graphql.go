@@ -52,7 +52,8 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 
 	operationNode, err := graphql.ParseGraphQLWithOperation(executeGraphQLInput.Query, executeGraphQLInput.OperationName, executeGraphQLInput.Variables)
 	if err != nil {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL syntax error: %v", err))
+		log.Debugf("GraphQL syntax error: %v", err)
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL syntax error")
 		return
 	}
 
@@ -165,7 +166,8 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 
 	sqlQuery, err := handler.graphqlCompiler.Compile(operationNode)
 	if err != nil {
-		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, fmt.Sprintf("GraphQL compilation error: %v", err))
+		log.Debugf("GraphQL compilation error: %v", err)
+		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL compilation error")
 		return
 	}
 
@@ -381,29 +383,31 @@ func (handler *BaseHandler) writeGraphQLSuccess(responseWriter http.ResponseWrit
 
 func (handler *BaseHandler) writeGraphQLDBError(responseWriter http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
-	message := err.Error()
+	message := "Service temporarily unavailable"
+	debugLog := err.Error()
 
 	var pgError *pgconn.PgError
 	if errors.As(err, &pgError) {
 		switch pgError.Code {
 		case "42501": // insufficient_privilege
 			status = http.StatusForbidden
-			message = "Permission denied by database security policy"
+			message = "Access denied"
 		case "23505": // unique_violation
 			status = http.StatusConflict
-			message = fmt.Sprintf("Unique constraint violation: %s", pgError.Detail)
+			message = "Resource already exists"
 		case "23503", "23001": // foreign_key_violation or restrict_violation
 			status = http.StatusConflict
-			message = fmt.Sprintf("Foreign key violation: %s", pgError.Detail)
+			message = "Invalid reference"
 		case "42P01", "42883": // undefined_table or undefined_function
 			status = http.StatusNotFound
-			message = "Relation does not exist"
+			message = "Resource not found"
 		case "42703": // undefined_column
 			status = http.StatusBadRequest
-			message = fmt.Sprintf("Column does not exist: %s", pgError.Message)
+			message = "Invalid field specified"
 		}
 	}
 
+	log.Debugf("GraphQL database error: %s", debugLog)
 	handler.writeGraphQLError(responseWriter, status, message)
 }
 

@@ -288,7 +288,7 @@ func (runner *WorkerdRunner) Deploy(
 	targetURL, _ := url.Parse("http://127.0.0.1:" + strconv.Itoa(port))
 	reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
 	reverseProxy.ErrorHandler = func(responseWriter http.ResponseWriter, proxyRequest *http.Request, proxyErr error) {
-		core.WriteErrorResponse(responseWriter, proxyRequest, http.StatusBadGateway, proxyErr.Error())
+		core.WriteErrorResponse(responseWriter, proxyRequest, http.StatusBadGateway, "Bad gateway", proxyErr.Error())
 	}
 	runner.activeProxies[targetEndpoint.Name] = reverseProxy
 

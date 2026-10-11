@@ -51,7 +51,7 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 			Reason:     parseErr.Error(),
 			StatusCode: http.StatusBadRequest,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, parseErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid image request path", parseErr.Error())
 		return
 	}
 
@@ -83,7 +83,7 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 			Reason:     fetchErr.Error(),
 			StatusCode: http.StatusBadGateway,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, fetchErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, "Bad gateway", fetchErr.Error())
 		return
 	}
 	defer func() { _ = bodyReadCloser.Close() }()
@@ -96,7 +96,7 @@ func (baseHandler *BaseHandler) handleGetInfo(responseWriter http.ResponseWriter
 			Reason:     inspectErr.Error(),
 			StatusCode: http.StatusUnprocessableEntity,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Unable to inspect image", inspectErr.Error())
 		return
 	}
 
@@ -125,7 +125,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 				Reason:     "Failed to parse multipart payload",
 				StatusCode: http.StatusBadRequest,
 			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to parse multipart payload")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Failed to parse multipart payload", parseMultipartErr.Error())
 			return
 		}
 
@@ -139,7 +139,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 				Reason:     "No file uploaded in multipart form",
 				StatusCode: http.StatusBadRequest,
 			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "No file uploaded in multipart form")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "No file uploaded in multipart form", fileErr.Error())
 			return
 		}
 		defer func() { _ = file.Close() }()
@@ -151,7 +151,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 				Reason:     inspectErr.Error(),
 				StatusCode: http.StatusUnprocessableEntity,
 			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Unable to inspect image", inspectErr.Error())
 			return
 		}
 
@@ -176,7 +176,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 			Reason:     inspectErr.Error(),
 			StatusCode: http.StatusUnprocessableEntity,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, inspectErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Unable to inspect image", inspectErr.Error())
 		return
 	}
 

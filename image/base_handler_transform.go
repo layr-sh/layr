@@ -53,7 +53,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 			Reason:     parseErr.Error(),
 			StatusCode: http.StatusBadRequest,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, parseErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid image request path", parseErr.Error())
 		return
 	}
 
@@ -64,7 +64,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 			Reason:     optionsErr.Error(),
 			StatusCode: http.StatusBadRequest,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, optionsErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid image processing options", optionsErr.Error())
 		return
 	}
 
@@ -137,7 +137,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 				Reason:     fetchErr.Error(),
 				StatusCode: http.StatusForbidden,
 			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, fetchErr.Error())
+			core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied", fetchErr.Error())
 			return
 		}
 		baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
@@ -145,7 +145,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 			Reason:     fetchErr.Error(),
 			StatusCode: http.StatusBadGateway,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, fetchErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, "Bad gateway", fetchErr.Error())
 		return
 	}
 	defer func() { _ = bodyReadCloser.Close() }()
@@ -158,7 +158,7 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 			Reason:     transformErr.Error(),
 			StatusCode: http.StatusUnprocessableEntity,
 		}))
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, transformErr.Error())
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Unable to process image", transformErr.Error())
 		return
 	}
 

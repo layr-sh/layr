@@ -20,7 +20,7 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
@@ -39,7 +39,7 @@ func (handler *BaseHandler) handleSetupMFA(responseWriter http.ResponseWriter, r
 		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", err.Error())
 		return
 	}
 
@@ -93,7 +93,7 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.UserID == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Bearer token required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	userID := authContext.UserID
@@ -105,7 +105,7 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 
 	code := strings.TrimSpace(verifyMFAInput.Code)
 	if code == "" {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Code required")
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Code is required")
 		return
 	}
 
@@ -123,7 +123,7 @@ func (handler *BaseHandler) handleVerifyMFA(responseWriter http.ResponseWriter, 
 		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", err.Error())
 		return
 	}
 
@@ -178,7 +178,7 @@ func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWrite
 	var challengeMFAInput ChallengeMFAInput
 	if request.Body != nil && request.ContentLength != 0 {
 		if err := json.NewDecoder(request.Body).Decode(&challengeMFAInput); err != nil {
-			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body")
+			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
 			return
 		}
 	}
@@ -219,7 +219,7 @@ func (handler *BaseHandler) handleChallengeMFA(responseWriter http.ResponseWrite
 		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket")
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid or expired MFA ticket", err.Error())
 		return
 	}
 
@@ -298,7 +298,7 @@ func (handler *BaseHandler) handleDisableMFA(responseWriter http.ResponseWriter,
 		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
 	if err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found")
+		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "User not found", err.Error())
 		return
 	}
 
