@@ -44,7 +44,7 @@ No authorization required
 
 ## data_tables_columns_delete
 
-> models::DeleteColumnResponse data_tables_columns_delete(schema_name, table_name, column_name)
+> models::DeleteColumnResponse data_tables_columns_delete(schema_name, table_name, column_name, cascade)
 Drop a column from a table schema
 
 Executes ALTER TABLE DROP COLUMN CASCADE, dropping the column and dependent views or indexes. Invalidates reflection caches and emits data.table.updated event. Requires data:schema.write scope.
@@ -57,6 +57,7 @@ Name | Type | Description  | Required | Notes
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
 **column_name** | **String** |  | [required] |
+**cascade** | Option<**bool**> | Cascade column drop to dependent views or indexes |  |
 
 ### Return type
 

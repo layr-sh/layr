@@ -24,6 +24,17 @@ import {
     RetryDLQResponseToJSON,
 } from '../models/RetryDLQResponse';
 
+export interface TasksDlqListRequest {
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+}
+
 export interface TasksDlqPurgeRequest {
     /**
      * 
@@ -50,8 +61,16 @@ export class DLQApi extends runtime.BaseAPI {
     /**
      * Creates request options for tasksDlqList without sending the request
      */
-    async tasksDlqListRequestOpts(): Promise<runtime.RequestOpts> {
+    async tasksDlqListRequestOpts(requestParameters: TasksDlqListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -70,8 +89,8 @@ export class DLQApi extends runtime.BaseAPI {
      * Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
      * List dead-lettered failed task executions
      */
-    async tasksDlqListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListDLQResponse>> {
-        const requestOptions = await this.tasksDlqListRequestOpts();
+    async tasksDlqListRaw(requestParameters: TasksDlqListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListDLQResponse>> {
+        const requestOptions = await this.tasksDlqListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => ListDLQResponseFromJSON(jsonValue));
@@ -81,8 +100,8 @@ export class DLQApi extends runtime.BaseAPI {
      * Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
      * List dead-lettered failed task executions
      */
-    async tasksDlqList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListDLQResponse> {
-        const response = await this.tasksDlqListRaw(initOverrides);
+    async tasksDlqList(requestParameters: TasksDlqListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListDLQResponse> {
+        const response = await this.tasksDlqListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

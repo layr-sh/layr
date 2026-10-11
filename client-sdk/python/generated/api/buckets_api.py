@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any
+from pydantic import Field, StrictInt, StrictStr
+from typing import Any, Optional
 from typing_extensions import Annotated
 from generated.models.bucket import Bucket
 from generated.models.create_bucket_input import CreateBucketInput
@@ -1078,6 +1078,8 @@ class BucketsApi:
     def file_storage_buckets_list_objects(
         self,
         bucket: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1097,6 +1099,10 @@ class BucketsApi:
 
         :param bucket: (required)
         :type bucket: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1121,6 +1127,8 @@ class BucketsApi:
 
         _param = self._file_storage_buckets_list_objects_serialize(
             bucket=bucket,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1145,6 +1153,8 @@ class BucketsApi:
     def file_storage_buckets_list_objects_with_http_info(
         self,
         bucket: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1164,6 +1174,10 @@ class BucketsApi:
 
         :param bucket: (required)
         :type bucket: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1188,6 +1202,8 @@ class BucketsApi:
 
         _param = self._file_storage_buckets_list_objects_serialize(
             bucket=bucket,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1212,6 +1228,8 @@ class BucketsApi:
     def file_storage_buckets_list_objects_without_preload_content(
         self,
         bucket: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1231,6 +1249,10 @@ class BucketsApi:
 
         :param bucket: (required)
         :type bucket: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1255,6 +1277,8 @@ class BucketsApi:
 
         _param = self._file_storage_buckets_list_objects_serialize(
             bucket=bucket,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1274,6 +1298,8 @@ class BucketsApi:
     def _file_storage_buckets_list_objects_serialize(
         self,
         bucket,
+        limit,
+        offset,
         _request_auth,
         _content_type,
         _headers,
@@ -1298,6 +1324,14 @@ class BucketsApi:
         if bucket is not None:
             _path_params['bucket'] = bucket
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

@@ -29,6 +29,27 @@ type ApiFileStorageObjectsDeleteRequest struct {
 	ApiService *ObjectsAPIService
 	bucket string
 	key string
+	token *string
+	expires *string
+	op *string
+}
+
+// Presigned capability HMAC token for deletion authorization
+func (r ApiFileStorageObjectsDeleteRequest) Token(token string) ApiFileStorageObjectsDeleteRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds timestamp when the presigned capability token expires
+func (r ApiFileStorageObjectsDeleteRequest) Expires(expires string) ApiFileStorageObjectsDeleteRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;write&#39;)
+func (r ApiFileStorageObjectsDeleteRequest) Op(op string) ApiFileStorageObjectsDeleteRequest {
+	r.op = &op
+	return r
 }
 
 func (r ApiFileStorageObjectsDeleteRequest) Execute() (interface{}, *http.Response, error) {
@@ -77,6 +98,15 @@ func (a *ObjectsAPIService) FileStorageObjectsDeleteExecute(r ApiFileStorageObje
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -136,6 +166,27 @@ type ApiFileStorageObjectsDownloadRequest struct {
 	ApiService *ObjectsAPIService
 	bucket string
 	key string
+	token *string
+	expires *string
+	op *string
+}
+
+// Presigned capability HMAC token for public download
+func (r ApiFileStorageObjectsDownloadRequest) Token(token string) ApiFileStorageObjectsDownloadRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds timestamp when the presigned capability token expires
+func (r ApiFileStorageObjectsDownloadRequest) Expires(expires string) ApiFileStorageObjectsDownloadRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;read&#39;)
+func (r ApiFileStorageObjectsDownloadRequest) Op(op string) ApiFileStorageObjectsDownloadRequest {
+	r.op = &op
+	return r
 }
 
 func (r ApiFileStorageObjectsDownloadRequest) Execute() (*os.File, *http.Response, error) {
@@ -184,6 +235,15 @@ func (a *ObjectsAPIService) FileStorageObjectsDownloadExecute(r ApiFileStorageOb
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -243,6 +303,27 @@ type ApiFileStorageObjectsHeadRequest struct {
 	ApiService *ObjectsAPIService
 	bucket string
 	key string
+	token *string
+	expires *string
+	op *string
+}
+
+// Presigned capability HMAC token
+func (r ApiFileStorageObjectsHeadRequest) Token(token string) ApiFileStorageObjectsHeadRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds timestamp when the presigned capability token expires
+func (r ApiFileStorageObjectsHeadRequest) Expires(expires string) ApiFileStorageObjectsHeadRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;read&#39;)
+func (r ApiFileStorageObjectsHeadRequest) Op(op string) ApiFileStorageObjectsHeadRequest {
+	r.op = &op
+	return r
 }
 
 func (r ApiFileStorageObjectsHeadRequest) Execute() (interface{}, *http.Response, error) {
@@ -291,6 +372,15 @@ func (a *ObjectsAPIService) FileStorageObjectsHeadExecute(r ApiFileStorageObject
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -351,11 +441,32 @@ type ApiFileStorageObjectsUploadPostRequest struct {
 	bucket string
 	key string
 	body *interface{}
+	token *string
+	expires *string
+	op *string
 }
 
 // Request body for core.Empty
 func (r ApiFileStorageObjectsUploadPostRequest) Body(body interface{}) ApiFileStorageObjectsUploadPostRequest {
 	r.body = &body
+	return r
+}
+
+// Presigned capability HMAC token for write authorization
+func (r ApiFileStorageObjectsUploadPostRequest) Token(token string) ApiFileStorageObjectsUploadPostRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds timestamp when the presigned capability token expires
+func (r ApiFileStorageObjectsUploadPostRequest) Expires(expires string) ApiFileStorageObjectsUploadPostRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;write&#39;)
+func (r ApiFileStorageObjectsUploadPostRequest) Op(op string) ApiFileStorageObjectsUploadPostRequest {
+	r.op = &op
 	return r
 }
 
@@ -408,6 +519,15 @@ func (a *ObjectsAPIService) FileStorageObjectsUploadPostExecute(r ApiFileStorage
 		return localVarReturnValue, nil, reportError("body is required and must be specified")
 	}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -470,11 +590,32 @@ type ApiFileStorageObjectsUploadPutRequest struct {
 	bucket string
 	key string
 	body *interface{}
+	token *string
+	expires *string
+	op *string
 }
 
 // Request body for core.Empty
 func (r ApiFileStorageObjectsUploadPutRequest) Body(body interface{}) ApiFileStorageObjectsUploadPutRequest {
 	r.body = &body
+	return r
+}
+
+// Presigned capability HMAC token for write authorization
+func (r ApiFileStorageObjectsUploadPutRequest) Token(token string) ApiFileStorageObjectsUploadPutRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds timestamp when the presigned capability token expires
+func (r ApiFileStorageObjectsUploadPutRequest) Expires(expires string) ApiFileStorageObjectsUploadPutRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;write&#39;)
+func (r ApiFileStorageObjectsUploadPutRequest) Op(op string) ApiFileStorageObjectsUploadPutRequest {
+	r.op = &op
 	return r
 }
 
@@ -527,6 +668,15 @@ func (a *ObjectsAPIService) FileStorageObjectsUploadPutExecute(r ApiFileStorageO
 		return localVarReturnValue, nil, reportError("body is required and must be specified")
 	}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

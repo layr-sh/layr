@@ -12,14 +12,18 @@ Method | HTTP request | Description
 
 ## tasks_dlq_list
 
-> models::ListDlqResponse tasks_dlq_list()
+> models::ListDlqResponse tasks_dlq_list(limit, offset)
 List dead-lettered failed task executions
 
 Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
 
 ### Return type
 

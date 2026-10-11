@@ -132,7 +132,7 @@ No authorization required
 
 ## file_storage_buckets_list_objects
 
-> models::ListBucketObjectsResponse file_storage_buckets_list_objects(bucket)
+> models::ListBucketObjectsResponse file_storage_buckets_list_objects(bucket, limit, offset)
 List objects stored within a bucket
 
 Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.
@@ -143,6 +143,8 @@ Queries metadata records in file_storage.objects for the specified bucket, detai
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **bucket** | **String** |  | [required] |
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
 
 ### Return type
 

@@ -50,6 +50,17 @@ export interface CoreEventHooksGetRequest {
     eventHookId: string;
 }
 
+export interface CoreEventHooksListRequest {
+    /**
+     * Filter event hooks by delivery driver ('sql' or 'http')
+     */
+    driver?: string;
+    /**
+     * Filter event hooks by active enabled status
+     */
+    isEnabled?: boolean;
+}
+
 export interface CoreEventHooksUpdateRequest {
     /**
      * 
@@ -223,8 +234,16 @@ export class EventHooksApi extends runtime.BaseAPI {
     /**
      * Creates request options for coreEventHooksList without sending the request
      */
-    async coreEventHooksListRequestOpts(): Promise<runtime.RequestOpts> {
+    async coreEventHooksListRequestOpts(requestParameters: CoreEventHooksListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['driver'] != null) {
+            queryParameters['driver'] = requestParameters['driver'];
+        }
+
+        if (requestParameters['isEnabled'] != null) {
+            queryParameters['is_enabled'] = requestParameters['isEnabled'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -243,8 +262,8 @@ export class EventHooksApi extends runtime.BaseAPI {
      * Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
      * List event hook subscriptions
      */
-    async coreEventHooksListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<EventHook>>> {
-        const requestOptions = await this.coreEventHooksListRequestOpts();
+    async coreEventHooksListRaw(requestParameters: CoreEventHooksListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<EventHook>>> {
+        const requestOptions = await this.coreEventHooksListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(EventHookFromJSON));
@@ -254,8 +273,8 @@ export class EventHooksApi extends runtime.BaseAPI {
      * Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
      * List event hook subscriptions
      */
-    async coreEventHooksList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<EventHook>> {
-        const response = await this.coreEventHooksListRaw(initOverrides);
+    async coreEventHooksList(requestParameters: CoreEventHooksListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<EventHook>> {
+        const response = await this.coreEventHooksListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

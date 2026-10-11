@@ -56,7 +56,7 @@ No authorization required
 
 # **coreEventsList**
 ```swift
-    open class func coreEventsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [Event]
+    open class func coreEventsList(limit: Int? = nil, offset: Int? = nil, type: String? = nil, actorType: String? = nil, actorId: String? = nil, resourceType: String? = nil, resourceId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListEventsResponse
 ```
 
 Query immutable system and domain audit events
@@ -68,10 +68,17 @@ Queries immutable system and domain events from core.events with multi-field fil
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
+let type = "type_example" // String | Filter by specific event type name (optional)
+let actorType = "actorType_example" // String | Filter by actor principal type (user, service_account, system) (optional)
+let actorId = "actorId_example" // String | Filter by actor principal UUID (optional)
+let resourceType = "resourceType_example" // String | Filter by target resource entity type (optional)
+let resourceId = "resourceId_example" // String | Filter by target resource unique identifier (optional)
 
 // Query immutable system and domain audit events
 do {
-    let response = try await EventsAPI.coreEventsList()
+    let response = try await EventsAPI.coreEventsList(limit: limit, offset: offset, type: type, actorType: actorType, actorId: actorId, resourceType: resourceType, resourceId: resourceId)
     dump(response)
 } catch {
     print(error)
@@ -79,11 +86,20 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
+ **type** | **String** | Filter by specific event type name | [optional] 
+ **actorType** | **String** | Filter by actor principal type (user, service_account, system) | [optional] 
+ **actorId** | **String** | Filter by actor principal UUID | [optional] 
+ **resourceType** | **String** | Filter by target resource entity type | [optional] 
+ **resourceId** | **String** | Filter by target resource unique identifier | [optional] 
 
 ### Return type
 
-[**[Event]**](Event.md)
+[**ListEventsResponse**](ListEventsResponse.md)
 
 ### Authorization
 

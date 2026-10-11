@@ -80,7 +80,7 @@ No authorization required
 
 ## dataTablesDelete
 
-> DeleteTableResponse dataTablesDelete(schemaName, tableName)
+> DeleteTableResponse dataTablesDelete(schemaName, tableName, cascade)
 
 Drop a table and cascade constraints
 
@@ -104,6 +104,8 @@ async function example() {
     schemaName: schemaName_example,
     // string
     tableName: tableName_example,
+    // boolean | Cascade table drop to dependent constraints and views (optional)
+    cascade: true,
   } satisfies DataTablesDeleteRequest;
 
   try {
@@ -125,6 +127,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
+| **cascade** | `boolean` | Cascade table drop to dependent constraints and views | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

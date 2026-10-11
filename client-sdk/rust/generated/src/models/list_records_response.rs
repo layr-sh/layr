@@ -14,18 +14,27 @@ use serde::{Deserialize, Serialize};
 /// ListRecordsResponse : ListRecordsResponse schema
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ListRecordsResponse {
-    #[serde(rename = "count", skip_serializing_if = "Option::is_none")]
-    pub count: Option<i32>,
+    #[serde(rename = "count")]
+    pub count: i32,
     #[serde(rename = "data", deserialize_with = "Option::deserialize")]
     pub data: Option<Vec<models::Record>>,
+    #[serde(rename = "limit")]
+    pub limit: i32,
+    #[serde(rename = "offset")]
+    pub offset: i32,
+    #[serde(rename = "total", skip_serializing_if = "Option::is_none")]
+    pub total: Option<i32>,
 }
 
 impl ListRecordsResponse {
     /// ListRecordsResponse schema
-    pub fn new(data: Option<Vec<models::Record>>) -> ListRecordsResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Record>>, limit: i32, offset: i32) -> ListRecordsResponse {
         ListRecordsResponse {
-            count: None,
+            count,
             data,
+            limit,
+            offset,
+            total: None,
         }
     }
 }

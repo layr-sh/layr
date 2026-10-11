@@ -22,7 +22,10 @@ var _ MappedNullable = &ListBucketObjectsResponse{}
 // ListBucketObjectsResponse ListBucketObjectsResponse schema
 type ListBucketObjectsResponse struct {
 	Count int32 `json:"count"`
-	Objects []Object `json:"objects"`
+	Data []Object `json:"data"`
+	Limit int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+	Total *int32 `json:"total,omitempty"`
 }
 
 type _ListBucketObjectsResponse ListBucketObjectsResponse
@@ -31,10 +34,12 @@ type _ListBucketObjectsResponse ListBucketObjectsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListBucketObjectsResponse(count int32, objects []Object) *ListBucketObjectsResponse {
+func NewListBucketObjectsResponse(count int32, data []Object, limit int32, offset int32) *ListBucketObjectsResponse {
 	this := ListBucketObjectsResponse{}
 	this.Count = count
-	this.Objects = objects
+	this.Data = data
+	this.Limit = limit
+	this.Offset = offset
 	return &this
 }
 
@@ -70,30 +75,110 @@ func (o *ListBucketObjectsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetObjects returns the Objects field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Object will be returned
-func (o *ListBucketObjectsResponse) GetObjects() []Object {
+func (o *ListBucketObjectsResponse) GetData() []Object {
 	if o == nil {
 		var ret []Object
 		return ret
 	}
 
-	return o.Objects
+	return o.Data
 }
 
-// GetObjectsOk returns a tuple with the Objects field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListBucketObjectsResponse) GetObjectsOk() ([]Object, bool) {
-	if o == nil || IsNil(o.Objects) {
+func (o *ListBucketObjectsResponse) GetDataOk() ([]Object, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Objects, true
+	return o.Data, true
 }
 
-// SetObjects sets field value
-func (o *ListBucketObjectsResponse) SetObjects(v []Object) {
-	o.Objects = v
+// SetData sets field value
+func (o *ListBucketObjectsResponse) SetData(v []Object) {
+	o.Data = v
+}
+
+// GetLimit returns the Limit field value
+func (o *ListBucketObjectsResponse) GetLimit() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Limit
+}
+
+// GetLimitOk returns a tuple with the Limit field value
+// and a boolean to check if the value has been set.
+func (o *ListBucketObjectsResponse) GetLimitOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Limit, true
+}
+
+// SetLimit sets field value
+func (o *ListBucketObjectsResponse) SetLimit(v int32) {
+	o.Limit = v
+}
+
+// GetOffset returns the Offset field value
+func (o *ListBucketObjectsResponse) GetOffset() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Offset
+}
+
+// GetOffsetOk returns a tuple with the Offset field value
+// and a boolean to check if the value has been set.
+func (o *ListBucketObjectsResponse) GetOffsetOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Offset, true
+}
+
+// SetOffset sets field value
+func (o *ListBucketObjectsResponse) SetOffset(v int32) {
+	o.Offset = v
+}
+
+// GetTotal returns the Total field value if set, zero value otherwise.
+func (o *ListBucketObjectsResponse) GetTotal() int32 {
+	if o == nil || IsNil(o.Total) {
+		var ret int32
+		return ret
+	}
+	return *o.Total
+}
+
+// GetTotalOk returns a tuple with the Total field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ListBucketObjectsResponse) GetTotalOk() (*int32, bool) {
+	if o == nil || IsNil(o.Total) {
+		return nil, false
+	}
+	return o.Total, true
+}
+
+// HasTotal returns a boolean if a field has been set.
+func (o *ListBucketObjectsResponse) HasTotal() bool {
+	if o != nil && !IsNil(o.Total) {
+		return true
+	}
+
+	return false
+}
+
+// SetTotal gets a reference to the given int32 and assigns it to the Total field.
+func (o *ListBucketObjectsResponse) SetTotal(v int32) {
+	o.Total = &v
 }
 
 func (o ListBucketObjectsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +192,13 @@ func (o ListBucketObjectsResponse) MarshalJSON() ([]byte, error) {
 func (o ListBucketObjectsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Objects != nil {
-		toSerialize["objects"] = o.Objects
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
+	}
+	toSerialize["limit"] = o.Limit
+	toSerialize["offset"] = o.Offset
+	if !IsNil(o.Total) {
+		toSerialize["total"] = o.Total
 	}
 	return toSerialize, nil
 }
@@ -119,7 +209,9 @@ func (o *ListBucketObjectsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"objects",
+		"data",
+		"limit",
+		"offset",
 	}
 
 	allProperties := make(map[string]interface{})

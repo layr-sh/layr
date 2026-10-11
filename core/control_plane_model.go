@@ -72,8 +72,11 @@ type ListEventHooksResponse []EventHook
 // ListEventHookDeliveriesResponse represents the response containing multiple event hook deliveries.
 type ListEventHookDeliveriesResponse []EventHookDelivery
 
-// ListEventsResponse represents the response containing multiple events.
-type ListEventsResponse []Event
+// ListEventsResponse represents the standardized paginated response containing multiple events.
+type ListEventsResponse struct {
+	Data []Event `json:"data"`
+	PaginationOutput
+}
 
 // EventFilter provides multi-field filtering and pagination options for querying events.
 type EventFilter struct {

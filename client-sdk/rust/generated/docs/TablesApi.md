@@ -43,7 +43,7 @@ No authorization required
 
 ## data_tables_delete
 
-> models::DeleteTableResponse data_tables_delete(schema_name, table_name)
+> models::DeleteTableResponse data_tables_delete(schema_name, table_name, cascade)
 Drop a table and cascade constraints
 
 Executes DROP TABLE CASCADE in PostgreSQL, removing the table, associated indexes, triggers, and foreign key constraints. Invalidates catalog caches and emits data.table.deleted event. Requires data:schema.write scope.
@@ -55,6 +55,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
+**cascade** | Option<**bool**> | Cascade table drop to dependent constraints and views |  |
 
 ### Return type
 

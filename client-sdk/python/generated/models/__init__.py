@@ -99,6 +99,7 @@ from generated.models.list_custom_domains_response import ListCustomDomainsRespo
 from generated.models.list_dlq_response import ListDLQResponse
 from generated.models.list_deployments_response import ListDeploymentsResponse
 from generated.models.list_endpoints_response import ListEndpointsResponse
+from generated.models.list_events_response import ListEventsResponse
 from generated.models.list_executions_response import ListExecutionsResponse
 from generated.models.list_indexes_response import ListIndexesResponse
 from generated.models.list_jobs_response import ListJobsResponse

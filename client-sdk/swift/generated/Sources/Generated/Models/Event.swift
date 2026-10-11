@@ -7,7 +7,6 @@
 
 import Foundation
 
-/** Event schema */
 public struct Event: Sendable, Codable, Hashable {
 
     public var action: String

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
 from pydantic import Field, StrictStr
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from typing_extensions import Annotated
 
 from generated.api_client import ApiClient, RequestSerialized
@@ -43,6 +43,7 @@ class RPCApi:
         schema_name: StrictStr,
         function_name: StrictStr,
         body: Annotated[Dict[str, Any], Field(description="Request body for data.ExecuteFunctionInput")],
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -66,6 +67,8 @@ class RPCApi:
         :type function_name: str
         :param body: Request body for data.ExecuteFunctionInput (required)
         :type body: object
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -92,6 +95,7 @@ class RPCApi:
             schema_name=schema_name,
             function_name=function_name,
             body=body,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -118,6 +122,7 @@ class RPCApi:
         schema_name: StrictStr,
         function_name: StrictStr,
         body: Annotated[Dict[str, Any], Field(description="Request body for data.ExecuteFunctionInput")],
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -141,6 +146,8 @@ class RPCApi:
         :type function_name: str
         :param body: Request body for data.ExecuteFunctionInput (required)
         :type body: object
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -167,6 +174,7 @@ class RPCApi:
             schema_name=schema_name,
             function_name=function_name,
             body=body,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -193,6 +201,7 @@ class RPCApi:
         schema_name: StrictStr,
         function_name: StrictStr,
         body: Annotated[Dict[str, Any], Field(description="Request body for data.ExecuteFunctionInput")],
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -216,6 +225,8 @@ class RPCApi:
         :type function_name: str
         :param body: Request body for data.ExecuteFunctionInput (required)
         :type body: object
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -242,6 +253,7 @@ class RPCApi:
             schema_name=schema_name,
             function_name=function_name,
             body=body,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -263,6 +275,7 @@ class RPCApi:
         schema_name,
         function_name,
         body,
+        invalidate_tables,
         _request_auth,
         _content_type,
         _headers,
@@ -289,6 +302,10 @@ class RPCApi:
         if function_name is not None:
             _path_params['function_name'] = function_name
         # process the query parameters
+        if invalidate_tables is not None:
+            
+            _query_params.append(('invalidate_tables', invalidate_tables))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -333,6 +350,7 @@ class RPCApi:
         self,
         schema_name: StrictStr,
         function_name: StrictStr,
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -354,6 +372,8 @@ class RPCApi:
         :type schema_name: str
         :param function_name: (required)
         :type function_name: str
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -379,6 +399,7 @@ class RPCApi:
         _param = self._data_rpc_query_serialize(
             schema_name=schema_name,
             function_name=function_name,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -404,6 +425,7 @@ class RPCApi:
         self,
         schema_name: StrictStr,
         function_name: StrictStr,
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -425,6 +447,8 @@ class RPCApi:
         :type schema_name: str
         :param function_name: (required)
         :type function_name: str
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -450,6 +474,7 @@ class RPCApi:
         _param = self._data_rpc_query_serialize(
             schema_name=schema_name,
             function_name=function_name,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -475,6 +500,7 @@ class RPCApi:
         self,
         schema_name: StrictStr,
         function_name: StrictStr,
+        invalidate_tables: Annotated[Optional[StrictStr], Field(description="Comma-separated table names whose cache should be invalidated")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -496,6 +522,8 @@ class RPCApi:
         :type schema_name: str
         :param function_name: (required)
         :type function_name: str
+        :param invalidate_tables: Comma-separated table names whose cache should be invalidated
+        :type invalidate_tables: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -521,6 +549,7 @@ class RPCApi:
         _param = self._data_rpc_query_serialize(
             schema_name=schema_name,
             function_name=function_name,
+            invalidate_tables=invalidate_tables,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -541,6 +570,7 @@ class RPCApi:
         self,
         schema_name,
         function_name,
+        invalidate_tables,
         _request_auth,
         _content_type,
         _headers,
@@ -567,6 +597,10 @@ class RPCApi:
         if function_name is not None:
             _path_params['function_name'] = function_name
         # process the query parameters
+        if invalidate_tables is not None:
+            
+            _query_params.append(('invalidate_tables', invalidate_tables))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

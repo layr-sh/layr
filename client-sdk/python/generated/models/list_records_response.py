@@ -28,9 +28,12 @@ class ListRecordsResponse(BaseModel):
     """
     ListRecordsResponse schema
     """ # noqa: E501
-    count: Optional[StrictInt] = None
+    count: StrictInt
     data: Optional[List[Record]]
-    __properties: ClassVar[List[str]] = ["count", "data"]
+    limit: StrictInt
+    offset: StrictInt
+    total: Optional[StrictInt] = None
+    __properties: ClassVar[List[str]] = ["count", "data", "limit", "offset", "total"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -95,7 +98,10 @@ class ListRecordsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "data": [Record.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
+            "data": [Record.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None,
+            "limit": obj.get("limit"),
+            "offset": obj.get("offset"),
+            "total": obj.get("total")
         })
         return _obj
 

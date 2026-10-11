@@ -15,7 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictBool, StrictStr
+from typing import Optional
 from typing_extensions import Annotated
 from generated.models.toggle_rls_input import ToggleRLSInput
 from generated.models.toggle_rls_response import ToggleRLSResponse
@@ -44,6 +45,8 @@ class TablesRLSApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         toggle_rls_input: Annotated[ToggleRLSInput, Field(description="Request body for data.ToggleRLSInput")],
+        action: Annotated[Optional[StrictStr], Field(description="RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')")] = None,
+        force: Annotated[Optional[StrictBool], Field(description="Whether to enforce RLS for table owners when action is FORCE")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -67,6 +70,10 @@ class TablesRLSApi:
         :type table_name: str
         :param toggle_rls_input: Request body for data.ToggleRLSInput (required)
         :type toggle_rls_input: ToggleRLSInput
+        :param action: RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')
+        :type action: str
+        :param force: Whether to enforce RLS for table owners when action is FORCE
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -93,6 +100,8 @@ class TablesRLSApi:
             schema_name=schema_name,
             table_name=table_name,
             toggle_rls_input=toggle_rls_input,
+            action=action,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -119,6 +128,8 @@ class TablesRLSApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         toggle_rls_input: Annotated[ToggleRLSInput, Field(description="Request body for data.ToggleRLSInput")],
+        action: Annotated[Optional[StrictStr], Field(description="RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')")] = None,
+        force: Annotated[Optional[StrictBool], Field(description="Whether to enforce RLS for table owners when action is FORCE")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -142,6 +153,10 @@ class TablesRLSApi:
         :type table_name: str
         :param toggle_rls_input: Request body for data.ToggleRLSInput (required)
         :type toggle_rls_input: ToggleRLSInput
+        :param action: RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')
+        :type action: str
+        :param force: Whether to enforce RLS for table owners when action is FORCE
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -168,6 +183,8 @@ class TablesRLSApi:
             schema_name=schema_name,
             table_name=table_name,
             toggle_rls_input=toggle_rls_input,
+            action=action,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -194,6 +211,8 @@ class TablesRLSApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         toggle_rls_input: Annotated[ToggleRLSInput, Field(description="Request body for data.ToggleRLSInput")],
+        action: Annotated[Optional[StrictStr], Field(description="RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')")] = None,
+        force: Annotated[Optional[StrictBool], Field(description="Whether to enforce RLS for table owners when action is FORCE")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -217,6 +236,10 @@ class TablesRLSApi:
         :type table_name: str
         :param toggle_rls_input: Request body for data.ToggleRLSInput (required)
         :type toggle_rls_input: ToggleRLSInput
+        :param action: RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')
+        :type action: str
+        :param force: Whether to enforce RLS for table owners when action is FORCE
+        :type force: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -243,6 +266,8 @@ class TablesRLSApi:
             schema_name=schema_name,
             table_name=table_name,
             toggle_rls_input=toggle_rls_input,
+            action=action,
+            force=force,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -264,6 +289,8 @@ class TablesRLSApi:
         schema_name,
         table_name,
         toggle_rls_input,
+        action,
+        force,
         _request_auth,
         _content_type,
         _headers,
@@ -290,6 +317,14 @@ class TablesRLSApi:
         if table_name is not None:
             _path_params['table_name'] = table_name
         # process the query parameters
+        if action is not None:
+            
+            _query_params.append(('action', action))
+            
+        if force is not None:
+            
+            _query_params.append(('force', force))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

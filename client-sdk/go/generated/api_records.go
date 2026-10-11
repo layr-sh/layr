@@ -29,11 +29,18 @@ type ApiDataRecordsCreateRequest struct {
 	schemaName string
 	tableName string
 	createRecordInput *CreateRecordInput
+	onConflict *string
 }
 
 // Request body for data.CreateRecordInput
 func (r ApiDataRecordsCreateRequest) CreateRecordInput(createRecordInput CreateRecordInput) ApiDataRecordsCreateRequest {
 	r.createRecordInput = &createRecordInput
+	return r
+}
+
+// Target column or constraint for upsert on-conflict resolution
+func (r ApiDataRecordsCreateRequest) OnConflict(onConflict string) ApiDataRecordsCreateRequest {
+	r.onConflict = &onConflict
 	return r
 }
 
@@ -86,6 +93,9 @@ func (a *RecordsAPIService) DataRecordsCreateExecute(r ApiDataRecordsCreateReque
 		return localVarReturnValue, nil, reportError("createRecordInput is required and must be specified")
 	}
 
+	if r.onConflict != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "on_conflict", r.onConflict, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -259,6 +269,13 @@ type ApiDataRecordsGetRequest struct {
 	schemaName string
 	tableName string
 	recordId string
+	select_ *string
+}
+
+// Column projection (e.g. &#39;id,name&#39;)
+func (r ApiDataRecordsGetRequest) Select_(select_ string) ApiDataRecordsGetRequest {
+	r.select_ = &select_
+	return r
 }
 
 func (r ApiDataRecordsGetRequest) Execute() (*GetRecordResponse, *http.Response, error) {
@@ -310,6 +327,9 @@ func (a *RecordsAPIService) DataRecordsGetExecute(r ApiDataRecordsGetRequest) (*
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.select_ != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "select", r.select_, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -369,6 +389,55 @@ type ApiDataRecordsListRequest struct {
 	ApiService *RecordsAPIService
 	schemaName string
 	tableName string
+	limit *int32
+	offset *int32
+	select_ *string
+	order *string
+	cacheTtl *int32
+	cacheKeySuffix *string
+	cacheKey *string
+}
+
+// Maximum number of items to return (default 50, maximum 1000)
+func (r ApiDataRecordsListRequest) Limit(limit int32) ApiDataRecordsListRequest {
+	r.limit = &limit
+	return r
+}
+
+// Number of items to skip before returning results (default 0)
+func (r ApiDataRecordsListRequest) Offset(offset int32) ApiDataRecordsListRequest {
+	r.offset = &offset
+	return r
+}
+
+// Column projection and embedded relations (e.g. &#39;id,name,posts(*)&#39;)
+func (r ApiDataRecordsListRequest) Select_(select_ string) ApiDataRecordsListRequest {
+	r.select_ = &select_
+	return r
+}
+
+// Ordering expression (e.g. &#39;created_at.desc,id.asc&#39;)
+func (r ApiDataRecordsListRequest) Order(order string) ApiDataRecordsListRequest {
+	r.order = &order
+	return r
+}
+
+// Cache duration in seconds
+func (r ApiDataRecordsListRequest) CacheTtl(cacheTtl int32) ApiDataRecordsListRequest {
+	r.cacheTtl = &cacheTtl
+	return r
+}
+
+// Custom suffix for cache key isolation
+func (r ApiDataRecordsListRequest) CacheKeySuffix(cacheKeySuffix string) ApiDataRecordsListRequest {
+	r.cacheKeySuffix = &cacheKeySuffix
+	return r
+}
+
+// Alias for cache_key_suffix
+func (r ApiDataRecordsListRequest) CacheKey(cacheKey string) ApiDataRecordsListRequest {
+	r.cacheKey = &cacheKey
+	return r
 }
 
 func (r ApiDataRecordsListRequest) Execute() (*ListRecordsResponse, *http.Response, error) {
@@ -417,6 +486,35 @@ func (a *RecordsAPIService) DataRecordsListExecute(r ApiDataRecordsListRequest) 
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.limit != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", r.limit, "form", "")
+	} else {
+		var defaultValue int32 = 50
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", defaultValue, "form", "")
+		r.limit = &defaultValue
+	}
+	if r.offset != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "form", "")
+	} else {
+		var defaultValue int32 = 0
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", defaultValue, "form", "")
+		r.offset = &defaultValue
+	}
+	if r.select_ != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "select", r.select_, "form", "")
+	}
+	if r.order != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "order", r.order, "form", "")
+	}
+	if r.cacheTtl != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "cache_ttl", r.cacheTtl, "form", "")
+	}
+	if r.cacheKeySuffix != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "cache_key_suffix", r.cacheKeySuffix, "form", "")
+	}
+	if r.cacheKey != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "cache_key", r.cacheKey, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

@@ -164,11 +164,20 @@ pub async fn core_event_hooks_get(configuration: &configuration::Configuration, 
 }
 
 /// Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
-pub async fn core_event_hooks_list(configuration: &configuration::Configuration, ) -> Result<Vec<models::EventHook>, Error<CoreEventHooksListError>> {
+pub async fn core_event_hooks_list(configuration: &configuration::Configuration, driver: Option<&str>, is_enabled: Option<bool>) -> Result<Vec<models::EventHook>, Error<CoreEventHooksListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_driver = driver;
+    let p_query_is_enabled = is_enabled;
 
     let uri_str = format!("{}/v1/_/core/event-hooks", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_driver {
+        req_builder = req_builder.query(&[("driver", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_is_enabled {
+        req_builder = req_builder.query(&[("is_enabled", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

@@ -145,7 +145,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	var listExecutionsResponse ListExecutionsResponse
 	require.NoError(t, json.Unmarshal(listExecsResponseRecorder.Body.Bytes(), &listExecutionsResponse))
 	require.GreaterOrEqual(t, listExecutionsResponse.Count, 2)
-	require.Equal(t, http.StatusOK, listExecutionsResponse.Executions[0].StatusCode)
+	require.Equal(t, http.StatusOK, listExecutionsResponse.Data[0].StatusCode)
 
 	// -------------------------------------------------------------------------
 	// PART C: Live Hot-Reload to v2 & Immediate Rollback to v1

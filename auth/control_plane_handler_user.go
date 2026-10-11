@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 	"uuid"
@@ -22,19 +21,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 		return
 	}
 
-	limit := 50
-	if limitParameter := request.URL.Query().Get("limit"); limitParameter != "" {
-		if parsedLimit, err := strconv.Atoi(limitParameter); err == nil && parsedLimit > 0 && parsedLimit <= 1000 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0
-	if offsetParameter := request.URL.Query().Get("offset"); offsetParameter != "" {
-		if parsedOffset, err := strconv.Atoi(offsetParameter); err == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
+	paginationInput := core.ParsePagination(request)
+	limit := paginationInput.Limit
+	offset := paginationInput.Offset
 
 	roleFilter := strings.TrimSpace(request.URL.Query().Get("role"))
 	searchQuery := strings.TrimSpace(request.URL.Query().Get("search"))
@@ -89,10 +78,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUsers(responseWriter h
 
 	log.Debugf("retrieved %d user(s)", len(users))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUsersResponse{
-		Users:  users,
-		Limit:  limit,
-		Offset: offset,
-		Count:  len(users),
+		Data: users,
+		PaginationOutput: core.PaginationOutput{
+			Limit:  limit,
+			Offset: offset,
+			Count:  len(users),
+		},
 	})
 }
 

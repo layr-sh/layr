@@ -14,11 +14,14 @@ open class TransformAPI {
      
      - parameter signature: (path)  
      - parameter path: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for protected storage sources (optional)
+     - parameter expires: (query) Unix epoch seconds expiration timestamp for presigned capability (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: URL
      */
-    open class func imageTransformGet(signature: String, path: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL {
-        return try await imageTransformGetWithRequestBuilder(signature: signature, path: path, apiConfiguration: apiConfiguration).execute().body
+    open class func imageTransformGet(signature: String, path: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL {
+        return try await imageTransformGetWithRequestBuilder(signature: signature, path: path, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -27,10 +30,13 @@ open class TransformAPI {
      - Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications. Verifies HMAC-SHA256 signature if enabled, caches transformed result, and streams binary image with appropriate Content-Type header.
      - parameter signature: (path)  
      - parameter path: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for protected storage sources (optional)
+     - parameter expires: (query) Unix epoch seconds expiration timestamp for presigned capability (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<URL> 
      */
-    open class func imageTransformGetWithRequestBuilder(signature: String, path: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<URL> {
+    open class func imageTransformGetWithRequestBuilder(signature: String, path: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<URL> {
         var localVariablePath = "/v1/image/{signature}/{path...}"
         let signaturePreEscape = "\(APIHelper.mapValueToPathItem(signature))"
         let signaturePostEscape = signaturePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -41,7 +47,13 @@ open class TransformAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

@@ -90,7 +90,7 @@ func TestAuthControlPlaneHandlerUserIntegration(t *testing.T) {
 	if err := json.NewDecoder(listResponseRecorder.Body).Decode(&listUsersResponse); err != nil {
 		t.Fatalf("failed to decode user list: %v", err)
 	}
-	if len(listUsersResponse.Users) == 0 {
+	if len(listUsersResponse.Data) == 0 {
 		t.Fatal("expected at least one user in user list")
 	}
 

@@ -10,7 +10,7 @@ All URIs are relative to *http://localhost*
 
 ## imageTransformGet
 
-> Blob imageTransformGet(signature, path)
+> Blob imageTransformGet(signature, path, token, expires, op)
 
 Transform and optimize an image dynamically
 
@@ -34,6 +34,12 @@ async function example() {
     signature: signature_example,
     // string |  (might contain slashes)
     path: path_example,
+    // string | Presigned capability HMAC token for protected storage sources (optional)
+    token: token_example,
+    // string | Unix epoch seconds expiration timestamp for presigned capability (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'read\') (optional)
+    op: op_example,
   } satisfies ImageTransformGetRequest;
 
   try {
@@ -55,6 +61,9 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **signature** | `string` |  | [Defaults to `undefined`] |
 | **path** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
+| **token** | `string` | Presigned capability HMAC token for protected storage sources | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds expiration timestamp for presigned capability | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;read\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

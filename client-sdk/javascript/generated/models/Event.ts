@@ -29,7 +29,7 @@ import {
 } from './EventActor';
 
 /**
- * Event schema
+ * 
  * @export
  * @interface Event
  */

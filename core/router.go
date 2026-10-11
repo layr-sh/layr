@@ -114,6 +114,28 @@ func RouteHide() RouteOption {
 	return fuego.OptionHide()
 }
 
+// RouteQueryParam declares a string query parameter for OpenAPI.
+func RouteQueryParam(name, description string, options ...fuego.ParamOption) RouteOption {
+	return fuego.OptionQuery(name, description, options...)
+}
+
+// RouteQueryInt declares an integer query parameter for OpenAPI.
+func RouteQueryInt(name, description string, options ...fuego.ParamOption) RouteOption {
+	return fuego.OptionQueryInt(name, description, options...)
+}
+
+// RouteQueryBool declares a boolean query parameter for OpenAPI.
+func RouteQueryBool(name, description string, options ...fuego.ParamOption) RouteOption {
+	return fuego.OptionQueryBool(name, description, options...)
+}
+
+// Param helpers re-exported from fuego for route definitions.
+var (
+	ParamRequired = fuego.ParamRequired
+	ParamDefault  = fuego.ParamDefault
+	ParamExample  = fuego.ParamExample
+)
+
 // Router wraps the underlying OpenAPI and HTTP router engine.
 type Router struct {
 	engine *fuego.Server
@@ -128,10 +150,6 @@ type netHTTPRouteRegisterer[T, B, P any] struct {
 
 func (registerer netHTTPRouteRegisterer[T, B, P]) Register() fuego.Route[T, B, P] {
 	route := registerer.route
-	for _, option := range registerer.options {
-		option(&route.BaseRoute)
-	}
-
 	fullPath := route.Path
 	if route.Method != "" {
 		fullPath = route.Method + " " + fullPath

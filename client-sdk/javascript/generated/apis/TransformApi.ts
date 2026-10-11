@@ -23,6 +23,18 @@ export interface ImageTransformGetRequest {
      *  (might contain slashes)
      */
     path: string;
+    /**
+     * Presigned capability HMAC token for protected storage sources
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds expiration timestamp for presigned capability
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('read')
+     */
+    op?: string;
 }
 
 /**
@@ -49,6 +61,18 @@ export class TransformApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

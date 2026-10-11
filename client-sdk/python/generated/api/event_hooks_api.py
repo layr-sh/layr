@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any, List
+from pydantic import Field, StrictBool, StrictStr
+from typing import Any, List, Optional
 from typing_extensions import Annotated
 from generated.models.create_event_hook_input import CreateEventHookInput
 from generated.models.event_hook import EventHook
@@ -829,6 +829,8 @@ class EventHooksApi:
     @validate_call
     def core_event_hooks_list(
         self,
+        driver: Annotated[Optional[StrictStr], Field(description="Filter event hooks by delivery driver ('sql' or 'http')")] = None,
+        is_enabled: Annotated[Optional[StrictBool], Field(description="Filter event hooks by active enabled status")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -846,6 +848,10 @@ class EventHooksApi:
 
         Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
 
+        :param driver: Filter event hooks by delivery driver ('sql' or 'http')
+        :type driver: str
+        :param is_enabled: Filter event hooks by active enabled status
+        :type is_enabled: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -869,6 +875,8 @@ class EventHooksApi:
         """ # noqa: E501
 
         _param = self._core_event_hooks_list_serialize(
+            driver=driver,
+            is_enabled=is_enabled,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -892,6 +900,8 @@ class EventHooksApi:
     @validate_call
     def core_event_hooks_list_with_http_info(
         self,
+        driver: Annotated[Optional[StrictStr], Field(description="Filter event hooks by delivery driver ('sql' or 'http')")] = None,
+        is_enabled: Annotated[Optional[StrictBool], Field(description="Filter event hooks by active enabled status")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -909,6 +919,10 @@ class EventHooksApi:
 
         Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
 
+        :param driver: Filter event hooks by delivery driver ('sql' or 'http')
+        :type driver: str
+        :param is_enabled: Filter event hooks by active enabled status
+        :type is_enabled: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -932,6 +946,8 @@ class EventHooksApi:
         """ # noqa: E501
 
         _param = self._core_event_hooks_list_serialize(
+            driver=driver,
+            is_enabled=is_enabled,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -955,6 +971,8 @@ class EventHooksApi:
     @validate_call
     def core_event_hooks_list_without_preload_content(
         self,
+        driver: Annotated[Optional[StrictStr], Field(description="Filter event hooks by delivery driver ('sql' or 'http')")] = None,
+        is_enabled: Annotated[Optional[StrictBool], Field(description="Filter event hooks by active enabled status")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -972,6 +990,10 @@ class EventHooksApi:
 
         Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
 
+        :param driver: Filter event hooks by delivery driver ('sql' or 'http')
+        :type driver: str
+        :param is_enabled: Filter event hooks by active enabled status
+        :type is_enabled: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -995,6 +1017,8 @@ class EventHooksApi:
         """ # noqa: E501
 
         _param = self._core_event_hooks_list_serialize(
+            driver=driver,
+            is_enabled=is_enabled,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1013,6 +1037,8 @@ class EventHooksApi:
 
     def _core_event_hooks_list_serialize(
         self,
+        driver,
+        is_enabled,
         _request_auth,
         _content_type,
         _headers,
@@ -1035,6 +1061,14 @@ class EventHooksApi:
 
         # process the path parameters
         # process the query parameters
+        if driver is not None:
+            
+            _query_params.append(('driver', driver))
+            
+        if is_enabled is not None:
+            
+            _query_params.append(('is_enabled', is_enabled))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

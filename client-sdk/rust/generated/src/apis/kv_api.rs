@@ -261,14 +261,22 @@ pub async fn data_kv_mset(configuration: &configuration::Configuration, set_mult
 }
 
 /// Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.
-pub async fn data_kv_put(configuration: &configuration::Configuration, key: &str, body: &str) -> Result<models::SetKvResponse, Error<DataKvPutError>> {
+pub async fn data_kv_put(configuration: &configuration::Configuration, key: &str, body: &str, ttl: Option<i32>, nx: Option<bool>) -> Result<models::SetKvResponse, Error<DataKvPutError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_key = key;
     let p_body_body = body;
+    let p_query_ttl = ttl;
+    let p_query_nx = nx;
 
     let uri_str = format!("{}/v1/data/kv/{key}", configuration.base_path, key=crate::apis::urlencode(p_path_key));
     let mut req_builder = configuration.client.request(reqwest::Method::PUT, &uri_str);
 
+    if let Some(ref param_value) = p_query_ttl {
+        req_builder = req_builder.query(&[("ttl", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_nx {
+        req_builder = req_builder.query(&[("nx", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -300,14 +308,18 @@ pub async fn data_kv_put(configuration: &configuration::Configuration, key: &str
 }
 
 /// Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).
-pub async fn data_kv_set(configuration: &configuration::Configuration, key: &str, set_kv_input: models::SetKvInput) -> Result<models::SetKvResponse, Error<DataKvSetError>> {
+pub async fn data_kv_set(configuration: &configuration::Configuration, key: &str, set_kv_input: models::SetKvInput, nx: Option<bool>) -> Result<models::SetKvResponse, Error<DataKvSetError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_key = key;
     let p_body_set_kv_input = set_kv_input;
+    let p_query_nx = nx;
 
     let uri_str = format!("{}/v1/data/kv/{key}", configuration.base_path, key=crate::apis::urlencode(p_path_key));
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
+    if let Some(ref param_value) = p_query_nx {
+        req_builder = req_builder.query(&[("nx", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

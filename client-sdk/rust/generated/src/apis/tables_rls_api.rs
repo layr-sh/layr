@@ -24,15 +24,23 @@ pub enum DataTablesRlsUpdateError {
 
 
 /// Executes ALTER TABLE to ENABLE, DISABLE, or FORCE Row-Level Security (RLS) enforcement on the table. Invalidates table metadata and emits data.table.updated event. Requires data:schema.write scope.
-pub async fn data_tables_rls_update(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, toggle_rls_input: models::ToggleRlsInput) -> Result<models::ToggleRlsResponse, Error<DataTablesRlsUpdateError>> {
+pub async fn data_tables_rls_update(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, toggle_rls_input: models::ToggleRlsInput, action: Option<&str>, force: Option<bool>) -> Result<models::ToggleRlsResponse, Error<DataTablesRlsUpdateError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_table_name = table_name;
     let p_body_toggle_rls_input = toggle_rls_input;
+    let p_query_action = action;
+    let p_query_force = force;
 
     let uri_str = format!("{}/v1/_/data/tables/{schema_name}/{table_name}/rls", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), table_name=crate::apis::urlencode(p_path_table_name));
     let mut req_builder = configuration.client.request(reqwest::Method::PATCH, &uri_str);
 
+    if let Some(ref param_value) = p_query_action {
+        req_builder = req_builder.query(&[("action", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_force {
+        req_builder = req_builder.query(&[("force", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

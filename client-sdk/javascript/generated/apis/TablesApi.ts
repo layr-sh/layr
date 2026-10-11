@@ -55,6 +55,10 @@ export interface DataTablesDeleteRequest {
      * 
      */
     tableName: string;
+    /**
+     * Cascade table drop to dependent constraints and views
+     */
+    cascade?: boolean;
 }
 
 export interface DataTablesGetRequest {
@@ -141,6 +145,10 @@ export class TablesApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['cascade'] != null) {
+            queryParameters['cascade'] = requestParameters['cascade'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

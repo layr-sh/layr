@@ -9,6 +9,9 @@ Name | Type
 ------------ | -------------
 `count` | number
 `data` | [Array&lt;ModelRecord&gt;](ModelRecord.md)
+`limit` | number
+`offset` | number
+`total` | number
 
 ## Example
 
@@ -19,6 +22,9 @@ import type { ListRecordsResponse } from ''
 const example = {
   "count": null,
   "data": null,
+  "limit": null,
+  "offset": null,
+  "total": null,
 } satisfies ListRecordsResponse
 
 console.log(example)

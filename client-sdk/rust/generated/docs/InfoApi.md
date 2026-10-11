@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 ## image_info_get
 
-> models::GetInfoResponse image_info_get(signature, path___)
+> models::GetInfoResponse image_info_get(signature, path___, token, expires, op)
 Inspect image metadata by path
 
 Extracts structural metadata (width, height, format, file size, colorspace, EXIF, orientation) from a remote or storage image path using cryptographic signature verification.
@@ -23,6 +23,9 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **signature** | **String** |  | [required] |
 **path___** | **String** |  (might contain slashes) | [required] |
+**token** | Option<**String**> | Presigned capability HMAC token for protected storage sources |  |
+**expires** | Option<**String**> | Unix epoch seconds expiration timestamp for presigned capability |  |
+**op** | Option<**String**> | Presigned operation capability type ('read') |  |
 
 ### Return type
 

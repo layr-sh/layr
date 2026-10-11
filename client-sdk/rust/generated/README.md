@@ -280,6 +280,7 @@ Class | Method | HTTP request | Description
  - [ListDeploymentsResponse](docs/ListDeploymentsResponse.md)
  - [ListDlqResponse](docs/ListDlqResponse.md)
  - [ListEndpointsResponse](docs/ListEndpointsResponse.md)
+ - [ListEventsResponse](docs/ListEventsResponse.md)
  - [ListExecutionsResponse](docs/ListExecutionsResponse.md)
  - [ListIndexesResponse](docs/ListIndexesResponse.md)
  - [ListJobsResponse](docs/ListJobsResponse.md)

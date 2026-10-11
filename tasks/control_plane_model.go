@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"uuid"
+
+	"layr.sh/core"
 )
 
 // GetJobResponse augments Job with next run countdown in seconds.
@@ -54,14 +56,14 @@ type TriggerExecutionResponse struct {
 
 // ListExecutionsResponse represents the output of querying execution history logs.
 type ListExecutionsResponse struct {
-	Executions []ExecutionLog `json:"executions"`
-	Count      int            `json:"count"`
+	Data []ExecutionLog `json:"data"`
+	core.PaginationOutput
 }
 
 // ListDLQResponse represents the output of listing dead-letter queue tasks.
 type ListDLQResponse struct {
-	DLQ   []DLQExecution `json:"dlq"`
-	Count int            `json:"count"`
+	Data []DLQExecution `json:"data"`
+	core.PaginationOutput
 }
 
 // RetryDLQResponse defines the output after re-queuing a dead-lettered execution.

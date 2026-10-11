@@ -216,7 +216,7 @@ No authorization required
 
 ## coreEventHooksList
 
-> Array&lt;EventHook&gt; coreEventHooksList()
+> Array&lt;EventHook&gt; coreEventHooksList(driver, isEnabled)
 
 List event hook subscriptions
 
@@ -235,8 +235,15 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new EventHooksApi();
 
+  const body = {
+    // string | Filter event hooks by delivery driver (\'sql\' or \'http\') (optional)
+    driver: driver_example,
+    // boolean | Filter event hooks by active enabled status (optional)
+    isEnabled: true,
+  } satisfies CoreEventHooksListRequest;
+
   try {
-    const data = await api.coreEventHooksList();
+    const data = await api.coreEventHooksList(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -249,7 +256,11 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **driver** | `string` | Filter event hooks by delivery driver (\&#39;sql\&#39; or \&#39;http\&#39;) | [Optional] [Defaults to `undefined`] |
+| **isEnabled** | `boolean` | Filter event hooks by active enabled status | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

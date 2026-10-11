@@ -65,6 +65,14 @@ export interface FileStorageBucketsListObjectsRequest {
      * 
      */
     bucket: string;
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
 }
 
 export interface FileStorageBucketsUpdateRequest {
@@ -288,6 +296,14 @@ export class BucketsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

@@ -12,26 +12,38 @@ open class ExecutionsAPI {
     /**
      Query execution history logs across all endpoints
      
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter endpointId: (query) Filter executions by endpoint UUID (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListExecutionsResponse
      */
-    open class func functionExecutionsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
-        return try await functionExecutionsListWithRequestBuilder(apiConfiguration: apiConfiguration).execute().body
+    open class func functionExecutionsList(limit: Int? = nil, offset: Int? = nil, endpointId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
+        return try await functionExecutionsListWithRequestBuilder(limit: limit, offset: offset, endpointId: endpointId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
      Query execution history logs across all endpoints
      - GET /v1/_/function/executions
      - Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter endpointId: (query) Filter executions by endpoint UUID (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListExecutionsResponse> 
      */
-    open class func functionExecutionsListWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
+    open class func functionExecutionsListWithRequestBuilder(limit: Int? = nil, offset: Int? = nil, endpointId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
         let localVariablePath = "/v1/_/function/executions"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "endpoint_id": (wrappedValue: endpointId?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -84,26 +96,38 @@ open class ExecutionsAPI {
     /**
      Query execution audit logs
      
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter jobId: (query) Filter task executions by job UUID (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListExecutionsResponse
      */
-    open class func tasksExecutionsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
-        return try await tasksExecutionsListWithRequestBuilder(apiConfiguration: apiConfiguration).execute().body
+    open class func tasksExecutionsList(limit: Int? = nil, offset: Int? = nil, jobId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
+        return try await tasksExecutionsListWithRequestBuilder(limit: limit, offset: offset, jobId: jobId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
      Query execution audit logs
      - GET /v1/_/tasks/executions
      - Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter jobId: (query) Filter task executions by job UUID (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListExecutionsResponse> 
      */
-    open class func tasksExecutionsListWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
+    open class func tasksExecutionsListWithRequestBuilder(limit: Int? = nil, offset: Int? = nil, jobId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
         let localVariablePath = "/v1/_/tasks/executions"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "job_id": (wrappedValue: jobId?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

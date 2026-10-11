@@ -631,7 +631,6 @@
         "description": "ListRecordsResponse schema",
         "properties": {
           "count": {
-            "nullable": true,
             "type": "integer"
           },
           "data": {
@@ -642,10 +641,22 @@
               "array",
               "null"
             ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
           }
         },
         "required": [
-          "data"
+          "count",
+          "data",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -3234,6 +3245,14 @@
         "operationId": "data__kv__set",
         "parameters": [
           {
+            "description": "Only set the key if it does not already exist",
+            "in": "query",
+            "name": "nx",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "in": "path",
             "name": "key",
             "required": true,
@@ -3284,6 +3303,22 @@
         "description": "Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.",
         "operationId": "data__kv__put",
         "parameters": [
+          {
+            "description": "Key time-to-live expiration in seconds",
+            "in": "query",
+            "name": "ttl",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only set the key if it does not already exist",
+            "in": "query",
+            "name": "nx",
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "in": "path",
             "name": "key",
@@ -3338,6 +3373,14 @@
         "operationId": "data__rpc__query",
         "parameters": [
           {
+            "description": "Comma-separated table names whose cache should be invalidated",
+            "in": "query",
+            "name": "invalidate_tables",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "schema_name",
             "required": true,
@@ -3385,6 +3428,14 @@
         "description": "Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.",
         "operationId": "data__rpc__mutation",
         "parameters": [
+          {
+            "description": "Comma-separated table names whose cache should be invalidated",
+            "in": "query",
+            "name": "invalidate_tables",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "schema_name",
@@ -3447,6 +3498,64 @@
         "operationId": "data__records__list",
         "parameters": [
           {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Column projection and embedded relations (e.g. 'id,name,posts(*)')",
+            "in": "query",
+            "name": "select",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Ordering expression (e.g. 'created_at.desc,id.asc')",
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cache duration in seconds",
+            "in": "query",
+            "name": "cache_ttl",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Custom suffix for cache key isolation",
+            "in": "query",
+            "name": "cache_key_suffix",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Alias for cache_key_suffix",
+            "in": "query",
+            "name": "cache_key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "schema_name",
             "required": true,
@@ -3494,6 +3603,14 @@
         "description": "Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.",
         "operationId": "data__records__create",
         "parameters": [
+          {
+            "description": "Target column or constraint for upsert on-conflict resolution",
+            "in": "query",
+            "name": "on_conflict",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "schema_name",
@@ -3614,6 +3731,14 @@
         "description": "Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.",
         "operationId": "data__records__get",
         "parameters": [
+          {
+            "description": "Column projection (e.g. 'id,name')",
+            "in": "query",
+            "name": "select",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "schema_name",
@@ -3807,6 +3932,30 @@
         "operationId": "file_storage__objects__delete",
         "parameters": [
           {
+            "description": "Presigned capability HMAC token for deletion authorization",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds timestamp when the presigned capability token expires",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('write')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "bucket",
             "required": true,
@@ -3859,6 +4008,30 @@
         "operationId": "file_storage__objects__download",
         "parameters": [
           {
+            "description": "Presigned capability HMAC token for public download",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds timestamp when the presigned capability token expires",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('read')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "bucket",
             "required": true,
@@ -3903,6 +4076,30 @@
         "description": "Returns HTTP metadata headers (Content-Length, Content-Type, ETag, Last-Modified) for a stored file without streaming body payload.",
         "operationId": "file_storage__objects__head",
         "parameters": [
+          {
+            "description": "Presigned capability HMAC token",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds timestamp when the presigned capability token expires",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('read')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "bucket",
@@ -3952,6 +4149,30 @@
         "description": "Uploads binary object payload into the target bucket, enforcing size guards and MIME validation. Stores in backend, writes metadata to file_storage.objects, and emits object created/updated event.",
         "operationId": "file_storage__objects__upload_post",
         "parameters": [
+          {
+            "description": "Presigned capability HMAC token for write authorization",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds timestamp when the presigned capability token expires",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('write')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "bucket",
@@ -4012,6 +4233,30 @@
         "description": "Stores binary payload in the specified bucket, enforcing bucket file size limits and MIME allowlists. Creates or updates metadata record in file_storage.objects and emits file_storage.object.created or file_storage.object.updated event.",
         "operationId": "file_storage__objects__upload_put",
         "parameters": [
+          {
+            "description": "Presigned capability HMAC token for write authorization",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds timestamp when the presigned capability token expires",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('write')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "bucket",
@@ -4203,6 +4448,30 @@
         "operationId": "image__info__get",
         "parameters": [
           {
+            "description": "Presigned capability HMAC token for protected storage sources",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds expiration timestamp for presigned capability",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('read')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "in": "path",
             "name": "signature",
             "required": true,
@@ -4253,6 +4522,30 @@
         "description": "Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications. Verifies HMAC-SHA256 signature if enabled, caches transformed result, and streams binary image with appropriate Content-Type header.",
         "operationId": "image__transform__get",
         "parameters": [
+          {
+            "description": "Presigned capability HMAC token for protected storage sources",
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Unix epoch seconds expiration timestamp for presigned capability",
+            "in": "query",
+            "name": "expires",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Presigned operation capability type ('read')",
+            "in": "query",
+            "name": "op",
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "in": "path",
             "name": "signature",

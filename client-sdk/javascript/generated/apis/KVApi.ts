@@ -113,6 +113,14 @@ export interface DataKvPutRequest {
      * 
      */
     body: string;
+    /**
+     * Key time-to-live expiration in seconds
+     */
+    ttl?: number;
+    /**
+     * Only set the key if it does not already exist
+     */
+    nx?: boolean;
 }
 
 export interface DataKvSetRequest {
@@ -124,6 +132,10 @@ export interface DataKvSetRequest {
      * 
      */
     setKVInput: SetKVInput;
+    /**
+     * Only set the key if it does not already exist
+     */
+    nx?: boolean;
 }
 
 export interface DataKvTouchRequest {
@@ -414,6 +426,14 @@ export class KVApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
+        if (requestParameters['ttl'] != null) {
+            queryParameters['ttl'] = requestParameters['ttl'];
+        }
+
+        if (requestParameters['nx'] != null) {
+            queryParameters['nx'] = requestParameters['nx'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         headerParameters['Content-Type'] = 'application/json';
@@ -470,6 +490,10 @@ export class KVApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['nx'] != null) {
+            queryParameters['nx'] = requestParameters['nx'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

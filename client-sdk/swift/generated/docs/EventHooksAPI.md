@@ -151,7 +151,7 @@ No authorization required
 
 # **coreEventHooksList**
 ```swift
-    open class func coreEventHooksList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [EventHook]
+    open class func coreEventHooksList(driver: String? = nil, isEnabled: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [EventHook]
 ```
 
 List event hook subscriptions
@@ -163,10 +163,12 @@ Lists event hook subscriptions from core.event_hooks with driver (sql or http), 
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let driver = "driver_example" // String | Filter event hooks by delivery driver ('sql' or 'http') (optional)
+let isEnabled = true // Bool | Filter event hooks by active enabled status (optional)
 
 // List event hook subscriptions
 do {
-    let response = try await EventHooksAPI.coreEventHooksList()
+    let response = try await EventHooksAPI.coreEventHooksList(driver: driver, isEnabled: isEnabled)
     dump(response)
 } catch {
     print(error)
@@ -174,7 +176,11 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **driver** | **String** | Filter event hooks by delivery driver (&#39;sql&#39; or &#39;http&#39;) | [optional] 
+ **isEnabled** | **Bool** | Filter event hooks by active enabled status | [optional] 
 
 ### Return type
 

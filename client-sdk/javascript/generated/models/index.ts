@@ -85,6 +85,7 @@ export * from './ListCustomDomainsResponse';
 export * from './ListDLQResponse';
 export * from './ListDeploymentsResponse';
 export * from './ListEndpointsResponse';
+export * from './ListEventsResponse';
 export * from './ListExecutionsResponse';
 export * from './ListIndexesResponse';
 export * from './ListJobsResponse';

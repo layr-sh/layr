@@ -34,7 +34,19 @@ export interface ListDLQResponse {
     /**
      * 
      */
-    dlq: Array<DLQExecution> | null;
+    data: Array<DLQExecution> | null;
+    /**
+     * 
+     */
+    limit: number;
+    /**
+     * 
+     */
+    offset: number;
+    /**
+     * 
+     */
+    total?: number;
 }
 
 /**
@@ -42,7 +54,9 @@ export interface ListDLQResponse {
  */
 export function instanceOfListDLQResponse(value: object): value is ListDLQResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('dlq' in value) || value['dlq'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
+    if (!('limit' in value) || value['limit'] === undefined) return false;
+    if (!('offset' in value) || value['offset'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +71,10 @@ export function ListDLQResponseFromJSONTyped(json: any, ignoreDiscriminator: boo
     return {
         
         'count': json['count'],
-        'dlq': (json['dlq'] == null ? null : (json['dlq'] as Array<any>).map(DLQExecutionFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(DLQExecutionFromJSON)),
+        'limit': json['limit'],
+        'offset': json['offset'],
+        'total': json['total'] == null ? undefined : json['total'],
     };
 }
 
@@ -73,7 +90,10 @@ export function ListDLQResponseToJSONTyped(value?: ListDLQResponse | null, ignor
     return {
         
         'count': value['count'],
-        'dlq': (value['dlq'] == null ? null : (value['dlq'] as Array<any>).map(DLQExecutionToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(DLQExecutionToJSON)),
+        'limit': value['limit'],
+        'offset': value['offset'],
+        'total': value['total'],
     };
 }
 

@@ -104,14 +104,18 @@ No authorization required
 
 ## core_event_hooks_list
 
-> Vec<models::EventHook> core_event_hooks_list()
+> Vec<models::EventHook> core_event_hooks_list(driver, is_enabled)
 List event hook subscriptions
 
 Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**driver** | Option<**String**> | Filter event hooks by delivery driver ('sql' or 'http') |  |
+**is_enabled** | Option<**bool**> | Filter event hooks by active enabled status |  |
 
 ### Return type
 

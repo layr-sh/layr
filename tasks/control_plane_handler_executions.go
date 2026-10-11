@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
 	"uuid"
 
@@ -64,30 +63,23 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWri
 		jobID = &parsedID
 	}
 
-	limit := defaultListLimit
-	if rawLimit := queryValues.Get("limit"); rawLimit != "" {
-		if parsedLimit, convErr := strconv.Atoi(rawLimit); convErr == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0
-	if rawOffset := queryValues.Get("offset"); rawOffset != "" {
-		if parsedOffset, convErr := strconv.Atoi(rawOffset); convErr == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
+	paginationInput := core.ParsePaginationWithDefaults(request, defaultListLimit, core.MaxPaginationLimit)
 
 	requestCtx := request.Context()
-	executions, totalCount, err := controlPlaneHandler.jobManager.ListExecutions(requestCtx, jobID, limit, offset)
+	executions, totalCount, err := controlPlaneHandler.jobManager.ListExecutions(requestCtx, jobID, paginationInput.Limit, paginationInput.Offset)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	listExecutionsResponse := ListExecutionsResponse{
-		Executions: executions,
-		Count:      totalCount,
+		Data: executions,
+		PaginationOutput: core.PaginationOutput{
+			Limit:  paginationInput.Limit,
+			Offset: paginationInput.Offset,
+			Count:  len(executions),
+			Total:  totalCount,
+		},
 	}
 	log.Debugf("retrieved %d execution(s)", len(executions))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listExecutionsResponse)
@@ -100,31 +92,23 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListDLQ(responseWriter htt
 		return
 	}
 
-	queryValues := request.URL.Query()
-	limit := defaultListLimit
-	if rawLimit := queryValues.Get("limit"); rawLimit != "" {
-		if parsedLimit, convErr := strconv.Atoi(rawLimit); convErr == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0
-	if rawOffset := queryValues.Get("offset"); rawOffset != "" {
-		if parsedOffset, convErr := strconv.Atoi(rawOffset); convErr == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
+	paginationInput := core.ParsePaginationWithDefaults(request, defaultListLimit, core.MaxPaginationLimit)
 
 	requestCtx := request.Context()
-	dlq, totalCount, err := controlPlaneHandler.jobManager.ListDLQ(requestCtx, limit, offset)
+	dlq, totalCount, err := controlPlaneHandler.jobManager.ListDLQ(requestCtx, paginationInput.Limit, paginationInput.Offset)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	listDLQResponse := ListDLQResponse{
-		DLQ:   dlq,
-		Count: totalCount,
+		Data: dlq,
+		PaginationOutput: core.PaginationOutput{
+			Limit:  paginationInput.Limit,
+			Offset: paginationInput.Offset,
+			Count:  len(dlq),
+			Total:  totalCount,
+		},
 	}
 	log.Debugf("retrieved %d DLQ execution(s)", len(dlq))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listDLQResponse)

@@ -37,6 +37,14 @@ export interface DataTablesRlsUpdateRequest {
      * 
      */
     toggleRLSInput: ToggleRLSInput;
+    /**
+     * RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')
+     */
+    action?: string;
+    /**
+     * Whether to enforce RLS for table owners when action is FORCE
+     */
+    force?: boolean;
 }
 
 /**
@@ -70,6 +78,14 @@ export class TablesRLSApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['action'] != null) {
+            queryParameters['action'] = requestParameters['action'];
+        }
+
+        if (requestParameters['force'] != null) {
+            queryParameters['force'] = requestParameters['force'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

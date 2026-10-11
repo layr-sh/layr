@@ -167,7 +167,7 @@ No authorization required
 
 ## data_kv_put
 
-> models::SetKvResponse data_kv_put(key, body)
+> models::SetKvResponse data_kv_put(key, body, ttl, nx)
 Put raw ephemeral KV entry with query TTL
 
 Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.
@@ -179,6 +179,8 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **key** | **String** |  | [required] |
 **body** | **String** | Request body for string | [required] |
+**ttl** | Option<**i32**> | Key time-to-live expiration in seconds |  |
+**nx** | Option<**bool**> | Only set the key if it does not already exist |  |
 
 ### Return type
 
@@ -198,7 +200,7 @@ No authorization required
 
 ## data_kv_set
 
-> models::SetKvResponse data_kv_set(key, set_kv_input)
+> models::SetKvResponse data_kv_set(key, set_kv_input, nx)
 Set an ephemeral KV entry with JSON envelope
 
 Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).
@@ -210,6 +212,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **key** | **String** |  | [required] |
 **set_kv_input** | [**SetKvInput**](SetKvInput.md) | Request body for data.SetKVInput | [required] |
+**nx** | Option<**bool**> | Only set the key if it does not already exist |  |
 
 ### Return type
 

@@ -83,14 +83,18 @@ pub async fn data_tables_create(configuration: &configuration::Configuration, cr
 }
 
 /// Executes DROP TABLE CASCADE in PostgreSQL, removing the table, associated indexes, triggers, and foreign key constraints. Invalidates catalog caches and emits data.table.deleted event. Requires data:schema.write scope.
-pub async fn data_tables_delete(configuration: &configuration::Configuration, schema_name: &str, table_name: &str) -> Result<models::DeleteTableResponse, Error<DataTablesDeleteError>> {
+pub async fn data_tables_delete(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, cascade: Option<bool>) -> Result<models::DeleteTableResponse, Error<DataTablesDeleteError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_table_name = table_name;
+    let p_query_cascade = cascade;
 
     let uri_str = format!("{}/v1/_/data/tables/{schema_name}/{table_name}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), table_name=crate::apis::urlencode(p_path_table_name));
     let mut req_builder = configuration.client.request(reqwest::Method::DELETE, &uri_str);
 
+    if let Some(ref param_value) = p_query_cascade {
+        req_builder = req_builder.query(&[("cascade", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

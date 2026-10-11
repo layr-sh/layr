@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 # **imageInfoGet**
 ```swift
-    open class func imageInfoGet(signature: String, path: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetInfoResponse
+    open class func imageInfoGet(signature: String, path: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetInfoResponse
 ```
 
 Inspect image metadata by path
@@ -24,10 +24,13 @@ import Generated
 
 let signature = "signature_example" // String | 
 let path = "path_example" // String |  (might contain slashes)
+let token = "token_example" // String | Presigned capability HMAC token for protected storage sources (optional)
+let expires = "expires_example" // String | Unix epoch seconds expiration timestamp for presigned capability (optional)
+let op = "op_example" // String | Presigned operation capability type ('read') (optional)
 
 // Inspect image metadata by path
 do {
-    let response = try await InfoAPI.imageInfoGet(signature: signature, path: path)
+    let response = try await InfoAPI.imageInfoGet(signature: signature, path: path, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -40,6 +43,9 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **signature** | **String** |  | 
  **path** | **String** |  (might contain slashes) | 
+ **token** | **String** | Presigned capability HMAC token for protected storage sources | [optional] 
+ **expires** | **String** | Unix epoch seconds expiration timestamp for presigned capability | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;read&#39;) | [optional] 
 
 ### Return type
 

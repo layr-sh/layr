@@ -22,9 +22,10 @@ var _ MappedNullable = &ListUsersResponse{}
 // ListUsersResponse ListUsersResponse schema
 type ListUsersResponse struct {
 	Count int32 `json:"count"`
+	Data []User `json:"data"`
 	Limit int32 `json:"limit"`
 	Offset int32 `json:"offset"`
-	Users []User `json:"users"`
+	Total *int32 `json:"total,omitempty"`
 }
 
 type _ListUsersResponse ListUsersResponse
@@ -33,12 +34,12 @@ type _ListUsersResponse ListUsersResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListUsersResponse(count int32, limit int32, offset int32, users []User) *ListUsersResponse {
+func NewListUsersResponse(count int32, data []User, limit int32, offset int32) *ListUsersResponse {
 	this := ListUsersResponse{}
 	this.Count = count
+	this.Data = data
 	this.Limit = limit
 	this.Offset = offset
-	this.Users = users
 	return &this
 }
 
@@ -72,6 +73,32 @@ func (o *ListUsersResponse) GetCountOk() (*int32, bool) {
 // SetCount sets field value
 func (o *ListUsersResponse) SetCount(v int32) {
 	o.Count = v
+}
+
+// GetData returns the Data field value
+// If the value is explicit nil, the zero value for []User will be returned
+func (o *ListUsersResponse) GetData() []User {
+	if o == nil {
+		var ret []User
+		return ret
+	}
+
+	return o.Data
+}
+
+// GetDataOk returns a tuple with the Data field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ListUsersResponse) GetDataOk() ([]User, bool) {
+	if o == nil || IsNil(o.Data) {
+		return nil, false
+	}
+	return o.Data, true
+}
+
+// SetData sets field value
+func (o *ListUsersResponse) SetData(v []User) {
+	o.Data = v
 }
 
 // GetLimit returns the Limit field value
@@ -122,30 +149,36 @@ func (o *ListUsersResponse) SetOffset(v int32) {
 	o.Offset = v
 }
 
-// GetUsers returns the Users field value
-// If the value is explicit nil, the zero value for []User will be returned
-func (o *ListUsersResponse) GetUsers() []User {
-	if o == nil {
-		var ret []User
+// GetTotal returns the Total field value if set, zero value otherwise.
+func (o *ListUsersResponse) GetTotal() int32 {
+	if o == nil || IsNil(o.Total) {
+		var ret int32
 		return ret
 	}
-
-	return o.Users
+	return *o.Total
 }
 
-// GetUsersOk returns a tuple with the Users field value
+// GetTotalOk returns a tuple with the Total field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListUsersResponse) GetUsersOk() ([]User, bool) {
-	if o == nil || IsNil(o.Users) {
+func (o *ListUsersResponse) GetTotalOk() (*int32, bool) {
+	if o == nil || IsNil(o.Total) {
 		return nil, false
 	}
-	return o.Users, true
+	return o.Total, true
 }
 
-// SetUsers sets field value
-func (o *ListUsersResponse) SetUsers(v []User) {
-	o.Users = v
+// HasTotal returns a boolean if a field has been set.
+func (o *ListUsersResponse) HasTotal() bool {
+	if o != nil && !IsNil(o.Total) {
+		return true
+	}
+
+	return false
+}
+
+// SetTotal gets a reference to the given int32 and assigns it to the Total field.
+func (o *ListUsersResponse) SetTotal(v int32) {
+	o.Total = &v
 }
 
 func (o ListUsersResponse) MarshalJSON() ([]byte, error) {
@@ -159,10 +192,13 @@ func (o ListUsersResponse) MarshalJSON() ([]byte, error) {
 func (o ListUsersResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
+	}
 	toSerialize["limit"] = o.Limit
 	toSerialize["offset"] = o.Offset
-	if o.Users != nil {
-		toSerialize["users"] = o.Users
+	if !IsNil(o.Total) {
+		toSerialize["total"] = o.Total
 	}
 	return toSerialize, nil
 }
@@ -173,9 +209,9 @@ func (o *ListUsersResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
+		"data",
 		"limit",
 		"offset",
-		"users",
 	}
 
 	allProperties := make(map[string]interface{})

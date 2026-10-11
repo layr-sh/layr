@@ -1,7 +1,6 @@
 
 # Event
 
-Event schema
 
 ## Properties
 

@@ -57,6 +57,10 @@ export interface DataRecordsCreateRequest {
      * 
      */
     createRecordInput: CreateRecordInput;
+    /**
+     * Target column or constraint for upsert on-conflict resolution
+     */
+    onConflict?: string;
 }
 
 export interface DataRecordsDeleteRequest {
@@ -87,6 +91,10 @@ export interface DataRecordsGetRequest {
      * 
      */
     recordId: string;
+    /**
+     * Column projection (e.g. 'id,name')
+     */
+    select?: string;
 }
 
 export interface DataRecordsListRequest {
@@ -98,6 +106,34 @@ export interface DataRecordsListRequest {
      * 
      */
     tableName: string;
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+    /**
+     * Column projection and embedded relations (e.g. 'id,name,posts(*)')
+     */
+    select?: string;
+    /**
+     * Ordering expression (e.g. 'created_at.desc,id.asc')
+     */
+    order?: string;
+    /**
+     * Cache duration in seconds
+     */
+    cacheTtl?: number;
+    /**
+     * Custom suffix for cache key isolation
+     */
+    cacheKeySuffix?: string;
+    /**
+     * Alias for cache_key_suffix
+     */
+    cacheKey?: string;
 }
 
 export interface DataRecordsPutRequest {
@@ -169,6 +205,10 @@ export class RecordsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['onConflict'] != null) {
+            queryParameters['on_conflict'] = requestParameters['onConflict'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -309,6 +349,10 @@ export class RecordsApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
+        if (requestParameters['select'] != null) {
+            queryParameters['select'] = requestParameters['select'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
 
@@ -364,6 +408,34 @@ export class RecordsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
+
+        if (requestParameters['select'] != null) {
+            queryParameters['select'] = requestParameters['select'];
+        }
+
+        if (requestParameters['order'] != null) {
+            queryParameters['order'] = requestParameters['order'];
+        }
+
+        if (requestParameters['cacheTtl'] != null) {
+            queryParameters['cache_ttl'] = requestParameters['cacheTtl'];
+        }
+
+        if (requestParameters['cacheKeySuffix'] != null) {
+            queryParameters['cache_key_suffix'] = requestParameters['cacheKeySuffix'];
+        }
+
+        if (requestParameters['cacheKey'] != null) {
+            queryParameters['cache_key'] = requestParameters['cacheKey'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

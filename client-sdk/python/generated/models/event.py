@@ -28,7 +28,7 @@ from pydantic_core import to_jsonable_python
 
 class Event(BaseModel):
     """
-    Event schema
+    Event
     """ # noqa: E501
     action: StrictStr
     actor: EventActor

@@ -2,7 +2,6 @@ package core
 
 import (
 	"net/http"
-	"strconv"
 	"uuid"
 )
 
@@ -27,16 +26,9 @@ func (server *Server) handleListEvents(responseWriter http.ResponseWriter, reque
 	if resourceIDQueryParam := queryValues.Get("resource_id"); resourceIDQueryParam != "" {
 		eventFilter.ResourceID = &resourceIDQueryParam
 	}
-	if limitQueryParam := queryValues.Get("limit"); limitQueryParam != "" {
-		if parsedLimit, parseErr := strconv.Atoi(limitQueryParam); parseErr == nil {
-			eventFilter.Limit = parsedLimit
-		}
-	}
-	if offsetQueryParam := queryValues.Get("offset"); offsetQueryParam != "" {
-		if parsedOffset, parseErr := strconv.Atoi(offsetQueryParam); parseErr == nil {
-			eventFilter.Offset = parsedOffset
-		}
-	}
+	paginationInput := ParsePagination(request)
+	eventFilter.Limit = paginationInput.Limit
+	eventFilter.Offset = paginationInput.Offset
 
 	events, err := server.kernel.eventManager.List(request.Context(), eventFilter)
 	if err != nil {
@@ -44,7 +36,14 @@ func (server *Server) handleListEvents(responseWriter http.ResponseWriter, reque
 		return
 	}
 	log.Debugf("retrieved %d event(s)", len(events))
-	WriteJSONResponse(responseWriter, http.StatusOK, events)
+	WriteJSONResponse(responseWriter, http.StatusOK, ListEventsResponse{
+		Data: events,
+		PaginationOutput: PaginationOutput{
+			Limit:  paginationInput.Limit,
+			Offset: paginationInput.Offset,
+			Count:  len(events),
+		},
+	})
 }
 
 func (server *Server) handleGetEvent(responseWriter http.ResponseWriter, request *http.Request) {

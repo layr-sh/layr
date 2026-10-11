@@ -29,11 +29,18 @@ type ApiDataRpcMutationRequest struct {
 	schemaName string
 	functionName string
 	body *map[string]interface{}
+	invalidateTables *string
 }
 
 // Request body for data.ExecuteFunctionInput
 func (r ApiDataRpcMutationRequest) Body(body map[string]interface{}) ApiDataRpcMutationRequest {
 	r.body = &body
+	return r
+}
+
+// Comma-separated table names whose cache should be invalidated
+func (r ApiDataRpcMutationRequest) InvalidateTables(invalidateTables string) ApiDataRpcMutationRequest {
+	r.invalidateTables = &invalidateTables
 	return r
 }
 
@@ -86,6 +93,9 @@ func (a *RPCAPIService) DataRpcMutationExecute(r ApiDataRpcMutationRequest) (int
 		return localVarReturnValue, nil, reportError("body is required and must be specified")
 	}
 
+	if r.invalidateTables != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "invalidate_tables", r.invalidateTables, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -147,6 +157,13 @@ type ApiDataRpcQueryRequest struct {
 	ApiService *RPCAPIService
 	schemaName string
 	functionName string
+	invalidateTables *string
+}
+
+// Comma-separated table names whose cache should be invalidated
+func (r ApiDataRpcQueryRequest) InvalidateTables(invalidateTables string) ApiDataRpcQueryRequest {
+	r.invalidateTables = &invalidateTables
+	return r
 }
 
 func (r ApiDataRpcQueryRequest) Execute() (interface{}, *http.Response, error) {
@@ -195,6 +212,9 @@ func (a *RPCAPIService) DataRpcQueryExecute(r ApiDataRpcQueryRequest) (interface
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.invalidateTables != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "invalidate_tables", r.invalidateTables, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

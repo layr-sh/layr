@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 ## data_rpc_mutation
 
-> serde_json::Value data_rpc_mutation(schema_name, function_name, body)
+> serde_json::Value data_rpc_mutation(schema_name, function_name, body, invalidate_tables)
 Execute database stored function or procedure with JSON payload
 
 Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.
@@ -24,6 +24,7 @@ Name | Type | Description  | Required | Notes
 **schema_name** | **String** |  | [required] |
 **function_name** | **String** |  | [required] |
 **body** | **serde_json::Value** | Request body for data.ExecuteFunctionInput | [required] |
+**invalidate_tables** | Option<**String**> | Comma-separated table names whose cache should be invalidated |  |
 
 ### Return type
 
@@ -43,7 +44,7 @@ No authorization required
 
 ## data_rpc_query
 
-> serde_json::Value data_rpc_query(schema_name, function_name)
+> serde_json::Value data_rpc_query(schema_name, function_name, invalidate_tables)
 Execute read-only database stored function or procedure
 
 Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.
@@ -55,6 +56,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **schema_name** | **String** |  | [required] |
 **function_name** | **String** |  | [required] |
+**invalidate_tables** | Option<**String**> | Comma-separated table names whose cache should be invalidated |  |
 
 ### Return type
 

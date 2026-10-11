@@ -15,9 +15,11 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import StrictStr
-from typing import List
+from pydantic import Field, StrictInt, StrictStr
+from typing import Optional
+from typing_extensions import Annotated
 from generated.models.event import Event
+from generated.models.list_events_response import ListEventsResponse
 
 from generated.api_client import ApiClient, RequestSerialized
 from generated.api_response import ApiResponse
@@ -301,6 +303,13 @@ class EventsApi:
     @validate_call
     def core_events_list(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        type: Annotated[Optional[StrictStr], Field(description="Filter by specific event type name")] = None,
+        actor_type: Annotated[Optional[StrictStr], Field(description="Filter by actor principal type (user, service_account, system)")] = None,
+        actor_id: Annotated[Optional[StrictStr], Field(description="Filter by actor principal UUID")] = None,
+        resource_type: Annotated[Optional[StrictStr], Field(description="Filter by target resource entity type")] = None,
+        resource_id: Annotated[Optional[StrictStr], Field(description="Filter by target resource unique identifier")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -313,11 +322,25 @@ class EventsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> List[Event]:
+    ) -> ListEventsResponse:
         """Query immutable system and domain audit events
 
         Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param type: Filter by specific event type name
+        :type type: str
+        :param actor_type: Filter by actor principal type (user, service_account, system)
+        :type actor_type: str
+        :param actor_id: Filter by actor principal UUID
+        :type actor_id: str
+        :param resource_type: Filter by target resource entity type
+        :type resource_type: str
+        :param resource_id: Filter by target resource unique identifier
+        :type resource_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -341,6 +364,13 @@ class EventsApi:
         """ # noqa: E501
 
         _param = self._core_events_list_serialize(
+            limit=limit,
+            offset=offset,
+            type=type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -348,7 +378,7 @@ class EventsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[Event]",
+            '200': "ListEventsResponse",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -364,6 +394,13 @@ class EventsApi:
     @validate_call
     def core_events_list_with_http_info(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        type: Annotated[Optional[StrictStr], Field(description="Filter by specific event type name")] = None,
+        actor_type: Annotated[Optional[StrictStr], Field(description="Filter by actor principal type (user, service_account, system)")] = None,
+        actor_id: Annotated[Optional[StrictStr], Field(description="Filter by actor principal UUID")] = None,
+        resource_type: Annotated[Optional[StrictStr], Field(description="Filter by target resource entity type")] = None,
+        resource_id: Annotated[Optional[StrictStr], Field(description="Filter by target resource unique identifier")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -376,11 +413,25 @@ class EventsApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[List[Event]]:
+    ) -> ApiResponse[ListEventsResponse]:
         """Query immutable system and domain audit events
 
         Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param type: Filter by specific event type name
+        :type type: str
+        :param actor_type: Filter by actor principal type (user, service_account, system)
+        :type actor_type: str
+        :param actor_id: Filter by actor principal UUID
+        :type actor_id: str
+        :param resource_type: Filter by target resource entity type
+        :type resource_type: str
+        :param resource_id: Filter by target resource unique identifier
+        :type resource_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -404,6 +455,13 @@ class EventsApi:
         """ # noqa: E501
 
         _param = self._core_events_list_serialize(
+            limit=limit,
+            offset=offset,
+            type=type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -411,7 +469,7 @@ class EventsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[Event]",
+            '200': "ListEventsResponse",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -427,6 +485,13 @@ class EventsApi:
     @validate_call
     def core_events_list_without_preload_content(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        type: Annotated[Optional[StrictStr], Field(description="Filter by specific event type name")] = None,
+        actor_type: Annotated[Optional[StrictStr], Field(description="Filter by actor principal type (user, service_account, system)")] = None,
+        actor_id: Annotated[Optional[StrictStr], Field(description="Filter by actor principal UUID")] = None,
+        resource_type: Annotated[Optional[StrictStr], Field(description="Filter by target resource entity type")] = None,
+        resource_id: Annotated[Optional[StrictStr], Field(description="Filter by target resource unique identifier")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -444,6 +509,20 @@ class EventsApi:
 
         Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param type: Filter by specific event type name
+        :type type: str
+        :param actor_type: Filter by actor principal type (user, service_account, system)
+        :type actor_type: str
+        :param actor_id: Filter by actor principal UUID
+        :type actor_id: str
+        :param resource_type: Filter by target resource entity type
+        :type resource_type: str
+        :param resource_id: Filter by target resource unique identifier
+        :type resource_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -467,6 +546,13 @@ class EventsApi:
         """ # noqa: E501
 
         _param = self._core_events_list_serialize(
+            limit=limit,
+            offset=offset,
+            type=type,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -474,7 +560,7 @@ class EventsApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "List[Event]",
+            '200': "ListEventsResponse",
         }
         response_data = self.api_client.call_api(
             *_param,
@@ -485,6 +571,13 @@ class EventsApi:
 
     def _core_events_list_serialize(
         self,
+        limit,
+        offset,
+        type,
+        actor_type,
+        actor_id,
+        resource_type,
+        resource_id,
         _request_auth,
         _content_type,
         _headers,
@@ -507,6 +600,34 @@ class EventsApi:
 
         # process the path parameters
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
+        if type is not None:
+            
+            _query_params.append(('type', type))
+            
+        if actor_type is not None:
+            
+            _query_params.append(('actor_type', actor_type))
+            
+        if actor_id is not None:
+            
+            _query_params.append(('actor_id', actor_id))
+            
+        if resource_type is not None:
+            
+            _query_params.append(('resource_type', resource_type))
+            
+        if resource_id is not None:
+            
+            _query_params.append(('resource_id', resource_id))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

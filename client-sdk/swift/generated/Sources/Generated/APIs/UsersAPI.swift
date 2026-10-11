@@ -129,26 +129,41 @@ open class UsersAPI {
     /**
      List registered application users with filtering and pagination
      
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter role: (query) Filter users by role name (optional)
+     - parameter search: (query) Case-insensitive substring search matching email or phone number (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListUsersResponse
      */
-    open class func authUsersList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListUsersResponse {
-        return try await authUsersListWithRequestBuilder(apiConfiguration: apiConfiguration).execute().body
+    open class func authUsersList(limit: Int? = nil, offset: Int? = nil, role: String? = nil, search: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListUsersResponse {
+        return try await authUsersListWithRequestBuilder(limit: limit, offset: offset, role: role, search: search, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
      List registered application users with filtering and pagination
      - GET /v1/_/auth/users
      - Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter role: (query) Filter users by role name (optional)
+     - parameter search: (query) Case-insensitive substring search matching email or phone number (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListUsersResponse> 
      */
-    open class func authUsersListWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListUsersResponse> {
+    open class func authUsersListWithRequestBuilder(limit: Int? = nil, offset: Int? = nil, role: String? = nil, search: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListUsersResponse> {
         let localVariablePath = "/v1/_/auth/users"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "role": (wrappedValue: role?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "search": (wrappedValue: search?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

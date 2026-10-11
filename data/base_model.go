@@ -3,12 +3,14 @@ package data
 import (
 	"encoding/json"
 	"time"
+
+	"layr.sh/core"
 )
 
 // ListRecordsResponse represents dynamic row query results.
 type ListRecordsResponse struct {
-	Data  []Record `json:"data"`
-	Count *int     `json:"count,omitempty"`
+	Data []Record `json:"data"`
+	core.PaginationOutput
 }
 
 // GetRecordResponse represents a single row result.

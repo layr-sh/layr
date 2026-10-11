@@ -3,7 +3,6 @@ package function
 
 import (
 	"net/http"
-	"strconv"
 
 	"uuid"
 
@@ -38,19 +37,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWri
 		endpointID = &parsedID
 	}
 
-	limit := defaultExecutionListLimit
-	if rawLimit := request.URL.Query().Get("limit"); rawLimit != "" {
-		if parsedLimit, convErr := strconv.Atoi(rawLimit); convErr == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0
-	if rawOffset := request.URL.Query().Get("offset"); rawOffset != "" {
-		if parsedOffset, convErr := strconv.Atoi(rawOffset); convErr == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
+	paginationInput := core.ParsePaginationWithDefaults(request, defaultExecutionListLimit, core.MaxPaginationLimit)
+	limit := paginationInput.Limit
+	offset := paginationInput.Offset
 
 	var countQuery string
 	var selectQuery string
@@ -111,7 +100,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListExecutions(responseWri
 
 	log.Debugf("retrieved %d execution(s)", len(executions))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListExecutionsResponse{
-		Executions: executions,
-		Count:      totalCount,
+		Data: executions,
+		PaginationOutput: core.PaginationOutput{
+			Limit:  limit,
+			Offset: offset,
+			Count:  len(executions),
+			Total:  totalCount,
+		},
 	})
 }

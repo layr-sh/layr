@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 # **dataRpcMutation**
 ```swift
-    open class func dataRpcMutation(schemaName: String, functionName: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
+    open class func dataRpcMutation(schemaName: String, functionName: String, body: JSONValue, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
 ```
 
 Execute database stored function or procedure with JSON payload
@@ -25,10 +25,11 @@ import Generated
 let schemaName = "schemaName_example" // String | 
 let functionName = "functionName_example" // String | 
 let body = "TODO" // JSONValue | Request body for data.ExecuteFunctionInput
+let invalidateTables = "invalidateTables_example" // String | Comma-separated table names whose cache should be invalidated (optional)
 
 // Execute database stored function or procedure with JSON payload
 do {
-    let response = try await RPCAPI.dataRpcMutation(schemaName: schemaName, functionName: functionName, body: body)
+    let response = try await RPCAPI.dataRpcMutation(schemaName: schemaName, functionName: functionName, body: body, invalidateTables: invalidateTables)
     dump(response)
 } catch {
     print(error)
@@ -42,6 +43,7 @@ Name | Type | Description  | Notes
  **schemaName** | **String** |  | 
  **functionName** | **String** |  | 
  **body** | **JSONValue** | Request body for data.ExecuteFunctionInput | 
+ **invalidateTables** | **String** | Comma-separated table names whose cache should be invalidated | [optional] 
 
 ### Return type
 
@@ -60,7 +62,7 @@ No authorization required
 
 # **dataRpcQuery**
 ```swift
-    open class func dataRpcQuery(schemaName: String, functionName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
+    open class func dataRpcQuery(schemaName: String, functionName: String, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
 ```
 
 Execute read-only database stored function or procedure
@@ -74,10 +76,11 @@ import Generated
 
 let schemaName = "schemaName_example" // String | 
 let functionName = "functionName_example" // String | 
+let invalidateTables = "invalidateTables_example" // String | Comma-separated table names whose cache should be invalidated (optional)
 
 // Execute read-only database stored function or procedure
 do {
-    let response = try await RPCAPI.dataRpcQuery(schemaName: schemaName, functionName: functionName)
+    let response = try await RPCAPI.dataRpcQuery(schemaName: schemaName, functionName: functionName, invalidateTables: invalidateTables)
     dump(response)
 } catch {
     print(error)
@@ -90,6 +93,7 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **schemaName** | **String** |  | 
  **functionName** | **String** |  | 
+ **invalidateTables** | **String** | Comma-separated table names whose cache should be invalidated | [optional] 
 
 ### Return type
 

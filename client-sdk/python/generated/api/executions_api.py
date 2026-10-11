@@ -15,7 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field
+from pydantic import Field, StrictInt, StrictStr
+from typing import Optional
 from typing_extensions import Annotated
 from generated.models.list_executions_response import ListExecutionsResponse
 from generated.models.trigger_execution_input import TriggerExecutionInput
@@ -42,6 +43,9 @@ class ExecutionsApi:
     @validate_call
     def function_executions_list(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        endpoint_id: Annotated[Optional[StrictStr], Field(description="Filter executions by endpoint UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -59,6 +63,12 @@ class ExecutionsApi:
 
         Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param endpoint_id: Filter executions by endpoint UUID
+        :type endpoint_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -82,6 +92,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._function_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            endpoint_id=endpoint_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -105,6 +118,9 @@ class ExecutionsApi:
     @validate_call
     def function_executions_list_with_http_info(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        endpoint_id: Annotated[Optional[StrictStr], Field(description="Filter executions by endpoint UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -122,6 +138,12 @@ class ExecutionsApi:
 
         Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param endpoint_id: Filter executions by endpoint UUID
+        :type endpoint_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -145,6 +167,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._function_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            endpoint_id=endpoint_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -168,6 +193,9 @@ class ExecutionsApi:
     @validate_call
     def function_executions_list_without_preload_content(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        endpoint_id: Annotated[Optional[StrictStr], Field(description="Filter executions by endpoint UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -185,6 +213,12 @@ class ExecutionsApi:
 
         Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param endpoint_id: Filter executions by endpoint UUID
+        :type endpoint_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -208,6 +242,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._function_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            endpoint_id=endpoint_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -226,6 +263,9 @@ class ExecutionsApi:
 
     def _function_executions_list_serialize(
         self,
+        limit,
+        offset,
+        endpoint_id,
         _request_auth,
         _content_type,
         _headers,
@@ -248,6 +288,18 @@ class ExecutionsApi:
 
         # process the path parameters
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
+        if endpoint_id is not None:
+            
+            _query_params.append(('endpoint_id', endpoint_id))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -549,6 +601,9 @@ class ExecutionsApi:
     @validate_call
     def tasks_executions_list(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        job_id: Annotated[Optional[StrictStr], Field(description="Filter task executions by job UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -566,6 +621,12 @@ class ExecutionsApi:
 
         Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param job_id: Filter task executions by job UUID
+        :type job_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -589,6 +650,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._tasks_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            job_id=job_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -612,6 +676,9 @@ class ExecutionsApi:
     @validate_call
     def tasks_executions_list_with_http_info(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        job_id: Annotated[Optional[StrictStr], Field(description="Filter task executions by job UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -629,6 +696,12 @@ class ExecutionsApi:
 
         Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param job_id: Filter task executions by job UUID
+        :type job_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -652,6 +725,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._tasks_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            job_id=job_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -675,6 +751,9 @@ class ExecutionsApi:
     @validate_call
     def tasks_executions_list_without_preload_content(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        job_id: Annotated[Optional[StrictStr], Field(description="Filter task executions by job UUID")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -692,6 +771,12 @@ class ExecutionsApi:
 
         Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param job_id: Filter task executions by job UUID
+        :type job_id: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -715,6 +800,9 @@ class ExecutionsApi:
         """ # noqa: E501
 
         _param = self._tasks_executions_list_serialize(
+            limit=limit,
+            offset=offset,
+            job_id=job_id,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -733,6 +821,9 @@ class ExecutionsApi:
 
     def _tasks_executions_list_serialize(
         self,
+        limit,
+        offset,
+        job_id,
         _request_auth,
         _content_type,
         _headers,
@@ -755,6 +846,18 @@ class ExecutionsApi:
 
         # process the path parameters
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
+        if job_id is not None:
+            
+            _query_params.append(('job_id', job_id))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

@@ -10,7 +10,7 @@ All URIs are relative to *http://localhost*
 
 ## dataTablesRlsUpdate
 
-> ToggleRLSResponse dataTablesRlsUpdate(schemaName, tableName, toggleRLSInput)
+> ToggleRLSResponse dataTablesRlsUpdate(schemaName, tableName, toggleRLSInput, action, force)
 
 Toggle Row-Level Security enforcement mode on a table
 
@@ -36,6 +36,10 @@ async function example() {
     tableName: tableName_example,
     // ToggleRLSInput | Request body for data.ToggleRLSInput
     toggleRLSInput: ...,
+    // string | RLS enforcement mode (\'ENABLE\', \'DISABLE\', or \'FORCE\') (optional)
+    action: action_example,
+    // boolean | Whether to enforce RLS for table owners when action is FORCE (optional)
+    force: true,
   } satisfies DataTablesRlsUpdateRequest;
 
   try {
@@ -58,6 +62,8 @@ example().catch(console.error);
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
 | **toggleRLSInput** | [ToggleRLSInput](ToggleRLSInput.md) | Request body for data.ToggleRLSInput | |
+| **action** | `string` | RLS enforcement mode (\&#39;ENABLE\&#39;, \&#39;DISABLE\&#39;, or \&#39;FORCE\&#39;) | [Optional] [Defaults to `undefined`] |
+| **force** | `boolean` | Whether to enforce RLS for table owners when action is FORCE | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

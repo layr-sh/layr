@@ -29,10 +29,11 @@ class ListUsersResponse(BaseModel):
     ListUsersResponse schema
     """ # noqa: E501
     count: StrictInt
+    data: Optional[List[User]]
     limit: StrictInt
     offset: StrictInt
-    users: Optional[List[User]]
-    __properties: ClassVar[List[str]] = ["count", "limit", "offset", "users"]
+    total: Optional[StrictInt] = None
+    __properties: ClassVar[List[str]] = ["count", "data", "limit", "offset", "total"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -73,16 +74,16 @@ class ListUsersResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in users (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.users:
-            for _item_users in self.users:
-                _items.append(_item_users.to_dict() if _item_users is not None else None)
-            _dict['users'] = _items
-        # set to None if users (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.users is None and "users" in self.model_fields_set:
-            _dict['users'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -97,9 +98,10 @@ class ListUsersResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
+            "data": [User.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None,
             "limit": obj.get("limit"),
             "offset": obj.get("offset"),
-            "users": [User.from_dict(_item) for _item in obj["users"]] if obj.get("users") is not None else None
+            "total": obj.get("total")
         })
         return _obj
 

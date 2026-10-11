@@ -58,7 +58,7 @@ No authorization required
 
 # **dataTablesDelete**
 ```swift
-    open class func dataTablesDelete(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteTableResponse
+    open class func dataTablesDelete(schemaName: String, tableName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteTableResponse
 ```
 
 Drop a table and cascade constraints
@@ -72,10 +72,11 @@ import Generated
 
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
+let cascade = true // Bool | Cascade table drop to dependent constraints and views (optional)
 
 // Drop a table and cascade constraints
 do {
-    let response = try await TablesAPI.dataTablesDelete(schemaName: schemaName, tableName: tableName)
+    let response = try await TablesAPI.dataTablesDelete(schemaName: schemaName, tableName: tableName, cascade: cascade)
     dump(response)
 } catch {
     print(error)
@@ -88,6 +89,7 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
+ **cascade** | **Bool** | Cascade table drop to dependent constraints and views | [optional] 
 
 ### Return type
 

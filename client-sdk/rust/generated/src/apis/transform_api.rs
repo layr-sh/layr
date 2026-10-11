@@ -24,14 +24,26 @@ pub enum ImageTransformGetError {
 
 
 /// Dynamically fetches, crops, resizes, optimizes, and transforms source images according to imgproxy option specifications. Verifies HMAC-SHA256 signature if enabled, caches transformed result, and streams binary image with appropriate Content-Type header.
-pub async fn image_transform_get(configuration: &configuration::Configuration, signature: &str, path___: &str) -> Result<reqwest::Response, Error<ImageTransformGetError>> {
+pub async fn image_transform_get(configuration: &configuration::Configuration, signature: &str, path___: &str, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<reqwest::Response, Error<ImageTransformGetError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_signature = signature;
     let p_path_path___ = path___;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/image/{signature}/{path}", configuration.base_path, signature=crate::apis::urlencode(p_path_signature),  path=crate::apis::urlencode(p_path_path___));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

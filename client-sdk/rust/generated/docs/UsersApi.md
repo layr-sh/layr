@@ -111,14 +111,20 @@ No authorization required
 
 ## auth_users_list
 
-> models::ListUsersResponse auth_users_list()
+> models::ListUsersResponse auth_users_list(limit, offset, role, search)
 List registered application users with filtering and pagination
 
 Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
+**role** | Option<**String**> | Filter users by role name |  |
+**search** | Option<**String**> | Case-insensitive substring search matching email or phone number |  |
 
 ### Return type
 

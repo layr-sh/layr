@@ -106,7 +106,7 @@ No authorization required
 
 # **functionEndpointsExecutions**
 ```swift
-    open class func functionEndpointsExecutions(endpointId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
+    open class func functionEndpointsExecutions(endpointId: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
 ```
 
 Query execution history logs for a specific endpoint
@@ -119,10 +119,12 @@ Returns historical invocation audit records from function.executions for a speci
 import Generated
 
 let endpointId = "endpointId_example" // String | 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
 
 // Query execution history logs for a specific endpoint
 do {
-    let response = try await EndpointsAPI.functionEndpointsExecutions(endpointId: endpointId)
+    let response = try await EndpointsAPI.functionEndpointsExecutions(endpointId: endpointId, limit: limit, offset: offset)
     dump(response)
 } catch {
     print(error)
@@ -134,6 +136,8 @@ do {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **endpointId** | **String** |  | 
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
 
 ### Return type
 

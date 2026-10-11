@@ -443,6 +443,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		return
 	}
 
+	paginationInput := core.ParsePagination(request)
+
 	ctx := request.Context()
 	const queryBucketSQL = `SELECT id FROM file_storage.buckets WHERE name = $1;`
 	var bucketID uuid.UUID
@@ -455,14 +457,19 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 		return
 	}
 
+	var totalCount int
+	const countObjectsSQL = `SELECT COUNT(*) FROM file_storage.objects WHERE bucket_id = $1;`
+	_ = controlPlaneHandler.kernel.DB().QueryRow(ctx, countObjectsSQL, bucketID).Scan(&totalCount)
+
 	const queryObjectsSQL = `
 		SELECT id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata, created_at, last_updated_at
 		FROM file_storage.objects
 		WHERE bucket_id = $1
-		ORDER BY object_key ASC;
+		ORDER BY object_key ASC
+		LIMIT $2 OFFSET $3;
 	`
 	objects := []Object{}
-	rows, queryErr := controlPlaneHandler.kernel.DB().Query(ctx, queryObjectsSQL, bucketID)
+	rows, queryErr := controlPlaneHandler.kernel.DB().Query(ctx, queryObjectsSQL, bucketID, paginationInput.Limit, paginationInput.Offset)
 	if queryErr == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -488,8 +495,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 	}
 
 	listBucketObjectsResponse := ListBucketObjectsResponse{
-		Objects: objects,
-		Count:   len(objects),
+		Data: objects,
+		PaginationOutput: core.PaginationOutput{
+			Limit:  paginationInput.Limit,
+			Offset: paginationInput.Offset,
+			Count:  len(objects),
+			Total:  totalCount,
+		},
 	}
 
 	log.Debugf("retrieved %d object(s) in bucket %s", len(objects), bucketName)

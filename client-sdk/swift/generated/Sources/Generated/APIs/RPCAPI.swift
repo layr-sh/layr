@@ -15,11 +15,12 @@ open class RPCAPI {
      - parameter schemaName: (path)  
      - parameter functionName: (path)  
      - parameter body: (body) Request body for data.ExecuteFunctionInput 
+     - parameter invalidateTables: (query) Comma-separated table names whose cache should be invalidated (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: JSONValue
      */
-    open class func dataRpcMutation(schemaName: String, functionName: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
-        return try await dataRpcMutationWithRequestBuilder(schemaName: schemaName, functionName: functionName, body: body, apiConfiguration: apiConfiguration).execute().body
+    open class func dataRpcMutation(schemaName: String, functionName: String, body: JSONValue, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
+        return try await dataRpcMutationWithRequestBuilder(schemaName: schemaName, functionName: functionName, body: body, invalidateTables: invalidateTables, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -29,10 +30,11 @@ open class RPCAPI {
      - parameter schemaName: (path)  
      - parameter functionName: (path)  
      - parameter body: (body) Request body for data.ExecuteFunctionInput 
+     - parameter invalidateTables: (query) Comma-separated table names whose cache should be invalidated (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<JSONValue> 
      */
-    open class func dataRpcMutationWithRequestBuilder(schemaName: String, functionName: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
+    open class func dataRpcMutationWithRequestBuilder(schemaName: String, functionName: String, body: JSONValue, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
         var localVariablePath = "/v1/data/{schema_name}/rpc/{function_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -43,7 +45,11 @@ open class RPCAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "invalidate_tables": (wrappedValue: invalidateTables?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -61,11 +67,12 @@ open class RPCAPI {
      
      - parameter schemaName: (path)  
      - parameter functionName: (path)  
+     - parameter invalidateTables: (query) Comma-separated table names whose cache should be invalidated (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: JSONValue
      */
-    open class func dataRpcQuery(schemaName: String, functionName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
-        return try await dataRpcQueryWithRequestBuilder(schemaName: schemaName, functionName: functionName, apiConfiguration: apiConfiguration).execute().body
+    open class func dataRpcQuery(schemaName: String, functionName: String, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
+        return try await dataRpcQueryWithRequestBuilder(schemaName: schemaName, functionName: functionName, invalidateTables: invalidateTables, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -74,10 +81,11 @@ open class RPCAPI {
      - Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.
      - parameter schemaName: (path)  
      - parameter functionName: (path)  
+     - parameter invalidateTables: (query) Comma-separated table names whose cache should be invalidated (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<JSONValue> 
      */
-    open class func dataRpcQueryWithRequestBuilder(schemaName: String, functionName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
+    open class func dataRpcQueryWithRequestBuilder(schemaName: String, functionName: String, invalidateTables: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
         var localVariablePath = "/v1/data/{schema_name}/rpc/{function_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -88,7 +96,11 @@ open class RPCAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "invalidate_tables": (wrappedValue: invalidateTables?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

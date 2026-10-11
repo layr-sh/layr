@@ -28,6 +28,27 @@ type ApiImageInfoGetRequest struct {
 	ApiService *InfoAPIService
 	signature string
 	path string
+	token *string
+	expires *string
+	op *string
+}
+
+// Presigned capability HMAC token for protected storage sources
+func (r ApiImageInfoGetRequest) Token(token string) ApiImageInfoGetRequest {
+	r.token = &token
+	return r
+}
+
+// Unix epoch seconds expiration timestamp for presigned capability
+func (r ApiImageInfoGetRequest) Expires(expires string) ApiImageInfoGetRequest {
+	r.expires = &expires
+	return r
+}
+
+// Presigned operation capability type (&#39;read&#39;)
+func (r ApiImageInfoGetRequest) Op(op string) ApiImageInfoGetRequest {
+	r.op = &op
+	return r
 }
 
 func (r ApiImageInfoGetRequest) Execute() (*GetInfoResponse, *http.Response, error) {
@@ -76,6 +97,15 @@ func (a *InfoAPIService) ImageInfoGetExecute(r ApiImageInfoGetRequest) (*GetInfo
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.token != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "token", r.token, "form", "")
+	}
+	if r.expires != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "expires", r.expires, "form", "")
+	}
+	if r.op != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "op", r.op, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

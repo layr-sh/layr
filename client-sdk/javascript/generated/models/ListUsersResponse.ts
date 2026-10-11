@@ -34,6 +34,10 @@ export interface ListUsersResponse {
     /**
      * 
      */
+    data: Array<User> | null;
+    /**
+     * 
+     */
     limit: number;
     /**
      * 
@@ -42,7 +46,7 @@ export interface ListUsersResponse {
     /**
      * 
      */
-    users: Array<User> | null;
+    total?: number;
 }
 
 /**
@@ -50,9 +54,9 @@ export interface ListUsersResponse {
  */
 export function instanceOfListUsersResponse(value: object): value is ListUsersResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     if (!('limit' in value) || value['limit'] === undefined) return false;
     if (!('offset' in value) || value['offset'] === undefined) return false;
-    if (!('users' in value) || value['users'] === undefined) return false;
     return true;
 }
 
@@ -67,9 +71,10 @@ export function ListUsersResponseFromJSONTyped(json: any, ignoreDiscriminator: b
     return {
         
         'count': json['count'],
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(UserFromJSON)),
         'limit': json['limit'],
         'offset': json['offset'],
-        'users': (json['users'] == null ? null : (json['users'] as Array<any>).map(UserFromJSON)),
+        'total': json['total'] == null ? undefined : json['total'],
     };
 }
 
@@ -85,9 +90,10 @@ export function ListUsersResponseToJSONTyped(value?: ListUsersResponse | null, i
     return {
         
         'count': value['count'],
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(UserToJSON)),
         'limit': value['limit'],
         'offset': value['offset'],
-        'users': (value['users'] == null ? null : (value['users'] as Array<any>).map(UserToJSON)),
+        'total': value['total'],
     };
 }
 

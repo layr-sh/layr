@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"uuid"
+
+	"layr.sh/core"
 )
 
 // Standard sentinel errors for control plane operations.
@@ -72,8 +74,8 @@ type GetStatsResponse struct {
 
 // ListExecutionsResponse represents the paginated collection of execution logs.
 type ListExecutionsResponse struct {
-	Executions []Execution `json:"executions"`
-	Count      int         `json:"count"`
+	Data []Execution `json:"data"`
+	core.PaginationOutput
 }
 
 // CreateCustomDomainInput defines the payload for registering a standalone custom domain.

@@ -69,8 +69,8 @@ func TestFunctionControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 		var allListExecutionsResponse ListExecutionsResponse
 		require.NoError(t, json.Unmarshal(allResponseRecorder.Body.Bytes(), &allListExecutionsResponse))
 		require.Equal(t, 1, allListExecutionsResponse.Count)
-		require.Equal(t, "POST", allListExecutionsResponse.Executions[0].Method)
-		require.Equal(t, "stdout message", allListExecutionsResponse.Executions[0].Stdout)
+		require.Equal(t, "POST", allListExecutionsResponse.Data[0].Method)
+		require.Equal(t, "stdout message", allListExecutionsResponse.Data[0].Stdout)
 
 		// List executions by endpoint ID path
 		byEndpointRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/_/function/endpoints/"+endpoint.ID.String()+"/executions", nil)
@@ -83,6 +83,6 @@ func TestFunctionControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 		var byEndpointListExecutionsResponse ListExecutionsResponse
 		require.NoError(t, json.Unmarshal(byEndpointResponseRecorder.Body.Bytes(), &byEndpointListExecutionsResponse))
 		require.Equal(t, 1, byEndpointListExecutionsResponse.Count)
-		require.Equal(t, endpoint.ID, byEndpointListExecutionsResponse.Executions[0].EndpointID)
+		require.Equal(t, endpoint.ID, byEndpointListExecutionsResponse.Data[0].EndpointID)
 	})
 }

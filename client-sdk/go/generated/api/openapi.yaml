@@ -66,6 +66,41 @@ paths:
         \ role filters, and verification status. Returns user metadata and creation\
         \ timestamps. Requires auth:user.read scope."
       operationId: auth__users__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: Filter users by role name
+        explode: true
+        in: query
+        name: role
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Case-insensitive substring search matching email or phone number
+        explode: true
+        in: query
+        name: search
+        required: false
+        schema:
+          type: string
+        style: form
       responses:
         "200":
           content:
@@ -693,6 +728,23 @@ paths:
         \ (sql or http), target function or URL, subscribed event type patterns, retry\
         \ limits, and enabled status. Requires core:event-hook.read scope."
       operationId: core__event_hooks__list
+      parameters:
+      - description: Filter event hooks by delivery driver ('sql' or 'http')
+        explode: true
+        in: query
+        name: driver
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter event hooks by active enabled status
+        explode: true
+        in: query
+        name: is_enabled
+        required: false
+        schema:
+          type: boolean
+        style: form
       responses:
         "200":
           content:
@@ -941,21 +993,74 @@ paths:
         \ limits. Returns full event context, actor, and payload data. Requires core:event.read\
         \ scope."
       operationId: core__events__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: Filter by specific event type name
+        explode: true
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: "Filter by actor principal type (user, service_account, system)"
+        explode: true
+        in: query
+        name: actor_type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by actor principal UUID
+        explode: true
+        in: query
+        name: actor_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by target resource entity type
+        explode: true
+        in: query
+        name: resource_type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by target resource unique identifier
+        explode: true
+        in: query
+        name: resource_id
+        required: false
+        schema:
+          type: string
+        style: form
       responses:
         "200":
           content:
             application/json:
               schema:
-                items:
-                  $ref: "#/components/schemas/Event"
-                type: array
-                default: null
+                $ref: "#/components/schemas/ListEventsResponse"
             application/xml:
               schema:
-                items:
-                  $ref: "#/components/schemas/Event"
-                type: array
-                default: null
+                $ref: "#/components/schemas/ListEventsResponse"
           description: OK
       summary: Query immutable system and domain audit events
       tags:
@@ -1328,6 +1433,14 @@ paths:
         \ caches and emits data.table.deleted event. Requires data:schema.write scope."
       operationId: data__tables__delete
       parameters:
+      - description: Cascade table drop to dependent constraints and views
+        explode: true
+        in: query
+        name: cascade
+        required: false
+        schema:
+          type: boolean
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -1450,6 +1563,14 @@ paths:
         \ data.table.updated event. Requires data:schema.write scope."
       operationId: data__tables__columns__delete
       parameters:
+      - description: Cascade column drop to dependent views or indexes
+        explode: true
+        in: query
+        name: cascade
+        required: false
+        schema:
+          type: boolean
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -1809,6 +1930,22 @@ paths:
         \ event. Requires data:schema.write scope."
       operationId: data__tables__rls__update
       parameters:
+      - description: "RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')"
+        explode: true
+        in: query
+        name: action
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Whether to enforce RLS for table owners when action is FORCE
+        explode: true
+        in: query
+        name: force
+        required: false
+        schema:
+          type: boolean
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -2008,6 +2145,24 @@ paths:
         \ with pagination. Requires storage:bucket.read scope."
       operationId: file_storage__buckets__list_objects
       parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -2559,6 +2714,24 @@ paths:
         \ and execution log streams. Requires function:endpoint.read scope."
       operationId: function__endpoints__executions
       parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
       - explode: false
         in: path
         name: endpoint_id
@@ -2629,6 +2802,33 @@ paths:
         \ memory utilization, and stdout/stderr streams. Requires function:endpoint.read\
         \ scope."
       operationId: function__executions__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: Filter executions by endpoint UUID
+        explode: true
+        in: query
+        name: endpoint_id
+        required: false
+        schema:
+          type: string
+        style: form
       responses:
         "200":
           content:
@@ -2982,6 +3182,25 @@ paths:
         \ all configured retry attempts, detailing failure errors, stack traces, and\
         \ attempt counts. Requires tasks:execution.read scope."
       operationId: tasks__dlq__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
       responses:
         "200":
           content:
@@ -3074,6 +3293,33 @@ paths:
         \ by job ID, execution status (pending, running, completed, failed, dead_lettered),\
         \ duration, and date ranges. Requires tasks:execution.read scope."
       operationId: tasks__executions__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: Filter task executions by job UUID
+        explode: true
+        in: query
+        name: job_id
+        required: false
+        schema:
+          type: string
+        style: form
       responses:
         "200":
           content:
@@ -4567,6 +4813,14 @@ paths:
         \ with optional set_nx conditional insertion flag (maximum payload 2 MB)."
       operationId: data__kv__set
       parameters:
+      - description: Only set the key if it does not already exist
+        explode: true
+        in: query
+        name: nx
+        required: false
+        schema:
+          type: boolean
+        style: form
       - explode: false
         in: path
         name: key
@@ -4603,6 +4857,22 @@ paths:
         ?ttl= query parameter and optional set_nx conditional insertion flag.
       operationId: data__kv__put
       parameters:
+      - description: Key time-to-live expiration in seconds
+        explode: true
+        in: query
+        name: ttl
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Only set the key if it does not already exist
+        explode: true
+        in: query
+        name: nx
+        required: false
+        schema:
+          type: boolean
+        style: form
       - explode: false
         in: path
         name: key
@@ -4641,6 +4911,14 @@ paths:
         \ claims."
       operationId: data__rpc__query
       parameters:
+      - description: Comma-separated table names whose cache should be invalidated
+        explode: true
+        in: query
+        name: invalidate_tables
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -4678,6 +4956,14 @@ paths:
         \ results."
       operationId: data__rpc__mutation
       parameters:
+      - description: Comma-separated table names whose cache should be invalidated
+        explode: true
+        in: query
+        name: invalidate_tables
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -4725,6 +5011,64 @@ paths:
         \ Supports optional KV result caching via ?cache_ttl."
       operationId: data__records__list
       parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: "Column projection and embedded relations (e.g. 'id,name,posts(*)')"
+        explode: true
+        in: query
+        name: select
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: "Ordering expression (e.g. 'created_at.desc,id.asc')"
+        explode: true
+        in: query
+        name: order
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Cache duration in seconds
+        explode: true
+        in: query
+        name: cache_ttl
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Custom suffix for cache key isolation
+        explode: true
+        in: query
+        name: cache_key_suffix
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Alias for cache_key_suffix
+        explode: true
+        in: query
+        name: cache_key
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -4763,6 +5107,14 @@ paths:
         \ and emits real-time CDC updates."
       operationId: data__records__create
       parameters:
+      - description: Target column or constraint for upsert on-conflict resolution
+        explode: true
+        in: query
+        name: on_conflict
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -4854,6 +5206,14 @@ paths:
         \ within caller session claims."
       operationId: data__records__get
       parameters:
+      - description: "Column projection (e.g. 'id,name')"
+        explode: true
+        in: query
+        name: select
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: schema_name
@@ -5001,6 +5361,31 @@ paths:
         event.
       operationId: file_storage__objects__delete
       parameters:
+      - description: Presigned capability HMAC token for deletion authorization
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds timestamp when the presigned capability token
+          expires
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('write')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -5041,6 +5426,31 @@ paths:
         \ and ETag validation. Enforces public bucket policy or valid capability credentials."
       operationId: file_storage__objects__download
       parameters:
+      - description: Presigned capability HMAC token for public download
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds timestamp when the presigned capability token
+          expires
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('read')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -5076,6 +5486,31 @@ paths:
         \ Last-Modified) for a stored file without streaming body payload."
       operationId: file_storage__objects__head
       parameters:
+      - description: Presigned capability HMAC token
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds timestamp when the presigned capability token
+          expires
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('read')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -5114,6 +5549,31 @@ paths:
         \ and emits object created/updated event."
       operationId: file_storage__objects__upload_post
       parameters:
+      - description: Presigned capability HMAC token for write authorization
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds timestamp when the presigned capability token
+          expires
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('write')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -5160,6 +5620,31 @@ paths:
         \ event."
       operationId: file_storage__objects__upload_put
       parameters:
+      - description: Presigned capability HMAC token for write authorization
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds timestamp when the presigned capability token
+          expires
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('write')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: bucket
@@ -5295,6 +5780,30 @@ paths:
         \ cryptographic signature verification."
       operationId: image__info__get
       parameters:
+      - description: Presigned capability HMAC token for protected storage sources
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds expiration timestamp for presigned capability
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('read')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: signature
@@ -5335,6 +5844,30 @@ paths:
         \ with appropriate Content-Type header."
       operationId: image__transform__get
       parameters:
+      - description: Presigned capability HMAC token for protected storage sources
+        explode: true
+        in: query
+        name: token
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Unix epoch seconds expiration timestamp for presigned capability
+        explode: true
+        in: query
+        name: expires
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Presigned operation capability type ('read')
+        explode: true
+        in: query
+        name: op
+        required: false
+        schema:
+          type: string
+        style: form
       - explode: false
         in: path
         name: signature
@@ -6870,7 +7403,6 @@ components:
       - timeout_seconds
       - updated_at
     Event:
-      description: Event schema
       example:
         action: action
         actor:
@@ -7830,7 +8362,7 @@ components:
       description: ListBucketObjectsResponse schema
       example:
         count: 0
-        objects:
+        data:
         - bucket_id: ""
           checksum_sha256: checksum_sha256
           content_type: content_type
@@ -7851,18 +8383,29 @@ components:
             key: ""
           object_key: object_key
           size_bytes: 6
+        limit: 1
+        offset: 5
+        total: 5
       properties:
         count:
           type: integer
-        objects:
+        data:
           items:
             $ref: "#/components/schemas/Object"
           nullable: true
           type: array
           default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
       required:
       - count
-      - objects
+      - data
+      - limit
+      - offset
     ListBucketsResponse:
       description: ListBucketsResponse schema
       example:
@@ -7966,7 +8509,7 @@ components:
       description: ListDLQResponse schema
       example:
         count: 0
-        dlq:
+        data:
         - attempts: 6
           created_at: 2000-01-23T04:56:07.000+00:00
           id: ""
@@ -7985,18 +8528,29 @@ components:
           payload: "{}"
           run_at: 2000-01-23T04:56:07.000+00:00
           status: status
+        limit: 5
+        offset: 5
+        total: 2
       properties:
         count:
           type: integer
-        dlq:
+        data:
           items:
             $ref: "#/components/schemas/DLQExecution"
           nullable: true
           type: array
           default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
       required:
       - count
-      - dlq
+      - data
+      - limit
+      - offset
     ListDeploymentsResponse:
       description: ListDeploymentsResponse schema
       example:
@@ -8085,11 +8639,75 @@ components:
       required:
       - count
       - endpoints
+    ListEventsResponse:
+      description: ListEventsResponse schema
+      example:
+        count: 0
+        data:
+        - action: action
+          actor:
+            id: ""
+            role: role
+            type: type
+          context:
+            ip_address: ip_address
+            request_id: request_id
+            user_agent: user_agent
+          created_at: 2000-01-23T04:56:07.000+00:00
+          data:
+            key: ""
+          id: ""
+          metadata:
+            key: ""
+          resource_id: resource_id
+          resource_type: resource_type
+          type: type
+        - action: action
+          actor:
+            id: ""
+            role: role
+            type: type
+          context:
+            ip_address: ip_address
+            request_id: request_id
+            user_agent: user_agent
+          created_at: 2000-01-23T04:56:07.000+00:00
+          data:
+            key: ""
+          id: ""
+          metadata:
+            key: ""
+          resource_id: resource_id
+          resource_type: resource_type
+          type: type
+        limit: 6
+        offset: 1
+        total: 5
+      properties:
+        count:
+          type: integer
+        data:
+          items:
+            $ref: "#/components/schemas/Event"
+          nullable: true
+          type: array
+          default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+      required:
+      - count
+      - data
+      - limit
+      - offset
     ListExecutionsResponse:
       description: ListExecutionsResponse schema
       example:
         count: 0
-        executions:
+        data:
         - created_at: 2000-01-23T04:56:07.000+00:00
           deployment_id: ""
           duration_ms: 6
@@ -8112,18 +8730,29 @@ components:
           status_code: 1
           stderr: stderr
           stdout: stdout
+        limit: 5
+        offset: 5
+        total: 2
       properties:
         count:
           type: integer
-        executions:
+        data:
           items:
             $ref: "#/components/schemas/Execution"
           nullable: true
           type: array
           default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
       required:
       - count
-      - executions
+      - data
+      - limit
+      - offset
     ListIndexesResponse:
       description: ListIndexesResponse schema
       example:
@@ -8271,18 +8900,29 @@ components:
         - id: id
           properties:
             key: properties
+        limit: 6
+        offset: 1
+        total: 5
       properties:
         count:
           type: integer
-          nullable: true
         data:
           items:
             $ref: "#/components/schemas/Record"
           nullable: true
           type: array
           default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
       required:
+      - count
       - data
+      - limit
+      - offset
     ListSessionsResponse:
       description: ListSessionsResponse schema
       example:
@@ -8462,53 +9102,56 @@ components:
       description: ListUsersResponse schema
       example:
         count: 0
+        data:
+        - created_at: 2000-01-23T04:56:07.000+00:00
+          email: email
+          email_verified_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          is_anonymous: true
+          last_updated_at: 2000-01-23T04:56:07.000+00:00
+          locked_until: 2000-01-23T04:56:07.000+00:00
+          mfa_enabled: true
+          phone: phone
+          phone_verified_at: 2000-01-23T04:56:07.000+00:00
+          properties:
+            key: ""
+          role: role
+        - created_at: 2000-01-23T04:56:07.000+00:00
+          email: email
+          email_verified_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          is_anonymous: true
+          last_updated_at: 2000-01-23T04:56:07.000+00:00
+          locked_until: 2000-01-23T04:56:07.000+00:00
+          mfa_enabled: true
+          phone: phone
+          phone_verified_at: 2000-01-23T04:56:07.000+00:00
+          properties:
+            key: ""
+          role: role
         limit: 6
         offset: 1
-        users:
-        - created_at: 2000-01-23T04:56:07.000+00:00
-          email: email
-          email_verified_at: 2000-01-23T04:56:07.000+00:00
-          id: id
-          is_anonymous: true
-          last_updated_at: 2000-01-23T04:56:07.000+00:00
-          locked_until: 2000-01-23T04:56:07.000+00:00
-          mfa_enabled: true
-          phone: phone
-          phone_verified_at: 2000-01-23T04:56:07.000+00:00
-          properties:
-            key: ""
-          role: role
-        - created_at: 2000-01-23T04:56:07.000+00:00
-          email: email
-          email_verified_at: 2000-01-23T04:56:07.000+00:00
-          id: id
-          is_anonymous: true
-          last_updated_at: 2000-01-23T04:56:07.000+00:00
-          locked_until: 2000-01-23T04:56:07.000+00:00
-          mfa_enabled: true
-          phone: phone
-          phone_verified_at: 2000-01-23T04:56:07.000+00:00
-          properties:
-            key: ""
-          role: role
+        total: 5
       properties:
         count:
           type: integer
-        limit:
-          type: integer
-        offset:
-          type: integer
-        users:
+        data:
           items:
             $ref: "#/components/schemas/User"
           nullable: true
           type: array
           default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
       required:
       - count
+      - data
       - limit
       - offset
-      - users
     LockUserInput:
       description: LockUserInput schema
       example:

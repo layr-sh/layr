@@ -206,13 +206,21 @@ pub async fn file_storage_buckets_list(configuration: &configuration::Configurat
 }
 
 /// Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.
-pub async fn file_storage_buckets_list_objects(configuration: &configuration::Configuration, bucket: &str) -> Result<models::ListBucketObjectsResponse, Error<FileStorageBucketsListObjectsError>> {
+pub async fn file_storage_buckets_list_objects(configuration: &configuration::Configuration, bucket: &str, limit: Option<i32>, offset: Option<i32>) -> Result<models::ListBucketObjectsResponse, Error<FileStorageBucketsListObjectsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
+    let p_query_limit = limit;
+    let p_query_offset = offset;
 
     let uri_str = format!("{}/v1/_/file-storage/buckets/{bucket}/objects", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

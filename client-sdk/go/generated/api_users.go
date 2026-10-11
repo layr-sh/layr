@@ -343,6 +343,34 @@ func (a *UsersAPIService) AuthUsersGetExecute(r ApiAuthUsersGetRequest) (*User, 
 type ApiAuthUsersListRequest struct {
 	ctx context.Context
 	ApiService *UsersAPIService
+	limit *int32
+	offset *int32
+	role *string
+	search *string
+}
+
+// Maximum number of items to return (default 50, maximum 1000)
+func (r ApiAuthUsersListRequest) Limit(limit int32) ApiAuthUsersListRequest {
+	r.limit = &limit
+	return r
+}
+
+// Number of items to skip before returning results (default 0)
+func (r ApiAuthUsersListRequest) Offset(offset int32) ApiAuthUsersListRequest {
+	r.offset = &offset
+	return r
+}
+
+// Filter users by role name
+func (r ApiAuthUsersListRequest) Role(role string) ApiAuthUsersListRequest {
+	r.role = &role
+	return r
+}
+
+// Case-insensitive substring search matching email or phone number
+func (r ApiAuthUsersListRequest) Search(search string) ApiAuthUsersListRequest {
+	r.search = &search
+	return r
 }
 
 func (r ApiAuthUsersListRequest) Execute() (*ListUsersResponse, *http.Response, error) {
@@ -385,6 +413,26 @@ func (a *UsersAPIService) AuthUsersListExecute(r ApiAuthUsersListRequest) (*List
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.limit != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", r.limit, "form", "")
+	} else {
+		var defaultValue int32 = 50
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", defaultValue, "form", "")
+		r.limit = &defaultValue
+	}
+	if r.offset != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "form", "")
+	} else {
+		var defaultValue int32 = 0
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", defaultValue, "form", "")
+		r.offset = &defaultValue
+	}
+	if r.role != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "role", r.role, "form", "")
+	}
+	if r.search != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "search", r.search, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
