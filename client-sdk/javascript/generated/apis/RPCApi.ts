@@ -27,6 +27,10 @@ export interface DataRpcMutationRequest {
      * 
      */
     body: object;
+    /**
+     * Comma-separated table names whose cache should be invalidated
+     */
+    invalidateTables?: string;
 }
 
 export interface DataRpcQueryRequest {
@@ -38,6 +42,10 @@ export interface DataRpcQueryRequest {
      * 
      */
     functionName: string;
+    /**
+     * Comma-separated table names whose cache should be invalidated
+     */
+    invalidateTables?: string;
 }
 
 /**
@@ -71,6 +79,10 @@ export class RPCApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['invalidateTables'] != null) {
+            queryParameters['invalidate_tables'] = requestParameters['invalidateTables'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -133,6 +145,10 @@ export class RPCApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['invalidateTables'] != null) {
+            queryParameters['invalidate_tables'] = requestParameters['invalidateTables'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

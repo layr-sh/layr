@@ -52,14 +52,26 @@ pub enum FileStorageObjectsUploadPutError {
 
 
 /// Deletes file object binary payload from the storage backend (database or S3) and removes its metadata row from file_storage.objects. Emits file_storage.object.deleted event.
-pub async fn file_storage_objects_delete(configuration: &configuration::Configuration, bucket: &str, key___: &str) -> Result<serde_json::Value, Error<FileStorageObjectsDeleteError>> {
+pub async fn file_storage_objects_delete(configuration: &configuration::Configuration, bucket: &str, key___: &str, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<serde_json::Value, Error<FileStorageObjectsDeleteError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
     let p_path_key___ = key___;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/file-storage/objects/{bucket}/{key}", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket),  key=crate::apis::urlencode(p_path_key___));
     let mut req_builder = configuration.client.request(reqwest::Method::DELETE, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -90,14 +102,26 @@ pub async fn file_storage_objects_delete(configuration: &configuration::Configur
 }
 
 /// Streams binary object payload from configured backend (PostgreSQL database bytea or S3) with HTTP Range header support, Content-Type, Content-Length, and ETag validation. Enforces public bucket policy or valid capability credentials.
-pub async fn file_storage_objects_download(configuration: &configuration::Configuration, bucket: &str, key___: &str) -> Result<reqwest::Response, Error<FileStorageObjectsDownloadError>> {
+pub async fn file_storage_objects_download(configuration: &configuration::Configuration, bucket: &str, key___: &str, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<reqwest::Response, Error<FileStorageObjectsDownloadError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
     let p_path_key___ = key___;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/file-storage/objects/{bucket}/{key}", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket),  key=crate::apis::urlencode(p_path_key___));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -117,14 +141,26 @@ pub async fn file_storage_objects_download(configuration: &configuration::Config
 }
 
 /// Returns HTTP metadata headers (Content-Length, Content-Type, ETag, Last-Modified) for a stored file without streaming body payload.
-pub async fn file_storage_objects_head(configuration: &configuration::Configuration, bucket: &str, key___: &str) -> Result<serde_json::Value, Error<FileStorageObjectsHeadError>> {
+pub async fn file_storage_objects_head(configuration: &configuration::Configuration, bucket: &str, key___: &str, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<serde_json::Value, Error<FileStorageObjectsHeadError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
     let p_path_key___ = key___;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/file-storage/objects/{bucket}/{key}", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket),  key=crate::apis::urlencode(p_path_key___));
     let mut req_builder = configuration.client.request(reqwest::Method::HEAD, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -155,15 +191,27 @@ pub async fn file_storage_objects_head(configuration: &configuration::Configurat
 }
 
 /// Uploads binary object payload into the target bucket, enforcing size guards and MIME validation. Stores in backend, writes metadata to file_storage.objects, and emits object created/updated event.
-pub async fn file_storage_objects_upload_post(configuration: &configuration::Configuration, bucket: &str, key___: &str, body: Option<serde_json::Value>) -> Result<models::Object, Error<FileStorageObjectsUploadPostError>> {
+pub async fn file_storage_objects_upload_post(configuration: &configuration::Configuration, bucket: &str, key___: &str, body: Option<serde_json::Value>, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<models::Object, Error<FileStorageObjectsUploadPostError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
     let p_path_key___ = key___;
     let p_body_body = body;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/file-storage/objects/{bucket}/{key}", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket),  key=crate::apis::urlencode(p_path_key___));
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -195,15 +243,27 @@ pub async fn file_storage_objects_upload_post(configuration: &configuration::Con
 }
 
 /// Stores binary payload in the specified bucket, enforcing bucket file size limits and MIME allowlists. Creates or updates metadata record in file_storage.objects and emits file_storage.object.created or file_storage.object.updated event.
-pub async fn file_storage_objects_upload_put(configuration: &configuration::Configuration, bucket: &str, key___: &str, body: Option<serde_json::Value>) -> Result<models::Object, Error<FileStorageObjectsUploadPutError>> {
+pub async fn file_storage_objects_upload_put(configuration: &configuration::Configuration, bucket: &str, key___: &str, body: Option<serde_json::Value>, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<models::Object, Error<FileStorageObjectsUploadPutError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_bucket = bucket;
     let p_path_key___ = key___;
     let p_body_body = body;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/file-storage/objects/{bucket}/{key}", configuration.base_path, bucket=crate::apis::urlencode(p_path_bucket),  key=crate::apis::urlencode(p_path_key___));
     let mut req_builder = configuration.client.request(reqwest::Method::PUT, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

@@ -16,16 +16,25 @@ use serde::{Deserialize, Serialize};
 pub struct ListBucketObjectsResponse {
     #[serde(rename = "count")]
     pub count: i32,
-    #[serde(rename = "objects", deserialize_with = "Option::deserialize")]
-    pub objects: Option<Vec<models::Object>>,
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<Vec<models::Object>>,
+    #[serde(rename = "limit")]
+    pub limit: i32,
+    #[serde(rename = "offset")]
+    pub offset: i32,
+    #[serde(rename = "total", skip_serializing_if = "Option::is_none")]
+    pub total: Option<i32>,
 }
 
 impl ListBucketObjectsResponse {
     /// ListBucketObjectsResponse schema
-    pub fn new(count: i32, objects: Option<Vec<models::Object>>) -> ListBucketObjectsResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Object>>, limit: i32, offset: i32) -> ListBucketObjectsResponse {
         ListBucketObjectsResponse {
             count,
-            objects,
+            data,
+            limit,
+            offset,
+            total: None,
         }
     }
 }

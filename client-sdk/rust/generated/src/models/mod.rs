@@ -170,6 +170,8 @@ pub mod list_dlq_response;
 pub use self::list_dlq_response::ListDlqResponse;
 pub mod list_endpoints_response;
 pub use self::list_endpoints_response::ListEndpointsResponse;
+pub mod list_events_response;
+pub use self::list_events_response::ListEventsResponse;
 pub mod list_executions_response;
 pub use self::list_executions_response::ListExecutionsResponse;
 pub mod list_indexes_response;

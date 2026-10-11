@@ -150,7 +150,7 @@ No authorization required
 
 ## functionEndpointsExecutions
 
-> ListExecutionsResponse functionEndpointsExecutions(endpointId)
+> ListExecutionsResponse functionEndpointsExecutions(endpointId, limit, offset)
 
 Query execution history logs for a specific endpoint
 
@@ -172,6 +172,10 @@ async function example() {
   const body = {
     // string
     endpointId: endpointId_example,
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
   } satisfies FunctionEndpointsExecutionsRequest;
 
   try {
@@ -192,6 +196,8 @@ example().catch(console.error);
 | Name | Type | Description  | Notes |
 |------------- | ------------- | ------------- | -------------|
 | **endpointId** | `string` |  | [Defaults to `undefined`] |
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
 
 ### Return type
 

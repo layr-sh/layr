@@ -11,7 +11,7 @@ All URIs are relative to *http://localhost*
 
 ## dataRpcMutation
 
-> any dataRpcMutation(schemaName, functionName, body)
+> any dataRpcMutation(schemaName, functionName, body, invalidateTables)
 
 Execute database stored function or procedure with JSON payload
 
@@ -37,6 +37,8 @@ async function example() {
     functionName: functionName_example,
     // object | Request body for data.ExecuteFunctionInput
     body: Object,
+    // string | Comma-separated table names whose cache should be invalidated (optional)
+    invalidateTables: invalidateTables_example,
   } satisfies DataRpcMutationRequest;
 
   try {
@@ -59,6 +61,7 @@ example().catch(console.error);
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **functionName** | `string` |  | [Defaults to `undefined`] |
 | **body** | `object` | Request body for data.ExecuteFunctionInput | |
+| **invalidateTables** | `string` | Comma-separated table names whose cache should be invalidated | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -84,7 +87,7 @@ No authorization required
 
 ## dataRpcQuery
 
-> any dataRpcQuery(schemaName, functionName)
+> any dataRpcQuery(schemaName, functionName, invalidateTables)
 
 Execute read-only database stored function or procedure
 
@@ -108,6 +111,8 @@ async function example() {
     schemaName: schemaName_example,
     // string
     functionName: functionName_example,
+    // string | Comma-separated table names whose cache should be invalidated (optional)
+    invalidateTables: invalidateTables_example,
   } satisfies DataRpcQueryRequest;
 
   try {
@@ -129,6 +134,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **functionName** | `string` |  | [Defaults to `undefined`] |
+| **invalidateTables** | `string` | Comma-separated table names whose cache should be invalidated | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

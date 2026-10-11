@@ -20,7 +20,7 @@ import (
 // checks if the Event type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &Event{}
 
-// Event Event schema
+// Event struct for Event
 type Event struct {
 	Action string `json:"action"`
 	Actor EventActor `json:"actor"`

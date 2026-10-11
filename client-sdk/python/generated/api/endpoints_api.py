@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any
+from pydantic import Field, StrictInt, StrictStr
+from typing import Any, Optional
 from typing_extensions import Annotated
 from generated.models.create_endpoint_input import CreateEndpointInput
 from generated.models.endpoint import Endpoint
@@ -571,6 +571,8 @@ class EndpointsApi:
     def function_endpoints_executions(
         self,
         endpoint_id: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -590,6 +592,10 @@ class EndpointsApi:
 
         :param endpoint_id: (required)
         :type endpoint_id: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -614,6 +620,8 @@ class EndpointsApi:
 
         _param = self._function_endpoints_executions_serialize(
             endpoint_id=endpoint_id,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -638,6 +646,8 @@ class EndpointsApi:
     def function_endpoints_executions_with_http_info(
         self,
         endpoint_id: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -657,6 +667,10 @@ class EndpointsApi:
 
         :param endpoint_id: (required)
         :type endpoint_id: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -681,6 +695,8 @@ class EndpointsApi:
 
         _param = self._function_endpoints_executions_serialize(
             endpoint_id=endpoint_id,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -705,6 +721,8 @@ class EndpointsApi:
     def function_endpoints_executions_without_preload_content(
         self,
         endpoint_id: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -724,6 +742,10 @@ class EndpointsApi:
 
         :param endpoint_id: (required)
         :type endpoint_id: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -748,6 +770,8 @@ class EndpointsApi:
 
         _param = self._function_endpoints_executions_serialize(
             endpoint_id=endpoint_id,
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -767,6 +791,8 @@ class EndpointsApi:
     def _function_endpoints_executions_serialize(
         self,
         endpoint_id,
+        limit,
+        offset,
         _request_auth,
         _content_type,
         _headers,
@@ -791,6 +817,14 @@ class EndpointsApi:
         if endpoint_id is not None:
             _path_params['endpoint_id'] = endpoint_id
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

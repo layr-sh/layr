@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any
+from pydantic import Field, StrictBool, StrictInt, StrictStr
+from typing import Any, Optional
 from typing_extensions import Annotated
 from generated.models.get_kv_response import GetKVResponse
 from generated.models.get_multiple_kv_input import GetMultipleKVInput
@@ -1361,6 +1361,8 @@ class KVApi:
         self,
         key: StrictStr,
         body: Annotated[StrictStr, Field(description="Request body for string")],
+        ttl: Annotated[Optional[StrictInt], Field(description="Key time-to-live expiration in seconds")] = None,
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1382,6 +1384,10 @@ class KVApi:
         :type key: str
         :param body: Request body for string (required)
         :type body: str
+        :param ttl: Key time-to-live expiration in seconds
+        :type ttl: int
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1407,6 +1413,8 @@ class KVApi:
         _param = self._data_kv_put_serialize(
             key=key,
             body=body,
+            ttl=ttl,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1432,6 +1440,8 @@ class KVApi:
         self,
         key: StrictStr,
         body: Annotated[StrictStr, Field(description="Request body for string")],
+        ttl: Annotated[Optional[StrictInt], Field(description="Key time-to-live expiration in seconds")] = None,
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1453,6 +1463,10 @@ class KVApi:
         :type key: str
         :param body: Request body for string (required)
         :type body: str
+        :param ttl: Key time-to-live expiration in seconds
+        :type ttl: int
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1478,6 +1492,8 @@ class KVApi:
         _param = self._data_kv_put_serialize(
             key=key,
             body=body,
+            ttl=ttl,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1503,6 +1519,8 @@ class KVApi:
         self,
         key: StrictStr,
         body: Annotated[StrictStr, Field(description="Request body for string")],
+        ttl: Annotated[Optional[StrictInt], Field(description="Key time-to-live expiration in seconds")] = None,
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1524,6 +1542,10 @@ class KVApi:
         :type key: str
         :param body: Request body for string (required)
         :type body: str
+        :param ttl: Key time-to-live expiration in seconds
+        :type ttl: int
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1549,6 +1571,8 @@ class KVApi:
         _param = self._data_kv_put_serialize(
             key=key,
             body=body,
+            ttl=ttl,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1569,6 +1593,8 @@ class KVApi:
         self,
         key,
         body,
+        ttl,
+        nx,
         _request_auth,
         _content_type,
         _headers,
@@ -1593,6 +1619,14 @@ class KVApi:
         if key is not None:
             _path_params['key'] = key
         # process the query parameters
+        if ttl is not None:
+            
+            _query_params.append(('ttl', ttl))
+            
+        if nx is not None:
+            
+            _query_params.append(('nx', nx))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -1637,6 +1671,7 @@ class KVApi:
         self,
         key: StrictStr,
         set_kv_input: Annotated[SetKVInput, Field(description="Request body for data.SetKVInput")],
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1658,6 +1693,8 @@ class KVApi:
         :type key: str
         :param set_kv_input: Request body for data.SetKVInput (required)
         :type set_kv_input: SetKVInput
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1683,6 +1720,7 @@ class KVApi:
         _param = self._data_kv_set_serialize(
             key=key,
             set_kv_input=set_kv_input,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1708,6 +1746,7 @@ class KVApi:
         self,
         key: StrictStr,
         set_kv_input: Annotated[SetKVInput, Field(description="Request body for data.SetKVInput")],
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1729,6 +1768,8 @@ class KVApi:
         :type key: str
         :param set_kv_input: Request body for data.SetKVInput (required)
         :type set_kv_input: SetKVInput
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1754,6 +1795,7 @@ class KVApi:
         _param = self._data_kv_set_serialize(
             key=key,
             set_kv_input=set_kv_input,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1779,6 +1821,7 @@ class KVApi:
         self,
         key: StrictStr,
         set_kv_input: Annotated[SetKVInput, Field(description="Request body for data.SetKVInput")],
+        nx: Annotated[Optional[StrictBool], Field(description="Only set the key if it does not already exist")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1800,6 +1843,8 @@ class KVApi:
         :type key: str
         :param set_kv_input: Request body for data.SetKVInput (required)
         :type set_kv_input: SetKVInput
+        :param nx: Only set the key if it does not already exist
+        :type nx: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1825,6 +1870,7 @@ class KVApi:
         _param = self._data_kv_set_serialize(
             key=key,
             set_kv_input=set_kv_input,
+            nx=nx,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1845,6 +1891,7 @@ class KVApi:
         self,
         key,
         set_kv_input,
+        nx,
         _request_auth,
         _content_type,
         _headers,
@@ -1869,6 +1916,10 @@ class KVApi:
         if key is not None:
             _path_params['key'] = key
         # process the query parameters
+        if nx is not None:
+            
+            _query_params.append(('nx', nx))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

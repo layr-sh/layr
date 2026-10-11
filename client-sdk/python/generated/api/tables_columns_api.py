@@ -15,7 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictBool, StrictStr
+from typing import Optional
 from typing_extensions import Annotated
 from generated.models.column import Column
 from generated.models.create_column_response import CreateColumnResponse
@@ -338,6 +339,7 @@ class TablesColumnsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         column_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade column drop to dependent views or indexes")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -361,6 +363,8 @@ class TablesColumnsApi:
         :type table_name: str
         :param column_name: (required)
         :type column_name: str
+        :param cascade: Cascade column drop to dependent views or indexes
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -387,6 +391,7 @@ class TablesColumnsApi:
             schema_name=schema_name,
             table_name=table_name,
             column_name=column_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -413,6 +418,7 @@ class TablesColumnsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         column_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade column drop to dependent views or indexes")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -436,6 +442,8 @@ class TablesColumnsApi:
         :type table_name: str
         :param column_name: (required)
         :type column_name: str
+        :param cascade: Cascade column drop to dependent views or indexes
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -462,6 +470,7 @@ class TablesColumnsApi:
             schema_name=schema_name,
             table_name=table_name,
             column_name=column_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -488,6 +497,7 @@ class TablesColumnsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         column_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade column drop to dependent views or indexes")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -511,6 +521,8 @@ class TablesColumnsApi:
         :type table_name: str
         :param column_name: (required)
         :type column_name: str
+        :param cascade: Cascade column drop to dependent views or indexes
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -537,6 +549,7 @@ class TablesColumnsApi:
             schema_name=schema_name,
             table_name=table_name,
             column_name=column_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -558,6 +571,7 @@ class TablesColumnsApi:
         schema_name,
         table_name,
         column_name,
+        cascade,
         _request_auth,
         _content_type,
         _headers,
@@ -586,6 +600,10 @@ class TablesColumnsApi:
         if column_name is not None:
             _path_params['column_name'] = column_name
         # process the query parameters
+        if cascade is not None:
+            
+            _query_params.append(('cascade', cascade))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

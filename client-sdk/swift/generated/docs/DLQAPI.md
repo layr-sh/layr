@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 # **tasksDlqList**
 ```swift
-    open class func tasksDlqList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListDLQResponse
+    open class func tasksDlqList(limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListDLQResponse
 ```
 
 List dead-lettered failed task executions
@@ -23,10 +23,12 @@ Queries dead-lettered executions from tasks.executions that exhausted all config
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
 
 // List dead-lettered failed task executions
 do {
-    let response = try await DLQAPI.tasksDlqList()
+    let response = try await DLQAPI.tasksDlqList(limit: limit, offset: offset)
     dump(response)
 } catch {
     print(error)
@@ -34,7 +36,11 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
 
 ### Return type
 

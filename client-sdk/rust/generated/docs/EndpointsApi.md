@@ -75,7 +75,7 @@ No authorization required
 
 ## function_endpoints_executions
 
-> models::ListExecutionsResponse function_endpoints_executions(endpoint_id)
+> models::ListExecutionsResponse function_endpoints_executions(endpoint_id, limit, offset)
 Query execution history logs for a specific endpoint
 
 Returns historical invocation audit records from function.executions for a specific endpoint, detailing response codes, durations, memory usage, and execution log streams. Requires function:endpoint.read scope.
@@ -86,6 +86,8 @@ Returns historical invocation audit records from function.executions for a speci
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **endpoint_id** | **String** |  | [required] |
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
 
 ### Return type
 

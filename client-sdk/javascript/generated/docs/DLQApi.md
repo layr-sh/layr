@@ -12,7 +12,7 @@ All URIs are relative to *http://localhost*
 
 ## tasksDlqList
 
-> ListDLQResponse tasksDlqList()
+> ListDLQResponse tasksDlqList(limit, offset)
 
 List dead-lettered failed task executions
 
@@ -31,8 +31,15 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new DLQApi();
 
+  const body = {
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
+  } satisfies TasksDlqListRequest;
+
   try {
-    const data = await api.tasksDlqList();
+    const data = await api.tasksDlqList(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -45,7 +52,11 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
 
 ### Return type
 

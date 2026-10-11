@@ -34,7 +34,19 @@ export interface ListExecutionsResponse {
     /**
      * 
      */
-    executions: Array<Execution> | null;
+    data: Array<Execution> | null;
+    /**
+     * 
+     */
+    limit: number;
+    /**
+     * 
+     */
+    offset: number;
+    /**
+     * 
+     */
+    total?: number;
 }
 
 /**
@@ -42,7 +54,9 @@ export interface ListExecutionsResponse {
  */
 export function instanceOfListExecutionsResponse(value: object): value is ListExecutionsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('executions' in value) || value['executions'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
+    if (!('limit' in value) || value['limit'] === undefined) return false;
+    if (!('offset' in value) || value['offset'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +71,10 @@ export function ListExecutionsResponseFromJSONTyped(json: any, ignoreDiscriminat
     return {
         
         'count': json['count'],
-        'executions': (json['executions'] == null ? null : (json['executions'] as Array<any>).map(ExecutionFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(ExecutionFromJSON)),
+        'limit': json['limit'],
+        'offset': json['offset'],
+        'total': json['total'] == null ? undefined : json['total'],
     };
 }
 
@@ -73,7 +90,10 @@ export function ListExecutionsResponseToJSONTyped(value?: ListExecutionsResponse
     return {
         
         'count': value['count'],
-        'executions': (value['executions'] == null ? null : (value['executions'] as Array<any>).map(ExecutionToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(ExecutionToJSON)),
+        'limit': value['limit'],
+        'offset': value['offset'],
+        'total': value['total'],
     };
 }
 

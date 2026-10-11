@@ -129,9 +129,58 @@ func (a *EventsAPIService) CoreEventsGetExecute(r ApiCoreEventsGetRequest) (*Eve
 type ApiCoreEventsListRequest struct {
 	ctx context.Context
 	ApiService *EventsAPIService
+	limit *int32
+	offset *int32
+	type_ *string
+	actorType *string
+	actorId *string
+	resourceType *string
+	resourceId *string
 }
 
-func (r ApiCoreEventsListRequest) Execute() ([]Event, *http.Response, error) {
+// Maximum number of items to return (default 50, maximum 1000)
+func (r ApiCoreEventsListRequest) Limit(limit int32) ApiCoreEventsListRequest {
+	r.limit = &limit
+	return r
+}
+
+// Number of items to skip before returning results (default 0)
+func (r ApiCoreEventsListRequest) Offset(offset int32) ApiCoreEventsListRequest {
+	r.offset = &offset
+	return r
+}
+
+// Filter by specific event type name
+func (r ApiCoreEventsListRequest) Type_(type_ string) ApiCoreEventsListRequest {
+	r.type_ = &type_
+	return r
+}
+
+// Filter by actor principal type (user, service_account, system)
+func (r ApiCoreEventsListRequest) ActorType(actorType string) ApiCoreEventsListRequest {
+	r.actorType = &actorType
+	return r
+}
+
+// Filter by actor principal UUID
+func (r ApiCoreEventsListRequest) ActorId(actorId string) ApiCoreEventsListRequest {
+	r.actorId = &actorId
+	return r
+}
+
+// Filter by target resource entity type
+func (r ApiCoreEventsListRequest) ResourceType(resourceType string) ApiCoreEventsListRequest {
+	r.resourceType = &resourceType
+	return r
+}
+
+// Filter by target resource unique identifier
+func (r ApiCoreEventsListRequest) ResourceId(resourceId string) ApiCoreEventsListRequest {
+	r.resourceId = &resourceId
+	return r
+}
+
+func (r ApiCoreEventsListRequest) Execute() (*ListEventsResponse, *http.Response, error) {
 	return r.ApiService.CoreEventsListExecute(r)
 }
 
@@ -151,13 +200,13 @@ func (a *EventsAPIService) CoreEventsList(ctx context.Context) ApiCoreEventsList
 }
 
 // Execute executes the request
-//  @return []Event
-func (a *EventsAPIService) CoreEventsListExecute(r ApiCoreEventsListRequest) ([]Event, *http.Response, error) {
+//  @return ListEventsResponse
+func (a *EventsAPIService) CoreEventsListExecute(r ApiCoreEventsListRequest) (*ListEventsResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  []Event
+		localVarReturnValue  *ListEventsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EventsAPIService.CoreEventsList")
@@ -171,6 +220,35 @@ func (a *EventsAPIService) CoreEventsListExecute(r ApiCoreEventsListRequest) ([]
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.limit != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", r.limit, "form", "")
+	} else {
+		var defaultValue int32 = 50
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", defaultValue, "form", "")
+		r.limit = &defaultValue
+	}
+	if r.offset != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "form", "")
+	} else {
+		var defaultValue int32 = 0
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", defaultValue, "form", "")
+		r.offset = &defaultValue
+	}
+	if r.type_ != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "type", r.type_, "form", "")
+	}
+	if r.actorType != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "actor_type", r.actorType, "form", "")
+	}
+	if r.actorId != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "actor_id", r.actorId, "form", "")
+	}
+	if r.resourceType != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "resource_type", r.resourceType, "form", "")
+	}
+	if r.resourceId != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "resource_id", r.resourceId, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

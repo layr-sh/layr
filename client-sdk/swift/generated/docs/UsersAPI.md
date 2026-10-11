@@ -158,7 +158,7 @@ No authorization required
 
 # **authUsersList**
 ```swift
-    open class func authUsersList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListUsersResponse
+    open class func authUsersList(limit: Int? = nil, offset: Int? = nil, role: String? = nil, search: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListUsersResponse
 ```
 
 List registered application users with filtering and pagination
@@ -170,10 +170,14 @@ Queries auth.users with pagination, text search over email/phone, role filters, 
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
+let role = "role_example" // String | Filter users by role name (optional)
+let search = "search_example" // String | Case-insensitive substring search matching email or phone number (optional)
 
 // List registered application users with filtering and pagination
 do {
-    let response = try await UsersAPI.authUsersList()
+    let response = try await UsersAPI.authUsersList(limit: limit, offset: offset, role: role, search: search)
     dump(response)
 } catch {
     print(error)
@@ -181,7 +185,13 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
+ **role** | **String** | Filter users by role name | [optional] 
+ **search** | **String** | Case-insensitive substring search matching email or phone number | [optional] 
 
 ### Return type
 

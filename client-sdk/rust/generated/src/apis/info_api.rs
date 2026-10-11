@@ -31,14 +31,26 @@ pub enum ImageInfoPostError {
 
 
 /// Extracts structural metadata (width, height, format, file size, colorspace, EXIF, orientation) from a remote or storage image path using cryptographic signature verification.
-pub async fn image_info_get(configuration: &configuration::Configuration, signature: &str, path___: &str) -> Result<models::GetInfoResponse, Error<ImageInfoGetError>> {
+pub async fn image_info_get(configuration: &configuration::Configuration, signature: &str, path___: &str, token: Option<&str>, expires: Option<&str>, op: Option<&str>) -> Result<models::GetInfoResponse, Error<ImageInfoGetError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_signature = signature;
     let p_path_path___ = path___;
+    let p_query_token = token;
+    let p_query_expires = expires;
+    let p_query_op = op;
 
     let uri_str = format!("{}/v1/image/info/{signature}/{path}", configuration.base_path, signature=crate::apis::urlencode(p_path_signature),  path=crate::apis::urlencode(p_path_path___));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_token {
+        req_builder = req_builder.query(&[("token", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_expires {
+        req_builder = req_builder.query(&[("expires", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_op {
+        req_builder = req_builder.query(&[("op", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

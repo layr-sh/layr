@@ -38,11 +38,20 @@ pub enum TasksDlqRetryError {
 
 
 /// Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
-pub async fn tasks_dlq_list(configuration: &configuration::Configuration, ) -> Result<models::ListDlqResponse, Error<TasksDlqListError>> {
+pub async fn tasks_dlq_list(configuration: &configuration::Configuration, limit: Option<i32>, offset: Option<i32>) -> Result<models::ListDlqResponse, Error<TasksDlqListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_limit = limit;
+    let p_query_offset = offset;
 
     let uri_str = format!("{}/v1/_/tasks/dlq", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

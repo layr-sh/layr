@@ -11,7 +11,7 @@ Method | HTTP request | Description
 
 # **functionExecutionsList**
 ```swift
-    open class func functionExecutionsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
+    open class func functionExecutionsList(limit: Int? = nil, offset: Int? = nil, endpointId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
 ```
 
 Query execution history logs across all endpoints
@@ -23,10 +23,13 @@ Queries execution telemetry logs from function.executions across all endpoints, 
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
+let endpointId = "endpointId_example" // String | Filter executions by endpoint UUID (optional)
 
 // Query execution history logs across all endpoints
 do {
-    let response = try await ExecutionsAPI.functionExecutionsList()
+    let response = try await ExecutionsAPI.functionExecutionsList(limit: limit, offset: offset, endpointId: endpointId)
     dump(response)
 } catch {
     print(error)
@@ -34,7 +37,12 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
+ **endpointId** | **String** | Filter executions by endpoint UUID | [optional] 
 
 ### Return type
 
@@ -99,7 +107,7 @@ No authorization required
 
 # **tasksExecutionsList**
 ```swift
-    open class func tasksExecutionsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
+    open class func tasksExecutionsList(limit: Int? = nil, offset: Int? = nil, jobId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse
 ```
 
 Query execution audit logs
@@ -111,10 +119,13 @@ Queries execution history records from tasks.executions with filtering by job ID
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
+let jobId = "jobId_example" // String | Filter task executions by job UUID (optional)
 
 // Query execution audit logs
 do {
-    let response = try await ExecutionsAPI.tasksExecutionsList()
+    let response = try await ExecutionsAPI.tasksExecutionsList(limit: limit, offset: offset, jobId: jobId)
     dump(response)
 } catch {
     print(error)
@@ -122,7 +133,12 @@ do {
 ```
 
 ### Parameters
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
+ **jobId** | **String** | Filter task executions by job UUID | [optional] 
 
 ### Return type
 

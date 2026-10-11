@@ -1211,7 +1211,6 @@
         "type": "object"
       },
       "Event": {
-        "description": "Event schema",
         "properties": {
           "action": {
             "type": "string"
@@ -1720,7 +1719,7 @@
           "count": {
             "type": "integer"
           },
-          "objects": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Object"
             },
@@ -1728,11 +1727,22 @@
               "array",
               "null"
             ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
           }
         },
         "required": [
           "count",
-          "objects"
+          "data",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -1808,7 +1818,7 @@
           "count": {
             "type": "integer"
           },
-          "dlq": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/DLQExecution"
             },
@@ -1816,11 +1826,22 @@
               "array",
               "null"
             ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
           }
         },
         "required": [
           "count",
-          "dlq"
+          "data",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -1868,13 +1889,46 @@
         ],
         "type": "object"
       },
+      "ListEventsResponse": {
+        "description": "ListEventsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
       "ListExecutionsResponse": {
         "description": "ListExecutionsResponse schema",
         "properties": {
           "count": {
             "type": "integer"
           },
-          "executions": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Execution"
             },
@@ -1882,11 +1936,22 @@
               "array",
               "null"
             ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
           }
         },
         "required": [
           "count",
-          "executions"
+          "data",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -2028,13 +2093,7 @@
           "count": {
             "type": "integer"
           },
-          "limit": {
-            "type": "integer"
-          },
-          "offset": {
-            "type": "integer"
-          },
-          "users": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/User"
             },
@@ -2042,13 +2101,22 @@
               "array",
               "null"
             ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
           }
         },
         "required": [
           "count",
+          "data",
           "limit",
-          "offset",
-          "users"
+          "offset"
         ],
         "type": "object"
       },
@@ -3423,6 +3491,42 @@
       "get": {
         "description": "Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.",
         "operationId": "auth__users__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter users by role name",
+            "in": "query",
+            "name": "role",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Case-insensitive substring search matching email or phone number",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4275,6 +4379,24 @@
       "get": {
         "description": "Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.",
         "operationId": "core__event_hooks__list",
+        "parameters": [
+          {
+            "description": "Filter event hooks by delivery driver ('sql' or 'http')",
+            "in": "query",
+            "name": "driver",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter event hooks by active enabled status",
+            "in": "query",
+            "name": "is_enabled",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4601,23 +4723,77 @@
       "get": {
         "description": "Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.",
         "operationId": "core__events__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by specific event type name",
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by actor principal type (user, service_account, system)",
+            "in": "query",
+            "name": "actor_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by actor principal UUID",
+            "in": "query",
+            "name": "actor_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by target resource entity type",
+            "in": "query",
+            "name": "resource_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by target resource unique identifier",
+            "in": "query",
+            "name": "resource_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Event"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ListEventsResponse"
                 }
               },
               "application/xml": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Event"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/ListEventsResponse"
                 }
               }
             },
@@ -5130,6 +5306,14 @@
         "operationId": "data__tables__delete",
         "parameters": [
           {
+            "description": "Cascade table drop to dependent constraints and views",
+            "in": "query",
+            "name": "cascade",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "in": "path",
             "name": "schema_name",
             "required": true,
@@ -5289,6 +5473,14 @@
         "description": "Executes ALTER TABLE DROP COLUMN CASCADE, dropping the column and dependent views or indexes. Invalidates reflection caches and emits data.table.updated event. Requires data:schema.write scope.",
         "operationId": "data__tables__columns__delete",
         "parameters": [
+          {
+            "description": "Cascade column drop to dependent views or indexes",
+            "in": "query",
+            "name": "cascade",
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "in": "path",
             "name": "schema_name",
@@ -5757,6 +5949,22 @@
         "operationId": "data__tables__rls__update",
         "parameters": [
           {
+            "description": "RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE')",
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Whether to enforce RLS for table owners when action is FORCE",
+            "in": "query",
+            "name": "force",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "in": "path",
             "name": "schema_name",
             "required": true,
@@ -6027,6 +6235,24 @@
         "description": "Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.",
         "operationId": "file_storage__buckets__list_objects",
         "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
           {
             "in": "path",
             "name": "bucket",
@@ -6784,6 +7010,24 @@
         "operationId": "function__endpoints__executions",
         "parameters": [
           {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
             "in": "path",
             "name": "endpoint_id",
             "required": true,
@@ -6877,6 +7121,34 @@
       "get": {
         "description": "Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.",
         "operationId": "function__executions__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter executions by endpoint UUID",
+            "in": "query",
+            "name": "endpoint_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -7371,6 +7643,26 @@
       "get": {
         "description": "Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.",
         "operationId": "tasks__dlq__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -7501,6 +7793,34 @@
       "get": {
         "description": "Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.",
         "operationId": "tasks__executions__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter task executions by job UUID",
+            "in": "query",
+            "name": "job_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

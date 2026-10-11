@@ -8,7 +8,10 @@ ListDLQResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`dlq` | [Array&lt;DLQExecution&gt;](DLQExecution.md)
+`data` | [Array&lt;DLQExecution&gt;](DLQExecution.md)
+`limit` | number
+`offset` | number
+`total` | number
 
 ## Example
 
@@ -18,7 +21,10 @@ import type { ListDLQResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "dlq": null,
+  "data": null,
+  "limit": null,
+  "offset": null,
+  "total": null,
 } satisfies ListDLQResponse
 
 console.log(example)

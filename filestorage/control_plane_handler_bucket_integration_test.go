@@ -224,7 +224,7 @@ func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
 	if decodeErr := json.NewDecoder(populatedListObjectsResponseRecorder.Body).Decode(&populatedListBucketObjectsResponse); decodeErr != nil {
 		t.Fatalf("failed to decode populated list objects response: %v", decodeErr)
 	}
-	if populatedListBucketObjectsResponse.Count != 1 || populatedListBucketObjectsResponse.Objects[0].ObjectKey != "folder/sample.txt" {
+	if populatedListBucketObjectsResponse.Count != 1 || populatedListBucketObjectsResponse.Data[0].ObjectKey != "folder/sample.txt" {
 		t.Fatalf("unexpected populated list objects response: %+v", populatedListBucketObjectsResponse)
 	}
 

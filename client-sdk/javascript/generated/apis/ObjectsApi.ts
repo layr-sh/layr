@@ -28,6 +28,18 @@ export interface FileStorageObjectsDeleteRequest {
      *  (might contain slashes)
      */
     key: string;
+    /**
+     * Presigned capability HMAC token for deletion authorization
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds timestamp when the presigned capability token expires
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('write')
+     */
+    op?: string;
 }
 
 export interface FileStorageObjectsDownloadRequest {
@@ -39,6 +51,18 @@ export interface FileStorageObjectsDownloadRequest {
      *  (might contain slashes)
      */
     key: string;
+    /**
+     * Presigned capability HMAC token for public download
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds timestamp when the presigned capability token expires
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('read')
+     */
+    op?: string;
 }
 
 export interface FileStorageObjectsHeadRequest {
@@ -50,6 +74,18 @@ export interface FileStorageObjectsHeadRequest {
      *  (might contain slashes)
      */
     key: string;
+    /**
+     * Presigned capability HMAC token
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds timestamp when the presigned capability token expires
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('read')
+     */
+    op?: string;
 }
 
 export interface FileStorageObjectsUploadPostRequest {
@@ -65,6 +101,18 @@ export interface FileStorageObjectsUploadPostRequest {
      * 
      */
     body: any | null;
+    /**
+     * Presigned capability HMAC token for write authorization
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds timestamp when the presigned capability token expires
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('write')
+     */
+    op?: string;
 }
 
 export interface FileStorageObjectsUploadPutRequest {
@@ -80,6 +128,18 @@ export interface FileStorageObjectsUploadPutRequest {
      * 
      */
     body: any | null;
+    /**
+     * Presigned capability HMAC token for write authorization
+     */
+    token?: string;
+    /**
+     * Unix epoch seconds timestamp when the presigned capability token expires
+     */
+    expires?: string;
+    /**
+     * Presigned operation capability type ('write')
+     */
+    op?: string;
 }
 
 /**
@@ -106,6 +166,18 @@ export class ObjectsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -173,6 +245,18 @@ export class ObjectsApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
 
@@ -227,6 +311,18 @@ export class ObjectsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -294,6 +390,18 @@ export class ObjectsApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
+
         const headerParameters: runtime.HTTPHeaders = {};
 
         headerParameters['Content-Type'] = 'application/json';
@@ -358,6 +466,18 @@ export class ObjectsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['token'] != null) {
+            queryParameters['token'] = requestParameters['token'];
+        }
+
+        if (requestParameters['expires'] != null) {
+            queryParameters['expires'] = requestParameters['expires'];
+        }
+
+        if (requestParameters['op'] != null) {
+            queryParameters['op'] = requestParameters['op'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

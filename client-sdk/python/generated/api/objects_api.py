@@ -43,6 +43,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for deletion authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -64,6 +67,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for deletion authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -89,6 +98,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_delete_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -115,6 +127,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for deletion authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -136,6 +151,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for deletion authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -161,6 +182,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_delete_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -187,6 +211,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for deletion authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -208,6 +235,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for deletion authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -233,6 +266,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_delete_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -254,6 +290,9 @@ class ObjectsApi:
         self,
         bucket,
         key___,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -280,6 +319,18 @@ class ObjectsApi:
         if key___ is not None:
             _path_params['key...'] = key___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -322,6 +373,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for public download")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -343,6 +397,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for public download
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -368,6 +428,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_download_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -393,6 +456,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for public download")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -414,6 +480,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for public download
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -439,6 +511,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_download_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -464,6 +539,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for public download")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -485,6 +563,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token for public download
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -510,6 +594,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_download_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -530,6 +617,9 @@ class ObjectsApi:
         self,
         bucket,
         key___,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -556,6 +646,18 @@ class ObjectsApi:
         if key___ is not None:
             _path_params['key...'] = key___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -597,6 +699,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -618,6 +723,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -643,6 +754,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_head_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -668,6 +782,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -689,6 +806,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -714,6 +837,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_head_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -739,6 +865,9 @@ class ObjectsApi:
         self,
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -760,6 +889,12 @@ class ObjectsApi:
         :type bucket: str
         :param key___:  (might contain slashes) (required)
         :type key___: str
+        :param token: Presigned capability HMAC token
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -785,6 +920,9 @@ class ObjectsApi:
         _param = self._file_storage_objects_head_serialize(
             bucket=bucket,
             key___=key___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -805,6 +943,9 @@ class ObjectsApi:
         self,
         bucket,
         key___,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -831,6 +972,18 @@ class ObjectsApi:
         if key___ is not None:
             _path_params['key...'] = key___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -874,6 +1027,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -897,6 +1053,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -923,6 +1085,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -949,6 +1114,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -972,6 +1140,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -998,6 +1172,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1024,6 +1201,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1047,6 +1227,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1073,6 +1259,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1094,6 +1283,9 @@ class ObjectsApi:
         bucket,
         key___,
         body,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -1120,6 +1312,18 @@ class ObjectsApi:
         if key___ is not None:
             _path_params['key...'] = key___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -1165,6 +1369,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1188,6 +1395,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1214,6 +1427,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1240,6 +1456,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1263,6 +1482,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1289,6 +1514,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1315,6 +1543,9 @@ class ObjectsApi:
         bucket: StrictStr,
         key___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
         body: Annotated[Optional[Any], Field(description="Request body for core.Empty")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for write authorization")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds timestamp when the presigned capability token expires")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('write')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1338,6 +1569,12 @@ class ObjectsApi:
         :type key___: str
         :param body: Request body for core.Empty (required)
         :type body: object
+        :param token: Presigned capability HMAC token for write authorization
+        :type token: str
+        :param expires: Unix epoch seconds timestamp when the presigned capability token expires
+        :type expires: str
+        :param op: Presigned operation capability type ('write')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1364,6 +1601,9 @@ class ObjectsApi:
             bucket=bucket,
             key___=key___,
             body=body,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1385,6 +1625,9 @@ class ObjectsApi:
         bucket,
         key___,
         body,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -1411,6 +1654,18 @@ class ObjectsApi:
         if key___ is not None:
             _path_params['key...'] = key___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

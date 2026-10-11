@@ -246,7 +246,7 @@ No authorization required
 
 # **dataKvPut**
 ```swift
-    open class func dataKvPut(key: String, body: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse
+    open class func dataKvPut(key: String, body: String, ttl: Int? = nil, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse
 ```
 
 Put raw ephemeral KV entry with query TTL
@@ -260,10 +260,12 @@ import Generated
 
 let key = "key_example" // String | 
 let body = "body_example" // String | Request body for string
+let ttl = 987 // Int | Key time-to-live expiration in seconds (optional)
+let nx = true // Bool | Only set the key if it does not already exist (optional)
 
 // Put raw ephemeral KV entry with query TTL
 do {
-    let response = try await KVAPI.dataKvPut(key: key, body: body)
+    let response = try await KVAPI.dataKvPut(key: key, body: body, ttl: ttl, nx: nx)
     dump(response)
 } catch {
     print(error)
@@ -276,6 +278,8 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **key** | **String** |  | 
  **body** | **String** | Request body for string | 
+ **ttl** | **Int** | Key time-to-live expiration in seconds | [optional] 
+ **nx** | **Bool** | Only set the key if it does not already exist | [optional] 
 
 ### Return type
 
@@ -294,7 +298,7 @@ No authorization required
 
 # **dataKvSet**
 ```swift
-    open class func dataKvSet(key: String, setKVInput: SetKVInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse
+    open class func dataKvSet(key: String, setKVInput: SetKVInput, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse
 ```
 
 Set an ephemeral KV entry with JSON envelope
@@ -308,10 +312,11 @@ import Generated
 
 let key = "key_example" // String | 
 let setKVInput = SetKVInput(ttl: 123, value: "value_example") // SetKVInput | Request body for data.SetKVInput
+let nx = true // Bool | Only set the key if it does not already exist (optional)
 
 // Set an ephemeral KV entry with JSON envelope
 do {
-    let response = try await KVAPI.dataKvSet(key: key, setKVInput: setKVInput)
+    let response = try await KVAPI.dataKvSet(key: key, setKVInput: setKVInput, nx: nx)
     dump(response)
 } catch {
     print(error)
@@ -324,6 +329,7 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **key** | **String** |  | 
  **setKVInput** | [**SetKVInput**](SetKVInput.md) | Request body for data.SetKVInput | 
+ **nx** | **Bool** | Only set the key if it does not already exist | [optional] 
 
 ### Return type
 

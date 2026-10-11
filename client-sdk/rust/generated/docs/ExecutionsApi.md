@@ -12,14 +12,19 @@ Method | HTTP request | Description
 
 ## function_executions_list
 
-> models::ListExecutionsResponse function_executions_list()
+> models::ListExecutionsResponse function_executions_list(limit, offset, endpoint_id)
 Query execution history logs across all endpoints
 
 Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
+**endpoint_id** | Option<**String**> | Filter executions by endpoint UUID |  |
 
 ### Return type
 
@@ -69,14 +74,19 @@ No authorization required
 
 ## tasks_executions_list
 
-> models::ListExecutionsResponse tasks_executions_list()
+> models::ListExecutionsResponse tasks_executions_list(limit, offset, job_id)
 Query execution audit logs
 
 Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
+**job_id** | Option<**String**> | Filter task executions by job UUID |  |
 
 ### Return type
 

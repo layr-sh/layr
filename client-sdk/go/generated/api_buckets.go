@@ -443,6 +443,20 @@ type ApiFileStorageBucketsListObjectsRequest struct {
 	ctx context.Context
 	ApiService *BucketsAPIService
 	bucket string
+	limit *int32
+	offset *int32
+}
+
+// Maximum number of items to return (default 50, maximum 1000)
+func (r ApiFileStorageBucketsListObjectsRequest) Limit(limit int32) ApiFileStorageBucketsListObjectsRequest {
+	r.limit = &limit
+	return r
+}
+
+// Number of items to skip before returning results (default 0)
+func (r ApiFileStorageBucketsListObjectsRequest) Offset(offset int32) ApiFileStorageBucketsListObjectsRequest {
+	r.offset = &offset
+	return r
 }
 
 func (r ApiFileStorageBucketsListObjectsRequest) Execute() (*ListBucketObjectsResponse, *http.Response, error) {
@@ -488,6 +502,20 @@ func (a *BucketsAPIService) FileStorageBucketsListObjectsExecute(r ApiFileStorag
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.limit != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", r.limit, "form", "")
+	} else {
+		var defaultValue int32 = 50
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", defaultValue, "form", "")
+		r.limit = &defaultValue
+	}
+	if r.offset != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "form", "")
+	} else {
+		var defaultValue int32 = 0
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", defaultValue, "form", "")
+		r.offset = &defaultValue
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

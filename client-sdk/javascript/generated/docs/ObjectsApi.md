@@ -14,7 +14,7 @@ All URIs are relative to *http://localhost*
 
 ## fileStorageObjectsDelete
 
-> any fileStorageObjectsDelete(bucket, key)
+> any fileStorageObjectsDelete(bucket, key, token, expires, op)
 
 Permanently delete a file object
 
@@ -38,6 +38,12 @@ async function example() {
     bucket: bucket_example,
     // string |  (might contain slashes)
     key: key_example,
+    // string | Presigned capability HMAC token for deletion authorization (optional)
+    token: token_example,
+    // string | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'write\') (optional)
+    op: op_example,
   } satisfies FileStorageObjectsDeleteRequest;
 
   try {
@@ -59,6 +65,9 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **bucket** | `string` |  | [Defaults to `undefined`] |
 | **key** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
+| **token** | `string` | Presigned capability HMAC token for deletion authorization | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds timestamp when the presigned capability token expires | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;write\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -85,7 +94,7 @@ No authorization required
 
 ## fileStorageObjectsDownload
 
-> Blob fileStorageObjectsDownload(bucket, key)
+> Blob fileStorageObjectsDownload(bucket, key, token, expires, op)
 
 Download a file object with byte-range support
 
@@ -109,6 +118,12 @@ async function example() {
     bucket: bucket_example,
     // string |  (might contain slashes)
     key: key_example,
+    // string | Presigned capability HMAC token for public download (optional)
+    token: token_example,
+    // string | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'read\') (optional)
+    op: op_example,
   } satisfies FileStorageObjectsDownloadRequest;
 
   try {
@@ -130,6 +145,9 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **bucket** | `string` |  | [Defaults to `undefined`] |
 | **key** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
+| **token** | `string` | Presigned capability HMAC token for public download | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds timestamp when the presigned capability token expires | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;read\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -155,7 +173,7 @@ No authorization required
 
 ## fileStorageObjectsHead
 
-> any fileStorageObjectsHead(bucket, key)
+> any fileStorageObjectsHead(bucket, key, token, expires, op)
 
 Inspect file object metadata headers
 
@@ -179,6 +197,12 @@ async function example() {
     bucket: bucket_example,
     // string |  (might contain slashes)
     key: key_example,
+    // string | Presigned capability HMAC token (optional)
+    token: token_example,
+    // string | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'read\') (optional)
+    op: op_example,
   } satisfies FileStorageObjectsHeadRequest;
 
   try {
@@ -200,6 +224,9 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **bucket** | `string` |  | [Defaults to `undefined`] |
 | **key** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
+| **token** | `string` | Presigned capability HMAC token | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds timestamp when the presigned capability token expires | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;read\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -225,7 +252,7 @@ No authorization required
 
 ## fileStorageObjectsUploadPost
 
-> ModelObject fileStorageObjectsUploadPost(bucket, key, body)
+> ModelObject fileStorageObjectsUploadPost(bucket, key, body, token, expires, op)
 
 Upload a file object via POST
 
@@ -251,6 +278,12 @@ async function example() {
     key: key_example,
     // any | Request body for core.Empty
     body: ...,
+    // string | Presigned capability HMAC token for write authorization (optional)
+    token: token_example,
+    // string | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'write\') (optional)
+    op: op_example,
   } satisfies FileStorageObjectsUploadPostRequest;
 
   try {
@@ -273,6 +306,9 @@ example().catch(console.error);
 | **bucket** | `string` |  | [Defaults to `undefined`] |
 | **key** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
 | **body** | `any` | Request body for core.Empty | |
+| **token** | `string` | Presigned capability HMAC token for write authorization | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds timestamp when the presigned capability token expires | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;write\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -298,7 +334,7 @@ No authorization required
 
 ## fileStorageObjectsUploadPut
 
-> ModelObject fileStorageObjectsUploadPut(bucket, key, body)
+> ModelObject fileStorageObjectsUploadPut(bucket, key, body, token, expires, op)
 
 Upload a file object via PUT
 
@@ -324,6 +360,12 @@ async function example() {
     key: key_example,
     // any | Request body for core.Empty
     body: ...,
+    // string | Presigned capability HMAC token for write authorization (optional)
+    token: token_example,
+    // string | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+    expires: expires_example,
+    // string | Presigned operation capability type (\'write\') (optional)
+    op: op_example,
   } satisfies FileStorageObjectsUploadPutRequest;
 
   try {
@@ -346,6 +388,9 @@ example().catch(console.error);
 | **bucket** | `string` |  | [Defaults to `undefined`] |
 | **key** | `string` |  (might contain slashes) | [Defaults to `undefined`] |
 | **body** | `any` | Request body for core.Empty | |
+| **token** | `string` | Presigned capability HMAC token for write authorization | [Optional] [Defaults to `undefined`] |
+| **expires** | `string` | Unix epoch seconds timestamp when the presigned capability token expires | [Optional] [Defaults to `undefined`] |
+| **op** | `string` | Presigned operation capability type (\&#39;write\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

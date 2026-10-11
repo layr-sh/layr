@@ -61,7 +61,7 @@ No authorization required
 
 # **dataTablesColumnsDelete**
 ```swift
-    open class func dataTablesColumnsDelete(schemaName: String, tableName: String, columnName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteColumnResponse
+    open class func dataTablesColumnsDelete(schemaName: String, tableName: String, columnName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteColumnResponse
 ```
 
 Drop a column from a table schema
@@ -76,10 +76,11 @@ import Generated
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
 let columnName = "columnName_example" // String | 
+let cascade = true // Bool | Cascade column drop to dependent views or indexes (optional)
 
 // Drop a column from a table schema
 do {
-    let response = try await TablesColumnsAPI.dataTablesColumnsDelete(schemaName: schemaName, tableName: tableName, columnName: columnName)
+    let response = try await TablesColumnsAPI.dataTablesColumnsDelete(schemaName: schemaName, tableName: tableName, columnName: columnName, cascade: cascade)
     dump(response)
 } catch {
     print(error)
@@ -93,6 +94,7 @@ Name | Type | Description  | Notes
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
  **columnName** | **String** |  | 
+ **cascade** | **Bool** | Cascade column drop to dependent views or indexes | [optional] 
 
 ### Return type
 

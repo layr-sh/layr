@@ -8,7 +8,10 @@ ListBucketObjectsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`objects` | [Array&lt;ModelObject&gt;](ModelObject.md)
+`data` | [Array&lt;ModelObject&gt;](ModelObject.md)
+`limit` | number
+`offset` | number
+`total` | number
 
 ## Example
 
@@ -18,7 +21,10 @@ import type { ListBucketObjectsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "objects": null,
+  "data": null,
+  "limit": null,
+  "offset": null,
+  "total": null,
 } satisfies ListBucketObjectsResponse
 
 console.log(example)

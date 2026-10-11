@@ -1,5 +1,7 @@
 package filestorage
 
+import "layr.sh/core"
+
 // CreateBucketInput defines the request body for creating a new bucket.
 type CreateBucketInput struct {
 	Name             string         `json:"name"`
@@ -27,6 +29,6 @@ type ListBucketsResponse struct {
 
 // ListBucketObjectsResponse represents the response containing objects in a bucket.
 type ListBucketObjectsResponse struct {
-	Objects []Object `json:"objects"`
-	Count   int      `json:"count"`
+	Data []Object `json:"data"`
+	core.PaginationOutput
 }

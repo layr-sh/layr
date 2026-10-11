@@ -41,18 +41,27 @@ No authorization required
 
 ## core_events_list
 
-> Vec<models::Event> core_events_list()
+> models::ListEventsResponse core_events_list(limit, offset, r#type, actor_type, actor_id, resource_type, resource_id)
 Query immutable system and domain audit events
 
 Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
+**r#type** | Option<**String**> | Filter by specific event type name |  |
+**actor_type** | Option<**String**> | Filter by actor principal type (user, service_account, system) |  |
+**actor_id** | Option<**String**> | Filter by actor principal UUID |  |
+**resource_type** | Option<**String**> | Filter by target resource entity type |  |
+**resource_id** | Option<**String**> | Filter by target resource unique identifier |  |
 
 ### Return type
 
-[**Vec<models::Event>**](Event.md)
+[**models::ListEventsResponse**](ListEventsResponse.md)
 
 ### Authorization
 

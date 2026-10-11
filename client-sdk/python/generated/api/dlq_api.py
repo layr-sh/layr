@@ -15,7 +15,7 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictInt, StrictStr
 from typing import Any, Optional
 from typing_extensions import Annotated
 from generated.models.list_dlq_response import ListDLQResponse
@@ -42,6 +42,8 @@ class DLQApi:
     @validate_call
     def tasks_dlq_list(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -59,6 +61,10 @@ class DLQApi:
 
         Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -82,6 +88,8 @@ class DLQApi:
         """ # noqa: E501
 
         _param = self._tasks_dlq_list_serialize(
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -105,6 +113,8 @@ class DLQApi:
     @validate_call
     def tasks_dlq_list_with_http_info(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -122,6 +132,10 @@ class DLQApi:
 
         Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -145,6 +159,8 @@ class DLQApi:
         """ # noqa: E501
 
         _param = self._tasks_dlq_list_serialize(
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -168,6 +184,8 @@ class DLQApi:
     @validate_call
     def tasks_dlq_list_without_preload_content(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -185,6 +203,10 @@ class DLQApi:
 
         Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -208,6 +230,8 @@ class DLQApi:
         """ # noqa: E501
 
         _param = self._tasks_dlq_list_serialize(
+            limit=limit,
+            offset=offset,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -226,6 +250,8 @@ class DLQApi:
 
     def _tasks_dlq_list_serialize(
         self,
+        limit,
+        offset,
         _request_auth,
         _content_type,
         _headers,
@@ -248,6 +274,14 @@ class DLQApi:
 
         # process the path parameters
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

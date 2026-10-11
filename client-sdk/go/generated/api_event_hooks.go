@@ -343,6 +343,20 @@ func (a *EventHooksAPIService) CoreEventHooksGetExecute(r ApiCoreEventHooksGetRe
 type ApiCoreEventHooksListRequest struct {
 	ctx context.Context
 	ApiService *EventHooksAPIService
+	driver *string
+	isEnabled *bool
+}
+
+// Filter event hooks by delivery driver (&#39;sql&#39; or &#39;http&#39;)
+func (r ApiCoreEventHooksListRequest) Driver(driver string) ApiCoreEventHooksListRequest {
+	r.driver = &driver
+	return r
+}
+
+// Filter event hooks by active enabled status
+func (r ApiCoreEventHooksListRequest) IsEnabled(isEnabled bool) ApiCoreEventHooksListRequest {
+	r.isEnabled = &isEnabled
+	return r
 }
 
 func (r ApiCoreEventHooksListRequest) Execute() ([]EventHook, *http.Response, error) {
@@ -385,6 +399,12 @@ func (a *EventHooksAPIService) CoreEventHooksListExecute(r ApiCoreEventHooksList
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.driver != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "driver", r.driver, "form", "")
+	}
+	if r.isEnabled != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "is_enabled", r.isEnabled, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

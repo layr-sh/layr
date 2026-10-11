@@ -148,6 +148,13 @@ type ApiDataTablesColumnsDeleteRequest struct {
 	schemaName string
 	tableName string
 	columnName string
+	cascade *bool
+}
+
+// Cascade column drop to dependent views or indexes
+func (r ApiDataTablesColumnsDeleteRequest) Cascade(cascade bool) ApiDataTablesColumnsDeleteRequest {
+	r.cascade = &cascade
+	return r
 }
 
 func (r ApiDataTablesColumnsDeleteRequest) Execute() (*DeleteColumnResponse, *http.Response, error) {
@@ -199,6 +206,9 @@ func (a *TablesColumnsAPIService) DataTablesColumnsDeleteExecute(r ApiDataTables
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.cascade != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "cascade", r.cascade, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

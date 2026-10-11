@@ -29,8 +29,11 @@ class ListBucketObjectsResponse(BaseModel):
     ListBucketObjectsResponse schema
     """ # noqa: E501
     count: StrictInt
-    objects: Optional[List[Object]]
-    __properties: ClassVar[List[str]] = ["count", "objects"]
+    data: Optional[List[Object]]
+    limit: StrictInt
+    offset: StrictInt
+    total: Optional[StrictInt] = None
+    __properties: ClassVar[List[str]] = ["count", "data", "limit", "offset", "total"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +74,16 @@ class ListBucketObjectsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in objects (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.objects:
-            for _item_objects in self.objects:
-                _items.append(_item_objects.to_dict() if _item_objects is not None else None)
-            _dict['objects'] = _items
-        # set to None if objects (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.objects is None and "objects" in self.model_fields_set:
-            _dict['objects'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +98,10 @@ class ListBucketObjectsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "objects": [Object.from_dict(_item) for _item in obj["objects"]] if obj.get("objects") is not None else None
+            "data": [Object.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None,
+            "limit": obj.get("limit"),
+            "offset": obj.get("offset"),
+            "total": obj.get("total")
         })
         return _obj
 

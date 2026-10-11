@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any, List
+from pydantic import Field, StrictInt, StrictStr
+from typing import Any, List, Optional
 from typing_extensions import Annotated
 from generated.models.create_console_user_input import CreateConsoleUserInput
 from generated.models.create_user_input import CreateUserInput
@@ -833,6 +833,10 @@ class UsersApi:
     @validate_call
     def auth_users_list(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        role: Annotated[Optional[StrictStr], Field(description="Filter users by role name")] = None,
+        search: Annotated[Optional[StrictStr], Field(description="Case-insensitive substring search matching email or phone number")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -850,6 +854,14 @@ class UsersApi:
 
         Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param role: Filter users by role name
+        :type role: str
+        :param search: Case-insensitive substring search matching email or phone number
+        :type search: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -873,6 +885,10 @@ class UsersApi:
         """ # noqa: E501
 
         _param = self._auth_users_list_serialize(
+            limit=limit,
+            offset=offset,
+            role=role,
+            search=search,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -896,6 +912,10 @@ class UsersApi:
     @validate_call
     def auth_users_list_with_http_info(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        role: Annotated[Optional[StrictStr], Field(description="Filter users by role name")] = None,
+        search: Annotated[Optional[StrictStr], Field(description="Case-insensitive substring search matching email or phone number")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -913,6 +933,14 @@ class UsersApi:
 
         Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param role: Filter users by role name
+        :type role: str
+        :param search: Case-insensitive substring search matching email or phone number
+        :type search: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -936,6 +964,10 @@ class UsersApi:
         """ # noqa: E501
 
         _param = self._auth_users_list_serialize(
+            limit=limit,
+            offset=offset,
+            role=role,
+            search=search,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -959,6 +991,10 @@ class UsersApi:
     @validate_call
     def auth_users_list_without_preload_content(
         self,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        role: Annotated[Optional[StrictStr], Field(description="Filter users by role name")] = None,
+        search: Annotated[Optional[StrictStr], Field(description="Case-insensitive substring search matching email or phone number")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -976,6 +1012,14 @@ class UsersApi:
 
         Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
 
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param role: Filter users by role name
+        :type role: str
+        :param search: Case-insensitive substring search matching email or phone number
+        :type search: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -999,6 +1043,10 @@ class UsersApi:
         """ # noqa: E501
 
         _param = self._auth_users_list_serialize(
+            limit=limit,
+            offset=offset,
+            role=role,
+            search=search,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1017,6 +1065,10 @@ class UsersApi:
 
     def _auth_users_list_serialize(
         self,
+        limit,
+        offset,
+        role,
+        search,
         _request_auth,
         _content_type,
         _headers,
@@ -1039,6 +1091,22 @@ class UsersApi:
 
         # process the path parameters
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
+        if role is not None:
+            
+            _query_params.append(('role', role))
+            
+        if search is not None:
+            
+            _query_params.append(('search', search))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

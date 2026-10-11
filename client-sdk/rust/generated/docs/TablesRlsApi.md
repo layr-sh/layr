@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## data_tables_rls_update
 
-> models::ToggleRlsResponse data_tables_rls_update(schema_name, table_name, toggle_rls_input)
+> models::ToggleRlsResponse data_tables_rls_update(schema_name, table_name, toggle_rls_input, action, force)
 Toggle Row-Level Security enforcement mode on a table
 
 Executes ALTER TABLE to ENABLE, DISABLE, or FORCE Row-Level Security (RLS) enforcement on the table. Invalidates table metadata and emits data.table.updated event. Requires data:schema.write scope.
@@ -23,6 +23,8 @@ Name | Type | Description  | Required | Notes
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
 **toggle_rls_input** | [**ToggleRlsInput**](ToggleRlsInput.md) | Request body for data.ToggleRLSInput | [required] |
+**action** | Option<**String**> | RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE') |  |
+**force** | Option<**bool**> | Whether to enforce RLS for table owners when action is FORCE |  |
 
 ### Return type
 

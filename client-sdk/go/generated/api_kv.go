@@ -567,11 +567,25 @@ type ApiDataKvPutRequest struct {
 	ApiService *KVAPIService
 	key string
 	body *string
+	ttl *int32
+	nx *bool
 }
 
 // Request body for string
 func (r ApiDataKvPutRequest) Body(body string) ApiDataKvPutRequest {
 	r.body = &body
+	return r
+}
+
+// Key time-to-live expiration in seconds
+func (r ApiDataKvPutRequest) Ttl(ttl int32) ApiDataKvPutRequest {
+	r.ttl = &ttl
+	return r
+}
+
+// Only set the key if it does not already exist
+func (r ApiDataKvPutRequest) Nx(nx bool) ApiDataKvPutRequest {
+	r.nx = &nx
 	return r
 }
 
@@ -621,6 +635,12 @@ func (a *KVAPIService) DataKvPutExecute(r ApiDataKvPutRequest) (*SetKVResponse, 
 		return localVarReturnValue, nil, reportError("body is required and must be specified")
 	}
 
+	if r.ttl != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "ttl", r.ttl, "form", "")
+	}
+	if r.nx != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "nx", r.nx, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 
@@ -682,11 +702,18 @@ type ApiDataKvSetRequest struct {
 	ApiService *KVAPIService
 	key string
 	setKVInput *SetKVInput
+	nx *bool
 }
 
 // Request body for data.SetKVInput
 func (r ApiDataKvSetRequest) SetKVInput(setKVInput SetKVInput) ApiDataKvSetRequest {
 	r.setKVInput = &setKVInput
+	return r
+}
+
+// Only set the key if it does not already exist
+func (r ApiDataKvSetRequest) Nx(nx bool) ApiDataKvSetRequest {
+	r.nx = &nx
 	return r
 }
 
@@ -736,6 +763,9 @@ func (a *KVAPIService) DataKvSetExecute(r ApiDataKvSetRequest) (*SetKVResponse, 
 		return localVarReturnValue, nil, reportError("setKVInput is required and must be specified")
 	}
 
+	if r.nx != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "nx", r.nx, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

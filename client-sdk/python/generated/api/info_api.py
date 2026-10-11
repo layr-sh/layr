@@ -43,6 +43,9 @@ class InfoApi:
         self,
         signature: StrictStr,
         path___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for protected storage sources")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds expiration timestamp for presigned capability")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -64,6 +67,12 @@ class InfoApi:
         :type signature: str
         :param path___:  (might contain slashes) (required)
         :type path___: str
+        :param token: Presigned capability HMAC token for protected storage sources
+        :type token: str
+        :param expires: Unix epoch seconds expiration timestamp for presigned capability
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -89,6 +98,9 @@ class InfoApi:
         _param = self._image_info_get_serialize(
             signature=signature,
             path___=path___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -114,6 +126,9 @@ class InfoApi:
         self,
         signature: StrictStr,
         path___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for protected storage sources")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds expiration timestamp for presigned capability")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -135,6 +150,12 @@ class InfoApi:
         :type signature: str
         :param path___:  (might contain slashes) (required)
         :type path___: str
+        :param token: Presigned capability HMAC token for protected storage sources
+        :type token: str
+        :param expires: Unix epoch seconds expiration timestamp for presigned capability
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -160,6 +181,9 @@ class InfoApi:
         _param = self._image_info_get_serialize(
             signature=signature,
             path___=path___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -185,6 +209,9 @@ class InfoApi:
         self,
         signature: StrictStr,
         path___: Annotated[StrictStr, Field(description=" (might contain slashes)")],
+        token: Annotated[Optional[StrictStr], Field(description="Presigned capability HMAC token for protected storage sources")] = None,
+        expires: Annotated[Optional[StrictStr], Field(description="Unix epoch seconds expiration timestamp for presigned capability")] = None,
+        op: Annotated[Optional[StrictStr], Field(description="Presigned operation capability type ('read')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -206,6 +233,12 @@ class InfoApi:
         :type signature: str
         :param path___:  (might contain slashes) (required)
         :type path___: str
+        :param token: Presigned capability HMAC token for protected storage sources
+        :type token: str
+        :param expires: Unix epoch seconds expiration timestamp for presigned capability
+        :type expires: str
+        :param op: Presigned operation capability type ('read')
+        :type op: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -231,6 +264,9 @@ class InfoApi:
         _param = self._image_info_get_serialize(
             signature=signature,
             path___=path___,
+            token=token,
+            expires=expires,
+            op=op,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -251,6 +287,9 @@ class InfoApi:
         self,
         signature,
         path___,
+        token,
+        expires,
+        op,
         _request_auth,
         _content_type,
         _headers,
@@ -277,6 +316,18 @@ class InfoApi:
         if path___ is not None:
             _path_params['path...'] = path___
         # process the query parameters
+        if token is not None:
+            
+            _query_params.append(('token', token))
+            
+        if expires is not None:
+            
+            _query_params.append(('expires', expires))
+            
+        if op is not None:
+            
+            _query_params.append(('op', op))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

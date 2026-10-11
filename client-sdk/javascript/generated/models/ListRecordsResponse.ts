@@ -30,18 +30,33 @@ export interface ListRecordsResponse {
     /**
      * 
      */
-    count?: number;
+    count: number;
     /**
      * 
      */
     data: Array<ModelRecord> | null;
+    /**
+     * 
+     */
+    limit: number;
+    /**
+     * 
+     */
+    offset: number;
+    /**
+     * 
+     */
+    total?: number;
 }
 
 /**
  * Check if a given object implements the ListRecordsResponse interface.
  */
 export function instanceOfListRecordsResponse(value: object): value is ListRecordsResponse {
+    if (!('count' in value) || value['count'] === undefined) return false;
     if (!('data' in value) || value['data'] === undefined) return false;
+    if (!('limit' in value) || value['limit'] === undefined) return false;
+    if (!('offset' in value) || value['offset'] === undefined) return false;
     return true;
 }
 
@@ -55,8 +70,11 @@ export function ListRecordsResponseFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
         
-        'count': json['count'] == null ? undefined : json['count'],
+        'count': json['count'],
         'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(ModelRecordFromJSON)),
+        'limit': json['limit'],
+        'offset': json['offset'],
+        'total': json['total'] == null ? undefined : json['total'],
     };
 }
 
@@ -73,6 +91,9 @@ export function ListRecordsResponseToJSONTyped(value?: ListRecordsResponse | nul
         
         'count': value['count'],
         'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(ModelRecordToJSON)),
+        'limit': value['limit'],
+        'offset': value['offset'],
+        'total': value['total'],
     };
 }
 

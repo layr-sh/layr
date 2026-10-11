@@ -52,26 +52,50 @@ open class EventsAPI {
     /**
      Query immutable system and domain audit events
      
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter type: (query) Filter by specific event type name (optional)
+     - parameter actorType: (query) Filter by actor principal type (user, service_account, system) (optional)
+     - parameter actorId: (query) Filter by actor principal UUID (optional)
+     - parameter resourceType: (query) Filter by target resource entity type (optional)
+     - parameter resourceId: (query) Filter by target resource unique identifier (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: [Event]
+     - returns: ListEventsResponse
      */
-    open class func coreEventsList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [Event] {
-        return try await coreEventsListWithRequestBuilder(apiConfiguration: apiConfiguration).execute().body
+    open class func coreEventsList(limit: Int? = nil, offset: Int? = nil, type: String? = nil, actorType: String? = nil, actorId: String? = nil, resourceType: String? = nil, resourceId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListEventsResponse {
+        return try await coreEventsListWithRequestBuilder(limit: limit, offset: offset, type: type, actorType: actorType, actorId: actorId, resourceType: resourceType, resourceId: resourceId, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
      Query immutable system and domain audit events
      - GET /v1/_/core/events
      - Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter type: (query) Filter by specific event type name (optional)
+     - parameter actorType: (query) Filter by actor principal type (user, service_account, system) (optional)
+     - parameter actorId: (query) Filter by actor principal UUID (optional)
+     - parameter resourceType: (query) Filter by target resource entity type (optional)
+     - parameter resourceId: (query) Filter by target resource unique identifier (optional)
      - parameter apiConfiguration: The configuration for the http request.
-     - returns: RequestBuilder<[Event]> 
+     - returns: RequestBuilder<ListEventsResponse> 
      */
-    open class func coreEventsListWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<[Event]> {
+    open class func coreEventsListWithRequestBuilder(limit: Int? = nil, offset: Int? = nil, type: String? = nil, actorType: String? = nil, actorId: String? = nil, resourceType: String? = nil, resourceId: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListEventsResponse> {
         let localVariablePath = "/v1/_/core/events"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "type": (wrappedValue: type?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "actor_type": (wrappedValue: actorType?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "actor_id": (wrappedValue: actorId?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "resource_type": (wrappedValue: resourceType?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "resource_id": (wrappedValue: resourceId?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -79,7 +103,7 @@ open class EventsAPI {
 
         let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
 
-        let localVariableRequestBuilder: RequestBuilder<[Event]>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+        let localVariableRequestBuilder: RequestBuilder<ListEventsResponse>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: false, apiConfiguration: apiConfiguration)
     }

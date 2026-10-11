@@ -194,7 +194,7 @@ No authorization required
 
 # **fileStorageBucketsListObjects**
 ```swift
-    open class func fileStorageBucketsListObjects(bucket: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListBucketObjectsResponse
+    open class func fileStorageBucketsListObjects(bucket: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListBucketObjectsResponse
 ```
 
 List objects stored within a bucket
@@ -207,10 +207,12 @@ Queries metadata records in file_storage.objects for the specified bucket, detai
 import Generated
 
 let bucket = "bucket_example" // String | 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
 
 // List objects stored within a bucket
 do {
-    let response = try await BucketsAPI.fileStorageBucketsListObjects(bucket: bucket)
+    let response = try await BucketsAPI.fileStorageBucketsListObjects(bucket: bucket, limit: limit, offset: offset)
     dump(response)
 } catch {
     print(error)
@@ -222,6 +224,8 @@ do {
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **bucket** | **String** |  | 
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
 
 ### Return type
 

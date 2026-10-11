@@ -29,11 +29,41 @@ import {
     TriggerExecutionResponseToJSON,
 } from '../models/TriggerExecutionResponse';
 
+export interface FunctionExecutionsListRequest {
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+    /**
+     * Filter executions by endpoint UUID
+     */
+    endpointId?: string;
+}
+
 export interface TasksExecutionsCreateRequest {
     /**
      * 
      */
     triggerExecutionInput: TriggerExecutionInput;
+}
+
+export interface TasksExecutionsListRequest {
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+    /**
+     * Filter task executions by job UUID
+     */
+    jobId?: string;
 }
 
 /**
@@ -44,8 +74,20 @@ export class ExecutionsApi extends runtime.BaseAPI {
     /**
      * Creates request options for functionExecutionsList without sending the request
      */
-    async functionExecutionsListRequestOpts(): Promise<runtime.RequestOpts> {
+    async functionExecutionsListRequestOpts(requestParameters: FunctionExecutionsListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
+
+        if (requestParameters['endpointId'] != null) {
+            queryParameters['endpoint_id'] = requestParameters['endpointId'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -64,8 +106,8 @@ export class ExecutionsApi extends runtime.BaseAPI {
      * Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
      * Query execution history logs across all endpoints
      */
-    async functionExecutionsListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListExecutionsResponse>> {
-        const requestOptions = await this.functionExecutionsListRequestOpts();
+    async functionExecutionsListRaw(requestParameters: FunctionExecutionsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListExecutionsResponse>> {
+        const requestOptions = await this.functionExecutionsListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => ListExecutionsResponseFromJSON(jsonValue));
@@ -75,8 +117,8 @@ export class ExecutionsApi extends runtime.BaseAPI {
      * Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
      * Query execution history logs across all endpoints
      */
-    async functionExecutionsList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListExecutionsResponse> {
-        const response = await this.functionExecutionsListRaw(initOverrides);
+    async functionExecutionsList(requestParameters: FunctionExecutionsListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListExecutionsResponse> {
+        const response = await this.functionExecutionsListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -132,8 +174,20 @@ export class ExecutionsApi extends runtime.BaseAPI {
     /**
      * Creates request options for tasksExecutionsList without sending the request
      */
-    async tasksExecutionsListRequestOpts(): Promise<runtime.RequestOpts> {
+    async tasksExecutionsListRequestOpts(requestParameters: TasksExecutionsListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
+
+        if (requestParameters['jobId'] != null) {
+            queryParameters['job_id'] = requestParameters['jobId'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -152,8 +206,8 @@ export class ExecutionsApi extends runtime.BaseAPI {
      * Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
      * Query execution audit logs
      */
-    async tasksExecutionsListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListExecutionsResponse>> {
-        const requestOptions = await this.tasksExecutionsListRequestOpts();
+    async tasksExecutionsListRaw(requestParameters: TasksExecutionsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListExecutionsResponse>> {
+        const requestOptions = await this.tasksExecutionsListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => ListExecutionsResponseFromJSON(jsonValue));
@@ -163,8 +217,8 @@ export class ExecutionsApi extends runtime.BaseAPI {
      * Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
      * Query execution audit logs
      */
-    async tasksExecutionsList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListExecutionsResponse> {
-        const response = await this.tasksExecutionsListRaw(initOverrides);
+    async tasksExecutionsList(requestParameters: TasksExecutionsListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListExecutionsResponse> {
+        const response = await this.tasksExecutionsListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

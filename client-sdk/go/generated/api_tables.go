@@ -139,6 +139,13 @@ type ApiDataTablesDeleteRequest struct {
 	ApiService *TablesAPIService
 	schemaName string
 	tableName string
+	cascade *bool
+}
+
+// Cascade table drop to dependent constraints and views
+func (r ApiDataTablesDeleteRequest) Cascade(cascade bool) ApiDataTablesDeleteRequest {
+	r.cascade = &cascade
+	return r
 }
 
 func (r ApiDataTablesDeleteRequest) Execute() (*DeleteTableResponse, *http.Response, error) {
@@ -187,6 +194,9 @@ func (a *TablesAPIService) DataTablesDeleteExecute(r ApiDataTablesDeleteRequest)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.cascade != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "cascade", r.cascade, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

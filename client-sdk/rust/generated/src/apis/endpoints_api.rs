@@ -134,13 +134,21 @@ pub async fn function_endpoints_delete(configuration: &configuration::Configurat
 }
 
 /// Returns historical invocation audit records from function.executions for a specific endpoint, detailing response codes, durations, memory usage, and execution log streams. Requires function:endpoint.read scope.
-pub async fn function_endpoints_executions(configuration: &configuration::Configuration, endpoint_id: &str) -> Result<models::ListExecutionsResponse, Error<FunctionEndpointsExecutionsError>> {
+pub async fn function_endpoints_executions(configuration: &configuration::Configuration, endpoint_id: &str, limit: Option<i32>, offset: Option<i32>) -> Result<models::ListExecutionsResponse, Error<FunctionEndpointsExecutionsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_endpoint_id = endpoint_id;
+    let p_query_limit = limit;
+    let p_query_offset = offset;
 
     let uri_str = format!("{}/v1/_/function/endpoints/{endpoint_id}/executions", configuration.base_path, endpoint_id=crate::apis::urlencode(p_path_endpoint_id));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

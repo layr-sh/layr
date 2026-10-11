@@ -29,11 +29,25 @@ type ApiDataTablesRlsUpdateRequest struct {
 	schemaName string
 	tableName string
 	toggleRLSInput *ToggleRLSInput
+	action *string
+	force *bool
 }
 
 // Request body for data.ToggleRLSInput
 func (r ApiDataTablesRlsUpdateRequest) ToggleRLSInput(toggleRLSInput ToggleRLSInput) ApiDataTablesRlsUpdateRequest {
 	r.toggleRLSInput = &toggleRLSInput
+	return r
+}
+
+// RLS enforcement mode (&#39;ENABLE&#39;, &#39;DISABLE&#39;, or &#39;FORCE&#39;)
+func (r ApiDataTablesRlsUpdateRequest) Action(action string) ApiDataTablesRlsUpdateRequest {
+	r.action = &action
+	return r
+}
+
+// Whether to enforce RLS for table owners when action is FORCE
+func (r ApiDataTablesRlsUpdateRequest) Force(force bool) ApiDataTablesRlsUpdateRequest {
+	r.force = &force
 	return r
 }
 
@@ -86,6 +100,12 @@ func (a *TablesRLSAPIService) DataTablesRlsUpdateExecute(r ApiDataTablesRlsUpdat
 		return localVarReturnValue, nil, reportError("toggleRLSInput is required and must be specified")
 	}
 
+	if r.action != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "action", r.action, "form", "")
+	}
+	if r.force != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "force", r.force, "form", "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

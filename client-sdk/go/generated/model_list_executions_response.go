@@ -22,7 +22,10 @@ var _ MappedNullable = &ListExecutionsResponse{}
 // ListExecutionsResponse ListExecutionsResponse schema
 type ListExecutionsResponse struct {
 	Count int32 `json:"count"`
-	Executions []Execution `json:"executions"`
+	Data []Execution `json:"data"`
+	Limit int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+	Total *int32 `json:"total,omitempty"`
 }
 
 type _ListExecutionsResponse ListExecutionsResponse
@@ -31,10 +34,12 @@ type _ListExecutionsResponse ListExecutionsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListExecutionsResponse(count int32, executions []Execution) *ListExecutionsResponse {
+func NewListExecutionsResponse(count int32, data []Execution, limit int32, offset int32) *ListExecutionsResponse {
 	this := ListExecutionsResponse{}
 	this.Count = count
-	this.Executions = executions
+	this.Data = data
+	this.Limit = limit
+	this.Offset = offset
 	return &this
 }
 
@@ -70,30 +75,110 @@ func (o *ListExecutionsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetExecutions returns the Executions field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Execution will be returned
-func (o *ListExecutionsResponse) GetExecutions() []Execution {
+func (o *ListExecutionsResponse) GetData() []Execution {
 	if o == nil {
 		var ret []Execution
 		return ret
 	}
 
-	return o.Executions
+	return o.Data
 }
 
-// GetExecutionsOk returns a tuple with the Executions field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListExecutionsResponse) GetExecutionsOk() ([]Execution, bool) {
-	if o == nil || IsNil(o.Executions) {
+func (o *ListExecutionsResponse) GetDataOk() ([]Execution, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Executions, true
+	return o.Data, true
 }
 
-// SetExecutions sets field value
-func (o *ListExecutionsResponse) SetExecutions(v []Execution) {
-	o.Executions = v
+// SetData sets field value
+func (o *ListExecutionsResponse) SetData(v []Execution) {
+	o.Data = v
+}
+
+// GetLimit returns the Limit field value
+func (o *ListExecutionsResponse) GetLimit() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Limit
+}
+
+// GetLimitOk returns a tuple with the Limit field value
+// and a boolean to check if the value has been set.
+func (o *ListExecutionsResponse) GetLimitOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Limit, true
+}
+
+// SetLimit sets field value
+func (o *ListExecutionsResponse) SetLimit(v int32) {
+	o.Limit = v
+}
+
+// GetOffset returns the Offset field value
+func (o *ListExecutionsResponse) GetOffset() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Offset
+}
+
+// GetOffsetOk returns a tuple with the Offset field value
+// and a boolean to check if the value has been set.
+func (o *ListExecutionsResponse) GetOffsetOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Offset, true
+}
+
+// SetOffset sets field value
+func (o *ListExecutionsResponse) SetOffset(v int32) {
+	o.Offset = v
+}
+
+// GetTotal returns the Total field value if set, zero value otherwise.
+func (o *ListExecutionsResponse) GetTotal() int32 {
+	if o == nil || IsNil(o.Total) {
+		var ret int32
+		return ret
+	}
+	return *o.Total
+}
+
+// GetTotalOk returns a tuple with the Total field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ListExecutionsResponse) GetTotalOk() (*int32, bool) {
+	if o == nil || IsNil(o.Total) {
+		return nil, false
+	}
+	return o.Total, true
+}
+
+// HasTotal returns a boolean if a field has been set.
+func (o *ListExecutionsResponse) HasTotal() bool {
+	if o != nil && !IsNil(o.Total) {
+		return true
+	}
+
+	return false
+}
+
+// SetTotal gets a reference to the given int32 and assigns it to the Total field.
+func (o *ListExecutionsResponse) SetTotal(v int32) {
+	o.Total = &v
 }
 
 func (o ListExecutionsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +192,13 @@ func (o ListExecutionsResponse) MarshalJSON() ([]byte, error) {
 func (o ListExecutionsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Executions != nil {
-		toSerialize["executions"] = o.Executions
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
+	}
+	toSerialize["limit"] = o.Limit
+	toSerialize["offset"] = o.Offset
+	if !IsNil(o.Total) {
+		toSerialize["total"] = o.Total
 	}
 	return toSerialize, nil
 }
@@ -119,7 +209,9 @@ func (o *ListExecutionsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"executions",
+		"data",
+		"limit",
+		"offset",
 	}
 
 	allProperties := make(map[string]interface{})

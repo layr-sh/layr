@@ -15,8 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
-from typing import Any
+from pydantic import Field, StrictInt, StrictStr
+from typing import Any, Optional
 from typing_extensions import Annotated
 from generated.models.create_record_input import CreateRecordInput
 from generated.models.create_record_response import CreateRecordResponse
@@ -49,6 +49,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         create_record_input: Annotated[CreateRecordInput, Field(description="Request body for data.CreateRecordInput")],
+        on_conflict: Annotated[Optional[StrictStr], Field(description="Target column or constraint for upsert on-conflict resolution")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -72,6 +73,8 @@ class RecordsApi:
         :type table_name: str
         :param create_record_input: Request body for data.CreateRecordInput (required)
         :type create_record_input: CreateRecordInput
+        :param on_conflict: Target column or constraint for upsert on-conflict resolution
+        :type on_conflict: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -98,6 +101,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             create_record_input=create_record_input,
+            on_conflict=on_conflict,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -124,6 +128,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         create_record_input: Annotated[CreateRecordInput, Field(description="Request body for data.CreateRecordInput")],
+        on_conflict: Annotated[Optional[StrictStr], Field(description="Target column or constraint for upsert on-conflict resolution")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -147,6 +152,8 @@ class RecordsApi:
         :type table_name: str
         :param create_record_input: Request body for data.CreateRecordInput (required)
         :type create_record_input: CreateRecordInput
+        :param on_conflict: Target column or constraint for upsert on-conflict resolution
+        :type on_conflict: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -173,6 +180,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             create_record_input=create_record_input,
+            on_conflict=on_conflict,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -199,6 +207,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         create_record_input: Annotated[CreateRecordInput, Field(description="Request body for data.CreateRecordInput")],
+        on_conflict: Annotated[Optional[StrictStr], Field(description="Target column or constraint for upsert on-conflict resolution")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -222,6 +231,8 @@ class RecordsApi:
         :type table_name: str
         :param create_record_input: Request body for data.CreateRecordInput (required)
         :type create_record_input: CreateRecordInput
+        :param on_conflict: Target column or constraint for upsert on-conflict resolution
+        :type on_conflict: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -248,6 +259,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             create_record_input=create_record_input,
+            on_conflict=on_conflict,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -269,6 +281,7 @@ class RecordsApi:
         schema_name,
         table_name,
         create_record_input,
+        on_conflict,
         _request_auth,
         _content_type,
         _headers,
@@ -295,6 +308,10 @@ class RecordsApi:
         if table_name is not None:
             _path_params['table_name'] = table_name
         # process the query parameters
+        if on_conflict is not None:
+            
+            _query_params.append(('on_conflict', on_conflict))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -634,6 +651,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         record_id: StrictStr,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection (e.g. 'id,name')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -657,6 +675,8 @@ class RecordsApi:
         :type table_name: str
         :param record_id: (required)
         :type record_id: str
+        :param select: Column projection (e.g. 'id,name')
+        :type select: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -683,6 +703,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             record_id=record_id,
+            select=select,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -709,6 +730,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         record_id: StrictStr,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection (e.g. 'id,name')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -732,6 +754,8 @@ class RecordsApi:
         :type table_name: str
         :param record_id: (required)
         :type record_id: str
+        :param select: Column projection (e.g. 'id,name')
+        :type select: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -758,6 +782,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             record_id=record_id,
+            select=select,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -784,6 +809,7 @@ class RecordsApi:
         schema_name: StrictStr,
         table_name: StrictStr,
         record_id: StrictStr,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection (e.g. 'id,name')")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -807,6 +833,8 @@ class RecordsApi:
         :type table_name: str
         :param record_id: (required)
         :type record_id: str
+        :param select: Column projection (e.g. 'id,name')
+        :type select: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -833,6 +861,7 @@ class RecordsApi:
             schema_name=schema_name,
             table_name=table_name,
             record_id=record_id,
+            select=select,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -854,6 +883,7 @@ class RecordsApi:
         schema_name,
         table_name,
         record_id,
+        select,
         _request_auth,
         _content_type,
         _headers,
@@ -882,6 +912,10 @@ class RecordsApi:
         if record_id is not None:
             _path_params['record_id'] = record_id
         # process the query parameters
+        if select is not None:
+            
+            _query_params.append(('select', select))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter
@@ -924,6 +958,13 @@ class RecordsApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection and embedded relations (e.g. 'id,name,posts(*)')")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Ordering expression (e.g. 'created_at.desc,id.asc')")] = None,
+        cache_ttl: Annotated[Optional[StrictInt], Field(description="Cache duration in seconds")] = None,
+        cache_key_suffix: Annotated[Optional[StrictStr], Field(description="Custom suffix for cache key isolation")] = None,
+        cache_key: Annotated[Optional[StrictStr], Field(description="Alias for cache_key_suffix")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -945,6 +986,20 @@ class RecordsApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param select: Column projection and embedded relations (e.g. 'id,name,posts(*)')
+        :type select: str
+        :param order: Ordering expression (e.g. 'created_at.desc,id.asc')
+        :type order: str
+        :param cache_ttl: Cache duration in seconds
+        :type cache_ttl: int
+        :param cache_key_suffix: Custom suffix for cache key isolation
+        :type cache_key_suffix: str
+        :param cache_key: Alias for cache_key_suffix
+        :type cache_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -970,6 +1025,13 @@ class RecordsApi:
         _param = self._data_records_list_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            limit=limit,
+            offset=offset,
+            select=select,
+            order=order,
+            cache_ttl=cache_ttl,
+            cache_key_suffix=cache_key_suffix,
+            cache_key=cache_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -995,6 +1057,13 @@ class RecordsApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection and embedded relations (e.g. 'id,name,posts(*)')")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Ordering expression (e.g. 'created_at.desc,id.asc')")] = None,
+        cache_ttl: Annotated[Optional[StrictInt], Field(description="Cache duration in seconds")] = None,
+        cache_key_suffix: Annotated[Optional[StrictStr], Field(description="Custom suffix for cache key isolation")] = None,
+        cache_key: Annotated[Optional[StrictStr], Field(description="Alias for cache_key_suffix")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1016,6 +1085,20 @@ class RecordsApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param select: Column projection and embedded relations (e.g. 'id,name,posts(*)')
+        :type select: str
+        :param order: Ordering expression (e.g. 'created_at.desc,id.asc')
+        :type order: str
+        :param cache_ttl: Cache duration in seconds
+        :type cache_ttl: int
+        :param cache_key_suffix: Custom suffix for cache key isolation
+        :type cache_key_suffix: str
+        :param cache_key: Alias for cache_key_suffix
+        :type cache_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1041,6 +1124,13 @@ class RecordsApi:
         _param = self._data_records_list_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            limit=limit,
+            offset=offset,
+            select=select,
+            order=order,
+            cache_ttl=cache_ttl,
+            cache_key_suffix=cache_key_suffix,
+            cache_key=cache_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1066,6 +1156,13 @@ class RecordsApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        limit: Annotated[Optional[StrictInt], Field(description="Maximum number of items to return (default 50, maximum 1000)")] = None,
+        offset: Annotated[Optional[StrictInt], Field(description="Number of items to skip before returning results (default 0)")] = None,
+        select: Annotated[Optional[StrictStr], Field(description="Column projection and embedded relations (e.g. 'id,name,posts(*)')")] = None,
+        order: Annotated[Optional[StrictStr], Field(description="Ordering expression (e.g. 'created_at.desc,id.asc')")] = None,
+        cache_ttl: Annotated[Optional[StrictInt], Field(description="Cache duration in seconds")] = None,
+        cache_key_suffix: Annotated[Optional[StrictStr], Field(description="Custom suffix for cache key isolation")] = None,
+        cache_key: Annotated[Optional[StrictStr], Field(description="Alias for cache_key_suffix")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -1087,6 +1184,20 @@ class RecordsApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param limit: Maximum number of items to return (default 50, maximum 1000)
+        :type limit: int
+        :param offset: Number of items to skip before returning results (default 0)
+        :type offset: int
+        :param select: Column projection and embedded relations (e.g. 'id,name,posts(*)')
+        :type select: str
+        :param order: Ordering expression (e.g. 'created_at.desc,id.asc')
+        :type order: str
+        :param cache_ttl: Cache duration in seconds
+        :type cache_ttl: int
+        :param cache_key_suffix: Custom suffix for cache key isolation
+        :type cache_key_suffix: str
+        :param cache_key: Alias for cache_key_suffix
+        :type cache_key: str
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -1112,6 +1223,13 @@ class RecordsApi:
         _param = self._data_records_list_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            limit=limit,
+            offset=offset,
+            select=select,
+            order=order,
+            cache_ttl=cache_ttl,
+            cache_key_suffix=cache_key_suffix,
+            cache_key=cache_key,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -1132,6 +1250,13 @@ class RecordsApi:
         self,
         schema_name,
         table_name,
+        limit,
+        offset,
+        select,
+        order,
+        cache_ttl,
+        cache_key_suffix,
+        cache_key,
         _request_auth,
         _content_type,
         _headers,
@@ -1158,6 +1283,34 @@ class RecordsApi:
         if table_name is not None:
             _path_params['table_name'] = table_name
         # process the query parameters
+        if limit is not None:
+            
+            _query_params.append(('limit', limit))
+            
+        if offset is not None:
+            
+            _query_params.append(('offset', offset))
+            
+        if select is not None:
+            
+            _query_params.append(('select', select))
+            
+        if order is not None:
+            
+            _query_params.append(('order', order))
+            
+        if cache_ttl is not None:
+            
+            _query_params.append(('cache_ttl', cache_ttl))
+            
+        if cache_key_suffix is not None:
+            
+            _query_params.append(('cache_key_suffix', cache_key_suffix))
+            
+        if cache_key is not None:
+            
+            _query_params.append(('cache_key', cache_key))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

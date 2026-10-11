@@ -21,8 +21,11 @@ var _ MappedNullable = &ListRecordsResponse{}
 
 // ListRecordsResponse ListRecordsResponse schema
 type ListRecordsResponse struct {
-	Count *int32 `json:"count,omitempty"`
+	Count int32 `json:"count"`
 	Data []Record `json:"data"`
+	Limit int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+	Total *int32 `json:"total,omitempty"`
 }
 
 type _ListRecordsResponse ListRecordsResponse
@@ -31,9 +34,12 @@ type _ListRecordsResponse ListRecordsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListRecordsResponse(data []Record) *ListRecordsResponse {
+func NewListRecordsResponse(count int32, data []Record, limit int32, offset int32) *ListRecordsResponse {
 	this := ListRecordsResponse{}
+	this.Count = count
 	this.Data = data
+	this.Limit = limit
+	this.Offset = offset
 	return &this
 }
 
@@ -45,36 +51,28 @@ func NewListRecordsResponseWithDefaults() *ListRecordsResponse {
 	return &this
 }
 
-// GetCount returns the Count field value if set, zero value otherwise.
+// GetCount returns the Count field value
 func (o *ListRecordsResponse) GetCount() int32 {
-	if o == nil || IsNil(o.Count) {
+	if o == nil {
 		var ret int32
 		return ret
 	}
-	return *o.Count
+
+	return o.Count
 }
 
-// GetCountOk returns a tuple with the Count field value if set, nil otherwise
+// GetCountOk returns a tuple with the Count field value
 // and a boolean to check if the value has been set.
 func (o *ListRecordsResponse) GetCountOk() (*int32, bool) {
-	if o == nil || IsNil(o.Count) {
+	if o == nil {
 		return nil, false
 	}
-	return o.Count, true
+	return &o.Count, true
 }
 
-// HasCount returns a boolean if a field has been set.
-func (o *ListRecordsResponse) HasCount() bool {
-	if o != nil && !IsNil(o.Count) {
-		return true
-	}
-
-	return false
-}
-
-// SetCount gets a reference to the given int32 and assigns it to the Count field.
+// SetCount sets field value
 func (o *ListRecordsResponse) SetCount(v int32) {
-	o.Count = &v
+	o.Count = v
 }
 
 // GetData returns the Data field value
@@ -103,6 +101,86 @@ func (o *ListRecordsResponse) SetData(v []Record) {
 	o.Data = v
 }
 
+// GetLimit returns the Limit field value
+func (o *ListRecordsResponse) GetLimit() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Limit
+}
+
+// GetLimitOk returns a tuple with the Limit field value
+// and a boolean to check if the value has been set.
+func (o *ListRecordsResponse) GetLimitOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Limit, true
+}
+
+// SetLimit sets field value
+func (o *ListRecordsResponse) SetLimit(v int32) {
+	o.Limit = v
+}
+
+// GetOffset returns the Offset field value
+func (o *ListRecordsResponse) GetOffset() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Offset
+}
+
+// GetOffsetOk returns a tuple with the Offset field value
+// and a boolean to check if the value has been set.
+func (o *ListRecordsResponse) GetOffsetOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Offset, true
+}
+
+// SetOffset sets field value
+func (o *ListRecordsResponse) SetOffset(v int32) {
+	o.Offset = v
+}
+
+// GetTotal returns the Total field value if set, zero value otherwise.
+func (o *ListRecordsResponse) GetTotal() int32 {
+	if o == nil || IsNil(o.Total) {
+		var ret int32
+		return ret
+	}
+	return *o.Total
+}
+
+// GetTotalOk returns a tuple with the Total field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ListRecordsResponse) GetTotalOk() (*int32, bool) {
+	if o == nil || IsNil(o.Total) {
+		return nil, false
+	}
+	return o.Total, true
+}
+
+// HasTotal returns a boolean if a field has been set.
+func (o *ListRecordsResponse) HasTotal() bool {
+	if o != nil && !IsNil(o.Total) {
+		return true
+	}
+
+	return false
+}
+
+// SetTotal gets a reference to the given int32 and assigns it to the Total field.
+func (o *ListRecordsResponse) SetTotal(v int32) {
+	o.Total = &v
+}
+
 func (o ListRecordsResponse) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -113,11 +191,14 @@ func (o ListRecordsResponse) MarshalJSON() ([]byte, error) {
 
 func (o ListRecordsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.Count) {
-		toSerialize["count"] = o.Count
-	}
+	toSerialize["count"] = o.Count
 	if o.Data != nil {
 		toSerialize["data"] = o.Data
+	}
+	toSerialize["limit"] = o.Limit
+	toSerialize["offset"] = o.Offset
+	if !IsNil(o.Total) {
+		toSerialize["total"] = o.Total
 	}
 	return toSerialize, nil
 }
@@ -127,7 +208,10 @@ func (o *ListRecordsResponse) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
+		"count",
 		"data",
+		"limit",
+		"offset",
 	}
 
 	allProperties := make(map[string]interface{})

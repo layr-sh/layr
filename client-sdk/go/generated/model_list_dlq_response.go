@@ -22,7 +22,10 @@ var _ MappedNullable = &ListDLQResponse{}
 // ListDLQResponse ListDLQResponse schema
 type ListDLQResponse struct {
 	Count int32 `json:"count"`
-	Dlq []DLQExecution `json:"dlq"`
+	Data []DLQExecution `json:"data"`
+	Limit int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+	Total *int32 `json:"total,omitempty"`
 }
 
 type _ListDLQResponse ListDLQResponse
@@ -31,10 +34,12 @@ type _ListDLQResponse ListDLQResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListDLQResponse(count int32, dlq []DLQExecution) *ListDLQResponse {
+func NewListDLQResponse(count int32, data []DLQExecution, limit int32, offset int32) *ListDLQResponse {
 	this := ListDLQResponse{}
 	this.Count = count
-	this.Dlq = dlq
+	this.Data = data
+	this.Limit = limit
+	this.Offset = offset
 	return &this
 }
 
@@ -70,30 +75,110 @@ func (o *ListDLQResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetDlq returns the Dlq field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []DLQExecution will be returned
-func (o *ListDLQResponse) GetDlq() []DLQExecution {
+func (o *ListDLQResponse) GetData() []DLQExecution {
 	if o == nil {
 		var ret []DLQExecution
 		return ret
 	}
 
-	return o.Dlq
+	return o.Data
 }
 
-// GetDlqOk returns a tuple with the Dlq field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListDLQResponse) GetDlqOk() ([]DLQExecution, bool) {
-	if o == nil || IsNil(o.Dlq) {
+func (o *ListDLQResponse) GetDataOk() ([]DLQExecution, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Dlq, true
+	return o.Data, true
 }
 
-// SetDlq sets field value
-func (o *ListDLQResponse) SetDlq(v []DLQExecution) {
-	o.Dlq = v
+// SetData sets field value
+func (o *ListDLQResponse) SetData(v []DLQExecution) {
+	o.Data = v
+}
+
+// GetLimit returns the Limit field value
+func (o *ListDLQResponse) GetLimit() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Limit
+}
+
+// GetLimitOk returns a tuple with the Limit field value
+// and a boolean to check if the value has been set.
+func (o *ListDLQResponse) GetLimitOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Limit, true
+}
+
+// SetLimit sets field value
+func (o *ListDLQResponse) SetLimit(v int32) {
+	o.Limit = v
+}
+
+// GetOffset returns the Offset field value
+func (o *ListDLQResponse) GetOffset() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.Offset
+}
+
+// GetOffsetOk returns a tuple with the Offset field value
+// and a boolean to check if the value has been set.
+func (o *ListDLQResponse) GetOffsetOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Offset, true
+}
+
+// SetOffset sets field value
+func (o *ListDLQResponse) SetOffset(v int32) {
+	o.Offset = v
+}
+
+// GetTotal returns the Total field value if set, zero value otherwise.
+func (o *ListDLQResponse) GetTotal() int32 {
+	if o == nil || IsNil(o.Total) {
+		var ret int32
+		return ret
+	}
+	return *o.Total
+}
+
+// GetTotalOk returns a tuple with the Total field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ListDLQResponse) GetTotalOk() (*int32, bool) {
+	if o == nil || IsNil(o.Total) {
+		return nil, false
+	}
+	return o.Total, true
+}
+
+// HasTotal returns a boolean if a field has been set.
+func (o *ListDLQResponse) HasTotal() bool {
+	if o != nil && !IsNil(o.Total) {
+		return true
+	}
+
+	return false
+}
+
+// SetTotal gets a reference to the given int32 and assigns it to the Total field.
+func (o *ListDLQResponse) SetTotal(v int32) {
+	o.Total = &v
 }
 
 func (o ListDLQResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +192,13 @@ func (o ListDLQResponse) MarshalJSON() ([]byte, error) {
 func (o ListDLQResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Dlq != nil {
-		toSerialize["dlq"] = o.Dlq
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
+	}
+	toSerialize["limit"] = o.Limit
+	toSerialize["offset"] = o.Offset
+	if !IsNil(o.Total) {
+		toSerialize["total"] = o.Total
 	}
 	return toSerialize, nil
 }
@@ -119,7 +209,9 @@ func (o *ListDLQResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"dlq",
+		"data",
+		"limit",
+		"offset",
 	}
 
 	allProperties := make(map[string]interface{})

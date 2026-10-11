@@ -213,11 +213,28 @@ pub async fn auth_users_get(configuration: &configuration::Configuration, user_i
 }
 
 /// Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
-pub async fn auth_users_list(configuration: &configuration::Configuration, ) -> Result<models::ListUsersResponse, Error<AuthUsersListError>> {
+pub async fn auth_users_list(configuration: &configuration::Configuration, limit: Option<i32>, offset: Option<i32>, role: Option<&str>, search: Option<&str>) -> Result<models::ListUsersResponse, Error<AuthUsersListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_limit = limit;
+    let p_query_offset = offset;
+    let p_query_role = role;
+    let p_query_search = search;
 
     let uri_str = format!("{}/v1/_/auth/users", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_role {
+        req_builder = req_builder.query(&[("role", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_search {
+        req_builder = req_builder.query(&[("search", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

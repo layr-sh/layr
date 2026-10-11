@@ -4,8 +4,11 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**count** | Option<**i32**> |  | [optional]
+**count** | **i32** |  | 
 **data** | Option<[**Vec<models::Record>**](Record.md)> |  | 
+**limit** | **i32** |  | 
+**offset** | **i32** |  | 
+**total** | Option<**i32**> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

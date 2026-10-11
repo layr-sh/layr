@@ -129,26 +129,35 @@ open class EventHooksAPI {
     /**
      List event hook subscriptions
      
+     - parameter driver: (query) Filter event hooks by delivery driver (&#39;sql&#39; or &#39;http&#39;) (optional)
+     - parameter isEnabled: (query) Filter event hooks by active enabled status (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: [EventHook]
      */
-    open class func coreEventHooksList(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [EventHook] {
-        return try await coreEventHooksListWithRequestBuilder(apiConfiguration: apiConfiguration).execute().body
+    open class func coreEventHooksList(driver: String? = nil, isEnabled: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> [EventHook] {
+        return try await coreEventHooksListWithRequestBuilder(driver: driver, isEnabled: isEnabled, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
      List event hook subscriptions
      - GET /v1/_/core/event-hooks
      - Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.
+     - parameter driver: (query) Filter event hooks by delivery driver (&#39;sql&#39; or &#39;http&#39;) (optional)
+     - parameter isEnabled: (query) Filter event hooks by active enabled status (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<[EventHook]> 
      */
-    open class func coreEventHooksListWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<[EventHook]> {
+    open class func coreEventHooksListWithRequestBuilder(driver: String? = nil, isEnabled: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<[EventHook]> {
         let localVariablePath = "/v1/_/core/event-hooks"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "driver": (wrappedValue: driver?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "is_enabled": (wrappedValue: isEnabled?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

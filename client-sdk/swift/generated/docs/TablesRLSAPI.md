@@ -9,7 +9,7 @@ Method | HTTP request | Description
 
 # **dataTablesRlsUpdate**
 ```swift
-    open class func dataTablesRlsUpdate(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ToggleRLSResponse
+    open class func dataTablesRlsUpdate(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, action: String? = nil, force: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ToggleRLSResponse
 ```
 
 Toggle Row-Level Security enforcement mode on a table
@@ -24,10 +24,12 @@ import Generated
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
 let toggleRLSInput = ToggleRLSInput(action: "action_example", mode: "mode_example") // ToggleRLSInput | Request body for data.ToggleRLSInput
+let action = "action_example" // String | RLS enforcement mode ('ENABLE', 'DISABLE', or 'FORCE') (optional)
+let force = true // Bool | Whether to enforce RLS for table owners when action is FORCE (optional)
 
 // Toggle Row-Level Security enforcement mode on a table
 do {
-    let response = try await TablesRLSAPI.dataTablesRlsUpdate(schemaName: schemaName, tableName: tableName, toggleRLSInput: toggleRLSInput)
+    let response = try await TablesRLSAPI.dataTablesRlsUpdate(schemaName: schemaName, tableName: tableName, toggleRLSInput: toggleRLSInput, action: action, force: force)
     dump(response)
 } catch {
     print(error)
@@ -41,6 +43,8 @@ Name | Type | Description  | Notes
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
  **toggleRLSInput** | [**ToggleRLSInput**](ToggleRLSInput.md) | Request body for data.ToggleRLSInput | 
+ **action** | **String** | RLS enforcement mode (&#39;ENABLE&#39;, &#39;DISABLE&#39;, or &#39;FORCE&#39;) | [optional] 
+ **force** | **Bool** | Whether to enforce RLS for table owners when action is FORCE | [optional] 
 
 ### Return type
 

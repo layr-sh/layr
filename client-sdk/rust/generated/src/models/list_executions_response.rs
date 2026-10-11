@@ -16,16 +16,25 @@ use serde::{Deserialize, Serialize};
 pub struct ListExecutionsResponse {
     #[serde(rename = "count")]
     pub count: i32,
-    #[serde(rename = "executions", deserialize_with = "Option::deserialize")]
-    pub executions: Option<Vec<models::Execution>>,
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<Vec<models::Execution>>,
+    #[serde(rename = "limit")]
+    pub limit: i32,
+    #[serde(rename = "offset")]
+    pub offset: i32,
+    #[serde(rename = "total", skip_serializing_if = "Option::is_none")]
+    pub total: Option<i32>,
 }
 
 impl ListExecutionsResponse {
     /// ListExecutionsResponse schema
-    pub fn new(count: i32, executions: Option<Vec<models::Execution>>) -> ListExecutionsResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Execution>>, limit: i32, offset: i32) -> ListExecutionsResponse {
         ListExecutionsResponse {
             count,
-            executions,
+            data,
+            limit,
+            offset,
+            total: None,
         }
     }
 }

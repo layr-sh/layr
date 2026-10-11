@@ -11,16 +11,25 @@ import Foundation
 public struct ListExecutionsResponse: Sendable, Codable, Hashable {
 
     public var count: Int
-    public var executions: [Execution]?
+    public var data: [Execution]?
+    public var limit: Int
+    public var offset: Int
+    public var total: Int?
 
-    public init(count: Int, executions: [Execution]?) {
+    public init(count: Int, data: [Execution]?, limit: Int, offset: Int, total: Int? = nil) {
         self.count = count
-        self.executions = executions
+        self.data = data
+        self.limit = limit
+        self.offset = offset
+        self.total = total
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case count
-        case executions
+        case data
+        case limit
+        case offset
+        case total
     }
 
     // Encodable protocol methods
@@ -28,7 +37,10 @@ public struct ListExecutionsResponse: Sendable, Codable, Hashable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(count, forKey: .count)
-        try container.encode(executions, forKey: .executions)
+        try container.encode(data, forKey: .data)
+        try container.encode(limit, forKey: .limit)
+        try container.encode(offset, forKey: .offset)
+        try container.encodeIfPresent(total, forKey: .total)
     }
 }
 

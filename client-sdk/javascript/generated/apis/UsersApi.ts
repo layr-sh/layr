@@ -70,6 +70,25 @@ export interface AuthUsersGetRequest {
     userId: string;
 }
 
+export interface AuthUsersListRequest {
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+    /**
+     * Filter users by role name
+     */
+    role?: string;
+    /**
+     * Case-insensitive substring search matching email or phone number
+     */
+    search?: string;
+}
+
 export interface AuthUsersLockRequest {
     /**
      * 
@@ -293,8 +312,24 @@ export class UsersApi extends runtime.BaseAPI {
     /**
      * Creates request options for authUsersList without sending the request
      */
-    async authUsersListRequestOpts(): Promise<runtime.RequestOpts> {
+    async authUsersListRequestOpts(requestParameters: AuthUsersListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
+
+        if (requestParameters['role'] != null) {
+            queryParameters['role'] = requestParameters['role'];
+        }
+
+        if (requestParameters['search'] != null) {
+            queryParameters['search'] = requestParameters['search'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -313,8 +348,8 @@ export class UsersApi extends runtime.BaseAPI {
      * Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
      * List registered application users with filtering and pagination
      */
-    async authUsersListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListUsersResponse>> {
-        const requestOptions = await this.authUsersListRequestOpts();
+    async authUsersListRaw(requestParameters: AuthUsersListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListUsersResponse>> {
+        const requestOptions = await this.authUsersListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => ListUsersResponseFromJSON(jsonValue));
@@ -324,8 +359,8 @@ export class UsersApi extends runtime.BaseAPI {
      * Queries auth.users with pagination, text search over email/phone, role filters, and verification status. Returns user metadata and creation timestamps. Requires auth:user.read scope.
      * List registered application users with filtering and pagination
      */
-    async authUsersList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListUsersResponse> {
-        const response = await this.authUsersListRaw(initOverrides);
+    async authUsersList(requestParameters: AuthUsersListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListUsersResponse> {
+        const response = await this.authUsersListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

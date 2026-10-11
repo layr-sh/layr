@@ -76,7 +76,7 @@ func TestTasksControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 		require.NoError(t, err)
 
 		// 5. GET /v1/_/tasks/dlq
-		listDLQRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/dlq?limit=10&offset=5", nil)
+		listDLQRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/dlq?limit=10&offset=0", nil)
 		listDLQRequest.Header.Set("X-Service-Account-Key", authSecretKey)
 		listDLQResponseRecorder := httptest.NewRecorder()
 		coreServer.Handler().ServeHTTP(listDLQResponseRecorder, listDLQRequest)

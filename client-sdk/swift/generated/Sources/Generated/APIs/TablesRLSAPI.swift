@@ -15,11 +15,13 @@ open class TablesRLSAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter toggleRLSInput: (body) Request body for data.ToggleRLSInput 
+     - parameter action: (query) RLS enforcement mode (&#39;ENABLE&#39;, &#39;DISABLE&#39;, or &#39;FORCE&#39;) (optional)
+     - parameter force: (query) Whether to enforce RLS for table owners when action is FORCE (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ToggleRLSResponse
      */
-    open class func dataTablesRlsUpdate(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ToggleRLSResponse {
-        return try await dataTablesRlsUpdateWithRequestBuilder(schemaName: schemaName, tableName: tableName, toggleRLSInput: toggleRLSInput, apiConfiguration: apiConfiguration).execute().body
+    open class func dataTablesRlsUpdate(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, action: String? = nil, force: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ToggleRLSResponse {
+        return try await dataTablesRlsUpdateWithRequestBuilder(schemaName: schemaName, tableName: tableName, toggleRLSInput: toggleRLSInput, action: action, force: force, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -29,10 +31,12 @@ open class TablesRLSAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter toggleRLSInput: (body) Request body for data.ToggleRLSInput 
+     - parameter action: (query) RLS enforcement mode (&#39;ENABLE&#39;, &#39;DISABLE&#39;, or &#39;FORCE&#39;) (optional)
+     - parameter force: (query) Whether to enforce RLS for table owners when action is FORCE (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ToggleRLSResponse> 
      */
-    open class func dataTablesRlsUpdateWithRequestBuilder(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ToggleRLSResponse> {
+    open class func dataTablesRlsUpdateWithRequestBuilder(schemaName: String, tableName: String, toggleRLSInput: ToggleRLSInput, action: String? = nil, force: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ToggleRLSResponse> {
         var localVariablePath = "/v1/_/data/tables/{schema_name}/{table_name}/rls"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -43,7 +47,12 @@ open class TablesRLSAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: toggleRLSInput, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "action": (wrappedValue: action?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "force": (wrappedValue: force?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

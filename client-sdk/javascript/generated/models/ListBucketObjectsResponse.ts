@@ -34,7 +34,19 @@ export interface ListBucketObjectsResponse {
     /**
      * 
      */
-    objects: Array<ModelObject> | null;
+    data: Array<ModelObject> | null;
+    /**
+     * 
+     */
+    limit: number;
+    /**
+     * 
+     */
+    offset: number;
+    /**
+     * 
+     */
+    total?: number;
 }
 
 /**
@@ -42,7 +54,9 @@ export interface ListBucketObjectsResponse {
  */
 export function instanceOfListBucketObjectsResponse(value: object): value is ListBucketObjectsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('objects' in value) || value['objects'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
+    if (!('limit' in value) || value['limit'] === undefined) return false;
+    if (!('offset' in value) || value['offset'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +71,10 @@ export function ListBucketObjectsResponseFromJSONTyped(json: any, ignoreDiscrimi
     return {
         
         'count': json['count'],
-        'objects': (json['objects'] == null ? null : (json['objects'] as Array<any>).map(ModelObjectFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(ModelObjectFromJSON)),
+        'limit': json['limit'],
+        'offset': json['offset'],
+        'total': json['total'] == null ? undefined : json['total'],
     };
 }
 
@@ -73,7 +90,10 @@ export function ListBucketObjectsResponseToJSONTyped(value?: ListBucketObjectsRe
     return {
         
         'count': value['count'],
-        'objects': (value['objects'] == null ? null : (value['objects'] as Array<any>).map(ModelObjectToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(ModelObjectToJSON)),
+        'limit': value['limit'],
+        'offset': value['offset'],
+        'total': value['total'],
     };
 }
 

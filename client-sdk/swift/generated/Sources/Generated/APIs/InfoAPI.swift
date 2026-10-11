@@ -14,11 +14,14 @@ open class InfoAPI {
      
      - parameter signature: (path)  
      - parameter path: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for protected storage sources (optional)
+     - parameter expires: (query) Unix epoch seconds expiration timestamp for presigned capability (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: GetInfoResponse
      */
-    open class func imageInfoGet(signature: String, path: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetInfoResponse {
-        return try await imageInfoGetWithRequestBuilder(signature: signature, path: path, apiConfiguration: apiConfiguration).execute().body
+    open class func imageInfoGet(signature: String, path: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetInfoResponse {
+        return try await imageInfoGetWithRequestBuilder(signature: signature, path: path, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -27,10 +30,13 @@ open class InfoAPI {
      - Extracts structural metadata (width, height, format, file size, colorspace, EXIF, orientation) from a remote or storage image path using cryptographic signature verification.
      - parameter signature: (path)  
      - parameter path: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for protected storage sources (optional)
+     - parameter expires: (query) Unix epoch seconds expiration timestamp for presigned capability (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<GetInfoResponse> 
      */
-    open class func imageInfoGetWithRequestBuilder(signature: String, path: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<GetInfoResponse> {
+    open class func imageInfoGetWithRequestBuilder(signature: String, path: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<GetInfoResponse> {
         var localVariablePath = "/v1/image/info/{signature}/{path...}"
         let signaturePreEscape = "\(APIHelper.mapValueToPathItem(signature))"
         let signaturePostEscape = signaturePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -41,7 +47,13 @@ open class InfoAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

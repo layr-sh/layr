@@ -15,11 +15,12 @@ open class RecordsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter createRecordInput: (body) Request body for data.CreateRecordInput 
+     - parameter onConflict: (query) Target column or constraint for upsert on-conflict resolution (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: CreateRecordResponse
      */
-    open class func dataRecordsCreate(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CreateRecordResponse {
-        return try await dataRecordsCreateWithRequestBuilder(schemaName: schemaName, tableName: tableName, createRecordInput: createRecordInput, apiConfiguration: apiConfiguration).execute().body
+    open class func dataRecordsCreate(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, onConflict: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CreateRecordResponse {
+        return try await dataRecordsCreateWithRequestBuilder(schemaName: schemaName, tableName: tableName, createRecordInput: createRecordInput, onConflict: onConflict, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -29,10 +30,11 @@ open class RecordsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter createRecordInput: (body) Request body for data.CreateRecordInput 
+     - parameter onConflict: (query) Target column or constraint for upsert on-conflict resolution (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<CreateRecordResponse> 
      */
-    open class func dataRecordsCreateWithRequestBuilder(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<CreateRecordResponse> {
+    open class func dataRecordsCreateWithRequestBuilder(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, onConflict: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<CreateRecordResponse> {
         var localVariablePath = "/v1/data/{schema_name}/{table_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -43,7 +45,11 @@ open class RecordsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: createRecordInput, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "on_conflict": (wrappedValue: onConflict?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -112,11 +118,12 @@ open class RecordsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter recordId: (path)  
+     - parameter select: (query) Column projection (e.g. &#39;id,name&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: GetRecordResponse
      */
-    open class func dataRecordsGet(schemaName: String, tableName: String, recordId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetRecordResponse {
-        return try await dataRecordsGetWithRequestBuilder(schemaName: schemaName, tableName: tableName, recordId: recordId, apiConfiguration: apiConfiguration).execute().body
+    open class func dataRecordsGet(schemaName: String, tableName: String, recordId: String, select: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetRecordResponse {
+        return try await dataRecordsGetWithRequestBuilder(schemaName: schemaName, tableName: tableName, recordId: recordId, select: select, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -126,10 +133,11 @@ open class RecordsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter recordId: (path)  
+     - parameter select: (query) Column projection (e.g. &#39;id,name&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<GetRecordResponse> 
      */
-    open class func dataRecordsGetWithRequestBuilder(schemaName: String, tableName: String, recordId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<GetRecordResponse> {
+    open class func dataRecordsGetWithRequestBuilder(schemaName: String, tableName: String, recordId: String, select: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<GetRecordResponse> {
         var localVariablePath = "/v1/data/{schema_name}/{table_name}/{record_id}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -143,7 +151,11 @@ open class RecordsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "select": (wrappedValue: select?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -161,11 +173,18 @@ open class RecordsAPI {
      
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter select: (query) Column projection and embedded relations (e.g. &#39;id,name,posts(*)&#39;) (optional)
+     - parameter order: (query) Ordering expression (e.g. &#39;created_at.desc,id.asc&#39;) (optional)
+     - parameter cacheTtl: (query) Cache duration in seconds (optional)
+     - parameter cacheKeySuffix: (query) Custom suffix for cache key isolation (optional)
+     - parameter cacheKey: (query) Alias for cache_key_suffix (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListRecordsResponse
      */
-    open class func dataRecordsList(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListRecordsResponse {
-        return try await dataRecordsListWithRequestBuilder(schemaName: schemaName, tableName: tableName, apiConfiguration: apiConfiguration).execute().body
+    open class func dataRecordsList(schemaName: String, tableName: String, limit: Int? = nil, offset: Int? = nil, select: String? = nil, order: String? = nil, cacheTtl: Int? = nil, cacheKeySuffix: String? = nil, cacheKey: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListRecordsResponse {
+        return try await dataRecordsListWithRequestBuilder(schemaName: schemaName, tableName: tableName, limit: limit, offset: offset, select: select, order: order, cacheTtl: cacheTtl, cacheKeySuffix: cacheKeySuffix, cacheKey: cacheKey, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -174,10 +193,17 @@ open class RecordsAPI {
      - Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
+     - parameter select: (query) Column projection and embedded relations (e.g. &#39;id,name,posts(*)&#39;) (optional)
+     - parameter order: (query) Ordering expression (e.g. &#39;created_at.desc,id.asc&#39;) (optional)
+     - parameter cacheTtl: (query) Cache duration in seconds (optional)
+     - parameter cacheKeySuffix: (query) Custom suffix for cache key isolation (optional)
+     - parameter cacheKey: (query) Alias for cache_key_suffix (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListRecordsResponse> 
      */
-    open class func dataRecordsListWithRequestBuilder(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListRecordsResponse> {
+    open class func dataRecordsListWithRequestBuilder(schemaName: String, tableName: String, limit: Int? = nil, offset: Int? = nil, select: String? = nil, order: String? = nil, cacheTtl: Int? = nil, cacheKeySuffix: String? = nil, cacheKey: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListRecordsResponse> {
         var localVariablePath = "/v1/data/{schema_name}/{table_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -188,7 +214,17 @@ open class RecordsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "select": (wrappedValue: select?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "order": (wrappedValue: order?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "cache_ttl": (wrappedValue: cacheTtl?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "cache_key_suffix": (wrappedValue: cacheKeySuffix?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "cache_key": (wrappedValue: cacheKey?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

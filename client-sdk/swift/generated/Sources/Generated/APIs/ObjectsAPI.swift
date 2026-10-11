@@ -14,11 +14,14 @@ open class ObjectsAPI {
      
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for deletion authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: JSONValue?
      */
-    open class func fileStorageObjectsDelete(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue? {
-        return try await fileStorageObjectsDeleteWithRequestBuilder(bucket: bucket, key: key, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageObjectsDelete(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue? {
+        return try await fileStorageObjectsDeleteWithRequestBuilder(bucket: bucket, key: key, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -27,10 +30,13 @@ open class ObjectsAPI {
      - Deletes file object binary payload from the storage backend (database or S3) and removes its metadata row from file_storage.objects. Emits file_storage.object.deleted event.
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for deletion authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<JSONValue?> 
      */
-    open class func fileStorageObjectsDeleteWithRequestBuilder(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue?> {
+    open class func fileStorageObjectsDeleteWithRequestBuilder(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue?> {
         var localVariablePath = "/v1/file-storage/objects/{bucket}/{key...}"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -41,7 +47,13 @@ open class ObjectsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -59,11 +71,14 @@ open class ObjectsAPI {
      
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for public download (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: URL
      */
-    open class func fileStorageObjectsDownload(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL {
-        return try await fileStorageObjectsDownloadWithRequestBuilder(bucket: bucket, key: key, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageObjectsDownload(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL {
+        return try await fileStorageObjectsDownloadWithRequestBuilder(bucket: bucket, key: key, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -72,10 +87,13 @@ open class ObjectsAPI {
      - Streams binary object payload from configured backend (PostgreSQL database bytea or S3) with HTTP Range header support, Content-Type, Content-Length, and ETag validation. Enforces public bucket policy or valid capability credentials.
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token for public download (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<URL> 
      */
-    open class func fileStorageObjectsDownloadWithRequestBuilder(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<URL> {
+    open class func fileStorageObjectsDownloadWithRequestBuilder(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<URL> {
         var localVariablePath = "/v1/file-storage/objects/{bucket}/{key...}"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -86,7 +104,13 @@ open class ObjectsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -104,11 +128,14 @@ open class ObjectsAPI {
      
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: JSONValue
      */
-    open class func fileStorageObjectsHead(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
-        return try await fileStorageObjectsHeadWithRequestBuilder(bucket: bucket, key: key, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageObjectsHead(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue {
+        return try await fileStorageObjectsHeadWithRequestBuilder(bucket: bucket, key: key, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -117,10 +144,13 @@ open class ObjectsAPI {
      - Returns HTTP metadata headers (Content-Length, Content-Type, ETag, Last-Modified) for a stored file without streaming body payload.
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
+     - parameter token: (query) Presigned capability HMAC token (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;read&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<JSONValue> 
      */
-    open class func fileStorageObjectsHeadWithRequestBuilder(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
+    open class func fileStorageObjectsHeadWithRequestBuilder(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<JSONValue> {
         var localVariablePath = "/v1/file-storage/objects/{bucket}/{key...}"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -131,7 +161,13 @@ open class ObjectsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -150,11 +186,14 @@ open class ObjectsAPI {
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
      - parameter body: (body) Request body for core.Empty 
+     - parameter token: (query) Presigned capability HMAC token for write authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: Object
      */
-    open class func fileStorageObjectsUploadPost(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object {
-        return try await fileStorageObjectsUploadPostWithRequestBuilder(bucket: bucket, key: key, body: body, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageObjectsUploadPost(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object {
+        return try await fileStorageObjectsUploadPostWithRequestBuilder(bucket: bucket, key: key, body: body, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -164,10 +203,13 @@ open class ObjectsAPI {
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
      - parameter body: (body) Request body for core.Empty 
+     - parameter token: (query) Presigned capability HMAC token for write authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<Object> 
      */
-    open class func fileStorageObjectsUploadPostWithRequestBuilder(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<Object> {
+    open class func fileStorageObjectsUploadPostWithRequestBuilder(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<Object> {
         var localVariablePath = "/v1/file-storage/objects/{bucket}/{key...}"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -178,7 +220,13 @@ open class ObjectsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -197,11 +245,14 @@ open class ObjectsAPI {
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
      - parameter body: (body) Request body for core.Empty 
+     - parameter token: (query) Presigned capability HMAC token for write authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: Object
      */
-    open class func fileStorageObjectsUploadPut(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object {
-        return try await fileStorageObjectsUploadPutWithRequestBuilder(bucket: bucket, key: key, body: body, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageObjectsUploadPut(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object {
+        return try await fileStorageObjectsUploadPutWithRequestBuilder(bucket: bucket, key: key, body: body, token: token, expires: expires, op: op, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -211,10 +262,13 @@ open class ObjectsAPI {
      - parameter bucket: (path)  
      - parameter key: (path)  (might contain slashes) 
      - parameter body: (body) Request body for core.Empty 
+     - parameter token: (query) Presigned capability HMAC token for write authorization (optional)
+     - parameter expires: (query) Unix epoch seconds timestamp when the presigned capability token expires (optional)
+     - parameter op: (query) Presigned operation capability type (&#39;write&#39;) (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<Object> 
      */
-    open class func fileStorageObjectsUploadPutWithRequestBuilder(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<Object> {
+    open class func fileStorageObjectsUploadPutWithRequestBuilder(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<Object> {
         var localVariablePath = "/v1/file-storage/objects/{bucket}/{key...}"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -225,7 +279,13 @@ open class ObjectsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "token": (wrappedValue: token?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "expires": (wrappedValue: expires?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "op": (wrappedValue: op?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

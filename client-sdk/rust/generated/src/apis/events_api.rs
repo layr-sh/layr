@@ -68,11 +68,40 @@ pub async fn core_events_get(configuration: &configuration::Configuration, event
 }
 
 /// Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
-pub async fn core_events_list(configuration: &configuration::Configuration, ) -> Result<Vec<models::Event>, Error<CoreEventsListError>> {
+pub async fn core_events_list(configuration: &configuration::Configuration, limit: Option<i32>, offset: Option<i32>, r#type: Option<&str>, actor_type: Option<&str>, actor_id: Option<&str>, resource_type: Option<&str>, resource_id: Option<&str>) -> Result<models::ListEventsResponse, Error<CoreEventsListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_limit = limit;
+    let p_query_offset = offset;
+    let p_query_type = r#type;
+    let p_query_actor_type = actor_type;
+    let p_query_actor_id = actor_id;
+    let p_query_resource_type = resource_type;
+    let p_query_resource_id = resource_id;
 
     let uri_str = format!("{}/v1/_/core/events", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_type {
+        req_builder = req_builder.query(&[("type", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_actor_type {
+        req_builder = req_builder.query(&[("actor_type", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_actor_id {
+        req_builder = req_builder.query(&[("actor_id", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_resource_type {
+        req_builder = req_builder.query(&[("resource_type", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_resource_id {
+        req_builder = req_builder.query(&[("resource_id", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -92,8 +121,8 @@ pub async fn core_events_list(configuration: &configuration::Configuration, ) ->
         let content = resp.text().await?;
         match content_type {
             ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
-            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `Vec&lt;models::Event&gt;`"))),
-            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `Vec&lt;models::Event&gt;`")))),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::ListEventsResponse`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::ListEventsResponse`")))),
         }
     } else {
         let content = resp.text().await?;

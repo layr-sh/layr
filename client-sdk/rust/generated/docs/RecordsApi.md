@@ -15,7 +15,7 @@ Method | HTTP request | Description
 
 ## data_records_create
 
-> models::CreateRecordResponse data_records_create(schema_name, table_name, create_record_input)
+> models::CreateRecordResponse data_records_create(schema_name, table_name, create_record_input, on_conflict)
 Insert single or bulk rows with RETURNING *
 
 Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.
@@ -28,6 +28,7 @@ Name | Type | Description  | Required | Notes
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
 **create_record_input** | [**CreateRecordInput**](CreateRecordInput.md) | Request body for data.CreateRecordInput | [required] |
+**on_conflict** | Option<**String**> | Target column or constraint for upsert on-conflict resolution |  |
 
 ### Return type
 
@@ -79,7 +80,7 @@ No authorization required
 
 ## data_records_get
 
-> models::GetRecordResponse data_records_get(schema_name, table_name, record_id)
+> models::GetRecordResponse data_records_get(schema_name, table_name, record_id, select)
 Get a single row by primary key
 
 Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.
@@ -92,6 +93,7 @@ Name | Type | Description  | Required | Notes
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
 **record_id** | **String** |  | [required] |
+**select** | Option<**String**> | Column projection (e.g. 'id,name') |  |
 
 ### Return type
 
@@ -111,7 +113,7 @@ No authorization required
 
 ## data_records_list
 
-> models::ListRecordsResponse data_records_list(schema_name, table_name)
+> models::ListRecordsResponse data_records_list(schema_name, table_name, limit, offset, select, order, cache_ttl, cache_key_suffix, cache_key)
 Query table rows with dynamic filtering, sorting, and pagination
 
 Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.
@@ -123,6 +125,13 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **schema_name** | **String** |  | [required] |
 **table_name** | **String** |  | [required] |
+**limit** | Option<**i32**> | Maximum number of items to return (default 50, maximum 1000) |  |[default to 50]
+**offset** | Option<**i32**> | Number of items to skip before returning results (default 0) |  |[default to 0]
+**select** | Option<**String**> | Column projection and embedded relations (e.g. 'id,name,posts(*)') |  |
+**order** | Option<**String**> | Ordering expression (e.g. 'created_at.desc,id.asc') |  |
+**cache_ttl** | Option<**i32**> | Cache duration in seconds |  |
+**cache_key_suffix** | Option<**String**> | Custom suffix for cache key isolation |  |
+**cache_key** | Option<**String**> | Alias for cache_key_suffix |  |
 
 ### Return type
 

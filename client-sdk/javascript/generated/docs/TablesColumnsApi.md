@@ -85,7 +85,7 @@ No authorization required
 
 ## dataTablesColumnsDelete
 
-> DeleteColumnResponse dataTablesColumnsDelete(schemaName, tableName, columnName)
+> DeleteColumnResponse dataTablesColumnsDelete(schemaName, tableName, columnName, cascade)
 
 Drop a column from a table schema
 
@@ -111,6 +111,8 @@ async function example() {
     tableName: tableName_example,
     // string
     columnName: columnName_example,
+    // boolean | Cascade column drop to dependent views or indexes (optional)
+    cascade: true,
   } satisfies DataTablesColumnsDeleteRequest;
 
   try {
@@ -133,6 +135,7 @@ example().catch(console.error);
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
 | **columnName** | `string` |  | [Defaults to `undefined`] |
+| **cascade** | `boolean` | Cascade column drop to dependent views or indexes | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

@@ -62,11 +62,12 @@ open class TablesColumnsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter columnName: (path)  
+     - parameter cascade: (query) Cascade column drop to dependent views or indexes (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: DeleteColumnResponse
      */
-    open class func dataTablesColumnsDelete(schemaName: String, tableName: String, columnName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteColumnResponse {
-        return try await dataTablesColumnsDeleteWithRequestBuilder(schemaName: schemaName, tableName: tableName, columnName: columnName, apiConfiguration: apiConfiguration).execute().body
+    open class func dataTablesColumnsDelete(schemaName: String, tableName: String, columnName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteColumnResponse {
+        return try await dataTablesColumnsDeleteWithRequestBuilder(schemaName: schemaName, tableName: tableName, columnName: columnName, cascade: cascade, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -76,10 +77,11 @@ open class TablesColumnsAPI {
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
      - parameter columnName: (path)  
+     - parameter cascade: (query) Cascade column drop to dependent views or indexes (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<DeleteColumnResponse> 
      */
-    open class func dataTablesColumnsDeleteWithRequestBuilder(schemaName: String, tableName: String, columnName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<DeleteColumnResponse> {
+    open class func dataTablesColumnsDeleteWithRequestBuilder(schemaName: String, tableName: String, columnName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<DeleteColumnResponse> {
         var localVariablePath = "/v1/_/data/tables/{schema_name}/{table_name}/columns/{column_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -93,7 +95,11 @@ open class TablesColumnsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "cascade": (wrappedValue: cascade?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

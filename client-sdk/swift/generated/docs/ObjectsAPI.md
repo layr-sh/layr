@@ -13,7 +13,7 @@ Method | HTTP request | Description
 
 # **fileStorageObjectsDelete**
 ```swift
-    open class func fileStorageObjectsDelete(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue?
+    open class func fileStorageObjectsDelete(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue?
 ```
 
 Permanently delete a file object
@@ -27,10 +27,13 @@ import Generated
 
 let bucket = "bucket_example" // String | 
 let key = "key_example" // String |  (might contain slashes)
+let token = "token_example" // String | Presigned capability HMAC token for deletion authorization (optional)
+let expires = "expires_example" // String | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+let op = "op_example" // String | Presigned operation capability type ('write') (optional)
 
 // Permanently delete a file object
 do {
-    let response = try await ObjectsAPI.fileStorageObjectsDelete(bucket: bucket, key: key)
+    let response = try await ObjectsAPI.fileStorageObjectsDelete(bucket: bucket, key: key, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -43,6 +46,9 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **bucket** | **String** |  | 
  **key** | **String** |  (might contain slashes) | 
+ **token** | **String** | Presigned capability HMAC token for deletion authorization | [optional] 
+ **expires** | **String** | Unix epoch seconds timestamp when the presigned capability token expires | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;write&#39;) | [optional] 
 
 ### Return type
 
@@ -61,7 +67,7 @@ No authorization required
 
 # **fileStorageObjectsDownload**
 ```swift
-    open class func fileStorageObjectsDownload(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL
+    open class func fileStorageObjectsDownload(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> URL
 ```
 
 Download a file object with byte-range support
@@ -75,10 +81,13 @@ import Generated
 
 let bucket = "bucket_example" // String | 
 let key = "key_example" // String |  (might contain slashes)
+let token = "token_example" // String | Presigned capability HMAC token for public download (optional)
+let expires = "expires_example" // String | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+let op = "op_example" // String | Presigned operation capability type ('read') (optional)
 
 // Download a file object with byte-range support
 do {
-    let response = try await ObjectsAPI.fileStorageObjectsDownload(bucket: bucket, key: key)
+    let response = try await ObjectsAPI.fileStorageObjectsDownload(bucket: bucket, key: key, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -91,6 +100,9 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **bucket** | **String** |  | 
  **key** | **String** |  (might contain slashes) | 
+ **token** | **String** | Presigned capability HMAC token for public download | [optional] 
+ **expires** | **String** | Unix epoch seconds timestamp when the presigned capability token expires | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;read&#39;) | [optional] 
 
 ### Return type
 
@@ -109,7 +121,7 @@ No authorization required
 
 # **fileStorageObjectsHead**
 ```swift
-    open class func fileStorageObjectsHead(bucket: String, key: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
+    open class func fileStorageObjectsHead(bucket: String, key: String, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> JSONValue
 ```
 
 Inspect file object metadata headers
@@ -123,10 +135,13 @@ import Generated
 
 let bucket = "bucket_example" // String | 
 let key = "key_example" // String |  (might contain slashes)
+let token = "token_example" // String | Presigned capability HMAC token (optional)
+let expires = "expires_example" // String | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+let op = "op_example" // String | Presigned operation capability type ('read') (optional)
 
 // Inspect file object metadata headers
 do {
-    let response = try await ObjectsAPI.fileStorageObjectsHead(bucket: bucket, key: key)
+    let response = try await ObjectsAPI.fileStorageObjectsHead(bucket: bucket, key: key, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -139,6 +154,9 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **bucket** | **String** |  | 
  **key** | **String** |  (might contain slashes) | 
+ **token** | **String** | Presigned capability HMAC token | [optional] 
+ **expires** | **String** | Unix epoch seconds timestamp when the presigned capability token expires | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;read&#39;) | [optional] 
 
 ### Return type
 
@@ -157,7 +175,7 @@ No authorization required
 
 # **fileStorageObjectsUploadPost**
 ```swift
-    open class func fileStorageObjectsUploadPost(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object
+    open class func fileStorageObjectsUploadPost(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object
 ```
 
 Upload a file object via POST
@@ -172,10 +190,13 @@ import Generated
 let bucket = "bucket_example" // String | 
 let key = "key_example" // String |  (might contain slashes)
 let body =  // JSONValue | Request body for core.Empty
+let token = "token_example" // String | Presigned capability HMAC token for write authorization (optional)
+let expires = "expires_example" // String | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+let op = "op_example" // String | Presigned operation capability type ('write') (optional)
 
 // Upload a file object via POST
 do {
-    let response = try await ObjectsAPI.fileStorageObjectsUploadPost(bucket: bucket, key: key, body: body)
+    let response = try await ObjectsAPI.fileStorageObjectsUploadPost(bucket: bucket, key: key, body: body, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -189,6 +210,9 @@ Name | Type | Description  | Notes
  **bucket** | **String** |  | 
  **key** | **String** |  (might contain slashes) | 
  **body** | **JSONValue** | Request body for core.Empty | 
+ **token** | **String** | Presigned capability HMAC token for write authorization | [optional] 
+ **expires** | **String** | Unix epoch seconds timestamp when the presigned capability token expires | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;write&#39;) | [optional] 
 
 ### Return type
 
@@ -207,7 +231,7 @@ No authorization required
 
 # **fileStorageObjectsUploadPut**
 ```swift
-    open class func fileStorageObjectsUploadPut(bucket: String, key: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object
+    open class func fileStorageObjectsUploadPut(bucket: String, key: String, body: JSONValue, token: String? = nil, expires: String? = nil, op: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> Object
 ```
 
 Upload a file object via PUT
@@ -222,10 +246,13 @@ import Generated
 let bucket = "bucket_example" // String | 
 let key = "key_example" // String |  (might contain slashes)
 let body =  // JSONValue | Request body for core.Empty
+let token = "token_example" // String | Presigned capability HMAC token for write authorization (optional)
+let expires = "expires_example" // String | Unix epoch seconds timestamp when the presigned capability token expires (optional)
+let op = "op_example" // String | Presigned operation capability type ('write') (optional)
 
 // Upload a file object via PUT
 do {
-    let response = try await ObjectsAPI.fileStorageObjectsUploadPut(bucket: bucket, key: key, body: body)
+    let response = try await ObjectsAPI.fileStorageObjectsUploadPut(bucket: bucket, key: key, body: body, token: token, expires: expires, op: op)
     dump(response)
 } catch {
     print(error)
@@ -239,6 +266,9 @@ Name | Type | Description  | Notes
  **bucket** | **String** |  | 
  **key** | **String** |  (might contain slashes) | 
  **body** | **JSONValue** | Request body for core.Empty | 
+ **token** | **String** | Presigned capability HMAC token for write authorization | [optional] 
+ **expires** | **String** | Unix epoch seconds timestamp when the presigned capability token expires | [optional] 
+ **op** | **String** | Presigned operation capability type (&#39;write&#39;) | [optional] 
 
 ### Return type
 

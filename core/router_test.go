@@ -304,3 +304,31 @@ func (mock *mockTestReporter) Helper() {}
 func (mock *mockTestReporter) Fatal(args ...any) {
 	mock.failed = true
 }
+
+func TestCoreRouterQueryOptionsUnit(t *testing.T) {
+	engine := fuego.NewServer(fuego.WithAddr("localhost:0"))
+	router := NewRouter(engine)
+
+	GetRoute[string](router, "/test-query", func(responseWriter http.ResponseWriter, request *http.Request) {},
+		RouteTag("Test"),
+		RouteQueryInt("limit", "Number of items", ParamDefault(50)),
+		RouteQueryInt("offset", "Offset of items", ParamDefault(0)),
+		RouteQueryParam("search", "Search term"),
+		RouteQueryBool("active", "Active flag"),
+		RouteOperationID("test__query"),
+		RouteSDKGroupName("test"),
+		RouteSDKMethodName("query"),
+	)
+
+	openAPISpec := router.OutputOpenAPISpec()
+	if openAPISpec == nil {
+		t.Fatal("expected non-nil spec")
+	}
+	pathItem := openAPISpec.Paths.Find("/test-query")
+	if pathItem == nil || pathItem.Get == nil {
+		t.Fatal("expected path item with GET operation")
+	}
+	if len(pathItem.Get.Parameters) != 4 {
+		t.Fatalf("expected 4 parameters, got %d", len(pathItem.Get.Parameters))
+	}
+}

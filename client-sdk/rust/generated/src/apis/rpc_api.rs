@@ -31,15 +31,19 @@ pub enum DataRpcQueryError {
 
 
 /// Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.
-pub async fn data_rpc_mutation(configuration: &configuration::Configuration, schema_name: &str, function_name: &str, body: serde_json::Value) -> Result<serde_json::Value, Error<DataRpcMutationError>> {
+pub async fn data_rpc_mutation(configuration: &configuration::Configuration, schema_name: &str, function_name: &str, body: serde_json::Value, invalidate_tables: Option<&str>) -> Result<serde_json::Value, Error<DataRpcMutationError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_function_name = function_name;
     let p_body_body = body;
+    let p_query_invalidate_tables = invalidate_tables;
 
     let uri_str = format!("{}/v1/data/{schema_name}/rpc/{function_name}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), function_name=crate::apis::urlencode(p_path_function_name));
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
+    if let Some(ref param_value) = p_query_invalidate_tables {
+        req_builder = req_builder.query(&[("invalidate_tables", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -71,14 +75,18 @@ pub async fn data_rpc_mutation(configuration: &configuration::Configuration, sch
 }
 
 /// Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.
-pub async fn data_rpc_query(configuration: &configuration::Configuration, schema_name: &str, function_name: &str) -> Result<serde_json::Value, Error<DataRpcQueryError>> {
+pub async fn data_rpc_query(configuration: &configuration::Configuration, schema_name: &str, function_name: &str, invalidate_tables: Option<&str>) -> Result<serde_json::Value, Error<DataRpcQueryError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_function_name = function_name;
+    let p_query_invalidate_tables = invalidate_tables;
 
     let uri_str = format!("{}/v1/data/{schema_name}/rpc/{function_name}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), function_name=crate::apis::urlencode(p_path_function_name));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_invalidate_tables {
+        req_builder = req_builder.query(&[("invalidate_tables", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

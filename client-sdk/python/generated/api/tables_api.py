@@ -15,7 +15,8 @@ from pydantic import validate_call, Field, StrictFloat, StrictStr, StrictInt
 from typing import Any, Dict, List, Optional, Tuple, Union
 from typing_extensions import Annotated
 
-from pydantic import Field, StrictStr
+from pydantic import Field, StrictBool, StrictStr
+from typing import Optional
 from typing_extensions import Annotated
 from generated.models.create_table_input import CreateTableInput
 from generated.models.create_table_response import CreateTableResponse
@@ -307,6 +308,7 @@ class TablesApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade table drop to dependent constraints and views")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -328,6 +330,8 @@ class TablesApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param cascade: Cascade table drop to dependent constraints and views
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -353,6 +357,7 @@ class TablesApi:
         _param = self._data_tables_delete_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -378,6 +383,7 @@ class TablesApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade table drop to dependent constraints and views")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -399,6 +405,8 @@ class TablesApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param cascade: Cascade table drop to dependent constraints and views
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -424,6 +432,7 @@ class TablesApi:
         _param = self._data_tables_delete_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -449,6 +458,7 @@ class TablesApi:
         self,
         schema_name: StrictStr,
         table_name: StrictStr,
+        cascade: Annotated[Optional[StrictBool], Field(description="Cascade table drop to dependent constraints and views")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -470,6 +480,8 @@ class TablesApi:
         :type schema_name: str
         :param table_name: (required)
         :type table_name: str
+        :param cascade: Cascade table drop to dependent constraints and views
+        :type cascade: bool
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
                                  timeout. It can also be a pair (tuple) of
@@ -495,6 +507,7 @@ class TablesApi:
         _param = self._data_tables_delete_serialize(
             schema_name=schema_name,
             table_name=table_name,
+            cascade=cascade,
             _request_auth=_request_auth,
             _content_type=_content_type,
             _headers=_headers,
@@ -515,6 +528,7 @@ class TablesApi:
         self,
         schema_name,
         table_name,
+        cascade,
         _request_auth,
         _content_type,
         _headers,
@@ -541,6 +555,10 @@ class TablesApi:
         if table_name is not None:
             _path_params['table_name'] = table_name
         # process the query parameters
+        if cascade is not None:
+            
+            _query_params.append(('cascade', cascade))
+            
         # process the header parameters
         # process the form parameters
         # process the body parameter

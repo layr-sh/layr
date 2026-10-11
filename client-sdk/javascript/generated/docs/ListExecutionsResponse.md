@@ -8,7 +8,10 @@ ListExecutionsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`executions` | [Array&lt;Execution&gt;](Execution.md)
+`data` | [Array&lt;Execution&gt;](Execution.md)
+`limit` | number
+`offset` | number
+`total` | number
 
 ## Example
 
@@ -18,7 +21,10 @@ import type { ListExecutionsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "executions": null,
+  "data": null,
+  "limit": null,
+  "offset": null,
+  "total": null,
 } satisfies ListExecutionsResponse
 
 console.log(example)

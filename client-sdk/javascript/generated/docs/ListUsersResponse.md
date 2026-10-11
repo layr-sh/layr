@@ -8,9 +8,10 @@ ListUsersResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
+`data` | [Array&lt;User&gt;](User.md)
 `limit` | number
 `offset` | number
-`users` | [Array&lt;User&gt;](User.md)
+`total` | number
 
 ## Example
 
@@ -20,9 +21,10 @@ import type { ListUsersResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
+  "data": null,
   "limit": null,
   "offset": null,
-  "users": null,
+  "total": null,
 } satisfies ListUsersResponse
 
 console.log(example)

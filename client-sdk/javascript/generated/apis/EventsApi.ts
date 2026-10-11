@@ -18,12 +18,48 @@ import {
     EventFromJSON,
     EventToJSON,
 } from '../models/Event';
+import {
+    type ListEventsResponse,
+    ListEventsResponseFromJSON,
+    ListEventsResponseToJSON,
+} from '../models/ListEventsResponse';
 
 export interface CoreEventsGetRequest {
     /**
      * 
      */
     eventId: string;
+}
+
+export interface CoreEventsListRequest {
+    /**
+     * Maximum number of items to return (default 50, maximum 1000)
+     */
+    limit?: number;
+    /**
+     * Number of items to skip before returning results (default 0)
+     */
+    offset?: number;
+    /**
+     * Filter by specific event type name
+     */
+    type?: string;
+    /**
+     * Filter by actor principal type (user, service_account, system)
+     */
+    actorType?: string;
+    /**
+     * Filter by actor principal UUID
+     */
+    actorId?: string;
+    /**
+     * Filter by target resource entity type
+     */
+    resourceType?: string;
+    /**
+     * Filter by target resource unique identifier
+     */
+    resourceId?: string;
 }
 
 /**
@@ -81,8 +117,36 @@ export class EventsApi extends runtime.BaseAPI {
     /**
      * Creates request options for coreEventsList without sending the request
      */
-    async coreEventsListRequestOpts(): Promise<runtime.RequestOpts> {
+    async coreEventsListRequestOpts(requestParameters: CoreEventsListRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['offset'] != null) {
+            queryParameters['offset'] = requestParameters['offset'];
+        }
+
+        if (requestParameters['type'] != null) {
+            queryParameters['type'] = requestParameters['type'];
+        }
+
+        if (requestParameters['actorType'] != null) {
+            queryParameters['actor_type'] = requestParameters['actorType'];
+        }
+
+        if (requestParameters['actorId'] != null) {
+            queryParameters['actor_id'] = requestParameters['actorId'];
+        }
+
+        if (requestParameters['resourceType'] != null) {
+            queryParameters['resource_type'] = requestParameters['resourceType'];
+        }
+
+        if (requestParameters['resourceId'] != null) {
+            queryParameters['resource_id'] = requestParameters['resourceId'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -101,19 +165,19 @@ export class EventsApi extends runtime.BaseAPI {
      * Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
      * Query immutable system and domain audit events
      */
-    async coreEventsListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<Event>>> {
-        const requestOptions = await this.coreEventsListRequestOpts();
+    async coreEventsListRaw(requestParameters: CoreEventsListRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListEventsResponse>> {
+        const requestOptions = await this.coreEventsListRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => jsonValue.map(EventFromJSON));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ListEventsResponseFromJSON(jsonValue));
     }
 
     /**
      * Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.
      * Query immutable system and domain audit events
      */
-    async coreEventsList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<Event>> {
-        const response = await this.coreEventsListRaw(initOverrides);
+    async coreEventsList(requestParameters: CoreEventsListRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListEventsResponse> {
+        const response = await this.coreEventsListRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

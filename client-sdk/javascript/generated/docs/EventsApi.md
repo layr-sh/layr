@@ -78,7 +78,7 @@ No authorization required
 
 ## coreEventsList
 
-> Array&lt;Event&gt; coreEventsList()
+> ListEventsResponse coreEventsList(limit, offset, type, actorType, actorId, resourceType, resourceId)
 
 Query immutable system and domain audit events
 
@@ -97,8 +97,25 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new EventsApi();
 
+  const body = {
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
+    // string | Filter by specific event type name (optional)
+    type: type_example,
+    // string | Filter by actor principal type (user, service_account, system) (optional)
+    actorType: actorType_example,
+    // string | Filter by actor principal UUID (optional)
+    actorId: actorId_example,
+    // string | Filter by target resource entity type (optional)
+    resourceType: resourceType_example,
+    // string | Filter by target resource unique identifier (optional)
+    resourceId: resourceId_example,
+  } satisfies CoreEventsListRequest;
+
   try {
-    const data = await api.coreEventsList();
+    const data = await api.coreEventsList(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -111,11 +128,20 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
+| **type** | `string` | Filter by specific event type name | [Optional] [Defaults to `undefined`] |
+| **actorType** | `string` | Filter by actor principal type (user, service_account, system) | [Optional] [Defaults to `undefined`] |
+| **actorId** | `string` | Filter by actor principal UUID | [Optional] [Defaults to `undefined`] |
+| **resourceType** | `string` | Filter by target resource entity type | [Optional] [Defaults to `undefined`] |
+| **resourceId** | `string` | Filter by target resource unique identifier | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
-[**Array&lt;Event&gt;**](Event.md)
+[**ListEventsResponse**](ListEventsResponse.md)
 
 ### Authorization
 

@@ -353,7 +353,7 @@ No authorization required
 
 ## dataKvPut
 
-> SetKVResponse dataKvPut(key, body)
+> SetKVResponse dataKvPut(key, body, ttl, nx)
 
 Put raw ephemeral KV entry with query TTL
 
@@ -377,6 +377,10 @@ async function example() {
     key: key_example,
     // string | Request body for string
     body: body_example,
+    // number | Key time-to-live expiration in seconds (optional)
+    ttl: 56,
+    // boolean | Only set the key if it does not already exist (optional)
+    nx: true,
   } satisfies DataKvPutRequest;
 
   try {
@@ -398,6 +402,8 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **key** | `string` |  | [Defaults to `undefined`] |
 | **body** | `string` | Request body for string | |
+| **ttl** | `number` | Key time-to-live expiration in seconds | [Optional] [Defaults to `undefined`] |
+| **nx** | `boolean` | Only set the key if it does not already exist | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -423,7 +429,7 @@ No authorization required
 
 ## dataKvSet
 
-> SetKVResponse dataKvSet(key, setKVInput)
+> SetKVResponse dataKvSet(key, setKVInput, nx)
 
 Set an ephemeral KV entry with JSON envelope
 
@@ -447,6 +453,8 @@ async function example() {
     key: key_example,
     // SetKVInput | Request body for data.SetKVInput
     setKVInput: ...,
+    // boolean | Only set the key if it does not already exist (optional)
+    nx: true,
   } satisfies DataKvSetRequest;
 
   try {
@@ -468,6 +476,7 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **key** | `string` |  | [Defaults to `undefined`] |
 | **setKVInput** | [SetKVInput](SetKVInput.md) | Request body for data.SetKVInput | |
+| **nx** | `boolean` | Only set the key if it does not already exist | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

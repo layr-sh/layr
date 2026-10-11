@@ -12,7 +12,7 @@ All URIs are relative to *http://localhost*
 
 ## functionExecutionsList
 
-> ListExecutionsResponse functionExecutionsList()
+> ListExecutionsResponse functionExecutionsList(limit, offset, endpointId)
 
 Query execution history logs across all endpoints
 
@@ -31,8 +31,17 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new ExecutionsApi();
 
+  const body = {
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
+    // string | Filter executions by endpoint UUID (optional)
+    endpointId: endpointId_example,
+  } satisfies FunctionExecutionsListRequest;
+
   try {
-    const data = await api.functionExecutionsList();
+    const data = await api.functionExecutionsList(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -45,7 +54,12 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
+| **endpointId** | `string` | Filter executions by endpoint UUID | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -138,7 +152,7 @@ No authorization required
 
 ## tasksExecutionsList
 
-> ListExecutionsResponse tasksExecutionsList()
+> ListExecutionsResponse tasksExecutionsList(limit, offset, jobId)
 
 Query execution audit logs
 
@@ -157,8 +171,17 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new ExecutionsApi();
 
+  const body = {
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
+    // string | Filter task executions by job UUID (optional)
+    jobId: jobId_example,
+  } satisfies TasksExecutionsListRequest;
+
   try {
-    const data = await api.tasksExecutionsList();
+    const data = await api.tasksExecutionsList(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -171,7 +194,12 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
+| **jobId** | `string` | Filter task executions by job UUID | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

@@ -165,11 +165,13 @@ open class BucketsAPI {
      List objects stored within a bucket
      
      - parameter bucket: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListBucketObjectsResponse
      */
-    open class func fileStorageBucketsListObjects(bucket: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListBucketObjectsResponse {
-        return try await fileStorageBucketsListObjectsWithRequestBuilder(bucket: bucket, apiConfiguration: apiConfiguration).execute().body
+    open class func fileStorageBucketsListObjects(bucket: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListBucketObjectsResponse {
+        return try await fileStorageBucketsListObjectsWithRequestBuilder(bucket: bucket, limit: limit, offset: offset, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -177,10 +179,12 @@ open class BucketsAPI {
      - GET /v1/_/file-storage/buckets/{bucket}/objects
      - Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.
      - parameter bucket: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListBucketObjectsResponse> 
      */
-    open class func fileStorageBucketsListObjectsWithRequestBuilder(bucket: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListBucketObjectsResponse> {
+    open class func fileStorageBucketsListObjectsWithRequestBuilder(bucket: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListBucketObjectsResponse> {
         var localVariablePath = "/v1/_/file-storage/buckets/{bucket}/objects"
         let bucketPreEscape = "\(APIHelper.mapValueToPathItem(bucket))"
         let bucketPostEscape = bucketPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -188,7 +192,12 @@ open class BucketsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

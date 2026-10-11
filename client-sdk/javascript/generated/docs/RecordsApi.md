@@ -15,7 +15,7 @@ All URIs are relative to *http://localhost*
 
 ## dataRecordsCreate
 
-> CreateRecordResponse dataRecordsCreate(schemaName, tableName, createRecordInput)
+> CreateRecordResponse dataRecordsCreate(schemaName, tableName, createRecordInput, onConflict)
 
 Insert single or bulk rows with RETURNING *
 
@@ -41,6 +41,8 @@ async function example() {
     tableName: tableName_example,
     // CreateRecordInput | Request body for data.CreateRecordInput
     createRecordInput: ...,
+    // string | Target column or constraint for upsert on-conflict resolution (optional)
+    onConflict: onConflict_example,
   } satisfies DataRecordsCreateRequest;
 
   try {
@@ -63,6 +65,7 @@ example().catch(console.error);
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
 | **createRecordInput** | [CreateRecordInput](CreateRecordInput.md) | Request body for data.CreateRecordInput | |
+| **onConflict** | `string` | Target column or constraint for upsert on-conflict resolution | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -162,7 +165,7 @@ No authorization required
 
 ## dataRecordsGet
 
-> GetRecordResponse dataRecordsGet(schemaName, tableName, recordId)
+> GetRecordResponse dataRecordsGet(schemaName, tableName, recordId, select)
 
 Get a single row by primary key
 
@@ -188,6 +191,8 @@ async function example() {
     tableName: tableName_example,
     // string
     recordId: recordId_example,
+    // string | Column projection (e.g. \'id,name\') (optional)
+    select: select_example,
   } satisfies DataRecordsGetRequest;
 
   try {
@@ -210,6 +215,7 @@ example().catch(console.error);
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
 | **recordId** | `string` |  | [Defaults to `undefined`] |
+| **select** | `string` | Column projection (e.g. \&#39;id,name\&#39;) | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 
@@ -235,7 +241,7 @@ No authorization required
 
 ## dataRecordsList
 
-> ListRecordsResponse dataRecordsList(schemaName, tableName)
+> ListRecordsResponse dataRecordsList(schemaName, tableName, limit, offset, select, order, cacheTtl, cacheKeySuffix, cacheKey)
 
 Query table rows with dynamic filtering, sorting, and pagination
 
@@ -259,6 +265,20 @@ async function example() {
     schemaName: schemaName_example,
     // string
     tableName: tableName_example,
+    // number | Maximum number of items to return (default 50, maximum 1000) (optional)
+    limit: 56,
+    // number | Number of items to skip before returning results (default 0) (optional)
+    offset: 56,
+    // string | Column projection and embedded relations (e.g. \'id,name,posts(*)\') (optional)
+    select: select_example,
+    // string | Ordering expression (e.g. \'created_at.desc,id.asc\') (optional)
+    order: order_example,
+    // number | Cache duration in seconds (optional)
+    cacheTtl: 56,
+    // string | Custom suffix for cache key isolation (optional)
+    cacheKeySuffix: cacheKeySuffix_example,
+    // string | Alias for cache_key_suffix (optional)
+    cacheKey: cacheKey_example,
   } satisfies DataRecordsListRequest;
 
   try {
@@ -280,6 +300,13 @@ example().catch(console.error);
 |------------- | ------------- | ------------- | -------------|
 | **schemaName** | `string` |  | [Defaults to `undefined`] |
 | **tableName** | `string` |  | [Defaults to `undefined`] |
+| **limit** | `number` | Maximum number of items to return (default 50, maximum 1000) | [Optional] [Defaults to `50`] |
+| **offset** | `number` | Number of items to skip before returning results (default 0) | [Optional] [Defaults to `0`] |
+| **select** | `string` | Column projection and embedded relations (e.g. \&#39;id,name,posts(*)\&#39;) | [Optional] [Defaults to `undefined`] |
+| **order** | `string` | Ordering expression (e.g. \&#39;created_at.desc,id.asc\&#39;) | [Optional] [Defaults to `undefined`] |
+| **cacheTtl** | `number` | Cache duration in seconds | [Optional] [Defaults to `undefined`] |
+| **cacheKeySuffix** | `string` | Custom suffix for cache key isolation | [Optional] [Defaults to `undefined`] |
+| **cacheKey** | `string` | Alias for cache_key_suffix | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

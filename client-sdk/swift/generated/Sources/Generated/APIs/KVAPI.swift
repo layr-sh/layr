@@ -205,11 +205,13 @@ open class KVAPI {
      
      - parameter key: (path)  
      - parameter body: (body) Request body for string 
+     - parameter ttl: (query) Key time-to-live expiration in seconds (optional)
+     - parameter nx: (query) Only set the key if it does not already exist (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: SetKVResponse
      */
-    open class func dataKvPut(key: String, body: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse {
-        return try await dataKvPutWithRequestBuilder(key: key, body: body, apiConfiguration: apiConfiguration).execute().body
+    open class func dataKvPut(key: String, body: String, ttl: Int? = nil, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse {
+        return try await dataKvPutWithRequestBuilder(key: key, body: body, ttl: ttl, nx: nx, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -218,10 +220,12 @@ open class KVAPI {
      - Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.
      - parameter key: (path)  
      - parameter body: (body) Request body for string 
+     - parameter ttl: (query) Key time-to-live expiration in seconds (optional)
+     - parameter nx: (query) Only set the key if it does not already exist (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<SetKVResponse> 
      */
-    open class func dataKvPutWithRequestBuilder(key: String, body: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<SetKVResponse> {
+    open class func dataKvPutWithRequestBuilder(key: String, body: String, ttl: Int? = nil, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<SetKVResponse> {
         var localVariablePath = "/v1/data/kv/{key}"
         let keyPreEscape = "\(APIHelper.mapValueToPathItem(key))"
         let keyPostEscape = keyPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -229,7 +233,12 @@ open class KVAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "ttl": (wrappedValue: ttl?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "nx": (wrappedValue: nx?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :
@@ -247,11 +256,12 @@ open class KVAPI {
      
      - parameter key: (path)  
      - parameter setKVInput: (body) Request body for data.SetKVInput 
+     - parameter nx: (query) Only set the key if it does not already exist (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: SetKVResponse
      */
-    open class func dataKvSet(key: String, setKVInput: SetKVInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse {
-        return try await dataKvSetWithRequestBuilder(key: key, setKVInput: setKVInput, apiConfiguration: apiConfiguration).execute().body
+    open class func dataKvSet(key: String, setKVInput: SetKVInput, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> SetKVResponse {
+        return try await dataKvSetWithRequestBuilder(key: key, setKVInput: setKVInput, nx: nx, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -260,10 +270,11 @@ open class KVAPI {
      - Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).
      - parameter key: (path)  
      - parameter setKVInput: (body) Request body for data.SetKVInput 
+     - parameter nx: (query) Only set the key if it does not already exist (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<SetKVResponse> 
      */
-    open class func dataKvSetWithRequestBuilder(key: String, setKVInput: SetKVInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<SetKVResponse> {
+    open class func dataKvSetWithRequestBuilder(key: String, setKVInput: SetKVInput, nx: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<SetKVResponse> {
         var localVariablePath = "/v1/data/kv/{key}"
         let keyPreEscape = "\(APIHelper.mapValueToPathItem(key))"
         let keyPostEscape = keyPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -271,7 +282,11 @@ open class KVAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: setKVInput, codableHelper: apiConfiguration.codableHelper)
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "nx": (wrappedValue: nx?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

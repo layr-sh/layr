@@ -90,11 +90,13 @@ open class EndpointsAPI {
      Query execution history logs for a specific endpoint
      
      - parameter endpointId: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: ListExecutionsResponse
      */
-    open class func functionEndpointsExecutions(endpointId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
-        return try await functionEndpointsExecutionsWithRequestBuilder(endpointId: endpointId, apiConfiguration: apiConfiguration).execute().body
+    open class func functionEndpointsExecutions(endpointId: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListExecutionsResponse {
+        return try await functionEndpointsExecutionsWithRequestBuilder(endpointId: endpointId, limit: limit, offset: offset, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -102,10 +104,12 @@ open class EndpointsAPI {
      - GET /v1/_/function/endpoints/{endpoint_id}/executions
      - Returns historical invocation audit records from function.executions for a specific endpoint, detailing response codes, durations, memory usage, and execution log streams. Requires function:endpoint.read scope.
      - parameter endpointId: (path)  
+     - parameter limit: (query) Maximum number of items to return (default 50, maximum 1000) (optional, default to 50)
+     - parameter offset: (query) Number of items to skip before returning results (default 0) (optional, default to 0)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<ListExecutionsResponse> 
      */
-    open class func functionEndpointsExecutionsWithRequestBuilder(endpointId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
+    open class func functionEndpointsExecutionsWithRequestBuilder(endpointId: String, limit: Int? = nil, offset: Int? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<ListExecutionsResponse> {
         var localVariablePath = "/v1/_/function/endpoints/{endpoint_id}/executions"
         let endpointIdPreEscape = "\(APIHelper.mapValueToPathItem(endpointId))"
         let endpointIdPostEscape = endpointIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -113,7 +117,12 @@ open class EndpointsAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "limit": (wrappedValue: limit?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+            "offset": (wrappedValue: offset?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

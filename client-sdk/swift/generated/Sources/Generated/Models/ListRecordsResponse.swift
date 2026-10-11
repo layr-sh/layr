@@ -10,25 +10,37 @@ import Foundation
 /** ListRecordsResponse schema */
 public struct ListRecordsResponse: Sendable, Codable, Hashable {
 
-    public var count: Int?
+    public var count: Int
     public var data: [Record]?
+    public var limit: Int
+    public var offset: Int
+    public var total: Int?
 
-    public init(count: Int? = nil, data: [Record]?) {
+    public init(count: Int, data: [Record]?, limit: Int, offset: Int, total: Int? = nil) {
         self.count = count
         self.data = data
+        self.limit = limit
+        self.offset = offset
+        self.total = total
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case count
         case data
+        case limit
+        case offset
+        case total
     }
 
     // Encodable protocol methods
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(count, forKey: .count)
+        try container.encode(count, forKey: .count)
         try container.encode(data, forKey: .data)
+        try container.encode(limit, forKey: .limit)
+        try container.encode(offset, forKey: .offset)
+        try container.encodeIfPresent(total, forKey: .total)
     }
 }
 

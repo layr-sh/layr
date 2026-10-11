@@ -38,11 +38,24 @@ pub enum TasksExecutionsListError {
 
 
 /// Queries execution telemetry logs from function.executions across all endpoints, returning status codes, execution duration in milliseconds, memory utilization, and stdout/stderr streams. Requires function:endpoint.read scope.
-pub async fn function_executions_list(configuration: &configuration::Configuration, ) -> Result<models::ListExecutionsResponse, Error<FunctionExecutionsListError>> {
+pub async fn function_executions_list(configuration: &configuration::Configuration, limit: Option<i32>, offset: Option<i32>, endpoint_id: Option<&str>) -> Result<models::ListExecutionsResponse, Error<FunctionExecutionsListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_limit = limit;
+    let p_query_offset = offset;
+    let p_query_endpoint_id = endpoint_id;
 
     let uri_str = format!("{}/v1/_/function/executions", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_endpoint_id {
+        req_builder = req_builder.query(&[("endpoint_id", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -111,11 +124,24 @@ pub async fn tasks_executions_create(configuration: &configuration::Configuratio
 }
 
 /// Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.
-pub async fn tasks_executions_list(configuration: &configuration::Configuration, ) -> Result<models::ListExecutionsResponse, Error<TasksExecutionsListError>> {
+pub async fn tasks_executions_list(configuration: &configuration::Configuration, limit: Option<i32>, offset: Option<i32>, job_id: Option<&str>) -> Result<models::ListExecutionsResponse, Error<TasksExecutionsListError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_query_limit = limit;
+    let p_query_offset = offset;
+    let p_query_job_id = job_id;
 
     let uri_str = format!("{}/v1/_/tasks/executions", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_job_id {
+        req_builder = req_builder.query(&[("job_id", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }

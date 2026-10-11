@@ -11,7 +11,6 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 
-/// Event : Event schema
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     #[serde(rename = "action")]
@@ -37,7 +36,6 @@ pub struct Event {
 }
 
 impl Event {
-    /// Event schema
     pub fn new(action: String, actor: models::EventActor, context: models::EventContext, created_at: chrono::DateTime<chrono::FixedOffset>, data: Option<std::collections::HashMap<String, serde_json::Value>>, id: Option<serde_json::Value>, metadata: Option<std::collections::HashMap<String, serde_json::Value>>, resource_type: String, r#type: String) -> Event {
         Event {
             action,

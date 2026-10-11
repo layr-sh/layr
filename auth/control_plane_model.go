@@ -2,6 +2,8 @@ package auth
 
 import (
 	"time"
+
+	"layr.sh/core"
 )
 
 // CreateUserInput defines parameters for creating an application user via control plane.
@@ -22,10 +24,8 @@ type LockUserInput struct {
 
 // ListUsersResponse represents the paginated list of application users.
 type ListUsersResponse struct {
-	Users  []User `json:"users"`
-	Limit  int    `json:"limit"`
-	Offset int    `json:"offset"`
-	Count  int    `json:"count"`
+	Data []User `json:"data"`
+	core.PaginationOutput
 }
 
 // ListUserSessionsResponse represents the list of active sessions for an application user in the control plane.

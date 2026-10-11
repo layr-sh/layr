@@ -14,7 +14,7 @@ Method | HTTP request | Description
 
 # **dataRecordsCreate**
 ```swift
-    open class func dataRecordsCreate(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CreateRecordResponse
+    open class func dataRecordsCreate(schemaName: String, tableName: String, createRecordInput: CreateRecordInput, onConflict: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CreateRecordResponse
 ```
 
 Insert single or bulk rows with RETURNING *
@@ -29,10 +29,11 @@ import Generated
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
 let createRecordInput = CreateRecordInput(data: [Record(id: "id_example", properties: "TODO")]) // CreateRecordInput | Request body for data.CreateRecordInput
+let onConflict = "onConflict_example" // String | Target column or constraint for upsert on-conflict resolution (optional)
 
 // Insert single or bulk rows with RETURNING *
 do {
-    let response = try await RecordsAPI.dataRecordsCreate(schemaName: schemaName, tableName: tableName, createRecordInput: createRecordInput)
+    let response = try await RecordsAPI.dataRecordsCreate(schemaName: schemaName, tableName: tableName, createRecordInput: createRecordInput, onConflict: onConflict)
     dump(response)
 } catch {
     print(error)
@@ -46,6 +47,7 @@ Name | Type | Description  | Notes
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
  **createRecordInput** | [**CreateRecordInput**](CreateRecordInput.md) | Request body for data.CreateRecordInput | 
+ **onConflict** | **String** | Target column or constraint for upsert on-conflict resolution | [optional] 
 
 ### Return type
 
@@ -114,7 +116,7 @@ No authorization required
 
 # **dataRecordsGet**
 ```swift
-    open class func dataRecordsGet(schemaName: String, tableName: String, recordId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetRecordResponse
+    open class func dataRecordsGet(schemaName: String, tableName: String, recordId: String, select: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> GetRecordResponse
 ```
 
 Get a single row by primary key
@@ -129,10 +131,11 @@ import Generated
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
 let recordId = "recordId_example" // String | 
+let select = "select_example" // String | Column projection (e.g. 'id,name') (optional)
 
 // Get a single row by primary key
 do {
-    let response = try await RecordsAPI.dataRecordsGet(schemaName: schemaName, tableName: tableName, recordId: recordId)
+    let response = try await RecordsAPI.dataRecordsGet(schemaName: schemaName, tableName: tableName, recordId: recordId, select: select)
     dump(response)
 } catch {
     print(error)
@@ -146,6 +149,7 @@ Name | Type | Description  | Notes
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
  **recordId** | **String** |  | 
+ **select** | **String** | Column projection (e.g. &#39;id,name&#39;) | [optional] 
 
 ### Return type
 
@@ -164,7 +168,7 @@ No authorization required
 
 # **dataRecordsList**
 ```swift
-    open class func dataRecordsList(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListRecordsResponse
+    open class func dataRecordsList(schemaName: String, tableName: String, limit: Int? = nil, offset: Int? = nil, select: String? = nil, order: String? = nil, cacheTtl: Int? = nil, cacheKeySuffix: String? = nil, cacheKey: String? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> ListRecordsResponse
 ```
 
 Query table rows with dynamic filtering, sorting, and pagination
@@ -178,10 +182,17 @@ import Generated
 
 let schemaName = "schemaName_example" // String | 
 let tableName = "tableName_example" // String | 
+let limit = 987 // Int | Maximum number of items to return (default 50, maximum 1000) (optional) (default to 50)
+let offset = 987 // Int | Number of items to skip before returning results (default 0) (optional) (default to 0)
+let select = "select_example" // String | Column projection and embedded relations (e.g. 'id,name,posts(*)') (optional)
+let order = "order_example" // String | Ordering expression (e.g. 'created_at.desc,id.asc') (optional)
+let cacheTtl = 987 // Int | Cache duration in seconds (optional)
+let cacheKeySuffix = "cacheKeySuffix_example" // String | Custom suffix for cache key isolation (optional)
+let cacheKey = "cacheKey_example" // String | Alias for cache_key_suffix (optional)
 
 // Query table rows with dynamic filtering, sorting, and pagination
 do {
-    let response = try await RecordsAPI.dataRecordsList(schemaName: schemaName, tableName: tableName)
+    let response = try await RecordsAPI.dataRecordsList(schemaName: schemaName, tableName: tableName, limit: limit, offset: offset, select: select, order: order, cacheTtl: cacheTtl, cacheKeySuffix: cacheKeySuffix, cacheKey: cacheKey)
     dump(response)
 } catch {
     print(error)
@@ -194,6 +205,13 @@ Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **schemaName** | **String** |  | 
  **tableName** | **String** |  | 
+ **limit** | **Int** | Maximum number of items to return (default 50, maximum 1000) | [optional] [default to 50]
+ **offset** | **Int** | Number of items to skip before returning results (default 0) | [optional] [default to 0]
+ **select** | **String** | Column projection and embedded relations (e.g. &#39;id,name,posts(*)&#39;) | [optional] 
+ **order** | **String** | Ordering expression (e.g. &#39;created_at.desc,id.asc&#39;) | [optional] 
+ **cacheTtl** | **Int** | Cache duration in seconds | [optional] 
+ **cacheKeySuffix** | **String** | Custom suffix for cache key isolation | [optional] 
+ **cacheKey** | **String** | Alias for cache_key_suffix | [optional] 
 
 ### Return type
 

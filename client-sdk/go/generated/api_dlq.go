@@ -26,6 +26,20 @@ type DLQAPIService service
 type ApiTasksDlqListRequest struct {
 	ctx context.Context
 	ApiService *DLQAPIService
+	limit *int32
+	offset *int32
+}
+
+// Maximum number of items to return (default 50, maximum 1000)
+func (r ApiTasksDlqListRequest) Limit(limit int32) ApiTasksDlqListRequest {
+	r.limit = &limit
+	return r
+}
+
+// Number of items to skip before returning results (default 0)
+func (r ApiTasksDlqListRequest) Offset(offset int32) ApiTasksDlqListRequest {
+	r.offset = &offset
+	return r
 }
 
 func (r ApiTasksDlqListRequest) Execute() (*ListDLQResponse, *http.Response, error) {
@@ -68,6 +82,20 @@ func (a *DLQAPIService) TasksDlqListExecute(r ApiTasksDlqListRequest) (*ListDLQR
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.limit != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", r.limit, "form", "")
+	} else {
+		var defaultValue int32 = 50
+		parameterAddToHeaderOrQuery(localVarQueryParams, "limit", defaultValue, "form", "")
+		r.limit = &defaultValue
+	}
+	if r.offset != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "form", "")
+	} else {
+		var defaultValue int32 = 0
+		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", defaultValue, "form", "")
+		r.offset = &defaultValue
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

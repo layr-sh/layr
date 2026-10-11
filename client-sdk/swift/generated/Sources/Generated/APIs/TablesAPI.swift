@@ -51,11 +51,12 @@ open class TablesAPI {
      
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
+     - parameter cascade: (query) Cascade table drop to dependent constraints and views (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: DeleteTableResponse
      */
-    open class func dataTablesDelete(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteTableResponse {
-        return try await dataTablesDeleteWithRequestBuilder(schemaName: schemaName, tableName: tableName, apiConfiguration: apiConfiguration).execute().body
+    open class func dataTablesDelete(schemaName: String, tableName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> DeleteTableResponse {
+        return try await dataTablesDeleteWithRequestBuilder(schemaName: schemaName, tableName: tableName, cascade: cascade, apiConfiguration: apiConfiguration).execute().body
     }
 
     /**
@@ -64,10 +65,11 @@ open class TablesAPI {
      - Executes DROP TABLE CASCADE in PostgreSQL, removing the table, associated indexes, triggers, and foreign key constraints. Invalidates catalog caches and emits data.table.deleted event. Requires data:schema.write scope.
      - parameter schemaName: (path)  
      - parameter tableName: (path)  
+     - parameter cascade: (query) Cascade table drop to dependent constraints and views (optional)
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<DeleteTableResponse> 
      */
-    open class func dataTablesDeleteWithRequestBuilder(schemaName: String, tableName: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<DeleteTableResponse> {
+    open class func dataTablesDeleteWithRequestBuilder(schemaName: String, tableName: String, cascade: Bool? = nil, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<DeleteTableResponse> {
         var localVariablePath = "/v1/_/data/tables/{schema_name}/{table_name}"
         let schemaNamePreEscape = "\(APIHelper.mapValueToPathItem(schemaName))"
         let schemaNamePostEscape = schemaNamePreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
@@ -78,7 +80,11 @@ open class TablesAPI {
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 
-        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        var localVariableUrlComponents = URLComponents(string: localVariableURLString)
+        let localVariableQueryParameters: [String: (wrappedValue: (any Sendable)?, isExplode: Bool)] = [
+            "cascade": (wrappedValue: cascade?.asParameter(codableHelper: apiConfiguration.codableHelper), isExplode: true),
+        ]
+        localVariableUrlComponents?.queryItems = APIHelper.mapValuesToQueryItems(localVariableQueryParameters)
 
         let localVariableNillableHeaders: [String: (any Sendable)?] = [
             :

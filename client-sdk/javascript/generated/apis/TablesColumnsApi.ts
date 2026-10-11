@@ -67,6 +67,10 @@ export interface DataTablesColumnsDeleteRequest {
      * 
      */
     columnName: string;
+    /**
+     * Cascade column drop to dependent views or indexes
+     */
+    cascade?: boolean;
 }
 
 export interface DataTablesColumnsUpdateRequest {
@@ -184,6 +188,10 @@ export class TablesColumnsApi extends runtime.BaseAPI {
         }
 
         const queryParameters: any = {};
+
+        if (requestParameters['cascade'] != null) {
+            queryParameters['cascade'] = requestParameters['cascade'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 

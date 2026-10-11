@@ -59,15 +59,19 @@ pub enum DataRecordsUpdateError {
 
 
 /// Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.
-pub async fn data_records_create(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, create_record_input: models::CreateRecordInput) -> Result<models::CreateRecordResponse, Error<DataRecordsCreateError>> {
+pub async fn data_records_create(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, create_record_input: models::CreateRecordInput, on_conflict: Option<&str>) -> Result<models::CreateRecordResponse, Error<DataRecordsCreateError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_table_name = table_name;
     let p_body_create_record_input = create_record_input;
+    let p_query_on_conflict = on_conflict;
 
     let uri_str = format!("{}/v1/data/{schema_name}/{table_name}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), table_name=crate::apis::urlencode(p_path_table_name));
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
+    if let Some(ref param_value) = p_query_on_conflict {
+        req_builder = req_builder.query(&[("on_conflict", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -138,15 +142,19 @@ pub async fn data_records_delete(configuration: &configuration::Configuration, s
 }
 
 /// Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.
-pub async fn data_records_get(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, record_id: &str) -> Result<models::GetRecordResponse, Error<DataRecordsGetError>> {
+pub async fn data_records_get(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, record_id: &str, select: Option<&str>) -> Result<models::GetRecordResponse, Error<DataRecordsGetError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_table_name = table_name;
     let p_path_record_id = record_id;
+    let p_query_select = select;
 
     let uri_str = format!("{}/v1/data/{schema_name}/{table_name}/{record_id}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), table_name=crate::apis::urlencode(p_path_table_name), record_id=crate::apis::urlencode(p_path_record_id));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_select {
+        req_builder = req_builder.query(&[("select", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
@@ -177,14 +185,42 @@ pub async fn data_records_get(configuration: &configuration::Configuration, sche
 }
 
 /// Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.
-pub async fn data_records_list(configuration: &configuration::Configuration, schema_name: &str, table_name: &str) -> Result<models::ListRecordsResponse, Error<DataRecordsListError>> {
+pub async fn data_records_list(configuration: &configuration::Configuration, schema_name: &str, table_name: &str, limit: Option<i32>, offset: Option<i32>, select: Option<&str>, order: Option<&str>, cache_ttl: Option<i32>, cache_key_suffix: Option<&str>, cache_key: Option<&str>) -> Result<models::ListRecordsResponse, Error<DataRecordsListError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_path_schema_name = schema_name;
     let p_path_table_name = table_name;
+    let p_query_limit = limit;
+    let p_query_offset = offset;
+    let p_query_select = select;
+    let p_query_order = order;
+    let p_query_cache_ttl = cache_ttl;
+    let p_query_cache_key_suffix = cache_key_suffix;
+    let p_query_cache_key = cache_key;
 
     let uri_str = format!("{}/v1/data/{schema_name}/{table_name}", configuration.base_path, schema_name=crate::apis::urlencode(p_path_schema_name), table_name=crate::apis::urlencode(p_path_table_name));
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
+    if let Some(ref param_value) = p_query_limit {
+        req_builder = req_builder.query(&[("limit", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_offset {
+        req_builder = req_builder.query(&[("offset", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_select {
+        req_builder = req_builder.query(&[("select", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_order {
+        req_builder = req_builder.query(&[("order", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cache_ttl {
+        req_builder = req_builder.query(&[("cache_ttl", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cache_key_suffix {
+        req_builder = req_builder.query(&[("cache_key_suffix", &param_value.to_string())]);
+    }
+    if let Some(ref param_value) = p_query_cache_key {
+        req_builder = req_builder.query(&[("cache_key", &param_value.to_string())]);
+    }
     if let Some(ref user_agent) = configuration.user_agent {
         req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
     }
