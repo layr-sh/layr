@@ -10,7 +10,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${ROOT_DIR}"
 
 SDK_DIR="./client-sdk"
-SPEC_FILE="generated/openapi/openapi.json"
+SPEC_FILE="generated/openapi/unified-spec.json"
 
 TARGET_JS=false
 TARGET_PY=false
