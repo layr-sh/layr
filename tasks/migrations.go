@@ -19,7 +19,7 @@ CREATE SCHEMA IF NOT EXISTS tasks;
 
 -- 1. Dynamic Runtime Configuration
 CREATE TABLE IF NOT EXISTS tasks.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS tasks.config (
 -- 2. Registered Recurring Cron Jobs
 CREATE TABLE IF NOT EXISTS tasks.jobs (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    name VARCHAR(128) UNIQUE NOT NULL,
-    cron_expression VARCHAR(64) NOT NULL,
-    timezone VARCHAR(64) NOT NULL DEFAULT 'UTC',
-    target_type VARCHAR(32) NOT NULL,
+    name TEXT UNIQUE NOT NULL,
+    cron_expression TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
+    target_type TEXT NOT NULL,
     target_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     last_run_at TIMESTAMPTZ,
@@ -45,13 +45,13 @@ CREATE INDEX IF NOT EXISTS idx_jobs_enabled_next ON tasks.jobs(next_run_at) WHER
 CREATE TABLE IF NOT EXISTS tasks.executions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     job_id UUID REFERENCES tasks.jobs(id) ON DELETE SET NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    status TEXT NOT NULL DEFAULT 'pending',
     run_at TIMESTAMPTZ NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     attempts INT NOT NULL DEFAULT 0,
     max_attempts INT NOT NULL DEFAULT 5,
     locked_at TIMESTAMPTZ,
-    locked_by VARCHAR(128),
+    locked_by TEXT,
     last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS tasks.execution_logs (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     job_id UUID REFERENCES tasks.jobs(id) ON DELETE SET NULL,
     execution_id UUID NOT NULL,
-    status VARCHAR(32) NOT NULL,
+    status TEXT NOT NULL,
     response_status_code INT,
     execution_duration_ms INT NOT NULL,
     response_body TEXT,

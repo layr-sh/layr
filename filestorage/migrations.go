@@ -19,7 +19,7 @@ CREATE SCHEMA IF NOT EXISTS file_storage;
 
 -- 1. Dynamic Runtime Configuration
 CREATE TABLE IF NOT EXISTS file_storage.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -27,9 +27,9 @@ CREATE TABLE IF NOT EXISTS file_storage.config (
 -- 2. File Storage Buckets
 CREATE TABLE IF NOT EXISTS file_storage.buckets (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    name VARCHAR(128) UNIQUE NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     is_public BOOLEAN NOT NULL DEFAULT false,
-    backend VARCHAR(32) NOT NULL DEFAULT 'database',
+    backend TEXT NOT NULL DEFAULT 'database',
     backend_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     allowed_mime_types TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     max_file_size_bytes BIGINT NOT NULL DEFAULT 52428800,
@@ -44,9 +44,9 @@ CREATE TABLE IF NOT EXISTS file_storage.objects (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     bucket_id UUID NOT NULL REFERENCES file_storage.buckets(id) ON DELETE CASCADE,
     object_key TEXT NOT NULL,
-    content_type VARCHAR(255) NOT NULL,
+    content_type TEXT NOT NULL,
     size_bytes BIGINT NOT NULL,
-    checksum_sha256 VARCHAR(64) NOT NULL,
+    checksum_sha256 TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -69,7 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_file_storage_chunks_object ON file_storage.chunks
 CREATE TABLE IF NOT EXISTS file_storage.s3_credentials (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     service_account_id UUID NOT NULL REFERENCES core.service_accounts(id) ON DELETE CASCADE,
-    access_key_id VARCHAR(64) UNIQUE NOT NULL,
+    access_key_id TEXT UNIQUE NOT NULL,
     encrypted_secret_key TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS file_storage.multipart_uploads (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     bucket_id UUID NOT NULL REFERENCES file_storage.buckets(id) ON DELETE CASCADE,
     object_key TEXT NOT NULL,
-    content_type VARCHAR(255) NOT NULL DEFAULT 'application/octet-stream',
+    content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );

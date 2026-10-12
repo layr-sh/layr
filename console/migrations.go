@@ -19,7 +19,7 @@ CREATE SCHEMA IF NOT EXISTS console;
 
 -- 1. Dynamic Runtime Configuration
 CREATE TABLE IF NOT EXISTS console.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS console.config (
 -- 2. Console Operator Users
 CREATE TABLE IF NOT EXISTS console.users (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     encrypted_mfa_secret BYTEA,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     last_login_at TIMESTAMPTZ,
@@ -43,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_users_is_enabled ON console.users(is_enabled);
 CREATE TABLE IF NOT EXISTS console.sessions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES console.users(id) ON DELETE CASCADE,
-    session_token_hash VARCHAR(255) NOT NULL,
+    session_token_hash TEXT NOT NULL,
     ip_address INET NOT NULL,
     user_agent TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS console.passkeys (
     public_key BYTEA NOT NULL,
     counter BIGINT NOT NULL DEFAULT 0,
     transports TEXT[] DEFAULT ARRAY[]::TEXT[],
-    friendly_name VARCHAR(128) NOT NULL DEFAULT 'Security Key',
+    friendly_name TEXT NOT NULL DEFAULT 'Security Key',
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );

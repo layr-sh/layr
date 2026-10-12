@@ -75,7 +75,7 @@ CREATE SCHEMA IF NOT EXISTS console;
 
 CREATE TABLE IF NOT EXISTS core.migrations (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    service VARCHAR(64) NOT NULL DEFAULT 'core',
+    service TEXT NOT NULL DEFAULT 'core',
     version INT NOT NULL,
     description TEXT NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -107,8 +107,8 @@ CREATE INDEX IF NOT EXISTS idx_core_nodes_heartbeat ON core.nodes (last_heartbea
 
 CREATE TABLE IF NOT EXISTS console.users (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     encrypted_mfa_secret BYTEA,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
     last_login_at TIMESTAMPTZ,
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS console.users (
 CREATE TABLE IF NOT EXISTS console.sessions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES console.users(id) ON DELETE CASCADE,
-    session_token_hash VARCHAR(255) NOT NULL,
+    session_token_hash TEXT NOT NULL,
     ip_address INET NOT NULL,
     user_agent TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -231,7 +231,7 @@ func (db *DatabasePool) MigrateUp(ctx context.Context, migrations []DatabaseMigr
 	_, _ = tx.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS core.migrations (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
-			service VARCHAR(64) NOT NULL DEFAULT 'core',
+			service TEXT NOT NULL DEFAULT 'core',
 			version INT NOT NULL,
 			description TEXT NOT NULL,
 			applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
