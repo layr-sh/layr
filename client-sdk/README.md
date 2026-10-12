@@ -478,7 +478,10 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 - Subgroup `function.cp.domains.*`:
   - [ ] `function.cp.domains.create()`: Register a standalone custom domain (`POST /v1/_/function/domains` | `function__domains__create`)
   - [ ] `function.cp.domains.delete()`: Delete custom domain and cascade attached routes (`DELETE /v1/_/function/domains/{domain_id}` | `function__domains__delete`)
+  - [ ] `function.cp.domains.get()`: Get custom domain details and DNS instructions (`GET /v1/_/function/domains/{domain_id}` | `function__domains__get`)
   - [ ] `function.cp.domains.list()`: List registered custom domains (`GET /v1/_/function/domains` | `function__domains__list`)
+  - [ ] `function.cp.domains.update()`: Update custom domain configuration (`PATCH /v1/_/function/domains/{domain_id}` | `function__domains__update`)
+  - [ ] `function.cp.domains.verify()`: Verify custom domain DNS configuration (`POST /v1/_/function/domains/{domain_id}/verify` | `function__domains__verify`)
 
 - Subgroup `function.cp.endpoint_domains.*`:
   - [ ] `function.cp.endpoint_domains.create()`: Attach endpoint route to custom domain with path prefix (`POST /v1/_/function/endpoints/{endpoint_id}/domains` | `function__endpoint_domains__create`)
