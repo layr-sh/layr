@@ -19,7 +19,7 @@ CREATE SCHEMA IF NOT EXISTS auth;
 
 -- 1. Dynamic Runtime Configuration (Managed via Console)
 CREATE TABLE IF NOT EXISTS auth.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -27,12 +27,12 @@ CREATE TABLE IF NOT EXISTS auth.config (
 -- 2. Core User Identity Table
 CREATE TABLE IF NOT EXISTS auth.users (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    email VARCHAR(255) UNIQUE,
-    phone VARCHAR(32) UNIQUE,
-    password_hash VARCHAR(255),
+    email TEXT UNIQUE,
+    phone TEXT UNIQUE,
+    password_hash TEXT,
     encrypted_mfa_secret TEXT,
     mfa_enabled BOOLEAN NOT NULL DEFAULT false,
-    role VARCHAR(64) NOT NULL DEFAULT 'authenticated',
+    role TEXT NOT NULL DEFAULT 'authenticated',
     is_anonymous BOOLEAN NOT NULL DEFAULT false,
     email_verified_at TIMESTAMPTZ,
     phone_verified_at TIMESTAMPTZ,
@@ -49,8 +49,8 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON auth.users(phone);
 CREATE TABLE IF NOT EXISTS auth.identities (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    provider VARCHAR(64) NOT NULL,
-    provider_user_id VARCHAR(255) NOT NULL,
+    provider TEXT NOT NULL,
+    provider_user_id TEXT NOT NULL,
     properties JSONB NOT NULL DEFAULT '{}'::jsonb,
     last_sign_in_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -64,8 +64,8 @@ CREATE INDEX IF NOT EXISTS idx_identities_user_id ON auth.identities(user_id);
 CREATE TABLE IF NOT EXISTS auth.sessions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    client_id VARCHAR(255),
-    refresh_token_hash VARCHAR(255) NOT NULL,
+    client_id TEXT,
+    refresh_token_hash TEXT NOT NULL,
     ip_address INET,
     user_agent TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS auth.passkeys (
     public_key BYTEA NOT NULL,
     counter BIGINT NOT NULL DEFAULT 0,
     transports TEXT[] DEFAULT ARRAY[]::TEXT[],
-    friendly_name VARCHAR(128) NOT NULL DEFAULT 'Passkey',
+    friendly_name TEXT NOT NULL DEFAULT 'Passkey',
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -94,9 +94,9 @@ CREATE INDEX IF NOT EXISTS idx_passkeys_user ON auth.passkeys(user_id);
 -- 6. OTP & Verification Tokens
 CREATE TABLE IF NOT EXISTS auth.otps (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    recipient VARCHAR(255) NOT NULL,
-    code_hash VARCHAR(255) NOT NULL,
-    purpose VARCHAR(32) NOT NULL,
+    recipient TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    purpose TEXT NOT NULL,
     attempts INT NOT NULL DEFAULT 0,
     expires_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()

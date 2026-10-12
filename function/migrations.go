@@ -19,7 +19,7 @@ CREATE SCHEMA IF NOT EXISTS function;
 
 -- 1. Dynamic Runtime Configuration
 CREATE TABLE IF NOT EXISTS function.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS function.config (
 -- 2. Endpoints Entity Table
 CREATE TABLE IF NOT EXISTS function.endpoints (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    name VARCHAR(128) UNIQUE NOT NULL,
+    name TEXT UNIQUE NOT NULL,
     description TEXT,
-    runtime VARCHAR(64) NOT NULL DEFAULT 'workerd',
-    entrypoint VARCHAR(128) NOT NULL DEFAULT 'index.js',
+    runtime TEXT NOT NULL DEFAULT 'workerd',
+    entrypoint TEXT NOT NULL DEFAULT 'index.js',
     memory_limit_mb INT NOT NULL DEFAULT 128,
     timeout_seconds INT NOT NULL DEFAULT 30,
     is_public BOOLEAN NOT NULL DEFAULT true,
@@ -44,13 +44,13 @@ CREATE TABLE IF NOT EXISTS function.deployments (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     endpoint_id UUID NOT NULL REFERENCES function.endpoints(id) ON DELETE CASCADE,
     version INT NOT NULL,
-    bundle_format VARCHAR(32) NOT NULL DEFAULT 'raw',
+    bundle_format TEXT NOT NULL DEFAULT 'raw',
     bundle_content BYTEA NOT NULL,
-    bundle_hash VARCHAR(64) NOT NULL,
+    bundle_hash TEXT NOT NULL,
     bundle_files JSONB NOT NULL DEFAULT '{}'::jsonb,
     environment_variables JSONB NOT NULL DEFAULT '{}'::jsonb,
     workerd_runtime_config JSONB,
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    status TEXT NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     CONSTRAINT uq_endpoint_version UNIQUE (endpoint_id, version)
 );
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS function.executions (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     endpoint_id UUID NOT NULL REFERENCES function.endpoints(id) ON DELETE CASCADE,
     deployment_id UUID REFERENCES function.deployments(id) ON DELETE SET NULL,
-    method VARCHAR(16) NOT NULL,
+    method TEXT NOT NULL,
     path TEXT NOT NULL,
     status_code INT NOT NULL,
     duration_ms INT NOT NULL,
@@ -92,10 +92,10 @@ CREATE INDEX IF NOT EXISTS idx_function_executions_created_at ON function.execut
 -- 5. Standalone Custom Domains
 CREATE TABLE IF NOT EXISTS function.custom_domains (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    domain VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    domain TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
     tls_enabled BOOLEAN NOT NULL DEFAULT true,
-    tls_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    tls_status TEXT NOT NULL DEFAULT 'pending',
     tls_acme_email TEXT,
     tls_error_message TEXT,
     tls_issued_at TIMESTAMPTZ,
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS function.custom_domain_routes (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     custom_domain_id UUID NOT NULL REFERENCES function.custom_domains(id) ON DELETE CASCADE,
     endpoint_id UUID NOT NULL REFERENCES function.endpoints(id) ON DELETE CASCADE,
-    path_prefix VARCHAR(255) NOT NULL DEFAULT '/',
+    path_prefix TEXT NOT NULL DEFAULT '/',
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     CONSTRAINT uq_function_custom_domain_routes_prefix UNIQUE(custom_domain_id, path_prefix)

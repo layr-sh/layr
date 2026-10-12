@@ -21,7 +21,7 @@ var DataDatabaseMigration = core.DatabaseMigration{
 CREATE SCHEMA IF NOT EXISTS data;
 
 CREATE TABLE IF NOT EXISTS data.config (
-    key VARCHAR(128) PRIMARY KEY,
+    key TEXT PRIMARY KEY,
     value JSONB NOT NULL,
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -136,7 +136,7 @@ CREATE INDEX IF NOT EXISTS idx_reference_data_currencies_code ON reference_data.
 
 CREATE TABLE IF NOT EXISTS reference_data.languages (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
-    code VARCHAR(8) NOT NULL UNIQUE,
+    code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
@@ -194,7 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_reference_data_country_borders_border ON referenc
 CREATE TABLE IF NOT EXISTS reference_data.country_name_translations (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     country_id UUID NOT NULL REFERENCES reference_data.countries(id) ON DELETE CASCADE,
-    language_code VARCHAR(8) NOT NULL,
+    language_code TEXT NOT NULL,
     common_name TEXT NOT NULL,
     official_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -205,7 +205,7 @@ CREATE INDEX IF NOT EXISTS idx_reference_data_country_translations_country ON re
 CREATE TABLE IF NOT EXISTS reference_data.country_native_names (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     country_id UUID NOT NULL REFERENCES reference_data.countries(id) ON DELETE CASCADE,
-    language_code VARCHAR(8) NOT NULL,
+    language_code TEXT NOT NULL,
     common_name TEXT NOT NULL,
     official_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -216,7 +216,7 @@ CREATE INDEX IF NOT EXISTS idx_reference_data_country_native_country ON referenc
 CREATE TABLE IF NOT EXISTS reference_data.country_demonyms (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     country_id UUID NOT NULL REFERENCES reference_data.countries(id) ON DELETE CASCADE,
-    language_code VARCHAR(8) NOT NULL,
+    language_code TEXT NOT NULL,
     female TEXT NOT NULL,
     male TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
@@ -236,7 +236,7 @@ CREATE INDEX IF NOT EXISTS idx_reference_data_country_capitals_country ON refere
 CREATE TABLE IF NOT EXISTS reference_data.country_tlds (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     country_id UUID NOT NULL REFERENCES reference_data.countries(id) ON DELETE CASCADE,
-    tld VARCHAR(16) NOT NULL,
+    tld TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     UNIQUE (country_id, tld)
 );
