@@ -3,8 +3,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -51,9 +53,6 @@ func getOperations(openAPISpec *openapi3.T, plane string) []OperationRecord {
 	var operations []OperationRecord
 	for path, pathItem := range openAPISpec.Paths.Map() {
 		for method, operation := range pathItem.Operations() {
-			if operation == nil {
-				continue
-			}
 			var sdkGroups []string
 			if raw, hasGroups := operation.Extensions["x-sdk-group-name"]; hasGroups {
 				switch typedGroups := raw.(type) {
@@ -287,62 +286,79 @@ func getServiceHookIdentifier(service string) string {
 	}
 }
 
-func main() {
-	checkFlag := flag.Bool("check", false, "Verify that client-sdk/README.md is up to date with router methods")
-	printFlag := flag.Bool("print", false, "Print generated method markdown to stdout instead of updating file")
-	flag.Parse()
+var (
+	getwdFn     = os.Getwd
+	osWriteFile = os.WriteFile
+	exitFunc    = os.Exit
+)
+
+func run(args []string, stdoutWriter io.Writer, readmeOverridePath ...string) error {
+	flagSet := flag.NewFlagSet("generate_dev_references", flag.ContinueOnError)
+	flagSet.SetOutput(io.Discard)
+	checkFlag := flagSet.Bool("check", false, "Verify that client-sdk/README.md is up to date with router methods")
+	printFlag := flagSet.Bool("print", false, "Print generated method markdown to stdout instead of updating file")
+	if err := flagSet.Parse(args); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
+	}
 
 	baseMarkdown, controlPlaneMarkdown := generateMethodsMarkdown()
 
 	if *printFlag {
-		fmt.Println("=== BASE PLANE METHODS ===")
-		fmt.Println(baseMarkdown)
-		fmt.Println("=== CONTROL PLANE (.cp) METHODS ===")
-		fmt.Println(controlPlaneMarkdown)
-		return
+		_, _ = fmt.Fprintln(stdoutWriter, "=== BASE PLANE METHODS ===")
+		_, _ = fmt.Fprintln(stdoutWriter, baseMarkdown)
+		_, _ = fmt.Fprintln(stdoutWriter, "=== CONTROL PLANE (.cp) METHODS ===")
+		_, _ = fmt.Fprintln(stdoutWriter, controlPlaneMarkdown)
+		return nil
 	}
 
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+	var readmePath string
+	if len(readmeOverridePath) > 0 && readmeOverridePath[0] != "" {
+		readmePath = readmeOverridePath[0]
+	} else {
+		repoRoot, err := findRepoRoot()
+		if err != nil {
+			return fmt.Errorf("error finding repo root: %w", err)
+		}
+		readmePath = filepath.Join(repoRoot, "client-sdk", "README.md")
 	}
 
-	readmePath := filepath.Join(repoRoot, "client-sdk", "README.md")
 	contentBytes, err := os.ReadFile(readmePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading %s: %v\n", readmePath, err)
-		os.Exit(1)
+		return fmt.Errorf("error reading %s: %w", readmePath, err)
 	}
 	content := string(contentBytes)
 
 	newContent := content
 	newContent, err = replaceBetweenMarkers(newContent, baseStartMarker, baseEndMarker, "\n\n"+baseMarkdown)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error injecting base methods: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error injecting base methods: %w", err)
 	}
 
 	newContent, err = replaceBetweenMarkers(newContent, controlPlaneStartMarker, controlPlaneEndMarker, "\n\n"+controlPlaneMarkdown)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error injecting control plane methods: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error injecting control plane methods: %w", err)
 	}
 
 	if *checkFlag {
 		if newContent != content {
-			fmt.Fprintln(os.Stderr, "client-sdk/README.md is out of date with Go router routes. Run ./scripts/sdk/generate-dev-references to synchronize.")
-			os.Exit(1)
+			return errors.New("client-sdk/README.md is out of date with Go router routes. Run ./scripts/sdk/generate-dev-references to synchronize")
 		}
-		fmt.Println("client-sdk/README.md is up to date with all router methods.")
-		return
+		_, _ = fmt.Fprintln(stdoutWriter, "client-sdk/README.md is up to date with all router methods.")
+		return nil
 	}
 
-	if err := os.WriteFile(readmePath, []byte(newContent), defaultFilePermission); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing %s: %v\n", readmePath, err)
-		os.Exit(1)
+	if err := osWriteFile(readmePath, []byte(newContent), defaultFilePermission); err != nil {
+		return fmt.Errorf("error writing %s: %w", readmePath, err)
 	}
-	fmt.Printf("Updated %s with latest router methods.\n", readmePath)
+	_, _ = fmt.Fprintf(stdoutWriter, "Updated %s with latest router methods.\n", readmePath)
+	return nil
+}
+
+func main() {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		exitFunc(1)
+	}
 }
 
 func replaceBetweenMarkers(content, startMarker, endMarker, replacement string) (string, error) {
@@ -364,7 +380,7 @@ func replaceBetweenMarkers(content, startMarker, endMarker, replacement string) 
 }
 
 func findRepoRoot() (string, error) {
-	currentDirectory, err := os.Getwd()
+	currentDirectory, err := getwdFn()
 	if err != nil {
 		return "", fmt.Errorf("get current working directory: %w", err)
 	}

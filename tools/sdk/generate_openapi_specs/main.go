@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -33,9 +33,6 @@ func validateSpecOperations(openAPISpec *openapi3.T, specName string) (int, erro
 	totalOperations := 0
 	for path, pathItem := range openAPISpec.Paths.Map() {
 		for method, operation := range pathItem.Operations() {
-			if operation == nil {
-				continue
-			}
 			totalOperations++
 
 			// 1. Validate OperationID
@@ -78,71 +75,71 @@ func validateSpecOperations(openAPISpec *openapi3.T, specName string) (int, erro
 	return totalOperations, nil
 }
 
-func main() {
-	outputDirectoryFlag := flag.String("output-dir", "generated/openapi", "Target directory for exported OpenAPI specifications")
-	validateOnlyFlag := flag.Bool("validate-only", false, "Only validate OpenAPI specifications without writing files to disk")
-	flag.Parse()
+var (
+	exportSpecsFn     = core.ExportOpenAPISpecs
+	jsonMarshalIndent = json.MarshalIndent
+	osWriteFile       = os.WriteFile
+	exitFunc          = os.Exit
+)
 
-	baseOpenAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec := core.ExportOpenAPISpecs()
-
-	// Validate base spec
-	baseOpsCount, err := validateSpecOperations(baseOpenAPISpec, "base-spec.json")
-	if err != nil {
-		log.Fatalf("Base spec validation failed: %v", err)
+func run(args []string, stdoutWriter io.Writer) error {
+	flagSet := flag.NewFlagSet("generate_openapi_specs", flag.ContinueOnError)
+	flagSet.SetOutput(io.Discard)
+	outputDirectoryFlag := flagSet.String("output-dir", "generated/openapi", "Target directory for exported OpenAPI specifications")
+	validateOnlyFlag := flagSet.Bool("validate-only", false, "Only validate OpenAPI specifications without writing files to disk")
+	if err := flagSet.Parse(args); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
-	// Validate control plane spec
-	controlPlaneOpsCount, err := validateSpecOperations(controlPlaneOpenAPISpec, "control-plane-spec.json")
-	if err != nil {
-		log.Fatalf("Control plane spec validation failed: %v", err)
+	baseOpenAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec := exportSpecsFn()
+
+	specs := []struct {
+		name        string
+		fileName    string
+		openAPISpec *openapi3.T
+	}{
+		{"base", "base-spec.json", baseOpenAPISpec},
+		{"control plane", "control-plane-spec.json", controlPlaneOpenAPISpec},
+		{"unified", "unified-spec.json", unifiedOpenAPISpec},
 	}
 
-	// Validate unified spec
-	unifiedOpsCount, err := validateSpecOperations(unifiedOpenAPISpec, "unified-spec.json")
-	if err != nil {
-		log.Fatalf("Unified spec validation failed: %v", err)
+	opsCounts := make([]int, len(specs))
+	for index, targetSpec := range specs {
+		count, err := validateSpecOperations(targetSpec.openAPISpec, targetSpec.fileName)
+		if err != nil {
+			return fmt.Errorf("%s spec validation failed: %w", targetSpec.name, err)
+		}
+		opsCounts[index] = count
 	}
 
 	if *validateOnlyFlag {
-		fmt.Printf("All OpenAPI specifications validated (%d total operations: %d base, %d control plane)\n",
-			unifiedOpsCount, baseOpsCount, controlPlaneOpsCount)
-		return
+		_, _ = fmt.Fprintf(stdoutWriter, "All OpenAPI specifications validated (%d total operations: %d base, %d control plane)\n",
+			opsCounts[2], opsCounts[0], opsCounts[1])
+		return nil
 	}
 
 	if mkdirErr := os.MkdirAll(*outputDirectoryFlag, defaultDirPermission); mkdirErr != nil {
-		log.Fatalf("Failed to create output directory %s: %v", *outputDirectoryFlag, mkdirErr)
+		return fmt.Errorf("failed to create output directory %s: %w", *outputDirectoryFlag, mkdirErr)
 	}
 
-	// 1. Export Base Client Spec
-	baseSpecPath := filepath.Join(*outputDirectoryFlag, "base-spec.json")
-	basePayloadJSON, marshalErr := json.MarshalIndent(baseOpenAPISpec, "", "  ")
-	if marshalErr != nil {
-		log.Fatalf("Failed to serialize base spec: %v", marshalErr)
+	for index, targetSpec := range specs {
+		specPath := filepath.Join(*outputDirectoryFlag, targetSpec.fileName)
+		payloadJSON, marshalErr := jsonMarshalIndent(targetSpec.openAPISpec, "", "  ")
+		if marshalErr != nil {
+			return fmt.Errorf("failed to serialize %s spec: %w", targetSpec.name, marshalErr)
+		}
+		if writeErr := osWriteFile(specPath, payloadJSON, defaultFilePermission); writeErr != nil {
+			return fmt.Errorf("failed to write %s: %w", specPath, writeErr)
+		}
+		_, _ = fmt.Fprintf(stdoutWriter, "Exported %s OpenAPI spec: %s (%d paths, %d operations)\n", targetSpec.name, specPath, targetSpec.openAPISpec.Paths.Len(), opsCounts[index])
 	}
-	if writeErr := os.WriteFile(baseSpecPath, basePayloadJSON, defaultFilePermission); writeErr != nil {
-		log.Fatalf("Failed to write %s: %v", baseSpecPath, writeErr)
-	}
-	fmt.Printf("Exported base OpenAPI spec: %s (%d paths, %d operations)\n", baseSpecPath, baseOpenAPISpec.Paths.Len(), baseOpsCount)
 
-	// 2. Export Control Plane Spec
-	controlPlaneSpecPath := filepath.Join(*outputDirectoryFlag, "control-plane-spec.json")
-	controlPlanePayloadJSON, marshalErr := json.MarshalIndent(controlPlaneOpenAPISpec, "", "  ")
-	if marshalErr != nil {
-		log.Fatalf("Failed to serialize control plane spec: %v", marshalErr)
-	}
-	if writeErr := os.WriteFile(controlPlaneSpecPath, controlPlanePayloadJSON, defaultFilePermission); writeErr != nil {
-		log.Fatalf("Failed to write %s: %v", controlPlaneSpecPath, writeErr)
-	}
-	fmt.Printf("Exported control plane OpenAPI spec: %s (%d paths, %d operations)\n", controlPlaneSpecPath, controlPlaneOpenAPISpec.Paths.Len(), controlPlaneOpsCount)
+	return nil
+}
 
-	// 3. Export Unified Spec
-	unifiedSpecPath := filepath.Join(*outputDirectoryFlag, "unified-spec.json")
-	unifiedPayloadJSON, marshalErr := json.MarshalIndent(unifiedOpenAPISpec, "", "  ")
-	if marshalErr != nil {
-		log.Fatalf("Failed to serialize unified spec: %v", marshalErr)
+func main() {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		exitFunc(1)
 	}
-	if writeErr := os.WriteFile(unifiedSpecPath, unifiedPayloadJSON, defaultFilePermission); writeErr != nil {
-		log.Fatalf("Failed to write %s: %v", unifiedSpecPath, writeErr)
-	}
-	fmt.Printf("Exported unified OpenAPI spec: %s (%d paths, %d operations)\n", unifiedSpecPath, unifiedOpenAPISpec.Paths.Len(), unifiedOpsCount)
 }
