@@ -970,3 +970,127 @@ func TestCoreConfigVerboseLoggingUnit(t *testing.T) {
 		t.Errorf("expected log output when LOG_LEVEL=debug, got %q", buffer.String())
 	}
 }
+
+func TestCoreServerTLSConfigDefaultsAndEnvOverridesUnit(t *testing.T) {
+	config := DefaultConfig()
+	if config.Server.TLS.Enabled {
+		t.Fatalf("expected TLS.Enabled to be false by default")
+	}
+	if config.Server.TLS.AutoTLS {
+		t.Fatalf("expected TLS.AutoTLS to be false by default")
+	}
+
+	if config.Server.TLS.HTTPRedirect != true {
+		t.Fatalf("expected TLS.HTTPRedirect to be true by default")
+	}
+	if config.Server.TLS.HTTPListenAddr != ":80" {
+		t.Fatalf("expected TLS.HTTPListenAddr to be ':80' by default")
+	}
+
+	t.Setenv("LAYR__SECURITY__MASTER_ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	t.Setenv("LAYR__SERVER__LISTEN_ADDR", ":443")
+	t.Setenv("LAYR__SERVER__TLS__ENABLED", "true")
+	t.Setenv("LAYR__SERVER__TLS__AUTO_TLS", "true")
+	t.Setenv("LAYR__SERVER__TLS__ACME_EMAIL", "admin@layr.sh")
+	t.Setenv("LAYR__SERVER__TLS__ACME_STAGING", "true")
+	t.Setenv("LAYR__SERVER__TLS__DOMAINS", "layr.sh,api.layr.sh")
+	t.Setenv("LAYR__SERVER__TLS__CERT_FILE", "/path/to/cert.pem")
+	t.Setenv("LAYR__SERVER__TLS__KEY_FILE", "/path/to/key.pem")
+	t.Setenv("LAYR__SERVER__TLS__CERT_PEM", "inline-cert")
+	t.Setenv("LAYR__SERVER__TLS__KEY_PEM", "inline-key")
+	t.Setenv("LAYR__SERVER__TLS__HTTP_REDIRECT", "false")
+	t.Setenv("LAYR__SERVER__TLS__HTTP_LISTEN_ADDR", ":8080")
+
+	loadedConfig, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	if loadedConfig.Server.ListenAddr != ":443" {
+		t.Fatalf("expected ListenAddr ':443', got %q", loadedConfig.Server.ListenAddr)
+	}
+	if !loadedConfig.Server.TLS.Enabled {
+		t.Fatalf("expected TLS.Enabled true")
+	}
+	if !loadedConfig.Server.TLS.AutoTLS {
+		t.Fatalf("expected TLS.AutoTLS true")
+	}
+	if loadedConfig.Server.TLS.AcmeEmail != "admin@layr.sh" {
+		t.Fatalf("expected AcmeEmail 'admin@layr.sh', got %q", loadedConfig.Server.TLS.AcmeEmail)
+	}
+	if !loadedConfig.Server.TLS.AcmeStaging {
+		t.Fatalf("expected AcmeStaging true")
+	}
+	if len(loadedConfig.Server.TLS.Domains) != 2 || loadedConfig.Server.TLS.Domains[0] != "layr.sh" || loadedConfig.Server.TLS.Domains[1] != "api.layr.sh" {
+		t.Fatalf("expected Domains [layr.sh api.layr.sh], got %v", loadedConfig.Server.TLS.Domains)
+	}
+	if loadedConfig.Server.TLS.CertFile != "/path/to/cert.pem" {
+		t.Fatalf("expected CertFile '/path/to/cert.pem', got %q", loadedConfig.Server.TLS.CertFile)
+	}
+	if loadedConfig.Server.TLS.KeyFile != "/path/to/key.pem" {
+		t.Fatalf("expected KeyFile '/path/to/key.pem', got %q", loadedConfig.Server.TLS.KeyFile)
+	}
+	if loadedConfig.Server.TLS.CertPEM != "inline-cert" {
+		t.Fatalf("expected CertPEM 'inline-cert', got %q", loadedConfig.Server.TLS.CertPEM)
+	}
+	if loadedConfig.Server.TLS.KeyPEM != "inline-key" {
+		t.Fatalf("expected KeyPEM 'inline-key', got %q", loadedConfig.Server.TLS.KeyPEM)
+	}
+	if loadedConfig.Server.TLS.HTTPRedirect != false {
+		t.Fatalf("expected HTTPRedirect false")
+	}
+	if loadedConfig.Server.TLS.HTTPListenAddr != ":8080" {
+		t.Fatalf("expected HTTPListenAddr ':8080', got %q", loadedConfig.Server.TLS.HTTPListenAddr)
+	}
+}
+
+func TestCoreServerTLSConfigValidationUnit(t *testing.T) {
+	validHexKey := strings.Repeat("a", 64)
+
+	// 1. TLS disabled: valid without certs
+	testConfig := DefaultConfig()
+	testConfig.Security.MasterEncryptionKey = validHexKey
+	testConfig.Server.TLS.Enabled = false
+	if err := testConfig.Validate(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+
+	// 2. TLS enabled with AutoTLS: valid without cert files
+	testConfig = DefaultConfig()
+	testConfig.Security.MasterEncryptionKey = validHexKey
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = true
+	if err := testConfig.Validate(); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+
+	// 3. TLS enabled with Manual TLS (AutoTLS: false) and missing certs: invalid
+	testConfig = DefaultConfig()
+	testConfig.Security.MasterEncryptionKey = validHexKey
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	if err := testConfig.Validate(); err == nil {
+		t.Fatalf("expected validation error when certs are missing for manual TLS")
+	}
+
+	// 4. TLS enabled with Manual TLS using CertFile and KeyFile: valid
+	testConfig = DefaultConfig()
+	testConfig.Security.MasterEncryptionKey = validHexKey
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertFile = "cert.pem"
+	testConfig.Server.TLS.KeyFile = "key.pem"
+	if err := testConfig.Validate(); err != nil {
+		t.Fatalf("unexpected error with cert files: %v", err)
+	}
+
+	// 5. TLS enabled with Manual TLS using CertPEM and KeyPEM: valid
+	testConfig = DefaultConfig()
+	testConfig.Security.MasterEncryptionKey = validHexKey
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = "pem-cert"
+	testConfig.Server.TLS.KeyPEM = "pem-key"
+	if err := testConfig.Validate(); err != nil {
+		t.Fatalf("unexpected error with inline PEMs: %v", err)
+	}
+}

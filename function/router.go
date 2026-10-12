@@ -9,9 +9,6 @@ import (
 
 // RegisterRoutes registers all Function data plane and administrative control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
-	if service.kernel.Server() != nil {
-		service.RegisterHostRoutes(service.kernel.Server())
-	}
 	service.registerBaseRoutes(baseRouter)
 	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
@@ -269,6 +266,14 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("function", "domains"),
 		core.RouteSDKMethodName("list"),
 	)
+	core.GetRoute[CustomDomain](router, "/v1/_/function/domains/{domain_id}", service.controlPlaneHandler.handleGetCustomDomain,
+		core.RouteTag("Domains"),
+		core.RouteSummary("Get custom domain details and DNS instructions"),
+		core.RouteDescription("Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope."),
+		core.RouteOperationID("function__domains__get"),
+		core.RouteSDKGroupName("function", "domains"),
+		core.RouteSDKMethodName("get"),
+	)
 	core.DeleteRoute[core.Empty](router, "/v1/_/function/domains/{domain_id}", service.controlPlaneHandler.handleDeleteCustomDomain,
 		core.RouteTag("Domains"),
 		core.RouteSummary("Delete custom domain and cascade attached routes"),
@@ -277,6 +282,22 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteOperationID("function__domains__delete"),
 		core.RouteSDKGroupName("function", "domains"),
 		core.RouteSDKMethodName("delete"),
+	)
+	core.PatchRoute[CustomDomain, UpdateCustomDomainInput](router, "/v1/_/function/domains/{domain_id}", service.controlPlaneHandler.handleUpdateCustomDomain,
+		core.RouteTag("Domains"),
+		core.RouteSummary("Update custom domain configuration"),
+		core.RouteDescription("Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope."),
+		core.RouteOperationID("function__domains__update"),
+		core.RouteSDKGroupName("function", "domains"),
+		core.RouteSDKMethodName("update"),
+	)
+	core.PostRoute[CustomDomain, core.Empty](router, "/v1/_/function/domains/{domain_id}/verify", service.controlPlaneHandler.handleVerifyCustomDomain,
+		core.RouteTag("Domains"),
+		core.RouteSummary("Verify custom domain DNS configuration"),
+		core.RouteDescription("Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope."),
+		core.RouteOperationID("function__domains__verify"),
+		core.RouteSDKGroupName("function", "domains"),
+		core.RouteSDKMethodName("verify"),
 	)
 
 	// 7. Custom Domain Route Mappings

@@ -360,6 +360,21 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.NoError(t, json.Unmarshal(createDomainResponseRecorder.Body.Bytes(), &customDomain))
 	require.Equal(t, "api.mycustomworker.io", customDomain.Domain)
 
+	// Verify custom domain before attaching endpoint routes
+	origCNAME := lookupCNAMEResolver
+	lookupCNAMEResolver = func(ctx context.Context, host string) (string, error) {
+		return "localhost", nil
+	}
+	defer func() {
+		lookupCNAMEResolver = origCNAME
+	}()
+
+	verifyDomainRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/domains/"+customDomain.ID.String()+"/verify", nil)
+	verifyDomainRequest.Header.Set("Authorization", authHeader)
+	verifyDomainResponseRecorder := httptest.NewRecorder()
+	coreServer.Handler().ServeHTTP(verifyDomainResponseRecorder, verifyDomainRequest)
+	require.Equal(t, http.StatusOK, verifyDomainResponseRecorder.Code)
+
 	// 3. Attach gatewayEndpoint to root ("/") route on the custom domain
 	rootRoutePayload := `{"custom_domain_id":"` + customDomain.ID.String() + `","path_prefix":"/"}`
 	rootRouteRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+gatewayEndpoint.ID.String()+"/domains", bytes.NewReader([]byte(rootRoutePayload)))

@@ -15,6 +15,7 @@ var (
 	ErrInvalidEndpointName       = errors.New("invalid endpoint name")
 	ErrCustomDomainConflict      = errors.New("custom domain already in use")
 	ErrCustomDomainNotFound      = errors.New("custom domain not found")
+	ErrCustomDomainNotVerified   = errors.New("custom domain must be verified before attaching endpoint routes")
 	ErrCustomDomainRouteConflict = errors.New("custom domain route conflict")
 	ErrCustomDomainRouteNotFound = errors.New("custom domain route not found")
 )
@@ -80,7 +81,15 @@ type ListExecutionsResponse struct {
 
 // CreateCustomDomainInput defines the payload for registering a standalone custom domain.
 type CreateCustomDomainInput struct {
-	Domain string `json:"domain"`
+	Domain       string  `json:"domain"`
+	TLSEnabled   *bool   `json:"tls_enabled,omitempty"`
+	TLSAcmeEmail *string `json:"tls_acme_email,omitempty"`
+}
+
+// UpdateCustomDomainInput defines the payload for modifying custom domain configuration at runtime.
+type UpdateCustomDomainInput struct {
+	TLSEnabled   *bool   `json:"tls_enabled,omitempty"`
+	TLSAcmeEmail *string `json:"tls_acme_email,omitempty"`
 }
 
 // ListCustomDomainsResponse defines the control plane listing output for custom domains.

@@ -3,8 +3,12 @@ package function
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"sync"
+	"time"
 
 	"layr.sh/core"
 )
@@ -15,13 +19,20 @@ func init() {
 	})
 }
 
+type hostValidationCacheEntry struct {
+	valid     bool
+	expiresAt time.Time
+}
+
 // Service encapsulates the serverless function execution engine coordinator.
 type Service struct {
-	kernel              *core.Kernel
-	configManager       *ConfigManager
-	engine              *Engine
-	baseHandler         *BaseHandler
-	controlPlaneHandler *ControlPlaneHandler
+	kernel                 *core.Kernel
+	configManager          *ConfigManager
+	engine                 *Engine
+	baseHandler            *BaseHandler
+	controlPlaneHandler    *ControlPlaneHandler
+	hostValidationCacheMap sync.Map
+	registerHostRoutesOnce sync.Once
 }
 
 // NewService initializes the Function service coordinator.
@@ -69,9 +80,133 @@ func (service *Service) ControlPlaneHandler() *ControlPlaneHandler {
 	return service.controlPlaneHandler
 }
 
-// RegisterHostRoutes registers host-based ingress interceptors on the HTTP gateway server.
+// RegisterHostRoutes registers host-based ingress interceptors and host validators on the HTTP gateway server.
 func (service *Service) RegisterHostRoutes(server *core.Server) {
-	server.RegisterHostHandler(service.baseHandler.HandleCustomDomain)
+	if server == nil {
+		return
+	}
+	service.registerHostRoutesOnce.Do(func() {
+		server.RegisterHostHandler(service.baseHandler.HandleCustomDomain)
+		server.RegisterHostValidator(service.validateCustomDomainHost)
+		server.DBCertCache().AddCertPutCallback(service.handleCertPut)
+	})
+}
+
+const (
+	certUpdateTimeout      = 5 * time.Second
+	hostValidationCacheTTL = 1 * time.Minute
+)
+
+// InvalidateHostValidationCache clears cached host validation for a domain or all domains if domain is empty.
+func (service *Service) InvalidateHostValidationCache(domain string) {
+	if domain == "" {
+		service.hostValidationCacheMap.Range(func(key, value any) bool {
+			service.hostValidationCacheMap.Delete(key)
+			return true
+		})
+		return
+	}
+	normalized, err := NormalizeAndValidateDomain(domain)
+	if err == nil {
+		service.hostValidationCacheMap.Delete(normalized)
+	} else {
+		service.hostValidationCacheMap.Delete(domain)
+	}
+}
+
+// handleCertPut updates custom domain TLS status when a certificate is stored in DBCertCache.
+func (service *Service) handleCertPut(key string, certData []byte) {
+	var certDER []byte
+	remaining := certData
+	for {
+		var block *pem.Block
+		block, remaining = pem.Decode(remaining)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			certDER = block.Bytes
+			break
+		}
+	}
+
+	if certDER == nil {
+		return
+	}
+
+	certificate, parseErr := x509.ParseCertificate(certDER)
+	if parseErr != nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), certUpdateTimeout)
+	defer cancel()
+
+	const updateSQL = `
+		UPDATE function.custom_domains
+		SET tls_status = 'active',
+			tls_issued_at = $1,
+			tls_expires_at = $2,
+			tls_error_message = NULL,
+			updated_at = clock_timestamp()
+		WHERE domain = $3 AND tls_enabled = true
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+	`
+	var customDomain CustomDomain
+	if scanErr := service.kernel.DB().QueryRow(ctx, updateSQL, certificate.NotBefore, certificate.NotAfter, key).Scan(
+		&customDomain.ID,
+		&customDomain.Domain,
+		&customDomain.Status,
+		&customDomain.TLSEnabled,
+		&customDomain.TLSStatus,
+		&customDomain.TLSAcmeEmail,
+		&customDomain.TLSErrorMessage,
+		&customDomain.TLSIssuedAt,
+		&customDomain.TLSExpiresAt,
+		&customDomain.CreatedAt,
+		&customDomain.UpdatedAt,
+	); scanErr == nil {
+		service.InvalidateHostValidationCache(key)
+		service.kernel.EventBus().Publish(
+			ctx,
+			NewCustomDomainUpdatedEvent(customDomain.ID.String(), CustomDomainUpdatedEventData(customDomain)),
+		)
+	}
+}
+
+// validateCustomDomainHost validates whether an incoming SNI hostname is a configured active custom domain with TLS enabled.
+func (service *Service) validateCustomDomainHost(ctx context.Context, host string) (bool, error) {
+	normalizedHost, err := NormalizeAndValidateDomain(host)
+	if err != nil {
+		return false, nil
+	}
+
+	if storedEntry, ok := service.hostValidationCacheMap.Load(normalizedHost); ok {
+		if entry, ok := storedEntry.(hostValidationCacheEntry); ok {
+			if time.Now().Before(entry.expiresAt) {
+				return entry.valid, nil
+			}
+			service.hostValidationCacheMap.Delete(normalizedHost)
+		}
+	}
+
+	const query = `
+		SELECT EXISTS(
+			SELECT 1 FROM function.custom_domains
+			WHERE domain = $1 AND status = 'active' AND tls_enabled = true AND tls_status != 'failed'
+		);
+	`
+	var exists bool
+	if queryErr := service.kernel.DB().QueryRow(ctx, query, normalizedHost).Scan(&exists); queryErr != nil {
+		return false, fmt.Errorf("failed to validate custom domain host %q: %w", host, queryErr)
+	}
+
+	service.hostValidationCacheMap.Store(normalizedHost, hostValidationCacheEntry{
+		valid:     exists,
+		expiresAt: time.Now().Add(hostValidationCacheTTL),
+	})
+
+	return exists, nil
 }
 
 // Start loads runtime configuration, starts the execution engine, and loads active endpoints.

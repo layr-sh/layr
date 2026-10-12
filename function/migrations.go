@@ -94,11 +94,19 @@ CREATE TABLE IF NOT EXISTS function.custom_domains (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     domain VARCHAR(255) UNIQUE NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active',
+    tls_enabled BOOLEAN NOT NULL DEFAULT true,
+    tls_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    tls_acme_email TEXT,
+    tls_error_message TEXT,
+    tls_issued_at TIMESTAMPTZ,
+    tls_expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 CREATE INDEX IF NOT EXISTS idx_function_custom_domains_domain ON function.custom_domains(domain);
+CREATE INDEX IF NOT EXISTS idx_function_custom_domains_tls_status ON function.custom_domains(tls_status);
+CREATE INDEX IF NOT EXISTS idx_function_custom_domains_tls_enabled ON function.custom_domains(tls_enabled);
 
 -- 6. Custom Domain Route Mappings
 CREATE TABLE IF NOT EXISTS function.custom_domain_routes (

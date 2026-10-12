@@ -75,13 +75,37 @@ func TestFunctionControlPlaneHandlerDomainsIntegration(t *testing.T) {
 		require.NoError(t, json.Unmarshal(listDomainsResponseRecorder.Body.Bytes(), &listCustomDomainsResponse))
 		require.Equal(t, 1, listCustomDomainsResponse.Total)
 
-		// 3. Create route on endpoint
+		// 3. Reject creating route on unverified custom domain
 		defaultPathPrefix := "/api"
 		createCustomDomainRouteInput := CreateCustomDomainRouteInput{
 			CustomDomainID: customDomain.ID,
 			PathPrefix:     &defaultPathPrefix,
 		}
 		createRouteJSON, _ := json.Marshal(createCustomDomainRouteInput)
+		unverifiedRouteRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", bytes.NewReader(createRouteJSON))
+		unverifiedRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
+		unverifiedRouteRequest.Header.Set("Authorization", authHeader)
+		unverifiedRouteResponseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleCreateCustomDomainRoute(unverifiedRouteResponseRecorder, unverifiedRouteRequest)
+		require.Equal(t, http.StatusBadRequest, unverifiedRouteResponseRecorder.Code)
+
+		// 4. Verify domain DNS
+		origCNAMEResolver := lookupCNAMEResolver
+		lookupCNAMEResolver = func(ctx context.Context, host string) (string, error) {
+			return "localhost", nil
+		}
+		defer func() {
+			lookupCNAMEResolver = origCNAMEResolver
+		}()
+
+		verifyDomainRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/domains/"+customDomain.ID.String()+"/verify", nil)
+		verifyDomainRequest.SetPathValue("domain_id", customDomain.ID.String())
+		verifyDomainRequest.Header.Set("Authorization", authHeader)
+		verifyDomainResponseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleVerifyCustomDomain(verifyDomainResponseRecorder, verifyDomainRequest)
+		require.Equal(t, http.StatusOK, verifyDomainResponseRecorder.Code)
+
+		// 5. Create route on endpoint after verification
 		createRouteRequest := httptest.NewRequestWithContext(testCtx, http.MethodPost, "/v1/_/function/endpoints/"+targetEndpoint.ID.String()+"/domains", bytes.NewReader(createRouteJSON))
 		createRouteRequest.SetPathValue("endpoint_id", targetEndpoint.ID.String())
 		createRouteRequest.Header.Set("Authorization", authHeader)

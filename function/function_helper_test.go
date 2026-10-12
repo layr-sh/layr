@@ -2,14 +2,117 @@ package function
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
+	"math/big"
+	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 	"uuid"
 )
+
+func generateTestCertAndKeyPEM(t *testing.T) (string, string) {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Layr Test"},
+		},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(90 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost", "test.example.com"},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+
+	return string(certPEM), string(keyPEM)
+}
+
+func generateTestCertBytes(t *testing.T) []byte {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Layr Test"},
+		},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(90 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost", "test.example.com"},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	keyDER, err := x509.MarshalECPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+
+	return append(keyPEM, certPEM...)
+}
+
+func generateExpiredTestCertBytes(t *testing.T) []byte {
+	t.Helper()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{
+			Organization: []string{"Layr Test Expired"},
+		},
+		NotBefore:             time.Now().Add(-100 * 24 * time.Hour),
+		NotAfter:              time.Now().Add(-10 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost", "expired.example.com"},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	keyDER, err := x509.MarshalECPrivateKey(privateKey)
+	require.NoError(t, err)
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+
+	return append(keyPEM, certPEM...)
+}
 
 func insertTestEndpoint(ctx context.Context, t *testing.T, kernel *core.Kernel, name string, isPublic bool) Endpoint {
 	t.Helper()
@@ -71,15 +174,18 @@ func deployTestEndpoint(ctx context.Context, t *testing.T, service *Service, end
 func insertTestCustomDomain(ctx context.Context, t *testing.T, kernel *core.Kernel, domain string) CustomDomain {
 	t.Helper()
 	const insertSQL = `
-		INSERT INTO function.custom_domains (domain, status, created_at, updated_at)
-		VALUES ($1, 'active', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, created_at, updated_at;
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		VALUES ($1, 'active', 'active', clock_timestamp(), clock_timestamp())
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, created_at, updated_at;
 	`
 	var customDomain CustomDomain
 	err := kernel.DB().QueryRow(ctx, insertSQL, domain).Scan(
 		&customDomain.ID,
 		&customDomain.Domain,
 		&customDomain.Status,
+		&customDomain.TLSEnabled,
+		&customDomain.TLSStatus,
+		&customDomain.TLSAcmeEmail,
 		&customDomain.CreatedAt,
 		&customDomain.UpdatedAt,
 	)

@@ -2,10 +2,13 @@ package core
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -13,11 +16,19 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-fuego/fuego"
+	"golang.org/x/crypto/acme"
+	"golang.org/x/crypto/acme/autocert"
 )
+
+// ErrHostNotPermitted indicates an incoming SNI host is not allowed to acquire TLS certificates.
+var ErrHostNotPermitted = errors.New("host is not permitted for TLS termination")
 
 // HostHandlerFunc defines a function that handles an incoming HTTP request based on its host or domain.
 // It returns true if the request was handled, or false if it should fall through to standard route dispatch.
 type HostHandlerFunc func(responseWriter http.ResponseWriter, request *http.Request) bool
+
+// HostValidatorFunc defines a function that validates whether an incoming SNI host is permitted for TLS termination.
+type HostValidatorFunc func(ctx context.Context, host string) (bool, error)
 
 // Server coordinates the Layr HTTP gateway, probes, and API dispatch.
 type Server struct {
@@ -26,7 +37,12 @@ type Server struct {
 	controlPlaneRouter *Router
 	serveMux           *http.ServeMux
 	server             *http.Server
+	httpServer         *http.Server
+	autocertManager    *autocert.Manager
+	dbCertCache        *DBCertCache
 	hostHandlers       []HostHandlerFunc
+	hostValidators     []HostValidatorFunc
+	tlsEnabled         bool
 	uptime             time.Time     //nolint:namingclarity
 	requestCount       atomic.Uint64 //nolint:namingclarity
 }
@@ -73,6 +89,7 @@ func NewServer(kernel *Kernel) *Server {
 		controlPlaneRouter: controlPlaneRouter,
 		serveMux:           serveMux,
 		uptime:             time.Now(),
+		dbCertCache:        NewDBCertCache(kernel.DB(), kernel.CryptoKeyManager()),
 	}
 
 	server.registerBaseRoutes()
@@ -113,22 +130,94 @@ func NewServer(kernel *Kernel) *Server {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	server.initTLS(config)
+
 	return server
 }
 
 // RegisterHostHandler registers a host-based request interceptor on the HTTP server.
 func (server *Server) RegisterHostHandler(hostHandlerFunc HostHandlerFunc) {
-	if server != nil && hostHandlerFunc != nil {
+	if hostHandlerFunc != nil {
 		server.hostHandlers = append(server.hostHandlers, hostHandlerFunc)
 	}
 }
 
 // HostHandlers returns all registered host-based request interceptors on the HTTP server.
 func (server *Server) HostHandlers() []HostHandlerFunc {
-	if server == nil {
-		return nil
-	}
 	return server.hostHandlers
+}
+
+// RegisterHostValidator registers a host authorization validator for TLS SNI checks.
+func (server *Server) RegisterHostValidator(hostValidatorFunc HostValidatorFunc) {
+	if hostValidatorFunc != nil {
+		server.hostValidators = append(server.hostValidators, hostValidatorFunc)
+	}
+}
+
+// HostValidators returns all registered host validators on the HTTP server.
+func (server *Server) HostValidators() []HostValidatorFunc {
+	return server.hostValidators
+}
+
+// ValidateHost checks whether the given host is authorized for TLS termination.
+// It checks the server base URL, configured static TLS domains, and dynamic host validators.
+func (server *Server) ValidateHost(ctx context.Context, host string) (bool, error) {
+	normalizedHost := strings.TrimSpace(strings.ToLower(host))
+	if normalizedHost == "" {
+		return false, nil
+	}
+	if strings.Contains(normalizedHost, ":") {
+		if cleanHost, _, splitErr := net.SplitHostPort(normalizedHost); splitErr == nil {
+			normalizedHost = cleanHost
+		}
+	}
+
+	config := GetConfig()
+
+	// 1. Match BaseURL hostname when BaseURL uses HTTPS (or does not explicitly specify plain http)
+	if config.Server.BaseURL != "" {
+		if parsedURL, err := url.Parse(config.Server.BaseURL); err == nil && parsedURL.Hostname() != "" {
+			if !strings.EqualFold(parsedURL.Scheme, "http") && strings.EqualFold(parsedURL.Hostname(), normalizedHost) {
+				return true, nil
+			}
+		}
+	}
+
+	// 2. Match static domains in Server.TLS.Domains
+	for _, domain := range config.Server.TLS.Domains {
+		cleanedDomain := strings.TrimSpace(strings.ToLower(domain))
+		if cleanHost, _, splitErr := net.SplitHostPort(cleanedDomain); splitErr == nil {
+			cleanedDomain = cleanHost
+		}
+		if cleanedDomain != "" && cleanedDomain == normalizedHost {
+			return true, nil
+		}
+	}
+
+	// 3. Match dynamic registered host validators
+	for _, validator := range server.hostValidators {
+		valid, err := validator(ctx, normalizedHost)
+		if err != nil {
+			return false, err
+		}
+		if valid {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// HostPolicy implements an autocert.HostPolicy that validates incoming hosts against the server.
+func (server *Server) HostPolicy(ctx context.Context, host string) error {
+	valid, err := server.ValidateHost(ctx, host)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("%w: %s", ErrHostNotPermitted, host)
+	}
+	return nil
 }
 
 // Mux returns the underlying HTTP ServeMux for route registration.
@@ -156,9 +245,50 @@ func (server *Server) Kernel() *Kernel {
 	return server.kernel
 }
 
-// Start boots the HTTP server in background.
+// AutocertManager returns the ACME certificate manager when AutoTLS is active.
+func (server *Server) AutocertManager() *autocert.Manager {
+	return server.autocertManager
+}
+
+// DBCertCache returns the database-backed certificate cache when AutoTLS is active.
+func (server *Server) DBCertCache() *DBCertCache {
+	return server.dbCertCache
+}
+
+// TLSConfig returns the configured TLS configuration if TLS is enabled.
+func (server *Server) TLSConfig() *tls.Config {
+	return server.server.TLSConfig
+}
+
+// TLSEnabled reports whether TLS termination is active on the server.
+func (server *Server) TLSEnabled() bool {
+	return server.tlsEnabled
+}
+
+// HTTPServer returns the auxiliary HTTP server if configured for HTTP-to-HTTPS redirect.
+func (server *Server) HTTPServer() *http.Server {
+	return server.httpServer
+}
+
+// Start boots the HTTP or HTTPS server in background.
 func (server *Server) Start() error {
-	log.Debugf("starting HTTP server on %s", server.server.Addr)
+	log.Debugf("starting server on %s", server.server.Addr)
+	if server.tlsEnabled {
+		if server.server.TLSConfig == nil {
+			return errors.New("cannot start server: TLS is enabled but TLS configuration failed to initialize")
+		}
+		if server.httpServer != nil {
+			go func() {
+				if err := server.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					log.Errorf("http redirect server failed to listen and serve: %v", err)
+				}
+			}()
+		}
+		if err := server.server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("https server failed to listen and serve: %w", err)
+		}
+		return nil
+	}
 	if err := server.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("http server failed to listen and serve: %w", err)
 	}
@@ -168,11 +298,149 @@ func (server *Server) Start() error {
 // Shutdown initiates a graceful drain.
 func (server *Server) Shutdown(ctx context.Context) error {
 	log.Debugf("shutting down HTTP server")
+	if server.httpServer != nil {
+		_ = server.httpServer.Shutdown(ctx)
+	}
 	if err := server.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("http server failed to shut down cleanly: %w", err)
 	}
 	log.Tracef("HTTP server shutdown complete")
 	return nil
+}
+
+func (server *Server) initTLS(config *Config) {
+	server.tlsEnabled = config.Server.TLS.Enabled || config.Server.TLS.AutoTLS
+	if !server.tlsEnabled {
+		return
+	}
+
+	if config.Server.TLS.AutoTLS {
+		manager := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      server.dbCertCache,
+			HostPolicy: server.HostPolicy,
+		}
+
+		if config.Server.TLS.AcmeEmail != "" {
+			manager.Email = config.Server.TLS.AcmeEmail
+		}
+
+		if config.Server.TLS.AcmeStaging {
+			manager.Client = &acme.Client{
+				DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			}
+		}
+
+		server.autocertManager = manager
+
+		if _, port, err := net.SplitHostPort(config.Server.ListenAddr); err == nil && port != "443" {
+			log.Warnf("AutoTLS is enabled on non-standard port :%s; ensure external port 443 forwards to this listener for ACME TLS-ALPN-01 challenges to succeed", port)
+		}
+
+		server.server.TLSConfig = manager.TLSConfig()
+	} else {
+		// Manual TLS
+		var certificate tls.Certificate
+		var err error
+		if config.Server.TLS.CertFile != "" && config.Server.TLS.KeyFile != "" {
+			certificate, err = tls.LoadX509KeyPair(config.Server.TLS.CertFile, config.Server.TLS.KeyFile)
+		} else if config.Server.TLS.CertPEM != "" && config.Server.TLS.KeyPEM != "" {
+			certificate, err = tls.X509KeyPair([]byte(config.Server.TLS.CertPEM), []byte(config.Server.TLS.KeyPEM))
+		}
+
+		if err == nil {
+			server.server.TLSConfig = &tls.Config{
+				Certificates: []tls.Certificate{certificate},
+				GetCertificate: func(clientHelloInfo *tls.ClientHelloInfo) (*tls.Certificate, error) { //nolint:contextcheck,nilnil
+					if clientHelloInfo == nil || strings.TrimSpace(clientHelloInfo.ServerName) == "" {
+						return nil, nil //nolint:nilnil
+					}
+					cleanName := strings.TrimSpace(strings.ToLower(clientHelloInfo.ServerName))
+					if cleanHost, _, splitErr := net.SplitHostPort(cleanName); splitErr == nil {
+						cleanName = cleanHost
+					}
+					cleanName = strings.TrimSuffix(cleanName, ".")
+					ctx := clientHelloInfo.Context()
+					if ctx == nil {
+						ctx = context.Background()
+					}
+					if cachedBytes, getErr := server.dbCertCache.Get(ctx, cleanName); getErr == nil && len(cachedBytes) > 0 {
+						if customCertificate, parseErr := tls.X509KeyPair(cachedBytes, cachedBytes); parseErr == nil {
+							return &customCertificate, nil
+						}
+					}
+					return nil, nil //nolint:nilnil
+				},
+			}
+		} else {
+			log.Errorf("failed to load TLS certificate/key pair: %v", err)
+		}
+	}
+
+	if config.Server.TLS.HTTPRedirect {
+		fallbackHandler := server.server.Handler
+		if config.Server.BaseURL != "" {
+			if parsedURL, parseErr := url.Parse(config.Server.BaseURL); parseErr == nil && strings.EqualFold(parsedURL.Scheme, "https") && parsedURL.Host != "" {
+				staticRedirectHandler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+					targetURL := "https://" + parsedURL.Host + request.URL.RequestURI()
+					http.Redirect(responseWriter, request, targetURL, http.StatusMovedPermanently)
+				})
+				middlewareRedirectHandler := server.middleware(staticRedirectHandler)
+				fallbackHandler = http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+					if len(server.hostHandlers) == 0 {
+						staticRedirectHandler.ServeHTTP(responseWriter, request)
+						return
+					}
+					middlewareRedirectHandler.ServeHTTP(responseWriter, request)
+				})
+			}
+		}
+
+		redirectHandler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			host := request.Host
+			if strings.Contains(host, ":") {
+				if cleanHost, _, splitErr := net.SplitHostPort(host); splitErr == nil {
+					host = cleanHost
+				}
+			}
+
+			// 1. If this host is authorized for TLS, redirect to HTTPS
+			valid, validateErr := server.ValidateHost(request.Context(), host)
+			if validateErr == nil && valid {
+				targetURL := "https://" + host + request.URL.RequestURI()
+				http.Redirect(responseWriter, request, targetURL, http.StatusMovedPermanently)
+				return
+			}
+
+			// 2. Delegate to middleware pipeline (handles hostHandlers with auth context, or fallback to BaseURL)
+			fallbackHandler.ServeHTTP(responseWriter, request)
+		})
+
+		var httpHandler http.Handler = redirectHandler
+		if server.autocertManager != nil {
+			httpHandler = server.autocertManager.HTTPHandler(redirectHandler)
+		} else if server.dbCertCache != nil {
+			challengeManager := &autocert.Manager{
+				Prompt: autocert.AcceptTOS,
+				Cache:  server.dbCertCache,
+			}
+			httpHandler = challengeManager.HTTPHandler(redirectHandler)
+		}
+
+		httpListenAddr := strings.TrimSpace(config.Server.TLS.HTTPListenAddr)
+		if httpListenAddr == "" {
+			httpListenAddr = ":80"
+		}
+
+		server.httpServer = &http.Server{
+			Addr:              httpListenAddr,
+			Handler:           httpHandler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      60 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+	}
 }
 
 func (server *Server) middleware(handler http.Handler) http.Handler {
