@@ -50,6 +50,34 @@ func TestFunctionConfigUnit(t *testing.T) {
 		emptyWorkerdDateConfig := DefaultConfig()
 		emptyWorkerdDateConfig.WorkerdRuntime.CompatibilityDate = ""
 		require.Error(t, emptyWorkerdDateConfig.Validate())
+
+		invalidEmailConfig := DefaultConfig()
+		invalidEmailConfig.DefaultTLSAcmeEmail = "not-an-email"
+		require.Error(t, invalidEmailConfig.Validate())
+
+		validEmailConfig := DefaultConfig()
+		validEmailConfig.DefaultTLSAcmeEmail = "admin@example.com"
+		require.NoError(t, validEmailConfig.Validate())
+
+		invalidApexIPConfig := DefaultConfig()
+		invalidApexIPConfig.CustomDomainApexIP = "not-an-ip"
+		require.Error(t, invalidApexIPConfig.Validate())
+
+		validApexIPConfig := DefaultConfig()
+		validApexIPConfig.CustomDomainApexIP = "198.51.100.1"
+		require.NoError(t, validApexIPConfig.Validate())
+
+		invalidCNAMEConfig := DefaultConfig()
+		invalidCNAMEConfig.CustomDomainCNAMETarget = "invalid..domain"
+		require.Error(t, invalidCNAMEConfig.Validate())
+
+		validCNAMEConfig := DefaultConfig()
+		validCNAMEConfig.CustomDomainCNAMETarget = "ingress.example.com"
+		require.NoError(t, validCNAMEConfig.Validate())
+
+		validLocalhostCNAMEConfig := DefaultConfig()
+		validLocalhostCNAMEConfig.CustomDomainCNAMETarget = "localhost"
+		require.NoError(t, validLocalhostCNAMEConfig.Validate())
 	})
 
 	t.Run("config manager in-memory concurrency", func(t *testing.T) {

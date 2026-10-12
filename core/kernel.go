@@ -138,7 +138,7 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 	}
 
 	// Initialize HTTP Gateway
-	kernel.server = NewServer(kernel)
+	kernel.server = NewServer(kernel) //nolint:contextcheck
 
 	// Auto-instantiate enabled modular services from registry if not manually registered
 	if len(kernel.services) == 0 {

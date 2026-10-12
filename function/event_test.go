@@ -160,6 +160,21 @@ func TestFunctionEventUnit(t *testing.T) {
 		require.Equal(t, domainID.String(), *event.ResourceID)
 	})
 
+	t.Run("custom domain updated event", func(t *testing.T) {
+		t.Parallel()
+		domainID := uuid.NewV7()
+		customDomainUpdatedEventData := CustomDomainUpdatedEventData(CustomDomain{
+			ID:         domainID,
+			Domain:     "api.example.com",
+			Status:     "active",
+			TLSEnabled: true,
+		})
+		event := NewCustomDomainUpdatedEvent(domainID.String(), customDomainUpdatedEventData)
+		require.Equal(t, "function.custom_domain.updated", event.Type)
+		require.NotNil(t, event.ResourceID)
+		require.Equal(t, domainID.String(), *event.ResourceID)
+	})
+
 	t.Run("custom domain route created event", func(t *testing.T) {
 		t.Parallel()
 		routeID := uuid.NewV7()

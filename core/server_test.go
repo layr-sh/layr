@@ -2,13 +2,26 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"uuid"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCoreServerAllEndpointsUnit(t *testing.T) {
@@ -476,12 +489,6 @@ func TestCoreServerHostHandlerUnit(t *testing.T) {
 	jwtSigner := NewJWTSigner(cryptoKeyManager)
 	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 
-	var nilServer *Server
-	if nilServer.HostHandlers() != nil {
-		t.Fatal("expected nil from nilServer.HostHandlers()")
-	}
-	nilServer.RegisterHostHandler(nil)
-
 	if len(server.HostHandlers()) != 0 {
 		t.Fatal("expected 0 host handlers initially")
 	}
@@ -520,4 +527,494 @@ func TestCoreServerHostHandlerUnit(t *testing.T) {
 	if unmatchedResponseRecorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 from unhandled route, got %d", unmatchedResponseRecorder.Code)
 	}
+}
+
+func generateTestCertAndKeyPEM(t *testing.T) (string, string) {
+	t.Helper()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Layr Test"},
+		},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:              []string{"localhost", "layr.test"},
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	require.NoError(t, err)
+
+	certBuf := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	keyBuf := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+
+	return string(certBuf), string(keyBuf)
+}
+
+func TestCoreServerValidateHostUnit(t *testing.T) {
+	ctx := context.Background()
+
+	testConfig := DefaultConfig()
+	testConfig.Server.BaseURL = "https://app.layr.sh:5297"
+	testConfig.Server.TLS.Domains = []string{"static.layr.sh", "api.layr.sh", "custom-port.layr.sh:443"}
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+
+	// Register dynamic host validator for custom domains
+	var customValidatorInvoked bool
+	server.RegisterHostValidator(func(validatorCtx context.Context, host string) (bool, error) {
+		customValidatorInvoked = true
+		if host == "custom.myworker.com" {
+			return true, nil
+		}
+		if host == "error.domain.com" {
+			return false, errors.New("validator database failure")
+		}
+		return false, nil
+	})
+
+	// 1. Empty host returns false
+	valid, err := server.ValidateHost(ctx, "")
+	require.NoError(t, err)
+	require.False(t, valid)
+
+	// 2. BaseURL hostname matches
+	valid, err = server.ValidateHost(ctx, "app.layr.sh")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	// 3. BaseURL with port in Host header matches
+	valid, err = server.ValidateHost(ctx, "APP.LAYR.SH:443")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	// 4. Static domains in Server.TLS.Domains match
+	valid, err = server.ValidateHost(ctx, "static.layr.sh")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	valid, err = server.ValidateHost(ctx, "API.LAYR.SH:5297")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	valid, err = server.ValidateHost(ctx, "custom-port.layr.sh")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	// 5. Dynamic host validator matches
+	customValidatorInvoked = false
+	valid, err = server.ValidateHost(ctx, "custom.myworker.com")
+	require.NoError(t, err)
+	require.True(t, valid)
+	require.True(t, customValidatorInvoked)
+
+	// 6. Unknown domain is rejected
+	valid, err = server.ValidateHost(ctx, "unknown-attacker.evil.com")
+	require.NoError(t, err)
+	require.False(t, valid)
+
+	// 7. Error from validator propagates
+	valid, err = server.ValidateHost(ctx, "error.domain.com")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "validator database failure")
+	require.False(t, valid)
+
+	// 8. RegisterHostValidator with nil is a no-op
+	server.RegisterHostValidator(nil)
+	require.Len(t, server.HostValidators(), 1)
+
+	// 9. HostPolicy returns nil for permitted host, ErrHostNotPermitted for unpermitted, and error on failure
+	require.NoError(t, server.HostPolicy(ctx, "app.layr.sh"))
+	unpermittedErr := server.HostPolicy(ctx, "unknown-attacker.evil.com")
+	require.Error(t, unpermittedErr)
+	require.ErrorIs(t, unpermittedErr, ErrHostNotPermitted)
+	validatorErr := server.HostPolicy(ctx, "error.domain.com")
+	require.Error(t, validatorErr)
+	require.Contains(t, validatorErr.Error(), "validator database failure")
+}
+
+func TestCoreServerTLSConfigManualPEMUnit(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKeyPEM(t)
+
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = certPEM
+	testConfig.Server.TLS.KeyPEM = keyPEM
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.Nil(t, server.AutocertManager())
+	require.NotNil(t, server.server.TLSConfig)
+	require.Len(t, server.server.TLSConfig.Certificates, 1)
+
+	// Verify manual TLS GetCertificate resolves cert from DBCertCache
+	getCert := server.server.TLSConfig.GetCertificate
+	require.NotNil(t, getCert)
+
+	// nil client hello returns nil, nil
+	certificate, err := getCert(nil)
+	require.NoError(t, err)
+	require.Nil(t, certificate)
+
+	// empty ServerName returns nil, nil
+	certificate, err = getCert(&tls.ClientHelloInfo{ServerName: ""})
+	require.NoError(t, err)
+	require.Nil(t, certificate)
+
+	// Unknown ServerName (not in cache) returns nil, nil (falls back to default cert)
+	certificate, err = getCert(&tls.ClientHelloInfo{ServerName: "unknown.domain.com"})
+	require.NoError(t, err)
+	require.Nil(t, certificate)
+
+	// ServerName found in DBCertCache returns the custom cert
+	customCertPEM, customKeyPEM := generateTestCertAndKeyPEM(t)
+	combinedPEM := customCertPEM + "\n" + customKeyPEM
+	require.NoError(t, server.DBCertCache().Put(context.Background(), "custom.domain.com", []byte(combinedPEM)))
+	certificate, err = getCert(&tls.ClientHelloInfo{ServerName: "CUSTOM.DOMAIN.COM"})
+	require.NoError(t, err)
+	require.NotNil(t, certificate)
+
+	// ServerName with trailing dot and port resolves correctly
+	portCertificate, portErr := getCert(&tls.ClientHelloInfo{ServerName: "CUSTOM.DOMAIN.COM.:443"})
+	require.NoError(t, portErr)
+	require.NotNil(t, portCertificate)
+
+	// Corrupted cert bytes in cache falls back to nil, nil
+	require.NoError(t, server.DBCertCache().Put(context.Background(), "corrupt.domain.com", []byte("invalid-cert-bytes")))
+	certificate, err = getCert(&tls.ClientHelloInfo{ServerName: "corrupt.domain.com"})
+	require.NoError(t, err)
+	require.Nil(t, certificate)
+}
+
+func TestCoreServerTLSConfigManualFilesUnit(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKeyPEM(t)
+
+	tempDir := t.TempDir()
+	certPath := filepath.Join(tempDir, "cert.pem")
+	keyPath := filepath.Join(tempDir, "key.pem")
+
+	require.NoError(t, os.WriteFile(certPath, []byte(certPEM), 0o600))
+	require.NoError(t, os.WriteFile(keyPath, []byte(keyPEM), 0o600))
+
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertFile = certPath
+	testConfig.Server.TLS.KeyFile = keyPath
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.NotNil(t, server.server.TLSConfig)
+	require.Len(t, server.server.TLSConfig.Certificates, 1)
+}
+
+func TestCoreServerTLSConfigAutoTLSUnit(t *testing.T) {
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = true
+	testConfig.Server.TLS.AcmeEmail = "admin@layr.sh"
+	testConfig.Server.TLS.AcmeStaging = true
+	testConfig.Server.TLS.Domains = []string{"layr.test"}
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.NotNil(t, server.server.TLSConfig)
+	require.NotNil(t, server.AutocertManager())
+	require.NotNil(t, server.server.TLSConfig.GetCertificate)
+
+	// Test autocert manager HostPolicy
+	hostPolicy := server.AutocertManager().HostPolicy
+	require.NotNil(t, hostPolicy)
+
+	// Allowed domain
+	require.NoError(t, hostPolicy(context.Background(), "layr.test"))
+
+	// Rejected domain
+	rejectErr := hostPolicy(context.Background(), "unknown.evil.com")
+	require.Error(t, rejectErr)
+	require.True(t, errors.Is(rejectErr, ErrHostNotPermitted))
+
+	// Error from dynamic host validator in HostPolicy
+	server.RegisterHostValidator(func(ctx context.Context, host string) (bool, error) {
+		return false, errors.New("validator database failure")
+	})
+	validatorErr := hostPolicy(context.Background(), "validator.fail.com")
+	require.Error(t, validatorErr)
+	require.Contains(t, validatorErr.Error(), "validator database failure")
+}
+
+func TestCoreServerTLSDisabledUnit(t *testing.T) {
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = false
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.Nil(t, server.server.TLSConfig)
+	require.Nil(t, server.TLSConfig())
+	require.NotNil(t, server.DBCertCache())
+	require.False(t, server.TLSEnabled())
+	require.Nil(t, server.AutocertManager())
+	require.Empty(t, server.HostValidators())
+}
+
+func TestCoreServerTLSConfigAutoTLSWithKernelDBUnit(t *testing.T) {
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = true
+	testConfig.Server.TLS.AcmeEmail = "admin@layr.sh"
+	testConfig.Server.TLS.Domains = []string{"layr.test"}
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.NotNil(t, server.TLSConfig())
+	require.NotNil(t, server.DBCertCache())
+}
+
+func TestCoreServerTLSInvalidManualCertUnit(t *testing.T) {
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = "invalid-cert-pem"
+	testConfig.Server.TLS.KeyPEM = "invalid-key-pem"
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	require.NotNil(t, server)
+	require.Nil(t, server.TLSConfig())
+
+	startErr := server.Start()
+	require.Error(t, startErr)
+	require.Contains(t, startErr.Error(), "TLS is enabled but TLS configuration failed to initialize")
+}
+
+func TestCoreServerHTTPToHTTPSRedirectUnit(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKeyPEM(t)
+
+	testConfig := DefaultConfig()
+	testConfig.Server.BaseURL = "https://app.layr.sh:8443"
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = certPEM
+	testConfig.Server.TLS.KeyPEM = keyPEM
+	testConfig.Server.TLS.HTTPRedirect = true
+	testConfig.Server.TLS.HTTPListenAddr = ":8080"
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	require.True(t, server.TLSEnabled())
+	require.NotNil(t, server.HTTPServer())
+	require.Equal(t, ":8080", server.HTTPServer().Addr)
+
+	httpHandler := server.HTTPServer().Handler
+	require.NotNil(t, httpHandler)
+
+	// 1. Valid host redirect with port stripping
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://app.layr.sh:8080/v1/users?page=1", nil)
+	request.Host = "app.layr.sh:8080"
+	responseRecorder := httptest.NewRecorder()
+	httpHandler.ServeHTTP(responseRecorder, request)
+
+	require.Equal(t, http.StatusMovedPermanently, responseRecorder.Code)
+	require.Equal(t, "https://app.layr.sh/v1/users?page=1", responseRecorder.Header().Get("Location"))
+
+	// 2. Unknown host falls back to BaseURL with custom port preserved
+	unknownRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil-attacker.com/v1/data", nil)
+	unknownRequest.Host = "evil-attacker.com"
+	unknownResponseRecorder := httptest.NewRecorder()
+	httpHandler.ServeHTTP(unknownResponseRecorder, unknownRequest)
+
+	require.Equal(t, http.StatusMovedPermanently, unknownResponseRecorder.Code)
+	require.Equal(t, "https://app.layr.sh:8443/v1/data", unknownResponseRecorder.Header().Get("Location"))
+
+	// 3. AutoTLS enabled wraps with autocert HTTPHandler
+	testConfig.Server.TLS.AutoTLS = true
+	testConfig.Server.TLS.Domains = []string{"app.layr.sh"}
+	autoServer := NewServer(kernel)
+	require.NotNil(t, autoServer.HTTPServer())
+	require.NotNil(t, autoServer.HTTPServer().Handler)
+
+	autoRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://app.layr.sh/v1/ping", nil)
+	autoRequest.Host = "app.layr.sh"
+	autoResponseRecorder := httptest.NewRecorder()
+	autoServer.HTTPServer().Handler.ServeHTTP(autoResponseRecorder, autoRequest)
+	require.Equal(t, http.StatusMovedPermanently, autoResponseRecorder.Code)
+
+	// 4. Default HTTPListenAddr when empty
+	testConfig.Server.TLS.HTTPListenAddr = ""
+	defaultHTTPServer := NewServer(kernel)
+	require.NotNil(t, defaultHTTPServer.HTTPServer())
+	require.Equal(t, ":80", defaultHTTPServer.HTTPServer().Addr)
+
+	// 5. Host handler intercepted on HTTP listener (e.g. plain HTTP custom domain without TLS)
+	var hostHandlerCalled bool
+	server.RegisterHostHandler(func(responseWriter http.ResponseWriter, hostRequest *http.Request) bool {
+		if hostRequest.Host == "plain.domain.com" {
+			hostHandlerCalled = true
+			responseWriter.WriteHeader(http.StatusOK)
+			_, _ = responseWriter.Write([]byte("plain-custom-domain"))
+			return true
+		}
+		return false
+	})
+	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://plain.domain.com/data", nil)
+	plainRequest.Host = "plain.domain.com"
+	plainResponseRecorder := httptest.NewRecorder()
+	httpHandler.ServeHTTP(plainResponseRecorder, plainRequest)
+	require.Equal(t, http.StatusOK, plainResponseRecorder.Code)
+	require.Equal(t, "plain-custom-domain", plainResponseRecorder.Body.String())
+	require.True(t, hostHandlerCalled)
+
+	// 6. BaseURL is plain HTTP (core server has no TLS) -> passes to server.server.Handler
+	plainBaseURLConfig := DefaultConfig()
+	plainBaseURLConfig.Server.BaseURL = "http://localhost:5297"
+	plainBaseURLConfig.Server.TLS.Enabled = true
+	plainBaseURLConfig.Server.TLS.AutoTLS = false
+	plainBaseURLConfig.Server.TLS.CertPEM = certPEM
+	plainBaseURLConfig.Server.TLS.KeyPEM = keyPEM
+	plainBaseURLConfig.Server.TLS.HTTPRedirect = true
+	plainBaseURLConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(plainBaseURLConfig)
+
+	plainBaseURLServer := NewServer(kernel)
+	plainBaseURLHandler := plainBaseURLServer.HTTPServer().Handler
+	coreRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/healthz", nil)
+	coreRequest.Host = "localhost"
+	coreResponseRecorder := httptest.NewRecorder()
+	plainBaseURLHandler.ServeHTTP(coreResponseRecorder, coreRequest)
+	require.Equal(t, http.StatusOK, coreResponseRecorder.Code)
+}
+
+func TestCoreServerHTTPListenerAppliesMiddlewareUnit(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKeyPEM(t)
+
+	testConfig := DefaultConfig()
+	testConfig.Server.BaseURL = "https://app.layr.sh"
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = certPEM
+	testConfig.Server.TLS.KeyPEM = keyPEM
+	testConfig.Server.TLS.HTTPRedirect = true
+	testConfig.Server.TLS.HTTPListenAddr = ":8080"
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+
+	jwtSigner := kernel.JWTSigner()
+	testUserID := uuid.NewV7().String()
+	token := jwtSigner.GenerateAccessToken(JWTClaims{
+		Subject: testUserID,
+		Role:    "authenticated",
+	})
+
+	var capturedAuthContext AuthContext
+	var capturedEventContext EventContext
+	var handlerCalled bool
+
+	server.RegisterHostHandler(func(responseWriter http.ResponseWriter, hostRequest *http.Request) bool {
+		if hostRequest.Host == "plain.domain.com" {
+			handlerCalled = true
+			capturedAuthContext = GetAuthContext(hostRequest.Context())
+			capturedEventContext, _ = GetEventContext(hostRequest.Context())
+			responseWriter.WriteHeader(http.StatusOK)
+			_, _ = responseWriter.Write([]byte("ok"))
+			return true
+		}
+		return false
+	})
+
+	httpHandler := server.HTTPServer().Handler
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://plain.domain.com/data", nil)
+	request.Host = "plain.domain.com"
+	request.Header.Set("Authorization", "Bearer "+token)
+	responseRecorder := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(responseRecorder, request)
+	require.True(t, handlerCalled)
+	require.Equal(t, http.StatusOK, responseRecorder.Code)
+
+	// Verify middleware enrichment was executed
+	require.NotNil(t, capturedEventContext.RequestID, "middleware should populate EventContext on HTTP listener")
+	require.True(t, capturedAuthContext.IsAuthenticated(), "middleware should authenticate JWT on HTTP listener")
+	require.Equal(t, testUserID, capturedAuthContext.UserID)
+}
+
+func TestCoreServerStartTLSUnit(t *testing.T) {
+	certPEM, keyPEM := generateTestCertAndKeyPEM(t)
+
+	testConfig := DefaultConfig()
+	testConfig.Server.TLS.Enabled = true
+	testConfig.Server.TLS.AutoTLS = false
+	testConfig.Server.TLS.CertPEM = certPEM
+	testConfig.Server.TLS.KeyPEM = keyPEM
+	testConfig.Server.TLS.HTTPRedirect = true
+	testConfig.Security.MasterEncryptionKey = TestMasterEncryptionKeyHex
+	SetLoadedConfig(testConfig)
+	defer UnloadConfig()
+
+	kernel := NewTestKernel(nil)
+	server := NewServer(kernel)
+	server.server.Addr = "-1"
+	server.HTTPServer().Addr = "-1"
+
+	startErr := server.Start()
+	require.Error(t, startErr)
+	require.Contains(t, startErr.Error(), "https server failed to listen and serve")
+
+	// Successful Start with dual listeners and graceful shutdown
+	validServer := NewServer(kernel)
+	validServer.server.Addr = "127.0.0.1:0"
+	validServer.HTTPServer().Addr = "127.0.0.1:0"
+	serverErrorChannel := make(chan error, 1)
+	go func() {
+		serverErrorChannel <- validServer.Start()
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	require.NoError(t, validServer.Shutdown(context.Background()))
+	require.NoError(t, <-serverErrorChannel)
 }

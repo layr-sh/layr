@@ -51,13 +51,30 @@ type Execution struct {
 	CreatedAt    time.Time  `json:"created_at"`
 }
 
+// RequiredDNSRecord represents a DNS configuration instruction required to point traffic to Layr.
+type RequiredDNSRecord struct {
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	Target   string `json:"target"`
+	Status   string `json:"status"`
+	Required bool   `json:"required"`
+	Comment  string `json:"comment,omitempty"`
+}
+
 // CustomDomain represents a registered custom domain hostname in function.custom_domains.
 type CustomDomain struct {
-	ID        uuid.UUID `json:"id"`
-	Domain    string    `json:"domain"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                 uuid.UUID           `json:"id"`
+	Domain             string              `json:"domain"`
+	Status             string              `json:"status"`
+	TLSEnabled         bool                `json:"tls_enabled"`
+	TLSStatus          string              `json:"tls_status"`
+	TLSAcmeEmail       *string             `json:"tls_acme_email,omitempty"`
+	TLSErrorMessage    *string             `json:"tls_error_message,omitempty"`
+	TLSIssuedAt        *time.Time          `json:"tls_issued_at,omitempty"`
+	TLSExpiresAt       *time.Time          `json:"tls_expires_at,omitempty"`
+	RequiredDNSRecords []RequiredDNSRecord `json:"required_dns_records,omitempty"`
+	CreatedAt          time.Time           `json:"created_at"`
+	UpdatedAt          time.Time           `json:"updated_at"`
 }
 
 // CustomDomainRoute represents an endpoint route mapping on a custom domain in function.custom_domain_routes.

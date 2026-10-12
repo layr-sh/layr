@@ -4,6 +4,7 @@ package function
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,28 @@ func TestFunctionServiceUnit(t *testing.T) {
 		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
 		service.RegisterRoutes(baseRouter, controlPlaneRouter)
 	})
+
+	t.Run("register host routes is idempotent and handles nil", func(t *testing.T) {
+		t.Parallel()
+		service := NewService(core.NewTestKernel(nil))
+		require.NotNil(t, service)
+
+		// nil server is a no-op
+		service.RegisterHostRoutes(nil)
+
+		server := core.NewServer(core.NewTestKernel(nil))
+		initialHandlersCount := len(server.HostHandlers())
+		initialValidatorsCount := len(server.HostValidators())
+
+		service.RegisterHostRoutes(server)
+		require.Equal(t, initialHandlersCount+1, len(server.HostHandlers()))
+		require.Equal(t, initialValidatorsCount+1, len(server.HostValidators()))
+
+		// Second call is a no-op due to sync.Once
+		service.RegisterHostRoutes(server)
+		require.Equal(t, initialHandlersCount+1, len(server.HostHandlers()))
+		require.Equal(t, initialValidatorsCount+1, len(server.HostValidators()))
+	})
 }
 
 func TestFunctionServiceLifecycleAndEventsUnit(t *testing.T) {
@@ -109,4 +132,66 @@ func TestFunctionServiceLifecycleAndEventsUnit(t *testing.T) {
 	testRunner.deployFail = false
 	require.NoError(t, service.Start(context.Background()))
 	service.Stop()
+}
+
+func TestFunctionServiceHostValidationCacheUnit(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	service := NewService(kernel)
+	ctx := context.Background()
+
+	// 1. InvalidateHostValidationCache on empty string ranges all entries
+	service.hostValidationCacheMap.Store("host1.test", hostValidationCacheEntry{valid: true, expiresAt: time.Now().Add(time.Minute)})
+	service.hostValidationCacheMap.Store("host2.test", hostValidationCacheEntry{valid: true, expiresAt: time.Now().Add(time.Minute)})
+	service.InvalidateHostValidationCache("")
+	var count int
+	service.hostValidationCacheMap.Range(func(key, value any) bool {
+		count++
+		return true
+	})
+	require.Equal(t, 0, count)
+
+	// 2. InvalidateHostValidationCache with valid and invalid domain
+	service.hostValidationCacheMap.Store("host1.test", hostValidationCacheEntry{valid: true, expiresAt: time.Now().Add(time.Minute)})
+	service.InvalidateHostValidationCache("HOST1.TEST")
+	_, ok := service.hostValidationCacheMap.Load("host1.test")
+	require.False(t, ok)
+
+	service.hostValidationCacheMap.Store("invalid..host", hostValidationCacheEntry{valid: true, expiresAt: time.Now().Add(time.Minute)})
+	service.InvalidateHostValidationCache("invalid..host")
+	_, ok = service.hostValidationCacheMap.Load("invalid..host")
+	require.False(t, ok)
+
+	// 3. validateCustomDomainHost cache hit, expiry, and miss
+	// Invalid domain returns false, nil
+	valid, err := service.validateCustomDomainHost(ctx, "invalid..host")
+	require.NoError(t, err)
+	require.False(t, valid)
+
+	// Insert active domain with TLS
+	_, err = kernel.DB().Exec(ctx, `
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		VALUES ('cache.test.com', 'active', true, 'active', clock_timestamp(), clock_timestamp());
+	`)
+	require.NoError(t, err)
+
+	// First call - cache miss, queries DB and caches
+	valid, err = service.validateCustomDomainHost(ctx, "cache.test.com")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	// Cache hit
+	valid, err = service.validateCustomDomainHost(ctx, "cache.test.com")
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	// Expired cache entry triggers eviction and re-query
+	service.hostValidationCacheMap.Store("cache.test.com", hostValidationCacheEntry{
+		valid:     false,
+		expiresAt: time.Now().Add(-1 * time.Minute),
+	})
+	valid, err = service.validateCustomDomainHost(ctx, "cache.test.com")
+	require.NoError(t, err)
+	require.True(t, valid)
 }

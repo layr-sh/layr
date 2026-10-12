@@ -35,11 +35,27 @@ type ProjectConfig struct {
 	Description string `json:"description"`
 }
 
-// ServerConfig defines the HTTP server network listener and base URL.
+// ServerConfig defines the HTTP server network listener, base URL, and TLS configuration.
 type ServerConfig struct {
-	ListenAddr        string `json:"listen_addr"`
-	BaseURL           string `json:"base_url"`
-	TrustProxyHeaders bool   `json:"trust_proxy_headers"`
+	ListenAddr        string          `json:"listen_addr"`
+	BaseURL           string          `json:"base_url"`
+	TrustProxyHeaders bool            `json:"trust_proxy_headers"`
+	TLS               ServerTLSConfig `json:"tls"`
+}
+
+// ServerTLSConfig defines SSL/TLS certificate termination and ACME auto-issuance settings.
+type ServerTLSConfig struct {
+	Enabled        bool     `json:"enabled"`
+	AutoTLS        bool     `json:"auto_tls"`
+	AcmeEmail      string   `json:"acme_email"`
+	AcmeStaging    bool     `json:"acme_staging"`
+	Domains        []string `json:"domains"`
+	CertFile       string   `json:"cert_file"`
+	KeyFile        string   `json:"key_file"`
+	CertPEM        string   `json:"cert_pem"`
+	KeyPEM         string   `json:"key_pem"`
+	HTTPRedirect   bool     `json:"http_redirect"`
+	HTTPListenAddr string   `json:"http_listen_addr"`
 }
 
 // DatabaseConfig defines PostgreSQL connection and pool parameters.
@@ -92,6 +108,12 @@ func DefaultConfig() *Config {
 			ListenAddr:        ":5297",
 			BaseURL:           "http://localhost:5297",
 			TrustProxyHeaders: true,
+			TLS: ServerTLSConfig{
+				Enabled:        false,
+				AutoTLS:        false,
+				HTTPRedirect:   true,
+				HTTPListenAddr: ":80",
+			},
 		},
 		Database: DatabaseConfig{
 			URL:                 ".layr/data",
@@ -284,12 +306,53 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 		}
 	case "server":
 		switch field {
-		case "listen_addr", "listenaddr":
+		case "listen_addr":
 			config.Server.ListenAddr = value
 			return "server.listen_addr", true
-		case "base_url", "baseurl":
+		case "base_url":
 			config.Server.BaseURL = value
 			return "server.base_url", true
+		case "tls__enabled":
+			config.Server.TLS.Enabled = strings.ToLower(value) == "true" || value == "1"
+			return "server.tls.enabled", true
+		case "tls__auto_tls":
+			config.Server.TLS.AutoTLS = strings.ToLower(value) == "true" || value == "1"
+			return "server.tls.auto_tls", true
+		case "tls__acme_email":
+			config.Server.TLS.AcmeEmail = strings.TrimSpace(value)
+			return "server.tls.acme_email", true
+		case "tls__acme_staging":
+			config.Server.TLS.AcmeStaging = strings.ToLower(value) == "true" || value == "1"
+			return "server.tls.acme_staging", true
+		case "tls__domains":
+			rawDomains := strings.Split(value, ",")
+			var domains []string
+			for _, d := range rawDomains {
+				trimmed := strings.TrimSpace(d)
+				if trimmed != "" {
+					domains = append(domains, trimmed)
+				}
+			}
+			config.Server.TLS.Domains = domains
+			return "server.tls.domains", true
+		case "tls__cert_file":
+			config.Server.TLS.CertFile = value
+			return "server.tls.cert_file", true
+		case "tls__key_file":
+			config.Server.TLS.KeyFile = value
+			return "server.tls.key_file", true
+		case "tls__cert_pem":
+			config.Server.TLS.CertPEM = value
+			return "server.tls.cert_pem", true
+		case "tls__key_pem":
+			config.Server.TLS.KeyPEM = value
+			return "server.tls.key_pem", true
+		case "tls__http_redirect":
+			config.Server.TLS.HTTPRedirect = strings.ToLower(value) == "true" || value == "1"
+			return "server.tls.http_redirect", true
+		case "tls__http_listen_addr":
+			config.Server.TLS.HTTPListenAddr = value
+			return "server.tls.http_listen_addr", true
 		}
 	case "database":
 		switch field {
@@ -344,7 +407,7 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 			config.Security.MasterEncryptionKey = value
 			return "security.master_encryption_key", true
 		}
-	case "kv_store", "kvstore", "kv":
+	case "kv_store", "kv":
 		switch field {
 		case "backend":
 			config.KVStore.Backend = strings.ToLower(value)
@@ -367,10 +430,10 @@ func applyEnvConfigField(config *Config, section, field, value string) (string, 
 		}
 	case "console":
 		switch field {
-		case "initial_root_user__email", "initial_root_user.email", "initial_root_user_email":
+		case "initial_root_user__email":
 			config.Console.InitialRootUser.Email = value
 			return "console.initial_root_user.email", true
-		case "initial_root_user__password", "initial_root_user.password", "initial_root_user_password":
+		case "initial_root_user__password":
 			config.Console.InitialRootUser.Password = value
 			return "console.initial_root_user.password", true
 		}
@@ -449,6 +512,14 @@ func (config *Config) Validate() error {
 
 	if config.KVStore.Backend == "redis" && config.KVStore.URL == "" && len(config.KVStore.ClusterURLs) == 0 {
 		return errors.New("kv_store.url or kv_store.cluster_urls is required when kv_store.backend is 'redis'")
+	}
+
+	if config.Server.TLS.Enabled && !config.Server.TLS.AutoTLS {
+		hasFiles := config.Server.TLS.CertFile != "" && config.Server.TLS.KeyFile != ""
+		hasPEMs := config.Server.TLS.CertPEM != "" && config.Server.TLS.KeyPEM != ""
+		if !hasFiles && !hasPEMs {
+			return errors.New("server.tls.enabled is true and auto_tls is false: cert_file/key_file or cert_pem/key_pem is required")
+		}
 	}
 
 	// Minimum Functional Service Invariant

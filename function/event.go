@@ -82,6 +82,14 @@ func NewCustomDomainDeletedEvent(resourceID string, customDomainDeletedEventData
 	return core.NewEvent("function.custom_domain.deleted", customDomainDeletedEventData).WithResourceID(resourceID)
 }
 
+// CustomDomainUpdatedEventData represents the payload for function.custom_domain.updated.
+type CustomDomainUpdatedEventData CustomDomain
+
+// NewCustomDomainUpdatedEvent creates a typed event for custom domain update.
+func NewCustomDomainUpdatedEvent(resourceID string, customDomainUpdatedEventData CustomDomainUpdatedEventData) core.Event {
+	return core.NewEvent("function.custom_domain.updated", customDomainUpdatedEventData).WithResourceID(resourceID)
+}
+
 // CustomDomainRouteCreatedEventData represents the payload for function.custom_domain_route.created.
 type CustomDomainRouteCreatedEventData CustomDomainRoute
 

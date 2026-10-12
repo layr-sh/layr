@@ -89,6 +89,13 @@ CREATE UNLOGGED TABLE IF NOT EXISTS core.kv_store (
 );
 CREATE INDEX IF NOT EXISTS idx_core_kv_store_expires_at ON core.kv_store (expires_at);
 
+CREATE TABLE IF NOT EXISTS core.acme_certificates (
+    key_name TEXT PRIMARY KEY,
+    data BYTEA NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS idx_core_acme_certificates_updated_at ON core.acme_certificates (updated_at);
+
 CREATE TABLE IF NOT EXISTS core.nodes (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     node_name TEXT NOT NULL,

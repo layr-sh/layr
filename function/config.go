@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -37,12 +39,15 @@ type WorkerdRuntimeConfig struct {
 
 // Config represents the dynamic operational runtime configuration for layr/function.
 type Config struct {
-	DefaultRuntime         string               `json:"default_runtime"`
-	DefaultMemoryLimitMB   int                  `json:"default_memory_limit_mb"`
-	DefaultTimeoutSeconds  int                  `json:"default_timeout_seconds"`
-	MaxBundleSizeBytes     int64                `json:"max_bundle_size_bytes"`
-	AllowedEnvironmentKeys []string             `json:"allowed_environment_keys"`
-	WorkerdRuntime         WorkerdRuntimeConfig `json:"workerd_runtime"`
+	DefaultRuntime          string               `json:"default_runtime"`
+	DefaultMemoryLimitMB    int                  `json:"default_memory_limit_mb"`
+	DefaultTimeoutSeconds   int                  `json:"default_timeout_seconds"`
+	MaxBundleSizeBytes      int64                `json:"max_bundle_size_bytes"`
+	AllowedEnvironmentKeys  []string             `json:"allowed_environment_keys"`
+	DefaultTLSAcmeEmail     string               `json:"default_tls_acme_email,omitempty"`
+	CustomDomainCNAMETarget string               `json:"custom_domain_cname_target,omitempty"`
+	CustomDomainApexIP      string               `json:"custom_domain_apex_ip,omitempty"`
+	WorkerdRuntime          WorkerdRuntimeConfig `json:"workerd_runtime"`
 }
 
 // DefaultConfig returns standard baseline configuration for functions.
@@ -73,6 +78,17 @@ func (config Config) Validate() error {
 	}
 	if config.MaxBundleSizeBytes <= 0 {
 		return fmt.Errorf("max_bundle_size_bytes must be greater than 0, got %d", config.MaxBundleSizeBytes)
+	}
+	if config.DefaultTLSAcmeEmail != "" && !strings.Contains(config.DefaultTLSAcmeEmail, "@") {
+		return errors.New("default_tls_acme_email must contain '@'")
+	}
+	if config.CustomDomainApexIP != "" && net.ParseIP(config.CustomDomainApexIP) == nil {
+		return errors.New("custom_domain_apex_ip must be a valid IP address")
+	}
+	if config.CustomDomainCNAMETarget != "" {
+		if _, err := NormalizeAndValidateDomain(config.CustomDomainCNAMETarget); err != nil && config.CustomDomainCNAMETarget != "localhost" {
+			return fmt.Errorf("custom_domain_cname_target is invalid: %w", err)
+		}
 	}
 	if config.WorkerdRuntime.CompatibilityDate == "" {
 		return errors.New("workerd_runtime.compatibility_date cannot be empty")
