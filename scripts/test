@@ -116,14 +116,30 @@ if [ "${ENFORCE_COVERAGE}" = "auto" ]; then
   fi
 fi
 
-# If no specific package is passed, discover all application packages (excluding scripts)
+# If no specific package is passed, discover all application packages (excluding scripts and generated client SDKs)
 if [ ${#TARGET_PACKAGES[@]} -eq 0 ]; then
   while IFS= read -r pkg; do
     [ -z "$pkg" ] && continue
-    if [[ "$pkg" != *"scripts"* ]]; then
+    if [[ "$pkg" != *"scripts"* && "$pkg" != *"client-sdk/go/generated"* ]]; then
       TARGET_PACKAGES+=("$pkg")
     fi
   done < <(go list ./... 2>/dev/null || true)
+else
+  # Expand any package patterns (e.g. ./...) and filter out excluded packages
+  EXPANDED_PACKAGES=()
+  for target in "${TARGET_PACKAGES[@]}"; do
+    if [[ "$target" == *"..."* ]]; then
+      while IFS= read -r pkg; do
+        [ -z "$pkg" ] && continue
+        if [[ "$pkg" != *"scripts"* && "$pkg" != *"client-sdk/go/generated"* ]]; then
+          EXPANDED_PACKAGES+=("$pkg")
+        fi
+      done < <(go list "$target" 2>/dev/null || true)
+    else
+      EXPANDED_PACKAGES+=("$target")
+    fi
+  done
+  TARGET_PACKAGES=("${EXPANDED_PACKAGES[@]}")
 fi
 
 if [ ${#TARGET_PACKAGES[@]} -eq 0 ]; then
