@@ -937,16 +937,37 @@ func TestAuthBaseHandlerUserSelfServiceIntegration(t *testing.T) {
 		IsAnonymous: true,
 	}, 900)
 
-	// Oversized email (>255 chars) causes UPDATE error -> 500
-	oversizedEmail := strings.Repeat("a", 250) + "@test.com"
-	updateEmailOversizedPayload, _ := json.Marshal(UpdateUserEmailInput{Email: oversizedEmail})
-	updateEmailOversizedRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/auth/user/email", bytes.NewReader(updateEmailOversizedPayload)), anonFailUserID, "authenticated", true)
-	updateEmailOversizedRequest.Header.Set("Authorization", "Bearer "+anonFailToken)
-	updateEmailOversizedResponseRecorder := httptest.NewRecorder()
-	baseHandler.handleUpdateUserEmail(updateEmailOversizedResponseRecorder, updateEmailOversizedRequest)
-	if updateEmailOversizedResponseRecorder.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 on oversized email update for anonymous user, got: %d (%s)", updateEmailOversizedResponseRecorder.Code, updateEmailOversizedResponseRecorder.Body.String())
+	// Trigger DB update error -> 500 on email update for anonymous user
+	_, err = db.Exec(ctx, `
+		CREATE OR REPLACE FUNCTION auth.trg_fail_update_email_fn() RETURNS trigger AS $$
+		BEGIN
+			IF NEW.email = 'fail.update@example.com' THEN
+				RAISE EXCEPTION 'simulated update failure';
+			END IF;
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		DROP TRIGGER IF EXISTS trg_fail_update_email ON auth.users;
+		CREATE TRIGGER trg_fail_update_email BEFORE UPDATE ON auth.users
+		FOR EACH ROW EXECUTE FUNCTION auth.trg_fail_update_email_fn();
+	`)
+	if err != nil {
+		t.Fatalf("failed to create fail trigger: %v", err)
 	}
+
+	updateEmailErrPayload, _ := json.Marshal(UpdateUserEmailInput{Email: "fail.update@example.com"})
+	updateEmailErrRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/v1/auth/user/email", bytes.NewReader(updateEmailErrPayload)), anonFailUserID, "authenticated", true)
+	updateEmailErrRequest.Header.Set("Authorization", "Bearer "+anonFailToken)
+	updateEmailErrResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleUpdateUserEmail(updateEmailErrResponseRecorder, updateEmailErrRequest)
+	if updateEmailErrResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on email update failure for anonymous user, got: %d (%s)", updateEmailErrResponseRecorder.Code, updateEmailErrResponseRecorder.Body.String())
+	}
+
+	_, _ = db.Exec(ctx, `
+		DROP TRIGGER IF EXISTS trg_fail_update_email ON auth.users;
+		DROP FUNCTION IF EXISTS auth.trg_fail_update_email_fn();
+	`)
 
 	// Trigger DB update error -> 500 on phone update
 	_, err = db.Exec(ctx, `
