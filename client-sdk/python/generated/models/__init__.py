@@ -133,6 +133,7 @@ from generated.models.refresh_token_input import RefreshTokenInput
 from generated.models.request_email_verification_input import RequestEmailVerificationInput
 from generated.models.request_password_reset_input import RequestPasswordResetInput
 from generated.models.request_phone_verification_input import RequestPhoneVerificationInput
+from generated.models.required_dns_record import RequiredDNSRecord
 from generated.models.reset_console_user_password_input import ResetConsoleUserPasswordInput
 from generated.models.resource_server_config import ResourceServerConfig
 from generated.models.retry_dlq_response import RetryDLQResponse
@@ -173,6 +174,7 @@ from generated.models.update_bucket_input import UpdateBucketInput
 from generated.models.update_column_input import UpdateColumnInput
 from generated.models.update_column_response import UpdateColumnResponse
 from generated.models.update_console_user_input import UpdateConsoleUserInput
+from generated.models.update_custom_domain_input import UpdateCustomDomainInput
 from generated.models.update_endpoint_input import UpdateEndpointInput
 from generated.models.update_event_hook_input import UpdateEventHookInput
 from generated.models.update_job_input import UpdateJobInput

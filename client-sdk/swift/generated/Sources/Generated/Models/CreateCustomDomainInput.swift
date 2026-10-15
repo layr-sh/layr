@@ -11,13 +11,19 @@ import Foundation
 public struct CreateCustomDomainInput: Sendable, Codable, Hashable {
 
     public var domain: String
+    public var tlsAcmeEmail: String?
+    public var tlsEnabled: Bool?
 
-    public init(domain: String) {
+    public init(domain: String, tlsAcmeEmail: String? = nil, tlsEnabled: Bool? = nil) {
         self.domain = domain
+        self.tlsAcmeEmail = tlsAcmeEmail
+        self.tlsEnabled = tlsEnabled
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case domain
+        case tlsAcmeEmail = "tls_acme_email"
+        case tlsEnabled = "tls_enabled"
     }
 
     // Encodable protocol methods
@@ -25,6 +31,8 @@ public struct CreateCustomDomainInput: Sendable, Codable, Hashable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(domain, forKey: .domain)
+        try container.encodeIfPresent(tlsAcmeEmail, forKey: .tlsAcmeEmail)
+        try container.encodeIfPresent(tlsEnabled, forKey: .tlsEnabled)
     }
 }
 

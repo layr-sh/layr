@@ -8,6 +8,8 @@ CreateCustomDomainInput schema
 Name | Type
 ------------ | -------------
 `domain` | string
+`tlsAcmeEmail` | string
+`tlsEnabled` | boolean
 
 ## Example
 
@@ -17,6 +19,8 @@ import type { CreateCustomDomainInput } from ''
 // TODO: Update the object below with actual values
 const example = {
   "domain": null,
+  "tlsAcmeEmail": null,
+  "tlsEnabled": null,
 } satisfies CreateCustomDomainInput
 
 console.log(example)

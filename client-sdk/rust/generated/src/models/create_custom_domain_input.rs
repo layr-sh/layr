@@ -16,6 +16,10 @@ use serde::{Deserialize, Serialize};
 pub struct CreateCustomDomainInput {
     #[serde(rename = "domain")]
     pub domain: String,
+    #[serde(rename = "tls_acme_email", skip_serializing_if = "Option::is_none")]
+    pub tls_acme_email: Option<String>,
+    #[serde(rename = "tls_enabled", skip_serializing_if = "Option::is_none")]
+    pub tls_enabled: Option<bool>,
 }
 
 impl CreateCustomDomainInput {
@@ -23,6 +27,8 @@ impl CreateCustomDomainInput {
     pub fn new(domain: String) -> CreateCustomDomainInput {
         CreateCustomDomainInput {
             domain,
+            tls_acme_email: None,
+            tls_enabled: None,
         }
     }
 }

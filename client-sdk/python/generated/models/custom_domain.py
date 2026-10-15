@@ -18,8 +18,9 @@ import re  # noqa: F401
 import json
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
+from generated.models.required_dns_record import RequiredDNSRecord
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -31,9 +32,16 @@ class CustomDomain(BaseModel):
     created_at: datetime
     domain: StrictStr
     id: Optional[Any]
+    required_dns_records: Optional[List[RequiredDNSRecord]] = None
     status: StrictStr
+    tls_acme_email: Optional[StrictStr] = None
+    tls_enabled: StrictBool
+    tls_error_message: Optional[StrictStr] = None
+    tls_expires_at: Optional[datetime] = None
+    tls_issued_at: Optional[datetime] = None
+    tls_status: StrictStr
     updated_at: datetime
-    __properties: ClassVar[List[str]] = ["created_at", "domain", "id", "status", "updated_at"]
+    __properties: ClassVar[List[str]] = ["created_at", "domain", "id", "required_dns_records", "status", "tls_acme_email", "tls_enabled", "tls_error_message", "tls_expires_at", "tls_issued_at", "tls_status", "updated_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -74,10 +82,21 @@ class CustomDomain(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in required_dns_records (list)
+        _items = []
+        if self.required_dns_records:
+            for _item_required_dns_records in self.required_dns_records:
+                _items.append(_item_required_dns_records.to_dict() if _item_required_dns_records is not None else None)
+            _dict['required_dns_records'] = _items
         # set to None if id (nullable) is None
         # and model_fields_set contains the field
         if self.id is None and "id" in self.model_fields_set:
             _dict['id'] = None
+
+        # set to None if required_dns_records (nullable) is None
+        # and model_fields_set contains the field
+        if self.required_dns_records is None and "required_dns_records" in self.model_fields_set:
+            _dict['required_dns_records'] = None
 
         return _dict
 
@@ -94,7 +113,14 @@ class CustomDomain(BaseModel):
             "created_at": obj.get("created_at"),
             "domain": obj.get("domain"),
             "id": obj.get("id"),
+            "required_dns_records": [RequiredDNSRecord.from_dict(_item) for _item in obj["required_dns_records"]] if obj.get("required_dns_records") is not None else None,
             "status": obj.get("status"),
+            "tls_acme_email": obj.get("tls_acme_email"),
+            "tls_enabled": obj.get("tls_enabled"),
+            "tls_error_message": obj.get("tls_error_message"),
+            "tls_expires_at": obj.get("tls_expires_at"),
+            "tls_issued_at": obj.get("tls_issued_at"),
+            "tls_status": obj.get("tls_status"),
             "updated_at": obj.get("updated_at")
         })
         return _obj

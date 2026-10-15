@@ -199,6 +199,7 @@ __all__ = [
     "RequestEmailVerificationInput",
     "RequestPasswordResetInput",
     "RequestPhoneVerificationInput",
+    "RequiredDNSRecord",
     "ResetConsoleUserPasswordInput",
     "ResourceServerConfig",
     "RetryDLQResponse",
@@ -239,6 +240,7 @@ __all__ = [
     "UpdateColumnInput",
     "UpdateColumnResponse",
     "UpdateConsoleUserInput",
+    "UpdateCustomDomainInput",
     "UpdateEndpointInput",
     "UpdateEventHookInput",
     "UpdateJobInput",
@@ -446,6 +448,7 @@ from generated.models.refresh_token_input import RefreshTokenInput as RefreshTok
 from generated.models.request_email_verification_input import RequestEmailVerificationInput as RequestEmailVerificationInput
 from generated.models.request_password_reset_input import RequestPasswordResetInput as RequestPasswordResetInput
 from generated.models.request_phone_verification_input import RequestPhoneVerificationInput as RequestPhoneVerificationInput
+from generated.models.required_dns_record import RequiredDNSRecord as RequiredDNSRecord
 from generated.models.reset_console_user_password_input import ResetConsoleUserPasswordInput as ResetConsoleUserPasswordInput
 from generated.models.resource_server_config import ResourceServerConfig as ResourceServerConfig
 from generated.models.retry_dlq_response import RetryDLQResponse as RetryDLQResponse
@@ -486,6 +489,7 @@ from generated.models.update_bucket_input import UpdateBucketInput as UpdateBuck
 from generated.models.update_column_input import UpdateColumnInput as UpdateColumnInput
 from generated.models.update_column_response import UpdateColumnResponse as UpdateColumnResponse
 from generated.models.update_console_user_input import UpdateConsoleUserInput as UpdateConsoleUserInput
+from generated.models.update_custom_domain_input import UpdateCustomDomainInput as UpdateCustomDomainInput
 from generated.models.update_endpoint_input import UpdateEndpointInput as UpdateEndpointInput
 from generated.models.update_event_hook_input import UpdateEventHookInput as UpdateEventHookInput
 from generated.models.update_job_input import UpdateJobInput as UpdateJobInput

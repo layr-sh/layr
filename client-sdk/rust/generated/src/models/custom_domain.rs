@@ -19,19 +19,40 @@ pub struct CustomDomain {
     pub domain: String,
     #[serde(rename = "id", deserialize_with = "Option::deserialize")]
     pub id: Option<serde_json::Value>,
+    #[serde(rename = "required_dns_records", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub required_dns_records: Option<Option<Vec<models::RequiredDnsRecord>>>,
     #[serde(rename = "status")]
     pub status: String,
+    #[serde(rename = "tls_acme_email", skip_serializing_if = "Option::is_none")]
+    pub tls_acme_email: Option<String>,
+    #[serde(rename = "tls_enabled")]
+    pub tls_enabled: bool,
+    #[serde(rename = "tls_error_message", skip_serializing_if = "Option::is_none")]
+    pub tls_error_message: Option<String>,
+    #[serde(rename = "tls_expires_at", skip_serializing_if = "Option::is_none")]
+    pub tls_expires_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    #[serde(rename = "tls_issued_at", skip_serializing_if = "Option::is_none")]
+    pub tls_issued_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    #[serde(rename = "tls_status")]
+    pub tls_status: String,
     #[serde(rename = "updated_at")]
     pub updated_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl CustomDomain {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, domain: String, id: Option<serde_json::Value>, status: String, updated_at: chrono::DateTime<chrono::FixedOffset>) -> CustomDomain {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, domain: String, id: Option<serde_json::Value>, status: String, tls_enabled: bool, tls_status: String, updated_at: chrono::DateTime<chrono::FixedOffset>) -> CustomDomain {
         CustomDomain {
             created_at,
             domain,
             id,
+            required_dns_records: None,
             status,
+            tls_acme_email: None,
+            tls_enabled,
+            tls_error_message: None,
+            tls_expires_at: None,
+            tls_issued_at: None,
+            tls_status,
             updated_at,
         }
     }

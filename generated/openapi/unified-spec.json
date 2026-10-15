@@ -407,6 +407,14 @@
         "properties": {
           "domain": {
             "type": "string"
+          },
+          "tls_acme_email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_enabled": {
+            "nullable": true,
+            "type": "boolean"
           }
         },
         "required": [
@@ -955,7 +963,40 @@
             "type": "string"
           },
           "id": {},
+          "required_dns_records": {
+            "items": {
+              "$ref": "#/components/schemas/RequiredDNSRecord"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "status": {
+            "type": "string"
+          },
+          "tls_acme_email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_enabled": {
+            "type": "boolean"
+          },
+          "tls_error_message": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_expires_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_issued_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_status": {
             "type": "string"
           },
           "updated_at": {
@@ -968,6 +1009,8 @@
           "domain",
           "id",
           "status",
+          "tls_enabled",
+          "tls_status",
           "updated_at"
         ],
         "type": "object"
@@ -3401,6 +3444,36 @@
         },
         "type": "object"
       },
+      "RequiredDNSRecord": {
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "required",
+          "status",
+          "target",
+          "type"
+        ],
+        "type": "object"
+      },
       "ResetConsoleUserPasswordInput": {
         "description": "ResetConsoleUserPasswordInput schema",
         "properties": {
@@ -4272,6 +4345,20 @@
             "type": "string"
           },
           "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateCustomDomainInput": {
+        "description": "UpdateCustomDomainInput schema",
+        "properties": {
+          "tls_acme_email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "tls_enabled": {
             "nullable": true,
             "type": "boolean"
           }
@@ -7897,6 +7984,150 @@
           "domains"
         ],
         "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope.",
+        "operationId": "function__domains__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get custom domain details and DNS instructions",
+        "tags": [
+          "Domains"
+        ],
+        "x-sdk-group-name": [
+          "function",
+          "domains"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "patch": {
+        "description": "Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope.",
+        "operationId": "function__domains__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomDomainInput"
+              }
+            }
+          },
+          "description": "Request body for function.UpdateCustomDomainInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update custom domain configuration",
+        "tags": [
+          "Domains"
+        ],
+        "x-sdk-group-name": [
+          "function",
+          "domains"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/function/domains/{domain_id}/verify": {
+      "post": {
+        "description": "Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope.",
+        "operationId": "function__domains__verify",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomDomain"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Verify custom domain DNS configuration",
+        "tags": [
+          "Domains"
+        ],
+        "x-sdk-group-name": [
+          "function",
+          "domains"
+        ],
+        "x-sdk-method-name": "verify"
       }
     },
     "/v1/_/function/endpoints": {

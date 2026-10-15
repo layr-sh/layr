@@ -87,6 +87,46 @@ open class DomainsAPI {
     }
 
     /**
+     Get custom domain details and DNS instructions
+     
+     - parameter domainId: (path)  
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: CustomDomain
+     */
+    open class func functionDomainsGet(domainId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CustomDomain {
+        return try await functionDomainsGetWithRequestBuilder(domainId: domainId, apiConfiguration: apiConfiguration).execute().body
+    }
+
+    /**
+     Get custom domain details and DNS instructions
+     - GET /v1/_/function/domains/{domain_id}
+     - Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope.
+     - parameter domainId: (path)  
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: RequestBuilder<CustomDomain> 
+     */
+    open class func functionDomainsGetWithRequestBuilder(domainId: String, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<CustomDomain> {
+        var localVariablePath = "/v1/_/function/domains/{domain_id}"
+        let domainIdPreEscape = "\(APIHelper.mapValueToPathItem(domainId))"
+        let domainIdPostEscape = domainIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        localVariablePath = localVariablePath.replacingOccurrences(of: "{domain_id}", with: domainIdPostEscape, options: .literal, range: nil)
+        let localVariableURLString = apiConfiguration.basePath + localVariablePath
+        let localVariableParameters: [String: any Sendable]? = nil
+
+        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+
+        let localVariableNillableHeaders: [String: (any Sendable)?] = [
+            :
+        ]
+
+        let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
+
+        let localVariableRequestBuilder: RequestBuilder<CustomDomain>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+
+        return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: false, apiConfiguration: apiConfiguration)
+    }
+
+    /**
      List registered custom domains
      
      - parameter apiConfiguration: The configuration for the http request.
@@ -119,5 +159,89 @@ open class DomainsAPI {
         let localVariableRequestBuilder: RequestBuilder<ListCustomDomainsResponse>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
 
         return localVariableRequestBuilder.init(method: "GET", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: false, apiConfiguration: apiConfiguration)
+    }
+
+    /**
+     Update custom domain configuration
+     
+     - parameter domainId: (path)  
+     - parameter updateCustomDomainInput: (body) Request body for function.UpdateCustomDomainInput 
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: CustomDomain
+     */
+    open class func functionDomainsUpdate(domainId: String, updateCustomDomainInput: UpdateCustomDomainInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CustomDomain {
+        return try await functionDomainsUpdateWithRequestBuilder(domainId: domainId, updateCustomDomainInput: updateCustomDomainInput, apiConfiguration: apiConfiguration).execute().body
+    }
+
+    /**
+     Update custom domain configuration
+     - PATCH /v1/_/function/domains/{domain_id}
+     - Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope.
+     - parameter domainId: (path)  
+     - parameter updateCustomDomainInput: (body) Request body for function.UpdateCustomDomainInput 
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: RequestBuilder<CustomDomain> 
+     */
+    open class func functionDomainsUpdateWithRequestBuilder(domainId: String, updateCustomDomainInput: UpdateCustomDomainInput, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<CustomDomain> {
+        var localVariablePath = "/v1/_/function/domains/{domain_id}"
+        let domainIdPreEscape = "\(APIHelper.mapValueToPathItem(domainId))"
+        let domainIdPostEscape = domainIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        localVariablePath = localVariablePath.replacingOccurrences(of: "{domain_id}", with: domainIdPostEscape, options: .literal, range: nil)
+        let localVariableURLString = apiConfiguration.basePath + localVariablePath
+        let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: updateCustomDomainInput, codableHelper: apiConfiguration.codableHelper)
+
+        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+
+        let localVariableNillableHeaders: [String: (any Sendable)?] = [
+            :
+        ]
+
+        let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
+
+        let localVariableRequestBuilder: RequestBuilder<CustomDomain>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+
+        return localVariableRequestBuilder.init(method: "PATCH", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: false, apiConfiguration: apiConfiguration)
+    }
+
+    /**
+     Verify custom domain DNS configuration
+     
+     - parameter domainId: (path)  
+     - parameter body: (body) Request body for core.Empty 
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: CustomDomain
+     */
+    open class func functionDomainsVerify(domainId: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) async throws(ErrorResponse) -> CustomDomain {
+        return try await functionDomainsVerifyWithRequestBuilder(domainId: domainId, body: body, apiConfiguration: apiConfiguration).execute().body
+    }
+
+    /**
+     Verify custom domain DNS configuration
+     - POST /v1/_/function/domains/{domain_id}/verify
+     - Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope.
+     - parameter domainId: (path)  
+     - parameter body: (body) Request body for core.Empty 
+     - parameter apiConfiguration: The configuration for the http request.
+     - returns: RequestBuilder<CustomDomain> 
+     */
+    open class func functionDomainsVerifyWithRequestBuilder(domainId: String, body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<CustomDomain> {
+        var localVariablePath = "/v1/_/function/domains/{domain_id}/verify"
+        let domainIdPreEscape = "\(APIHelper.mapValueToPathItem(domainId))"
+        let domainIdPostEscape = domainIdPreEscape.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        localVariablePath = localVariablePath.replacingOccurrences(of: "{domain_id}", with: domainIdPostEscape, options: .literal, range: nil)
+        let localVariableURLString = apiConfiguration.basePath + localVariablePath
+        let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
+
+        let localVariableUrlComponents = URLComponents(string: localVariableURLString)
+
+        let localVariableNillableHeaders: [String: (any Sendable)?] = [
+            :
+        ]
+
+        let localVariableHeaderParameters = APIHelper.rejectNilHeaders(localVariableNillableHeaders)
+
+        let localVariableRequestBuilder: RequestBuilder<CustomDomain>.Type = apiConfiguration.requestBuilderFactory.getBuilder()
+
+        return localVariableRequestBuilder.init(method: "POST", URLString: (localVariableUrlComponents?.string ?? localVariableURLString), parameters: localVariableParameters, headers: localVariableHeaderParameters, requiresAuthentication: false, apiConfiguration: apiConfiguration)
     }
 }

@@ -12,14 +12,28 @@ public struct CustomDomain: Sendable, Codable, Hashable {
     public var createdAt: Date
     public var domain: String
     public var id: JSONValue?
+    public var requiredDnsRecords: [RequiredDNSRecord]?
     public var status: String
+    public var tlsAcmeEmail: String?
+    public var tlsEnabled: Bool
+    public var tlsErrorMessage: String?
+    public var tlsExpiresAt: Date?
+    public var tlsIssuedAt: Date?
+    public var tlsStatus: String
     public var updatedAt: Date
 
-    public init(createdAt: Date, domain: String, id: JSONValue?, status: String, updatedAt: Date) {
+    public init(createdAt: Date, domain: String, id: JSONValue?, requiredDnsRecords: [RequiredDNSRecord]? = nil, status: String, tlsAcmeEmail: String? = nil, tlsEnabled: Bool, tlsErrorMessage: String? = nil, tlsExpiresAt: Date? = nil, tlsIssuedAt: Date? = nil, tlsStatus: String, updatedAt: Date) {
         self.createdAt = createdAt
         self.domain = domain
         self.id = id
+        self.requiredDnsRecords = requiredDnsRecords
         self.status = status
+        self.tlsAcmeEmail = tlsAcmeEmail
+        self.tlsEnabled = tlsEnabled
+        self.tlsErrorMessage = tlsErrorMessage
+        self.tlsExpiresAt = tlsExpiresAt
+        self.tlsIssuedAt = tlsIssuedAt
+        self.tlsStatus = tlsStatus
         self.updatedAt = updatedAt
     }
 
@@ -27,7 +41,14 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         case createdAt = "created_at"
         case domain
         case id
+        case requiredDnsRecords = "required_dns_records"
         case status
+        case tlsAcmeEmail = "tls_acme_email"
+        case tlsEnabled = "tls_enabled"
+        case tlsErrorMessage = "tls_error_message"
+        case tlsExpiresAt = "tls_expires_at"
+        case tlsIssuedAt = "tls_issued_at"
+        case tlsStatus = "tls_status"
         case updatedAt = "updated_at"
     }
 
@@ -38,7 +59,14 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(domain, forKey: .domain)
         try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(requiredDnsRecords, forKey: .requiredDnsRecords)
         try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(tlsAcmeEmail, forKey: .tlsAcmeEmail)
+        try container.encode(tlsEnabled, forKey: .tlsEnabled)
+        try container.encodeIfPresent(tlsErrorMessage, forKey: .tlsErrorMessage)
+        try container.encodeIfPresent(tlsExpiresAt, forKey: .tlsExpiresAt)
+        try container.encodeIfPresent(tlsIssuedAt, forKey: .tlsIssuedAt)
+        try container.encode(tlsStatus, forKey: .tlsStatus)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
 }

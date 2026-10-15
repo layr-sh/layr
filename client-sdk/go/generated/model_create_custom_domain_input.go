@@ -22,6 +22,8 @@ var _ MappedNullable = &CreateCustomDomainInput{}
 // CreateCustomDomainInput CreateCustomDomainInput schema
 type CreateCustomDomainInput struct {
 	Domain string `json:"domain"`
+	TlsAcmeEmail *string `json:"tls_acme_email,omitempty"`
+	TlsEnabled *bool `json:"tls_enabled,omitempty"`
 }
 
 type _CreateCustomDomainInput CreateCustomDomainInput
@@ -68,6 +70,70 @@ func (o *CreateCustomDomainInput) SetDomain(v string) {
 	o.Domain = v
 }
 
+// GetTlsAcmeEmail returns the TlsAcmeEmail field value if set, zero value otherwise.
+func (o *CreateCustomDomainInput) GetTlsAcmeEmail() string {
+	if o == nil || IsNil(o.TlsAcmeEmail) {
+		var ret string
+		return ret
+	}
+	return *o.TlsAcmeEmail
+}
+
+// GetTlsAcmeEmailOk returns a tuple with the TlsAcmeEmail field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CreateCustomDomainInput) GetTlsAcmeEmailOk() (*string, bool) {
+	if o == nil || IsNil(o.TlsAcmeEmail) {
+		return nil, false
+	}
+	return o.TlsAcmeEmail, true
+}
+
+// HasTlsAcmeEmail returns a boolean if a field has been set.
+func (o *CreateCustomDomainInput) HasTlsAcmeEmail() bool {
+	if o != nil && !IsNil(o.TlsAcmeEmail) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsAcmeEmail gets a reference to the given string and assigns it to the TlsAcmeEmail field.
+func (o *CreateCustomDomainInput) SetTlsAcmeEmail(v string) {
+	o.TlsAcmeEmail = &v
+}
+
+// GetTlsEnabled returns the TlsEnabled field value if set, zero value otherwise.
+func (o *CreateCustomDomainInput) GetTlsEnabled() bool {
+	if o == nil || IsNil(o.TlsEnabled) {
+		var ret bool
+		return ret
+	}
+	return *o.TlsEnabled
+}
+
+// GetTlsEnabledOk returns a tuple with the TlsEnabled field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CreateCustomDomainInput) GetTlsEnabledOk() (*bool, bool) {
+	if o == nil || IsNil(o.TlsEnabled) {
+		return nil, false
+	}
+	return o.TlsEnabled, true
+}
+
+// HasTlsEnabled returns a boolean if a field has been set.
+func (o *CreateCustomDomainInput) HasTlsEnabled() bool {
+	if o != nil && !IsNil(o.TlsEnabled) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsEnabled gets a reference to the given bool and assigns it to the TlsEnabled field.
+func (o *CreateCustomDomainInput) SetTlsEnabled(v bool) {
+	o.TlsEnabled = &v
+}
+
 func (o CreateCustomDomainInput) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -79,6 +145,12 @@ func (o CreateCustomDomainInput) MarshalJSON() ([]byte, error) {
 func (o CreateCustomDomainInput) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["domain"] = o.Domain
+	if !IsNil(o.TlsAcmeEmail) {
+		toSerialize["tls_acme_email"] = o.TlsAcmeEmail
+	}
+	if !IsNil(o.TlsEnabled) {
+		toSerialize["tls_enabled"] = o.TlsEnabled
+	}
 	return toSerialize, nil
 }
 

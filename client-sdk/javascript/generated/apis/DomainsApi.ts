@@ -28,6 +28,11 @@ import {
     ListCustomDomainsResponseFromJSON,
     ListCustomDomainsResponseToJSON,
 } from '../models/ListCustomDomainsResponse';
+import {
+    type UpdateCustomDomainInput,
+    UpdateCustomDomainInputFromJSON,
+    UpdateCustomDomainInputToJSON,
+} from '../models/UpdateCustomDomainInput';
 
 export interface FunctionDomainsCreateRequest {
     /**
@@ -41,6 +46,35 @@ export interface FunctionDomainsDeleteRequest {
      * 
      */
     domainId: string;
+}
+
+export interface FunctionDomainsGetRequest {
+    /**
+     * 
+     */
+    domainId: string;
+}
+
+export interface FunctionDomainsUpdateRequest {
+    /**
+     * 
+     */
+    domainId: string;
+    /**
+     * 
+     */
+    updateCustomDomainInput: UpdateCustomDomainInput;
+}
+
+export interface FunctionDomainsVerifyRequest {
+    /**
+     * 
+     */
+    domainId: string;
+    /**
+     * 
+     */
+    body: any | null;
 }
 
 /**
@@ -156,6 +190,53 @@ export class DomainsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for functionDomainsGet without sending the request
+     */
+    async functionDomainsGetRequestOpts(requestParameters: FunctionDomainsGetRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['domainId'] == null) {
+            throw new runtime.RequiredError(
+                'domainId',
+                'Required parameter "domainId" was null or undefined when calling functionDomainsGet().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/v1/_/function/domains/{domain_id}`;
+        urlPath = urlPath.replace('{domain_id}', encodeURIComponent(String(requestParameters['domainId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope.
+     * Get custom domain details and DNS instructions
+     */
+    async functionDomainsGetRaw(requestParameters: FunctionDomainsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CustomDomain>> {
+        const requestOptions = await this.functionDomainsGetRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CustomDomainFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope.
+     * Get custom domain details and DNS instructions
+     */
+    async functionDomainsGet(requestParameters: FunctionDomainsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CustomDomain> {
+        const response = await this.functionDomainsGetRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for functionDomainsList without sending the request
      */
     async functionDomainsListRequestOpts(): Promise<runtime.RequestOpts> {
@@ -191,6 +272,120 @@ export class DomainsApi extends runtime.BaseAPI {
      */
     async functionDomainsList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListCustomDomainsResponse> {
         const response = await this.functionDomainsListRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for functionDomainsUpdate without sending the request
+     */
+    async functionDomainsUpdateRequestOpts(requestParameters: FunctionDomainsUpdateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['domainId'] == null) {
+            throw new runtime.RequiredError(
+                'domainId',
+                'Required parameter "domainId" was null or undefined when calling functionDomainsUpdate().'
+            );
+        }
+
+        if (requestParameters['updateCustomDomainInput'] == null) {
+            throw new runtime.RequiredError(
+                'updateCustomDomainInput',
+                'Required parameter "updateCustomDomainInput" was null or undefined when calling functionDomainsUpdate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/v1/_/function/domains/{domain_id}`;
+        urlPath = urlPath.replace('{domain_id}', encodeURIComponent(String(requestParameters['domainId'])));
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdateCustomDomainInputToJSON(requestParameters['updateCustomDomainInput']),
+        };
+    }
+
+    /**
+     * Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope.
+     * Update custom domain configuration
+     */
+    async functionDomainsUpdateRaw(requestParameters: FunctionDomainsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CustomDomain>> {
+        const requestOptions = await this.functionDomainsUpdateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CustomDomainFromJSON(jsonValue));
+    }
+
+    /**
+     * Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope.
+     * Update custom domain configuration
+     */
+    async functionDomainsUpdate(requestParameters: FunctionDomainsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CustomDomain> {
+        const response = await this.functionDomainsUpdateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for functionDomainsVerify without sending the request
+     */
+    async functionDomainsVerifyRequestOpts(requestParameters: FunctionDomainsVerifyRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['domainId'] == null) {
+            throw new runtime.RequiredError(
+                'domainId',
+                'Required parameter "domainId" was null or undefined when calling functionDomainsVerify().'
+            );
+        }
+
+        if (requestParameters['body'] === undefined) {
+            throw new runtime.RequiredError(
+                'body',
+                'Required parameter "body" was undefined when calling functionDomainsVerify().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/v1/_/function/domains/{domain_id}/verify`;
+        urlPath = urlPath.replace('{domain_id}', encodeURIComponent(String(requestParameters['domainId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: requestParameters['body'] as any,
+        };
+    }
+
+    /**
+     * Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope.
+     * Verify custom domain DNS configuration
+     */
+    async functionDomainsVerifyRaw(requestParameters: FunctionDomainsVerifyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CustomDomain>> {
+        const requestOptions = await this.functionDomainsVerifyRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CustomDomainFromJSON(jsonValue));
+    }
+
+    /**
+     * Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope.
+     * Verify custom domain DNS configuration
+     */
+    async functionDomainsVerify(requestParameters: FunctionDomainsVerifyRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CustomDomain> {
+        const response = await this.functionDomainsVerifyRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
