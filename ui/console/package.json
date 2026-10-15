@@ -1,0 +1,48 @@
+{
+  "name": "layr-console",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint && eslint",
+    "lint:fix": "oxlint --fix && eslint --fix",
+    "typecheck": "nuxt typecheck && golar tsc --noEmit -p .nuxt/tsconfig.server.json",
+    "analyze": "knip",
+    "test": "nuxt build && vitest run"
+  },
+  "dependencies": {
+    "nuxt": "^4.6.1",
+    "vue": "^3.5.43",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@golar/vue": "^0.1.10",
+    "@iconify-json/lucide": "^1.2.144",
+    "@nuxt/eslint": "^1.17.0",
+    "@nuxt/test-utils": "^4.3.3",
+    "@nuxt/ui": "^4.11.3",
+    "@types/node": "^26.6.5",
+    "@vueuse/core": "^15.0.0",
+    "@vueuse/nuxt": "^15.0.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-oxlint": "^1.88.0",
+    "golar": "^0.1.10",
+    "knip": "^6.41.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.4"
+  },
+  "lint-staged": {
+    "*": "oxfmt --no-error-on-unmatched-pattern",
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "pnpm run lint"
+  },
+  "packageManager": "pnpm@12.11.2+sha512.25a51652a196785af5f28bda6dfe8dc582ebefa4ac1d180221ce1390231c5fb76637822ea4b6e4633ce74acdcb0a77f725af11bad38177fdeddaee818a955cb9"
+}
