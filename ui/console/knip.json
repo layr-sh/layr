@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreFiles": ["golar.config.ts"],
+  "ignoreDependencies": [
+    "@golar/vue",
+    "@iconify-json/lucide",
+    "@vueuse/core",
+    "vitest-environment-nuxt"
+  ]
+}

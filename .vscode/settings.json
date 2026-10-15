@@ -1,15 +1,24 @@
 {
-    "go.lintTool": "golangci-lint",
-    "go.lintFlags": [
-        "--path-mode=abs",
-        "--fast-only"
-    ],
-    "go.formatTool": "custom",
-    "go.alternateTools": {
-        "customFormatter": "golangci-lint"
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--path-mode=abs", "--fast-only"],
+  "go.formatTool": "custom",
+  "go.alternateTools": {
+    "customFormatter": "golangci-lint"
+  },
+  "go.formatFlags": ["fmt", "--stdin"],
+  "[javascript][typescript][vue][json][jsonc][yaml][yaml]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.oxc": "always"
     },
-    "go.formatFlags": [
-        "fmt",
-        "--stdin"
-    ]
+    "editor.quickSuggestions": {
+      "strings": "on"
+    }
+  },
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "tailwindCSS.classAttributes": ["class", "ui"],
+  "tailwindCSS.classFunctions": ["defineAppConfig"]
 }

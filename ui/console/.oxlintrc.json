@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["oxc", "typescript", "unicorn", "vue"],
+  "jsPlugins": ["./tools/oxlint-rules/index.ts"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "layr-oxlint-rules/no-short-identifiers": [
+      "error",
+      {
+        "min": 3,
+        "exceptions": ["_", "id", "db"]
+      }
+    ],
+    "layr-oxlint-rules/no-representation-suffixes": "error",
+    "layr-oxlint-rules/enforce-initialism-casing": "error",
+    "layr-oxlint-rules/no-disallowed-identifiers": "error",
+    "layr-oxlint-rules/enforce-error-naming": "error",
+    "layr-oxlint-rules/represent-type-name": "error",
+    "layr-oxlint-rules/no-direct-call-access": [
+      "error",
+      {
+        "functions": ["useRuntimeConfig"]
+      }
+    ],
+    "layr-oxlint-rules/no-destructured-call-return": [
+      "error",
+      {
+        "functions": ["useRuntimeConfig"]
+      }
+    ]
+  },
+  "env": {
+    "builtin": true
+  }
+}
