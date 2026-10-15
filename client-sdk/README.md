@@ -39,7 +39,7 @@ Layr SDKs implement a 4-tier architectural pattern:
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Tier 2: Fluent Value-Add Builders (Data, File Storage, Image)               │
 │  - QueryBuilder: .from('table').select().eq().order().limit()                │
-│  - BucketClient: .from('bucket').upload().download().createSignedUrl()       │
+│  - BucketClient: .from('bucket').upload().download().createPresignedURL()    │
 │  - ImageURLBuilder: .url('source').resize().format().quality().sign()        │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Tier 1: Automated OpenAPI 3.1 Codegen                                       │
@@ -58,7 +58,7 @@ Layr SDKs implement a 4-tier architectural pattern:
 
 - Fluent builders are provided for Data, File Storage, and Image. Other services are invoked directly through Tier 1 generated methods:
   - Data Service: Query builder (`data.from('todos').select('*').eq(...)`) and CDC subscription manager (`data.subscribe('todos')`).
-  - File Storage Service: Bucket client (`fileStorage.from('avatars').upload(...)`, `.createSignedUrl(...)`).
+  - File Storage Service: Bucket client (`fileStorage.from('avatars').upload(...)`, `.createPresignedURL(...)`).
   - Image Service: URL builder (`image.url(source).resize(...).format(...).sign(...)`).
 
 ### Layer 3: Client Factory & Service Hooks
@@ -96,7 +96,7 @@ Outgoing HTTP requests include credentials based on client mode and elevation:
 | --- | --- | --- |
 | `Publishable-Key` (fallback `X-Publishable-Key`) | Publishable API Key | Browser / mobile client; enforces PostgreSQL Row-Level Security (RLS) |
 | `Authorization: Bearer <token>` | User Session JWT or M2M JWT | Authenticated user session or M2M client (issued via `auth.oidc.token` `client_credentials`); enforces PostgreSQL RLS |
-| `Service-Account-Key` (fallback `X-Service-Account-Key`) | Service Account Secret | Elevated backend service account; bypasses RLS, enables `.cp` operations |
+| `Service-Account-Key` (fallback `X-Service-Account-Key`) | Service Account Key | Elevated backend service account; bypasses RLS, enables `.cp` operations |
 
 Keys (both publishable keys and service account keys) do not use prefixes like `pk_` or `sa_`; they are raw 32-byte hex strings.
 
@@ -322,7 +322,7 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - `.head(key)`: Returns object metadata headers.
   - `.upload(key, file, options)`: Uploads binary payload with automatic MIME detection.
   - `.delete(key)`: Removes file object.
-  - `.createSignedUrl(key, expiresInSeconds)`: Mints time-limited pre-signed download URL.
+  - `.createPresignedURL(key, { operation, expiresInSeconds })`: Mints time-limited pre-signed download URL.
 
 #### 3. Image Service (`useImage` / `UseImage`) — Image URL Builder
 
@@ -554,7 +554,7 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 
 - [ ] Test coverage: all non-generated statements, branches, functions, and lines achieve 100% test coverage.
 - [ ] Error and fallback coverage: all HTTP 4xx/5xx responses, network failures, missing optional parameters, and null returns have unit tests.
-- [ ] Testing specification: unit, integration, and E2E standards documented in [client-sdk/TESTS.md (TBD)](file:///Users/hrdtr/Workspace/Personal/layr/client-sdk/TESTS.md).
+- [ ] Testing specification: unit, integration, and E2E standards documented in [client-sdk/TESTS.md](file:///Users/hrdtr/Workspace/Personal/layr/client-sdk/TESTS.md).
 
 ---
 
@@ -562,7 +562,7 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 
 | Language | Directory | Core Transport & Retry | Fluent QueryBuilder | File Storage BucketClient | Image HMAC Builder | Realtime WebSocket | Elevation `.cp` | 100% Test Coverage | Status |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| JavaScript / TypeScript | `client-sdk/javascript` | - | - | - | - | - | - | - (0%) | Pending |
+| JavaScript / TypeScript | `client-sdk/javascript` | Complete | Complete | Complete | Complete | Complete | Complete | Complete (100%) | Complete |
 | Python | `client-sdk/python` | - | - | - | - | - | - | - (0%) | Pending |
 | Go | `client-sdk/go` | - | - | - | - | - | - | - (0%) | Pending |
 | Rust | `client-sdk/rust` | - | - | - | - | - | - | - (0%) | Pending |

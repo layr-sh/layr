@@ -29,10 +29,31 @@ pub enum FunctionDomainsDeleteError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`function_domains_get`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FunctionDomainsGetError {
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`function_domains_list`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FunctionDomainsListError {
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`function_domains_update`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FunctionDomainsUpdateError {
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`function_domains_verify`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FunctionDomainsVerifyError {
     UnknownValue(serde_json::Value),
 }
 
@@ -112,6 +133,43 @@ pub async fn function_domains_delete(configuration: &configuration::Configuratio
     }
 }
 
+/// Returns a single custom domain definition by UUID from function.custom_domains including verification status, TLS configuration, and DNS setup instructions. Requires function:endpoint.read scope.
+pub async fn function_domains_get(configuration: &configuration::Configuration, domain_id: &str) -> Result<models::CustomDomain, Error<FunctionDomainsGetError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_domain_id = domain_id;
+
+    let uri_str = format!("{}/v1/_/function/domains/{domain_id}", configuration.base_path, domain_id=crate::apis::urlencode(p_path_domain_id));
+    let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::CustomDomain`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::CustomDomain`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<FunctionDomainsGetError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent { status, content, entity }))
+    }
+}
+
 /// Returns all registered custom domain definitions from function.custom_domains with hostnames and verification states. Requires function:endpoint.read scope.
 pub async fn function_domains_list(configuration: &configuration::Configuration, ) -> Result<models::ListCustomDomainsResponse, Error<FunctionDomainsListError>> {
 
@@ -143,6 +201,84 @@ pub async fn function_domains_list(configuration: &configuration::Configuration,
     } else {
         let content = resp.text().await?;
         let entity: Option<FunctionDomainsListError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent { status, content, entity }))
+    }
+}
+
+/// Updates custom domain configuration such as toggling TLS on or off, or updating ACME contact email at runtime. Requires function:endpoint.write scope.
+pub async fn function_domains_update(configuration: &configuration::Configuration, domain_id: &str, update_custom_domain_input: models::UpdateCustomDomainInput) -> Result<models::CustomDomain, Error<FunctionDomainsUpdateError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_domain_id = domain_id;
+    let p_body_update_custom_domain_input = update_custom_domain_input;
+
+    let uri_str = format!("{}/v1/_/function/domains/{domain_id}", configuration.base_path, domain_id=crate::apis::urlencode(p_path_domain_id));
+    let mut req_builder = configuration.client.request(reqwest::Method::PATCH, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    req_builder = req_builder.json(&p_body_update_custom_domain_input);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::CustomDomain`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::CustomDomain`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<FunctionDomainsUpdateError> = serde_json::from_str(&content).ok();
+        Err(Error::ResponseError(ResponseContent { status, content, entity }))
+    }
+}
+
+/// Performs a live DNS lookup (CNAME/IP) to verify domain DNS points to Layr ingress. If matched, activates domain status and triggers TLS provisioning when enabled. If not matched, returns misconfigured status with diagnostic error details. Requires function:endpoint.write scope.
+pub async fn function_domains_verify(configuration: &configuration::Configuration, domain_id: &str, body: Option<serde_json::Value>) -> Result<models::CustomDomain, Error<FunctionDomainsVerifyError>> {
+    // add a prefix to parameters to efficiently prevent name collisions
+    let p_path_domain_id = domain_id;
+    let p_body_body = body;
+
+    let uri_str = format!("{}/v1/_/function/domains/{domain_id}/verify", configuration.base_path, domain_id=crate::apis::urlencode(p_path_domain_id));
+    let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
+
+    if let Some(ref user_agent) = configuration.user_agent {
+        req_builder = req_builder.header(reqwest::header::USER_AGENT, user_agent.clone());
+    }
+    req_builder = req_builder.json(&p_body_body);
+
+    let req = req_builder.build()?;
+    let resp = configuration.client.execute(req).await?;
+
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream");
+    let content_type = super::ContentType::from(content_type);
+
+    if !status.is_client_error() && !status.is_server_error() {
+        let content = resp.text().await?;
+        match content_type {
+            ContentType::Json => serde_json::from_str(&content).map_err(Error::from),
+            ContentType::Text => return Err(Error::from(serde_json::Error::custom("Received `text/plain` content type response that cannot be converted to `models::CustomDomain`"))),
+            ContentType::Unsupported(unknown_type) => return Err(Error::from(serde_json::Error::custom(format!("Received `{unknown_type}` content type response that cannot be converted to `models::CustomDomain`")))),
+        }
+    } else {
+        let content = resp.text().await?;
+        let entity: Option<FunctionDomainsVerifyError> = serde_json::from_str(&content).ok();
         Err(Error::ResponseError(ResponseContent { status, content, entity }))
     }
 }

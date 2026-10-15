@@ -9,7 +9,14 @@ Name | Type
 `createdAt` | Date
 `domain` | string
 `id` | any
+`requiredDnsRecords` | [Array&lt;RequiredDNSRecord&gt;](RequiredDNSRecord.md)
 `status` | string
+`tlsAcmeEmail` | string
+`tlsEnabled` | boolean
+`tlsErrorMessage` | string
+`tlsExpiresAt` | Date
+`tlsIssuedAt` | Date
+`tlsStatus` | string
 `updatedAt` | Date
 
 ## Example
@@ -22,7 +29,14 @@ const example = {
   "createdAt": null,
   "domain": null,
   "id": null,
+  "requiredDnsRecords": null,
   "status": null,
+  "tlsAcmeEmail": null,
+  "tlsEnabled": null,
+  "tlsErrorMessage": null,
+  "tlsExpiresAt": null,
+  "tlsIssuedAt": null,
+  "tlsStatus": null,
   "updatedAt": null,
 } satisfies CustomDomain
 

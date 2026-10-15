@@ -25,7 +25,14 @@ type CustomDomain struct {
 	CreatedAt time.Time `json:"created_at"`
 	Domain string `json:"domain"`
 	Id interface{} `json:"id"`
+	RequiredDnsRecords []RequiredDNSRecord `json:"required_dns_records,omitempty"`
 	Status string `json:"status"`
+	TlsAcmeEmail *string `json:"tls_acme_email,omitempty"`
+	TlsEnabled bool `json:"tls_enabled"`
+	TlsErrorMessage *string `json:"tls_error_message,omitempty"`
+	TlsExpiresAt *time.Time `json:"tls_expires_at,omitempty"`
+	TlsIssuedAt *time.Time `json:"tls_issued_at,omitempty"`
+	TlsStatus string `json:"tls_status"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
@@ -35,12 +42,14 @@ type _CustomDomain CustomDomain
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCustomDomain(createdAt time.Time, domain string, id interface{}, status string, updatedAt time.Time) *CustomDomain {
+func NewCustomDomain(createdAt time.Time, domain string, id interface{}, status string, tlsEnabled bool, tlsStatus string, updatedAt time.Time) *CustomDomain {
 	this := CustomDomain{}
 	this.CreatedAt = createdAt
 	this.Domain = domain
 	this.Id = id
 	this.Status = status
+	this.TlsEnabled = tlsEnabled
+	this.TlsStatus = tlsStatus
 	this.UpdatedAt = updatedAt
 	return &this
 }
@@ -127,6 +136,39 @@ func (o *CustomDomain) SetId(v interface{}) {
 	o.Id = v
 }
 
+// GetRequiredDnsRecords returns the RequiredDnsRecords field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *CustomDomain) GetRequiredDnsRecords() []RequiredDNSRecord {
+	if o == nil {
+		var ret []RequiredDNSRecord
+		return ret
+	}
+	return o.RequiredDnsRecords
+}
+
+// GetRequiredDnsRecordsOk returns a tuple with the RequiredDnsRecords field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *CustomDomain) GetRequiredDnsRecordsOk() ([]RequiredDNSRecord, bool) {
+	if o == nil || IsNil(o.RequiredDnsRecords) {
+		return nil, false
+	}
+	return o.RequiredDnsRecords, true
+}
+
+// HasRequiredDnsRecords returns a boolean if a field has been set.
+func (o *CustomDomain) HasRequiredDnsRecords() bool {
+	if o != nil && !IsNil(o.RequiredDnsRecords) {
+		return true
+	}
+
+	return false
+}
+
+// SetRequiredDnsRecords gets a reference to the given []RequiredDNSRecord and assigns it to the RequiredDnsRecords field.
+func (o *CustomDomain) SetRequiredDnsRecords(v []RequiredDNSRecord) {
+	o.RequiredDnsRecords = v
+}
+
 // GetStatus returns the Status field value
 func (o *CustomDomain) GetStatus() string {
 	if o == nil {
@@ -149,6 +191,182 @@ func (o *CustomDomain) GetStatusOk() (*string, bool) {
 // SetStatus sets field value
 func (o *CustomDomain) SetStatus(v string) {
 	o.Status = v
+}
+
+// GetTlsAcmeEmail returns the TlsAcmeEmail field value if set, zero value otherwise.
+func (o *CustomDomain) GetTlsAcmeEmail() string {
+	if o == nil || IsNil(o.TlsAcmeEmail) {
+		var ret string
+		return ret
+	}
+	return *o.TlsAcmeEmail
+}
+
+// GetTlsAcmeEmailOk returns a tuple with the TlsAcmeEmail field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsAcmeEmailOk() (*string, bool) {
+	if o == nil || IsNil(o.TlsAcmeEmail) {
+		return nil, false
+	}
+	return o.TlsAcmeEmail, true
+}
+
+// HasTlsAcmeEmail returns a boolean if a field has been set.
+func (o *CustomDomain) HasTlsAcmeEmail() bool {
+	if o != nil && !IsNil(o.TlsAcmeEmail) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsAcmeEmail gets a reference to the given string and assigns it to the TlsAcmeEmail field.
+func (o *CustomDomain) SetTlsAcmeEmail(v string) {
+	o.TlsAcmeEmail = &v
+}
+
+// GetTlsEnabled returns the TlsEnabled field value
+func (o *CustomDomain) GetTlsEnabled() bool {
+	if o == nil {
+		var ret bool
+		return ret
+	}
+
+	return o.TlsEnabled
+}
+
+// GetTlsEnabledOk returns a tuple with the TlsEnabled field value
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsEnabledOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TlsEnabled, true
+}
+
+// SetTlsEnabled sets field value
+func (o *CustomDomain) SetTlsEnabled(v bool) {
+	o.TlsEnabled = v
+}
+
+// GetTlsErrorMessage returns the TlsErrorMessage field value if set, zero value otherwise.
+func (o *CustomDomain) GetTlsErrorMessage() string {
+	if o == nil || IsNil(o.TlsErrorMessage) {
+		var ret string
+		return ret
+	}
+	return *o.TlsErrorMessage
+}
+
+// GetTlsErrorMessageOk returns a tuple with the TlsErrorMessage field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsErrorMessageOk() (*string, bool) {
+	if o == nil || IsNil(o.TlsErrorMessage) {
+		return nil, false
+	}
+	return o.TlsErrorMessage, true
+}
+
+// HasTlsErrorMessage returns a boolean if a field has been set.
+func (o *CustomDomain) HasTlsErrorMessage() bool {
+	if o != nil && !IsNil(o.TlsErrorMessage) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsErrorMessage gets a reference to the given string and assigns it to the TlsErrorMessage field.
+func (o *CustomDomain) SetTlsErrorMessage(v string) {
+	o.TlsErrorMessage = &v
+}
+
+// GetTlsExpiresAt returns the TlsExpiresAt field value if set, zero value otherwise.
+func (o *CustomDomain) GetTlsExpiresAt() time.Time {
+	if o == nil || IsNil(o.TlsExpiresAt) {
+		var ret time.Time
+		return ret
+	}
+	return *o.TlsExpiresAt
+}
+
+// GetTlsExpiresAtOk returns a tuple with the TlsExpiresAt field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsExpiresAtOk() (*time.Time, bool) {
+	if o == nil || IsNil(o.TlsExpiresAt) {
+		return nil, false
+	}
+	return o.TlsExpiresAt, true
+}
+
+// HasTlsExpiresAt returns a boolean if a field has been set.
+func (o *CustomDomain) HasTlsExpiresAt() bool {
+	if o != nil && !IsNil(o.TlsExpiresAt) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsExpiresAt gets a reference to the given time.Time and assigns it to the TlsExpiresAt field.
+func (o *CustomDomain) SetTlsExpiresAt(v time.Time) {
+	o.TlsExpiresAt = &v
+}
+
+// GetTlsIssuedAt returns the TlsIssuedAt field value if set, zero value otherwise.
+func (o *CustomDomain) GetTlsIssuedAt() time.Time {
+	if o == nil || IsNil(o.TlsIssuedAt) {
+		var ret time.Time
+		return ret
+	}
+	return *o.TlsIssuedAt
+}
+
+// GetTlsIssuedAtOk returns a tuple with the TlsIssuedAt field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsIssuedAtOk() (*time.Time, bool) {
+	if o == nil || IsNil(o.TlsIssuedAt) {
+		return nil, false
+	}
+	return o.TlsIssuedAt, true
+}
+
+// HasTlsIssuedAt returns a boolean if a field has been set.
+func (o *CustomDomain) HasTlsIssuedAt() bool {
+	if o != nil && !IsNil(o.TlsIssuedAt) {
+		return true
+	}
+
+	return false
+}
+
+// SetTlsIssuedAt gets a reference to the given time.Time and assigns it to the TlsIssuedAt field.
+func (o *CustomDomain) SetTlsIssuedAt(v time.Time) {
+	o.TlsIssuedAt = &v
+}
+
+// GetTlsStatus returns the TlsStatus field value
+func (o *CustomDomain) GetTlsStatus() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.TlsStatus
+}
+
+// GetTlsStatusOk returns a tuple with the TlsStatus field value
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetTlsStatusOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TlsStatus, true
+}
+
+// SetTlsStatus sets field value
+func (o *CustomDomain) SetTlsStatus(v string) {
+	o.TlsStatus = v
 }
 
 // GetUpdatedAt returns the UpdatedAt field value
@@ -190,7 +408,24 @@ func (o CustomDomain) ToMap() (map[string]interface{}, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+	if o.RequiredDnsRecords != nil {
+		toSerialize["required_dns_records"] = o.RequiredDnsRecords
+	}
 	toSerialize["status"] = o.Status
+	if !IsNil(o.TlsAcmeEmail) {
+		toSerialize["tls_acme_email"] = o.TlsAcmeEmail
+	}
+	toSerialize["tls_enabled"] = o.TlsEnabled
+	if !IsNil(o.TlsErrorMessage) {
+		toSerialize["tls_error_message"] = o.TlsErrorMessage
+	}
+	if !IsNil(o.TlsExpiresAt) {
+		toSerialize["tls_expires_at"] = o.TlsExpiresAt
+	}
+	if !IsNil(o.TlsIssuedAt) {
+		toSerialize["tls_issued_at"] = o.TlsIssuedAt
+	}
+	toSerialize["tls_status"] = o.TlsStatus
 	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
@@ -204,6 +439,8 @@ func (o *CustomDomain) UnmarshalJSON(data []byte) (err error) {
 		"domain",
 		"id",
 		"status",
+		"tls_enabled",
+		"tls_status",
 		"updated_at",
 	}
 

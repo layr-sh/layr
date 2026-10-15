@@ -23,6 +23,14 @@ export interface CreateCustomDomainInput {
      * 
      */
     domain: string;
+    /**
+     * 
+     */
+    tlsAcmeEmail?: string;
+    /**
+     * 
+     */
+    tlsEnabled?: boolean;
 }
 
 /**
@@ -44,6 +52,8 @@ export function CreateCustomDomainInputFromJSONTyped(json: any, ignoreDiscrimina
     return {
         
         'domain': json['domain'],
+        'tlsAcmeEmail': json['tls_acme_email'] == null ? undefined : json['tls_acme_email'],
+        'tlsEnabled': json['tls_enabled'] == null ? undefined : json['tls_enabled'],
     };
 }
 
@@ -59,6 +69,8 @@ export function CreateCustomDomainInputToJSONTyped(value?: CreateCustomDomainInp
     return {
         
         'domain': value['domain'],
+        'tls_acme_email': value['tlsAcmeEmail'],
+        'tls_enabled': value['tlsEnabled'],
     };
 }
 

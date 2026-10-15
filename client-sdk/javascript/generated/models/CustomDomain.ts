@@ -13,6 +13,14 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
+import type { RequiredDNSRecord } from './RequiredDNSRecord';
+import {
+    RequiredDNSRecordFromJSON,
+    RequiredDNSRecordFromJSONTyped,
+    RequiredDNSRecordToJSON,
+    RequiredDNSRecordToJSONTyped,
+} from './RequiredDNSRecord';
+
 /**
  * 
  * @export
@@ -34,7 +42,35 @@ export interface CustomDomain {
     /**
      * 
      */
+    requiredDnsRecords?: Array<RequiredDNSRecord> | null;
+    /**
+     * 
+     */
     status: string;
+    /**
+     * 
+     */
+    tlsAcmeEmail?: string;
+    /**
+     * 
+     */
+    tlsEnabled: boolean;
+    /**
+     * 
+     */
+    tlsErrorMessage?: string;
+    /**
+     * 
+     */
+    tlsExpiresAt?: Date;
+    /**
+     * 
+     */
+    tlsIssuedAt?: Date;
+    /**
+     * 
+     */
+    tlsStatus: string;
     /**
      * 
      */
@@ -49,6 +85,8 @@ export function instanceOfCustomDomain(value: object): value is CustomDomain {
     if (!('domain' in value) || value['domain'] === undefined) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
+    if ((!('tlsEnabled' in (value as Record<string, any>)) && !('tls_enabled' in (value as Record<string, any>))) || ((value as Record<string, any>)['tlsEnabled'] === undefined && (value as Record<string, any>)['tls_enabled'] === undefined)) return false;
+    if ((!('tlsStatus' in (value as Record<string, any>)) && !('tls_status' in (value as Record<string, any>))) || ((value as Record<string, any>)['tlsStatus'] === undefined && (value as Record<string, any>)['tls_status'] === undefined)) return false;
     if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
@@ -66,7 +104,14 @@ export function CustomDomainFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'createdAt': (json['created_at'] == null ? json['created_at'] : parseDateTime(json['created_at'])),
         'domain': json['domain'],
         'id': json['id'],
+        'requiredDnsRecords': json['required_dns_records'] === undefined ? undefined : json['required_dns_records'] === null ? null : ((json['required_dns_records'] as Array<any>).map(RequiredDNSRecordFromJSON)),
         'status': json['status'],
+        'tlsAcmeEmail': json['tls_acme_email'] == null ? undefined : json['tls_acme_email'],
+        'tlsEnabled': json['tls_enabled'],
+        'tlsErrorMessage': json['tls_error_message'] == null ? undefined : json['tls_error_message'],
+        'tlsExpiresAt': json['tls_expires_at'] == null ? undefined : (parseDateTime(json['tls_expires_at'])),
+        'tlsIssuedAt': json['tls_issued_at'] == null ? undefined : (parseDateTime(json['tls_issued_at'])),
+        'tlsStatus': json['tls_status'],
         'updatedAt': (json['updated_at'] == null ? json['updated_at'] : parseDateTime(json['updated_at'])),
     };
 }
@@ -85,7 +130,14 @@ export function CustomDomainToJSONTyped(value?: CustomDomain | null, ignoreDiscr
         'created_at': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
         'domain': value['domain'],
         'id': value['id'],
+        'required_dns_records': value['requiredDnsRecords'] == null ? undefined : ((value['requiredDnsRecords'] as Array<any>).map(RequiredDNSRecordToJSON)),
         'status': value['status'],
+        'tls_acme_email': value['tlsAcmeEmail'],
+        'tls_enabled': value['tlsEnabled'],
+        'tls_error_message': value['tlsErrorMessage'],
+        'tls_expires_at': value['tlsExpiresAt'] == null ? value['tlsExpiresAt'] : serializeDateTime(value['tlsExpiresAt']),
+        'tls_issued_at': value['tlsIssuedAt'] == null ? value['tlsIssuedAt'] : serializeDateTime(value['tlsIssuedAt']),
+        'tls_status': value['tlsStatus'],
         'updated_at': value['updatedAt'] == null ? value['updatedAt'] : serializeDateTime(value['updatedAt']),
     };
 }

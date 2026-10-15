@@ -57,7 +57,10 @@ Class | Method | HTTP request | Description
 *DeploymentsAPI* | [**functionDeploymentsRollback**](docs/DeploymentsAPI.md#functiondeploymentsrollback) | **POST** /v1/_/function/endpoints/{endpoint_id}/rollback | Rollback endpoint to a previous deployment revision
 *DomainsAPI* | [**functionDomainsCreate**](docs/DomainsAPI.md#functiondomainscreate) | **POST** /v1/_/function/domains | Register a standalone custom domain
 *DomainsAPI* | [**functionDomainsDelete**](docs/DomainsAPI.md#functiondomainsdelete) | **DELETE** /v1/_/function/domains/{domain_id} | Delete custom domain and cascade attached routes
+*DomainsAPI* | [**functionDomainsGet**](docs/DomainsAPI.md#functiondomainsget) | **GET** /v1/_/function/domains/{domain_id} | Get custom domain details and DNS instructions
 *DomainsAPI* | [**functionDomainsList**](docs/DomainsAPI.md#functiondomainslist) | **GET** /v1/_/function/domains | List registered custom domains
+*DomainsAPI* | [**functionDomainsUpdate**](docs/DomainsAPI.md#functiondomainsupdate) | **PATCH** /v1/_/function/domains/{domain_id} | Update custom domain configuration
+*DomainsAPI* | [**functionDomainsVerify**](docs/DomainsAPI.md#functiondomainsverify) | **POST** /v1/_/function/domains/{domain_id}/verify | Verify custom domain DNS configuration
 *EndpointDomainsAPI* | [**functionEndpointDomainsCreate**](docs/EndpointDomainsAPI.md#functionendpointdomainscreate) | **POST** /v1/_/function/endpoints/{endpoint_id}/domains | Attach endpoint route to custom domain with path prefix
 *EndpointDomainsAPI* | [**functionEndpointDomainsDelete**](docs/EndpointDomainsAPI.md#functionendpointdomainsdelete) | **DELETE** /v1/_/function/endpoints/{endpoint_id}/domains/{route_id} | Remove endpoint route mapping from custom domain
 *EndpointDomainsAPI* | [**functionEndpointDomainsList**](docs/EndpointDomainsAPI.md#functionendpointdomainslist) | **GET** /v1/_/function/endpoints/{endpoint_id}/domains | List custom domain routes attached to an endpoint
@@ -314,6 +317,7 @@ Class | Method | HTTP request | Description
  - [RequestEmailVerificationInput](docs/RequestEmailVerificationInput.md)
  - [RequestPasswordResetInput](docs/RequestPasswordResetInput.md)
  - [RequestPhoneVerificationInput](docs/RequestPhoneVerificationInput.md)
+ - [RequiredDNSRecord](docs/RequiredDNSRecord.md)
  - [ResetConsoleUserPasswordInput](docs/ResetConsoleUserPasswordInput.md)
  - [ResourceServerConfig](docs/ResourceServerConfig.md)
  - [RetryDLQResponse](docs/RetryDLQResponse.md)
@@ -354,6 +358,7 @@ Class | Method | HTTP request | Description
  - [UpdateColumnInput](docs/UpdateColumnInput.md)
  - [UpdateColumnResponse](docs/UpdateColumnResponse.md)
  - [UpdateConsoleUserInput](docs/UpdateConsoleUserInput.md)
+ - [UpdateCustomDomainInput](docs/UpdateCustomDomainInput.md)
  - [UpdateEndpointInput](docs/UpdateEndpointInput.md)
  - [UpdateEventHookInput](docs/UpdateEventHookInput.md)
  - [UpdateJobInput](docs/UpdateJobInput.md)

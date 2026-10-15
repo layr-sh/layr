@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictStr
-from typing import Any, ClassVar, Dict, List
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr
+from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -28,7 +28,9 @@ class CreateCustomDomainInput(BaseModel):
     CreateCustomDomainInput schema
     """ # noqa: E501
     domain: StrictStr
-    __properties: ClassVar[List[str]] = ["domain"]
+    tls_acme_email: Optional[StrictStr] = None
+    tls_enabled: Optional[StrictBool] = None
+    __properties: ClassVar[List[str]] = ["domain", "tls_acme_email", "tls_enabled"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -81,7 +83,9 @@ class CreateCustomDomainInput(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "domain": obj.get("domain")
+            "domain": obj.get("domain"),
+            "tls_acme_email": obj.get("tls_acme_email"),
+            "tls_enabled": obj.get("tls_enabled")
         })
         return _obj
 
