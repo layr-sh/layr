@@ -124,7 +124,7 @@ func TestFunctionBaseHandlerDomainTLSIntegration(t *testing.T) {
 
 	var activeCustomDomain CustomDomain
 	fetchErr := kernel.DB().QueryRow(testCtx, `
-		SELECT id, domain, status, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at, tls_enabled
+		SELECT id, domain, status, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at, tls_enabled
 		FROM function.custom_domains
 		WHERE id = $1;
 	`, customDomain.ID).Scan(
@@ -137,7 +137,7 @@ func TestFunctionBaseHandlerDomainTLSIntegration(t *testing.T) {
 		&activeCustomDomain.TLSIssuedAt,
 		&activeCustomDomain.TLSExpiresAt,
 		&activeCustomDomain.CreatedAt,
-		&activeCustomDomain.UpdatedAt,
+		&activeCustomDomain.LastUpdatedAt,
 		&activeCustomDomain.TLSEnabled,
 	)
 	require.NoError(t, fetchErr)

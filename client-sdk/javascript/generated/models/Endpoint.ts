@@ -46,6 +46,10 @@ export interface Endpoint {
     /**
      * 
      */
+    lastUpdatedAt: Date;
+    /**
+     * 
+     */
     memoryLimitMb: number;
     /**
      * 
@@ -59,10 +63,6 @@ export interface Endpoint {
      * 
      */
     timeoutSeconds: number;
-    /**
-     * 
-     */
-    updatedAt: Date;
 }
 
 /**
@@ -73,11 +73,11 @@ export function instanceOfEndpoint(value: object): value is Endpoint {
     if (!('entrypoint' in value) || value['entrypoint'] === undefined) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
     if ((!('isPublic' in (value as Record<string, any>)) && !('is_public' in (value as Record<string, any>))) || ((value as Record<string, any>)['isPublic'] === undefined && (value as Record<string, any>)['is_public'] === undefined)) return false;
+    if ((!('lastUpdatedAt' in (value as Record<string, any>)) && !('last_updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastUpdatedAt'] === undefined && (value as Record<string, any>)['last_updated_at'] === undefined)) return false;
     if ((!('memoryLimitMb' in (value as Record<string, any>)) && !('memory_limit_mb' in (value as Record<string, any>))) || ((value as Record<string, any>)['memoryLimitMb'] === undefined && (value as Record<string, any>)['memory_limit_mb'] === undefined)) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if (!('runtime' in value) || value['runtime'] === undefined) return false;
     if ((!('timeoutSeconds' in (value as Record<string, any>)) && !('timeout_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['timeoutSeconds'] === undefined && (value as Record<string, any>)['timeout_seconds'] === undefined)) return false;
-    if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
 
@@ -97,11 +97,11 @@ export function EndpointFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'entrypoint': json['entrypoint'],
         'id': json['id'],
         'isPublic': json['is_public'],
+        'lastUpdatedAt': (json['last_updated_at'] == null ? json['last_updated_at'] : parseDateTime(json['last_updated_at'])),
         'memoryLimitMb': json['memory_limit_mb'],
         'name': json['name'],
         'runtime': json['runtime'],
         'timeoutSeconds': json['timeout_seconds'],
-        'updatedAt': (json['updated_at'] == null ? json['updated_at'] : parseDateTime(json['updated_at'])),
     };
 }
 
@@ -122,11 +122,11 @@ export function EndpointToJSONTyped(value?: Endpoint | null, ignoreDiscriminator
         'entrypoint': value['entrypoint'],
         'id': value['id'],
         'is_public': value['isPublic'],
+        'last_updated_at': value['lastUpdatedAt'] == null ? value['lastUpdatedAt'] : serializeDateTime(value['lastUpdatedAt']),
         'memory_limit_mb': value['memoryLimitMb'],
         'name': value['name'],
         'runtime': value['runtime'],
         'timeout_seconds': value['timeoutSeconds'],
-        'updated_at': value['updatedAt'] == null ? value['updatedAt'] : serializeDateTime(value['updatedAt']),
     };
 }
 

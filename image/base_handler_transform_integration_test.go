@@ -81,7 +81,7 @@ func TestImageBaseHandlerTransformIntegration(t *testing.T) {
 	t.Run("transform with database preset", func(t *testing.T) {
 		presetID := uuid.New()
 		const insertPresetSQL = `
-			INSERT INTO image.presets (id, name, processing_options, created_at, updated_at)
+			INSERT INTO image.presets (id, name, processing_options, created_at, last_updated_at)
 			VALUES ($1, 'avatar_thumb', 'rs:fill:32:32/q:80', clock_timestamp(), clock_timestamp());
 		`
 		_, insertPresetErr := kernel.DB().Exec(ctx, insertPresetSQL, presetID)

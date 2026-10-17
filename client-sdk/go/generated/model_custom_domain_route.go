@@ -27,8 +27,8 @@ type CustomDomainRoute struct {
 	Domain *string `json:"domain,omitempty"`
 	EndpointId interface{} `json:"endpoint_id"`
 	Id interface{} `json:"id"`
+	LastUpdatedAt time.Time `json:"last_updated_at"`
 	PathPrefix string `json:"path_prefix"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type _CustomDomainRoute CustomDomainRoute
@@ -37,14 +37,14 @@ type _CustomDomainRoute CustomDomainRoute
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCustomDomainRoute(createdAt time.Time, customDomainId interface{}, endpointId interface{}, id interface{}, pathPrefix string, updatedAt time.Time) *CustomDomainRoute {
+func NewCustomDomainRoute(createdAt time.Time, customDomainId interface{}, endpointId interface{}, id interface{}, lastUpdatedAt time.Time, pathPrefix string) *CustomDomainRoute {
 	this := CustomDomainRoute{}
 	this.CreatedAt = createdAt
 	this.CustomDomainId = customDomainId
 	this.EndpointId = endpointId
 	this.Id = id
+	this.LastUpdatedAt = lastUpdatedAt
 	this.PathPrefix = pathPrefix
-	this.UpdatedAt = updatedAt
 	return &this
 }
 
@@ -190,6 +190,30 @@ func (o *CustomDomainRoute) SetId(v interface{}) {
 	o.Id = v
 }
 
+// GetLastUpdatedAt returns the LastUpdatedAt field value
+func (o *CustomDomainRoute) GetLastUpdatedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.LastUpdatedAt
+}
+
+// GetLastUpdatedAtOk returns a tuple with the LastUpdatedAt field value
+// and a boolean to check if the value has been set.
+func (o *CustomDomainRoute) GetLastUpdatedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.LastUpdatedAt, true
+}
+
+// SetLastUpdatedAt sets field value
+func (o *CustomDomainRoute) SetLastUpdatedAt(v time.Time) {
+	o.LastUpdatedAt = v
+}
+
 // GetPathPrefix returns the PathPrefix field value
 func (o *CustomDomainRoute) GetPathPrefix() string {
 	if o == nil {
@@ -212,30 +236,6 @@ func (o *CustomDomainRoute) GetPathPrefixOk() (*string, bool) {
 // SetPathPrefix sets field value
 func (o *CustomDomainRoute) SetPathPrefix(v string) {
 	o.PathPrefix = v
-}
-
-// GetUpdatedAt returns the UpdatedAt field value
-func (o *CustomDomainRoute) GetUpdatedAt() time.Time {
-	if o == nil {
-		var ret time.Time
-		return ret
-	}
-
-	return o.UpdatedAt
-}
-
-// GetUpdatedAtOk returns a tuple with the UpdatedAt field value
-// and a boolean to check if the value has been set.
-func (o *CustomDomainRoute) GetUpdatedAtOk() (*time.Time, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.UpdatedAt, true
-}
-
-// SetUpdatedAt sets field value
-func (o *CustomDomainRoute) SetUpdatedAt(v time.Time) {
-	o.UpdatedAt = v
 }
 
 func (o CustomDomainRoute) MarshalJSON() ([]byte, error) {
@@ -261,8 +261,8 @@ func (o CustomDomainRoute) ToMap() (map[string]interface{}, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+	toSerialize["last_updated_at"] = o.LastUpdatedAt
 	toSerialize["path_prefix"] = o.PathPrefix
-	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
 
@@ -275,8 +275,8 @@ func (o *CustomDomainRoute) UnmarshalJSON(data []byte) (err error) {
 		"custom_domain_id",
 		"endpoint_id",
 		"id",
+		"last_updated_at",
 		"path_prefix",
-		"updated_at",
 	}
 
 	allProperties := make(map[string]interface{})

@@ -18,7 +18,7 @@ type Endpoint struct {
 	IsPublic           bool       `json:"is_public"`
 	ActiveDeploymentID *uuid.UUID `json:"active_deployment_id,omitempty"`
 	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	LastUpdatedAt      time.Time  `json:"last_updated_at"`
 }
 
 // Deployment represents an immutable deployment version containing bundled code in function.deployments.
@@ -74,7 +74,7 @@ type CustomDomain struct {
 	TLSExpiresAt       *time.Time          `json:"tls_expires_at,omitempty"`
 	RequiredDNSRecords []RequiredDNSRecord `json:"required_dns_records,omitempty"`
 	CreatedAt          time.Time           `json:"created_at"`
-	UpdatedAt          time.Time           `json:"updated_at"`
+	LastUpdatedAt      time.Time           `json:"last_updated_at"`
 }
 
 // CustomDomainRoute represents an endpoint route mapping on a custom domain in function.custom_domain_routes.
@@ -85,5 +85,5 @@ type CustomDomainRoute struct {
 	EndpointID     uuid.UUID `json:"endpoint_id"`
 	PathPrefix     string    `json:"path_prefix"`
 	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	LastUpdatedAt  time.Time `json:"last_updated_at"`
 }

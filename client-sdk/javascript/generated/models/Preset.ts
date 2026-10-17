@@ -34,15 +34,15 @@ export interface Preset {
     /**
      * 
      */
+    lastUpdatedAt: Date;
+    /**
+     * 
+     */
     name: string;
     /**
      * 
      */
     processingOptions: string;
-    /**
-     * 
-     */
-    updatedAt: Date;
 }
 
 /**
@@ -51,9 +51,9 @@ export interface Preset {
 export function instanceOfPreset(value: object): value is Preset {
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
+    if ((!('lastUpdatedAt' in (value as Record<string, any>)) && !('last_updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastUpdatedAt'] === undefined && (value as Record<string, any>)['last_updated_at'] === undefined)) return false;
     if (!('name' in value) || value['name'] === undefined) return false;
     if ((!('processingOptions' in (value as Record<string, any>)) && !('processing_options' in (value as Record<string, any>))) || ((value as Record<string, any>)['processingOptions'] === undefined && (value as Record<string, any>)['processing_options'] === undefined)) return false;
-    if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
 
@@ -70,9 +70,9 @@ export function PresetFromJSONTyped(json: any, ignoreDiscriminator: boolean): Pr
         'createdAt': (json['created_at'] == null ? json['created_at'] : parseDateTime(json['created_at'])),
         'description': json['description'] == null ? undefined : json['description'],
         'id': json['id'],
+        'lastUpdatedAt': (json['last_updated_at'] == null ? json['last_updated_at'] : parseDateTime(json['last_updated_at'])),
         'name': json['name'],
         'processingOptions': json['processing_options'],
-        'updatedAt': (json['updated_at'] == null ? json['updated_at'] : parseDateTime(json['updated_at'])),
     };
 }
 
@@ -90,9 +90,9 @@ export function PresetToJSONTyped(value?: Preset | null, ignoreDiscriminator: bo
         'created_at': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
         'description': value['description'],
         'id': value['id'],
+        'last_updated_at': value['lastUpdatedAt'] == null ? value['lastUpdatedAt'] : serializeDateTime(value['lastUpdatedAt']),
         'name': value['name'],
         'processing_options': value['processingOptions'],
-        'updated_at': value['updatedAt'] == null ? value['updatedAt'] : serializeDateTime(value['updatedAt']),
     };
 }
 

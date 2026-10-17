@@ -97,7 +97,7 @@ func (baseHandler *BaseHandler) resolveEndpointByCustomDomain(ctx context.Contex
 	}
 
 	const queryEndpointSQL = `
-		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at
+		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at
 		FROM function.endpoints
 		WHERE id = $1;
 	`
@@ -113,7 +113,7 @@ func (baseHandler *BaseHandler) resolveEndpointByCustomDomain(ctx context.Contex
 		&targetEndpoint.IsPublic,
 		&targetEndpoint.ActiveDeploymentID,
 		&targetEndpoint.CreatedAt,
-		&targetEndpoint.UpdatedAt,
+		&targetEndpoint.LastUpdatedAt,
 	)
 	if endpointErr != nil {
 		if errors.Is(endpointErr, pgx.ErrNoRows) {

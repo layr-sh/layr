@@ -70,9 +70,9 @@ func (certCache *DBCertCache) Put(ctx context.Context, key string, data []byte) 
 	}
 
 	const upsertQuery = `
-		INSERT INTO core.acme_certificates (key_name, data, updated_at)
+		INSERT INTO core.acme_certificates (key_name, data, last_updated_at)
 		VALUES ($1, $2, clock_timestamp())
-		ON CONFLICT (key_name) DO UPDATE SET data = EXCLUDED.data, updated_at = clock_timestamp()
+		ON CONFLICT (key_name) DO UPDATE SET data = EXCLUDED.data, last_updated_at = clock_timestamp()
 	`
 	if _, err := certCache.db.Exec(ctx, upsertQuery, key, []byte(encryptedEnvelope)); err != nil {
 		return fmt.Errorf("failed to store cert in cache for key %q: %w", key, err)

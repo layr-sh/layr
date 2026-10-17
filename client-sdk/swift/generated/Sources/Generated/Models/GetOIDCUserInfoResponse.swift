@@ -13,38 +13,38 @@ public struct GetOIDCUserInfoResponse: Sendable, Codable, Hashable {
     public var email: String?
     public var emailVerified: Bool
     public var isAnonymous: Bool
+    public var lastUpdatedAt: Int64
     public var name: String?
     public var phoneNumber: String?
     public var phoneNumberVerified: Bool
     public var properties: [String: JSONValue?]?
     public var role: String
     public var sub: String
-    public var updatedAt: Int64
 
-    public init(email: String? = nil, emailVerified: Bool, isAnonymous: Bool, name: String? = nil, phoneNumber: String? = nil, phoneNumberVerified: Bool, properties: [String: JSONValue?]? = nil, role: String, sub: String, updatedAt: Int64) {
+    public init(email: String? = nil, emailVerified: Bool, isAnonymous: Bool, lastUpdatedAt: Int64, name: String? = nil, phoneNumber: String? = nil, phoneNumberVerified: Bool, properties: [String: JSONValue?]? = nil, role: String, sub: String) {
         self.email = email
         self.emailVerified = emailVerified
         self.isAnonymous = isAnonymous
+        self.lastUpdatedAt = lastUpdatedAt
         self.name = name
         self.phoneNumber = phoneNumber
         self.phoneNumberVerified = phoneNumberVerified
         self.properties = properties
         self.role = role
         self.sub = sub
-        self.updatedAt = updatedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case email
         case emailVerified = "email_verified"
         case isAnonymous = "is_anonymous"
+        case lastUpdatedAt = "last_updated_at"
         case name
         case phoneNumber = "phone_number"
         case phoneNumberVerified = "phone_number_verified"
         case properties
         case role
         case sub
-        case updatedAt = "updated_at"
     }
 
     // Encodable protocol methods
@@ -54,13 +54,13 @@ public struct GetOIDCUserInfoResponse: Sendable, Codable, Hashable {
         try container.encodeIfPresent(email, forKey: .email)
         try container.encode(emailVerified, forKey: .emailVerified)
         try container.encode(isAnonymous, forKey: .isAnonymous)
+        try container.encode(lastUpdatedAt, forKey: .lastUpdatedAt)
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(phoneNumber, forKey: .phoneNumber)
         try container.encode(phoneNumberVerified, forKey: .phoneNumberVerified)
         try container.encodeIfPresent(properties, forKey: .properties)
         try container.encode(role, forKey: .role)
         try container.encode(sub, forKey: .sub)
-        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

@@ -642,7 +642,7 @@ func TestAuthBaseHandlerUserSelfServiceIntegration(t *testing.T) {
 
 	// 5. POST /v1/auth/user/export - Export comprehensive user account data graph
 	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
+		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_signed_in_at)
 		VALUES ($1, 'github', 'gh_selfservice_123', '{"login":"selfservice"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, userID)
 	exportRequest := core.WithTestAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/user/export", nil), userID, "user", false)

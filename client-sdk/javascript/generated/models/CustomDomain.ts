@@ -42,6 +42,10 @@ export interface CustomDomain {
     /**
      * 
      */
+    lastUpdatedAt: Date;
+    /**
+     * 
+     */
     requiredDnsRecords?: Array<RequiredDNSRecord> | null;
     /**
      * 
@@ -71,10 +75,6 @@ export interface CustomDomain {
      * 
      */
     tlsStatus: string;
-    /**
-     * 
-     */
-    updatedAt: Date;
 }
 
 /**
@@ -84,10 +84,10 @@ export function instanceOfCustomDomain(value: object): value is CustomDomain {
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
     if (!('domain' in value) || value['domain'] === undefined) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
+    if ((!('lastUpdatedAt' in (value as Record<string, any>)) && !('last_updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastUpdatedAt'] === undefined && (value as Record<string, any>)['last_updated_at'] === undefined)) return false;
     if (!('status' in value) || value['status'] === undefined) return false;
     if ((!('tlsEnabled' in (value as Record<string, any>)) && !('tls_enabled' in (value as Record<string, any>))) || ((value as Record<string, any>)['tlsEnabled'] === undefined && (value as Record<string, any>)['tls_enabled'] === undefined)) return false;
     if ((!('tlsStatus' in (value as Record<string, any>)) && !('tls_status' in (value as Record<string, any>))) || ((value as Record<string, any>)['tlsStatus'] === undefined && (value as Record<string, any>)['tls_status'] === undefined)) return false;
-    if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
 
@@ -104,6 +104,7 @@ export function CustomDomainFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'createdAt': (json['created_at'] == null ? json['created_at'] : parseDateTime(json['created_at'])),
         'domain': json['domain'],
         'id': json['id'],
+        'lastUpdatedAt': (json['last_updated_at'] == null ? json['last_updated_at'] : parseDateTime(json['last_updated_at'])),
         'requiredDnsRecords': json['required_dns_records'] === undefined ? undefined : json['required_dns_records'] === null ? null : ((json['required_dns_records'] as Array<any>).map(RequiredDNSRecordFromJSON)),
         'status': json['status'],
         'tlsAcmeEmail': json['tls_acme_email'] == null ? undefined : json['tls_acme_email'],
@@ -112,7 +113,6 @@ export function CustomDomainFromJSONTyped(json: any, ignoreDiscriminator: boolea
         'tlsExpiresAt': json['tls_expires_at'] == null ? undefined : (parseDateTime(json['tls_expires_at'])),
         'tlsIssuedAt': json['tls_issued_at'] == null ? undefined : (parseDateTime(json['tls_issued_at'])),
         'tlsStatus': json['tls_status'],
-        'updatedAt': (json['updated_at'] == null ? json['updated_at'] : parseDateTime(json['updated_at'])),
     };
 }
 
@@ -130,6 +130,7 @@ export function CustomDomainToJSONTyped(value?: CustomDomain | null, ignoreDiscr
         'created_at': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
         'domain': value['domain'],
         'id': value['id'],
+        'last_updated_at': value['lastUpdatedAt'] == null ? value['lastUpdatedAt'] : serializeDateTime(value['lastUpdatedAt']),
         'required_dns_records': value['requiredDnsRecords'] == null ? undefined : ((value['requiredDnsRecords'] as Array<any>).map(RequiredDNSRecordToJSON)),
         'status': value['status'],
         'tls_acme_email': value['tlsAcmeEmail'],
@@ -138,7 +139,6 @@ export function CustomDomainToJSONTyped(value?: CustomDomain | null, ignoreDiscr
         'tls_expires_at': value['tlsExpiresAt'] == null ? value['tlsExpiresAt'] : serializeDateTime(value['tlsExpiresAt']),
         'tls_issued_at': value['tlsIssuedAt'] == null ? value['tlsIssuedAt'] : serializeDateTime(value['tlsIssuedAt']),
         'tls_status': value['tlsStatus'],
-        'updated_at': value['updatedAt'] == null ? value['updatedAt'] : serializeDateTime(value['updatedAt']),
     };
 }
 

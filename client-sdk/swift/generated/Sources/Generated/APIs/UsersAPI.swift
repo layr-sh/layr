@@ -388,7 +388,7 @@ open class UsersAPI {
     /**
      List console user accounts
      - GET /v1/_/console/users
-     - Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+     - Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<[User]> 
      */

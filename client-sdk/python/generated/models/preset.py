@@ -31,10 +31,10 @@ class Preset(BaseModel):
     created_at: datetime
     description: Optional[StrictStr] = None
     id: Optional[Any]
+    last_updated_at: datetime
     name: StrictStr
     processing_options: StrictStr
-    updated_at: datetime
-    __properties: ClassVar[List[str]] = ["created_at", "description", "id", "name", "processing_options", "updated_at"]
+    __properties: ClassVar[List[str]] = ["created_at", "description", "id", "last_updated_at", "name", "processing_options"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -95,9 +95,9 @@ class Preset(BaseModel):
             "created_at": obj.get("created_at"),
             "description": obj.get("description"),
             "id": obj.get("id"),
+            "last_updated_at": obj.get("last_updated_at"),
             "name": obj.get("name"),
-            "processing_options": obj.get("processing_options"),
-            "updated_at": obj.get("updated_at")
+            "processing_options": obj.get("processing_options")
         })
         return _obj
 

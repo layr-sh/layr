@@ -26,7 +26,7 @@ export interface ExportIdentityRecord {
     /**
      * 
      */
-    lastSignInAt: Date;
+    lastSignedInAt: Date;
     /**
      * 
      */
@@ -46,7 +46,7 @@ export interface ExportIdentityRecord {
  */
 export function instanceOfExportIdentityRecord(value: object): value is ExportIdentityRecord {
     if ((!('createdAt' in (value as Record<string, any>)) && !('created_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['createdAt'] === undefined && (value as Record<string, any>)['created_at'] === undefined)) return false;
-    if ((!('lastSignInAt' in (value as Record<string, any>)) && !('last_sign_in_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastSignInAt'] === undefined && (value as Record<string, any>)['last_sign_in_at'] === undefined)) return false;
+    if ((!('lastSignedInAt' in (value as Record<string, any>)) && !('last_signed_in_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastSignedInAt'] === undefined && (value as Record<string, any>)['last_signed_in_at'] === undefined)) return false;
     if (!('properties' in value) || value['properties'] === undefined) return false;
     if (!('provider' in value) || value['provider'] === undefined) return false;
     if ((!('providerUserId' in (value as Record<string, any>)) && !('provider_user_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['providerUserId'] === undefined && (value as Record<string, any>)['provider_user_id'] === undefined)) return false;
@@ -64,7 +64,7 @@ export function ExportIdentityRecordFromJSONTyped(json: any, ignoreDiscriminator
     return {
         
         'createdAt': (json['created_at'] == null ? json['created_at'] : parseDateTime(json['created_at'])),
-        'lastSignInAt': (json['last_sign_in_at'] == null ? json['last_sign_in_at'] : parseDateTime(json['last_sign_in_at'])),
+        'lastSignedInAt': (json['last_signed_in_at'] == null ? json['last_signed_in_at'] : parseDateTime(json['last_signed_in_at'])),
         'properties': json['properties'],
         'provider': json['provider'],
         'providerUserId': json['provider_user_id'],
@@ -83,7 +83,7 @@ export function ExportIdentityRecordToJSONTyped(value?: ExportIdentityRecord | n
     return {
         
         'created_at': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
-        'last_sign_in_at': value['lastSignInAt'] == null ? value['lastSignInAt'] : serializeDateTime(value['lastSignInAt']),
+        'last_signed_in_at': value['lastSignedInAt'] == null ? value['lastSignedInAt'] : serializeDateTime(value['lastSignedInAt']),
         'properties': value['properties'],
         'provider': value['provider'],
         'provider_user_id': value['providerUserId'],

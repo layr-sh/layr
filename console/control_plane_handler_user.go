@@ -24,7 +24,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListConsoleUsers(responseW
 	}
 
 	const selectUsersSQL = `
-		SELECT id, email, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		SELECT id, email, encrypted_mfa_secret, is_enabled, last_signed_in_at, created_at, last_updated_at
 		FROM console.users
 		ORDER BY created_at ASC
 	`
@@ -44,7 +44,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListConsoleUsers(responseW
 			&user.Email,
 			&encryptedMFASecret,
 			&user.IsEnabled,
-			&user.LastLoginAt,
+			&user.LastSignedInAt,
 			&user.CreatedAt,
 			&user.LastUpdatedAt,
 		)
@@ -124,7 +124,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleUser(responseWri
 	}
 
 	const selectUserSQL = `
-		SELECT id, email, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		SELECT id, email, encrypted_mfa_secret, is_enabled, last_signed_in_at, created_at, last_updated_at
 		FROM console.users
 		WHERE id = $1
 	`
@@ -135,7 +135,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleUser(responseWri
 		&user.Email,
 		&encryptedMFASecret,
 		&user.IsEnabled,
-		&user.LastLoginAt,
+		&user.LastSignedInAt,
 		&user.CreatedAt,
 		&user.LastUpdatedAt,
 	)
@@ -193,7 +193,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConsoleUser(response
 			is_enabled = COALESCE($2, is_enabled),
 			last_updated_at = clock_timestamp()
 		WHERE id = $3
-		RETURNING id, email, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		RETURNING id, email, encrypted_mfa_secret, is_enabled, last_signed_in_at, created_at, last_updated_at
 	`
 	var updatedUser User
 	var encryptedMFASecret []byte
@@ -202,7 +202,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConsoleUser(response
 		&updatedUser.Email,
 		&encryptedMFASecret,
 		&updatedUser.IsEnabled,
-		&updatedUser.LastLoginAt,
+		&updatedUser.LastSignedInAt,
 		&updatedUser.CreatedAt,
 		&updatedUser.LastUpdatedAt,
 	)

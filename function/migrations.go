@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS function.endpoints (
     is_public BOOLEAN NOT NULL DEFAULT true,
     active_deployment_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 -- 3. Deployments & Code Bundles (Immutable version history)
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS function.custom_domains (
     tls_issued_at TIMESTAMPTZ,
     tls_expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 CREATE INDEX IF NOT EXISTS idx_function_custom_domains_domain ON function.custom_domains(domain);
@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS function.custom_domain_routes (
     endpoint_id UUID NOT NULL REFERENCES function.endpoints(id) ON DELETE CASCADE,
     path_prefix TEXT NOT NULL DEFAULT '/',
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     CONSTRAINT uq_function_custom_domain_routes_prefix UNIQUE(custom_domain_id, path_prefix)
 );
 

@@ -14,17 +14,17 @@ public struct CustomDomainRoute: Sendable, Codable, Hashable {
     public var domain: String?
     public var endpointId: JSONValue?
     public var id: JSONValue?
+    public var lastUpdatedAt: Date
     public var pathPrefix: String
-    public var updatedAt: Date
 
-    public init(createdAt: Date, customDomainId: JSONValue?, domain: String? = nil, endpointId: JSONValue?, id: JSONValue?, pathPrefix: String, updatedAt: Date) {
+    public init(createdAt: Date, customDomainId: JSONValue?, domain: String? = nil, endpointId: JSONValue?, id: JSONValue?, lastUpdatedAt: Date, pathPrefix: String) {
         self.createdAt = createdAt
         self.customDomainId = customDomainId
         self.domain = domain
         self.endpointId = endpointId
         self.id = id
+        self.lastUpdatedAt = lastUpdatedAt
         self.pathPrefix = pathPrefix
-        self.updatedAt = updatedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
@@ -33,8 +33,8 @@ public struct CustomDomainRoute: Sendable, Codable, Hashable {
         case domain
         case endpointId = "endpoint_id"
         case id
+        case lastUpdatedAt = "last_updated_at"
         case pathPrefix = "path_prefix"
-        case updatedAt = "updated_at"
     }
 
     // Encodable protocol methods
@@ -46,8 +46,8 @@ public struct CustomDomainRoute: Sendable, Codable, Hashable {
         try container.encodeIfPresent(domain, forKey: .domain)
         try container.encode(endpointId, forKey: .endpointId)
         try container.encode(id, forKey: .id)
+        try container.encode(lastUpdatedAt, forKey: .lastUpdatedAt)
         try container.encode(pathPrefix, forKey: .pathPrefix)
-        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

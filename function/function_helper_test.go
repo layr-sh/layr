@@ -117,9 +117,9 @@ func generateExpiredTestCertBytes(t *testing.T) []byte {
 func insertTestEndpoint(ctx context.Context, t *testing.T, kernel *core.Kernel, name string, isPublic bool) Endpoint {
 	t.Helper()
 	const querySQL = `
-		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at)
+		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at)
 		VALUES ($1, 'workerd', 'index.js', 128, 30, $2, clock_timestamp(), clock_timestamp())
-		RETURNING id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at;
+		RETURNING id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at;
 	`
 	var storedEndpoint Endpoint
 	err := kernel.DB().QueryRow(ctx, querySQL, name, isPublic).Scan(
@@ -133,7 +133,7 @@ func insertTestEndpoint(ctx context.Context, t *testing.T, kernel *core.Kernel, 
 		&storedEndpoint.IsPublic,
 		&storedEndpoint.ActiveDeploymentID,
 		&storedEndpoint.CreatedAt,
-		&storedEndpoint.UpdatedAt,
+		&storedEndpoint.LastUpdatedAt,
 	)
 	require.NoError(t, err)
 	return storedEndpoint
@@ -174,9 +174,9 @@ func deployTestEndpoint(ctx context.Context, t *testing.T, service *Service, end
 func insertTestCustomDomain(ctx context.Context, t *testing.T, kernel *core.Kernel, domain string) CustomDomain {
 	t.Helper()
 	const insertSQL = `
-		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, last_updated_at)
 		VALUES ($1, 'active', 'active', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, created_at, last_updated_at;
 	`
 	var customDomain CustomDomain
 	err := kernel.DB().QueryRow(ctx, insertSQL, domain).Scan(
@@ -187,7 +187,7 @@ func insertTestCustomDomain(ctx context.Context, t *testing.T, kernel *core.Kern
 		&customDomain.TLSStatus,
 		&customDomain.TLSAcmeEmail,
 		&customDomain.CreatedAt,
-		&customDomain.UpdatedAt,
+		&customDomain.LastUpdatedAt,
 	)
 	require.NoError(t, err)
 	return customDomain
@@ -196,7 +196,7 @@ func insertTestCustomDomain(ctx context.Context, t *testing.T, kernel *core.Kern
 func bindTestCustomDomainRoute(ctx context.Context, t *testing.T, kernel *core.Kernel, endpointID uuid.UUID, domainID uuid.UUID, pathPrefix string) {
 	t.Helper()
 	const insertSQL = `
-		INSERT INTO function.custom_domain_routes (custom_domain_id, endpoint_id, path_prefix, created_at, updated_at)
+		INSERT INTO function.custom_domain_routes (custom_domain_id, endpoint_id, path_prefix, created_at, last_updated_at)
 		VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp());
 	`
 	_, err := kernel.DB().Exec(ctx, insertSQL, domainID, endpointID, pathPrefix)

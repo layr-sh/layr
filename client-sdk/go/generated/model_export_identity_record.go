@@ -23,7 +23,7 @@ var _ MappedNullable = &ExportIdentityRecord{}
 // ExportIdentityRecord struct for ExportIdentityRecord
 type ExportIdentityRecord struct {
 	CreatedAt time.Time `json:"created_at"`
-	LastSignInAt time.Time `json:"last_sign_in_at"`
+	LastSignedInAt time.Time `json:"last_signed_in_at"`
 	Properties map[string]*interface{} `json:"properties"`
 	Provider string `json:"provider"`
 	ProviderUserId string `json:"provider_user_id"`
@@ -35,10 +35,10 @@ type _ExportIdentityRecord ExportIdentityRecord
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewExportIdentityRecord(createdAt time.Time, lastSignInAt time.Time, properties map[string]*interface{}, provider string, providerUserId string) *ExportIdentityRecord {
+func NewExportIdentityRecord(createdAt time.Time, lastSignedInAt time.Time, properties map[string]*interface{}, provider string, providerUserId string) *ExportIdentityRecord {
 	this := ExportIdentityRecord{}
 	this.CreatedAt = createdAt
-	this.LastSignInAt = lastSignInAt
+	this.LastSignedInAt = lastSignedInAt
 	this.Properties = properties
 	this.Provider = provider
 	this.ProviderUserId = providerUserId
@@ -77,28 +77,28 @@ func (o *ExportIdentityRecord) SetCreatedAt(v time.Time) {
 	o.CreatedAt = v
 }
 
-// GetLastSignInAt returns the LastSignInAt field value
-func (o *ExportIdentityRecord) GetLastSignInAt() time.Time {
+// GetLastSignedInAt returns the LastSignedInAt field value
+func (o *ExportIdentityRecord) GetLastSignedInAt() time.Time {
 	if o == nil {
 		var ret time.Time
 		return ret
 	}
 
-	return o.LastSignInAt
+	return o.LastSignedInAt
 }
 
-// GetLastSignInAtOk returns a tuple with the LastSignInAt field value
+// GetLastSignedInAtOk returns a tuple with the LastSignedInAt field value
 // and a boolean to check if the value has been set.
-func (o *ExportIdentityRecord) GetLastSignInAtOk() (*time.Time, bool) {
+func (o *ExportIdentityRecord) GetLastSignedInAtOk() (*time.Time, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.LastSignInAt, true
+	return &o.LastSignedInAt, true
 }
 
-// SetLastSignInAt sets field value
-func (o *ExportIdentityRecord) SetLastSignInAt(v time.Time) {
-	o.LastSignInAt = v
+// SetLastSignedInAt sets field value
+func (o *ExportIdentityRecord) SetLastSignedInAt(v time.Time) {
+	o.LastSignedInAt = v
 }
 
 // GetProperties returns the Properties field value
@@ -186,7 +186,7 @@ func (o ExportIdentityRecord) MarshalJSON() ([]byte, error) {
 func (o ExportIdentityRecord) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["created_at"] = o.CreatedAt
-	toSerialize["last_sign_in_at"] = o.LastSignInAt
+	toSerialize["last_signed_in_at"] = o.LastSignedInAt
 	if o.Properties != nil {
 		toSerialize["properties"] = o.Properties
 	}
@@ -201,7 +201,7 @@ func (o *ExportIdentityRecord) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"created_at",
-		"last_sign_in_at",
+		"last_signed_in_at",
 		"properties",
 		"provider",
 		"provider_user_id",

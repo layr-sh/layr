@@ -34,12 +34,12 @@ class Endpoint(BaseModel):
     entrypoint: StrictStr
     id: Optional[Any]
     is_public: StrictBool
+    last_updated_at: datetime
     memory_limit_mb: StrictInt
     name: StrictStr
     runtime: StrictStr
     timeout_seconds: StrictInt
-    updated_at: datetime
-    __properties: ClassVar[List[str]] = ["active_deployment_id", "created_at", "description", "entrypoint", "id", "is_public", "memory_limit_mb", "name", "runtime", "timeout_seconds", "updated_at"]
+    __properties: ClassVar[List[str]] = ["active_deployment_id", "created_at", "description", "entrypoint", "id", "is_public", "last_updated_at", "memory_limit_mb", "name", "runtime", "timeout_seconds"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -108,11 +108,11 @@ class Endpoint(BaseModel):
             "entrypoint": obj.get("entrypoint"),
             "id": obj.get("id"),
             "is_public": obj.get("is_public"),
+            "last_updated_at": obj.get("last_updated_at"),
             "memory_limit_mb": obj.get("memory_limit_mb"),
             "name": obj.get("name"),
             "runtime": obj.get("runtime"),
-            "timeout_seconds": obj.get("timeout_seconds"),
-            "updated_at": obj.get("updated_at")
+            "timeout_seconds": obj.get("timeout_seconds")
         })
         return _obj
 

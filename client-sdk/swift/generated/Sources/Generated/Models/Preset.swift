@@ -12,26 +12,26 @@ public struct Preset: Sendable, Codable, Hashable {
     public var createdAt: Date
     public var description: String?
     public var id: JSONValue?
+    public var lastUpdatedAt: Date
     public var name: String
     public var processingOptions: String
-    public var updatedAt: Date
 
-    public init(createdAt: Date, description: String? = nil, id: JSONValue?, name: String, processingOptions: String, updatedAt: Date) {
+    public init(createdAt: Date, description: String? = nil, id: JSONValue?, lastUpdatedAt: Date, name: String, processingOptions: String) {
         self.createdAt = createdAt
         self.description = description
         self.id = id
+        self.lastUpdatedAt = lastUpdatedAt
         self.name = name
         self.processingOptions = processingOptions
-        self.updatedAt = updatedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case createdAt = "created_at"
         case description
         case id
+        case lastUpdatedAt = "last_updated_at"
         case name
         case processingOptions = "processing_options"
-        case updatedAt = "updated_at"
     }
 
     // Encodable protocol methods
@@ -41,9 +41,9 @@ public struct Preset: Sendable, Codable, Hashable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encode(id, forKey: .id)
+        try container.encode(lastUpdatedAt, forKey: .lastUpdatedAt)
         try container.encode(name, forKey: .name)
         try container.encode(processingOptions, forKey: .processingOptions)
-        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

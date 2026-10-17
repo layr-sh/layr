@@ -37,7 +37,7 @@ interface TestDatabase {
           email: string;
           role: 'admin' | 'user' | 'guest';
           created_at: string;
-          last_login: string | null;
+          last_signed_in: string | null;
         };
         Insert: {
           id?: string;
@@ -47,7 +47,7 @@ interface TestDatabase {
         Update: {
           email?: string;
           role?: 'admin' | 'user' | 'guest';
-          last_login?: string | null;
+          last_signed_in?: string | null;
         };
       };
     };
@@ -161,7 +161,7 @@ describe('Database Contract & Type Resolver', () => {
         email: string;
         role: 'admin' | 'user' | 'guest';
         created_at: string;
-        last_login: string | null;
+        last_signed_in: string | null;
       }>();
       expectTypeOf<ResolveInsert<ResolvedUser>>().toEqualTypeOf<{
         id?: string;
@@ -171,7 +171,7 @@ describe('Database Contract & Type Resolver', () => {
       expectTypeOf<ResolveUpdate<ResolvedUser>>().toEqualTypeOf<{
         email?: string;
         role?: 'admin' | 'user' | 'guest';
-        last_login?: string | null;
+        last_signed_in?: string | null;
       }>();
     });
 

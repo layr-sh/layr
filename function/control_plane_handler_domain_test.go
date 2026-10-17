@@ -53,10 +53,10 @@ func TestFunctionControlPlaneHandlerDomainsUnit(t *testing.T) {
 
 	var targetEndpoint Endpoint
 	createEndpointErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at)
+		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at)
 		VALUES ('cp-domain-test', 'workerd', 'index.js', 128, 30, true, clock_timestamp(), clock_timestamp())
-		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at;
-	`).Scan(&targetEndpoint.ID, &targetEndpoint.Name, &targetEndpoint.Runtime, &targetEndpoint.Entrypoint, &targetEndpoint.MemoryLimitMB, &targetEndpoint.TimeoutSeconds, &targetEndpoint.IsPublic, &targetEndpoint.CreatedAt, &targetEndpoint.UpdatedAt)
+		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at;
+	`).Scan(&targetEndpoint.ID, &targetEndpoint.Name, &targetEndpoint.Runtime, &targetEndpoint.Entrypoint, &targetEndpoint.MemoryLimitMB, &targetEndpoint.TimeoutSeconds, &targetEndpoint.IsPublic, &targetEndpoint.CreatedAt, &targetEndpoint.LastUpdatedAt)
 	require.NoError(t, createEndpointErr)
 
 	// 1. Standalone Custom Domains
@@ -748,10 +748,10 @@ func TestFunctionControlPlaneHandlerTLSVerificationUnit(t *testing.T) {
 	// 1. Create a custom domain in DB
 	var customDomain CustomDomain
 	createDomainErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, last_updated_at)
 		VALUES ('nonexistent-unresolvable-domain-xyz987.test', 'active', 'pending', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
-	`).Scan(&customDomain.ID, &customDomain.Domain, &customDomain.Status, &customDomain.TLSEnabled, &customDomain.TLSStatus, &customDomain.TLSAcmeEmail, &customDomain.TLSErrorMessage, &customDomain.TLSIssuedAt, &customDomain.TLSExpiresAt, &customDomain.CreatedAt, &customDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
+	`).Scan(&customDomain.ID, &customDomain.Domain, &customDomain.Status, &customDomain.TLSEnabled, &customDomain.TLSStatus, &customDomain.TLSAcmeEmail, &customDomain.TLSErrorMessage, &customDomain.TLSIssuedAt, &customDomain.TLSExpiresAt, &customDomain.CreatedAt, &customDomain.LastUpdatedAt)
 	require.NoError(t, createDomainErr)
 	require.Equal(t, "pending", customDomain.TLSStatus)
 	require.True(t, customDomain.TLSEnabled)
@@ -808,10 +808,10 @@ func TestFunctionControlPlaneHandlerTLSVerificationUnit(t *testing.T) {
 	// 7. Verify resolvable domain (localhost) succeeds DNS check -> tls_status = 'provisioning', status = 'active'
 	var localhostCustomDomain CustomDomain
 	createLocalhostErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, last_updated_at)
 		VALUES ('localhost', 'active', 'pending', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
-	`).Scan(&localhostCustomDomain.ID, &localhostCustomDomain.Domain, &localhostCustomDomain.Status, &localhostCustomDomain.TLSEnabled, &localhostCustomDomain.TLSStatus, &localhostCustomDomain.TLSAcmeEmail, &localhostCustomDomain.TLSErrorMessage, &localhostCustomDomain.TLSIssuedAt, &localhostCustomDomain.TLSExpiresAt, &localhostCustomDomain.CreatedAt, &localhostCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
+	`).Scan(&localhostCustomDomain.ID, &localhostCustomDomain.Domain, &localhostCustomDomain.Status, &localhostCustomDomain.TLSEnabled, &localhostCustomDomain.TLSStatus, &localhostCustomDomain.TLSAcmeEmail, &localhostCustomDomain.TLSErrorMessage, &localhostCustomDomain.TLSIssuedAt, &localhostCustomDomain.TLSExpiresAt, &localhostCustomDomain.CreatedAt, &localhostCustomDomain.LastUpdatedAt)
 	require.NoError(t, createLocalhostErr)
 	require.True(t, localhostCustomDomain.TLSEnabled)
 
@@ -832,10 +832,10 @@ func TestFunctionControlPlaneHandlerTLSVerificationUnit(t *testing.T) {
 	// 7a-2. Verify failing DNS on domain with tls_enabled=false preserves tls_status='disabled'
 	var plainCustomDomain CustomDomain
 	createPlainErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('plain-fail.test', 'pending', false, 'disabled', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&plainCustomDomain.ID, &plainCustomDomain.Domain, &plainCustomDomain.Status, &plainCustomDomain.TLSEnabled, &plainCustomDomain.TLSStatus, &plainCustomDomain.CreatedAt, &plainCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&plainCustomDomain.ID, &plainCustomDomain.Domain, &plainCustomDomain.Status, &plainCustomDomain.TLSEnabled, &plainCustomDomain.TLSStatus, &plainCustomDomain.CreatedAt, &plainCustomDomain.LastUpdatedAt)
 	require.NoError(t, createPlainErr)
 
 	verifyPlainRequest := httptest.NewRequestWithContext(rootCtx, http.MethodPost, "/v1/_/function/domains/"+plainCustomDomain.ID.String()+"/verify", nil)
@@ -880,10 +880,10 @@ func TestFunctionControlPlaneHandlerTLSVerificationUnit(t *testing.T) {
 	// Fetch updated custom domain
 	var activeCustomDomain CustomDomain
 	fetchActiveErr := kernel.DB().QueryRow(testCtx, `
-		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at
+		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at
 		FROM function.custom_domains
 		WHERE domain = 'localhost';
-	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.TLSAcmeEmail, &activeCustomDomain.TLSErrorMessage, &activeCustomDomain.TLSIssuedAt, &activeCustomDomain.TLSExpiresAt, &activeCustomDomain.CreatedAt, &activeCustomDomain.UpdatedAt)
+	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.TLSAcmeEmail, &activeCustomDomain.TLSErrorMessage, &activeCustomDomain.TLSIssuedAt, &activeCustomDomain.TLSExpiresAt, &activeCustomDomain.CreatedAt, &activeCustomDomain.LastUpdatedAt)
 	require.NoError(t, fetchActiveErr)
 	require.Equal(t, "active", activeCustomDomain.TLSStatus)
 	require.True(t, activeCustomDomain.TLSEnabled)
@@ -943,18 +943,18 @@ func TestFunctionControlPlaneHandlerTLSErrorPathsUnit(t *testing.T) {
 	// Create domains for update failure
 	var unresolvableCustomDomain CustomDomain
 	insertErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, last_updated_at)
 		VALUES ('unresolvable-domain-trigger-test.test', 'active', 'pending', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
-	`).Scan(&unresolvableCustomDomain.ID, &unresolvableCustomDomain.Domain, &unresolvableCustomDomain.Status, &unresolvableCustomDomain.TLSEnabled, &unresolvableCustomDomain.TLSStatus, &unresolvableCustomDomain.TLSAcmeEmail, &unresolvableCustomDomain.TLSErrorMessage, &unresolvableCustomDomain.TLSIssuedAt, &unresolvableCustomDomain.TLSExpiresAt, &unresolvableCustomDomain.CreatedAt, &unresolvableCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
+	`).Scan(&unresolvableCustomDomain.ID, &unresolvableCustomDomain.Domain, &unresolvableCustomDomain.Status, &unresolvableCustomDomain.TLSEnabled, &unresolvableCustomDomain.TLSStatus, &unresolvableCustomDomain.TLSAcmeEmail, &unresolvableCustomDomain.TLSErrorMessage, &unresolvableCustomDomain.TLSIssuedAt, &unresolvableCustomDomain.TLSExpiresAt, &unresolvableCustomDomain.CreatedAt, &unresolvableCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertErr)
 
 	var resolvableCustomDomain CustomDomain
 	insertResolvableErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_status, created_at, last_updated_at)
 		VALUES ('localhost', 'active', 'pending', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
-	`).Scan(&resolvableCustomDomain.ID, &resolvableCustomDomain.Domain, &resolvableCustomDomain.Status, &resolvableCustomDomain.TLSEnabled, &resolvableCustomDomain.TLSStatus, &resolvableCustomDomain.TLSAcmeEmail, &resolvableCustomDomain.TLSErrorMessage, &resolvableCustomDomain.TLSIssuedAt, &resolvableCustomDomain.TLSExpiresAt, &resolvableCustomDomain.CreatedAt, &resolvableCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
+	`).Scan(&resolvableCustomDomain.ID, &resolvableCustomDomain.Domain, &resolvableCustomDomain.Status, &resolvableCustomDomain.TLSEnabled, &resolvableCustomDomain.TLSStatus, &resolvableCustomDomain.TLSAcmeEmail, &resolvableCustomDomain.TLSErrorMessage, &resolvableCustomDomain.TLSIssuedAt, &resolvableCustomDomain.TLSExpiresAt, &resolvableCustomDomain.CreatedAt, &resolvableCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertResolvableErr)
 
 	// Add trigger to fail UPDATE on custom_domains
@@ -1462,10 +1462,10 @@ func TestFunctionVerifyActiveCustomDomainIdempotentUnit(t *testing.T) {
 	// 1. Insert domain that is already active
 	var activeCustomDomain CustomDomain
 	insertErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('idempotent.active.com', 'active', true, 'active', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.CreatedAt, &activeCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.CreatedAt, &activeCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertErr)
 
 	// 2. Seed active certificate in DBCertCache
@@ -1488,10 +1488,10 @@ func TestFunctionVerifyActiveCustomDomainIdempotentUnit(t *testing.T) {
 	// 4. Pending domain with pre-existing certificate in cache verifies directly to active
 	var pendingCustomDomain CustomDomain
 	insertPendingErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('pending.precached.com', 'pending', true, 'pending', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&pendingCustomDomain.ID, &pendingCustomDomain.Domain, &pendingCustomDomain.Status, &pendingCustomDomain.TLSEnabled, &pendingCustomDomain.TLSStatus, &pendingCustomDomain.CreatedAt, &pendingCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&pendingCustomDomain.ID, &pendingCustomDomain.Domain, &pendingCustomDomain.Status, &pendingCustomDomain.TLSEnabled, &pendingCustomDomain.TLSStatus, &pendingCustomDomain.CreatedAt, &pendingCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertPendingErr)
 
 	require.NoError(t, coreServer.DBCertCache().Put(testCtx, pendingCustomDomain.Domain, generateTestCertBytes(t)))
@@ -1510,10 +1510,10 @@ func TestFunctionVerifyActiveCustomDomainIdempotentUnit(t *testing.T) {
 	// 4b. Re-verifying a domain with an EXPIRED certificate in cache MUST trigger renewal into provisioning status
 	var expiredCustomDomain CustomDomain
 	insertExpiredErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('expired.domain.com', 'active', true, 'active', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&expiredCustomDomain.ID, &expiredCustomDomain.Domain, &expiredCustomDomain.Status, &expiredCustomDomain.TLSEnabled, &expiredCustomDomain.TLSStatus, &expiredCustomDomain.CreatedAt, &expiredCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&expiredCustomDomain.ID, &expiredCustomDomain.Domain, &expiredCustomDomain.Status, &expiredCustomDomain.TLSEnabled, &expiredCustomDomain.TLSStatus, &expiredCustomDomain.CreatedAt, &expiredCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertExpiredErr)
 
 	require.NoError(t, coreServer.DBCertCache().Put(testCtx, expiredCustomDomain.Domain, generateExpiredTestCertBytes(t)))
@@ -1540,10 +1540,10 @@ func TestFunctionVerifyActiveCustomDomainIdempotentUnit(t *testing.T) {
 	// 5. triggerTLSProvisioning success transitions provisioning domain to active
 	var provCustomDomain CustomDomain
 	insertProvErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('prov.success.com', 'active', true, 'provisioning', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&provCustomDomain.ID, &provCustomDomain.Domain, &provCustomDomain.Status, &provCustomDomain.TLSEnabled, &provCustomDomain.TLSStatus, &provCustomDomain.CreatedAt, &provCustomDomain.UpdatedAt)
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&provCustomDomain.ID, &provCustomDomain.Domain, &provCustomDomain.Status, &provCustomDomain.TLSEnabled, &provCustomDomain.TLSStatus, &provCustomDomain.CreatedAt, &provCustomDomain.LastUpdatedAt)
 	require.NoError(t, insertProvErr)
 
 	controlPlaneHandler.triggerTLSProvisioning(provCustomDomain.Domain, "admin@layr.sh")

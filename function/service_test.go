@@ -171,7 +171,7 @@ func TestFunctionServiceHostValidationCacheUnit(t *testing.T) {
 
 	// Insert active domain with TLS
 	_, err = kernel.DB().Exec(ctx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('cache.test.com', 'active', true, 'active', clock_timestamp(), clock_timestamp());
 	`)
 	require.NoError(t, err)

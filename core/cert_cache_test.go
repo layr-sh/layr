@@ -92,7 +92,7 @@ func TestCoreDBCertCacheEdgeCasesUnit(t *testing.T) {
 
 	// 1. Corrupted ciphertext in DB returns decryption error on Get
 	corruptKey := "corrupted.example.com"
-	_, insertCorruptErr := db.Exec(ctx, "INSERT INTO core.acme_certificates (key_name, data, updated_at) VALUES ($1, $2, clock_timestamp())", corruptKey, []byte("invalid-corrupted-ciphertext"))
+	_, insertCorruptErr := db.Exec(ctx, "INSERT INTO core.acme_certificates (key_name, data, last_updated_at) VALUES ($1, $2, clock_timestamp())", corruptKey, []byte("invalid-corrupted-ciphertext"))
 	require.NoError(t, insertCorruptErr)
 
 	corruptedData, corruptErr := dbCertCache.Get(ctx, corruptKey)

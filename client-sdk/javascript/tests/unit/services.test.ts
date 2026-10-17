@@ -52,7 +52,7 @@ describe('Service Methods Unit Tests (SVC-01 to SVC-08)', () => {
           expires_in: 3600,
           refresh_token: 'ref',
           token_type: 'Bearer',
-          user: { id: 'u1', email: 'user@example.com', phone: '', created_at: '', updated_at: '' },
+          user: { id: 'u1', email: 'user@example.com', phone: '', created_at: '', last_updated_at: '' },
         }),
         {
           status: 201,

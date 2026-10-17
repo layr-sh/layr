@@ -378,7 +378,7 @@ func isTwoPartCCTLD(secondLast, last string) bool {
 // fetchCustomDomainByID retrieves a custom domain by its UUID primary key.
 func (controlPlaneHandler *ControlPlaneHandler) fetchCustomDomainByID(ctx context.Context, domainID uuid.UUID) (*CustomDomain, error) {
 	const querySQL = `
-		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at
+		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at
 		FROM function.custom_domains
 		WHERE id = $1;
 	`
@@ -395,7 +395,7 @@ func (controlPlaneHandler *ControlPlaneHandler) fetchCustomDomainByID(ctx contex
 		&customDomain.TLSIssuedAt,
 		&customDomain.TLSExpiresAt,
 		&customDomain.CreatedAt,
-		&customDomain.UpdatedAt,
+		&customDomain.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -474,9 +474,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomain(respons
 	}
 
 	const insertSQL = `
-		INSERT INTO function.custom_domains (id, domain, status, tls_enabled, tls_status, tls_acme_email, created_at, updated_at)
+		INSERT INTO function.custom_domains (id, domain, status, tls_enabled, tls_status, tls_acme_email, created_at, last_updated_at)
 		VALUES (uuidv7(), $1, 'pending', $2, $3, $4, clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 	`
 
 	var customDomain CustomDomain
@@ -491,7 +491,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomain(respons
 		&customDomain.TLSIssuedAt,
 		&customDomain.TLSExpiresAt,
 		&customDomain.CreatedAt,
-		&customDomain.UpdatedAt,
+		&customDomain.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		var pgError *pgconn.PgError
@@ -522,7 +522,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomains(response
 	}
 
 	const querySQL = `
-		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at
+		SELECT id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at
 		FROM function.custom_domains
 		ORDER BY created_at ASC;
 	`
@@ -548,7 +548,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomains(response
 			&customDomain.TLSIssuedAt,
 			&customDomain.TLSExpiresAt,
 			&customDomain.CreatedAt,
-			&customDomain.UpdatedAt,
+			&customDomain.LastUpdatedAt,
 		)
 		customDomain.RequiredDNSRecords = controlPlaneHandler.buildRequiredDNSRecords(customDomain.Domain, customDomain.Status, customDomain.TLSStatus)
 		customDomains = append(customDomains, customDomain)
@@ -607,7 +607,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomain(respons
 	const deleteSQL = `
 		DELETE FROM function.custom_domains
 		WHERE id = $1
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 	`
 	scanErr := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), deleteSQL, domainID).Scan(
 		&customDomain.ID,
@@ -620,7 +620,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomain(respons
 		&customDomain.TLSIssuedAt,
 		&customDomain.TLSExpiresAt,
 		&customDomain.CreatedAt,
-		&customDomain.UpdatedAt,
+		&customDomain.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {
@@ -705,9 +705,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateCustomDomain(respons
 
 	const updateSQL = `
 		UPDATE function.custom_domains
-		SET tls_enabled = $1, tls_status = $2, tls_error_message = $3, tls_acme_email = $4, updated_at = clock_timestamp()
+		SET tls_enabled = $1, tls_status = $2, tls_error_message = $3, tls_acme_email = $4, last_updated_at = clock_timestamp()
 		WHERE id = $5
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 	`
 
 	var updatedCustomDomain CustomDomain
@@ -722,7 +722,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateCustomDomain(respons
 		&updatedCustomDomain.TLSIssuedAt,
 		&updatedCustomDomain.TLSExpiresAt,
 		&updatedCustomDomain.CreatedAt,
-		&updatedCustomDomain.UpdatedAt,
+		&updatedCustomDomain.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, scanErr.Error())
@@ -885,9 +885,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyCustomDomain(respons
 		}
 		const updateFailedSQL = `
 			UPDATE function.custom_domains
-			SET status = 'pending', tls_status = $1, tls_error_message = $2, updated_at = clock_timestamp()
+			SET status = 'pending', tls_status = $1, tls_error_message = $2, last_updated_at = clock_timestamp()
 			WHERE id = $3
-			RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+			RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 		`
 		var failedCustomDomain CustomDomain
 		scanErr := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), updateFailedSQL, failedTLSStatus, diagnosticMessage, domainID).Scan(
@@ -901,7 +901,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyCustomDomain(respons
 			&failedCustomDomain.TLSIssuedAt,
 			&failedCustomDomain.TLSExpiresAt,
 			&failedCustomDomain.CreatedAt,
-			&failedCustomDomain.UpdatedAt,
+			&failedCustomDomain.LastUpdatedAt,
 		)
 		if scanErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, scanErr.Error())
@@ -944,9 +944,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyCustomDomain(respons
 
 	const updateSuccessSQL = `
 		UPDATE function.custom_domains
-		SET status = 'active', tls_status = $1, tls_error_message = $2, updated_at = clock_timestamp()
+		SET status = 'active', tls_status = $1, tls_error_message = $2, last_updated_at = clock_timestamp()
 		WHERE id = $3
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 	`
 	var verifiedCustomDomain CustomDomain
 	scanErr := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), updateSuccessSQL, nextTLSStatus, tlsErrorMessage, domainID).Scan(
@@ -960,7 +960,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyCustomDomain(respons
 		&verifiedCustomDomain.TLSIssuedAt,
 		&verifiedCustomDomain.TLSExpiresAt,
 		&verifiedCustomDomain.CreatedAt,
-		&verifiedCustomDomain.UpdatedAt,
+		&verifiedCustomDomain.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, scanErr.Error())
@@ -1009,9 +1009,9 @@ func (controlPlaneHandler *ControlPlaneHandler) triggerTLSProvisioning(domain st
 			log.Warnf("failed to auto-provision TLS certificate for custom domain %s: %v", domain, err)
 			const updateErrSQL = `
 				UPDATE function.custom_domains
-				SET tls_status = 'failed', tls_error_message = $1, updated_at = clock_timestamp()
+				SET tls_status = 'failed', tls_error_message = $1, last_updated_at = clock_timestamp()
 				WHERE domain = $2 AND tls_enabled = true AND tls_status = 'provisioning'
-				RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+				RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 			`
 			var failedCustomDomain CustomDomain
 			if scanErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, updateErrSQL, err.Error(), domain).Scan(
@@ -1025,7 +1025,7 @@ func (controlPlaneHandler *ControlPlaneHandler) triggerTLSProvisioning(domain st
 				&failedCustomDomain.TLSIssuedAt,
 				&failedCustomDomain.TLSExpiresAt,
 				&failedCustomDomain.CreatedAt,
-				&failedCustomDomain.UpdatedAt,
+				&failedCustomDomain.LastUpdatedAt,
 			); scanErr == nil {
 				controlPlaneHandler.InvalidateHostValidationCache(domain)
 				controlPlaneHandler.kernel.EventBus().Publish(
@@ -1036,9 +1036,9 @@ func (controlPlaneHandler *ControlPlaneHandler) triggerTLSProvisioning(domain st
 		} else {
 			const updateActiveSQL = `
 				UPDATE function.custom_domains
-				SET tls_status = 'active', tls_error_message = NULL, updated_at = clock_timestamp()
+				SET tls_status = 'active', tls_error_message = NULL, last_updated_at = clock_timestamp()
 				WHERE domain = $1 AND tls_enabled = true AND tls_status = 'provisioning'
-				RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+				RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 			`
 			var activeCustomDomain CustomDomain
 			if scanErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, updateActiveSQL, domain).Scan(
@@ -1052,7 +1052,7 @@ func (controlPlaneHandler *ControlPlaneHandler) triggerTLSProvisioning(domain st
 				&activeCustomDomain.TLSIssuedAt,
 				&activeCustomDomain.TLSExpiresAt,
 				&activeCustomDomain.CreatedAt,
-				&activeCustomDomain.UpdatedAt,
+				&activeCustomDomain.LastUpdatedAt,
 			); scanErr == nil {
 				controlPlaneHandler.InvalidateHostValidationCache(domain)
 				controlPlaneHandler.kernel.EventBus().Publish(
@@ -1125,9 +1125,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomainRoute(re
 	}
 
 	const insertSQL = `
-		INSERT INTO function.custom_domain_routes (id, custom_domain_id, endpoint_id, path_prefix, created_at, updated_at)
+		INSERT INTO function.custom_domain_routes (id, custom_domain_id, endpoint_id, path_prefix, created_at, last_updated_at)
 		VALUES (uuidv7(), $1, $2, $3, clock_timestamp(), clock_timestamp())
-		RETURNING id, custom_domain_id, endpoint_id, path_prefix, created_at, updated_at;
+		RETURNING id, custom_domain_id, endpoint_id, path_prefix, created_at, last_updated_at;
 	`
 
 	var customDomainRoute CustomDomainRoute
@@ -1143,7 +1143,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateCustomDomainRoute(re
 		&customDomainRoute.EndpointID,
 		&customDomainRoute.PathPrefix,
 		&customDomainRoute.CreatedAt,
-		&customDomainRoute.UpdatedAt,
+		&customDomainRoute.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		var pgError *pgconn.PgError
@@ -1181,7 +1181,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomainRoutes(res
 	}
 
 	const querySQL = `
-		SELECT r.id, r.custom_domain_id, d.domain, r.endpoint_id, r.path_prefix, r.created_at, r.updated_at
+		SELECT r.id, r.custom_domain_id, d.domain, r.endpoint_id, r.path_prefix, r.created_at, r.last_updated_at
 		FROM function.custom_domain_routes r
 		JOIN function.custom_domains d ON d.id = r.custom_domain_id
 		WHERE r.endpoint_id = $1
@@ -1205,7 +1205,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListCustomDomainRoutes(res
 			&customDomainRoute.EndpointID,
 			&customDomainRoute.PathPrefix,
 			&customDomainRoute.CreatedAt,
-			&customDomainRoute.UpdatedAt,
+			&customDomainRoute.LastUpdatedAt,
 		)
 		routes = append(routes, customDomainRoute)
 	}
@@ -1242,7 +1242,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomainRoute(re
 	const deleteSQL = `
 		DELETE FROM function.custom_domain_routes
 		WHERE id = $1 AND endpoint_id = $2
-		RETURNING id, custom_domain_id, endpoint_id, path_prefix, created_at, updated_at;
+		RETURNING id, custom_domain_id, endpoint_id, path_prefix, created_at, last_updated_at;
 	`
 	scanErr := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), deleteSQL, routeID, endpointID).Scan(
 		&customDomainRoute.ID,
@@ -1250,7 +1250,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteCustomDomainRoute(re
 		&customDomainRoute.EndpointID,
 		&customDomainRoute.PathPrefix,
 		&customDomainRoute.CreatedAt,
-		&customDomainRoute.UpdatedAt,
+		&customDomainRoute.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {

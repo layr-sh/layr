@@ -19,23 +19,23 @@ pub struct Preset {
     pub description: Option<String>,
     #[serde(rename = "id", deserialize_with = "Option::deserialize")]
     pub id: Option<serde_json::Value>,
+    #[serde(rename = "last_updated_at")]
+    pub last_updated_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "name")]
     pub name: String,
     #[serde(rename = "processing_options")]
     pub processing_options: String,
-    #[serde(rename = "updated_at")]
-    pub updated_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl Preset {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, id: Option<serde_json::Value>, name: String, processing_options: String, updated_at: chrono::DateTime<chrono::FixedOffset>) -> Preset {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, id: Option<serde_json::Value>, last_updated_at: chrono::DateTime<chrono::FixedOffset>, name: String, processing_options: String) -> Preset {
         Preset {
             created_at,
             description: None,
             id,
+            last_updated_at,
             name,
             processing_options,
-            updated_at,
         }
     }
 }

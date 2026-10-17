@@ -25,9 +25,9 @@ type Preset struct {
 	CreatedAt time.Time `json:"created_at"`
 	Description *string `json:"description,omitempty"`
 	Id interface{} `json:"id"`
+	LastUpdatedAt time.Time `json:"last_updated_at"`
 	Name string `json:"name"`
 	ProcessingOptions string `json:"processing_options"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type _Preset Preset
@@ -36,13 +36,13 @@ type _Preset Preset
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewPreset(createdAt time.Time, id interface{}, name string, processingOptions string, updatedAt time.Time) *Preset {
+func NewPreset(createdAt time.Time, id interface{}, lastUpdatedAt time.Time, name string, processingOptions string) *Preset {
 	this := Preset{}
 	this.CreatedAt = createdAt
 	this.Id = id
+	this.LastUpdatedAt = lastUpdatedAt
 	this.Name = name
 	this.ProcessingOptions = processingOptions
-	this.UpdatedAt = updatedAt
 	return &this
 }
 
@@ -136,6 +136,30 @@ func (o *Preset) SetId(v interface{}) {
 	o.Id = v
 }
 
+// GetLastUpdatedAt returns the LastUpdatedAt field value
+func (o *Preset) GetLastUpdatedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.LastUpdatedAt
+}
+
+// GetLastUpdatedAtOk returns a tuple with the LastUpdatedAt field value
+// and a boolean to check if the value has been set.
+func (o *Preset) GetLastUpdatedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.LastUpdatedAt, true
+}
+
+// SetLastUpdatedAt sets field value
+func (o *Preset) SetLastUpdatedAt(v time.Time) {
+	o.LastUpdatedAt = v
+}
+
 // GetName returns the Name field value
 func (o *Preset) GetName() string {
 	if o == nil {
@@ -184,30 +208,6 @@ func (o *Preset) SetProcessingOptions(v string) {
 	o.ProcessingOptions = v
 }
 
-// GetUpdatedAt returns the UpdatedAt field value
-func (o *Preset) GetUpdatedAt() time.Time {
-	if o == nil {
-		var ret time.Time
-		return ret
-	}
-
-	return o.UpdatedAt
-}
-
-// GetUpdatedAtOk returns a tuple with the UpdatedAt field value
-// and a boolean to check if the value has been set.
-func (o *Preset) GetUpdatedAtOk() (*time.Time, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.UpdatedAt, true
-}
-
-// SetUpdatedAt sets field value
-func (o *Preset) SetUpdatedAt(v time.Time) {
-	o.UpdatedAt = v
-}
-
 func (o Preset) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -225,9 +225,9 @@ func (o Preset) ToMap() (map[string]interface{}, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+	toSerialize["last_updated_at"] = o.LastUpdatedAt
 	toSerialize["name"] = o.Name
 	toSerialize["processing_options"] = o.ProcessingOptions
-	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
 
@@ -238,9 +238,9 @@ func (o *Preset) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"created_at",
 		"id",
+		"last_updated_at",
 		"name",
 		"processing_options",
-		"updated_at",
 	}
 
 	allProperties := make(map[string]interface{})

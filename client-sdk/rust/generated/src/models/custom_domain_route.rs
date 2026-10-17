@@ -23,22 +23,22 @@ pub struct CustomDomainRoute {
     pub endpoint_id: Option<serde_json::Value>,
     #[serde(rename = "id", deserialize_with = "Option::deserialize")]
     pub id: Option<serde_json::Value>,
+    #[serde(rename = "last_updated_at")]
+    pub last_updated_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "path_prefix")]
     pub path_prefix: String,
-    #[serde(rename = "updated_at")]
-    pub updated_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl CustomDomainRoute {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, custom_domain_id: Option<serde_json::Value>, endpoint_id: Option<serde_json::Value>, id: Option<serde_json::Value>, path_prefix: String, updated_at: chrono::DateTime<chrono::FixedOffset>) -> CustomDomainRoute {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, custom_domain_id: Option<serde_json::Value>, endpoint_id: Option<serde_json::Value>, id: Option<serde_json::Value>, last_updated_at: chrono::DateTime<chrono::FixedOffset>, path_prefix: String) -> CustomDomainRoute {
         CustomDomainRoute {
             created_at,
             custom_domain_id,
             domain: None,
             endpoint_id,
             id,
+            last_updated_at,
             path_prefix,
-            updated_at,
         }
     }
 }

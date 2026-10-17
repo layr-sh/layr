@@ -4,7 +4,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **createdAt** | **Date** |  | 
-**lastSignInAt** | **Date** |  | 
+**lastSignedInAt** | **Date** |  | 
 **properties** | **[String: JSONValue?]** |  | 
 **provider** | **String** |  | 
 **providerUserId** | **String** |  | 

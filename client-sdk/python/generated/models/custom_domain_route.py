@@ -33,9 +33,9 @@ class CustomDomainRoute(BaseModel):
     domain: Optional[StrictStr] = None
     endpoint_id: Optional[Any]
     id: Optional[Any]
+    last_updated_at: datetime
     path_prefix: StrictStr
-    updated_at: datetime
-    __properties: ClassVar[List[str]] = ["created_at", "custom_domain_id", "domain", "endpoint_id", "id", "path_prefix", "updated_at"]
+    __properties: ClassVar[List[str]] = ["created_at", "custom_domain_id", "domain", "endpoint_id", "id", "last_updated_at", "path_prefix"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -108,8 +108,8 @@ class CustomDomainRoute(BaseModel):
             "domain": obj.get("domain"),
             "endpoint_id": obj.get("endpoint_id"),
             "id": obj.get("id"),
-            "path_prefix": obj.get("path_prefix"),
-            "updated_at": obj.get("updated_at")
+            "last_updated_at": obj.get("last_updated_at"),
+            "path_prefix": obj.get("path_prefix")
         })
         return _obj
 

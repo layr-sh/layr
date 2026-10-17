@@ -44,10 +44,10 @@ func TestFunctionEventUnit(t *testing.T) {
 		t.Parallel()
 		endpointID := uuid.NewV7()
 		endpointUpdatedEventData := EndpointUpdatedEventData(Endpoint{
-			ID:        endpointID,
-			Name:      "hello-v2",
-			Runtime:   "workerd",
-			UpdatedAt: time.Now().UTC(),
+			ID:            endpointID,
+			Name:          "hello-v2",
+			Runtime:       "workerd",
+			LastUpdatedAt: time.Now().UTC(),
 		})
 		event := NewEndpointUpdatedEvent(endpointID.String(), endpointUpdatedEventData)
 		require.Equal(t, "function.endpoint.updated", event.Type)

@@ -12,11 +12,11 @@ Name | Type
 `entrypoint` | string
 `id` | any
 `isPublic` | boolean
+`lastUpdatedAt` | Date
 `memoryLimitMb` | number
 `name` | string
 `runtime` | string
 `timeoutSeconds` | number
-`updatedAt` | Date
 
 ## Example
 
@@ -31,11 +31,11 @@ const example = {
   "entrypoint": null,
   "id": null,
   "isPublic": null,
+  "lastUpdatedAt": null,
   "memoryLimitMb": null,
   "name": null,
   "runtime": null,
   "timeoutSeconds": null,
-  "updatedAt": null,
 } satisfies Endpoint
 
 console.log(example)

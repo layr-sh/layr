@@ -200,7 +200,7 @@ func (handler *BaseHandler) handleExportUser(responseWriter http.ResponseWriter,
 	// Fetch linked third-party identities
 	identities := make([]ExportIdentityRecord, 0)
 	identityRows, queryErr := handler.kernel.DB().Query(ctx, `
-		SELECT provider, provider_user_id, properties, created_at, last_sign_in_at 
+		SELECT provider, provider_user_id, properties, created_at, last_signed_in_at 
 		FROM auth.identities 
 		WHERE user_id = $1
 	`, targetUserID)

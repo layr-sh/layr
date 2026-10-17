@@ -25,6 +25,7 @@ type CustomDomain struct {
 	CreatedAt time.Time `json:"created_at"`
 	Domain string `json:"domain"`
 	Id interface{} `json:"id"`
+	LastUpdatedAt time.Time `json:"last_updated_at"`
 	RequiredDnsRecords []RequiredDNSRecord `json:"required_dns_records,omitempty"`
 	Status string `json:"status"`
 	TlsAcmeEmail *string `json:"tls_acme_email,omitempty"`
@@ -33,7 +34,6 @@ type CustomDomain struct {
 	TlsExpiresAt *time.Time `json:"tls_expires_at,omitempty"`
 	TlsIssuedAt *time.Time `json:"tls_issued_at,omitempty"`
 	TlsStatus string `json:"tls_status"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type _CustomDomain CustomDomain
@@ -42,15 +42,15 @@ type _CustomDomain CustomDomain
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCustomDomain(createdAt time.Time, domain string, id interface{}, status string, tlsEnabled bool, tlsStatus string, updatedAt time.Time) *CustomDomain {
+func NewCustomDomain(createdAt time.Time, domain string, id interface{}, lastUpdatedAt time.Time, status string, tlsEnabled bool, tlsStatus string) *CustomDomain {
 	this := CustomDomain{}
 	this.CreatedAt = createdAt
 	this.Domain = domain
 	this.Id = id
+	this.LastUpdatedAt = lastUpdatedAt
 	this.Status = status
 	this.TlsEnabled = tlsEnabled
 	this.TlsStatus = tlsStatus
-	this.UpdatedAt = updatedAt
 	return &this
 }
 
@@ -134,6 +134,30 @@ func (o *CustomDomain) GetIdOk() (*interface{}, bool) {
 // SetId sets field value
 func (o *CustomDomain) SetId(v interface{}) {
 	o.Id = v
+}
+
+// GetLastUpdatedAt returns the LastUpdatedAt field value
+func (o *CustomDomain) GetLastUpdatedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.LastUpdatedAt
+}
+
+// GetLastUpdatedAtOk returns a tuple with the LastUpdatedAt field value
+// and a boolean to check if the value has been set.
+func (o *CustomDomain) GetLastUpdatedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.LastUpdatedAt, true
+}
+
+// SetLastUpdatedAt sets field value
+func (o *CustomDomain) SetLastUpdatedAt(v time.Time) {
+	o.LastUpdatedAt = v
 }
 
 // GetRequiredDnsRecords returns the RequiredDnsRecords field value if set, zero value otherwise (both if not set or set to explicit null).
@@ -369,30 +393,6 @@ func (o *CustomDomain) SetTlsStatus(v string) {
 	o.TlsStatus = v
 }
 
-// GetUpdatedAt returns the UpdatedAt field value
-func (o *CustomDomain) GetUpdatedAt() time.Time {
-	if o == nil {
-		var ret time.Time
-		return ret
-	}
-
-	return o.UpdatedAt
-}
-
-// GetUpdatedAtOk returns a tuple with the UpdatedAt field value
-// and a boolean to check if the value has been set.
-func (o *CustomDomain) GetUpdatedAtOk() (*time.Time, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.UpdatedAt, true
-}
-
-// SetUpdatedAt sets field value
-func (o *CustomDomain) SetUpdatedAt(v time.Time) {
-	o.UpdatedAt = v
-}
-
 func (o CustomDomain) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -408,6 +408,7 @@ func (o CustomDomain) ToMap() (map[string]interface{}, error) {
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
 	}
+	toSerialize["last_updated_at"] = o.LastUpdatedAt
 	if o.RequiredDnsRecords != nil {
 		toSerialize["required_dns_records"] = o.RequiredDnsRecords
 	}
@@ -426,7 +427,6 @@ func (o CustomDomain) ToMap() (map[string]interface{}, error) {
 		toSerialize["tls_issued_at"] = o.TlsIssuedAt
 	}
 	toSerialize["tls_status"] = o.TlsStatus
-	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
 
@@ -438,10 +438,10 @@ func (o *CustomDomain) UnmarshalJSON(data []byte) (err error) {
 		"created_at",
 		"domain",
 		"id",
+		"last_updated_at",
 		"status",
 		"tls_enabled",
 		"tls_status",
-		"updated_at",
 	}
 
 	allProperties := make(map[string]interface{})

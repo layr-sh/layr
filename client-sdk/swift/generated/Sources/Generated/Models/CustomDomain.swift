@@ -12,6 +12,7 @@ public struct CustomDomain: Sendable, Codable, Hashable {
     public var createdAt: Date
     public var domain: String
     public var id: JSONValue?
+    public var lastUpdatedAt: Date
     public var requiredDnsRecords: [RequiredDNSRecord]?
     public var status: String
     public var tlsAcmeEmail: String?
@@ -20,12 +21,12 @@ public struct CustomDomain: Sendable, Codable, Hashable {
     public var tlsExpiresAt: Date?
     public var tlsIssuedAt: Date?
     public var tlsStatus: String
-    public var updatedAt: Date
 
-    public init(createdAt: Date, domain: String, id: JSONValue?, requiredDnsRecords: [RequiredDNSRecord]? = nil, status: String, tlsAcmeEmail: String? = nil, tlsEnabled: Bool, tlsErrorMessage: String? = nil, tlsExpiresAt: Date? = nil, tlsIssuedAt: Date? = nil, tlsStatus: String, updatedAt: Date) {
+    public init(createdAt: Date, domain: String, id: JSONValue?, lastUpdatedAt: Date, requiredDnsRecords: [RequiredDNSRecord]? = nil, status: String, tlsAcmeEmail: String? = nil, tlsEnabled: Bool, tlsErrorMessage: String? = nil, tlsExpiresAt: Date? = nil, tlsIssuedAt: Date? = nil, tlsStatus: String) {
         self.createdAt = createdAt
         self.domain = domain
         self.id = id
+        self.lastUpdatedAt = lastUpdatedAt
         self.requiredDnsRecords = requiredDnsRecords
         self.status = status
         self.tlsAcmeEmail = tlsAcmeEmail
@@ -34,13 +35,13 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         self.tlsExpiresAt = tlsExpiresAt
         self.tlsIssuedAt = tlsIssuedAt
         self.tlsStatus = tlsStatus
-        self.updatedAt = updatedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case createdAt = "created_at"
         case domain
         case id
+        case lastUpdatedAt = "last_updated_at"
         case requiredDnsRecords = "required_dns_records"
         case status
         case tlsAcmeEmail = "tls_acme_email"
@@ -49,7 +50,6 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         case tlsExpiresAt = "tls_expires_at"
         case tlsIssuedAt = "tls_issued_at"
         case tlsStatus = "tls_status"
-        case updatedAt = "updated_at"
     }
 
     // Encodable protocol methods
@@ -59,6 +59,7 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(domain, forKey: .domain)
         try container.encode(id, forKey: .id)
+        try container.encode(lastUpdatedAt, forKey: .lastUpdatedAt)
         try container.encodeIfPresent(requiredDnsRecords, forKey: .requiredDnsRecords)
         try container.encode(status, forKey: .status)
         try container.encodeIfPresent(tlsAcmeEmail, forKey: .tlsAcmeEmail)
@@ -67,7 +68,6 @@ public struct CustomDomain: Sendable, Codable, Hashable {
         try container.encodeIfPresent(tlsExpiresAt, forKey: .tlsExpiresAt)
         try container.encodeIfPresent(tlsIssuedAt, forKey: .tlsIssuedAt)
         try container.encode(tlsStatus, forKey: .tlsStatus)
-        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

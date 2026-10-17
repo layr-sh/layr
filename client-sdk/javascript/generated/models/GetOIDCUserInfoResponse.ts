@@ -34,6 +34,10 @@ export interface GetOIDCUserInfoResponse {
     /**
      * 
      */
+    lastUpdatedAt: number;
+    /**
+     * 
+     */
     name?: string;
     /**
      * 
@@ -55,10 +59,6 @@ export interface GetOIDCUserInfoResponse {
      * 
      */
     sub: string;
-    /**
-     * 
-     */
-    updatedAt: number;
 }
 
 /**
@@ -67,10 +67,10 @@ export interface GetOIDCUserInfoResponse {
 export function instanceOfGetOIDCUserInfoResponse(value: object): value is GetOIDCUserInfoResponse {
     if ((!('emailVerified' in (value as Record<string, any>)) && !('email_verified' in (value as Record<string, any>))) || ((value as Record<string, any>)['emailVerified'] === undefined && (value as Record<string, any>)['email_verified'] === undefined)) return false;
     if ((!('isAnonymous' in (value as Record<string, any>)) && !('is_anonymous' in (value as Record<string, any>))) || ((value as Record<string, any>)['isAnonymous'] === undefined && (value as Record<string, any>)['is_anonymous'] === undefined)) return false;
+    if ((!('lastUpdatedAt' in (value as Record<string, any>)) && !('last_updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastUpdatedAt'] === undefined && (value as Record<string, any>)['last_updated_at'] === undefined)) return false;
     if ((!('phoneNumberVerified' in (value as Record<string, any>)) && !('phone_number_verified' in (value as Record<string, any>))) || ((value as Record<string, any>)['phoneNumberVerified'] === undefined && (value as Record<string, any>)['phone_number_verified'] === undefined)) return false;
     if (!('role' in value) || value['role'] === undefined) return false;
     if (!('sub' in value) || value['sub'] === undefined) return false;
-    if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
 
@@ -87,13 +87,13 @@ export function GetOIDCUserInfoResponseFromJSONTyped(json: any, ignoreDiscrimina
         'email': json['email'] == null ? undefined : json['email'],
         'emailVerified': json['email_verified'],
         'isAnonymous': json['is_anonymous'],
+        'lastUpdatedAt': json['last_updated_at'],
         'name': json['name'] == null ? undefined : json['name'],
         'phoneNumber': json['phone_number'] == null ? undefined : json['phone_number'],
         'phoneNumberVerified': json['phone_number_verified'],
         'properties': json['properties'] === undefined ? undefined : json['properties'] === null ? null : json['properties'],
         'role': json['role'],
         'sub': json['sub'],
-        'updatedAt': json['updated_at'],
     };
 }
 
@@ -111,13 +111,13 @@ export function GetOIDCUserInfoResponseToJSONTyped(value?: GetOIDCUserInfoRespon
         'email': value['email'],
         'email_verified': value['emailVerified'],
         'is_anonymous': value['isAnonymous'],
+        'last_updated_at': value['lastUpdatedAt'],
         'name': value['name'],
         'phone_number': value['phoneNumber'],
         'phone_number_verified': value['phoneNumberVerified'],
         'properties': value['properties'],
         'role': value['role'],
         'sub': value['sub'],
-        'updated_at': value['updatedAt'],
     };
 }
 
