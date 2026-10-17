@@ -81,17 +81,18 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
 
   describe('3. SchemaClient & Multi-Schema Navigation', () => {
     const client = createClient<MockDatabase>({ endpoint: 'https://api.layr.sh' });
+    const data = useData(client);
 
     it('returns strongly-typed SchemaClient instances', () => {
-      const publicSchema = client.schema('public');
+      const publicSchema = data.schema('public');
       expectTypeOf(publicSchema).toEqualTypeOf<SchemaClient<MockDatabase, 'public'>>();
 
-      const analyticsSchema = client.schema('analytics');
+      const analyticsSchema = data.schema('analytics');
       expectTypeOf(analyticsSchema).toEqualTypeOf<SchemaClient<MockDatabase, 'analytics'>>();
     });
 
     it('infers correct QueryBuilder types from SchemaClient', () => {
-      const userQb = client.schema('public').from('users');
+      const userQb = data.schema('public').from('users');
       expectTypeOf(userQb).toEqualTypeOf<
         QueryBuilder<
           MockDatabase['public']['Tables']['users']['Row'],
@@ -100,7 +101,7 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
         >
       >();
 
-      const eventQb = client.schema('analytics').from('events');
+      const eventQb = data.schema('analytics').from('events');
       expectTypeOf(eventQb).toEqualTypeOf<
         QueryBuilder<
           MockDatabase['analytics']['Tables']['events']['Row'],
@@ -110,14 +111,23 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
       >();
     });
 
-    it('rejects invalid schema names on typed client', () => {
+    it('rejects invalid schema names on typed data service', () => {
       // @ts-expect-error - 'nonexistent_schema' is not a schema in MockDatabase
-      () => client.schema('nonexistent_schema');
+      () => data.schema('nonexistent_schema');
     });
 
-    it('allows any schema and table name on untyped client', () => {
+    it('rejects .from or .schema on base LayrClient', () => {
+      // @ts-expect-error - 'from' does not exist on LayrClient
+      () => client.from('users');
+
+      // @ts-expect-error - 'schema' does not exist on LayrClient
+      () => client.schema('public');
+    });
+
+    it('allows any schema and table name on untyped data service', () => {
       const untyped = createClient({ endpoint: 'https://api.layr.sh' });
-      const dynamicSchema = untyped.schema('any_dynamic_schema');
+      const untypedData = useData(untyped);
+      const dynamicSchema = untypedData.schema('any_dynamic_schema');
       const dynamicQb = dynamicSchema.from('any_dynamic_table');
 
       expectTypeOf(dynamicQb).toEqualTypeOf<

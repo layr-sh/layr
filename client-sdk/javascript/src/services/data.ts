@@ -105,6 +105,32 @@ export interface DataControlPlane {
   };
 }
 
+export interface SchemaClient<Database = GenericDatabase, SchemaName extends string = 'public'> {
+  from<
+    TableName extends (Database extends Record<string, any>
+      ? SchemaName extends keyof Database
+        ? 'Tables' extends keyof Database[SchemaName]
+          ? keyof Database[SchemaName]['Tables'] & string
+          : string
+        : string
+      : string)
+  >(
+    table: TableName
+  ): QueryBuilder<
+    ResolveRow<ResolveTable<Database, SchemaName, TableName>>,
+    ResolveInsert<ResolveTable<Database, SchemaName, TableName>>,
+    ResolveUpdate<ResolveTable<Database, SchemaName, TableName>>
+  >;
+
+  from<
+    CustomRow extends Record<string, any> = never,
+    CustomInsert = Partial<CustomRow>,
+    CustomUpdate = Partial<CustomRow>
+  >(
+    table: [CustomRow] extends [never] ? never : string
+  ): QueryBuilder<CustomRow, CustomInsert, CustomUpdate>;
+}
+
 export type ColumnFilters<T> = {
   [K in keyof T]?: string | number | boolean;
 };
@@ -141,6 +167,10 @@ export interface DataService<Database = GenericDatabase> extends ElevatableServi
   >(
     table: [CustomRow] extends [never] ? never : string
   ): QueryBuilder<CustomRow, CustomInsert, CustomUpdate>;
+
+  schema<SchemaName extends (Database extends Record<string, any> ? keyof Database & string : string)>(
+    schema: SchemaName
+  ): SchemaClient<Database, SchemaName>;
 
   subscribe: <T = Record<string, unknown>>(table: string, options?: SubscribeOptions) => RealtimeChannel<T>;
 
@@ -203,6 +233,10 @@ export function useData<Database = GenericDatabase>(client: LayrClient<Database>
     client,
 
     from: (table: string): any => new QueryBuilder(client, table),
+
+    schema: (schemaName: string): any => ({
+      from: (tableName: string) => new QueryBuilder(client, `${schemaName}.${tableName}`),
+    }),
 
     subscribe: <T = Record<string, unknown>>(table: string, options?: SubscribeOptions) => {
       let rtManager = client._singletons.get('realtimeManager') as RealtimeManager | undefined;

@@ -5,46 +5,14 @@ import {
   normalizeEndpointURL,
   type RetryOptions,
 } from './transport';
-import type {
-  GenericDatabase,
-  ResolveInsert,
-  ResolveRow,
-  ResolveTable,
-  ResolveUpdate,
-} from './database';
-import { QueryBuilder } from '../extensions/query-builder';
+import type { GenericDatabase } from './database';
+export type { SchemaClient } from '../services/data';
 
 export interface ClientOptions extends RetryOptions {
   endpoint: string;
   publishableKey?: string;
   sessionToken?: string;
   headers?: Record<string, string>;
-}
-
-export interface SchemaClient<Database = GenericDatabase, SchemaName extends string = 'public'> {
-  from<
-    TableName extends (Database extends Record<string, any>
-      ? SchemaName extends keyof Database
-        ? 'Tables' extends keyof Database[SchemaName]
-          ? keyof Database[SchemaName]['Tables'] & string
-          : string
-        : string
-      : string)
-  >(
-    table: TableName
-  ): QueryBuilder<
-    ResolveRow<ResolveTable<Database, SchemaName, TableName>>,
-    ResolveInsert<ResolveTable<Database, SchemaName, TableName>>,
-    ResolveUpdate<ResolveTable<Database, SchemaName, TableName>>
-  >;
-
-  from<
-    CustomRow extends Record<string, any> = never,
-    CustomInsert = Partial<CustomRow>,
-    CustomUpdate = Partial<CustomRow>
-  >(
-    table: [CustomRow] extends [never] ? never : string
-  ): QueryBuilder<CustomRow, CustomInsert, CustomUpdate>;
 }
 
 export interface LayrClient<Database = GenericDatabase> {
@@ -56,34 +24,6 @@ export interface LayrClient<Database = GenericDatabase> {
   setSession(token: string): void;
   clearSession(): void;
   _singletons: Map<string, unknown>;
-
-  from<
-    TableName extends (Database extends Record<string, any>
-      ? 'public' extends keyof Database
-        ? 'Tables' extends keyof Database['public']
-          ? keyof Database['public']['Tables'] & string
-          : string
-        : string
-      : string)
-  >(
-    table: TableName
-  ): QueryBuilder<
-    ResolveRow<ResolveTable<Database, 'public', TableName>>,
-    ResolveInsert<ResolveTable<Database, 'public', TableName>>,
-    ResolveUpdate<ResolveTable<Database, 'public', TableName>>
-  >;
-
-  from<
-    CustomRow extends Record<string, any> = never,
-    CustomInsert = Partial<CustomRow>,
-    CustomUpdate = Partial<CustomRow>
-  >(
-    table: [CustomRow] extends [never] ? never : string
-  ): QueryBuilder<CustomRow, CustomInsert, CustomUpdate>;
-
-  schema<SchemaName extends (Database extends Record<string, any> ? keyof Database & string : string)>(
-    schema: SchemaName
-  ): SchemaClient<Database, SchemaName>;
 }
 
 export function createClient<Database = GenericDatabase>(options: ClientOptions): LayrClient<Database> {
@@ -118,16 +58,6 @@ export function createClient<Database = GenericDatabase>(options: ClientOptions)
     clearSession() {
       delete this.sessionToken;
       delete this.headers['Authorization'];
-    },
-
-    from(table: string): any {
-      return new QueryBuilder(this as any, table);
-    },
-
-    schema(schemaName: string): any {
-      return {
-        from: (tableName: string) => new QueryBuilder(this as any, `${schemaName}.${tableName}`),
-      };
     },
   };
 
