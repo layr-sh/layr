@@ -147,23 +147,27 @@ export type Elevated<T> = T extends ElevatableService<infer TCP, any>
   ? T & { cp: TCP }
   : T;
 
+export interface WithServiceAccountOptions {
+  serviceAccountKey?: string;
+}
+
 export function withServiceAccount<T extends ElevatableService<unknown, any>>(
   service: T,
-  options: { serviceAccountKey: string }
+  options?: WithServiceAccountOptions
 ): Elevated<T> {
-  if (!options?.serviceAccountKey || typeof options.serviceAccountKey !== 'string' || options.serviceAccountKey.trim() === '') {
-    throw new Error('serviceAccountKey is required for withServiceAccount elevation');
-  }
-
   const elevatable = service as ElevatableService<unknown>;
-  if (!elevatable.client) {
+  if (!elevatable || !elevatable.client) {
     throw new Error('Provided service is not a valid Layr service client');
   }
 
   const elevatedHeaders: Record<string, string> = {
     ...elevatable.client.headers,
-    'Service-Account-Key': options.serviceAccountKey.trim(),
   };
+
+  const key = options?.serviceAccountKey?.trim();
+  if (key) {
+    elevatedHeaders['Service-Account-Key'] = key;
+  }
 
   const elevatedConfig = new Configuration({
     basePath: elevatable.client.endpointURL,
