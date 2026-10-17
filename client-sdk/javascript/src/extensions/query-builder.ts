@@ -193,7 +193,7 @@ export class QueryBuilder<
     }
 
     const query = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
-    return `${this.client.endpointURL}/v1/data/${encodeURIComponent(this.schema)}/${encodeURIComponent(this.table)}${query}`;
+    return `${this.client.endpoint}/v1/data/${encodeURIComponent(this.schema)}/${encodeURIComponent(this.table)}${query}`;
   }
 
   async execute(): Promise<TRow[]> {

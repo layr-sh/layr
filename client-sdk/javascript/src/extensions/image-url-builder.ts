@@ -81,7 +81,7 @@ export class ImageURLBuilder {
 
   build(): string {
     const relativePath = this.getRelativePath();
-    return `${this.client.endpointURL}/v1/image/${this.signature}${relativePath}`;
+    return `${this.client.endpoint}/v1/image/${this.signature}${relativePath}`;
   }
 
   toString(): string {

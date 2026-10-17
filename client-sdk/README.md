@@ -34,7 +34,7 @@ Layr SDKs implement a 4-tier architectural pattern:
 │  withServiceAccount(service, options?) -> ServiceWithCP                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Tier 3: Client Context & Functional Service Hooks                           │
-│  createClient(endpointURL, options) -> LayrClient                            │
+│  createClient(options) -> LayrClient                                         │
 │  useData(client), useAuth(client), useFileStorage(client), ...               │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Tier 2: Fluent Value-Add Builders (Data, File Storage, Image)               │
@@ -104,7 +104,7 @@ Keys (both publishable keys and service account keys) do not use prefixes like `
 
 Standardized identifiers across languages without abbreviations:
 
-- `endpointURL` / `endpointUrl` (not `baseUrl`, or `url`)
+- `endpoint` (not `baseUrl`, or `url`)
 - `accountID` / `accountId`, `serviceAccountKey`, `serviceAccountID` / `serviceAccountId`
 - `webhookID` / `webhookId`
 - `timeoutMs`, `initialDelayMs`, `maxDelayMs`
@@ -337,8 +337,8 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 ### Phase 4: Tier 3 Central Client & Modular Service Hooks
 
 - [ ] Central client factory (`createClient` / `layrclient.New`):
-  - Accepts `endpointURL` / `endpointUrl` and `options: ClientOptions`.
-  - Holds `config`, `endpointURL` / `endpointUrl`, `options`, and cached singleton services for data realtime service.
+  - Accepts `options: ClientOptions` (with `endpoint`).
+  - Holds `config`, `endpoint`, `options`, and cached singleton services for data realtime service.
   - Provides `setSession(token)` and `clearSession()` with in-place mutation of active HTTP headers.
 - [ ] Modular functional hooks:
   - `useData(client)`, `useAuth(client)`, `useFileStorage(client)`, `useImage(client)`, `useFunction(client)`, `useTasks(client)`, `useCore(client)`.

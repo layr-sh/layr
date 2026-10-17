@@ -44,7 +44,6 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
 
       expectTypeOf(client).toEqualTypeOf<LayrClient<MockDatabase>>();
       expectTypeOf(client.endpoint).toEqualTypeOf<string>();
-      expectTypeOf(client.endpointURL).toEqualTypeOf<string>();
       expectTypeOf(client.sessionToken).toEqualTypeOf<string | undefined>();
     });
 
