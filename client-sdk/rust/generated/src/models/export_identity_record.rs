@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 pub struct ExportIdentityRecord {
     #[serde(rename = "created_at")]
     pub created_at: chrono::DateTime<chrono::FixedOffset>,
-    #[serde(rename = "last_sign_in_at")]
-    pub last_sign_in_at: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "last_signed_in_at")]
+    pub last_signed_in_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "properties", deserialize_with = "Option::deserialize")]
     pub properties: Option<std::collections::HashMap<String, serde_json::Value>>,
     #[serde(rename = "provider")]
@@ -26,10 +26,10 @@ pub struct ExportIdentityRecord {
 }
 
 impl ExportIdentityRecord {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, last_sign_in_at: chrono::DateTime<chrono::FixedOffset>, properties: Option<std::collections::HashMap<String, serde_json::Value>>, provider: String, provider_user_id: String) -> ExportIdentityRecord {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, last_signed_in_at: chrono::DateTime<chrono::FixedOffset>, properties: Option<std::collections::HashMap<String, serde_json::Value>>, provider: String, provider_user_id: String) -> ExportIdentityRecord {
         ExportIdentityRecord {
             created_at,
-            last_sign_in_at,
+            last_signed_in_at,
             properties,
             provider,
             provider_user_id,

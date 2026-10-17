@@ -148,9 +148,9 @@ func (service *Service) handleCertPut(key string, certData []byte) {
 			tls_issued_at = $1,
 			tls_expires_at = $2,
 			tls_error_message = NULL,
-			updated_at = clock_timestamp()
+			last_updated_at = clock_timestamp()
 		WHERE domain = $3 AND tls_enabled = true
-		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, updated_at;
+		RETURNING id, domain, status, tls_enabled, tls_status, tls_acme_email, tls_error_message, tls_issued_at, tls_expires_at, created_at, last_updated_at;
 	`
 	var customDomain CustomDomain
 	if scanErr := service.kernel.DB().QueryRow(ctx, updateSQL, certificate.NotBefore, certificate.NotAfter, key).Scan(
@@ -164,7 +164,7 @@ func (service *Service) handleCertPut(key string, certData []byte) {
 		&customDomain.TLSIssuedAt,
 		&customDomain.TLSExpiresAt,
 		&customDomain.CreatedAt,
-		&customDomain.UpdatedAt,
+		&customDomain.LastUpdatedAt,
 	); scanErr == nil {
 		service.InvalidateHostValidationCache(key)
 		service.kernel.EventBus().Publish(
@@ -233,7 +233,7 @@ func (service *Service) Start(ctx context.Context) error {
 // loadActiveEndpoints queries all endpoints that have active deployments and loads them into the engine.
 func (service *Service) loadActiveEndpoints(ctx context.Context) error {
 	const querySQL = `
-		SELECT f.id, f.name, f.description, f.runtime, f.entrypoint, f.memory_limit_mb, f.timeout_seconds, f.is_public, f.active_deployment_id, f.created_at, f.updated_at,
+		SELECT f.id, f.name, f.description, f.runtime, f.entrypoint, f.memory_limit_mb, f.timeout_seconds, f.is_public, f.active_deployment_id, f.created_at, f.last_updated_at,
 		       d.id, d.endpoint_id, d.version, d.bundle_format, d.bundle_content, d.bundle_hash, d.bundle_files, d.environment_variables, d.workerd_runtime_config, d.status, d.created_at
 		FROM function.endpoints f
 		JOIN function.deployments d ON f.active_deployment_id = d.id;
@@ -263,7 +263,7 @@ func (service *Service) loadActiveEndpoints(ctx context.Context) error {
 			&storedEndpoint.IsPublic,
 			&storedEndpoint.ActiveDeploymentID,
 			&storedEndpoint.CreatedAt,
-			&storedEndpoint.UpdatedAt,
+			&storedEndpoint.LastUpdatedAt,
 			&deployment.ID,
 			&deployment.EndpointID,
 			&deployment.Version,

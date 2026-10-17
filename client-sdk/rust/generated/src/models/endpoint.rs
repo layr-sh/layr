@@ -25,6 +25,8 @@ pub struct Endpoint {
     pub id: Option<serde_json::Value>,
     #[serde(rename = "is_public")]
     pub is_public: bool,
+    #[serde(rename = "last_updated_at")]
+    pub last_updated_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "memory_limit_mb")]
     pub memory_limit_mb: i32,
     #[serde(rename = "name")]
@@ -33,12 +35,10 @@ pub struct Endpoint {
     pub runtime: String,
     #[serde(rename = "timeout_seconds")]
     pub timeout_seconds: i32,
-    #[serde(rename = "updated_at")]
-    pub updated_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl Endpoint {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, entrypoint: String, id: Option<serde_json::Value>, is_public: bool, memory_limit_mb: i32, name: String, runtime: String, timeout_seconds: i32, updated_at: chrono::DateTime<chrono::FixedOffset>) -> Endpoint {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, entrypoint: String, id: Option<serde_json::Value>, is_public: bool, last_updated_at: chrono::DateTime<chrono::FixedOffset>, memory_limit_mb: i32, name: String, runtime: String, timeout_seconds: i32) -> Endpoint {
         Endpoint {
             active_deployment_id: None,
             created_at,
@@ -46,11 +46,11 @@ impl Endpoint {
             entrypoint,
             id,
             is_public,
+            last_updated_at,
             memory_limit_mb,
             name,
             runtime,
             timeout_seconds,
-            updated_at,
         }
     }
 }

@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS auth.identities (
     provider TEXT NOT NULL,
     provider_user_id TEXT NOT NULL,
     properties JSONB NOT NULL DEFAULT '{}'::jsonb,
-    last_sign_in_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    last_signed_in_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     UNIQUE(provider, provider_user_id)

@@ -963,6 +963,10 @@
             "type": "string"
           },
           "id": {},
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "required_dns_records": {
             "items": {
               "$ref": "#/components/schemas/RequiredDNSRecord"
@@ -998,20 +1002,16 @@
           },
           "tls_status": {
             "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
           }
         },
         "required": [
           "created_at",
           "domain",
           "id",
+          "last_updated_at",
           "status",
           "tls_enabled",
-          "tls_status",
-          "updated_at"
+          "tls_status"
         ],
         "type": "object"
       },
@@ -1027,11 +1027,11 @@
           },
           "endpoint_id": {},
           "id": {},
-          "path_prefix": {
+          "last_updated_at": {
+            "format": "date-time",
             "type": "string"
           },
-          "updated_at": {
-            "format": "date-time",
+          "path_prefix": {
             "type": "string"
           }
         },
@@ -1040,8 +1040,8 @@
           "custom_domain_id",
           "endpoint_id",
           "id",
-          "path_prefix",
-          "updated_at"
+          "last_updated_at",
+          "path_prefix"
         ],
         "type": "object"
       },
@@ -1375,6 +1375,10 @@
           "is_public": {
             "type": "boolean"
           },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "memory_limit_mb": {
             "type": "integer"
           },
@@ -1386,10 +1390,6 @@
           },
           "timeout_seconds": {
             "type": "integer"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
           }
         },
         "required": [
@@ -1397,11 +1397,11 @@
           "entrypoint",
           "id",
           "is_public",
+          "last_updated_at",
           "memory_limit_mb",
           "name",
           "runtime",
-          "timeout_seconds",
-          "updated_at"
+          "timeout_seconds"
         ],
         "type": "object"
       },
@@ -1703,7 +1703,7 @@
             "format": "date-time",
             "type": "string"
           },
-          "last_sign_in_at": {
+          "last_signed_in_at": {
             "format": "date-time",
             "type": "string"
           },
@@ -1723,7 +1723,7 @@
         },
         "required": [
           "created_at",
-          "last_sign_in_at",
+          "last_signed_in_at",
           "properties",
           "provider",
           "provider_user_id"
@@ -2012,6 +2012,10 @@
           "is_anonymous": {
             "type": "boolean"
           },
+          "last_updated_at": {
+            "format": "int64",
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           },
@@ -2034,19 +2038,15 @@
           },
           "sub": {
             "type": "string"
-          },
-          "updated_at": {
-            "format": "int64",
-            "type": "integer"
           }
         },
         "required": [
           "email_verified",
           "is_anonymous",
+          "last_updated_at",
           "phone_number_verified",
           "role",
-          "sub",
-          "updated_at"
+          "sub"
         ],
         "type": "object"
       },
@@ -3298,23 +3298,23 @@
             "type": "string"
           },
           "id": {},
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
           "processing_options": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
             "type": "string"
           }
         },
         "required": [
           "created_at",
           "id",
+          "last_updated_at",
           "name",
-          "processing_options",
-          "updated_at"
+          "processing_options"
         ],
         "type": "object"
       },
@@ -5381,7 +5381,7 @@
     },
     "/v1/_/console/users": {
       "get": {
-        "description": "Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.",
+        "description": "Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.",
         "operationId": "console__users__list",
         "responses": {
           "200": {

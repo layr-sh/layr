@@ -42,11 +42,11 @@ export interface CustomDomainRoute {
     /**
      * 
      */
-    pathPrefix: string;
+    lastUpdatedAt: Date;
     /**
      * 
      */
-    updatedAt: Date;
+    pathPrefix: string;
 }
 
 /**
@@ -57,8 +57,8 @@ export function instanceOfCustomDomainRoute(value: object): value is CustomDomai
     if ((!('customDomainId' in (value as Record<string, any>)) && !('custom_domain_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['customDomainId'] === undefined && (value as Record<string, any>)['custom_domain_id'] === undefined)) return false;
     if ((!('endpointId' in (value as Record<string, any>)) && !('endpoint_id' in (value as Record<string, any>))) || ((value as Record<string, any>)['endpointId'] === undefined && (value as Record<string, any>)['endpoint_id'] === undefined)) return false;
     if (!('id' in value) || value['id'] === undefined) return false;
+    if ((!('lastUpdatedAt' in (value as Record<string, any>)) && !('last_updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['lastUpdatedAt'] === undefined && (value as Record<string, any>)['last_updated_at'] === undefined)) return false;
     if ((!('pathPrefix' in (value as Record<string, any>)) && !('path_prefix' in (value as Record<string, any>))) || ((value as Record<string, any>)['pathPrefix'] === undefined && (value as Record<string, any>)['path_prefix'] === undefined)) return false;
-    if ((!('updatedAt' in (value as Record<string, any>)) && !('updated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['updatedAt'] === undefined && (value as Record<string, any>)['updated_at'] === undefined)) return false;
     return true;
 }
 
@@ -77,8 +77,8 @@ export function CustomDomainRouteFromJSONTyped(json: any, ignoreDiscriminator: b
         'domain': json['domain'] == null ? undefined : json['domain'],
         'endpointId': json['endpoint_id'],
         'id': json['id'],
+        'lastUpdatedAt': (json['last_updated_at'] == null ? json['last_updated_at'] : parseDateTime(json['last_updated_at'])),
         'pathPrefix': json['path_prefix'],
-        'updatedAt': (json['updated_at'] == null ? json['updated_at'] : parseDateTime(json['updated_at'])),
     };
 }
 
@@ -98,8 +98,8 @@ export function CustomDomainRouteToJSONTyped(value?: CustomDomainRoute | null, i
         'domain': value['domain'],
         'endpoint_id': value['endpointId'],
         'id': value['id'],
+        'last_updated_at': value['lastUpdatedAt'] == null ? value['lastUpdatedAt'] : serializeDateTime(value['lastUpdatedAt']),
         'path_prefix': value['pathPrefix'],
-        'updated_at': value['updatedAt'] == null ? value['updatedAt'] : serializeDateTime(value['updatedAt']),
     };
 }
 

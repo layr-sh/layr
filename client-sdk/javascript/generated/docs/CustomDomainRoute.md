@@ -11,8 +11,8 @@ Name | Type
 `domain` | string
 `endpointId` | any
 `id` | any
+`lastUpdatedAt` | Date
 `pathPrefix` | string
-`updatedAt` | Date
 
 ## Example
 
@@ -26,8 +26,8 @@ const example = {
   "domain": null,
   "endpointId": null,
   "id": null,
+  "lastUpdatedAt": null,
   "pathPrefix": null,
-  "updatedAt": null,
 } satisfies CustomDomainRoute
 
 console.log(example)

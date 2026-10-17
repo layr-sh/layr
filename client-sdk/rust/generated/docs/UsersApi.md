@@ -298,7 +298,7 @@ No authorization required
 > Vec<models::User> console_users_list()
 List console user accounts
 
-Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 
 ### Parameters
 

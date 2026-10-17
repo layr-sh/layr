@@ -104,7 +104,7 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 	core.GetRoute[ListConsoleUsersResponse](router, "/v1/_/console/users", service.controlPlaneHandler.handleListConsoleUsers,
 		core.RouteTag("Users"),
 		core.RouteSummary("List console user accounts"),
-		core.RouteDescription("Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope."),
+		core.RouteDescription("Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope."),
 		core.RouteOperationID("console__users__list"),
 		core.RouteSDKGroupName("console", "users"),
 		core.RouteSDKMethodName("list"),

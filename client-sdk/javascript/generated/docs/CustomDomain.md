@@ -9,6 +9,7 @@ Name | Type
 `createdAt` | Date
 `domain` | string
 `id` | any
+`lastUpdatedAt` | Date
 `requiredDnsRecords` | [Array&lt;RequiredDNSRecord&gt;](RequiredDNSRecord.md)
 `status` | string
 `tlsAcmeEmail` | string
@@ -17,7 +18,6 @@ Name | Type
 `tlsExpiresAt` | Date
 `tlsIssuedAt` | Date
 `tlsStatus` | string
-`updatedAt` | Date
 
 ## Example
 
@@ -29,6 +29,7 @@ const example = {
   "createdAt": null,
   "domain": null,
   "id": null,
+  "lastUpdatedAt": null,
   "requiredDnsRecords": null,
   "status": null,
   "tlsAcmeEmail": null,
@@ -37,7 +38,6 @@ const example = {
   "tlsExpiresAt": null,
   "tlsIssuedAt": null,
   "tlsStatus": null,
-  "updatedAt": null,
 } satisfies CustomDomain
 
 console.log(example)

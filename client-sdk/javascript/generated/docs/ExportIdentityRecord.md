@@ -7,7 +7,7 @@
 Name | Type
 ------------ | -------------
 `createdAt` | Date
-`lastSignInAt` | Date
+`lastSignedInAt` | Date
 `properties` | { [key: string]: any | null; }
 `provider` | string
 `providerUserId` | string
@@ -20,7 +20,7 @@ import type { ExportIdentityRecord } from ''
 // TODO: Update the object below with actual values
 const example = {
   "createdAt": null,
-  "lastSignInAt": null,
+  "lastSignedInAt": null,
   "properties": null,
   "provider": null,
   "providerUserId": null,

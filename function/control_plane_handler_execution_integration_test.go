@@ -35,9 +35,9 @@ func TestFunctionControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 	// 1. Insert endpoint and executions in DB
 	var endpoint Endpoint
 	insertEndpointSQL := `
-		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at)
+		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at)
 		VALUES ('exec-integration-fn', 'workerd', 'index.js', 128, 30, true, clock_timestamp(), clock_timestamp())
-		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at;
+		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at;
 	`
 	require.NoError(t, kernel.DB().QueryRow(testCtx, insertEndpointSQL).Scan(
 		&endpoint.ID,
@@ -48,7 +48,7 @@ func TestFunctionControlPlaneHandlerExecutionsIntegration(t *testing.T) {
 		&endpoint.TimeoutSeconds,
 		&endpoint.IsPublic,
 		&endpoint.CreatedAt,
-		&endpoint.UpdatedAt,
+		&endpoint.LastUpdatedAt,
 	))
 
 	insertExecutionSQL := `

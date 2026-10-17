@@ -1034,7 +1034,7 @@ func (r ApiConsoleUsersListRequest) Execute() ([]User, *http.Response, error) {
 /*
 ConsoleUsersList List console user accounts
 
-Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 
  @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
  @return ApiConsoleUsersListRequest

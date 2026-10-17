@@ -10,14 +10,14 @@ import Foundation
 public struct ExportIdentityRecord: Sendable, Codable, Hashable {
 
     public var createdAt: Date
-    public var lastSignInAt: Date
+    public var lastSignedInAt: Date
     public var properties: [String: JSONValue?]?
     public var provider: String
     public var providerUserId: String
 
-    public init(createdAt: Date, lastSignInAt: Date, properties: [String: JSONValue?]?, provider: String, providerUserId: String) {
+    public init(createdAt: Date, lastSignedInAt: Date, properties: [String: JSONValue?]?, provider: String, providerUserId: String) {
         self.createdAt = createdAt
-        self.lastSignInAt = lastSignInAt
+        self.lastSignedInAt = lastSignedInAt
         self.properties = properties
         self.provider = provider
         self.providerUserId = providerUserId
@@ -25,7 +25,7 @@ public struct ExportIdentityRecord: Sendable, Codable, Hashable {
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case createdAt = "created_at"
-        case lastSignInAt = "last_sign_in_at"
+        case lastSignedInAt = "last_signed_in_at"
         case properties
         case provider
         case providerUserId = "provider_user_id"
@@ -36,7 +36,7 @@ public struct ExportIdentityRecord: Sendable, Codable, Hashable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(createdAt, forKey: .createdAt)
-        try container.encode(lastSignInAt, forKey: .lastSignInAt)
+        try container.encode(lastSignedInAt, forKey: .lastSignedInAt)
         try container.encode(properties, forKey: .properties)
         try container.encode(provider, forKey: .provider)
         try container.encode(providerUserId, forKey: .providerUserId)

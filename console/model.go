@@ -6,14 +6,14 @@ import (
 
 // User represents an administrative user stored in console.users.
 type User struct {
-	ID            string     `json:"id"`
-	Email         string     `json:"email"`
-	PasswordHash  string     `json:"-"`
-	MFAEnabled    bool       `json:"mfa_enabled"`
-	IsEnabled     bool       `json:"is_enabled"`
-	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastUpdatedAt time.Time  `json:"last_updated_at"`
+	ID             string     `json:"id"`
+	Email          string     `json:"email"`
+	PasswordHash   string     `json:"-"`
+	MFAEnabled     bool       `json:"mfa_enabled"`
+	IsEnabled      bool       `json:"is_enabled"`
+	LastSignedInAt *time.Time `json:"last_signed_in_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastUpdatedAt  time.Time  `json:"last_updated_at"`
 }
 
 // Session represents an active session record stored in console.sessions.

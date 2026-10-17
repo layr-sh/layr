@@ -96,7 +96,7 @@ func TestFunctionServiceIntegration(t *testing.T) {
 	// 3. Create endpoint and deployment in database
 	var endpointID uuid.UUID
 	const insertEndpointSQL = `
-		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at)
+		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at)
 		VALUES ('event-triggered-func', 'workerd', 'index.js', 128, 30, true, clock_timestamp(), clock_timestamp())
 		RETURNING id;
 	`

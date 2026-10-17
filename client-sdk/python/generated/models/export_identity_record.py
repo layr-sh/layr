@@ -29,11 +29,11 @@ class ExportIdentityRecord(BaseModel):
     ExportIdentityRecord
     """ # noqa: E501
     created_at: datetime
-    last_sign_in_at: datetime
+    last_signed_in_at: datetime
     properties: Optional[Dict[str, Any]]
     provider: StrictStr
     provider_user_id: StrictStr
-    __properties: ClassVar[List[str]] = ["created_at", "last_sign_in_at", "properties", "provider", "provider_user_id"]
+    __properties: ClassVar[List[str]] = ["created_at", "last_signed_in_at", "properties", "provider", "provider_user_id"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -92,7 +92,7 @@ class ExportIdentityRecord(BaseModel):
 
         _obj = cls.model_validate({
             "created_at": obj.get("created_at"),
-            "last_sign_in_at": obj.get("last_sign_in_at"),
+            "last_signed_in_at": obj.get("last_signed_in_at"),
             "properties": obj.get("properties"),
             "provider": obj.get("provider"),
             "provider_user_id": obj.get("provider_user_id")

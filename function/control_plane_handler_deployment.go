@@ -174,7 +174,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 		),
 		updated_ep AS (
 			UPDATE function.endpoints f
-			SET active_deployment_id = new_dep.id, updated_at = clock_timestamp()
+			SET active_deployment_id = new_dep.id, last_updated_at = clock_timestamp()
 			FROM new_dep
 			WHERE f.id = new_dep.endpoint_id
 		)
@@ -389,7 +389,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRollbackDeployment(respons
 
 	const updateSQL = `
 		UPDATE function.endpoints
-		SET active_deployment_id = $1, updated_at = clock_timestamp()
+		SET active_deployment_id = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2;
 	`
 	if _, updateErr := controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSQL, deployment.ID, endpointID); updateErr != nil {

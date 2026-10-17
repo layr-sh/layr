@@ -32,6 +32,7 @@ class CustomDomain(BaseModel):
     created_at: datetime
     domain: StrictStr
     id: Optional[Any]
+    last_updated_at: datetime
     required_dns_records: Optional[List[RequiredDNSRecord]] = None
     status: StrictStr
     tls_acme_email: Optional[StrictStr] = None
@@ -40,8 +41,7 @@ class CustomDomain(BaseModel):
     tls_expires_at: Optional[datetime] = None
     tls_issued_at: Optional[datetime] = None
     tls_status: StrictStr
-    updated_at: datetime
-    __properties: ClassVar[List[str]] = ["created_at", "domain", "id", "required_dns_records", "status", "tls_acme_email", "tls_enabled", "tls_error_message", "tls_expires_at", "tls_issued_at", "tls_status", "updated_at"]
+    __properties: ClassVar[List[str]] = ["created_at", "domain", "id", "last_updated_at", "required_dns_records", "status", "tls_acme_email", "tls_enabled", "tls_error_message", "tls_expires_at", "tls_issued_at", "tls_status"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -113,6 +113,7 @@ class CustomDomain(BaseModel):
             "created_at": obj.get("created_at"),
             "domain": obj.get("domain"),
             "id": obj.get("id"),
+            "last_updated_at": obj.get("last_updated_at"),
             "required_dns_records": [RequiredDNSRecord.from_dict(_item) for _item in obj["required_dns_records"]] if obj.get("required_dns_records") is not None else None,
             "status": obj.get("status"),
             "tls_acme_email": obj.get("tls_acme_email"),
@@ -120,8 +121,7 @@ class CustomDomain(BaseModel):
             "tls_error_message": obj.get("tls_error_message"),
             "tls_expires_at": obj.get("tls_expires_at"),
             "tls_issued_at": obj.get("tls_issued_at"),
-            "tls_status": obj.get("tls_status"),
-            "updated_at": obj.get("updated_at")
+            "tls_status": obj.get("tls_status")
         })
         return _obj
 

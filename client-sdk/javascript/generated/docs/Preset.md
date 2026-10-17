@@ -9,9 +9,9 @@ Name | Type
 `createdAt` | Date
 `description` | string
 `id` | any
+`lastUpdatedAt` | Date
 `name` | string
 `processingOptions` | string
-`updatedAt` | Date
 
 ## Example
 
@@ -23,9 +23,9 @@ const example = {
   "createdAt": null,
   "description": null,
   "id": null,
+  "lastUpdatedAt": null,
   "name": null,
   "processingOptions": null,
-  "updatedAt": null,
 } satisfies Preset
 
 console.log(example)

@@ -13,7 +13,7 @@ type Preset struct {
 	ProcessingOptions string    `json:"processing_options"`
 	Description       *string   `json:"description,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	LastUpdatedAt     time.Time `json:"last_updated_at"`
 }
 
 // CacheEntry represents transformation cache metadata stored in image.cache_entries.

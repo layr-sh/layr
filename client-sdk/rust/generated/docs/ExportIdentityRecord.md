@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **created_at** | **chrono::DateTime<chrono::FixedOffset>** |  | 
-**last_sign_in_at** | **chrono::DateTime<chrono::FixedOffset>** |  | 
+**last_signed_in_at** | **chrono::DateTime<chrono::FixedOffset>** |  | 
 **properties** | Option<**std::collections::HashMap<String, serde_json::Value>**> |  | 
 **provider** | **String** |  | 
 **provider_user_id** | **String** |  | 

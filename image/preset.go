@@ -36,7 +36,7 @@ func NewPresetManager(kernel *core.Kernel) *PresetManager {
 // Load populates the in-memory preset cache from PostgreSQL.
 func (presetManager *PresetManager) Load(ctx context.Context) error {
 	const selectSQLStatement = `
-		SELECT id, name, processing_options, description, created_at, updated_at
+		SELECT id, name, processing_options, description, created_at, last_updated_at
 		FROM image.presets;
 	`
 
@@ -56,7 +56,7 @@ func (presetManager *PresetManager) Load(ctx context.Context) error {
 			&preset.ProcessingOptions,
 			&descriptionNullString,
 			&preset.CreatedAt,
-			&preset.UpdatedAt,
+			&preset.LastUpdatedAt,
 		)
 		if descriptionNullString.Valid {
 			descString := descriptionNullString.String
@@ -88,7 +88,7 @@ func (presetManager *PresetManager) ResolveOptions(name string) (string, error) 
 // List returns all presets ordered by name.
 func (presetManager *PresetManager) List(ctx context.Context) ([]Preset, error) {
 	const selectSQLStatement = `
-		SELECT id, name, processing_options, description, created_at, updated_at
+		SELECT id, name, processing_options, description, created_at, last_updated_at
 		FROM image.presets
 		ORDER BY name ASC;
 	`
@@ -109,7 +109,7 @@ func (presetManager *PresetManager) List(ctx context.Context) ([]Preset, error) 
 			&preset.ProcessingOptions,
 			&descriptionNullString,
 			&preset.CreatedAt,
-			&preset.UpdatedAt,
+			&preset.LastUpdatedAt,
 		)
 		if descriptionNullString.Valid {
 			descString := descriptionNullString.String
@@ -124,7 +124,7 @@ func (presetManager *PresetManager) List(ctx context.Context) ([]Preset, error) 
 // GetByID queries a single preset by its UUID.
 func (presetManager *PresetManager) GetByID(ctx context.Context, presetID uuid.UUID) (*Preset, error) {
 	const selectSQLStatement = `
-		SELECT id, name, processing_options, description, created_at, updated_at
+		SELECT id, name, processing_options, description, created_at, last_updated_at
 		FROM image.presets
 		WHERE id = $1;
 	`
@@ -137,7 +137,7 @@ func (presetManager *PresetManager) GetByID(ctx context.Context, presetID uuid.U
 		&preset.ProcessingOptions,
 		&descriptionNullString,
 		&preset.CreatedAt,
-		&preset.UpdatedAt,
+		&preset.LastUpdatedAt,
 	)
 	if queryErr != nil {
 		if errors.Is(queryErr, pgx.ErrNoRows) {
@@ -163,9 +163,9 @@ func (presetManager *PresetManager) Create(ctx context.Context, createPresetInpu
 	}
 
 	const insertSQLStatement = `
-		INSERT INTO image.presets (name, processing_options, description, created_at, updated_at)
+		INSERT INTO image.presets (name, processing_options, description, created_at, last_updated_at)
 		VALUES ($1, $2, $3, clock_timestamp(), clock_timestamp())
-		RETURNING id, name, processing_options, description, created_at, updated_at;
+		RETURNING id, name, processing_options, description, created_at, last_updated_at;
 	`
 
 	var preset Preset
@@ -182,7 +182,7 @@ func (presetManager *PresetManager) Create(ctx context.Context, createPresetInpu
 		&preset.ProcessingOptions,
 		&descriptionNullString,
 		&preset.CreatedAt,
-		&preset.UpdatedAt,
+		&preset.LastUpdatedAt,
 	)
 	if queryErr != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPresetExists, queryErr)
@@ -223,9 +223,9 @@ func (presetManager *PresetManager) Update(ctx context.Context, presetID uuid.UU
 
 	const updateSQLStatement = `
 		UPDATE image.presets
-		SET name = $1, processing_options = $2, description = $3, updated_at = clock_timestamp()
+		SET name = $1, processing_options = $2, description = $3, last_updated_at = clock_timestamp()
 		WHERE id = $4
-		RETURNING id, name, processing_options, description, created_at, updated_at;
+		RETURNING id, name, processing_options, description, created_at, last_updated_at;
 	`
 
 	var updatedPreset Preset
@@ -243,7 +243,7 @@ func (presetManager *PresetManager) Update(ctx context.Context, presetID uuid.UU
 		&updatedPreset.ProcessingOptions,
 		&descriptionNullString,
 		&updatedPreset.CreatedAt,
-		&updatedPreset.UpdatedAt,
+		&updatedPreset.LastUpdatedAt,
 	)
 	if queryErr != nil {
 		return nil, fmt.Errorf("failed to update preset: %w", queryErr)

@@ -22,7 +22,7 @@ var validEndpointNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 // fetchEndpointByID retrieves an endpoint definition by UUID.
 func (controlPlaneHandler *ControlPlaneHandler) fetchEndpointByID(ctx context.Context, endpointID uuid.UUID) (*Endpoint, error) {
 	const querySQL = `
-		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at
+		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at
 		FROM function.endpoints
 		WHERE id = $1;
 	`
@@ -39,7 +39,7 @@ func (controlPlaneHandler *ControlPlaneHandler) fetchEndpointByID(ctx context.Co
 		&storedEndpoint.IsPublic,
 		&storedEndpoint.ActiveDeploymentID,
 		&storedEndpoint.CreatedAt,
-		&storedEndpoint.UpdatedAt,
+		&storedEndpoint.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) || errors.Is(scanErr, sql.ErrNoRows) {
@@ -59,7 +59,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListEndpoints(responseWrit
 	}
 
 	const querySQL = `
-		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at
+		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at
 		FROM function.endpoints
 		ORDER BY name ASC;
 	`
@@ -85,7 +85,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListEndpoints(responseWrit
 			&storedEndpoint.IsPublic,
 			&storedEndpoint.ActiveDeploymentID,
 			&storedEndpoint.CreatedAt,
-			&storedEndpoint.UpdatedAt,
+			&storedEndpoint.LastUpdatedAt,
 		)
 		endpoints = append(endpoints, storedEndpoint)
 	}
@@ -143,11 +143,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateEndpoint(responseWri
 
 	const insertSQL = `
 		INSERT INTO function.endpoints (
-			name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at
+			name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, clock_timestamp(), clock_timestamp()
 		)
-		RETURNING id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at;
+		RETURNING id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at;
 	`
 
 	var storedEndpoint Endpoint
@@ -172,7 +172,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateEndpoint(responseWri
 		&storedEndpoint.IsPublic,
 		&storedEndpoint.ActiveDeploymentID,
 		&storedEndpoint.CreatedAt,
-		&storedEndpoint.UpdatedAt,
+		&storedEndpoint.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if strings.Contains(scanErr.Error(), "duplicate key") || strings.Contains(scanErr.Error(), "unique constraint") {
@@ -271,9 +271,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateEndpoint(responseWri
 
 	const updateSQL = `
 		UPDATE function.endpoints
-		SET description = $1, runtime = $2, entrypoint = $3, memory_limit_mb = $4, timeout_seconds = $5, is_public = $6, updated_at = clock_timestamp()
+		SET description = $1, runtime = $2, entrypoint = $3, memory_limit_mb = $4, timeout_seconds = $5, is_public = $6, last_updated_at = clock_timestamp()
 		WHERE id = $7
-		RETURNING updated_at;
+		RETURNING last_updated_at;
 	`
 
 	queryErr := controlPlaneHandler.kernel.DB().QueryRow(
@@ -286,7 +286,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateEndpoint(responseWri
 		existingEndpoint.TimeoutSeconds,
 		existingEndpoint.IsPublic,
 		endpointID,
-	).Scan(&existingEndpoint.UpdatedAt)
+	).Scan(&existingEndpoint.LastUpdatedAt)
 	if queryErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, queryErr.Error())
 		return

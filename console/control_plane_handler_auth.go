@@ -40,7 +40,7 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 	const selectSQLStatement = `
 		SELECT
 			s.id, s.user_id, host(s.ip_address), COALESCE(s.user_agent, ''), s.expires_at, s.created_at,
-			u.id, u.email, u.encrypted_mfa_secret, u.is_enabled, u.last_login_at, u.created_at, u.last_updated_at
+			u.id, u.email, u.encrypted_mfa_secret, u.is_enabled, u.last_signed_in_at, u.created_at, u.last_updated_at
 		FROM console.sessions s
 		JOIN console.users u ON s.user_id = u.id
 		WHERE s.session_token_hash = $1
@@ -60,7 +60,7 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 		&user.Email,
 		&encryptedMFASecret,
 		&user.IsEnabled,
-		&user.LastLoginAt,
+		&user.LastSignedInAt,
 		&user.CreatedAt,
 		&user.LastUpdatedAt,
 	)
@@ -98,7 +98,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignInConsole(responseWrit
 
 	ctx := request.Context()
 	const selectUserSQL = `
-		SELECT id, email, password_hash, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		SELECT id, email, password_hash, encrypted_mfa_secret, is_enabled, last_signed_in_at, created_at, last_updated_at
 		FROM console.users
 		WHERE LOWER(email) = LOWER($1)
 	`
@@ -112,7 +112,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignInConsole(responseWrit
 		&passwordHash,
 		&encryptedMFASecret,
 		&user.IsEnabled,
-		&user.LastLoginAt,
+		&user.LastSignedInAt,
 		&user.CreatedAt,
 		&user.LastUpdatedAt,
 	)
@@ -205,9 +205,9 @@ func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(resp
 	accessToken := controlPlaneHandler.kernel.JWTSigner().GenerateAccessToken(jwtClaims, controlPlaneHandler.configManager.Get().SessionIdleTimeoutSeconds)
 
 	now := time.Now().UTC()
-	user.LastLoginAt = &now
-	const updateLastLoginSQL = `UPDATE console.users SET last_login_at = clock_timestamp(), last_updated_at = clock_timestamp() WHERE id = $1`
-	_, _ = controlPlaneHandler.kernel.DB().Exec(ctx, updateLastLoginSQL, user.ID)
+	user.LastSignedInAt = &now
+	const updateLastSignedInSQL = `UPDATE console.users SET last_signed_in_at = clock_timestamp(), last_updated_at = clock_timestamp() WHERE id = $1`
+	_, _ = controlPlaneHandler.kernel.DB().Exec(ctx, updateLastSignedInSQL, user.ID)
 
 	controlPlaneHandler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 		ID:        sessionID,
@@ -396,7 +396,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleChallengeConsoleMFA(respon
 	_ = controlPlaneHandler.kernel.KVStore().Delete(ctx, ticketKey)
 
 	const selectUserSQL = `
-		SELECT id, email, password_hash, encrypted_mfa_secret, is_enabled, last_login_at, created_at, last_updated_at
+		SELECT id, email, password_hash, encrypted_mfa_secret, is_enabled, last_signed_in_at, created_at, last_updated_at
 		FROM console.users
 		WHERE id = $1
 	`
@@ -410,7 +410,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleChallengeConsoleMFA(respon
 		&passwordHash,
 		&encryptedMFASecret,
 		&user.IsEnabled,
-		&user.LastLoginAt,
+		&user.LastSignedInAt,
 		&user.CreatedAt,
 		&user.LastUpdatedAt,
 	)

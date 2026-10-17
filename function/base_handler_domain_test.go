@@ -187,7 +187,7 @@ func TestFunctionBaseHandlerResolveEndpointByCustomDomainUnit(t *testing.T) {
 	_, dropConstraintErr := kernel.DB().Exec(testCtx, `ALTER TABLE function.custom_domain_routes DROP CONSTRAINT IF EXISTS custom_domain_routes_endpoint_id_fkey;`)
 	require.NoError(t, dropConstraintErr)
 	const insertOrphanRouteSQL = `
-		INSERT INTO function.custom_domain_routes (custom_domain_id, endpoint_id, path_prefix, created_at, updated_at)
+		INSERT INTO function.custom_domain_routes (custom_domain_id, endpoint_id, path_prefix, created_at, last_updated_at)
 		VALUES ($1, $2, '/orphan', clock_timestamp(), clock_timestamp());
 	`
 	_, insertOrphanErr := kernel.DB().Exec(testCtx, insertOrphanRouteSQL, createdCustomDomain.ID, missingEndpointID)
@@ -266,10 +266,10 @@ func TestFunctionBaseHandlerDomainRedirectStatusCodesUnit(t *testing.T) {
 	// 1. Active TLS domain -> 301 Moved Permanently
 	var activeCustomDomain CustomDomain
 	require.NoError(t, kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('active.domain.com', 'active', true, 'active', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.CreatedAt, &activeCustomDomain.UpdatedAt))
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&activeCustomDomain.ID, &activeCustomDomain.Domain, &activeCustomDomain.Status, &activeCustomDomain.TLSEnabled, &activeCustomDomain.TLSStatus, &activeCustomDomain.CreatedAt, &activeCustomDomain.LastUpdatedAt))
 	bindTestCustomDomainRoute(testCtx, t, kernel, endpoint.ID, activeCustomDomain.ID, "/")
 
 	activeRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "http://active.domain.com/hello", nil)
@@ -283,10 +283,10 @@ func TestFunctionBaseHandlerDomainRedirectStatusCodesUnit(t *testing.T) {
 	// 2. Provisioning TLS domain -> 307 Temporary Redirect
 	var provisioningCustomDomain CustomDomain
 	require.NoError(t, kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('prov.domain.com', 'active', true, 'provisioning', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&provisioningCustomDomain.ID, &provisioningCustomDomain.Domain, &provisioningCustomDomain.Status, &provisioningCustomDomain.TLSEnabled, &provisioningCustomDomain.TLSStatus, &provisioningCustomDomain.CreatedAt, &provisioningCustomDomain.UpdatedAt))
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&provisioningCustomDomain.ID, &provisioningCustomDomain.Domain, &provisioningCustomDomain.Status, &provisioningCustomDomain.TLSEnabled, &provisioningCustomDomain.TLSStatus, &provisioningCustomDomain.CreatedAt, &provisioningCustomDomain.LastUpdatedAt))
 	bindTestCustomDomainRoute(testCtx, t, kernel, endpoint.ID, provisioningCustomDomain.ID, "/")
 
 	provisioningRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "http://prov.domain.com/test", nil)
@@ -300,10 +300,10 @@ func TestFunctionBaseHandlerDomainRedirectStatusCodesUnit(t *testing.T) {
 	// 3. Failed TLS domain -> do NOT redirect to HTTPS
 	var failedCustomDomain CustomDomain
 	require.NoError(t, kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, updated_at)
+		INSERT INTO function.custom_domains (domain, status, tls_enabled, tls_status, created_at, last_updated_at)
 		VALUES ('fail.domain.com', 'active', true, 'failed', clock_timestamp(), clock_timestamp())
-		RETURNING id, domain, status, tls_enabled, tls_status, created_at, updated_at;
-	`).Scan(&failedCustomDomain.ID, &failedCustomDomain.Domain, &failedCustomDomain.Status, &failedCustomDomain.TLSEnabled, &failedCustomDomain.TLSStatus, &failedCustomDomain.CreatedAt, &failedCustomDomain.UpdatedAt))
+		RETURNING id, domain, status, tls_enabled, tls_status, created_at, last_updated_at;
+	`).Scan(&failedCustomDomain.ID, &failedCustomDomain.Domain, &failedCustomDomain.Status, &failedCustomDomain.TLSEnabled, &failedCustomDomain.TLSStatus, &failedCustomDomain.CreatedAt, &failedCustomDomain.LastUpdatedAt))
 	bindTestCustomDomainRoute(testCtx, t, kernel, endpoint.ID, failedCustomDomain.ID, "/")
 
 	failedRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "http://fail.domain.com/test", nil)

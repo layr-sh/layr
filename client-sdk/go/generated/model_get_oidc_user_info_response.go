@@ -24,13 +24,13 @@ type GetOIDCUserInfoResponse struct {
 	Email *string `json:"email,omitempty"`
 	EmailVerified bool `json:"email_verified"`
 	IsAnonymous bool `json:"is_anonymous"`
+	LastUpdatedAt int64 `json:"last_updated_at"`
 	Name *string `json:"name,omitempty"`
 	PhoneNumber *string `json:"phone_number,omitempty"`
 	PhoneNumberVerified bool `json:"phone_number_verified"`
 	Properties map[string]*interface{} `json:"properties,omitempty"`
 	Role string `json:"role"`
 	Sub string `json:"sub"`
-	UpdatedAt int64 `json:"updated_at"`
 }
 
 type _GetOIDCUserInfoResponse GetOIDCUserInfoResponse
@@ -39,14 +39,14 @@ type _GetOIDCUserInfoResponse GetOIDCUserInfoResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewGetOIDCUserInfoResponse(emailVerified bool, isAnonymous bool, phoneNumberVerified bool, role string, sub string, updatedAt int64) *GetOIDCUserInfoResponse {
+func NewGetOIDCUserInfoResponse(emailVerified bool, isAnonymous bool, lastUpdatedAt int64, phoneNumberVerified bool, role string, sub string) *GetOIDCUserInfoResponse {
 	this := GetOIDCUserInfoResponse{}
 	this.EmailVerified = emailVerified
 	this.IsAnonymous = isAnonymous
+	this.LastUpdatedAt = lastUpdatedAt
 	this.PhoneNumberVerified = phoneNumberVerified
 	this.Role = role
 	this.Sub = sub
-	this.UpdatedAt = updatedAt
 	return &this
 }
 
@@ -136,6 +136,30 @@ func (o *GetOIDCUserInfoResponse) GetIsAnonymousOk() (*bool, bool) {
 // SetIsAnonymous sets field value
 func (o *GetOIDCUserInfoResponse) SetIsAnonymous(v bool) {
 	o.IsAnonymous = v
+}
+
+// GetLastUpdatedAt returns the LastUpdatedAt field value
+func (o *GetOIDCUserInfoResponse) GetLastUpdatedAt() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.LastUpdatedAt
+}
+
+// GetLastUpdatedAtOk returns a tuple with the LastUpdatedAt field value
+// and a boolean to check if the value has been set.
+func (o *GetOIDCUserInfoResponse) GetLastUpdatedAtOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.LastUpdatedAt, true
+}
+
+// SetLastUpdatedAt sets field value
+func (o *GetOIDCUserInfoResponse) SetLastUpdatedAt(v int64) {
+	o.LastUpdatedAt = v
 }
 
 // GetName returns the Name field value if set, zero value otherwise.
@@ -307,30 +331,6 @@ func (o *GetOIDCUserInfoResponse) SetSub(v string) {
 	o.Sub = v
 }
 
-// GetUpdatedAt returns the UpdatedAt field value
-func (o *GetOIDCUserInfoResponse) GetUpdatedAt() int64 {
-	if o == nil {
-		var ret int64
-		return ret
-	}
-
-	return o.UpdatedAt
-}
-
-// GetUpdatedAtOk returns a tuple with the UpdatedAt field value
-// and a boolean to check if the value has been set.
-func (o *GetOIDCUserInfoResponse) GetUpdatedAtOk() (*int64, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.UpdatedAt, true
-}
-
-// SetUpdatedAt sets field value
-func (o *GetOIDCUserInfoResponse) SetUpdatedAt(v int64) {
-	o.UpdatedAt = v
-}
-
 func (o GetOIDCUserInfoResponse) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -346,6 +346,7 @@ func (o GetOIDCUserInfoResponse) ToMap() (map[string]interface{}, error) {
 	}
 	toSerialize["email_verified"] = o.EmailVerified
 	toSerialize["is_anonymous"] = o.IsAnonymous
+	toSerialize["last_updated_at"] = o.LastUpdatedAt
 	if !IsNil(o.Name) {
 		toSerialize["name"] = o.Name
 	}
@@ -358,7 +359,6 @@ func (o GetOIDCUserInfoResponse) ToMap() (map[string]interface{}, error) {
 	}
 	toSerialize["role"] = o.Role
 	toSerialize["sub"] = o.Sub
-	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
 
@@ -369,10 +369,10 @@ func (o *GetOIDCUserInfoResponse) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"email_verified",
 		"is_anonymous",
+		"last_updated_at",
 		"phone_number_verified",
 		"role",
 		"sub",
-		"updated_at",
 	}
 
 	allProperties := make(map[string]interface{})

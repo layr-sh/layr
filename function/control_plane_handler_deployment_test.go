@@ -65,10 +65,10 @@ func TestFunctionControlPlaneHandlerDeploymentsUnit(t *testing.T) {
 	// Create test endpoint
 	var endpoint Endpoint
 	createErr := kernel.DB().QueryRow(testCtx, `
-		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at)
+		INSERT INTO function.endpoints (name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at)
 		VALUES ('deploy-unit-test-fn', 'workerd', 'index.js', 128, 30, true, clock_timestamp(), clock_timestamp())
-		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, updated_at;
-	`).Scan(&endpoint.ID, &endpoint.Name, &endpoint.Runtime, &endpoint.Entrypoint, &endpoint.MemoryLimitMB, &endpoint.TimeoutSeconds, &endpoint.IsPublic, &endpoint.CreatedAt, &endpoint.UpdatedAt)
+		RETURNING id, name, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, created_at, last_updated_at;
+	`).Scan(&endpoint.ID, &endpoint.Name, &endpoint.Runtime, &endpoint.Entrypoint, &endpoint.MemoryLimitMB, &endpoint.TimeoutSeconds, &endpoint.IsPublic, &endpoint.CreatedAt, &endpoint.LastUpdatedAt)
 	require.NoError(t, createErr)
 
 	randomUUID := "01923456-789a-7bc8-9def-0123456789ab"

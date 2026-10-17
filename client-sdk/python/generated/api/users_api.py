@@ -2485,7 +2485,7 @@ class UsersApi:
     ) -> List[User]:
         """List console user accounts
 
-        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -2548,7 +2548,7 @@ class UsersApi:
     ) -> ApiResponse[List[User]]:
         """List console user accounts
 
-        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request
@@ -2611,7 +2611,7 @@ class UsersApi:
     ) -> RESTResponseType:
         """List console user accounts
 
-        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+        Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 
         :param _request_timeout: timeout setting for this request. If one
                                  number provided, it will be total request

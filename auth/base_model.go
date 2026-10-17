@@ -289,7 +289,7 @@ type GetOIDCUserInfoResponse struct {
 	PhoneNumberVerified bool           `json:"phone_number_verified"`
 	Role                string         `json:"role"`
 	IsAnonymous         bool           `json:"is_anonymous"`
-	UpdatedAt           int64          `json:"updated_at"`
+	LastUpdatedAt       int64          `json:"last_updated_at"`
 	Properties          map[string]any `json:"properties,omitempty"`
 }
 
@@ -299,7 +299,7 @@ type ExportIdentityRecord struct {
 	ProviderUserID string         `json:"provider_user_id"`
 	Properties     map[string]any `json:"properties"`
 	CreatedAt      time.Time      `json:"created_at"`
-	LastSignInAt   time.Time      `json:"last_sign_in_at"`
+	LastSignInAt   time.Time      `json:"last_signed_in_at"`
 }
 
 // ExportUserResponse represents comprehensive user account data graph for GDPR compliance.

@@ -8,8 +8,8 @@ Name | Type | Description | Notes
 **domain** | **String** |  | [optional] 
 **endpointId** | **JSONValue** |  | 
 **id** | **JSONValue** |  | 
+**lastUpdatedAt** | **Date** |  | 
 **pathPrefix** | **String** |  | 
-**updatedAt** | **Date** |  | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

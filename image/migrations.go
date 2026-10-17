@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS image.presets (
     processing_options TEXT NOT NULL,
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 -- 3. Transformation Cache Index

@@ -30,14 +30,14 @@ class GetOIDCUserInfoResponse(BaseModel):
     email: Optional[StrictStr] = None
     email_verified: StrictBool
     is_anonymous: StrictBool
+    last_updated_at: StrictInt
     name: Optional[StrictStr] = None
     phone_number: Optional[StrictStr] = None
     phone_number_verified: StrictBool
     properties: Optional[Dict[str, Any]] = None
     role: StrictStr
     sub: StrictStr
-    updated_at: StrictInt
-    __properties: ClassVar[List[str]] = ["email", "email_verified", "is_anonymous", "name", "phone_number", "phone_number_verified", "properties", "role", "sub", "updated_at"]
+    __properties: ClassVar[List[str]] = ["email", "email_verified", "is_anonymous", "last_updated_at", "name", "phone_number", "phone_number_verified", "properties", "role", "sub"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -98,13 +98,13 @@ class GetOIDCUserInfoResponse(BaseModel):
             "email": obj.get("email"),
             "email_verified": obj.get("email_verified"),
             "is_anonymous": obj.get("is_anonymous"),
+            "last_updated_at": obj.get("last_updated_at"),
             "name": obj.get("name"),
             "phone_number": obj.get("phone_number"),
             "phone_number_verified": obj.get("phone_number_verified"),
             "properties": obj.get("properties"),
             "role": obj.get("role"),
-            "sub": obj.get("sub"),
-            "updated_at": obj.get("updated_at")
+            "sub": obj.get("sub")
         })
         return _obj
 

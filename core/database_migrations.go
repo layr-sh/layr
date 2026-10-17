@@ -92,9 +92,9 @@ CREATE INDEX IF NOT EXISTS idx_core_kv_store_expires_at ON core.kv_store (expire
 CREATE TABLE IF NOT EXISTS core.acme_certificates (
     key_name TEXT PRIMARY KEY,
     data BYTEA NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
-CREATE INDEX IF NOT EXISTS idx_core_acme_certificates_updated_at ON core.acme_certificates (updated_at);
+CREATE INDEX IF NOT EXISTS idx_core_acme_certificates_last_updated_at ON core.acme_certificates (last_updated_at);
 
 CREATE TABLE IF NOT EXISTS core.nodes (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS console.users (
     password_hash TEXT NOT NULL,
     encrypted_mfa_secret BYTEA,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
-    last_login_at TIMESTAMPTZ,
+    last_signed_in_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );

@@ -642,7 +642,7 @@ export class UsersApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+     * Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
      * List console user accounts
      */
     async consoleUsersListRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Array<User>>> {
@@ -653,7 +653,7 @@ export class UsersApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+     * Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
      * List console user accounts
      */
     async consoleUsersList(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Array<User>> {

@@ -20,6 +20,8 @@ pub struct GetOidcUserInfoResponse {
     pub email_verified: bool,
     #[serde(rename = "is_anonymous")]
     pub is_anonymous: bool,
+    #[serde(rename = "last_updated_at")]
+    pub last_updated_at: i64,
     #[serde(rename = "name", skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(rename = "phone_number", skip_serializing_if = "Option::is_none")]
@@ -32,24 +34,22 @@ pub struct GetOidcUserInfoResponse {
     pub role: String,
     #[serde(rename = "sub")]
     pub sub: String,
-    #[serde(rename = "updated_at")]
-    pub updated_at: i64,
 }
 
 impl GetOidcUserInfoResponse {
     /// GetOIDCUserInfoResponse schema
-    pub fn new(email_verified: bool, is_anonymous: bool, phone_number_verified: bool, role: String, sub: String, updated_at: i64) -> GetOidcUserInfoResponse {
+    pub fn new(email_verified: bool, is_anonymous: bool, last_updated_at: i64, phone_number_verified: bool, role: String, sub: String) -> GetOidcUserInfoResponse {
         GetOidcUserInfoResponse {
             email: None,
             email_verified,
             is_anonymous,
+            last_updated_at,
             name: None,
             phone_number: None,
             phone_number_verified,
             properties: None,
             role,
             sub,
-            updated_at,
         }
     }
 }

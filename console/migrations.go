@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS console.users (
     password_hash TEXT NOT NULL,
     encrypted_mfa_secret BYTEA,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
-    last_login_at TIMESTAMPTZ,
+    last_signed_in_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );

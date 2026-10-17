@@ -10,13 +10,13 @@ Name | Type
 `email` | string
 `emailVerified` | boolean
 `isAnonymous` | boolean
+`lastUpdatedAt` | number
 `name` | string
 `phoneNumber` | string
 `phoneNumberVerified` | boolean
 `properties` | { [key: string]: any | null; }
 `role` | string
 `sub` | string
-`updatedAt` | number
 
 ## Example
 
@@ -28,13 +28,13 @@ const example = {
   "email": null,
   "emailVerified": null,
   "isAnonymous": null,
+  "lastUpdatedAt": null,
   "name": null,
   "phoneNumber": null,
   "phoneNumberVerified": null,
   "properties": null,
   "role": null,
   "sub": null,
-  "updatedAt": null,
 } satisfies GetOIDCUserInfoResponse
 
 console.log(example)

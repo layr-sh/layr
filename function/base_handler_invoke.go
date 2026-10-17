@@ -63,7 +63,7 @@ func (capturingWriter *capturingResponseWriter) Write(contentBytes []byte) (int,
 
 func (baseHandler *BaseHandler) fetchEndpointByName(ctx context.Context, name string) (*Endpoint, error) {
 	const querySQL = `
-		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, updated_at
+		SELECT id, name, description, runtime, entrypoint, memory_limit_mb, timeout_seconds, is_public, active_deployment_id, created_at, last_updated_at
 		FROM function.endpoints
 		WHERE name = $1;
 	`
@@ -80,7 +80,7 @@ func (baseHandler *BaseHandler) fetchEndpointByName(ctx context.Context, name st
 		&storedEndpoint.IsPublic,
 		&storedEndpoint.ActiveDeploymentID,
 		&storedEndpoint.CreatedAt,
-		&storedEndpoint.UpdatedAt,
+		&storedEndpoint.LastUpdatedAt,
 	)
 	if scanErr != nil {
 		if errors.Is(scanErr, pgx.ErrNoRows) {

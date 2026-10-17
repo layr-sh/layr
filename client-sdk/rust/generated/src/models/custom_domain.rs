@@ -19,6 +19,8 @@ pub struct CustomDomain {
     pub domain: String,
     #[serde(rename = "id", deserialize_with = "Option::deserialize")]
     pub id: Option<serde_json::Value>,
+    #[serde(rename = "last_updated_at")]
+    pub last_updated_at: chrono::DateTime<chrono::FixedOffset>,
     #[serde(rename = "required_dns_records", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub required_dns_records: Option<Option<Vec<models::RequiredDnsRecord>>>,
     #[serde(rename = "status")]
@@ -35,16 +37,15 @@ pub struct CustomDomain {
     pub tls_issued_at: Option<chrono::DateTime<chrono::FixedOffset>>,
     #[serde(rename = "tls_status")]
     pub tls_status: String,
-    #[serde(rename = "updated_at")]
-    pub updated_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl CustomDomain {
-    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, domain: String, id: Option<serde_json::Value>, status: String, tls_enabled: bool, tls_status: String, updated_at: chrono::DateTime<chrono::FixedOffset>) -> CustomDomain {
+    pub fn new(created_at: chrono::DateTime<chrono::FixedOffset>, domain: String, id: Option<serde_json::Value>, last_updated_at: chrono::DateTime<chrono::FixedOffset>, status: String, tls_enabled: bool, tls_status: String) -> CustomDomain {
         CustomDomain {
             created_at,
             domain,
             id,
+            last_updated_at,
             required_dns_records: None,
             status,
             tls_acme_email: None,
@@ -53,7 +54,6 @@ impl CustomDomain {
             tls_expires_at: None,
             tls_issued_at: None,
             tls_status,
-            updated_at,
         }
     }
 }

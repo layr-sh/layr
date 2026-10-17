@@ -28,11 +28,11 @@ type Endpoint struct {
 	Entrypoint string `json:"entrypoint"`
 	Id interface{} `json:"id"`
 	IsPublic bool `json:"is_public"`
+	LastUpdatedAt time.Time `json:"last_updated_at"`
 	MemoryLimitMb int32 `json:"memory_limit_mb"`
 	Name string `json:"name"`
 	Runtime string `json:"runtime"`
 	TimeoutSeconds int32 `json:"timeout_seconds"`
-	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type _Endpoint Endpoint
@@ -41,17 +41,17 @@ type _Endpoint Endpoint
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewEndpoint(createdAt time.Time, entrypoint string, id interface{}, isPublic bool, memoryLimitMb int32, name string, runtime string, timeoutSeconds int32, updatedAt time.Time) *Endpoint {
+func NewEndpoint(createdAt time.Time, entrypoint string, id interface{}, isPublic bool, lastUpdatedAt time.Time, memoryLimitMb int32, name string, runtime string, timeoutSeconds int32) *Endpoint {
 	this := Endpoint{}
 	this.CreatedAt = createdAt
 	this.Entrypoint = entrypoint
 	this.Id = id
 	this.IsPublic = isPublic
+	this.LastUpdatedAt = lastUpdatedAt
 	this.MemoryLimitMb = memoryLimitMb
 	this.Name = name
 	this.Runtime = runtime
 	this.TimeoutSeconds = timeoutSeconds
-	this.UpdatedAt = updatedAt
 	return &this
 }
 
@@ -226,6 +226,30 @@ func (o *Endpoint) SetIsPublic(v bool) {
 	o.IsPublic = v
 }
 
+// GetLastUpdatedAt returns the LastUpdatedAt field value
+func (o *Endpoint) GetLastUpdatedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.LastUpdatedAt
+}
+
+// GetLastUpdatedAtOk returns a tuple with the LastUpdatedAt field value
+// and a boolean to check if the value has been set.
+func (o *Endpoint) GetLastUpdatedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.LastUpdatedAt, true
+}
+
+// SetLastUpdatedAt sets field value
+func (o *Endpoint) SetLastUpdatedAt(v time.Time) {
+	o.LastUpdatedAt = v
+}
+
 // GetMemoryLimitMb returns the MemoryLimitMb field value
 func (o *Endpoint) GetMemoryLimitMb() int32 {
 	if o == nil {
@@ -322,30 +346,6 @@ func (o *Endpoint) SetTimeoutSeconds(v int32) {
 	o.TimeoutSeconds = v
 }
 
-// GetUpdatedAt returns the UpdatedAt field value
-func (o *Endpoint) GetUpdatedAt() time.Time {
-	if o == nil {
-		var ret time.Time
-		return ret
-	}
-
-	return o.UpdatedAt
-}
-
-// GetUpdatedAtOk returns a tuple with the UpdatedAt field value
-// and a boolean to check if the value has been set.
-func (o *Endpoint) GetUpdatedAtOk() (*time.Time, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.UpdatedAt, true
-}
-
-// SetUpdatedAt sets field value
-func (o *Endpoint) SetUpdatedAt(v time.Time) {
-	o.UpdatedAt = v
-}
-
 func (o Endpoint) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -368,11 +368,11 @@ func (o Endpoint) ToMap() (map[string]interface{}, error) {
 		toSerialize["id"] = o.Id
 	}
 	toSerialize["is_public"] = o.IsPublic
+	toSerialize["last_updated_at"] = o.LastUpdatedAt
 	toSerialize["memory_limit_mb"] = o.MemoryLimitMb
 	toSerialize["name"] = o.Name
 	toSerialize["runtime"] = o.Runtime
 	toSerialize["timeout_seconds"] = o.TimeoutSeconds
-	toSerialize["updated_at"] = o.UpdatedAt
 	return toSerialize, nil
 }
 
@@ -385,11 +385,11 @@ func (o *Endpoint) UnmarshalJSON(data []byte) (err error) {
 		"entrypoint",
 		"id",
 		"is_public",
+		"last_updated_at",
 		"memory_limit_mb",
 		"name",
 		"runtime",
 		"timeout_seconds",
-		"updated_at",
 	}
 
 	allProperties := make(map[string]interface{})

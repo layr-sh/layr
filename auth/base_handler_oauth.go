@@ -286,9 +286,9 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 
 		// Link identity
 		_, _ = handler.kernel.DB().Exec(ctx, `
-			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
+			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_signed_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
-			ON CONFLICT (provider, provider_user_id) DO UPDATE SET user_id = $1, last_sign_in_at = clock_timestamp(), properties = $4
+			ON CONFLICT (provider, provider_user_id) DO UPDATE SET user_id = $1, last_signed_in_at = clock_timestamp(), properties = $4
 		`, anonymousUser.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		// Convert anonymous user to authenticated
@@ -343,7 +343,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 			core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account is temporarily locked", fmt.Sprintf("failed OAuth sign in for locked user %s", user.ID))
 			return
 		}
-		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.identities SET last_sign_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
+		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.identities SET last_signed_in_at = clock_timestamp() WHERE provider = $1 AND provider_user_id = $2", provider, userInfo.ProviderUserID)
 	} else {
 		log.Debugf("registering new federated user via %s", provider)
 		var emailPtr *string
@@ -364,9 +364,9 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 		}
 
 		_, _ = handler.kernel.DB().Exec(ctx, `
-			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_sign_in_at, created_at, last_updated_at)
+			INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, last_signed_in_at, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, clock_timestamp(), clock_timestamp(), clock_timestamp())
-			ON CONFLICT (provider, provider_user_id) DO UPDATE SET last_sign_in_at = clock_timestamp()
+			ON CONFLICT (provider, provider_user_id) DO UPDATE SET last_signed_in_at = clock_timestamp()
 		`, user.ID, provider, userInfo.ProviderUserID, propertiesJSON)
 
 		log.Tracef("created new federated user %s for %s:%s", user.ID, provider, userInfo.ProviderUserID)

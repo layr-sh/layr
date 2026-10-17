@@ -1259,7 +1259,7 @@ func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWr
 		PhoneNumberVerified: user.PhoneVerifiedAt != nil,
 		Role:                user.Role,
 		IsAnonymous:         user.IsAnonymous,
-		UpdatedAt:           user.LastUpdatedAt.Unix(),
+		LastUpdatedAt:       user.LastUpdatedAt.Unix(),
 		Properties:          user.Properties,
 	}
 

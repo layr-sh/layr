@@ -452,7 +452,7 @@ pub async fn console_users_get(configuration: &configuration::Configuration, use
     }
 }
 
-/// Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last login timestamp, and creation date. Requires console:user.read scope.
+/// Returns all registered console user accounts from console.users with email, active status, MFA enrollment status, last signed in timestamp, and creation date. Requires console:user.read scope.
 pub async fn console_users_list(configuration: &configuration::Configuration, ) -> Result<Vec<models::User>, Error<ConsoleUsersListError>> {
 
     let uri_str = format!("{}/v1/_/console/users", configuration.base_path);

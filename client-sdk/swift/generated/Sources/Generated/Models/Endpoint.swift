@@ -15,24 +15,24 @@ public struct Endpoint: Sendable, Codable, Hashable {
     public var entrypoint: String
     public var id: JSONValue?
     public var isPublic: Bool
+    public var lastUpdatedAt: Date
     public var memoryLimitMb: Int
     public var name: String
     public var runtime: String
     public var timeoutSeconds: Int
-    public var updatedAt: Date
 
-    public init(activeDeploymentId: JSONValue? = nil, createdAt: Date, description: String? = nil, entrypoint: String, id: JSONValue?, isPublic: Bool, memoryLimitMb: Int, name: String, runtime: String, timeoutSeconds: Int, updatedAt: Date) {
+    public init(activeDeploymentId: JSONValue? = nil, createdAt: Date, description: String? = nil, entrypoint: String, id: JSONValue?, isPublic: Bool, lastUpdatedAt: Date, memoryLimitMb: Int, name: String, runtime: String, timeoutSeconds: Int) {
         self.activeDeploymentId = activeDeploymentId
         self.createdAt = createdAt
         self.description = description
         self.entrypoint = entrypoint
         self.id = id
         self.isPublic = isPublic
+        self.lastUpdatedAt = lastUpdatedAt
         self.memoryLimitMb = memoryLimitMb
         self.name = name
         self.runtime = runtime
         self.timeoutSeconds = timeoutSeconds
-        self.updatedAt = updatedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
@@ -42,11 +42,11 @@ public struct Endpoint: Sendable, Codable, Hashable {
         case entrypoint
         case id
         case isPublic = "is_public"
+        case lastUpdatedAt = "last_updated_at"
         case memoryLimitMb = "memory_limit_mb"
         case name
         case runtime
         case timeoutSeconds = "timeout_seconds"
-        case updatedAt = "updated_at"
     }
 
     // Encodable protocol methods
@@ -59,11 +59,11 @@ public struct Endpoint: Sendable, Codable, Hashable {
         try container.encode(entrypoint, forKey: .entrypoint)
         try container.encode(id, forKey: .id)
         try container.encode(isPublic, forKey: .isPublic)
+        try container.encode(lastUpdatedAt, forKey: .lastUpdatedAt)
         try container.encode(memoryLimitMb, forKey: .memoryLimitMb)
         try container.encode(name, forKey: .name)
         try container.encode(runtime, forKey: .runtime)
         try container.encode(timeoutSeconds, forKey: .timeoutSeconds)
-        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 

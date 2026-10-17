@@ -387,7 +387,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 
 	// 10. User Export via POST /v1/auth/user/export
 	_, err = db.Exec(ctx, `
-		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_sign_in_at)
+		INSERT INTO auth.identities (user_id, provider, provider_user_id, properties, created_at, last_signed_in_at)
 		VALUES ($1, 'github', 'gh_user_123', '{"login":"alice"}'::jsonb, clock_timestamp(), clock_timestamp())
 	`, signupAuthTokenResponse.User.ID)
 	if err != nil {
