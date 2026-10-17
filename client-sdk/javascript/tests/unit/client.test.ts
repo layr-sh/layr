@@ -136,8 +136,8 @@ describe('Client Context & Elevation Unit Tests', () => {
     }
 
     it('instantiates useData(client).from and useData(client).schema with schema routing', () => {
-      const client = createClient<MyDatabase>({ endpoint: 'http://localhost:5297' });
-      const data = useData(client);
+      const client = createClient({ endpoint: 'http://localhost:5297' });
+      const data = useData<MyDatabase>(client);
 
       const todosBuilder = data.from('todos');
       expect(todosBuilder).toBeDefined();

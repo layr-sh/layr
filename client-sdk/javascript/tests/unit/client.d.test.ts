@@ -32,7 +32,7 @@ interface MockDatabase {
 describe('LayrClient & Service Wrappers Type Safety', () => {
   describe('1. Client Instantiation & Configuration Typing', () => {
     it('creates typed client instance with endpoint', () => {
-      const client = createClient<MockDatabase>({
+      const client = createClient({
         endpoint: 'https://api.layr.sh',
         publishableKey: 'pk_live_123',
         sessionToken: 'tok_abc',
@@ -42,14 +42,9 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
         headers: { 'X-Custom': 'header' },
       });
 
-      expectTypeOf(client).toEqualTypeOf<LayrClient<MockDatabase>>();
+      expectTypeOf(client).toEqualTypeOf<LayrClient>();
       expectTypeOf(client.endpoint).toEqualTypeOf<string>();
       expectTypeOf(client.sessionToken).toEqualTypeOf<string | undefined>();
-    });
-
-    it('creates untyped client defaulting to GenericDatabase', () => {
-      const untyped = createClient({ endpoint: 'https://api.layr.sh' });
-      expectTypeOf(untyped).toEqualTypeOf<LayrClient<GenericDatabase>>();
     });
 
     it('rejects missing or invalid client options', () => {
@@ -65,7 +60,7 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
   });
 
   describe('2. Session Management Typing', () => {
-    const client = createClient<MockDatabase>({ endpoint: 'https://api.layr.sh' });
+    const client = createClient({ endpoint: 'https://api.layr.sh' });
 
     it('manages session token with strict string types', () => {
       client.setSession('session_jwt_123');
@@ -80,8 +75,8 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
   });
 
   describe('3. SchemaClient & Multi-Schema Navigation', () => {
-    const client = createClient<MockDatabase>({ endpoint: 'https://api.layr.sh' });
-    const data = useData(client);
+    const client = createClient({ endpoint: 'https://api.layr.sh' });
+    const data = useData<MockDatabase>(client);
 
     it('returns strongly-typed SchemaClient instances', () => {
       const publicSchema = data.schema('public');
@@ -137,10 +132,10 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
   });
 
   describe('4. Service Wrapper Singletons & Type Preservation', () => {
-    const client = createClient<MockDatabase>({ endpoint: 'https://api.layr.sh' });
+    const client = createClient({ endpoint: 'https://api.layr.sh' });
 
     it('preserves database type in useData service wrapper', () => {
-      const data = useData(client);
+      const data = useData<MockDatabase>(client);
       expectTypeOf(data).toEqualTypeOf<DataService<MockDatabase>>();
 
       const qb = data.from('users');

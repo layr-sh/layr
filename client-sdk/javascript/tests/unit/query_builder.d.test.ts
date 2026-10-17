@@ -305,9 +305,9 @@ interface SampleDatabase {
 }
 
 describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', () => {
-  const client = createClient<SampleDatabase>({ endpoint: 'https://api.layr.sh' });
+  const client = createClient({ endpoint: 'https://api.layr.sh' });
   const untypedClient = createClient({ endpoint: 'https://api.layr.sh' });
-  const data = useData(client);
+  const data = useData<SampleDatabase>(client);
   const untypedData = useData(untypedClient);
 
   describe('1. Schema Resolution & Table Validation', () => {
@@ -1075,7 +1075,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('13. Service Wrapper Integration (useData & records)', () => {
-    const dataService = useData(client);
+    const dataService = useData<SampleDatabase>(client);
 
     it('infers typed QueryBuilder from useData(client).from()', () => {
       const qb = dataService.from('todos');

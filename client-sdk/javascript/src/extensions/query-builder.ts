@@ -21,7 +21,7 @@ export class QueryBuilder<
 > implements PromiseLike<TRow[]> {
   protected schema: string;
   protected table: string;
-  protected client: LayrClient<any>;
+  protected client: LayrClient;
   protected selectCols: string = '*';
   protected filterParams: string[] = [];
   protected orderParams: string[] = [];
@@ -29,7 +29,7 @@ export class QueryBuilder<
   protected offsetCount?: number;
   protected primaryKeyId?: string;
 
-  constructor(client: LayrClient<any>, tableWithSchema: string) {
+  constructor(client: LayrClient, tableWithSchema: string) {
     this.client = client;
     const parts = tableWithSchema.split('.');
     if (parts.length > 1 && parts[0] && parts[1]) {
