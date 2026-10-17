@@ -149,7 +149,7 @@ func TestConsoleFullLifecycleE2E(t *testing.T) {
 	var getConsoleSessionResponse GetConsoleSessionResponse
 	require.NoError(t, json.Unmarshal(sessionResponseRecorder.Body.Bytes(), &getConsoleSessionResponse))
 	require.Equal(t, createdUser.ID, getConsoleSessionResponse.User.ID)
-	require.NotEmpty(t, getConsoleSessionResponse.Session.ID)
+	require.NotEmpty(t, getConsoleSessionResponse.ID)
 
 	// 9. Console Operator: Setup, Verify, and Test TOTP MFA Lifecycle
 	setupMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/mfa", nil)
