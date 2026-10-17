@@ -162,7 +162,7 @@ export class RealtimeManager {
     }
     this.isExplicitClose = false;
     const cleanToken = this.layrClient.sessionToken?.replace(/^Bearer\s+/i, '').trim();
-    let wsURL = this.layrClient.endpointURL.replace(/^http/i, 'ws') + '/v1/realtime';
+    let wsURL = this.layrClient.endpoint.replace(/^http/i, 'ws') + '/v1/realtime';
     if (cleanToken) {
       wsURL += `?token=${encodeURIComponent(cleanToken)}`;
     }

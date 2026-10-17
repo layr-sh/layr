@@ -49,7 +49,6 @@ export interface SchemaClient<Database = GenericDatabase, SchemaName extends str
 
 export interface LayrClient<Database = GenericDatabase> {
   readonly endpoint: string;
-  readonly endpointURL: string;
   readonly options: ClientOptions;
   readonly config: Configuration;
   readonly headers: Record<string, string>;
@@ -100,7 +99,6 @@ export function createClient<Database = GenericDatabase>(options: ClientOptions)
 
   const client: LayrClient<Database> = {
     endpoint: normalizedURL,
-    endpointURL: normalizedURL,
     options,
     config,
     headers: activeHeaders,
@@ -170,7 +168,7 @@ export function withServiceAccount<T extends ElevatableService<unknown, any>>(
   }
 
   const elevatedConfig = new Configuration({
-    basePath: elevatable.client.endpointURL,
+    basePath: elevatable.client.endpoint,
     headers: elevatedHeaders,
     fetchApi: elevatable.client.config.fetchApi,
   });

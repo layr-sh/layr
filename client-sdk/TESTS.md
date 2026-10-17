@@ -399,7 +399,7 @@ Unit tests run in isolation with zero network calls. All HTTP/WebSocket transpor
 
 | ID | Test Scenario | Input / Precondition | Expected Behavior / Assertion | Required Branches |
 | :--- | :--- | :--- | :--- | :--- |
-| `CL-01` | Client Factory Initialization | Initializing client with options | Client instantiated with config, options, endpointURL | Normal options creation |
+| `CL-01` | Client Factory Initialization | Initializing client with options | Client instantiated with config, options, endpoint | Normal options creation |
 | `CL-02` | Session Mutation: `setSession` | Setting active session token | Mutates active session token and `Authorization` header in-place | Bearer prefix stripping |
 | `CL-03` | Session Mutation: `clearSession` | Clearing active session | Deletes active session token and removes `Authorization` header | Header deletion |
 | `CL-04` | Service Elevation: `.cp` Attachment | Elevating a service with `serviceAccountKey` | Returns elevated object with `.cp` namespace; base service unchanged | Elevation execution |

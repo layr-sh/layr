@@ -12,7 +12,6 @@ describe('Client Context & Elevation Unit Tests', () => {
     });
 
     expect(client.endpoint).toBe('https://api.layr.sh');
-    expect(client.endpointURL).toBe('https://api.layr.sh');
     expect(client.headers['Publishable-Key']).toBe(publishableKey);
     expect(client._singletons).toBeInstanceOf(Map);
     expect(client.config).toBeDefined();
