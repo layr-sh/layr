@@ -2,6 +2,7 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import { createClient, withServiceAccount, ATTACH_CONTROL_PLANE, type ElevatableService } from '../../src/core/client';
 import type { QueryBuilder } from '../../src/extensions/query-builder';
 import { useAuth } from '../../src/services/auth';
+import { useData } from '../../src/services/data';
 
 describe('Client Context & Elevation Unit Tests', () => {
   it('CL-01: Factory Instantiation produces valid LayrClient', () => {
@@ -15,6 +16,8 @@ describe('Client Context & Elevation Unit Tests', () => {
     expect(client.headers['Publishable-Key']).toBe(publishableKey);
     expect(client._singletons).toBeInstanceOf(Map);
     expect(client.config).toBeDefined();
+    expect((client as any).from).toBeUndefined();
+    expect((client as any).schema).toBeUndefined();
   });
 
   it('CL-02: Session Mutability sets Authorization header', () => {
@@ -132,10 +135,11 @@ describe('Client Context & Elevation Unit Tests', () => {
       };
     }
 
-    it('instantiates client.from and client.schema with schema routing', () => {
+    it('instantiates useData(client).from and useData(client).schema with schema routing', () => {
       const client = createClient<MyDatabase>({ endpoint: 'http://localhost:5297' });
+      const data = useData(client);
 
-      const todosBuilder = client.from('todos');
+      const todosBuilder = data.from('todos');
       expect(todosBuilder).toBeDefined();
       expectTypeOf(todosBuilder).toEqualTypeOf<
         QueryBuilder<
@@ -145,7 +149,7 @@ describe('Client Context & Elevation Unit Tests', () => {
         >
       >();
 
-      const auditLogsBuilder = client.schema('audit').from('logs');
+      const auditLogsBuilder = data.schema('audit').from('logs');
       expect(auditLogsBuilder).toBeDefined();
       expectTypeOf(auditLogsBuilder).toEqualTypeOf<
         QueryBuilder<
@@ -159,7 +163,7 @@ describe('Client Context & Elevation Unit Tests', () => {
         postId: string;
         body: string;
       }
-      const customBuilder = client.from<AdHocPost>('posts');
+      const customBuilder = data.from<AdHocPost>('posts');
       expect(customBuilder).toBeDefined();
       expectTypeOf(customBuilder).toEqualTypeOf<
         QueryBuilder<AdHocPost, Partial<AdHocPost>, Partial<AdHocPost>>

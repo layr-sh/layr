@@ -307,10 +307,12 @@ interface SampleDatabase {
 describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', () => {
   const client = createClient<SampleDatabase>({ endpoint: 'https://api.layr.sh' });
   const untypedClient = createClient({ endpoint: 'https://api.layr.sh' });
+  const data = useData(client);
+  const untypedData = useData(untypedClient);
 
   describe('1. Schema Resolution & Table Validation', () => {
     it('resolves known tables with exact Row, Insert, and Update types', () => {
-      const qb = client.from('todos');
+      const qb = data.from('todos');
 
       expectTypeOf(qb).toEqualTypeOf<
         QueryBuilder<
@@ -322,37 +324,37 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('resolves explicit public schema identically to default .from()', () => {
-      const qbDefault = client.from('todos');
-      const qbExplicit = client.schema('public').from('todos');
+      const qbDefault = data.from('todos');
+      const qbExplicit = data.schema('public').from('todos');
 
       expectTypeOf(qbExplicit).toEqualTypeOf(qbDefault);
     });
 
     it('rejects nonexistent table names in typed client', () => {
       // @ts-expect-error - 'non_existent_table' is not in SampleDatabase['public']['Tables']
-      () => client.from('non_existent_table');
+      () => data.from('non_existent_table');
 
       // @ts-expect-error - 'users' is not in audit schema
-      () => client.schema('audit').from('users');
+      () => data.schema('audit').from('users');
     });
 
     it('rejects nonexistent schemas in typed client', () => {
       // @ts-expect-error - 'nonexistent_schema' does not exist on SampleDatabase
-      () => client.schema('nonexistent_schema');
+      () => data.schema('nonexistent_schema');
     });
 
     it('rejects tables belonging to other schemas without switching schema', () => {
       // @ts-expect-error - 'invoices' belongs to billing schema, not public
-      () => client.from('invoices');
+      () => data.from('invoices');
 
       // @ts-expect-error - 'orders' belongs to e_commerce schema, not public
-      () => client.from('orders');
+      () => data.from('orders');
     });
   });
 
   describe('2. Column Selection & Narrowing Edge Cases', () => {
     it('preserves full Row type when selecting with wildcard or default', () => {
-      const wildcard = client.from('todos').select('*');
+      const wildcard = data.from('todos').select('*');
       expectTypeOf(wildcard).toEqualTypeOf<
         QueryBuilder<
           SampleDatabase['public']['Tables']['todos']['Row'],
@@ -361,7 +363,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
         >
       >();
 
-      const defaultSelect = client.from('todos').select();
+      const defaultSelect = data.from('todos').select();
       expectTypeOf(defaultSelect).toEqualTypeOf<
         QueryBuilder<
           SampleDatabase['public']['Tables']['todos']['Row'],
@@ -372,7 +374,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('narrows return type to subset of selected columns', () => {
-      const narrowed = client.from('todos').select(['id', 'title']);
+      const narrowed = data.from('todos').select(['id', 'title']);
 
       expectTypeOf(narrowed).toEqualTypeOf<
         QueryBuilder<
@@ -384,7 +386,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('narrows return type to a single selected column', () => {
-      const singleCol = client.from('todos').select(['id']);
+      const singleCol = data.from('todos').select(['id']);
 
       expectTypeOf(singleCol).toEqualTypeOf<
         QueryBuilder<
@@ -396,7 +398,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('narrows return type to three selected columns', () => {
-      const threeCols = client.from('todos').select(['id', 'title', 'completed']);
+      const threeCols = data.from('todos').select(['id', 'title', 'completed']);
 
       expectTypeOf(threeCols).toEqualTypeOf<
         QueryBuilder<
@@ -408,7 +410,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('narrows return type with nested object column', () => {
-      const withObj = client.from('todos').select(['id', 'metadata']);
+      const withObj = data.from('todos').select(['id', 'metadata']);
 
       expectTypeOf(withObj).toEqualTypeOf<
         QueryBuilder<
@@ -426,7 +428,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('supports chained select calls narrowing down further', () => {
-      const twoCols = client.from('todos').select(['id', 'title']);
+      const twoCols = data.from('todos').select(['id', 'title']);
       const oneCol = twoCols.select(['id']);
 
       expectTypeOf(oneCol).toEqualTypeOf<
@@ -440,11 +442,11 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
 
     it('rejects invalid column names in select array', () => {
       // @ts-expect-error - 'invalid_column' is not a key of todos Row
-      () => client.from('todos').select(['id', 'invalid_column']);
+      () => data.from('todos').select(['id', 'invalid_column']);
     });
 
     it('preserves builder chaining on narrowed projections and prunes unselected columns', () => {
-      const narrowed = client.from('todos').select(['id', 'title']);
+      const narrowed = data.from('todos').select(['id', 'title']);
       const chained = narrowed.eq('title', 'Test');
 
       expectTypeOf(chained).toEqualTypeOf<
@@ -464,7 +466,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('3. Predicates & Filtering Type Constraints', () => {
-    const qb = client.from('todos');
+    const qb = data.from('todos');
 
     it('enforces value type match for equality and comparison operators', () => {
       qb.eq('id', 1);
@@ -560,7 +562,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('4. Deep Nested JSON Paths (Up to 5 Levels Deep & JSON Arrows)', () => {
-    const upQb = client.from('user_profiles');
+    const upQb = data.from('user_profiles');
 
     it('validates 4-level deep nested dot paths and value types', () => {
       upQb.eq('profile.location.city', 'Jakarta');
@@ -583,7 +585,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('validates 5-level deep nested dot paths on enterprise schema', () => {
-      const entQb = client.schema('enterprise').from('orgs');
+      const entQb = data.schema('enterprise').from('orgs');
 
       entQb.eq('corp.division.team.lead.email', 'lead@layr.sh');
       entQb.eq('corp.division.team.lead.yearsOfExperience', 8);
@@ -611,7 +613,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('5. Mutation Typing: Single vs Batch Insert, Upsert, Update, Delete', () => {
-    const qb = client.from('todos');
+    const qb = data.from('todos');
 
     it('overloads insert: single record returns Promise<TRow>, array returns Promise<TRow[]>', () => {
       const single = qb.insert({ title: 'Single' });
@@ -684,7 +686,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('6. Terminal Fetch Operations: single(), maybeSingle(), and PromiseLike contract', () => {
-    const qb = client.from('todos');
+    const qb = data.from('todos');
 
     it('resolves .single() to Promise<TRow>', () => {
       const single = qb.single();
@@ -721,12 +723,12 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('resolves narrowed .single() to exact narrowed Row', () => {
-      const narrowedSingle = client.from('todos').select(['id', 'title']).single();
+      const narrowedSingle = data.from('todos').select(['id', 'title']).single();
       expectTypeOf(narrowedSingle).toMatchTypeOf<PromiseLike<{ id: number; title: string }>>();
     });
 
     it('resolves narrowed .maybeSingle() to exact narrowed Row or null', () => {
-      const narrowedMaybeSingle = client.from('todos').select(['id']).maybeSingle();
+      const narrowedMaybeSingle = data.from('todos').select(['id']).maybeSingle();
       expectTypeOf(narrowedMaybeSingle).toMatchTypeOf<PromiseLike<{ id: number } | null>>();
     });
   });
@@ -737,7 +739,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     type CategoryRow = SampleDatabase['public']['Tables']['categories']['Row'];
 
     it('supports left join with nullable relation property', () => {
-      const leftJoined = client.from('todos').join<UserRow, 'author'>('users', {
+      const leftJoined = data.from('todos').join<UserRow, 'author'>('users', {
         type: 'left',
         as: 'author',
       });
@@ -756,7 +758,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('supports inner join with non-null relation property', () => {
-      const innerJoined = client.from('todos').join<UserRow, 'author', 'inner'>('users', {
+      const innerJoined = data.from('todos').join<UserRow, 'author', 'inner'>('users', {
         type: 'inner',
         as: 'author',
       });
@@ -775,7 +777,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('supports self-referential left join (e.g. users -> manager)', () => {
-      const withManager = client.from('users').join<UserRow, 'manager'>('users', {
+      const withManager = data.from('users').join<UserRow, 'manager'>('users', {
         as: 'manager',
       });
 
@@ -791,7 +793,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('supports self-referential 1-to-many relation join (e.g. categories -> subcategories)', () => {
-      const withSubcategories = client.from('categories').join<CategoryRow[], 'subcategories'>('categories', {
+      const withSubcategories = data.from('categories').join<CategoryRow[], 'subcategories'>('categories', {
         as: 'subcategories',
       });
 
@@ -812,7 +814,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
         body: string;
       }
 
-      const postWithComments = client.from('todos').join<CommentRow[], 'comments'>('comments', {
+      const postWithComments = data.from('todos').join<CommentRow[], 'comments'>('comments', {
         as: 'comments',
       });
 
@@ -830,7 +832,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('supports chaining multiple relational joins', () => {
-      const multiJoined = client
+      const multiJoined = data
         .from('todos')
         .join<UserRow, 'author'>('users', { as: 'author' })
         .join<AuditLogRow[], 'audit_logs'>('logs', { as: 'audit_logs' });
@@ -850,7 +852,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('allows projection of both parent and joined properties after join', () => {
-      const joined = client.from('todos').join<UserRow, 'author', 'inner'>('users', {
+      const joined = data.from('todos').join<UserRow, 'author', 'inner'>('users', {
         type: 'inner',
         as: 'author',
       });
@@ -892,7 +894,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     }
 
     it('allows ad-hoc generic override on typed client for external tables', () => {
-      const adHocQb = client.from<AdHocArticle>('articles');
+      const adHocQb = data.from<AdHocArticle>('articles');
 
       expectTypeOf(adHocQb).toEqualTypeOf<
         QueryBuilder<AdHocArticle, Partial<AdHocArticle>, Partial<AdHocArticle>>
@@ -908,7 +910,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('allows arbitrary strings on untyped client with Record<string, unknown> default', () => {
-      const untypedQb = untypedClient.from('any_dynamic_table');
+      const untypedQb = untypedData.from('any_dynamic_table');
 
       expectTypeOf(untypedQb).toEqualTypeOf<
         QueryBuilder<Record<string, unknown>, Partial<Record<string, unknown>>, Partial<Record<string, unknown>>>
@@ -918,7 +920,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     });
 
     it('allows strict ad-hoc typing on untyped client instances', () => {
-      const strictAdHoc = untypedClient.from<AdHocArticle>('articles');
+      const strictAdHoc = untypedData.from<AdHocArticle>('articles');
 
       expectTypeOf(strictAdHoc).toEqualTypeOf<
         QueryBuilder<AdHocArticle, Partial<AdHocArticle>, Partial<AdHocArticle>>
@@ -932,13 +934,13 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
 
     it('rejects untyped table access on typed client without generic', () => {
       // @ts-expect-error - cannot pass unmapped table without generic override on typed client
-      () => client.from('unmapped_table');
+      () => data.from('unmapped_table');
     });
   });
 
   describe('9. Multi-Schema Operations', () => {
     it('supports selecting tables from custom schemas with distinct types', () => {
-      const auditQb = client.schema('audit').from('logs');
+      const auditQb = data.schema('audit').from('logs');
       expectTypeOf(auditQb).toEqualTypeOf<
         QueryBuilder<
           SampleDatabase['audit']['Tables']['logs']['Row'],
@@ -947,7 +949,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
         >
       >();
 
-      const billingQb = client.schema('billing').from('invoices');
+      const billingQb = data.schema('billing').from('invoices');
       expectTypeOf(billingQb).toEqualTypeOf<
         QueryBuilder<
           SampleDatabase['billing']['Tables']['invoices']['Row'],
@@ -959,16 +961,16 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
 
     it('rejects cross-schema table queries', () => {
       // @ts-expect-error - 'invoices' is in billing, not audit
-      () => client.schema('audit').from('invoices');
+      () => data.schema('audit').from('invoices');
 
       // @ts-expect-error - 'todos' is in public, not billing
-      () => client.schema('billing').from('todos');
+      () => data.schema('billing').from('todos');
     });
   });
 
   describe('10. Nullable, Optional, and Literal Union Edge Cases', () => {
-    const ordersQb = client.schema('e_commerce').from('orders');
-    const reviewsQb = client.schema('e_commerce').from('reviews');
+    const ordersQb = data.schema('e_commerce').from('orders');
+    const reviewsQb = data.schema('e_commerce').from('reviews');
 
     it('handles nullable columns with string and null comparisons', () => {
       ordersQb.eq('trackingNumber', 'TRK-123456');
@@ -1010,7 +1012,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
     type ReviewRow = SampleDatabase['e_commerce']['Tables']['reviews']['Row'];
 
     it('supports 3-way joins across relational entities with nullability preservation', () => {
-      const complexPipeline = client
+      const complexPipeline = data
         .schema('e_commerce')
         .from('orders')
         .join<CustomerRow, 'customer', 'inner'>('customers', {
@@ -1042,7 +1044,7 @@ describe('Vitest Type Testing: Comprehensive Schema & QueryBuilder Edge Cases', 
   });
 
   describe('12. Discriminated Union Row Structures in QueryBuilder', () => {
-    const payQb = client.from('payments');
+    const payQb = data.from('payments');
 
     it('preserves discriminated union row in QueryBuilder and types mutations', () => {
       expectTypeOf(payQb).toMatchTypeOf<
