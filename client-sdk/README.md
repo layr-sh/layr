@@ -31,7 +31,7 @@ Layr SDKs implement a 4-tier architectural pattern:
 ```text
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  Tier 4: Service Account Elevation & Control Plane (.cp)                     │
-│  withServiceAccount(service, { serviceAccountKey }) -> ServiceWithCP         │
+│  withServiceAccount(service, options?) -> ServiceWithCP                      │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Tier 3: Client Context & Functional Service Hooks                           │
 │  createClient(endpointURL, options) -> LayrClient                            │
@@ -348,8 +348,8 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 ### Phase 5: Tier 4 Service Account Elevation & Control Plane (`.cp`)
 
 - [ ] Elevation helper (`withServiceAccount` / `WithServiceAccount`):
-  - Accepts a service instance and `options: { serviceAccountKey }`.
-  - Injects `Service-Account-Key` header and attaches the `.cp` (Go: `.CP`) namespace.
+  - Accepts a service instance and optional `options?: { serviceAccountKey?: string }`.
+  - Injects `Service-Account-Key` header (when key is provided) and attaches the `.cp` (Go: `.CP`) namespace.
 - [ ] Control plane operation mapping:
   - Every control plane operation across all services is directly callable on an elevated service client instance (returned from `withServiceAccount(use<Service>(client), ...)`) based on its OpenAPI Operation ID under `.cp` (`<service>.cp.<subgroups>.<method>()`).
 

@@ -403,7 +403,7 @@ Unit tests run in isolation with zero network calls. All HTTP/WebSocket transpor
 | `CL-02` | Session Mutation: `setSession` | Setting active session token | Mutates active session token and `Authorization` header in-place | Bearer prefix stripping |
 | `CL-03` | Session Mutation: `clearSession` | Clearing active session | Deletes active session token and removes `Authorization` header | Header deletion |
 | `CL-04` | Service Elevation: `.cp` Attachment | Elevating a service with `serviceAccountKey` | Returns elevated object with `.cp` namespace; base service unchanged | Elevation execution |
-| `CL-05` | Elevation Validation: Missing Key | `serviceAccountKey: ""` or omitted | Throws descriptive error: `serviceAccountKey is required` | Empty key validation |
+| `CL-05` | Service Elevation: Optional Key | Options omitted or empty `serviceAccountKey` | Attaches `.cp` namespace without `Service-Account-Key` header | Optional key elevation |
 | `CL-06` | Elevation Validation: Invalid Service | Non-service client object passed to elevator | Throws descriptive error: `not a valid Layr service client` | Client presence validation |
 | `CL-07` | Elevation Immutability | Inspect base service after elevation | Base service does not expose `.cp` at runtime or in types | Non-mutation of input service |
 

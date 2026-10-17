@@ -70,22 +70,30 @@ describe('Client Context & Elevation Unit Tests', () => {
     expect((auth as any).cp).toBeUndefined();
   });
 
-  it('CL-06: Elevation Guard throws on empty serviceAccountKey', () => {
+  it('CL-06: Elevation with optional options attaches .cp without Service-Account-Key header', () => {
     const client = createClient({ endpoint: 'http://localhost:5297' });
     const auth = useAuth(client);
 
-    expect(() => withServiceAccount(auth, { serviceAccountKey: '' })).toThrow(
-      'serviceAccountKey is required'
-    );
-    expect(() => withServiceAccount(auth, { serviceAccountKey: '   ' })).toThrow(
-      'serviceAccountKey is required'
-    );
-    expect(() => withServiceAccount(auth, null as any)).toThrow(
-      'serviceAccountKey is required'
-    );
+    // Call without options
+    const elevatedNoOpts = withServiceAccount(auth);
+    expect(elevatedNoOpts.cp).toBeDefined();
+
+    // Call with empty options
+    const elevatedEmptyOpts = withServiceAccount(auth, {});
+    expect(elevatedEmptyOpts.cp).toBeDefined();
+
+    // Call with empty or whitespace serviceAccountKey
+    const elevatedEmptyKey = withServiceAccount(auth, { serviceAccountKey: '' });
+    expect(elevatedEmptyKey.cp).toBeDefined();
+
+    const elevatedWhitespaceKey = withServiceAccount(auth, { serviceAccountKey: '   ' });
+    expect(elevatedWhitespaceKey.cp).toBeDefined();
   });
 
   it('CL-07: Elevation Guard throws on invalid service', () => {
+    expect(() => withServiceAccount({} as any)).toThrow(
+      'Provided service is not a valid Layr service client'
+    );
     expect(() =>
       withServiceAccount({} as any, { serviceAccountKey: 'valid_key' })
     ).toThrow('Provided service is not a valid Layr service client');
@@ -94,7 +102,7 @@ describe('Client Context & Elevation Unit Tests', () => {
   it('CL-08: Elevation on service without ATTACH_CONTROL_PLANE yields undefined cp', () => {
     const client = createClient({ endpoint: 'http://localhost:5297' });
     const simpleService: ElevatableService<unknown> = { client };
-    const elevated = withServiceAccount(simpleService, { serviceAccountKey: 'key' });
+    const elevated = withServiceAccount(simpleService);
     expect(elevated.cp).toBeUndefined();
   });
 
