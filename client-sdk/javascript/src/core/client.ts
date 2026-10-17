@@ -5,7 +5,6 @@ import {
   normalizeEndpointURL,
   type RetryOptions,
 } from './transport';
-import type { GenericDatabase } from './database';
 export type { SchemaClient } from '../services/data';
 
 export interface ClientOptions extends RetryOptions {
@@ -15,7 +14,7 @@ export interface ClientOptions extends RetryOptions {
   headers?: Record<string, string>;
 }
 
-export interface LayrClient<Database = GenericDatabase> {
+export interface LayrClient {
   readonly endpoint: string;
   readonly options: ClientOptions;
   readonly config: Configuration;
@@ -26,7 +25,7 @@ export interface LayrClient<Database = GenericDatabase> {
   _singletons: Map<string, unknown>;
 }
 
-export function createClient<Database = GenericDatabase>(options: ClientOptions): LayrClient<Database> {
+export function createClient(options: ClientOptions): LayrClient {
   const normalizedURL = normalizeEndpointURL(options?.endpoint);
   const activeHeaders = buildHeaders(options);
   const fetchWithRetry = createFetchWithRetry(options);
@@ -37,7 +36,7 @@ export function createClient<Database = GenericDatabase>(options: ClientOptions)
     fetchApi: fetchWithRetry,
   });
 
-  const client: LayrClient<Database> = {
+  const client: LayrClient = {
     endpoint: normalizedURL,
     options,
     config,
@@ -66,12 +65,12 @@ export function createClient<Database = GenericDatabase>(options: ClientOptions)
 
 export const ATTACH_CONTROL_PLANE = Symbol('attachControlPlane');
 
-export interface ElevatableService<TCP = unknown, Database = any> {
-  client: LayrClient<Database>;
+export interface ElevatableService<TCP = unknown> {
+  client: LayrClient;
   [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => TCP;
 }
 
-export type Elevated<T> = T extends ElevatableService<infer TCP, any>
+export type Elevated<T> = T extends ElevatableService<infer TCP>
   ? T & { cp: TCP }
   : T;
 
@@ -79,7 +78,7 @@ export interface WithServiceAccountOptions {
   serviceAccountKey?: string;
 }
 
-export function withServiceAccount<T extends ElevatableService<unknown, any>>(
+export function withServiceAccount<T extends ElevatableService<unknown>>(
   service: T,
   options?: WithServiceAccountOptions
 ): Elevated<T> {

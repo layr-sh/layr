@@ -107,14 +107,14 @@ export interface SubscribedChannel {
 }
 
 export class RealtimeManager {
-  private layrClient: LayrClient<any>;
+  private layrClient: LayrClient;
   private ws?: WebSocket;
   private channels = new Map<string, SubscribedChannel>();
   private pingInterval?: ReturnType<typeof setInterval>;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private isExplicitClose = false;
 
-  constructor(layrClient: LayrClient<any>) {
+  constructor(layrClient: LayrClient) {
     this.layrClient = layrClient;
   }
 

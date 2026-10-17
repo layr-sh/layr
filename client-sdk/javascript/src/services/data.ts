@@ -140,8 +140,8 @@ export type ListRecordsParams<T = Record<string, string | number | boolean>> = O
   'schemaName' | 'tableName'
 > & ColumnFilters<T>;
 
-export interface DataService<Database = GenericDatabase> extends ElevatableService<DataControlPlane, Database> {
-  client: LayrClient<Database>;
+export interface DataService<Database = GenericDatabase> extends ElevatableService<DataControlPlane> {
+  client: LayrClient;
   [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => DataControlPlane;
 
   from<
@@ -226,7 +226,7 @@ export interface DataService<Database = GenericDatabase> extends ElevatableServi
   };
 }
 
-export function useData<Database = GenericDatabase>(client: LayrClient<Database>): DataService<Database> {
+export function useData<Database = GenericDatabase>(client: LayrClient): DataService<Database> {
   const config = client.config;
 
   const service: DataService<Database> = {
