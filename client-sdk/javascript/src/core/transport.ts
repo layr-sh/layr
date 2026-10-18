@@ -1,21 +1,16 @@
-import {
-  LayrAPIError,
-  type ErrorResponse,
-  type OAuthErrorResponse,
-  type LayrAPIErrorResponse,
-} from './errors';
+import { LayrAPIError } from "./errors";
 
-export * from './errors';
+export * from "./errors";
 
 export function normalizeEndpointURL(url?: string): string {
-  if (!url || typeof url !== 'string') {
-    return 'http://localhost:5297';
+  if (!url || typeof url !== "string") {
+    return "http://localhost:5297";
   }
   const trimmed = url.trim();
-  if (trimmed === '') {
-    return 'http://localhost:5297';
+  if (trimmed === "") {
+    return "http://localhost:5297";
   }
-  return trimmed.replace(/\/+$/, '');
+  return trimmed.replace(/\/+$/, "");
 }
 
 export interface HeaderOptions {
@@ -37,18 +32,18 @@ export function buildHeaders(options: HeaderOptions = {}): Record<string, string
   }
 
   if (options.publishableKey) {
-    headers['Publishable-Key'] = options.publishableKey;
+    headers["Publishable-Key"] = options.publishableKey;
   }
 
   if (options.sessionToken) {
-    const cleanToken = options.sessionToken.replace(/^Bearer\s+/i, '').trim();
+    const cleanToken = options.sessionToken.replace(/^Bearer\s+/i, "").trim();
     if (cleanToken) {
-      headers['Authorization'] = `Bearer ${cleanToken}`;
+      headers["Authorization"] = `Bearer ${cleanToken}`;
     }
   }
 
   if (options.serviceAccountKey) {
-    headers['Service-Account-Key'] = options.serviceAccountKey;
+    headers["Service-Account-Key"] = options.serviceAccountKey;
   }
 
   return headers;
@@ -93,10 +88,10 @@ export function createFetchWithRetry(options: RetryOptions = {}): typeof fetch {
       if (timeoutMs && timeoutMs > 0) {
         const controller = new AbortController();
         if (init?.signal) {
-          init.signal.addEventListener('abort', () => controller.abort());
+          init.signal.addEventListener("abort", () => controller.abort());
         }
         timer = setTimeout(() => {
-          controller.abort(new DOMException('Request timeout', 'TimeoutError'));
+          controller.abort(new DOMException("Request timeout", "TimeoutError"));
         }, timeoutMs);
         initToUse = { ...init, signal: controller.signal };
       }
@@ -112,7 +107,7 @@ export function createFetchWithRetry(options: RetryOptions = {}): typeof fetch {
             // ignore drain error
           }
 
-          let delay = parseRetryAfter(response.headers.get('Retry-After'));
+          let delay = parseRetryAfter(response.headers.get("Retry-After"));
           if (delay === null || delay < 0) {
             const exponential = Math.min(maxDelayMs, initialDelayMs * Math.pow(2, attempt));
             delay = exponential + Math.random() * initialDelayMs;
@@ -136,7 +131,12 @@ export async function handleApiCall<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'response' in err && (err as { response: unknown }).response instanceof Response) {
+    if (
+      err &&
+      typeof err === "object" &&
+      "response" in err &&
+      (err as { response: unknown }).response instanceof Response
+    ) {
       throw await LayrAPIError.fromResponse((err as { response: Response }).response);
     }
     throw err;

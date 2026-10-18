@@ -9,6 +9,7 @@ import (
 
 // RegisterRoutes registers all Console control plane routes.
 func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
+	service.registerBaseRoutes(baseRouter)
 	service.registerControlPlaneRoutes(controlPlaneRouter)
 }
 
