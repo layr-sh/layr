@@ -29,8 +29,8 @@ class ListPoliciesResponse(BaseModel):
     ListPoliciesResponse schema
     """ # noqa: E501
     count: StrictInt
-    policies: Optional[List[Policy]]
-    __properties: ClassVar[List[str]] = ["count", "policies"]
+    data: Optional[List[Policy]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListPoliciesResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in policies (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.policies:
-            for _item_policies in self.policies:
-                _items.append(_item_policies.to_dict() if _item_policies is not None else None)
-            _dict['policies'] = _items
-        # set to None if policies (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.policies is None and "policies" in self.model_fields_set:
-            _dict['policies'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListPoliciesResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "policies": [Policy.from_dict(_item) for _item in obj["policies"]] if obj.get("policies") is not None else None
+            "data": [Policy.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

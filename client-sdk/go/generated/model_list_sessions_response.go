@@ -22,7 +22,7 @@ var _ MappedNullable = &ListSessionsResponse{}
 // ListSessionsResponse ListSessionsResponse schema
 type ListSessionsResponse struct {
 	Count int32 `json:"count"`
-	Sessions []UserSession `json:"sessions"`
+	Data []UserSession `json:"data"`
 }
 
 type _ListSessionsResponse ListSessionsResponse
@@ -31,10 +31,10 @@ type _ListSessionsResponse ListSessionsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListSessionsResponse(count int32, sessions []UserSession) *ListSessionsResponse {
+func NewListSessionsResponse(count int32, data []UserSession) *ListSessionsResponse {
 	this := ListSessionsResponse{}
 	this.Count = count
-	this.Sessions = sessions
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListSessionsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetSessions returns the Sessions field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []UserSession will be returned
-func (o *ListSessionsResponse) GetSessions() []UserSession {
+func (o *ListSessionsResponse) GetData() []UserSession {
 	if o == nil {
 		var ret []UserSession
 		return ret
 	}
 
-	return o.Sessions
+	return o.Data
 }
 
-// GetSessionsOk returns a tuple with the Sessions field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListSessionsResponse) GetSessionsOk() ([]UserSession, bool) {
-	if o == nil || IsNil(o.Sessions) {
+func (o *ListSessionsResponse) GetDataOk() ([]UserSession, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Sessions, true
+	return o.Data, true
 }
 
-// SetSessions sets field value
-func (o *ListSessionsResponse) SetSessions(v []UserSession) {
-	o.Sessions = v
+// SetData sets field value
+func (o *ListSessionsResponse) SetData(v []UserSession) {
+	o.Data = v
 }
 
 func (o ListSessionsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListSessionsResponse) MarshalJSON() ([]byte, error) {
 func (o ListSessionsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Sessions != nil {
-		toSerialize["sessions"] = o.Sessions
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListSessionsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"sessions",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

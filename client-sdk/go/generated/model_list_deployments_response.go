@@ -22,7 +22,7 @@ var _ MappedNullable = &ListDeploymentsResponse{}
 // ListDeploymentsResponse ListDeploymentsResponse schema
 type ListDeploymentsResponse struct {
 	Count int32 `json:"count"`
-	Deployments []Deployment `json:"deployments"`
+	Data []Deployment `json:"data"`
 }
 
 type _ListDeploymentsResponse ListDeploymentsResponse
@@ -31,10 +31,10 @@ type _ListDeploymentsResponse ListDeploymentsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListDeploymentsResponse(count int32, deployments []Deployment) *ListDeploymentsResponse {
+func NewListDeploymentsResponse(count int32, data []Deployment) *ListDeploymentsResponse {
 	this := ListDeploymentsResponse{}
 	this.Count = count
-	this.Deployments = deployments
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListDeploymentsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetDeployments returns the Deployments field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Deployment will be returned
-func (o *ListDeploymentsResponse) GetDeployments() []Deployment {
+func (o *ListDeploymentsResponse) GetData() []Deployment {
 	if o == nil {
 		var ret []Deployment
 		return ret
 	}
 
-	return o.Deployments
+	return o.Data
 }
 
-// GetDeploymentsOk returns a tuple with the Deployments field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListDeploymentsResponse) GetDeploymentsOk() ([]Deployment, bool) {
-	if o == nil || IsNil(o.Deployments) {
+func (o *ListDeploymentsResponse) GetDataOk() ([]Deployment, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Deployments, true
+	return o.Data, true
 }
 
-// SetDeployments sets field value
-func (o *ListDeploymentsResponse) SetDeployments(v []Deployment) {
-	o.Deployments = v
+// SetData sets field value
+func (o *ListDeploymentsResponse) SetData(v []Deployment) {
+	o.Data = v
 }
 
 func (o ListDeploymentsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListDeploymentsResponse) MarshalJSON() ([]byte, error) {
 func (o ListDeploymentsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Deployments != nil {
-		toSerialize["deployments"] = o.Deployments
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListDeploymentsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"deployments",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

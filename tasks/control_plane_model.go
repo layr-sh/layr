@@ -37,7 +37,7 @@ type UpdateJobInput struct {
 
 // ListJobsResponse represents the output of listing cron jobs.
 type ListJobsResponse struct {
-	Jobs  []GetJobResponse `json:"jobs"`
+	Data  []GetJobResponse `json:"data"`
 	Count int              `json:"count"`
 }
 

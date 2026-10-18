@@ -8,7 +8,7 @@ ListPresetsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`presets` | [Array&lt;Preset&gt;](Preset.md)
+`data` | [Array&lt;Preset&gt;](Preset.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListPresetsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "presets": null,
+  "data": null,
 } satisfies ListPresetsResponse
 
 console.log(example)

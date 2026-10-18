@@ -70,8 +70,8 @@ func (handler *BaseHandler) handleListSessions(responseWriter http.ResponseWrite
 
 	log.Debugf("retrieved %d active session(s) for user %s", len(sessions), userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListSessionsResponse{
-		Sessions: sessions,
-		Count:    len(sessions),
+		Data:  sessions,
+		Count: len(sessions),
 	})
 }
 

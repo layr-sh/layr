@@ -34,7 +34,7 @@ export interface ListDeploymentsResponse {
     /**
      * 
      */
-    deployments: Array<Deployment> | null;
+    data: Array<Deployment> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListDeploymentsResponse {
  */
 export function instanceOfListDeploymentsResponse(value: object): value is ListDeploymentsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('deployments' in value) || value['deployments'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListDeploymentsResponseFromJSONTyped(json: any, ignoreDiscrimina
     return {
         
         'count': json['count'],
-        'deployments': (json['deployments'] == null ? null : (json['deployments'] as Array<any>).map(DeploymentFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(DeploymentFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListDeploymentsResponseToJSONTyped(value?: ListDeploymentsRespon
     return {
         
         'count': value['count'],
-        'deployments': (value['deployments'] == null ? null : (value['deployments'] as Array<any>).map(DeploymentToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(DeploymentToJSON)),
     };
 }
 

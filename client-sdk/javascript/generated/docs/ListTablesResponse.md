@@ -8,7 +8,7 @@ ListTablesResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`tables` | [Array&lt;Table&gt;](Table.md)
+`data` | [Array&lt;Table&gt;](Table.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListTablesResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "tables": null,
+  "data": null,
 } satisfies ListTablesResponse
 
 console.log(example)

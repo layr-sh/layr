@@ -28,9 +28,9 @@ class ListBucketsResponse(BaseModel):
     """
     ListBucketsResponse schema
     """ # noqa: E501
-    buckets: Optional[List[Bucket]]
     count: StrictInt
-    __properties: ClassVar[List[str]] = ["buckets", "count"]
+    data: Optional[List[Bucket]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListBucketsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in buckets (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.buckets:
-            for _item_buckets in self.buckets:
-                _items.append(_item_buckets.to_dict() if _item_buckets is not None else None)
-            _dict['buckets'] = _items
-        # set to None if buckets (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.buckets is None and "buckets" in self.model_fields_set:
-            _dict['buckets'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -94,8 +94,8 @@ class ListBucketsResponse(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "buckets": [Bucket.from_dict(_item) for _item in obj["buckets"]] if obj.get("buckets") is not None else None,
-            "count": obj.get("count")
+            "count": obj.get("count"),
+            "data": [Bucket.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

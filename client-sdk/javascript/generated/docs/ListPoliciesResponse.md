@@ -8,7 +8,7 @@ ListPoliciesResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`policies` | [Array&lt;Policy&gt;](Policy.md)
+`data` | [Array&lt;Policy&gt;](Policy.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListPoliciesResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "policies": null,
+  "data": null,
 } satisfies ListPoliciesResponse
 
 console.log(example)

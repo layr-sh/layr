@@ -29,8 +29,8 @@ class ListDeploymentsResponse(BaseModel):
     ListDeploymentsResponse schema
     """ # noqa: E501
     count: StrictInt
-    deployments: Optional[List[Deployment]]
-    __properties: ClassVar[List[str]] = ["count", "deployments"]
+    data: Optional[List[Deployment]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListDeploymentsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in deployments (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.deployments:
-            for _item_deployments in self.deployments:
-                _items.append(_item_deployments.to_dict() if _item_deployments is not None else None)
-            _dict['deployments'] = _items
-        # set to None if deployments (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.deployments is None and "deployments" in self.model_fields_set:
-            _dict['deployments'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListDeploymentsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "deployments": [Deployment.from_dict(_item) for _item in obj["deployments"]] if obj.get("deployments") is not None else None
+            "data": [Deployment.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

@@ -46,8 +46,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListUserSessions(responseW
 
 	log.Debugf("retrieved %d session(s) for user %s", len(sessions), userID)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListUserSessionsResponse{
-		Sessions: sessions,
-		Count:    len(sessions),
+		Data:  sessions,
+		Count: len(sessions),
 	})
 }
 

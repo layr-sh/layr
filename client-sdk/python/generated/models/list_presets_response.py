@@ -29,8 +29,8 @@ class ListPresetsResponse(BaseModel):
     ListPresetsResponse schema
     """ # noqa: E501
     count: StrictInt
-    presets: Optional[List[Preset]]
-    __properties: ClassVar[List[str]] = ["count", "presets"]
+    data: Optional[List[Preset]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListPresetsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in presets (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.presets:
-            for _item_presets in self.presets:
-                _items.append(_item_presets.to_dict() if _item_presets is not None else None)
-            _dict['presets'] = _items
-        # set to None if presets (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.presets is None and "presets" in self.model_fields_set:
-            _dict['presets'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListPresetsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "presets": [Preset.from_dict(_item) for _item in obj["presets"]] if obj.get("presets") is not None else None
+            "data": [Preset.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

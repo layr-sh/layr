@@ -34,7 +34,7 @@ export interface ListIndexesResponse {
     /**
      * 
      */
-    indexes: Array<ModelIndex> | null;
+    data: Array<ModelIndex> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListIndexesResponse {
  */
 export function instanceOfListIndexesResponse(value: object): value is ListIndexesResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('indexes' in value) || value['indexes'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListIndexesResponseFromJSONTyped(json: any, ignoreDiscriminator:
     return {
         
         'count': json['count'],
-        'indexes': (json['indexes'] == null ? null : (json['indexes'] as Array<any>).map(ModelIndexFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(ModelIndexFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListIndexesResponseToJSONTyped(value?: ListIndexesResponse | nul
     return {
         
         'count': value['count'],
-        'indexes': (value['indexes'] == null ? null : (value['indexes'] as Array<any>).map(ModelIndexToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(ModelIndexToJSON)),
     };
 }
 

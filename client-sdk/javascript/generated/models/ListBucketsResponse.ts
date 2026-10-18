@@ -30,19 +30,19 @@ export interface ListBucketsResponse {
     /**
      * 
      */
-    buckets: Array<Bucket> | null;
+    count: number;
     /**
      * 
      */
-    count: number;
+    data: Array<Bucket> | null;
 }
 
 /**
  * Check if a given object implements the ListBucketsResponse interface.
  */
 export function instanceOfListBucketsResponse(value: object): value is ListBucketsResponse {
-    if (!('buckets' in value) || value['buckets'] === undefined) return false;
     if (!('count' in value) || value['count'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -56,8 +56,8 @@ export function ListBucketsResponseFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
         
-        'buckets': (json['buckets'] == null ? null : (json['buckets'] as Array<any>).map(BucketFromJSON)),
         'count': json['count'],
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(BucketFromJSON)),
     };
 }
 
@@ -72,8 +72,8 @@ export function ListBucketsResponseToJSONTyped(value?: ListBucketsResponse | nul
 
     return {
         
-        'buckets': (value['buckets'] == null ? null : (value['buckets'] as Array<any>).map(BucketToJSON)),
         'count': value['count'],
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(BucketToJSON)),
     };
 }
 

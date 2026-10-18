@@ -10,25 +10,25 @@ import Foundation
 /** ListBucketsResponse schema */
 public struct ListBucketsResponse: Sendable, Codable, Hashable {
 
-    public var buckets: [Bucket]?
     public var count: Int
+    public var data: [Bucket]?
 
-    public init(buckets: [Bucket]?, count: Int) {
-        self.buckets = buckets
+    public init(count: Int, data: [Bucket]?) {
         self.count = count
+        self.data = data
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
-        case buckets
         case count
+        case data
     }
 
     // Encodable protocol methods
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(buckets, forKey: .buckets)
         try container.encode(count, forKey: .count)
+        try container.encode(data, forKey: .data)
     }
 }
 

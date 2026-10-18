@@ -34,7 +34,7 @@ export interface ListPresetsResponse {
     /**
      * 
      */
-    presets: Array<Preset> | null;
+    data: Array<Preset> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListPresetsResponse {
  */
 export function instanceOfListPresetsResponse(value: object): value is ListPresetsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('presets' in value) || value['presets'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListPresetsResponseFromJSONTyped(json: any, ignoreDiscriminator:
     return {
         
         'count': json['count'],
-        'presets': (json['presets'] == null ? null : (json['presets'] as Array<any>).map(PresetFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(PresetFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListPresetsResponseToJSONTyped(value?: ListPresetsResponse | nul
     return {
         
         'count': value['count'],
-        'presets': (value['presets'] == null ? null : (value['presets'] as Array<any>).map(PresetToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(PresetToJSON)),
     };
 }
 

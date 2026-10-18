@@ -200,7 +200,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	}
 
 	var secondarySessionID string
-	for _, userSession := range listSessionsResponse.Sessions {
+	for _, userSession := range listSessionsResponse.Data {
 		if userSession.UserAgent != nil && *userSession.UserAgent == "Secondary-Device-Tablet" {
 			secondarySessionID = userSession.ID
 		}

@@ -27,8 +27,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListIndexes(responseWriter
 	}
 	log.Debugf("retrieved %d index(es) on %s.%s", len(indexes), schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListIndexesResponse{
-		Indexes: indexes,
-		Count:   len(indexes),
+		Data:  indexes,
+		Count: len(indexes),
 	})
 }
 

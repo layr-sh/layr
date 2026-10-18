@@ -34,7 +34,7 @@ export interface ListPoliciesResponse {
     /**
      * 
      */
-    policies: Array<Policy> | null;
+    data: Array<Policy> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListPoliciesResponse {
  */
 export function instanceOfListPoliciesResponse(value: object): value is ListPoliciesResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('policies' in value) || value['policies'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListPoliciesResponseFromJSONTyped(json: any, ignoreDiscriminator
     return {
         
         'count': json['count'],
-        'policies': (json['policies'] == null ? null : (json['policies'] as Array<any>).map(PolicyFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(PolicyFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListPoliciesResponseToJSONTyped(value?: ListPoliciesResponse | n
     return {
         
         'count': value['count'],
-        'policies': (value['policies'] == null ? null : (value['policies'] as Array<any>).map(PolicyToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(PolicyToJSON)),
     };
 }
 

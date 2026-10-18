@@ -16,8 +16,8 @@ type UpdatePresetInput struct {
 
 // ListPresetsResponse represents the response containing multiple presets.
 type ListPresetsResponse struct {
-	Presets []Preset `json:"presets"`
-	Count   int      `json:"count"`
+	Data  []Preset `json:"data"`
+	Count int      `json:"count"`
 }
 
 // SignURLInput defines the request body for generating a signed image URL.

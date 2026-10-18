@@ -141,8 +141,8 @@ type UserSession struct {
 
 // ListSessionsResponse represents the list of active sessions for the current user.
 type ListSessionsResponse struct {
-	Sessions []UserSession `json:"sessions"`
-	Count    int           `json:"count"`
+	Data  []UserSession `json:"data"`
+	Count int           `json:"count"`
 }
 
 // RevokeOtherSessionsResponse represents the result of revoking other devices.

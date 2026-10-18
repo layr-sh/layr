@@ -21,8 +21,8 @@ var _ MappedNullable = &ListBucketsResponse{}
 
 // ListBucketsResponse ListBucketsResponse schema
 type ListBucketsResponse struct {
-	Buckets []Bucket `json:"buckets"`
 	Count int32 `json:"count"`
+	Data []Bucket `json:"data"`
 }
 
 type _ListBucketsResponse ListBucketsResponse
@@ -31,10 +31,10 @@ type _ListBucketsResponse ListBucketsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListBucketsResponse(buckets []Bucket, count int32) *ListBucketsResponse {
+func NewListBucketsResponse(count int32, data []Bucket) *ListBucketsResponse {
 	this := ListBucketsResponse{}
-	this.Buckets = buckets
 	this.Count = count
+	this.Data = data
 	return &this
 }
 
@@ -44,32 +44,6 @@ func NewListBucketsResponse(buckets []Bucket, count int32) *ListBucketsResponse 
 func NewListBucketsResponseWithDefaults() *ListBucketsResponse {
 	this := ListBucketsResponse{}
 	return &this
-}
-
-// GetBuckets returns the Buckets field value
-// If the value is explicit nil, the zero value for []Bucket will be returned
-func (o *ListBucketsResponse) GetBuckets() []Bucket {
-	if o == nil {
-		var ret []Bucket
-		return ret
-	}
-
-	return o.Buckets
-}
-
-// GetBucketsOk returns a tuple with the Buckets field value
-// and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListBucketsResponse) GetBucketsOk() ([]Bucket, bool) {
-	if o == nil || IsNil(o.Buckets) {
-		return nil, false
-	}
-	return o.Buckets, true
-}
-
-// SetBuckets sets field value
-func (o *ListBucketsResponse) SetBuckets(v []Bucket) {
-	o.Buckets = v
 }
 
 // GetCount returns the Count field value
@@ -96,6 +70,32 @@ func (o *ListBucketsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
+// GetData returns the Data field value
+// If the value is explicit nil, the zero value for []Bucket will be returned
+func (o *ListBucketsResponse) GetData() []Bucket {
+	if o == nil {
+		var ret []Bucket
+		return ret
+	}
+
+	return o.Data
+}
+
+// GetDataOk returns a tuple with the Data field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *ListBucketsResponse) GetDataOk() ([]Bucket, bool) {
+	if o == nil || IsNil(o.Data) {
+		return nil, false
+	}
+	return o.Data, true
+}
+
+// SetData sets field value
+func (o *ListBucketsResponse) SetData(v []Bucket) {
+	o.Data = v
+}
+
 func (o ListBucketsResponse) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -106,10 +106,10 @@ func (o ListBucketsResponse) MarshalJSON() ([]byte, error) {
 
 func (o ListBucketsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if o.Buckets != nil {
-		toSerialize["buckets"] = o.Buckets
-	}
 	toSerialize["count"] = o.Count
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
+	}
 	return toSerialize, nil
 }
 
@@ -118,8 +118,8 @@ func (o *ListBucketsResponse) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"buckets",
 		"count",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

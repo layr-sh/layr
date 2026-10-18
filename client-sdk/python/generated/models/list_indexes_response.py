@@ -29,8 +29,8 @@ class ListIndexesResponse(BaseModel):
     ListIndexesResponse schema
     """ # noqa: E501
     count: StrictInt
-    indexes: Optional[List[Index]]
-    __properties: ClassVar[List[str]] = ["count", "indexes"]
+    data: Optional[List[Index]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListIndexesResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in indexes (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.indexes:
-            for _item_indexes in self.indexes:
-                _items.append(_item_indexes.to_dict() if _item_indexes is not None else None)
-            _dict['indexes'] = _items
-        # set to None if indexes (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.indexes is None and "indexes" in self.model_fields_set:
-            _dict['indexes'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListIndexesResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "indexes": [Index.from_dict(_item) for _item in obj["indexes"]] if obj.get("indexes") is not None else None
+            "data": [Index.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

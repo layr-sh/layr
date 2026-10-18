@@ -11,16 +11,16 @@ import Foundation
 public struct ListJobsResponse: Sendable, Codable, Hashable {
 
     public var count: Int
-    public var jobs: [GetJobResponse]?
+    public var data: [GetJobResponse]?
 
-    public init(count: Int, jobs: [GetJobResponse]?) {
+    public init(count: Int, data: [GetJobResponse]?) {
         self.count = count
-        self.jobs = jobs
+        self.data = data
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
         case count
-        case jobs
+        case data
     }
 
     // Encodable protocol methods
@@ -28,7 +28,7 @@ public struct ListJobsResponse: Sendable, Codable, Hashable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(count, forKey: .count)
-        try container.encode(jobs, forKey: .jobs)
+        try container.encode(data, forKey: .data)
     }
 }
 
