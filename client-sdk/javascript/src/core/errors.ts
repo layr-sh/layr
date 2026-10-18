@@ -26,11 +26,11 @@ export class LayrAPIError extends Error {
   readonly response?: Response;
 
   constructor(payload?: LayrAPIErrorResponse | string, response?: Response) {
-    const p = typeof payload === 'string' ? { detail: payload } : payload;
+    const p = typeof payload === "string" ? { detail: payload } : payload;
     const status = p?.status ?? response?.status ?? 500;
-    const detail = p?.detail || p?.error_description || response?.statusText || `HTTP ${status}`;
+    const detail = p?.detail || p?.error_description || `Unknown error occurred`;
     super(detail);
-    this.name = 'LayrAPIError';
+    this.name = "LayrAPIError";
     this.status = status;
     this.title = p?.title || response?.statusText || `HTTP ${status}`;
     this.detail = detail;
@@ -42,7 +42,7 @@ export class LayrAPIError extends Error {
   }
 
   static async fromResponse(response: Response): Promise<LayrAPIError> {
-    let bodyText = '';
+    let bodyText = "";
     try {
       bodyText = await response.text();
     } catch {

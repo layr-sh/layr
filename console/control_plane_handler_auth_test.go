@@ -320,3 +320,87 @@ func TestConsoleControlPlaneHandlerAuthDatabaseUnit(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, badMFASignInResponseRecorder.Code)
 	})
 }
+
+func TestConsoleResolveUserScopesUnit(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+
+	ctx := context.Background()
+	service := NewService(kernel)
+	controlPlaneHandler := service.controlPlaneHandler
+
+	// 1. User with linked root service account ("*")
+	var rootUserID string
+	insertRootUserSQL := `
+		INSERT INTO console.users (email, password_hash, is_enabled)
+		VALUES ('root-test@example.com', 'hash', true)
+		RETURNING id
+	`
+	require.NoError(t, kernel.DB().QueryRow(ctx, insertRootUserSQL).Scan(&rootUserID))
+
+	_, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
+		ConsoleUserID: &rootUserID,
+		Name:          "Root SA",
+		Scopes:        []string{core.ScopeRoot},
+	})
+	require.NoError(t, err)
+
+	rootScopes := controlPlaneHandler.resolveUserScopes(ctx, rootUserID)
+	require.Equal(t, []string{core.ScopeRoot}, rootScopes)
+
+	// 2. User with linked service account with custom non-root scopes
+	var customUserID string
+	insertCustomUserSQL := `
+		INSERT INTO console.users (email, password_hash, is_enabled)
+		VALUES ('custom-test@example.com', 'hash', true)
+		RETURNING id
+	`
+	require.NoError(t, kernel.DB().QueryRow(ctx, insertCustomUserSQL).Scan(&customUserID))
+
+	_, err = kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
+		ConsoleUserID: &customUserID,
+		Name:          "Custom SA",
+		Scopes:        []string{core.ScopeDataSchemaRead, core.ScopeAuthUserRead},
+	})
+	require.NoError(t, err)
+
+	customScopes := controlPlaneHandler.resolveUserScopes(ctx, customUserID)
+	require.Contains(t, customScopes, core.ScopeDataSchemaRead)
+	require.Contains(t, customScopes, core.ScopeAuthUserRead)
+	require.Contains(t, customScopes, core.ScopeConsoleUserRead)
+
+	// 3. User with no linked service account
+	var plainUserID string
+	insertPlainUserSQL := `
+		INSERT INTO console.users (email, password_hash, is_enabled)
+		VALUES ('plain-test@example.com', 'hash', true)
+		RETURNING id
+	`
+	require.NoError(t, kernel.DB().QueryRow(ctx, insertPlainUserSQL).Scan(&plainUserID))
+
+	plainScopes := controlPlaneHandler.resolveUserScopes(ctx, plainUserID)
+	require.Equal(t, defaultConsoleScopes, plainScopes)
+
+	// 4. Broken DB returns defaultConsoleScopes
+	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	brokenControlPlaneHandler := NewService(brokenKernel).controlPlaneHandler
+	brokenScopes := brokenControlPlaneHandler.resolveUserScopes(ctx, rootUserID)
+	require.Equal(t, defaultConsoleScopes, brokenScopes)
+
+	// 5. Corrupted scopes JSON in database
+	var corruptUserID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		INSERT INTO console.users (email, password_hash, is_enabled)
+		VALUES ('corrupt-test@example.com', 'hash', true)
+		RETURNING id
+	`).Scan(&corruptUserID))
+
+	_, err = kernel.DB().Exec(ctx, `
+		INSERT INTO core.service_accounts (name, key_prefix, key_hash, scopes, is_enabled, console_user_id)
+		VALUES ('Corrupt SA', 'prefix01', 'hash01', '{"not":"an_array"}', true, $1)
+	`, corruptUserID)
+	require.NoError(t, err)
+
+	corruptScopes := controlPlaneHandler.resolveUserScopes(ctx, corruptUserID)
+	require.Equal(t, defaultConsoleScopes, corruptScopes)
+}

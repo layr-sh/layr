@@ -2,9 +2,9 @@
 package console
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +14,13 @@ import (
 )
 
 const consoleMFATicketTTL = 5 * time.Minute
+
+var defaultConsoleScopes = []string{
+	core.ScopeConsoleUserRead,
+	core.ScopeConsoleUserWrite,
+	core.ScopeConsoleConfigRead,
+	core.ScopeConsoleConfigWrite,
+}
 
 func (controlPlaneHandler *ControlPlaneHandler) extractConsoleToken(request *http.Request) string {
 	if request == nil {
@@ -194,13 +201,15 @@ func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(resp
 		Secure:   isSecure,
 	})
 
+	scopes := controlPlaneHandler.resolveUserScopes(ctx, user.ID)
+
 	jwtClaims := core.JWTClaims{
 		Subject:   user.ID,
 		SessionID: sessionID,
 		Email:     user.Email,
 		Role:      "console_operator",
 		Audience:  "layr:console:user",
-		Scope:     fmt.Sprintf("%s %s %s %s", core.ScopeConsoleUserRead, core.ScopeConsoleUserWrite, core.ScopeConsoleConfigRead, core.ScopeConsoleConfigWrite),
+		Scope:     strings.Join(scopes, " "),
 	}
 	accessToken := controlPlaneHandler.kernel.JWTSigner().GenerateAccessToken(jwtClaims, controlPlaneHandler.configManager.Get().SessionIdleTimeoutSeconds)
 
@@ -269,6 +278,59 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSignOutConsole(responseWri
 	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
+func (controlPlaneHandler *ControlPlaneHandler) resolveUserScopes(ctx context.Context, userID string) []string {
+	const selectScopesSQL = `
+		SELECT scopes
+		FROM core.service_accounts
+		WHERE console_user_id = $1 AND is_enabled = true
+	`
+	rows, err := controlPlaneHandler.kernel.DB().Query(ctx, selectScopesSQL, userID)
+	if err != nil {
+		return defaultConsoleScopes
+	}
+	defer rows.Close()
+
+	var userScopes []string
+	hasRoot := false
+
+	for rows.Next() {
+		var scopesRaw []byte
+		_ = rows.Scan(&scopesRaw)
+		var scopes []string
+		if unmarshalErr := json.Unmarshal(scopesRaw, &scopes); unmarshalErr != nil {
+			continue
+		}
+		for _, scope := range scopes {
+			if scope == core.ScopeRoot {
+				hasRoot = true
+				break
+			}
+			userScopes = append(userScopes, scope)
+		}
+		if hasRoot {
+			break
+		}
+	}
+
+	if hasRoot {
+		return []string{core.ScopeRoot}
+	}
+
+	if len(userScopes) == 0 {
+		return defaultConsoleScopes
+	}
+
+	seen := make(map[string]bool)
+	var finalScopes []string
+	for _, scope := range append(defaultConsoleScopes, userScopes...) {
+		if !seen[scope] {
+			seen[scope] = true
+			finalScopes = append(finalScopes, scope)
+		}
+	}
+	return finalScopes
+}
+
 // handleGetConsoleSession handles GET /v1/_/console/session.
 func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleSession(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling get console session request")
@@ -279,12 +341,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleSession(response
 		return
 	}
 
-	scopes := []string{
-		core.ScopeConsoleUserRead,
-		core.ScopeConsoleUserWrite,
-		core.ScopeConsoleConfigRead,
-		core.ScopeConsoleConfigWrite,
-	}
+	scopes := controlPlaneHandler.resolveUserScopes(request.Context(), user.ID)
 
 	getConsoleSessionResponse := GetConsoleSessionResponse{
 		User:    *user,
