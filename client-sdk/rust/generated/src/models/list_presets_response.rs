@@ -16,16 +16,16 @@ use serde::{Deserialize, Serialize};
 pub struct ListPresetsResponse {
     #[serde(rename = "count")]
     pub count: i32,
-    #[serde(rename = "presets", deserialize_with = "Option::deserialize")]
-    pub presets: Option<Vec<models::Preset>>,
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<Vec<models::Preset>>,
 }
 
 impl ListPresetsResponse {
     /// ListPresetsResponse schema
-    pub fn new(count: i32, presets: Option<Vec<models::Preset>>) -> ListPresetsResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Preset>>) -> ListPresetsResponse {
         ListPresetsResponse {
             count,
-            presets,
+            data,
         }
     }
 }

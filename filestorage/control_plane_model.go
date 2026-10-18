@@ -23,8 +23,8 @@ type UpdateBucketInput struct {
 
 // ListBucketsResponse represents the response containing multiple buckets.
 type ListBucketsResponse struct {
-	Buckets []Bucket `json:"buckets"`
-	Count   int      `json:"count"`
+	Data  []Bucket `json:"data"`
+	Count int      `json:"count"`
 }
 
 // ListBucketObjectsResponse represents the response containing objects in a bucket.

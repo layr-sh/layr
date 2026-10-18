@@ -34,7 +34,7 @@ export interface ListEndpointsResponse {
     /**
      * 
      */
-    endpoints: Array<Endpoint> | null;
+    data: Array<Endpoint> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListEndpointsResponse {
  */
 export function instanceOfListEndpointsResponse(value: object): value is ListEndpointsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('endpoints' in value) || value['endpoints'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListEndpointsResponseFromJSONTyped(json: any, ignoreDiscriminato
     return {
         
         'count': json['count'],
-        'endpoints': (json['endpoints'] == null ? null : (json['endpoints'] as Array<any>).map(EndpointFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(EndpointFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListEndpointsResponseToJSONTyped(value?: ListEndpointsResponse |
     return {
         
         'count': value['count'],
-        'endpoints': (value['endpoints'] == null ? null : (value['endpoints'] as Array<any>).map(EndpointToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(EndpointToJSON)),
     };
 }
 

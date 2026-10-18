@@ -22,7 +22,7 @@ var _ MappedNullable = &ListIndexesResponse{}
 // ListIndexesResponse ListIndexesResponse schema
 type ListIndexesResponse struct {
 	Count int32 `json:"count"`
-	Indexes []Index `json:"indexes"`
+	Data []Index `json:"data"`
 }
 
 type _ListIndexesResponse ListIndexesResponse
@@ -31,10 +31,10 @@ type _ListIndexesResponse ListIndexesResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListIndexesResponse(count int32, indexes []Index) *ListIndexesResponse {
+func NewListIndexesResponse(count int32, data []Index) *ListIndexesResponse {
 	this := ListIndexesResponse{}
 	this.Count = count
-	this.Indexes = indexes
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListIndexesResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetIndexes returns the Indexes field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Index will be returned
-func (o *ListIndexesResponse) GetIndexes() []Index {
+func (o *ListIndexesResponse) GetData() []Index {
 	if o == nil {
 		var ret []Index
 		return ret
 	}
 
-	return o.Indexes
+	return o.Data
 }
 
-// GetIndexesOk returns a tuple with the Indexes field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListIndexesResponse) GetIndexesOk() ([]Index, bool) {
-	if o == nil || IsNil(o.Indexes) {
+func (o *ListIndexesResponse) GetDataOk() ([]Index, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Indexes, true
+	return o.Data, true
 }
 
-// SetIndexes sets field value
-func (o *ListIndexesResponse) SetIndexes(v []Index) {
-	o.Indexes = v
+// SetData sets field value
+func (o *ListIndexesResponse) SetData(v []Index) {
+	o.Data = v
 }
 
 func (o ListIndexesResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListIndexesResponse) MarshalJSON() ([]byte, error) {
 func (o ListIndexesResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Indexes != nil {
-		toSerialize["indexes"] = o.Indexes
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListIndexesResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"indexes",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

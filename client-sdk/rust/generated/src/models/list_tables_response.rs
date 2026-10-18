@@ -16,16 +16,16 @@ use serde::{Deserialize, Serialize};
 pub struct ListTablesResponse {
     #[serde(rename = "count")]
     pub count: i32,
-    #[serde(rename = "tables", deserialize_with = "Option::deserialize")]
-    pub tables: Option<Vec<models::Table>>,
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<Vec<models::Table>>,
 }
 
 impl ListTablesResponse {
     /// ListTablesResponse schema
-    pub fn new(count: i32, tables: Option<Vec<models::Table>>) -> ListTablesResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Table>>) -> ListTablesResponse {
         ListTablesResponse {
             count,
-            tables,
+            data,
         }
     }
 }

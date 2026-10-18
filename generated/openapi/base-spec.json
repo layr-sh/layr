@@ -666,7 +666,7 @@
           "count": {
             "type": "integer"
           },
-          "sessions": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/UserSession"
             },
@@ -678,7 +678,7 @@
         },
         "required": [
           "count",
-          "sessions"
+          "data"
         ],
         "type": "object"
       },

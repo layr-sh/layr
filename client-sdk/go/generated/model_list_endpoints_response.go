@@ -22,7 +22,7 @@ var _ MappedNullable = &ListEndpointsResponse{}
 // ListEndpointsResponse ListEndpointsResponse schema
 type ListEndpointsResponse struct {
 	Count int32 `json:"count"`
-	Endpoints []Endpoint `json:"endpoints"`
+	Data []Endpoint `json:"data"`
 }
 
 type _ListEndpointsResponse ListEndpointsResponse
@@ -31,10 +31,10 @@ type _ListEndpointsResponse ListEndpointsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListEndpointsResponse(count int32, endpoints []Endpoint) *ListEndpointsResponse {
+func NewListEndpointsResponse(count int32, data []Endpoint) *ListEndpointsResponse {
 	this := ListEndpointsResponse{}
 	this.Count = count
-	this.Endpoints = endpoints
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListEndpointsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetEndpoints returns the Endpoints field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Endpoint will be returned
-func (o *ListEndpointsResponse) GetEndpoints() []Endpoint {
+func (o *ListEndpointsResponse) GetData() []Endpoint {
 	if o == nil {
 		var ret []Endpoint
 		return ret
 	}
 
-	return o.Endpoints
+	return o.Data
 }
 
-// GetEndpointsOk returns a tuple with the Endpoints field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListEndpointsResponse) GetEndpointsOk() ([]Endpoint, bool) {
-	if o == nil || IsNil(o.Endpoints) {
+func (o *ListEndpointsResponse) GetDataOk() ([]Endpoint, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Endpoints, true
+	return o.Data, true
 }
 
-// SetEndpoints sets field value
-func (o *ListEndpointsResponse) SetEndpoints(v []Endpoint) {
-	o.Endpoints = v
+// SetData sets field value
+func (o *ListEndpointsResponse) SetData(v []Endpoint) {
+	o.Data = v
 }
 
 func (o ListEndpointsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListEndpointsResponse) MarshalJSON() ([]byte, error) {
 func (o ListEndpointsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Endpoints != nil {
-		toSerialize["endpoints"] = o.Endpoints
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListEndpointsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"endpoints",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

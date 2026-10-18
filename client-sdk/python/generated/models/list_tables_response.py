@@ -29,8 +29,8 @@ class ListTablesResponse(BaseModel):
     ListTablesResponse schema
     """ # noqa: E501
     count: StrictInt
-    tables: Optional[List[Table]]
-    __properties: ClassVar[List[str]] = ["count", "tables"]
+    data: Optional[List[Table]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListTablesResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in tables (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.tables:
-            for _item_tables in self.tables:
-                _items.append(_item_tables.to_dict() if _item_tables is not None else None)
-            _dict['tables'] = _items
-        # set to None if tables (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.tables is None and "tables" in self.model_fields_set:
-            _dict['tables'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListTablesResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "tables": [Table.from_dict(_item) for _item in obj["tables"]] if obj.get("tables") is not None else None
+            "data": [Table.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

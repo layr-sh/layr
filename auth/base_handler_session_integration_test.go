@@ -91,7 +91,7 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 		t.Fatalf("expected 3 sessions, got: %d", cookieListSessionsResponse.Count)
 	}
 	var currentFound bool
-	for _, s := range cookieListSessionsResponse.Sessions {
+	for _, s := range cookieListSessionsResponse.Data {
 		if s.ID == session1ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -114,7 +114,7 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 	var refreshTokenListSessionsResponse ListSessionsResponse
 	_ = json.NewDecoder(refreshTokenListResponseRecorder.Body).Decode(&refreshTokenListSessionsResponse)
 	currentFound = false
-	for _, s := range refreshTokenListSessionsResponse.Sessions {
+	for _, s := range refreshTokenListSessionsResponse.Data {
 		if s.ID == session2ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -142,7 +142,7 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 	var sessionIDListSessionsResponse ListSessionsResponse
 	_ = json.NewDecoder(sessionIDListResponseRecorder.Body).Decode(&sessionIDListSessionsResponse)
 	currentFound = false
-	for _, s := range sessionIDListSessionsResponse.Sessions {
+	for _, s := range sessionIDListSessionsResponse.Data {
 		if s.ID == session3ID && s.IsCurrent {
 			currentFound = true
 		}
@@ -176,7 +176,7 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 	baseHandler.handleListSessions(singleListResponseRecorder, singleListRequest)
 	var singleListSessionsResponse ListSessionsResponse
 	_ = json.NewDecoder(singleListResponseRecorder.Body).Decode(&singleListSessionsResponse)
-	if singleListSessionsResponse.Count != 1 || !singleListSessionsResponse.Sessions[0].IsCurrent {
+	if singleListSessionsResponse.Count != 1 || !singleListSessionsResponse.Data[0].IsCurrent {
 		t.Fatalf("expected single session fallback to mark IsCurrent = true")
 	}
 

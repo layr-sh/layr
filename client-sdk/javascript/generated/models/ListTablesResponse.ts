@@ -34,7 +34,7 @@ export interface ListTablesResponse {
     /**
      * 
      */
-    tables: Array<Table> | null;
+    data: Array<Table> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListTablesResponse {
  */
 export function instanceOfListTablesResponse(value: object): value is ListTablesResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('tables' in value) || value['tables'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListTablesResponseFromJSONTyped(json: any, ignoreDiscriminator: 
     return {
         
         'count': json['count'],
-        'tables': (json['tables'] == null ? null : (json['tables'] as Array<any>).map(TableFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(TableFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListTablesResponseToJSONTyped(value?: ListTablesResponse | null,
     return {
         
         'count': value['count'],
-        'tables': (value['tables'] == null ? null : (value['tables'] as Array<any>).map(TableToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(TableToJSON)),
     };
 }
 

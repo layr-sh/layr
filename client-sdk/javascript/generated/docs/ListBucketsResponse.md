@@ -7,8 +7,8 @@ ListBucketsResponse schema
 
 Name | Type
 ------------ | -------------
-`buckets` | [Array&lt;Bucket&gt;](Bucket.md)
 `count` | number
+`data` | [Array&lt;Bucket&gt;](Bucket.md)
 
 ## Example
 
@@ -17,8 +17,8 @@ import type { ListBucketsResponse } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "buckets": null,
   "count": null,
+  "data": null,
 } satisfies ListBucketsResponse
 
 console.log(example)

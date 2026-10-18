@@ -30,6 +30,6 @@ type ListUsersResponse struct {
 
 // ListUserSessionsResponse represents the list of active sessions for an application user in the control plane.
 type ListUserSessionsResponse struct {
-	Sessions []Session `json:"sessions"`
-	Count    int       `json:"count"`
+	Data  []Session `json:"data"`
+	Count int       `json:"count"`
 }

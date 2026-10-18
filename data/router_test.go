@@ -40,7 +40,7 @@ func TestDataRouterUnit(t *testing.T) {
 	_ = ExecuteGraphQLResponse{Data: "test"}
 	_ = ToggleRLSInput{Action: "enable"}
 	_ = ToggleRLSResponse{Status: "enabled"}
-	_ = ListTablesResponse{Tables: []Table{{Name: "t", Schema: "s"}}}
+	_ = ListTablesResponse{Data: []Table{{Name: "t", Schema: "s"}}}
 	_ = Table{Name: "t", Schema: "s"}
 	_ = Column{Name: "c", Type: "text"}
 	_ = Index{IndexName: "idx"}

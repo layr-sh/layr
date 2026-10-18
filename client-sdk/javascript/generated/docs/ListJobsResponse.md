@@ -8,7 +8,7 @@ ListJobsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`jobs` | [Array&lt;GetJobResponse&gt;](GetJobResponse.md)
+`data` | [Array&lt;GetJobResponse&gt;](GetJobResponse.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListJobsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "jobs": null,
+  "data": null,
 } satisfies ListJobsResponse
 
 console.log(example)

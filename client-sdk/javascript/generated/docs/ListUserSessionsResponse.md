@@ -8,7 +8,7 @@ ListUserSessionsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`sessions` | [Array&lt;Session&gt;](Session.md)
+`data` | [Array&lt;Session&gt;](Session.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListUserSessionsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "sessions": null,
+  "data": null,
 } satisfies ListUserSessionsResponse
 
 console.log(example)

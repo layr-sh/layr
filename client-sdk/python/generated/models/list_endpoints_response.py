@@ -29,8 +29,8 @@ class ListEndpointsResponse(BaseModel):
     ListEndpointsResponse schema
     """ # noqa: E501
     count: StrictInt
-    endpoints: Optional[List[Endpoint]]
-    __properties: ClassVar[List[str]] = ["count", "endpoints"]
+    data: Optional[List[Endpoint]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListEndpointsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in endpoints (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.endpoints:
-            for _item_endpoints in self.endpoints:
-                _items.append(_item_endpoints.to_dict() if _item_endpoints is not None else None)
-            _dict['endpoints'] = _items
-        # set to None if endpoints (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.endpoints is None and "endpoints" in self.model_fields_set:
-            _dict['endpoints'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListEndpointsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "endpoints": [Endpoint.from_dict(_item) for _item in obj["endpoints"]] if obj.get("endpoints") is not None else None
+            "data": [Endpoint.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

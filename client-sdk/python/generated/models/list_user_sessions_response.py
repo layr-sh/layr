@@ -29,8 +29,8 @@ class ListUserSessionsResponse(BaseModel):
     ListUserSessionsResponse schema
     """ # noqa: E501
     count: StrictInt
-    sessions: Optional[List[Session]]
-    __properties: ClassVar[List[str]] = ["count", "sessions"]
+    data: Optional[List[Session]]
+    __properties: ClassVar[List[str]] = ["count", "data"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,16 +71,16 @@ class ListUserSessionsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in sessions (list)
+        # override the default output from pydantic by calling `to_dict()` of each item in data (list)
         _items = []
-        if self.sessions:
-            for _item_sessions in self.sessions:
-                _items.append(_item_sessions.to_dict() if _item_sessions is not None else None)
-            _dict['sessions'] = _items
-        # set to None if sessions (nullable) is None
+        if self.data:
+            for _item_data in self.data:
+                _items.append(_item_data.to_dict() if _item_data is not None else None)
+            _dict['data'] = _items
+        # set to None if data (nullable) is None
         # and model_fields_set contains the field
-        if self.sessions is None and "sessions" in self.model_fields_set:
-            _dict['sessions'] = None
+        if self.data is None and "data" in self.model_fields_set:
+            _dict['data'] = None
 
         return _dict
 
@@ -95,7 +95,7 @@ class ListUserSessionsResponse(BaseModel):
 
         _obj = cls.model_validate({
             "count": obj.get("count"),
-            "sessions": [Session.from_dict(_item) for _item in obj["sessions"]] if obj.get("sessions") is not None else None
+            "data": [Session.from_dict(_item) for _item in obj["data"]] if obj.get("data") is not None else None
         })
         return _obj
 

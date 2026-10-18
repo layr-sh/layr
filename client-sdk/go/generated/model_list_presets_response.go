@@ -22,7 +22,7 @@ var _ MappedNullable = &ListPresetsResponse{}
 // ListPresetsResponse ListPresetsResponse schema
 type ListPresetsResponse struct {
 	Count int32 `json:"count"`
-	Presets []Preset `json:"presets"`
+	Data []Preset `json:"data"`
 }
 
 type _ListPresetsResponse ListPresetsResponse
@@ -31,10 +31,10 @@ type _ListPresetsResponse ListPresetsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListPresetsResponse(count int32, presets []Preset) *ListPresetsResponse {
+func NewListPresetsResponse(count int32, data []Preset) *ListPresetsResponse {
 	this := ListPresetsResponse{}
 	this.Count = count
-	this.Presets = presets
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListPresetsResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetPresets returns the Presets field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Preset will be returned
-func (o *ListPresetsResponse) GetPresets() []Preset {
+func (o *ListPresetsResponse) GetData() []Preset {
 	if o == nil {
 		var ret []Preset
 		return ret
 	}
 
-	return o.Presets
+	return o.Data
 }
 
-// GetPresetsOk returns a tuple with the Presets field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListPresetsResponse) GetPresetsOk() ([]Preset, bool) {
-	if o == nil || IsNil(o.Presets) {
+func (o *ListPresetsResponse) GetDataOk() ([]Preset, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Presets, true
+	return o.Data, true
 }
 
-// SetPresets sets field value
-func (o *ListPresetsResponse) SetPresets(v []Preset) {
-	o.Presets = v
+// SetData sets field value
+func (o *ListPresetsResponse) SetData(v []Preset) {
+	o.Data = v
 }
 
 func (o ListPresetsResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListPresetsResponse) MarshalJSON() ([]byte, error) {
 func (o ListPresetsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Presets != nil {
-		toSerialize["presets"] = o.Presets
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListPresetsResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"presets",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

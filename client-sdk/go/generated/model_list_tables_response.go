@@ -22,7 +22,7 @@ var _ MappedNullable = &ListTablesResponse{}
 // ListTablesResponse ListTablesResponse schema
 type ListTablesResponse struct {
 	Count int32 `json:"count"`
-	Tables []Table `json:"tables"`
+	Data []Table `json:"data"`
 }
 
 type _ListTablesResponse ListTablesResponse
@@ -31,10 +31,10 @@ type _ListTablesResponse ListTablesResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListTablesResponse(count int32, tables []Table) *ListTablesResponse {
+func NewListTablesResponse(count int32, data []Table) *ListTablesResponse {
 	this := ListTablesResponse{}
 	this.Count = count
-	this.Tables = tables
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListTablesResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetTables returns the Tables field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Table will be returned
-func (o *ListTablesResponse) GetTables() []Table {
+func (o *ListTablesResponse) GetData() []Table {
 	if o == nil {
 		var ret []Table
 		return ret
 	}
 
-	return o.Tables
+	return o.Data
 }
 
-// GetTablesOk returns a tuple with the Tables field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListTablesResponse) GetTablesOk() ([]Table, bool) {
-	if o == nil || IsNil(o.Tables) {
+func (o *ListTablesResponse) GetDataOk() ([]Table, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Tables, true
+	return o.Data, true
 }
 
-// SetTables sets field value
-func (o *ListTablesResponse) SetTables(v []Table) {
-	o.Tables = v
+// SetData sets field value
+func (o *ListTablesResponse) SetData(v []Table) {
+	o.Data = v
 }
 
 func (o ListTablesResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListTablesResponse) MarshalJSON() ([]byte, error) {
 func (o ListTablesResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Tables != nil {
-		toSerialize["tables"] = o.Tables
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListTablesResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"tables",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

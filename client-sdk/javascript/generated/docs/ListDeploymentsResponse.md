@@ -8,7 +8,7 @@ ListDeploymentsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`deployments` | [Array&lt;Deployment&gt;](Deployment.md)
+`data` | [Array&lt;Deployment&gt;](Deployment.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListDeploymentsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "deployments": null,
+  "data": null,
 } satisfies ListDeploymentsResponse
 
 console.log(example)

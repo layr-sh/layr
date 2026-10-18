@@ -14,18 +14,18 @@ use serde::{Deserialize, Serialize};
 /// ListBucketsResponse : ListBucketsResponse schema
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ListBucketsResponse {
-    #[serde(rename = "buckets", deserialize_with = "Option::deserialize")]
-    pub buckets: Option<Vec<models::Bucket>>,
     #[serde(rename = "count")]
     pub count: i32,
+    #[serde(rename = "data", deserialize_with = "Option::deserialize")]
+    pub data: Option<Vec<models::Bucket>>,
 }
 
 impl ListBucketsResponse {
     /// ListBucketsResponse schema
-    pub fn new(buckets: Option<Vec<models::Bucket>>, count: i32) -> ListBucketsResponse {
+    pub fn new(count: i32, data: Option<Vec<models::Bucket>>) -> ListBucketsResponse {
         ListBucketsResponse {
-            buckets,
             count,
+            data,
         }
     }
 }

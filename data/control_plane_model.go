@@ -155,8 +155,8 @@ type CreateIndexResponse struct {
 
 // ListIndexesResponse represents a list of index definitions on a table.
 type ListIndexesResponse struct {
-	Indexes []Index `json:"indexes"`
-	Count   int     `json:"count"`
+	Data  []Index `json:"data"`
+	Count int     `json:"count"`
 }
 
 // DeleteIndexResponse represents the result of dropping an index.
@@ -173,8 +173,8 @@ type CreatePolicyResponse struct {
 
 // ListPoliciesResponse represents a list of RLS policies on a table.
 type ListPoliciesResponse struct {
-	Policies []Policy `json:"policies"`
-	Count    int      `json:"count"`
+	Data  []Policy `json:"data"`
+	Count int      `json:"count"`
 }
 
 // DeletePolicyResponse represents the result of dropping an RLS policy.
@@ -203,8 +203,8 @@ type InvalidateCacheResponse struct {
 
 // ListTablesResponse represents a list of table summaries.
 type ListTablesResponse struct {
-	Tables []Table `json:"tables"`
-	Count  int     `json:"count"`
+	Data  []Table `json:"data"`
+	Count int     `json:"count"`
 }
 
 // ExecuteSQLResponse represents execution timing and results from raw SQL queries.

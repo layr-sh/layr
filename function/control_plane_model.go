@@ -43,8 +43,8 @@ type UpdateEndpointInput struct {
 
 // ListEndpointsResponse represents the response containing a collection of endpoints.
 type ListEndpointsResponse struct {
-	Endpoints []Endpoint `json:"endpoints"`
-	Count     int        `json:"count"`
+	Data  []Endpoint `json:"data"`
+	Count int        `json:"count"`
 }
 
 // CreateDeploymentInput defines the request body for uploading and deploying a code bundle or file tree.
@@ -63,8 +63,8 @@ type RollbackDeploymentInput struct {
 
 // ListDeploymentsResponse represents the response containing deployment version history.
 type ListDeploymentsResponse struct {
-	Deployments []Deployment `json:"deployments"`
-	Count       int          `json:"count"`
+	Data  []Deployment `json:"data"`
+	Count int          `json:"count"`
 }
 
 // GetStatsResponse represents runtime metrics and health telemetry across runners.

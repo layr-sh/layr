@@ -22,7 +22,7 @@ var _ MappedNullable = &ListPoliciesResponse{}
 // ListPoliciesResponse ListPoliciesResponse schema
 type ListPoliciesResponse struct {
 	Count int32 `json:"count"`
-	Policies []Policy `json:"policies"`
+	Data []Policy `json:"data"`
 }
 
 type _ListPoliciesResponse ListPoliciesResponse
@@ -31,10 +31,10 @@ type _ListPoliciesResponse ListPoliciesResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListPoliciesResponse(count int32, policies []Policy) *ListPoliciesResponse {
+func NewListPoliciesResponse(count int32, data []Policy) *ListPoliciesResponse {
 	this := ListPoliciesResponse{}
 	this.Count = count
-	this.Policies = policies
+	this.Data = data
 	return &this
 }
 
@@ -70,30 +70,30 @@ func (o *ListPoliciesResponse) SetCount(v int32) {
 	o.Count = v
 }
 
-// GetPolicies returns the Policies field value
+// GetData returns the Data field value
 // If the value is explicit nil, the zero value for []Policy will be returned
-func (o *ListPoliciesResponse) GetPolicies() []Policy {
+func (o *ListPoliciesResponse) GetData() []Policy {
 	if o == nil {
 		var ret []Policy
 		return ret
 	}
 
-	return o.Policies
+	return o.Data
 }
 
-// GetPoliciesOk returns a tuple with the Policies field value
+// GetDataOk returns a tuple with the Data field value
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListPoliciesResponse) GetPoliciesOk() ([]Policy, bool) {
-	if o == nil || IsNil(o.Policies) {
+func (o *ListPoliciesResponse) GetDataOk() ([]Policy, bool) {
+	if o == nil || IsNil(o.Data) {
 		return nil, false
 	}
-	return o.Policies, true
+	return o.Data, true
 }
 
-// SetPolicies sets field value
-func (o *ListPoliciesResponse) SetPolicies(v []Policy) {
-	o.Policies = v
+// SetData sets field value
+func (o *ListPoliciesResponse) SetData(v []Policy) {
+	o.Data = v
 }
 
 func (o ListPoliciesResponse) MarshalJSON() ([]byte, error) {
@@ -107,8 +107,8 @@ func (o ListPoliciesResponse) MarshalJSON() ([]byte, error) {
 func (o ListPoliciesResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["count"] = o.Count
-	if o.Policies != nil {
-		toSerialize["policies"] = o.Policies
+	if o.Data != nil {
+		toSerialize["data"] = o.Data
 	}
 	return toSerialize, nil
 }
@@ -119,7 +119,7 @@ func (o *ListPoliciesResponse) UnmarshalJSON(data []byte) (err error) {
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
 		"count",
-		"policies",
+		"data",
 	}
 
 	allProperties := make(map[string]interface{})

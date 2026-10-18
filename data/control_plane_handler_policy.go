@@ -27,8 +27,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPolicies(responseWrite
 	}
 	log.Debugf("retrieved %d policy(ies) on %s.%s", len(policies), schema, table)
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListPoliciesResponse{
-		Policies: policies,
-		Count:    len(policies),
+		Data:  policies,
+		Count: len(policies),
 	})
 }
 

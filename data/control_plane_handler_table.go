@@ -23,8 +23,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListTables(responseWriter 
 	}
 	log.Debugf("retrieved %d table(s)", len(tables))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListTablesResponse{
-		Tables: tables,
-		Count:  len(tables),
+		Data:  tables,
+		Count: len(tables),
 	})
 }
 

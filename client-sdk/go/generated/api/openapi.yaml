@@ -6132,7 +6132,7 @@ components:
         id: ""
         is_public: true
         last_updated_at: 2000-01-23T04:56:07.000+00:00
-        max_file_size_bytes: 0
+        max_file_size_bytes: 6
         name: name
       properties:
         allowed_mime_types:
@@ -8568,7 +8568,8 @@ components:
     ListBucketsResponse:
       description: ListBucketsResponse schema
       example:
-        buckets:
+        count: 0
+        data:
         - allowed_mime_types:
           - allowed_mime_types
           - allowed_mime_types
@@ -8579,7 +8580,7 @@ components:
           id: ""
           is_public: true
           last_updated_at: 2000-01-23T04:56:07.000+00:00
-          max_file_size_bytes: 0
+          max_file_size_bytes: 6
           name: name
         - allowed_mime_types:
           - allowed_mime_types
@@ -8591,21 +8592,20 @@ components:
           id: ""
           is_public: true
           last_updated_at: 2000-01-23T04:56:07.000+00:00
-          max_file_size_bytes: 0
+          max_file_size_bytes: 6
           name: name
-        count: 6
       properties:
-        buckets:
+        count:
+          type: integer
+        data:
           items:
             $ref: "#/components/schemas/Bucket"
           nullable: true
           type: array
           default: null
-        count:
-          type: integer
       required:
-      - buckets
       - count
+      - data
     ListCustomDomainRoutesResponse:
       description: ListCustomDomainRoutesResponse schema
       example:
@@ -8752,7 +8752,7 @@ components:
       description: ListDeploymentsResponse schema
       example:
         count: 0
-        deployments:
+        data:
         - bundle_files:
             key: ""
           bundle_format: bundle_format
@@ -8788,7 +8788,7 @@ components:
       properties:
         count:
           type: integer
-        deployments:
+        data:
           items:
             $ref: "#/components/schemas/Deployment"
           nullable: true
@@ -8796,12 +8796,12 @@ components:
           default: null
       required:
       - count
-      - deployments
+      - data
     ListEndpointsResponse:
       description: ListEndpointsResponse schema
       example:
         count: 0
-        endpoints:
+        data:
         - active_deployment_id: ""
           created_at: 2000-01-23T04:56:07.000+00:00
           description: description
@@ -8827,7 +8827,7 @@ components:
       properties:
         count:
           type: integer
-        endpoints:
+        data:
           items:
             $ref: "#/components/schemas/Endpoint"
           nullable: true
@@ -8835,7 +8835,7 @@ components:
           default: null
       required:
       - count
-      - endpoints
+      - data
     ListEventsResponse:
       description: ListEventsResponse schema
       example:
@@ -8954,7 +8954,7 @@ components:
       description: ListIndexesResponse schema
       example:
         count: 0
-        indexes:
+        data:
         - columns:
           - columns
           - columns
@@ -8970,7 +8970,7 @@ components:
       properties:
         count:
           type: integer
-        indexes:
+        data:
           items:
             $ref: "#/components/schemas/Index"
           nullable: true
@@ -8978,12 +8978,12 @@ components:
           default: null
       required:
       - count
-      - indexes
+      - data
     ListJobsResponse:
       description: ListJobsResponse schema
       example:
         count: 0
-        jobs:
+        data:
         - created_at: 2000-01-23T04:56:07.000+00:00
           cron_expression: cron_expression
           id: ""
@@ -9011,7 +9011,7 @@ components:
       properties:
         count:
           type: integer
-        jobs:
+        data:
           items:
             $ref: "#/components/schemas/GetJobResponse"
           nullable: true
@@ -9019,12 +9019,12 @@ components:
           default: null
       required:
       - count
-      - jobs
+      - data
     ListPoliciesResponse:
       description: ListPoliciesResponse schema
       example:
         count: 0
-        policies:
+        data:
         - command: command
           name: name
           permissive: permissive
@@ -9048,7 +9048,7 @@ components:
       properties:
         count:
           type: integer
-        policies:
+        data:
           items:
             $ref: "#/components/schemas/Policy"
           nullable: true
@@ -9056,12 +9056,12 @@ components:
           default: null
       required:
       - count
-      - policies
+      - data
     ListPresetsResponse:
       description: ListPresetsResponse schema
       example:
         count: 0
-        presets:
+        data:
         - created_at: 2000-01-23T04:56:07.000+00:00
           description: description
           id: ""
@@ -9077,7 +9077,7 @@ components:
       properties:
         count:
           type: integer
-        presets:
+        data:
           items:
             $ref: "#/components/schemas/Preset"
           nullable: true
@@ -9085,7 +9085,7 @@ components:
           default: null
       required:
       - count
-      - presets
+      - data
     ListRecordsResponse:
       description: ListRecordsResponse schema
       example:
@@ -9124,7 +9124,7 @@ components:
       description: ListSessionsResponse schema
       example:
         count: 0
-        sessions:
+        data:
         - created_at: 2000-01-23T04:56:07.000+00:00
           expires_at: 2000-01-23T04:56:07.000+00:00
           id: id
@@ -9140,7 +9140,7 @@ components:
       properties:
         count:
           type: integer
-        sessions:
+        data:
           items:
             $ref: "#/components/schemas/UserSession"
           nullable: true
@@ -9148,12 +9148,12 @@ components:
           default: null
       required:
       - count
-      - sessions
+      - data
     ListTablesResponse:
       description: ListTablesResponse schema
       example:
         count: 0
-        tables:
+        data:
         - columns:
           - default_value: default_value
             is_nullable: true
@@ -9253,7 +9253,7 @@ components:
       properties:
         count:
           type: integer
-        tables:
+        data:
           items:
             $ref: "#/components/schemas/Table"
           nullable: true
@@ -9261,12 +9261,12 @@ components:
           default: null
       required:
       - count
-      - tables
+      - data
     ListUserSessionsResponse:
       description: ListUserSessionsResponse schema
       example:
         count: 0
-        sessions:
+        data:
         - client_id: client_id
           created_at: 2000-01-23T04:56:07.000+00:00
           expires_at: 2000-01-23T04:56:07.000+00:00
@@ -9286,7 +9286,7 @@ components:
       properties:
         count:
           type: integer
-        sessions:
+        data:
           items:
             $ref: "#/components/schemas/Session"
           nullable: true
@@ -9294,7 +9294,7 @@ components:
           default: null
       required:
       - count
-      - sessions
+      - data
     ListUsersResponse:
       description: ListUsersResponse schema
       example:

@@ -8,7 +8,7 @@ ListEndpointsResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`endpoints` | [Array&lt;Endpoint&gt;](Endpoint.md)
+`data` | [Array&lt;Endpoint&gt;](Endpoint.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListEndpointsResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "endpoints": null,
+  "data": null,
 } satisfies ListEndpointsResponse
 
 console.log(example)

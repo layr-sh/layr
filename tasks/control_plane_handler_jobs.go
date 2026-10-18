@@ -26,7 +26,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListJobs(responseWriter ht
 	}
 
 	listJobsResponse := ListJobsResponse{
-		Jobs:  jobs,
+		Data:  jobs,
 		Count: len(jobs),
 	}
 	log.Debugf("retrieved %d job(s)", len(jobs))

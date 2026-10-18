@@ -25,8 +25,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListPresets(responseWriter
 	}
 
 	listPresetsResponse := ListPresetsResponse{
-		Presets: presets,
-		Count:   len(presets),
+		Data:  presets,
+		Count: len(presets),
 	}
 	log.Debugf("retrieved %d preset(s)", len(presets))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, listPresetsResponse)

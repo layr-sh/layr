@@ -1792,7 +1792,10 @@
       "ListBucketsResponse": {
         "description": "ListBucketsResponse schema",
         "properties": {
-          "buckets": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Bucket"
             },
@@ -1800,14 +1803,11 @@
               "array",
               "null"
             ]
-          },
-          "count": {
-            "type": "integer"
           }
         },
         "required": [
-          "buckets",
-          "count"
+          "count",
+          "data"
         ],
         "type": "object"
       },
@@ -1894,7 +1894,7 @@
           "count": {
             "type": "integer"
           },
-          "deployments": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Deployment"
             },
@@ -1906,7 +1906,7 @@
         },
         "required": [
           "count",
-          "deployments"
+          "data"
         ],
         "type": "object"
       },
@@ -1916,7 +1916,7 @@
           "count": {
             "type": "integer"
           },
-          "endpoints": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Endpoint"
             },
@@ -1928,7 +1928,7 @@
         },
         "required": [
           "count",
-          "endpoints"
+          "data"
         ],
         "type": "object"
       },
@@ -2004,7 +2004,7 @@
           "count": {
             "type": "integer"
           },
-          "indexes": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Index"
             },
@@ -2016,7 +2016,7 @@
         },
         "required": [
           "count",
-          "indexes"
+          "data"
         ],
         "type": "object"
       },
@@ -2026,7 +2026,7 @@
           "count": {
             "type": "integer"
           },
-          "jobs": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/GetJobResponse"
             },
@@ -2038,7 +2038,7 @@
         },
         "required": [
           "count",
-          "jobs"
+          "data"
         ],
         "type": "object"
       },
@@ -2048,7 +2048,7 @@
           "count": {
             "type": "integer"
           },
-          "policies": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Policy"
             },
@@ -2060,7 +2060,7 @@
         },
         "required": [
           "count",
-          "policies"
+          "data"
         ],
         "type": "object"
       },
@@ -2070,7 +2070,7 @@
           "count": {
             "type": "integer"
           },
-          "presets": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Preset"
             },
@@ -2082,7 +2082,7 @@
         },
         "required": [
           "count",
-          "presets"
+          "data"
         ],
         "type": "object"
       },
@@ -2092,7 +2092,7 @@
           "count": {
             "type": "integer"
           },
-          "tables": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Table"
             },
@@ -2104,7 +2104,7 @@
         },
         "required": [
           "count",
-          "tables"
+          "data"
         ],
         "type": "object"
       },
@@ -2114,7 +2114,7 @@
           "count": {
             "type": "integer"
           },
-          "sessions": {
+          "data": {
             "items": {
               "$ref": "#/components/schemas/Session"
             },
@@ -2126,7 +2126,7 @@
         },
         "required": [
           "count",
-          "sessions"
+          "data"
         ],
         "type": "object"
       },

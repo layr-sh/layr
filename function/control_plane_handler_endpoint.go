@@ -92,8 +92,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListEndpoints(responseWrit
 
 	log.Debugf("retrieved %d endpoint(s)", len(endpoints))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListEndpointsResponse{
-		Endpoints: endpoints,
-		Count:     len(endpoints),
+		Data:  endpoints,
+		Count: len(endpoints),
 	})
 }
 

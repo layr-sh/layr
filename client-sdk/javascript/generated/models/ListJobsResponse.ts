@@ -34,7 +34,7 @@ export interface ListJobsResponse {
     /**
      * 
      */
-    jobs: Array<GetJobResponse> | null;
+    data: Array<GetJobResponse> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListJobsResponse {
  */
 export function instanceOfListJobsResponse(value: object): value is ListJobsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('jobs' in value) || value['jobs'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListJobsResponseFromJSONTyped(json: any, ignoreDiscriminator: bo
     return {
         
         'count': json['count'],
-        'jobs': (json['jobs'] == null ? null : (json['jobs'] as Array<any>).map(GetJobResponseFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(GetJobResponseFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListJobsResponseToJSONTyped(value?: ListJobsResponse | null, ign
     return {
         
         'count': value['count'],
-        'jobs': (value['jobs'] == null ? null : (value['jobs'] as Array<any>).map(GetJobResponseToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(GetJobResponseToJSON)),
     };
 }
 

@@ -34,7 +34,7 @@ export interface ListSessionsResponse {
     /**
      * 
      */
-    sessions: Array<UserSession> | null;
+    data: Array<UserSession> | null;
 }
 
 /**
@@ -42,7 +42,7 @@ export interface ListSessionsResponse {
  */
 export function instanceOfListSessionsResponse(value: object): value is ListSessionsResponse {
     if (!('count' in value) || value['count'] === undefined) return false;
-    if (!('sessions' in value) || value['sessions'] === undefined) return false;
+    if (!('data' in value) || value['data'] === undefined) return false;
     return true;
 }
 
@@ -57,7 +57,7 @@ export function ListSessionsResponseFromJSONTyped(json: any, ignoreDiscriminator
     return {
         
         'count': json['count'],
-        'sessions': (json['sessions'] == null ? null : (json['sessions'] as Array<any>).map(UserSessionFromJSON)),
+        'data': (json['data'] == null ? null : (json['data'] as Array<any>).map(UserSessionFromJSON)),
     };
 }
 
@@ -73,7 +73,7 @@ export function ListSessionsResponseToJSONTyped(value?: ListSessionsResponse | n
     return {
         
         'count': value['count'],
-        'sessions': (value['sessions'] == null ? null : (value['sessions'] as Array<any>).map(UserSessionToJSON)),
+        'data': (value['data'] == null ? null : (value['data'] as Array<any>).map(UserSessionToJSON)),
     };
 }
 

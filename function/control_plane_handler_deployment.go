@@ -304,8 +304,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListDeployments(responseWr
 
 	log.Debugf("retrieved %d deployment(s)", len(deployments))
 	core.WriteJSONResponse(responseWriter, http.StatusOK, ListDeploymentsResponse{
-		Deployments: deployments,
-		Count:       len(deployments),
+		Data:  deployments,
+		Count: len(deployments),
 	})
 }
 

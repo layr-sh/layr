@@ -8,7 +8,7 @@ ListIndexesResponse schema
 Name | Type
 ------------ | -------------
 `count` | number
-`indexes` | [Array&lt;ModelIndex&gt;](ModelIndex.md)
+`data` | [Array&lt;ModelIndex&gt;](ModelIndex.md)
 
 ## Example
 
@@ -18,7 +18,7 @@ import type { ListIndexesResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "count": null,
-  "indexes": null,
+  "data": null,
 } satisfies ListIndexesResponse
 
 console.log(example)

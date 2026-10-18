@@ -65,8 +65,8 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBuckets(responseWriter
 	}
 
 	listBucketsResponse := ListBucketsResponse{
-		Buckets: buckets,
-		Count:   len(buckets),
+		Data:  buckets,
+		Count: len(buckets),
 	}
 
 	log.Debugf("retrieved %d bucket(s)", len(buckets))
