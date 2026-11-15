@@ -174,7 +174,7 @@ func TestAuthBaseHandlerSessionUnit(t *testing.T) {
 	signOutWithBodyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", strings.NewReader(`{"refresh_token":"dummy-refresh-token"}`))
 	signOutWithBodyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSignOut(signOutWithBodyResponseRecorder, signOutWithBodyRequest)
-	if signOutWithBodyResponseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 No Content on sign out with body, got: %d", signOutWithBodyResponseRecorder.Code)
+	if signOutWithBodyResponseRecorder.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when session revocation fails, got: %d", signOutWithBodyResponseRecorder.Code)
 	}
 }

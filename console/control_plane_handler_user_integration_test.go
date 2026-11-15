@@ -14,6 +14,77 @@ import (
 	"layr.sh/core"
 )
 
+func TestConsoleRootUserProtectionIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := t.Context()
+	service := NewService(kernel)
+	server := core.NewServer(kernel)
+	service.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter(), server.Mux())
+	consoleRootUser, rootServiceAccount, _, err := kernel.CreateConsoleRootUser(ctx, "root-protection@example.com", "ValidPassword123!")
+	require.NoError(t, err)
+	require.Equal(t, []string{core.ScopeRoot}, rootServiceAccount.Scopes)
+	standaloneServiceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{Name: "Standalone Root", Scopes: []string{core.ScopeRoot}})
+	require.NoError(t, err)
+	require.Nil(t, standaloneServiceAccount.ConsoleUserID)
+
+	signInResponseRecorder := httptest.NewRecorder()
+	service.controlPlaneHandler.issueConsoleSessionResponse(signInResponseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-in", nil), User{ID: consoleRootUser.ID, Email: consoleRootUser.Email, IsEnabled: true})
+	var signInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(signInResponseRecorder.Body.Bytes(), &signInConsoleResponse))
+	for _, testCase := range []struct{ method, body string }{
+		{method: http.MethodDelete},
+		{method: http.MethodPut, body: `{"is_enabled":false}`},
+	} {
+		t.Run(testCase.method, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(ctx, testCase.method, "/v1/_/console/users/"+consoleRootUser.ID, bytes.NewBufferString(testCase.body))
+			request.Header.Set("Authorization", "Bearer "+signInConsoleResponse.AccessToken)
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			require.Equal(t, http.StatusForbidden, responseRecorder.Code, responseRecorder.Body.String())
+
+			request = httptest.NewRequestWithContext(ctx, testCase.method, "/v1/_/console/users/"+consoleRootUser.ID, bytes.NewBufferString(testCase.body))
+			request.Header.Set("Service-Account-Key", standaloneServiceAccount.SecretKey)
+			responseRecorder = httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			require.Equal(t, http.StatusConflict, responseRecorder.Code, responseRecorder.Body.String())
+		})
+	}
+	require.Error(t, kernel.DeleteConsoleRootUser(ctx, consoleRootUser.Email))
+	for _, body := range []string{`{"scopes":["console:user.read"]}`, `{"is_enabled":false}`} {
+		t.Run(body, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/core/service-accounts/"+rootServiceAccount.ID, bytes.NewBufferString(body))
+			request.Header.Set("Service-Account-Key", standaloneServiceAccount.SecretKey)
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			require.Equal(t, http.StatusForbidden, responseRecorder.Code, responseRecorder.Body.String())
+		})
+	}
+
+	secondConsoleRootUser, _, _, err := kernel.CreateConsoleRootUser(ctx, "second-root-protection@example.com", "ValidPassword123!")
+	require.NoError(t, err)
+	start := make(chan struct{})
+	statuses := make(chan int, 2)
+	for _, userID := range []string{consoleRootUser.ID, secondConsoleRootUser.ID} {
+		go func() {
+			<-start
+			request := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/_/console/users/"+userID, nil)
+			request.Header.Set("Service-Account-Key", standaloneServiceAccount.SecretKey)
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			statuses <- responseRecorder.Code
+		}()
+	}
+	close(start)
+	require.ElementsMatch(t, []int{http.StatusNoContent, http.StatusConflict}, []int{<-statuses, <-statuses})
+	var rootCount int
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		SELECT COUNT(DISTINCT u.id) FROM console.users u JOIN core.service_accounts sa ON sa.console_user_id = u.id
+		WHERE u.is_enabled AND sa.is_enabled AND sa.scopes @> '["*"]'::jsonb
+	`).Scan(&rootCount))
+	require.Equal(t, 1, rootCount)
+}
+
 func TestConsoleControlPlaneHandlerUsersIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
@@ -53,6 +124,10 @@ func TestConsoleControlPlaneHandlerUsersIntegration(t *testing.T) {
 		require.True(t, user.IsEnabled)
 		require.NotEmpty(t, user.ID)
 		createdUserID = user.ID
+		var linkedAccountCount int
+		require.NoError(t, kernel.DB().QueryRow(ctx, `SELECT COUNT(*) FROM core.service_accounts WHERE console_user_id = $1`, user.ID).Scan(&linkedAccountCount))
+		require.Equal(t, 1, linkedAccountCount)
+		require.ElementsMatch(t, defaultConsoleScopes, service.controlPlaneHandler.resolveUserScopes(ctx, user.ID))
 
 		// Duplicate email conflict
 		conflictResponseRecorder := httptest.NewRecorder()

@@ -150,13 +150,13 @@ func TestCoreServiceAccountCheckScopeAndRequireScopeUnit(t *testing.T) {
 		t.Fatalf("expected 403, got %d", failResponseRecorder.Code)
 	}
 
-	// 3. No secret key extracted -> returns true
+	// 3. Missing credentials must not authorize control-plane requests.
 	noKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	if !serviceAccountManager.CheckScope(noKeyRequest, "any:scope") {
-		t.Fatal("expected CheckScope to return true when no secret key in request")
+	if serviceAccountManager.CheckScope(noKeyRequest, "any:scope") {
+		t.Fatal("expected CheckScope to reject missing credentials")
 	}
 	noKeyResponseRecorder := httptest.NewRecorder()
-	if !serviceAccountManager.RequireScope(noKeyResponseRecorder, noKeyRequest, "any:scope") {
-		t.Fatal("expected RequireScope to return true when no secret key in request")
+	if serviceAccountManager.RequireScope(noKeyResponseRecorder, noKeyRequest, "any:scope") {
+		t.Fatal("expected RequireScope to reject missing credentials")
 	}
 }

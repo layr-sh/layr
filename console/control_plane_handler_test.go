@@ -44,7 +44,8 @@ func TestConsoleControlPlaneHandlerUnit(t *testing.T) {
 		t.Parallel()
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 		responseRecorder := httptest.NewRecorder()
-		require.True(t, serviceAccountManager.RequireScope(responseRecorder, request, core.ScopeConsoleConfigRead))
+		require.False(t, serviceAccountManager.RequireScope(responseRecorder, request, core.ScopeConsoleConfigRead))
+		require.Equal(t, http.StatusForbidden, responseRecorder.Code)
 	})
 
 	t.Run("RequireScope with invalid service account key", func(t *testing.T) {

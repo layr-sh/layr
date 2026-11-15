@@ -19,7 +19,7 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	defer cleanup()
 	db := kernel.DB()
 
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 	configManager := NewConfigManager(kernel)
 
 	// 1. Initial Load creates and saves default config
@@ -240,7 +240,7 @@ func TestAuthConfigManagerScopeEnforcementIntegration(t *testing.T) {
 	}
 
 	// 3. GET with invalid key fails with 403
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/config", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/auth/config", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid_secret_key_value")
 	invalidKeyResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleGetConfig(invalidKeyResponseRecorder, invalidKeyRequest)
@@ -254,7 +254,7 @@ func TestAuthConfigManagerBrokenPoolIntegration(t *testing.T) {
 	configManager := NewConfigManager(kernel)
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 
 	// Load with broken pool returns error
 	if err := configManager.Load(ctx); err == nil {

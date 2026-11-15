@@ -367,7 +367,7 @@ func TestConsoleResolveUserScopesUnit(t *testing.T) {
 	customScopes := controlPlaneHandler.resolveUserScopes(ctx, customUserID)
 	require.Contains(t, customScopes, core.ScopeDataSchemaRead)
 	require.Contains(t, customScopes, core.ScopeAuthUserRead)
-	require.Contains(t, customScopes, core.ScopeConsoleUserRead)
+	require.NotContains(t, customScopes, core.ScopeConsoleUserRead)
 
 	// 3. User with no linked service account
 	var plainUserID string
@@ -379,13 +379,13 @@ func TestConsoleResolveUserScopesUnit(t *testing.T) {
 	require.NoError(t, kernel.DB().QueryRow(ctx, insertPlainUserSQL).Scan(&plainUserID))
 
 	plainScopes := controlPlaneHandler.resolveUserScopes(ctx, plainUserID)
-	require.Equal(t, defaultConsoleScopes, plainScopes)
+	require.Empty(t, plainScopes)
 
-	// 4. Broken DB returns defaultConsoleScopes
+	// 4. A database failure must not grant permissions.
 	brokenKernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	brokenControlPlaneHandler := NewService(brokenKernel).controlPlaneHandler
 	brokenScopes := brokenControlPlaneHandler.resolveUserScopes(ctx, rootUserID)
-	require.Equal(t, defaultConsoleScopes, brokenScopes)
+	require.Empty(t, brokenScopes)
 
 	// 5. Corrupted scopes JSON in database
 	var corruptUserID string
@@ -402,5 +402,5 @@ func TestConsoleResolveUserScopesUnit(t *testing.T) {
 	require.NoError(t, err)
 
 	corruptScopes := controlPlaneHandler.resolveUserScopes(ctx, corruptUserID)
-	require.Equal(t, defaultConsoleScopes, corruptScopes)
+	require.Empty(t, corruptScopes)
 }

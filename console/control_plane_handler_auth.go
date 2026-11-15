@@ -42,6 +42,14 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 	}
 
 	tokenHash := controlPlaneHandler.kernel.JWTSigner().HashRefreshToken(token)
+	var sessionID, userID string
+	if strings.Count(token, ".") == 2 {
+		jwtClaims, err := controlPlaneHandler.kernel.JWTSigner().VerifyAccessToken(token)
+		if err != nil || jwtClaims == nil || jwtClaims.Audience != "layr:console:user" || jwtClaims.SessionID == "" || jwtClaims.Subject == "" {
+			return nil, nil, errors.New("invalid console token")
+		}
+		sessionID, userID = jwtClaims.SessionID, jwtClaims.Subject
+	}
 
 	ctx := request.Context()
 	const selectSQLStatement = `
@@ -50,13 +58,14 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 			u.id, u.email, u.encrypted_mfa_secret, u.is_enabled, u.last_signed_in_at, u.created_at, u.last_updated_at
 		FROM console.sessions s
 		JOIN console.users u ON s.user_id = u.id
-		WHERE s.session_token_hash = $1
+		WHERE ($2 = '' AND s.session_token_hash = $1)
+		   OR (s.id::text = $2 AND s.user_id::text = $3)
 	`
 	var session Session
 	var user User
 	var encryptedMFASecret []byte
 
-	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, selectSQLStatement, tokenHash).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(ctx, selectSQLStatement, tokenHash, sessionID, userID).Scan(
 		&session.ID,
 		&session.UserID,
 		&session.IPAddress,
@@ -240,25 +249,18 @@ func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(resp
 func (controlPlaneHandler *ControlPlaneHandler) handleSignOutConsole(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling console sign out request")
 
-	token := controlPlaneHandler.extractConsoleToken(request)
-	if token != "" {
-		tokenHash := controlPlaneHandler.kernel.JWTSigner().HashRefreshToken(token)
-
-		var sessionID string
-		var userID string
-		const selectSessionSQL = `SELECT id, user_id FROM console.sessions WHERE session_token_hash = $1`
-		_ = controlPlaneHandler.kernel.DB().QueryRow(request.Context(), selectSessionSQL, tokenHash).Scan(&sessionID, &userID)
-
-		const deleteSessionSQL = `DELETE FROM console.sessions WHERE session_token_hash = $1`
-		_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSessionSQL, tokenHash)
-
-		if sessionID != "" {
-			controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(sessionID, SessionRevokedEventData{
-				SessionID: sessionID,
-				UserID:    userID,
-				Reason:    "sign_out",
-			}))
+	if user, session, err := controlPlaneHandler.authenticateSession(request); err == nil {
+		const deleteSessionSQL = `DELETE FROM console.sessions WHERE id = $1`
+		_, err = controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSessionSQL, session.ID)
+		if err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to revoke Console session")
+			return
 		}
+		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSessionRevokedEvent(session.ID, SessionRevokedEventData{
+			SessionID: session.ID,
+			UserID:    user.ID,
+			Reason:    "sign_out",
+		}))
 	}
 
 	isSecure := core.IsSecureRequest(request)
@@ -283,10 +285,11 @@ func (controlPlaneHandler *ControlPlaneHandler) resolveUserScopes(ctx context.Co
 		SELECT scopes
 		FROM core.service_accounts
 		WHERE console_user_id = $1 AND is_enabled = true
+				  AND (expires_at IS NULL OR expires_at > clock_timestamp())
 	`
 	rows, err := controlPlaneHandler.kernel.DB().Query(ctx, selectScopesSQL, userID)
 	if err != nil {
-		return defaultConsoleScopes
+		return nil
 	}
 	defer rows.Close()
 
@@ -317,12 +320,12 @@ func (controlPlaneHandler *ControlPlaneHandler) resolveUserScopes(ctx context.Co
 	}
 
 	if len(userScopes) == 0 {
-		return defaultConsoleScopes
+		return nil
 	}
 
 	seen := make(map[string]bool)
 	var finalScopes []string
-	for _, scope := range append(defaultConsoleScopes, userScopes...) {
+	for _, scope := range userScopes {
 		if !seen[scope] {
 			seen[scope] = true
 			finalScopes = append(finalScopes, scope)

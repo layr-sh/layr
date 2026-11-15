@@ -141,7 +141,7 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected client endpoint 200 with fallback key, got %d", fallbackClientResponseRecorder.Code)
 	}
 
-	// Test base client endpoint with valid authenticated JWT in Authorization header -> 200
+	// A signed End User JWT without a live session must not authenticate.
 	validJWTToken := jwtSigner.GenerateAccessToken(JWTClaims{
 		Subject: "01918a24-7777-7000-8000-000000000001",
 		Role:    "authenticated",
@@ -150,8 +150,8 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 	clientAuthHeaderRequest.Header.Set("Authorization", "Bearer "+validJWTToken)
 	clientAuthHeaderResponseRecorder := httptest.NewRecorder()
 	server.server.Handler.ServeHTTP(clientAuthHeaderResponseRecorder, clientAuthHeaderRequest)
-	if clientAuthHeaderResponseRecorder.Code != http.StatusOK {
-		t.Fatalf("expected client endpoint 200 with valid JWT authorization, got %d", clientAuthHeaderResponseRecorder.Code)
+	if clientAuthHeaderResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for JWT without a live session, got %d", clientAuthHeaderResponseRecorder.Code)
 	}
 
 	// Test base client endpoint with authenticated context (e.g. verified session or service account) -> 200
@@ -298,13 +298,21 @@ func TestCoreServerPanicRecoveryUnit(t *testing.T) {
 }
 
 func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
+	db, cleanup := SetupTestDB(t, nil)
+	defer cleanup()
+	_, schemaErr := db.Exec(t.Context(), `
+		CREATE SCHEMA auth;
+		CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, phone TEXT, role TEXT DEFAULT 'authenticated', is_anonymous BOOLEAN DEFAULT false, locked_until TIMESTAMPTZ);
+		CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), refresh_token_hash TEXT, expires_at TIMESTAMPTZ);
+	`)
+	require.NoError(t, schemaErr)
 	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("failed to create key manager: %v", err)
 	}
 
 	jwtSigner := NewJWTSigner(cryptoKeyManager)
-	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
+	server := NewServer(&Kernel{db: db, cryptoKeyManager: cryptoKeyManager, jwtSigner: jwtSigner})
 
 	var capturedAuthContext AuthContext
 	var capturedEventActor EventActor
@@ -331,9 +339,15 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	// 2. User Access Token via Bearer
 	userID := uuid.NewV7().String()
+	sessionID := uuid.NewV7().String()
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.users (id) VALUES ($1)`, userID)
+	require.NoError(t, err)
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at) VALUES ($1, $2, 'hash', clock_timestamp() + interval '1 hour')`, sessionID, userID)
+	require.NoError(t, err)
 	userToken := jwtSigner.GenerateAccessToken(JWTClaims{
-		Subject: userID,
-		Role:    "authenticated",
+		Subject:   userID,
+		SessionID: sessionID,
+		Role:      "authenticated",
 	}, 600)
 
 	userRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
@@ -459,7 +473,13 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 
 	// 5. Authenticated Anonymous User Account (user with is_anonymous = true)
 	anonUserID := uuid.NewV7().String()
+	anonSessionID := uuid.NewV7().String()
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.users (id, is_anonymous) VALUES ($1, true)`, anonUserID)
+	require.NoError(t, err)
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at) VALUES ($1, $2, 'anonymous-hash', clock_timestamp() + interval '1 hour')`, anonSessionID, anonUserID)
+	require.NoError(t, err)
 	anonToken := jwtSigner.GenerateAccessToken(JWTClaims{
+		SessionID:   anonSessionID,
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,
@@ -956,14 +976,28 @@ func TestCoreServerHTTPListenerAppliesMiddlewareUnit(t *testing.T) {
 	SetLoadedConfig(testConfig)
 	defer UnloadConfig()
 
-	kernel := NewTestKernel(nil)
+	db, cleanup := SetupTestDB(t, nil)
+	defer cleanup()
+	_, err := db.Exec(t.Context(), `
+		CREATE SCHEMA auth;
+		CREATE TABLE auth.users (id UUID PRIMARY KEY, locked_until TIMESTAMPTZ);
+		CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), expires_at TIMESTAMPTZ);
+	`)
+	require.NoError(t, err)
+	kernel := NewTestKernel(db)
 	server := NewServer(kernel)
 
 	jwtSigner := kernel.JWTSigner()
 	testUserID := uuid.NewV7().String()
+	sessionID := uuid.NewV7().String()
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.users (id) VALUES ($1)`, testUserID)
+	require.NoError(t, err)
+	_, err = db.Exec(t.Context(), `INSERT INTO auth.sessions (id, user_id, expires_at) VALUES ($1, $2, clock_timestamp() + interval '1 hour')`, sessionID, testUserID)
+	require.NoError(t, err)
 	token := jwtSigner.GenerateAccessToken(JWTClaims{
-		Subject: testUserID,
-		Role:    "authenticated",
+		SessionID: sessionID,
+		Subject:   testUserID,
+		Role:      "authenticated",
 	})
 
 	var capturedAuthContext AuthContext

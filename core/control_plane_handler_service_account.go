@@ -7,6 +7,9 @@ import (
 )
 
 func (server *Server) handleListServiceAccounts(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreServiceAccountRead) {
+		return
+	}
 	log.Trace("handling list service accounts request")
 	accounts, err := server.kernel.serviceAccountManager.List(request.Context())
 	if err != nil {
@@ -18,6 +21,9 @@ func (server *Server) handleListServiceAccounts(responseWriter http.ResponseWrit
 }
 
 func (server *Server) handleCreateServiceAccount(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreServiceAccountWrite) {
+		return
+	}
 	log.Trace("handling create service account request")
 	var createServiceAccountInput CreateServiceAccountInput
 	if err := json.NewDecoder(request.Body).Decode(&createServiceAccountInput); err != nil {
@@ -35,6 +41,9 @@ func (server *Server) handleCreateServiceAccount(responseWriter http.ResponseWri
 }
 
 func (server *Server) handleGetServiceAccount(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreServiceAccountRead) {
+		return
+	}
 	serviceAccountID := request.PathValue("service_account_id")
 	log.Tracef("handling get service account request: id=%s", serviceAccountID)
 	serviceAccount, err := server.kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)
@@ -47,6 +56,9 @@ func (server *Server) handleGetServiceAccount(responseWriter http.ResponseWriter
 }
 
 func (server *Server) handleUpdateServiceAccount(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreServiceAccountWrite) {
+		return
+	}
 	serviceAccountID := request.PathValue("service_account_id")
 	log.Tracef("handling update service account request: id=%s", serviceAccountID)
 	var updateServiceAccountInput UpdateServiceAccountInput
@@ -69,6 +81,9 @@ func (server *Server) handleUpdateServiceAccount(responseWriter http.ResponseWri
 }
 
 func (server *Server) handleDeleteServiceAccount(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreServiceAccountWrite) {
+		return
+	}
 	serviceAccountID := request.PathValue("service_account_id")
 	log.Tracef("handling delete service account request: id=%s", serviceAccountID)
 	serviceAccount, err := server.kernel.serviceAccountManager.Get(request.Context(), serviceAccountID)

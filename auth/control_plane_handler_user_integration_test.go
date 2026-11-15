@@ -228,7 +228,7 @@ func TestAuthControlPlaneHandlerUserBrokenPoolIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 	randomID := uuid.NewV7().String()
 
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-users", JWT: core.JWTClaims{Scope: core.ScopeAuthUserWrite}})
 
 	// 1. List Users error
 	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users", nil)

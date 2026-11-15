@@ -2,12 +2,14 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
 
@@ -266,9 +268,18 @@ func (handler *BaseHandler) handleRefreshToken(responseWriter http.ResponseWrite
 			if err := json.Unmarshal([]byte(cachedData), &cachedSession); err == nil && cachedSession.User.ID != "" {
 				log.Tracef("fast-path session cache hit for user %s", cachedSession.User.ID)
 				_ = handler.kernel.KVStore().Delete(ctx, "auth:session:"+tokenHash)
-				_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", tokenHash)
 				if cachedSession.User.LockedUntil != nil && time.Now().UTC().Before(*cachedSession.User.LockedUntil) {
 					core.WriteErrorResponse(responseWriter, request, http.StatusLocked, "Account temporarily locked")
+					return
+				}
+				var userID string
+				var expiresAt time.Time
+				err := handler.kernel.DB().QueryRow(ctx, `
+					DELETE FROM auth.sessions WHERE refresh_token_hash = $1
+					RETURNING user_id, expires_at
+				`, tokenHash).Scan(&userID, &expiresAt)
+				if err != nil || userID != cachedSession.User.ID || !expiresAt.After(time.Now().UTC()) {
+					core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Refresh token revoked or invalid")
 					return
 				}
 				handler.issueSessionResponse(responseWriter, request, cachedSession.User, "session_refresh")
@@ -281,8 +292,8 @@ func (handler *BaseHandler) handleRefreshToken(responseWriter http.ResponseWrite
 	var expiresAt time.Time
 
 	err := handler.kernel.DB().QueryRow(ctx, `
-		SELECT id, user_id, expires_at 
-		FROM auth.sessions 
+		SELECT id, user_id, expires_at
+		FROM auth.sessions
 		WHERE refresh_token_hash = $1
 	`, tokenHash).Scan(&sessionID, &userID, &expiresAt)
 
@@ -339,16 +350,37 @@ func (handler *BaseHandler) handleSignOut(responseWriter http.ResponseWriter, re
 		refreshTokenInput.RefreshToken = core.ExtractRequestSessionToken(request)
 	}
 
+	var tokenSessionID, tokenUserID string
+	if strings.Count(refreshTokenInput.RefreshToken, ".") == 2 {
+		jwtClaims, err := handler.kernel.JWTSigner().VerifyAccessToken(refreshTokenInput.RefreshToken)
+		if err != nil || jwtClaims == nil || jwtClaims.SessionID == "" || jwtClaims.Subject == "" || jwtClaims.Audience == "layr:console:user" || (core.AuthContext{JWT: *jwtClaims}).IsServiceAccount() {
+			refreshTokenInput.RefreshToken = ""
+		} else {
+			tokenSessionID, tokenUserID = jwtClaims.SessionID, jwtClaims.Subject
+		}
+	}
+
 	if refreshTokenInput.RefreshToken != "" {
 		tokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshTokenInput.RefreshToken)
-		_ = handler.kernel.KVStore().Delete(request.Context(), "auth:session:"+tokenHash)
-		var sessionID, userID string
+		var sessionID, userID, refreshTokenHash string
 		var clientID *string
 		err := handler.kernel.DB().QueryRow(request.Context(), `
-			DELETE FROM auth.sessions 
-			WHERE refresh_token_hash = $1
-			RETURNING id, user_id, client_id
-		`, tokenHash).Scan(&sessionID, &userID, &clientID)
+			DELETE FROM auth.sessions
+			WHERE ($2 = '' AND refresh_token_hash = $1)
+			   OR (id::text = $2 AND user_id::text = $3)
+			RETURNING id, user_id, client_id, refresh_token_hash
+		`, tokenHash, tokenSessionID, tokenUserID).Scan(&sessionID, &userID, &clientID, &refreshTokenHash)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to revoke session", err.Error())
+			return
+		}
+		if refreshTokenHash != "" {
+			tokenHash = refreshTokenHash
+		}
+		if cacheErr := handler.kernel.KVStore().Delete(request.Context(), "auth:session:"+tokenHash); cacheErr != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to revoke cached session", cacheErr.Error())
+			return
+		}
 		if err == nil {
 			if clientID != nil && *clientID != "" {
 				config := handler.configManager.Get()

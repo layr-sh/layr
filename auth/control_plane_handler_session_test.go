@@ -11,7 +11,9 @@ import (
 )
 
 func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{
+		ServiceAccountID: "test-root", JWT: core.JWTClaims{Scope: core.ScopeRoot},
+	})
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
@@ -19,7 +21,7 @@ func TestAuthControlPlaneHandlerSessionUnit(t *testing.T) {
 
 	// 1. Test Forbidden Scope on session handlers
 
-	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
+	forbiddenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/auth/users/"+testUserID+"/sessions", nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
 	forbiddenRequest.SetPathValue("user_id", testUserID)
 

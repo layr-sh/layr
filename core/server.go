@@ -462,6 +462,7 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 		})
 
 		var authenticated bool
+		var consoleJWTClaims *JWTClaims
 
 		// 1. JWT Request Verification (M2M JWT or User Access Token)
 		token := ExtractRequestSessionToken(request)
@@ -492,7 +493,9 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 						})
 						authenticated = true
 					}
-				} else {
+				} else if jwtClaims.Audience == "layr:console:user" {
+					consoleJWTClaims = jwtClaims
+				} else if jwtClaims.SessionID != "" {
 					var currentRefreshTokenHash string
 					if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
 						currentRefreshTokenHash = server.kernel.jwtSigner.HashRefreshToken(cookie.Value)
@@ -509,21 +512,32 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 						}
 					}
 
-					ctx = WithAuthContext(ctx, AuthContext{
-						UserID:           jwtClaims.Subject,
-						JWT:              *jwtClaims,
-						RefreshTokenHash: currentRefreshTokenHash,
-					})
-
-					if parsedUserUUID, parseErr := uuid.Parse(jwtClaims.Subject); parseErr == nil {
-						role := jwtClaims.Role
-						ctx = WithEventActor(ctx, EventActor{
-							Type: "user",
-							ID:   &parsedUserUUID,
-							Role: &role,
+					var activeSession bool
+					err := server.kernel.DB().QueryRow(ctx, `
+						SELECT EXISTS (
+							SELECT 1 FROM auth.sessions s JOIN auth.users u ON u.id = s.user_id
+							WHERE s.id::text = $1 AND s.user_id::text = $2
+							  AND s.expires_at > clock_timestamp()
+							  AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
+						)
+					`, jwtClaims.SessionID, jwtClaims.Subject).Scan(&activeSession)
+					if err == nil && activeSession {
+						ctx = WithAuthContext(ctx, AuthContext{
+							UserID:           jwtClaims.Subject,
+							JWT:              *jwtClaims,
+							RefreshTokenHash: currentRefreshTokenHash,
 						})
+
+						if parsedUserUUID, parseErr := uuid.Parse(jwtClaims.Subject); parseErr == nil {
+							role := jwtClaims.Role
+							ctx = WithEventActor(ctx, EventActor{
+								Type: "user",
+								ID:   &parsedUserUUID,
+								Role: &role,
+							})
+						}
+						authenticated = true
 					}
-					authenticated = true
 				}
 			}
 		}
@@ -553,6 +567,50 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 			}
 		}
 
+		// Console sessions authenticate their linked service account.
+		if !authenticated {
+			var consoleToken string
+			if cookie, err := request.Cookie(ConsoleCookieNameSecure); err == nil && cookie.Value != "" {
+				consoleToken = cookie.Value
+			} else if cookie, err := request.Cookie(ConsoleCookieNameInsecure); err == nil && cookie.Value != "" {
+				consoleToken = cookie.Value
+			}
+			if consoleJWTClaims != nil || consoleToken != "" {
+				var sessionID, userID string
+				if consoleJWTClaims != nil {
+					sessionID, userID = consoleJWTClaims.SessionID, consoleJWTClaims.Subject
+				}
+				var serviceAccountID, consoleUserID, consoleSessionID string
+				err := server.kernel.DB().QueryRow(ctx, `
+					SELECT sa.id, u.id, s.id
+					FROM console.sessions s
+					JOIN console.users u ON u.id = s.user_id
+					JOIN core.service_accounts sa ON sa.console_user_id = u.id
+					WHERE u.is_enabled AND s.expires_at > clock_timestamp()
+					  AND sa.is_enabled AND (sa.expires_at IS NULL OR sa.expires_at > clock_timestamp())
+					  AND (($2 <> '' AND s.id::text = $2 AND u.id::text = $3)
+					       OR ($2 = '' AND $4 AND s.session_token_hash = $1))
+					ORDER BY sa.created_at, sa.id LIMIT 1
+				`, server.kernel.jwtSigner.HashRefreshToken(consoleToken), sessionID, userID, consoleJWTClaims == nil).Scan(&serviceAccountID, &consoleUserID, &consoleSessionID)
+				if err == nil {
+					if serviceAccount, err := server.kernel.serviceAccountManager.Get(ctx, serviceAccountID); err == nil && (len(serviceAccount.AllowedIPs) == 0 || IsIPAllowed(clientIP, serviceAccount.AllowedIPs)) {
+						ctx = WithAuthContext(ctx, AuthContext{
+							ServiceAccountID: serviceAccount.ID,
+							JWT: JWTClaims{
+								Subject: consoleUserID, SessionID: consoleSessionID,
+								Audience: "layr:console:user", Role: "service_role",
+								Scope: strings.Join(serviceAccount.Scopes, " "),
+							},
+						})
+						serviceAccountUUID, _ := uuid.Parse(serviceAccount.ID)
+						role := "service_role"
+						ctx = WithEventActor(ctx, EventActor{Type: "service_account", ID: &serviceAccountUUID, Role: &role})
+						authenticated = true
+					}
+				}
+			}
+		}
+
 		// 3. Database Session Lookup (Cookie or X-Refresh-Token fallback)
 		if !authenticated {
 			var sessionRefreshToken string
@@ -577,6 +635,7 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 					FROM auth.sessions s
 					JOIN auth.users u ON u.id = s.user_id
 					WHERE s.refresh_token_hash = $1 AND s.expires_at > clock_timestamp()
+					  AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
 				`, refreshTokenHash).Scan(&sessionID, &sessionUserID, &email, &phone, &role, &isAnonymous)
 				if queryErr == nil && sessionUserID != "" {
 					jwtClaims := JWTClaims{

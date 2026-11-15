@@ -38,6 +38,10 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 	`
 	var userID string
 	require.NoError(t, kernel.DB().QueryRow(ctx, insertUserSQL, passwordHash).Scan(&userID))
+	_, err = kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
+		Name: "Console User", ConsoleUserID: &userID, Scopes: defaultConsoleScopes,
+	})
+	require.NoError(t, err)
 
 	var activeSessionCookie *http.Cookie
 	var mfaSecret string
@@ -55,6 +59,26 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 		require.NoError(t, json.Unmarshal(signInResponseRecorder.Body.Bytes(), &signInConsoleResponse))
 		require.Equal(t, "operator@layr.sh", signInConsoleResponse.User.Email)
 		require.NotEmpty(t, signInConsoleResponse.AccessToken)
+
+		bearerSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/console/session", nil)
+		bearerSessionRequest.Header.Set("Authorization", "Bearer "+signInConsoleResponse.AccessToken)
+		bearerSessionResponseRecorder := httptest.NewRecorder()
+		coreServer.Handler().ServeHTTP(bearerSessionResponseRecorder, bearerSessionRequest)
+		require.Equal(t, http.StatusOK, bearerSessionResponseRecorder.Code)
+
+		jwtClaims, err := kernel.JWTSigner().VerifyAccessToken(signInConsoleResponse.AccessToken)
+		require.NoError(t, err)
+		for _, invalidClaims := range []core.JWTClaims{
+			{Subject: userID, SessionID: jwtClaims.SessionID, Role: "authenticated"},
+			{Subject: userID, Audience: "layr:console:user"},
+			{Subject: "another-user", SessionID: jwtClaims.SessionID, Audience: "layr:console:user"},
+		} {
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/console/session", nil)
+			request.Header.Set("Authorization", "Bearer "+kernel.JWTSigner().GenerateAccessToken(invalidClaims, 900))
+			responseRecorder := httptest.NewRecorder()
+			coreServer.Handler().ServeHTTP(responseRecorder, request)
+			require.Equal(t, http.StatusUnauthorized, responseRecorder.Code)
+		}
 
 		cookies := signInResponseRecorder.Result().Cookies()
 		for _, c := range cookies {
@@ -165,9 +189,25 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 		coreServer.Handler().ServeHTTP(disableMFAResponseRecorder, disableMFARequest)
 		require.Equal(t, http.StatusNoContent, disableMFAResponseRecorder.Code)
 
+		// Failed session deletion must not report a successful sign-out.
+		_, err = kernel.DB().Exec(ctx, `
+			CREATE FUNCTION console.reject_test_sign_out() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN RAISE EXCEPTION 'session deletion failed'; END; $$;
+			CREATE TRIGGER reject_test_sign_out BEFORE DELETE ON console.sessions
+			FOR EACH STATEMENT EXECUTE FUNCTION console.reject_test_sign_out();
+		`)
+		require.NoError(t, err)
+		failedSignOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-out", nil)
+		failedSignOutRequest.Header.Set("Authorization", "Bearer "+signInConsoleResponse.AccessToken)
+		failedSignOutResponseRecorder := httptest.NewRecorder()
+		coreServer.Handler().ServeHTTP(failedSignOutResponseRecorder, failedSignOutRequest)
+		require.Equal(t, http.StatusInternalServerError, failedSignOutResponseRecorder.Code)
+		_, err = kernel.DB().Exec(ctx, `DROP TRIGGER reject_test_sign_out ON console.sessions; DROP FUNCTION console.reject_test_sign_out();`)
+		require.NoError(t, err)
+
 		// 9. Sign Out
 		signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-out", nil)
-		signOutRequest.AddCookie(activeSessionCookie)
+		signOutRequest.Header.Set("Authorization", "Bearer "+signInConsoleResponse.AccessToken)
 		signOutResponseRecorder := httptest.NewRecorder()
 		coreServer.Handler().ServeHTTP(signOutResponseRecorder, signOutRequest)
 		require.Equal(t, http.StatusNoContent, signOutResponseRecorder.Code)
@@ -178,5 +218,8 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 		getSessionAfterResponseRecorder := httptest.NewRecorder()
 		coreServer.Handler().ServeHTTP(getSessionAfterResponseRecorder, getSessionAfterRequest)
 		require.Equal(t, http.StatusUnauthorized, getSessionAfterResponseRecorder.Code)
+		bearerAfterSignOutResponseRecorder := httptest.NewRecorder()
+		coreServer.Handler().ServeHTTP(bearerAfterSignOutResponseRecorder, bearerSessionRequest)
+		require.Equal(t, http.StatusUnauthorized, bearerAfterSignOutResponseRecorder.Code)
 	})
 }

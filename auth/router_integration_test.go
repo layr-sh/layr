@@ -15,7 +15,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-router", JWT: core.JWTClaims{Scope: core.ScopeRoot}})
 	service := NewService(kernel)
 	if err := service.Start(ctx); err != nil {
 		t.Fatalf("failed to start service: %v", err)
