@@ -1,0 +1,628 @@
+{
+  "components": {
+    "schemas": {
+      "Bucket": {
+        "properties": {
+          "allowed_mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "backend": {
+            "type": "string"
+          },
+          "backend_config": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {},
+          "is_public": {
+            "type": "boolean"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "max_file_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed_mime_types",
+          "backend",
+          "created_at",
+          "id",
+          "is_public",
+          "last_updated_at",
+          "max_file_size_bytes",
+          "name"
+        ],
+        "type": "object"
+      },
+      "Config": {
+        "description": "Config schema",
+        "properties": {
+          "chunk_size_bytes": {
+            "type": "integer"
+          },
+          "default_allowed_mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "default_max_file_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "presign_token_expiry_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chunk_size_bytes",
+          "default_allowed_mime_types",
+          "default_max_file_size_bytes",
+          "enabled",
+          "presign_token_expiry_seconds"
+        ],
+        "type": "object"
+      },
+      "CreateBucketInput": {
+        "description": "CreateBucketInput schema",
+        "properties": {
+          "allowed_mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "backend": {
+            "type": "string"
+          },
+          "backend_config": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "max_file_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed_mime_types",
+          "backend",
+          "is_public",
+          "max_file_size_bytes",
+          "name"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "description": "Empty schema"
+      },
+      "ListBucketObjectsResponse": {
+        "description": "ListBucketObjectsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Object"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ListBucketsResponse": {
+        "description": "ListBucketsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Bucket"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "data"
+        ],
+        "type": "object"
+      },
+      "Object": {
+        "properties": {
+          "bucket_id": {},
+          "checksum_sha256": {
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {},
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket_id",
+          "checksum_sha256",
+          "content_type",
+          "created_at",
+          "id",
+          "last_updated_at",
+          "metadata",
+          "object_key",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "UpdateBucketInput": {
+        "description": "UpdateBucketInput schema",
+        "properties": {
+          "allowed_mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "backend": {
+            "nullable": true,
+            "type": "string"
+          },
+          "backend_config": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "is_public": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "max_file_size_bytes": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "unknown-interface": {
+        "description": "unknown-interface schema"
+      }
+    }
+  },
+  "info": {
+    "description": "\nThis is the autogenerated OpenAPI documentation for your [Fuego](https://github.com/go-fuego/fuego) API.\n\nBelow is a Fuego Cheatsheet to help you get started. Don't hesitate to check the [Fuego documentation](https://go-fuego.dev) for more details.\n\nHappy coding! 🔥\n\n## Usage\n\n### Route registration\n\n```go\nfunc main() {\n\t// Create a new server\n\ts := fuego.NewServer()\n\n\t// Register some routes\n\tfuego.Post(s, \"/hello\", myController)\n\tfuego.Get(s, \"/myPath\", otherController)\n\tfuego.Put(s, \"/hello\", thirdController)\n\n\tadminRoutes := fuego.Group(s, \"/admin\")\n\tfuego.Use(adminRoutes, myMiddleware) // This middleware (for authentication, etc...) will be available for routes starting by /admin/*, \n\tfuego.Get(adminRoutes, \"/hello\", groupController) // This route will be available at /admin/hello\n\n\t// Start the server\n\ts.Start()\n}\n```\n\n### Basic controller\n\n```go\ntype MyBody struct {\n\tName string `json:\"name\" validate:\"required,max=30\"`\n}\n\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc hello(ctx fuego.ContextWithBody[MyBody]) (*MyResponse, error) {\n\tbody, err := ctx.Body()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + body.Name}, nil\n}\n```\n\n### Add openAPI information to the route\n\n```go\nimport (\n\t\"github.com/go-fuego/fuego\"\n\t\"github.com/go-fuego/fuego/option\"\n\t\"github.com/go-fuego/fuego/param\"\n)\n\nfunc main() {\n\ts := fuego.NewServer()\n\n\t// Custom OpenAPI options\n\tfuego.Post(s, \"/\", myController\n\t\toption.Description(\"This route does something...\"),\n\t\toption.Summary(\"This is my summary\"),\n\t\toption.Tags(\"MyTag\"), // A tag is set by default according to the return type (can be deactivated)\n\t\toption.Deprecated(), // Marks the route as deprecated in the OpenAPI spec\n\n\t\toption.Query(\"name\", \"Declares a query parameter with default value\", param.Default(\"Carmack\")),\n\t\toption.Header(\"Authorization\", \"Bearer token\", param.Required()),\n\t\toptionPagination,\n\t\toptionCustomBehavior,\n\t)\n\n\ts.Run()\n}\n\nvar optionPagination = option.Group(\n\toption.QueryInt(\"page\", \"Page number\", param.Default(1), param.Example(\"1st page\", 1), param.Example(\"42nd page\", 42)),\n\toption.QueryInt(\"perPage\", \"Number of items per page\"),\n)\n\nvar optionCustomBehavior = func(r *fuego.BaseRoute) {\n\tr.XXX = \"YYY\"\n}\n```\n\nThen, in the controller\n\n```go\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc getAllPets(ctx fuego.ContextNoBody) (*MyResponse, error) {\n\tname := ctx.QueryParam(\"name\")\n\tperPage, _ := ctx.QueryParamIntErr(\"per_page\")\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + name}, nil\n}\n```\n",
+    "title": "OpenAPI",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/_/file-storage/buckets": {
+      "get": {
+        "description": "Returns all configured storage buckets from file_storage.buckets, detailing backend type (database or s3), public access flag, file size limits, and allowed MIME types. Requires storage:bucket.read scope.",
+        "operationId": "file_storage__buckets__list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBucketsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBucketsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List all storage buckets and backend configurations",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Provisions a new storage bucket in file_storage.buckets with database or S3 backend settings, size limits, allowed MIME types, and public access policy. Emits file_storage.bucket.created event. Requires storage:bucket.write scope.",
+        "operationId": "file_storage__buckets__create",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBucketInput"
+              }
+            }
+          },
+          "description": "Request body for filestorage.CreateBucketInput",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "summary": "Create a storage bucket with backend configuration",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/_/file-storage/buckets/{bucket}": {
+      "delete": {
+        "description": "Deletes a storage bucket from file_storage.buckets and permanently cascades deletion of all stored objects from the backend and database. Emits file_storage.bucket.deleted event. Requires storage:bucket.write scope.",
+        "operationId": "file_storage__buckets__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Bucket deleted"
+          }
+        },
+        "summary": "Delete a storage bucket and cascade contained objects",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves configuration, size limits, allowed MIME types, backend type, and public access status for a specific bucket from file_storage.buckets. Requires storage:bucket.read scope.",
+        "operationId": "file_storage__buckets__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get storage bucket details by name",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "patch": {
+        "description": "Modifies bucket settings in file_storage.buckets including public flag, file size limit, allowed MIME types, and backend configuration. Emits file_storage.bucket.updated event. Requires storage:bucket.write scope.",
+        "operationId": "file_storage__buckets__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bucket",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBucketInput"
+              }
+            }
+          },
+          "description": "Request body for filestorage.UpdateBucketInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bucket"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update storage bucket configuration and constraints",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/file-storage/buckets/{bucket}/objects": {
+      "get": {
+        "description": "Queries metadata records in file_storage.objects for the specified bucket, detailing key paths, file sizes, MIME types, ETags, and upload timestamps with pagination. Requires storage:bucket.read scope.",
+        "operationId": "file_storage__buckets__list_objects",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bucket",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBucketObjectsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBucketObjectsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List objects stored within a bucket",
+        "tags": [
+          "Buckets"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "buckets"
+        ],
+        "x-sdk-method-name": "list_objects"
+      }
+    },
+    "/v1/_/file-storage/config": {
+      "get": {
+        "description": "Returns dynamic operational configuration settings for the file storage subsystem including global size limits and default backends. Requires storage:config.read scope.",
+        "operationId": "file_storage__config__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get runtime file storage configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "config"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "put": {
+        "description": "Updates dynamic operational configuration for the file storage subsystem in storage.config, tuning global upload limits and backends without restart. Requires storage:config.write scope.",
+        "operationId": "file_storage__config__update",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "description": "Request body for filestorage.Config",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update runtime file storage configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "config"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	_ "layr.sh/auth"
@@ -91,47 +92,46 @@ func run(args []string, stdoutWriter io.Writer) error {
 		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
-	baseOpenAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec := exportSpecsFn()
-
-	specs := []struct {
-		name        string
-		fileName    string
-		openAPISpec *openapi3.T
-	}{
-		{"base", "base-spec.json", baseOpenAPISpec},
-		{"control plane", "control-plane-spec.json", controlPlaneOpenAPISpec},
-		{"unified", "unified-spec.json", unifiedOpenAPISpec},
+	baseOpenAPISpecs, controlPlaneOpenAPISpecs := exportSpecsFn()
+	specs := make(map[string]*openapi3.T, len(baseOpenAPISpecs)*2)
+	var specNames []string
+	for serviceName, baseOpenAPISpec := range baseOpenAPISpecs {
+		baseSpecName := filepath.Join(serviceName, "base-spec.json")
+		controlPlaneSpecName := filepath.Join(serviceName, "control-plane-spec.json")
+		specs[baseSpecName] = baseOpenAPISpec
+		specs[controlPlaneSpecName] = controlPlaneOpenAPISpecs[serviceName]
+		specNames = append(specNames, baseSpecName, controlPlaneSpecName)
 	}
+	sort.Strings(specNames)
 
-	opsCounts := make([]int, len(specs))
-	for index, targetSpec := range specs {
-		count, err := validateSpecOperations(targetSpec.openAPISpec, targetSpec.fileName)
+	opsCounts := make(map[string]int, len(specs))
+	for _, specName := range specNames {
+		count, err := validateSpecOperations(specs[specName], specName)
 		if err != nil {
-			return fmt.Errorf("%s spec validation failed: %w", targetSpec.name, err)
+			return fmt.Errorf("%s spec validation failed: %w", specName, err)
 		}
-		opsCounts[index] = count
+		opsCounts[specName] = count
 	}
 
 	if *validateOnlyFlag {
-		_, _ = fmt.Fprintf(stdoutWriter, "All OpenAPI specifications validated (%d total operations: %d base, %d control plane)\n",
-			opsCounts[2], opsCounts[0], opsCounts[1])
+		_, _ = fmt.Fprintf(stdoutWriter, "All OpenAPI specifications validated (%d services, %d specifications)\n", len(baseOpenAPISpecs), len(specs))
 		return nil
 	}
 
-	if mkdirErr := os.MkdirAll(*outputDirectoryFlag, defaultDirPermission); mkdirErr != nil {
-		return fmt.Errorf("failed to create output directory %s: %w", *outputDirectoryFlag, mkdirErr)
-	}
-
-	for index, targetSpec := range specs {
-		specPath := filepath.Join(*outputDirectoryFlag, targetSpec.fileName)
-		payloadJSON, marshalErr := jsonMarshalIndent(targetSpec.openAPISpec, "", "  ")
+	for _, specName := range specNames {
+		openAPISpec := specs[specName]
+		specPath := filepath.Join(*outputDirectoryFlag, specName)
+		if mkdirErr := os.MkdirAll(filepath.Dir(specPath), defaultDirPermission); mkdirErr != nil {
+			return fmt.Errorf("failed to create output directory %s: %w", filepath.Dir(specPath), mkdirErr)
+		}
+		payloadJSON, marshalErr := jsonMarshalIndent(openAPISpec, "", "  ")
 		if marshalErr != nil {
-			return fmt.Errorf("failed to serialize %s spec: %w", targetSpec.name, marshalErr)
+			return fmt.Errorf("failed to serialize %s spec: %w", specName, marshalErr)
 		}
 		if writeErr := osWriteFile(specPath, payloadJSON, defaultFilePermission); writeErr != nil {
 			return fmt.Errorf("failed to write %s: %w", specPath, writeErr)
 		}
-		_, _ = fmt.Fprintf(stdoutWriter, "Exported %s OpenAPI spec: %s (%d paths, %d operations)\n", targetSpec.name, specPath, targetSpec.openAPISpec.Paths.Len(), opsCounts[index])
+		_, _ = fmt.Fprintf(stdoutWriter, "Exported %s OpenAPI spec: %s (%d paths, %d operations)\n", specName, specPath, openAPISpec.Paths.Len(), opsCounts[specName])
 	}
 
 	return nil

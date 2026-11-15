@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { describe, it, expect } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   createClient,
   useAuth,
@@ -12,20 +12,20 @@ import {
   useImage,
   useTasks,
   withServiceAccount,
-} from '../../src';
+} from "../../src";
 
 function getServiceAccountKey(): string | undefined {
   if (process.env.LAYR__SERVICE_ACCOUNT_KEY) {
     return process.env.LAYR__SERVICE_ACCOUNT_KEY;
   }
   const candidatePaths = [
-    path.resolve(process.cwd(), '../../.layr/initial-root-account.txt'),
-    path.resolve(process.cwd(), '.layr/initial-root-account.txt'),
-    path.resolve(process.cwd(), '../.layr/initial-root-account.txt'),
+    path.resolve(process.cwd(), "../../.layr/initial-root-account.txt"),
+    path.resolve(process.cwd(), ".layr/initial-root-account.txt"),
+    path.resolve(process.cwd(), "../.layr/initial-root-account.txt"),
   ];
   for (const filePath of candidatePaths) {
     if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = fs.readFileSync(filePath, "utf-8");
       const match = content.match(/Service Account Key:\s*([a-f0-9]{32,64})/i);
       if (match && match[1]) {
         return match[1];
@@ -35,16 +35,19 @@ function getServiceAccountKey(): string | undefined {
   return undefined;
 }
 
-describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Lifecycle', () => {
-  const endpoint = process.env.LAYR__SERVER__BASE_URL ?? 'http://127.0.0.1:5297';
+describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)("Layr Production E2E SDK Lifecycle", () => {
+  const endpoint = process.env.LAYR__SERVER__BASE_URL ?? "http://127.0.0.1:5297";
   let publishableKey: string;
   let serviceAccountKey: string | undefined;
   let userSessionToken: string;
 
-  it('1. probes cluster manifest via HTTP and useCore', async () => {
+  it("1. probes cluster manifest via HTTP and useCore", async () => {
     const response = await fetch(`${endpoint}/v1/manifest`);
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { publishable_key?: string; project?: { name?: string } };
+    const body = (await response.json()) as {
+      publishable_key?: string;
+      project?: { name?: string };
+    };
     expect(body.project).toBeDefined();
     expect(body.publishable_key).toBeDefined();
     publishableKey = body.publishable_key!;
@@ -58,9 +61,11 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     serviceAccountKey = getServiceAccountKey();
   });
 
-  it('2. executes DDL table creation and schema reflection via elevated Data control plane', async () => {
+  it("2. executes DDL table creation and schema reflection via elevated Data control plane", async () => {
     if (!serviceAccountKey) {
-      console.warn('Skipping elevated DDL test: serviceAccountKey not found in .layr/initial-root-account.txt');
+      console.warn(
+        "Skipping elevated DDL test: serviceAccountKey not found in .layr/initial-root-account.txt",
+      );
       return;
     }
     const client = createClient({ endpoint, publishableKey });
@@ -68,59 +73,59 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
 
     const tableName = `e2e_tasks_${Date.now()}`;
     const createResult = await dataElevated.cp.tables.create({
-      schema: 'public',
+      schema: "public",
       name: tableName,
       columns: [
-        { name: 'id', type: 'uuid', isPrimaryKey: true, isNullable: false, isUnique: true },
-        { name: 'title', type: 'text', isPrimaryKey: false, isNullable: false, isUnique: false },
-        { name: 'status', type: 'text', isPrimaryKey: false, isNullable: false, isUnique: false },
+        { name: "id", type: "uuid", isPrimaryKey: true, isNullable: false, isUnique: true },
+        { name: "title", type: "text", isPrimaryKey: false, isNullable: false, isUnique: false },
+        { name: "status", type: "text", isPrimaryKey: false, isNullable: false, isUnique: false },
       ],
     });
     expect(createResult.table).toBe(tableName);
 
-    const tableSchema = await dataElevated.cp.tables.get('public', tableName);
+    const tableSchema = await dataElevated.cp.tables.get("public", tableName);
     expect(tableSchema.name).toBe(tableName);
 
     // CRUD on the newly created table
     const data = useData(client);
     const inserted = await data.from(tableName).insert({
-      title: 'Deploy to Production',
-      status: 'pending',
+      title: "Deploy to Production",
+      status: "pending",
     });
     expect(inserted).toBeDefined();
     const insertedId = (inserted as any).id;
     expect(insertedId).toBeDefined();
 
     // Query back
-    const fetched = await data.from(tableName).select('*').eq('id', insertedId);
+    const fetched = await data.from(tableName).select("*").eq("id", insertedId);
     expect(Array.isArray(fetched)).toBe(true);
     expect(fetched.length).toBe(1);
-    expect((fetched[0] as any).title).toBe('Deploy to Production');
+    expect((fetched[0] as any).title).toBe("Deploy to Production");
 
     // Update
-    const updated = await data.from(tableName).update({ status: 'completed' }, insertedId);
+    const updated = await data.from(tableName).update({ status: "completed" }, insertedId);
     expect(updated).toBeDefined();
 
     // Delete
     await data.from(tableName).delete(insertedId);
-    const afterDelete = await data.from(tableName).select('*').eq('id', insertedId);
+    const afterDelete = await data.from(tableName).select("*").eq("id", insertedId);
     expect(afterDelete.length).toBe(0);
 
     // Drop table
-    await dataElevated.cp.tables.delete('public', tableName);
+    await dataElevated.cp.tables.delete("public", tableName);
   });
 
-  it('3. executes authentication, session management, and user profile journey', async () => {
+  it("3. executes authentication, session management, and user profile journey", async () => {
     const client = createClient({ endpoint, publishableKey });
     const auth = useAuth(client);
     const uniqueEmail = `e2e-user-${Date.now()}@example.com`;
-    const password = 'StrongPassword123!';
+    const password = "StrongPassword123!";
 
     const signUpResult = await auth.sign_up({
       email: uniqueEmail,
       password,
-      phone: '',
-      properties: { role: 'tester' },
+      phone: "",
+      properties: { role: "tester" },
     });
     expect(signUpResult.accessToken).toBeDefined();
     expect(signUpResult.user.email).toBe(uniqueEmail);
@@ -135,31 +140,31 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     expect(profile.email).toBe(uniqueEmail);
   });
 
-  it('4. executes ephemeral Key-Value cache operations', async () => {
+  it("4. executes ephemeral Key-Value cache operations", async () => {
     const client = createClient({ endpoint, publishableKey });
     const data = useData(client);
     const key = `e2e_setting_${Date.now()}`;
 
-    await data.kv.set(key, { value: 'enabled', ttl: 120 });
+    await data.kv.set(key, { value: "enabled", ttl: 120 });
     const retrieved = await data.kv.get(key);
-    expect(retrieved.value).toBe('enabled');
+    expect(retrieved.value).toBe("enabled");
 
     await data.kv.delete(key);
   });
 
-  it('5. executes GraphQL introspection & query execution', async () => {
+  it("5. executes GraphQL introspection & query execution", async () => {
     const client = createClient({ endpoint, publishableKey });
     const data = useData(client);
 
     const gqlResult = await data.graphql({
-      query: '{ __schema { types { name } } }',
+      query: "{ __schema { types { name } } }",
     });
     expect(gqlResult.data).toBeDefined();
   });
 
-  it('6. executes storage bucket lifecycle, upload, head, presign, download, and delete', async () => {
+  it("6. executes storage bucket lifecycle, upload, head, presign, download, and delete", async () => {
     if (!serviceAccountKey) {
-      console.warn('Skipping storage bucket test: serviceAccountKey not found');
+      console.warn("Skipping storage bucket test: serviceAccountKey not found");
       return;
     }
     const client = createClient({ endpoint, publishableKey });
@@ -171,64 +176,70 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     const bucketName = `e2e-bucket-${Date.now()}`;
     const createdBucket = await storageElevated.cp.buckets.create({
       name: bucketName,
-      backend: 'database',
+      backend: "database",
       isPublic: true,
       maxFileSizeBytes: 5242880,
-      allowedMimeTypes: ['text/plain'],
+      allowedMimeTypes: ["text/plain"],
     });
     expect(createdBucket.name).toBe(bucketName);
 
     const bucketClient = useFileStorage(client).from(bucketName);
-    const fileContent = 'Layr Enterprise Object Storage Payload';
-    await bucketClient.upload('documents/readme.txt', new Blob([fileContent], { type: 'text/plain' }), {
-      contentType: 'text/plain',
-    });
+    const fileContent = "Layr Enterprise Object Storage Payload";
+    await bucketClient.upload(
+      "documents/readme.txt",
+      new Blob([fileContent], { type: "text/plain" }),
+      {
+        contentType: "text/plain",
+      },
+    );
 
-    const headers = await bucketClient.head('documents/readme.txt');
+    const headers = await bucketClient.head("documents/readme.txt");
     expect(headers).toBeDefined();
 
-    const downloaded = await bucketClient.download('documents/readme.txt');
+    const downloaded = await bucketClient.download("documents/readme.txt");
     const downloadedText = await downloaded.text();
     expect(downloadedText).toBe(fileContent);
 
-    const presignedUrl = await bucketClient.createPresignedURL('documents/readme.txt', {
-      operation: 'read',
+    const presignedUrl = await bucketClient.createPresignedURL("documents/readme.txt", {
+      operation: "read",
       expiresInSeconds: 300,
     });
     expect(presignedUrl).toContain(bucketName);
-    expect(presignedUrl).toContain('documents/readme.txt');
+    expect(presignedUrl).toContain("documents/readme.txt");
 
-    await bucketClient.delete('documents/readme.txt');
+    await bucketClient.delete("documents/readme.txt");
     await storageElevated.cp.buckets.delete(bucketName);
   });
 
-  it('7. executes Image transformation URL builder and HMAC signing', () => {
+  it("7. executes Image transformation URL builder and HMAC signing", () => {
     const client = createClient({ endpoint, publishableKey });
     const image = useImage(client);
 
     const unsignedUrl = image
-      .url('avatars/user.jpg')
-      .resize({ width: 256, height: 256, fit: 'fill' })
-      .format('webp')
+      .url("avatars/user.jpg")
+      .resize({ width: 256, height: 256, fit: "fill" })
+      .format("webp")
       .quality(80)
       .blur(1.5)
       .build();
 
-    expect(unsignedUrl).toContain('/v1/image/_/rs:fill:256:256/f:webp/q:80/bl:1.5/plain/avatars/user.jpg');
+    expect(unsignedUrl).toContain(
+      "/v1/image/_/rs:fill:256:256/f:webp/q:80/bl:1.5/plain/avatars/user.jpg",
+    );
 
     const signedUrl = image
-      .url('avatars/user.jpg')
+      .url("avatars/user.jpg")
       .resize({ width: 100, height: 100 })
-      .sign('my-test-hmac-key-0123456789abcdef')
+      .sign("my-test-hmac-key-0123456789abcdef")
       .build();
 
-    expect(signedUrl).not.toContain('/_/');
-    expect(signedUrl).toContain('/v1/image/');
+    expect(signedUrl).not.toContain("/_/");
+    expect(signedUrl).toContain("/v1/image/");
   });
 
-  it('8. executes Tasks cron job scheduling, configuration, telemetry, and lifecycle', async () => {
+  it("8. executes Tasks cron job scheduling, configuration, telemetry, and lifecycle", async () => {
     if (!serviceAccountKey) {
-      console.warn('Skipping tasks test: serviceAccountKey not found');
+      console.warn("Skipping tasks test: serviceAccountKey not found");
       return;
     }
     const client = createClient({ endpoint, publishableKey });
@@ -242,9 +253,9 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     const jobName = `e2e_job_${Date.now()}`;
     const job = await tasksElevated.cp.jobs.create({
       name: jobName,
-      cronExpression: '0 0 * * *',
-      targetType: 'sql',
-      targetPayload: { query: 'SELECT 1;' },
+      cronExpression: "0 0 * * *",
+      targetType: "sql",
+      targetPayload: { query: "SELECT 1;" },
       isEnabled: true,
     });
     expect(job.name).toBe(jobName);
@@ -258,7 +269,7 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     // 4. List registered jobs
     const jobsList = await tasksElevated.cp.jobs.list();
     expect(jobsList.count).toBeGreaterThan(0);
-    expect(jobsList.jobs?.some((j) => j.id === job.id)).toBe(true);
+    expect(jobsList.data?.some((j) => j.id === job.id)).toBe(true);
 
     // 5. Query execution telemetry and stats
     const stats = await tasksElevated.cp.stats.get();
@@ -274,9 +285,9 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     await tasksElevated.cp.jobs.delete(job.id as string);
   });
 
-  it('9. executes Function serverless endpoint provisioning, deployment, and telemetry', async () => {
+  it("9. executes Function serverless endpoint provisioning, deployment, and telemetry", async () => {
     if (!serviceAccountKey) {
-      console.warn('Skipping function test: serviceAccountKey not found');
+      console.warn("Skipping function test: serviceAccountKey not found");
       return;
     }
     const client = createClient({ endpoint, publishableKey });
@@ -294,10 +305,10 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     const endpointName = `e2e_func_${Date.now()}`;
     const createdEndpoint = await funcElevated.cp.endpoints.create({
       name: endpointName,
-      description: 'E2E Test Function Endpoint',
+      description: "E2E Test Function Endpoint",
       isPublic: true,
-      runtime: 'workerd',
-      entrypoint: 'index.js',
+      runtime: "workerd",
+      entrypoint: "index.js",
     });
     expect(createdEndpoint.name).toBe(endpointName);
     expect(createdEndpoint.id).toBeDefined();
@@ -310,7 +321,7 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     // 5. List endpoints
     const endpointList = await funcElevated.cp.endpoints.list();
     expect(endpointList.count).toBeGreaterThan(0);
-    expect(endpointList.endpoints?.some((ep) => ep.id === createdEndpoint.id)).toBe(true);
+    expect(endpointList.data?.some((ep) => ep.id === createdEndpoint.id)).toBe(true);
 
     // 6. Create deployment bundle
     const deployment = await funcElevated.cp.deployments.create(createdEndpoint.id as string, {
@@ -331,9 +342,9 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
     await funcElevated.cp.endpoints.delete(createdEndpoint.id as string);
   });
 
-  it('10. executes Console administrative configuration and operator identity management', async () => {
+  it("10. executes Console administrative configuration and operator identity management", async () => {
     if (!serviceAccountKey) {
-      console.warn('Skipping console test: serviceAccountKey not found');
+      console.warn("Skipping console test: serviceAccountKey not found");
       return;
     }
     const client = createClient({ endpoint, publishableKey });
@@ -345,7 +356,7 @@ describe.skipIf(!process.env.LAYR__SERVER__BASE_URL)('Layr Production E2E SDK Li
 
     // 2. Create operator user
     const operatorEmail = `e2e-operator-${Date.now()}@example.com`;
-    const operatorPassword = 'OperatorPassword123!';
+    const operatorPassword = "OperatorPassword123!";
     const user = await consoleElevated.cp.users.create({
       email: operatorEmail,
       password: operatorPassword,

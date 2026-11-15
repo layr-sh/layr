@@ -22,7 +22,7 @@ func TestAuthControlPlaneHandlerConfigIntegration(t *testing.T) {
 	defer authService.Stop()
 
 	coreServer := core.NewServer(kernel)
-	authService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	authService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	serviceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "auth-config-admin",

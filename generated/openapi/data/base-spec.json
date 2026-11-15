@@ -1,0 +1,1418 @@
+{
+  "components": {
+    "schemas": {
+      "CreateRecordInput": {
+        "description": "CreateRecordInput schema",
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Record"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CreateRecordResponse": {
+        "description": "CreateRecordResponse schema",
+        "properties": {
+          "count": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Record"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "description": "Empty schema"
+      },
+      "ExecuteGraphQLInput": {
+        "description": "ExecuteGraphQLInput schema",
+        "properties": {
+          "operationName": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "ExecuteGraphQLResponse": {
+        "description": "ExecuteGraphQLResponse schema",
+        "properties": {
+          "data": {},
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/GraphQLError"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "GetKVResponse": {
+        "description": "GetKVResponse schema",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "GetMultipleKVInput": {
+        "description": "GetMultipleKVInput schema",
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "GetMultipleKVResponse": {
+        "description": "GetMultipleKVResponse schema",
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "type": "object"
+      },
+      "GetRecordResponse": {
+        "description": "GetRecordResponse schema",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Record"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "GraphQLError": {
+        "properties": {
+          "extensions": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/GraphQLLocation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "items": {},
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "GraphQLLocation": {
+        "properties": {
+          "column": {
+            "type": "integer"
+          },
+          "line": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "column",
+          "line"
+        ],
+        "type": "object"
+      },
+      "IncrementKVInput": {
+        "description": "IncrementKVInput schema",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "step": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "IncrementKVResponse": {
+        "description": "IncrementKVResponse schema",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ListRecordsResponse": {
+        "description": "ListRecordsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Record"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "Record": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "properties": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SetKVInput": {
+        "description": "SetKVInput schema",
+        "properties": {
+          "ttl": {
+            "type": "integer"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
+      "SetKVResponse": {
+        "description": "SetKVResponse schema",
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SetMultipleKVInput": {
+        "description": "SetMultipleKVInput schema",
+        "properties": {
+          "entries": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "SetMultipleKVResponse": {
+        "description": "SetMultipleKVResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "status"
+        ],
+        "type": "object"
+      },
+      "TouchKVInput": {
+        "description": "TouchKVInput schema",
+        "properties": {
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ttl"
+        ],
+        "type": "object"
+      },
+      "TouchKVResponse": {
+        "description": "TouchKVResponse schema",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "status",
+          "ttl"
+        ],
+        "type": "object"
+      },
+      "UpdateRecordInput": {
+        "description": "UpdateRecordInput schema",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Record"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateRecordResponse": {
+        "description": "UpdateRecordResponse schema",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Record"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "string": {
+        "description": "string schema",
+        "type": "string"
+      },
+      "unknown-interface": {
+        "description": "unknown-interface schema"
+      }
+    }
+  },
+  "info": {
+    "description": "\nThis is the autogenerated OpenAPI documentation for your [Fuego](https://github.com/go-fuego/fuego) API.\n\nBelow is a Fuego Cheatsheet to help you get started. Don't hesitate to check the [Fuego documentation](https://go-fuego.dev) for more details.\n\nHappy coding! 🔥\n\n## Usage\n\n### Route registration\n\n```go\nfunc main() {\n\t// Create a new server\n\ts := fuego.NewServer()\n\n\t// Register some routes\n\tfuego.Post(s, \"/hello\", myController)\n\tfuego.Get(s, \"/myPath\", otherController)\n\tfuego.Put(s, \"/hello\", thirdController)\n\n\tadminRoutes := fuego.Group(s, \"/admin\")\n\tfuego.Use(adminRoutes, myMiddleware) // This middleware (for authentication, etc...) will be available for routes starting by /admin/*, \n\tfuego.Get(adminRoutes, \"/hello\", groupController) // This route will be available at /admin/hello\n\n\t// Start the server\n\ts.Start()\n}\n```\n\n### Basic controller\n\n```go\ntype MyBody struct {\n\tName string `json:\"name\" validate:\"required,max=30\"`\n}\n\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc hello(ctx fuego.ContextWithBody[MyBody]) (*MyResponse, error) {\n\tbody, err := ctx.Body()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + body.Name}, nil\n}\n```\n\n### Add openAPI information to the route\n\n```go\nimport (\n\t\"github.com/go-fuego/fuego\"\n\t\"github.com/go-fuego/fuego/option\"\n\t\"github.com/go-fuego/fuego/param\"\n)\n\nfunc main() {\n\ts := fuego.NewServer()\n\n\t// Custom OpenAPI options\n\tfuego.Post(s, \"/\", myController\n\t\toption.Description(\"This route does something...\"),\n\t\toption.Summary(\"This is my summary\"),\n\t\toption.Tags(\"MyTag\"), // A tag is set by default according to the return type (can be deactivated)\n\t\toption.Deprecated(), // Marks the route as deprecated in the OpenAPI spec\n\n\t\toption.Query(\"name\", \"Declares a query parameter with default value\", param.Default(\"Carmack\")),\n\t\toption.Header(\"Authorization\", \"Bearer token\", param.Required()),\n\t\toptionPagination,\n\t\toptionCustomBehavior,\n\t)\n\n\ts.Run()\n}\n\nvar optionPagination = option.Group(\n\toption.QueryInt(\"page\", \"Page number\", param.Default(1), param.Example(\"1st page\", 1), param.Example(\"42nd page\", 42)),\n\toption.QueryInt(\"perPage\", \"Number of items per page\"),\n)\n\nvar optionCustomBehavior = func(r *fuego.BaseRoute) {\n\tr.XXX = \"YYY\"\n}\n```\n\nThen, in the controller\n\n```go\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc getAllPets(ctx fuego.ContextNoBody) (*MyResponse, error) {\n\tname := ctx.QueryParam(\"name\")\n\tperPage, _ := ctx.QueryParamIntErr(\"per_page\")\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + name}, nil\n}\n```\n",
+    "title": "OpenAPI",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/data/kv/increment": {
+      "post": {
+        "description": "Atomically modifies an integer counter in the KV store by step value (positive or negative) with optional TTL preservation, returning the updated integer.",
+        "operationId": "data__kv__increment",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/IncrementKVInput"
+              }
+            }
+          },
+          "description": "Request body for data.IncrementKVInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncrementKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncrementKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Atomically increment or decrement an integer counter",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "increment"
+      }
+    },
+    "/v1/data/kv/mget": {
+      "post": {
+        "description": "Fetches values for an array of keys from the distributed ephemeral KV cache in a single atomic pipelined round-trip, maintaining tenant/session key isolation.",
+        "operationId": "data__kv__mget",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/GetMultipleKVInput"
+              }
+            }
+          },
+          "description": "Request body for data.GetMultipleKVInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMultipleKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMultipleKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Batch get multiple ephemeral KV entries",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "mget"
+      }
+    },
+    "/v1/data/kv/mset": {
+      "post": {
+        "description": "Stores multiple key-value pairs with optional individual TTLs in the distributed KV cache in a single atomic round-trip.",
+        "operationId": "data__kv__mset",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMultipleKVInput"
+              }
+            }
+          },
+          "description": "Request body for data.SetMultipleKVInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetMultipleKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetMultipleKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Batch set multiple ephemeral KV entries",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "mset"
+      }
+    },
+    "/v1/data/kv/{key}": {
+      "delete": {
+        "description": "Evicts a key-value entry from the distributed KV cache.",
+        "operationId": "data__kv__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "KV entry deleted"
+          }
+        },
+        "summary": "Delete an ephemeral KV entry",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves a key-value entry with session/tenant isolation from the distributed KV store. Returns 404 if expired or not found.",
+        "operationId": "data__kv__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get an ephemeral KV entry by key",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "patch": {
+        "description": "Updates the expiration TTL of an existing key in the KV cache without altering its stored payload.",
+        "operationId": "data__kv__touch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/TouchKVInput"
+              }
+            }
+          },
+          "description": "Request body for data.TouchKVInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TouchKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/TouchKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Refresh TTL of an existing KV entry",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "touch"
+      },
+      "post": {
+        "description": "Stores a value in the KV cache using a { value, ttl } JSON envelope with optional set_nx conditional insertion flag (maximum payload 2 MB).",
+        "operationId": "data__kv__set",
+        "parameters": [
+          {
+            "description": "Only set the key if it does not already exist",
+            "in": "query",
+            "name": "nx",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/SetKVInput"
+              }
+            }
+          },
+          "description": "Request body for data.SetKVInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Set an ephemeral KV entry with JSON envelope",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "set"
+      },
+      "put": {
+        "description": "Stores raw request body directly in the KV store with optional ?ttl= query parameter and optional set_nx conditional insertion flag.",
+        "operationId": "data__kv__put",
+        "parameters": [
+          {
+            "description": "Key time-to-live expiration in seconds",
+            "in": "query",
+            "name": "ttl",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Only set the key if it does not already exist",
+            "in": "query",
+            "name": "nx",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/string"
+              }
+            }
+          },
+          "description": "Request body for string",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetKVResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetKVResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Put raw ephemeral KV entry with query TTL",
+        "tags": [
+          "KV"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "kv"
+        ],
+        "x-sdk-method-name": "put"
+      }
+    },
+    "/v1/data/{schema_name}/rpc/{function_name}": {
+      "get": {
+        "description": "Invokes a PostgreSQL stored function or procedure with arguments passed via query parameters, setting transaction-local caller RLS session claims.",
+        "operationId": "data__rpc__query",
+        "parameters": [
+          {
+            "description": "Comma-separated table names whose cache should be invalidated",
+            "in": "query",
+            "name": "invalidate_tables",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "function_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/unknown-interface"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/unknown-interface"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Execute read-only database stored function or procedure",
+        "tags": [
+          "RPC"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "rpc"
+        ],
+        "x-sdk-method-name": "query"
+      },
+      "post": {
+        "description": "Invokes a PostgreSQL stored procedure or function with JSON request body arguments, setting caller RLS session claims and returning execution results.",
+        "operationId": "data__rpc__mutation",
+        "parameters": [
+          {
+            "description": "Comma-separated table names whose cache should be invalidated",
+            "in": "query",
+            "name": "invalidate_tables",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "function_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "description": "Request body for data.ExecuteFunctionInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/unknown-interface"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/unknown-interface"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Execute database stored function or procedure with JSON payload",
+        "tags": [
+          "RPC"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "rpc"
+        ],
+        "x-sdk-method-name": "mutation"
+      }
+    },
+    "/v1/data/{schema_name}/{table_name}": {
+      "get": {
+        "description": "Queries PostgreSQL table rows with dynamic filter predicates (eq, gte, in, like), JSON path filtering, relational foreign-key embedding, cursor/offset pagination, and multi-column sorting. Injects caller JWT session claims into transaction-local variables for native Row-Level Security (RLS) enforcement. Supports optional KV result caching via ?cache_ttl.",
+        "operationId": "data__records__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Column projection and embedded relations (e.g. 'id,name,posts(*)')",
+            "in": "query",
+            "name": "select",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Ordering expression (e.g. 'created_at.desc,id.asc')",
+            "in": "query",
+            "name": "order",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Cache duration in seconds",
+            "in": "query",
+            "name": "cache_ttl",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Custom suffix for cache key isolation",
+            "in": "query",
+            "name": "cache_key_suffix",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Alias for cache_key_suffix",
+            "in": "query",
+            "name": "cache_key",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRecordsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRecordsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Query table rows with dynamic filtering, sorting, and pagination",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Inserts a single row or batch of JSON objects into PostgreSQL, automatically applying defaults and returning inserted tuples. Validates against RLS INSERT ... WITH CHECK policies, invalidates table query caches, and emits real-time CDC updates.",
+        "operationId": "data__records__create",
+        "parameters": [
+          {
+            "description": "Target column or constraint for upsert on-conflict resolution",
+            "in": "query",
+            "name": "on_conflict",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecordInput"
+              }
+            }
+          },
+          "description": "Request body for data.CreateRecordInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRecordResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateRecordResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Insert single or bulk rows with RETURNING *",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/data/{schema_name}/{table_name}/{record_id}": {
+      "delete": {
+        "description": "Deletes a row by primary key from PostgreSQL subject to caller RLS DELETE ... USING policies, invalidating table query caches and broadcasting CDC events.",
+        "operationId": "data__records__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Row deleted"
+          }
+        },
+        "summary": "Delete a row by primary key",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves a single row from PostgreSQL by UUID or primary key, enforcing caller Row-Level Security (RLS) SELECT policies and executing within caller session claims.",
+        "operationId": "data__records__get",
+        "parameters": [
+          {
+            "description": "Column projection (e.g. 'id,name')",
+            "in": "query",
+            "name": "select",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetRecordResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetRecordResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get a single row by primary key",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "patch": {
+        "description": "Applies partial column updates to a row identified by primary key, validating against RLS UPDATE ... USING ... WITH CHECK policies, invalidating cached queries, and broadcasting CDC changes.",
+        "operationId": "data__records__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecordInput"
+              }
+            }
+          },
+          "description": "Request body for data.UpdateRecordInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRecordResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRecordResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Partially update a row by primary key",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "update"
+      },
+      "put": {
+        "description": "Replaces column values for a row identified by primary key, validating against RLS UPDATE policies, invalidating table query caches, and broadcasting CDC changes.",
+        "operationId": "data__records__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schema_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table_name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRecordInput"
+              }
+            }
+          },
+          "description": "Request body for data.UpdateRecordInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRecordResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRecordResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update entire row by primary key",
+        "tags": [
+          "Records"
+        ],
+        "x-sdk-group-name": [
+          "data",
+          "records"
+        ],
+        "x-sdk-method-name": "put"
+      }
+    },
+    "/v1/graphql": {
+      "post": {
+        "description": "Dynamic introspection and execution engine over PostgreSQL tables, supporting complex nested selections, arguments, variables, query depth limits (max depth guard), complexity budgets, and native RLS session context injection.",
+        "operationId": "data__graphql",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteGraphQLInput"
+              }
+            }
+          },
+          "description": "Request body for data.ExecuteGraphQLInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteGraphQLResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteGraphQLResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Execute GraphQL query or mutation",
+        "tags": [
+          "GraphQL"
+        ],
+        "x-sdk-group-name": [
+          "data"
+        ],
+        "x-sdk-method-name": "graphql"
+      }
+    }
+  }
+}

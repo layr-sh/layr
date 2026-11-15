@@ -22,7 +22,7 @@ func TestFunctionBaseHandlerInvokeIntegration(t *testing.T) {
 	defer service.Stop()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	// 1. Create and deploy public endpoint
 	publicEndpoint := insertTestEndpoint(testCtx, t, kernel, "hello-integration-fn", true)

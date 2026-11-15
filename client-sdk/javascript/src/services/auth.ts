@@ -1,7 +1,7 @@
-import type { Configuration } from '../../generated/runtime';
+import { Configuration } from "../../generated/auth/control_plane/runtime";
+import { Configuration as BaseConfiguration } from "../../generated/auth/base/runtime";
 import {
   AnonymousApi,
-  ConfigApi,
   MFAApi,
   OIDCApi,
   OTPApi,
@@ -21,27 +21,25 @@ import {
   UserPhoneVerificationApi,
   UserPropertiesApi,
   UserSessionsApi,
+} from "../../generated/auth/base/apis";
+import {
+  ConfigApi,
   UsersApi,
   UsersSessionsApi,
   type AuthUsersListRequest,
-} from '../../generated/apis';
+} from "../../generated/auth/control_plane/apis";
 import type {
   AuthTokenResponse,
   BeginPasskeySignUpInput,
   ChallengeMFAInput,
-  Config,
   ConfirmEmailVerificationInput,
   ConfirmPasswordResetInput,
   ConfirmPhoneVerificationInput,
-  CreateUserInput,
   ExportUserResponse,
   GetOIDCUserInfoResponse,
   GetUserResponse,
   IssueOIDCTokenResponse,
   ListSessionsResponse,
-  ListUserSessionsResponse,
-  ListUsersResponse,
-  LockUserInput,
   Passkey,
   RefreshTokenInput,
   RequestEmailVerificationInput,
@@ -65,9 +63,21 @@ import type {
   VerifyOTPInput,
   VerifyPasskeySignInInput,
   VerifyPasskeySignUpInput,
-} from '../../generated/models';
-import { ATTACH_CONTROL_PLANE, type ElevatableService, type LayrClient } from '../core/client';
-import { handleApiCall } from '../core/transport';
+} from "../../generated/auth/base/models";
+import type {
+  Config,
+  CreateUserInput,
+  ListUserSessionsResponse,
+  ListUsersResponse,
+  LockUserInput,
+} from "../../generated/auth/control_plane/models";
+import {
+  ATTACH_CONTROL_PLANE,
+  type ConfigurationParameters,
+  type ElevatableService,
+  type LayrClient,
+} from "../core/client";
+import { handleApiCall } from "../core/transport";
 
 export interface AuthControlPlane {
   config: {
@@ -90,7 +100,7 @@ export interface AuthControlPlane {
 
 export interface AuthService extends ElevatableService<AuthControlPlane> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => AuthControlPlane;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => AuthControlPlane;
 
   sign_in: (input: SignInInput) => Promise<AuthTokenResponse>;
   sign_out: () => Promise<void>;
@@ -174,7 +184,7 @@ export interface AuthService extends ElevatableService<AuthControlPlane> {
 }
 
 export function useAuth(client: LayrClient): AuthService {
-  const config = client.config;
+  const config = new BaseConfiguration(client.config);
 
   const service: AuthService = {
     client,
@@ -191,7 +201,7 @@ export function useAuth(client: LayrClient): AuthService {
     anonymous: {
       sign_in: (input: SignInAnonymousInput = {}) =>
         handleApiCall(() =>
-          new AnonymousApi(config).authAnonymousSignIn({ signInAnonymousInput: input })
+          new AnonymousApi(config).authAnonymousSignIn({ signInAnonymousInput: input }),
         ),
     },
 
@@ -220,14 +230,12 @@ export function useAuth(client: LayrClient): AuthService {
     passkeys: {
       sign_in: {
         begin: () =>
-          handleApiCall(() =>
-            new PasskeysSignInApi(config).authPasskeysSignInBegin({ body: {} })
-          ),
+          handleApiCall(() => new PasskeysSignInApi(config).authPasskeysSignInBegin({ body: {} })),
         verify: (input: VerifyPasskeySignInInput) =>
           handleApiCall(() =>
             new PasskeysSignInApi(config).authPasskeysSignInVerify({
               verifyPasskeySignInInput: input,
-            })
+            }),
           ),
       },
       sign_up: {
@@ -235,13 +243,13 @@ export function useAuth(client: LayrClient): AuthService {
           handleApiCall(() =>
             new PasskeysSignUpApi(config).authPasskeysSignUpBegin({
               beginPasskeySignUpInput: input,
-            })
+            }),
           ),
         verify: (input: VerifyPasskeySignUpInput) =>
           handleApiCall(() =>
             new PasskeysSignUpApi(config).authPasskeysSignUpVerify({
               verifyPasskeySignUpInput: input,
-            })
+            }),
           ),
       },
     },
@@ -251,13 +259,13 @@ export function useAuth(client: LayrClient): AuthService {
         handleApiCall(() =>
           new PasswordResetApi(config).authPasswordResetConfirm({
             confirmPasswordResetInput: input,
-          })
+          }),
         ),
       request: (input: RequestPasswordResetInput) =>
         handleApiCall(() =>
           new PasswordResetApi(config).authPasswordResetRequest({
             requestPasswordResetInput: input,
-          })
+          }),
         ),
     },
 
@@ -268,26 +276,25 @@ export function useAuth(client: LayrClient): AuthService {
 
     user: {
       delete: () => handleApiCall(() => new UserApi(config).authUserDelete()),
-      export: () =>
-        handleApiCall(() => new UserApi(config).authUserExport({ body: null })),
+      export: () => handleApiCall(() => new UserApi(config).authUserExport({ body: null })),
       get: () => handleApiCall(() => new UserApi(config).authUserGet()),
       email: {
         update: (input: UpdateUserEmailInput) =>
           handleApiCall(() =>
-            new UserEmailApi(config).authUserEmailUpdate({ updateUserEmailInput: input })
+            new UserEmailApi(config).authUserEmailUpdate({ updateUserEmailInput: input }),
           ),
         verification: {
           confirm: (input: ConfirmEmailVerificationInput) =>
             handleApiCall(() =>
               new UserEmailVerificationApi(config).authUserEmailVerificationConfirm({
                 confirmEmailVerificationInput: input,
-              })
+              }),
             ),
           request: (input: RequestEmailVerificationInput = {}) =>
             handleApiCall(() =>
               new UserEmailVerificationApi(config).authUserEmailVerificationRequest({
                 requestEmailVerificationInput: input,
-              })
+              }),
             ),
         },
       },
@@ -301,26 +308,26 @@ export function useAuth(client: LayrClient): AuthService {
           handleApiCall(() =>
             new UserPasswordApi(config).authUserPasswordUpdate({
               updateUserPasswordInput: input,
-            })
+            }),
           ),
       },
       phone: {
         update: (input: UpdateUserPhoneInput) =>
           handleApiCall(() =>
-            new UserPhoneApi(config).authUserPhoneUpdate({ updateUserPhoneInput: input })
+            new UserPhoneApi(config).authUserPhoneUpdate({ updateUserPhoneInput: input }),
           ),
         verification: {
           confirm: (input: ConfirmPhoneVerificationInput) =>
             handleApiCall(() =>
               new UserPhoneVerificationApi(config).authUserPhoneVerificationConfirm({
                 confirmPhoneVerificationInput: input,
-              })
+              }),
             ),
           request: (input: RequestPhoneVerificationInput = {}) =>
             handleApiCall(() =>
               new UserPhoneVerificationApi(config).authUserPhoneVerificationRequest({
                 requestPhoneVerificationInput: input,
-              })
+              }),
             ),
         },
       },
@@ -329,7 +336,7 @@ export function useAuth(client: LayrClient): AuthService {
           handleApiCall(() =>
             new UserPropertiesApi(config).authUserPropertiesUpdate({
               updateUserPropertiesInput: input,
-            })
+            }),
           ),
       },
       sessions: {
@@ -337,50 +344,53 @@ export function useAuth(client: LayrClient): AuthService {
         revoke: (sessionId: string) =>
           handleApiCall(() => new UserSessionsApi(config).authUserSessionsRevoke({ sessionId })),
         revoke_others: () =>
-          handleApiCall(() => new UserSessionsApi(config).authUserSessionsRevokeOthers({ body: null })),
+          handleApiCall(() =>
+            new UserSessionsApi(config).authUserSessionsRevokeOthers({ body: null }),
+          ),
       },
     },
 
-    [ATTACH_CONTROL_PLANE]: (elevatedConfig: Configuration) => ({
-      config: {
-        get: () => handleApiCall(() => new ConfigApi(elevatedConfig).authConfigGet()),
-        update: (input: Config) =>
-          handleApiCall(() =>
-            new ConfigApi(elevatedConfig).authConfigUpdate({ config: input })
-          ),
-      },
-      users: {
-        create: (input: CreateUserInput) =>
-          handleApiCall(() =>
-            new UsersApi(elevatedConfig).authUsersCreate({ createUserInput: input })
-          ),
-        delete: (userId: string) =>
-          handleApiCall(() => new UsersApi(elevatedConfig).authUsersDelete({ userId })),
-        get: (userId: string) =>
-          handleApiCall(() => new UsersApi(elevatedConfig).authUsersGet({ userId })),
-        list: (params: AuthUsersListRequest = {}) =>
-          handleApiCall(() => new UsersApi(elevatedConfig).authUsersList(params)),
-        lock: (userId: string, input: LockUserInput) =>
-          handleApiCall(() =>
-            new UsersApi(elevatedConfig).authUsersLock({
-              userId,
-              lockUserInput: input,
-            })
-          ),
-        unlock: (userId: string) =>
-          handleApiCall(() => new UsersApi(elevatedConfig).authUsersUnlock({ userId })),
-        sessions: {
-          list: (userId: string) =>
-            handleApiCall(() =>
-              new UsersSessionsApi(elevatedConfig).authUsersSessionsList({ userId })
-            ),
-          revoke: (userId: string) =>
-            handleApiCall(() =>
-              new UsersSessionsApi(elevatedConfig).authUsersSessionsRevoke({ userId, body: {} })
-            ),
+    [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): AuthControlPlane => {
+      const elevatedConfig = new Configuration(configuration);
+      return {
+        config: {
+          get: () => handleApiCall(() => new ConfigApi(elevatedConfig).authConfigGet()),
+          update: (input: Config) =>
+            handleApiCall(() => new ConfigApi(elevatedConfig).authConfigUpdate({ config: input })),
         },
-      },
-    }),
+        users: {
+          create: (input: CreateUserInput) =>
+            handleApiCall(() =>
+              new UsersApi(elevatedConfig).authUsersCreate({ createUserInput: input }),
+            ),
+          delete: (userId: string) =>
+            handleApiCall(() => new UsersApi(elevatedConfig).authUsersDelete({ userId })),
+          get: (userId: string) =>
+            handleApiCall(() => new UsersApi(elevatedConfig).authUsersGet({ userId })),
+          list: (params: AuthUsersListRequest = {}) =>
+            handleApiCall(() => new UsersApi(elevatedConfig).authUsersList(params)),
+          lock: (userId: string, input: LockUserInput) =>
+            handleApiCall(() =>
+              new UsersApi(elevatedConfig).authUsersLock({
+                userId,
+                lockUserInput: input,
+              }),
+            ),
+          unlock: (userId: string) =>
+            handleApiCall(() => new UsersApi(elevatedConfig).authUsersUnlock({ userId })),
+          sessions: {
+            list: (userId: string) =>
+              handleApiCall(() =>
+                new UsersSessionsApi(elevatedConfig).authUsersSessionsList({ userId }),
+              ),
+            revoke: (userId: string) =>
+              handleApiCall(() =>
+                new UsersSessionsApi(elevatedConfig).authUsersSessionsRevoke({ userId, body: {} }),
+              ),
+          },
+        },
+      };
+    },
   };
 
   return service;

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateOpenapiSpecsValidateSpecOperationsUnit(t *testing.T) {
@@ -257,6 +259,57 @@ func TestGenerateOpenapiSpecsValidateSpecOperationsUnit(t *testing.T) {
 	})
 }
 
+func TestGenerateOpenapiSpecsServiceIsolationUnit(t *testing.T) {
+	baseOpenAPISpecs, controlPlaneOpenAPISpecs := exportSpecsFn()
+	require.Len(t, baseOpenAPISpecs, 8)
+	require.Len(t, controlPlaneOpenAPISpecs, 8)
+
+	for serviceName, propertyName := range map[string]string{
+		"auth":         "password",
+		"console":      "session_idle_timeout_seconds",
+		"data":         "schemas",
+		"file_storage": "default_max_file_size_bytes",
+		"function":     "default_runtime",
+		"image":        "default_quality",
+		"tasks":        "concurrency_limit",
+	} {
+		t.Run(serviceName, func(t *testing.T) {
+			configSchemaRef := controlPlaneOpenAPISpecs[serviceName].Components.Schemas["Config"]
+			require.NotNil(t, configSchemaRef)
+			require.NotNil(t, configSchemaRef.Value)
+			assert.Contains(t, configSchemaRef.Value.Properties, propertyName)
+			if serviceName != "auth" {
+				assert.NotContains(t, configSchemaRef.Value.Properties, "password")
+			}
+		})
+	}
+
+	assert.Contains(t, controlPlaneOpenAPISpecs["auth"].Components.Schemas["User"].Value.Properties, "phone")
+	assert.NotContains(t, controlPlaneOpenAPISpecs["console"].Components.Schemas["User"].Value.Properties, "phone")
+	assert.Contains(t, controlPlaneOpenAPISpecs["console"].Components.Schemas["User"].Value.Properties, "is_enabled")
+	assert.Contains(t, controlPlaneOpenAPISpecs["auth"].Components.Schemas["Session"].Value.Properties, "client_id")
+	assert.NotContains(t, controlPlaneOpenAPISpecs["console"].Components.Schemas["Session"].Value.Properties, "client_id")
+
+	for serviceName, baseOpenAPISpec := range baseOpenAPISpecs {
+		t.Run(serviceName+" routes", func(t *testing.T) {
+			for planeName, openAPISpec := range map[string]*openapi3.T{"base": baseOpenAPISpec, "control plane": controlPlaneOpenAPISpecs[serviceName]} {
+				t.Run(planeName, func(t *testing.T) {
+					for path, pathItem := range openAPISpec.Paths.Map() {
+						t.Run(path, func(t *testing.T) {
+							for method, operation := range pathItem.Operations() {
+								t.Run(method, func(t *testing.T) {
+									groups := operation.Extensions["x-sdk-group-name"].([]string)
+									assert.Equal(t, serviceName, groups[0])
+								})
+							}
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestGenerateOpenapiSpecsRunUnit(t *testing.T) {
 	t.Run("ValidateOnlyFlag", func(t *testing.T) {
 		var outputBuffer bytes.Buffer
@@ -281,9 +334,22 @@ func TestGenerateOpenapiSpecsRunUnit(t *testing.T) {
 		}
 
 		expectedFiles := []string{
-			"base-spec.json",
-			"control-plane-spec.json",
-			"unified-spec.json",
+			"auth/base-spec.json",
+			"auth/control-plane-spec.json",
+			"console/base-spec.json",
+			"console/control-plane-spec.json",
+			"core/base-spec.json",
+			"core/control-plane-spec.json",
+			"data/base-spec.json",
+			"data/control-plane-spec.json",
+			"file_storage/base-spec.json",
+			"file_storage/control-plane-spec.json",
+			"function/base-spec.json",
+			"function/control-plane-spec.json",
+			"image/base-spec.json",
+			"image/control-plane-spec.json",
+			"tasks/base-spec.json",
+			"tasks/control-plane-spec.json",
 		}
 
 		for _, fileName := range expectedFiles {
@@ -303,8 +369,8 @@ func TestGenerateOpenapiSpecsRunUnit(t *testing.T) {
 		origFn := exportSpecsFn
 		defer func() { exportSpecsFn = origFn }()
 
-		exportSpecsFn = func() (*openapi3.T, *openapi3.T, *openapi3.T) {
-			return nil, nil, nil
+		exportSpecsFn = func() (map[string]*openapi3.T, map[string]*openapi3.T) {
+			return map[string]*openapi3.T{"core": nil}, nil
 		}
 
 		var outputBuffer bytes.Buffer

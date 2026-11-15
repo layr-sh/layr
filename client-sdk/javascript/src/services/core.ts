@@ -1,13 +1,14 @@
-import type { Configuration } from '../../generated/runtime';
+import { Configuration } from "../../generated/core/control_plane/runtime";
+import { Configuration as BaseConfiguration } from "../../generated/core/base/runtime";
 import {
   EventHooksApi,
   EventHooksDeliveriesApi,
   EventsApi,
-  ManifestApi,
   ServiceAccountsApi,
   type CoreEventHooksListRequest,
   type CoreEventsListRequest,
-} from '../../generated/apis';
+} from "../../generated/core/control_plane/apis";
+import { ManifestApi } from "../../generated/core/base/apis";
 import type {
   CreateEventHookInput,
   CreateServiceAccountInput,
@@ -15,14 +16,19 @@ import type {
   Event,
   EventHook,
   EventHookDelivery,
-  GetManifestResponse,
   ListEventsResponse,
   ServiceAccount,
   UpdateEventHookInput,
   UpdateServiceAccountInput,
-} from '../../generated/models';
-import { ATTACH_CONTROL_PLANE, type ElevatableService, type LayrClient } from '../core/client';
-import { handleApiCall } from '../core/transport';
+} from "../../generated/core/control_plane/models";
+import type { GetManifestResponse } from "../../generated/core/base/models";
+import {
+  ATTACH_CONTROL_PLANE,
+  type ConfigurationParameters,
+  type ElevatableService,
+  type LayrClient,
+} from "../core/client";
+import { handleApiCall } from "../core/transport";
 
 export interface CoreControlPlane {
   event_hooks: {
@@ -51,97 +57,98 @@ export interface CoreControlPlane {
 
 export interface CoreService extends ElevatableService<CoreControlPlane> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => CoreControlPlane;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => CoreControlPlane;
 
   manifest: () => Promise<GetManifestResponse>;
 }
 
 export function useCore(client: LayrClient): CoreService {
-  const config = client.config;
+  const config = new BaseConfiguration(client.config);
 
   const service: CoreService = {
     client,
 
     manifest: () => handleApiCall(() => new ManifestApi(config).coreManifest()),
 
-    [ATTACH_CONTROL_PLANE]: (elevatedConfig: Configuration): CoreControlPlane => ({
-      event_hooks: {
-        create: (input: CreateEventHookInput) =>
-          handleApiCall(() =>
-            new EventHooksApi(elevatedConfig).coreEventHooksCreate({
-              createEventHookInput: input,
-            })
-          ),
-        delete: (eventHookId: string) =>
-          handleApiCall(async () => {
-            await new EventHooksApi(elevatedConfig).coreEventHooksDelete({ eventHookId });
-          }),
-        get: (eventHookId: string) =>
-          handleApiCall(() =>
-            new EventHooksApi(elevatedConfig).coreEventHooksGet({ eventHookId })
-          ),
-        list: (params = {}) =>
-          handleApiCall(() =>
-            new EventHooksApi(elevatedConfig).coreEventHooksList(params)
-          ),
-        update: (eventHookId: string, input: UpdateEventHookInput) =>
-          handleApiCall(() =>
-            new EventHooksApi(elevatedConfig).coreEventHooksUpdate({
-              eventHookId,
-              updateEventHookInput: input,
-            })
-          ),
-        deliveries: {
-          list: (eventHookId: string) =>
+    [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): CoreControlPlane => {
+      const elevatedConfig = new Configuration(configuration);
+      return {
+        event_hooks: {
+          create: (input: CreateEventHookInput) =>
             handleApiCall(() =>
-              new EventHooksDeliveriesApi(elevatedConfig).coreEventHooksDeliveriesList({
-                eventHookId,
-              })
+              new EventHooksApi(elevatedConfig).coreEventHooksCreate({
+                createEventHookInput: input,
+              }),
             ),
-          retry: (eventHookId: string, deliveryId: string) =>
+          delete: (eventHookId: string) =>
             handleApiCall(async () => {
-              await new EventHooksDeliveriesApi(elevatedConfig).coreEventHooksDeliveriesRetry({
+              await new EventHooksApi(elevatedConfig).coreEventHooksDelete({ eventHookId });
+            }),
+          get: (eventHookId: string) =>
+            handleApiCall(() =>
+              new EventHooksApi(elevatedConfig).coreEventHooksGet({ eventHookId }),
+            ),
+          list: (params = {}) =>
+            handleApiCall(() => new EventHooksApi(elevatedConfig).coreEventHooksList(params)),
+          update: (eventHookId: string, input: UpdateEventHookInput) =>
+            handleApiCall(() =>
+              new EventHooksApi(elevatedConfig).coreEventHooksUpdate({
                 eventHookId,
-                deliveryId,
-                body: {},
+                updateEventHookInput: input,
+              }),
+            ),
+          deliveries: {
+            list: (eventHookId: string) =>
+              handleApiCall(() =>
+                new EventHooksDeliveriesApi(elevatedConfig).coreEventHooksDeliveriesList({
+                  eventHookId,
+                }),
+              ),
+            retry: (eventHookId: string, deliveryId: string) =>
+              handleApiCall(async () => {
+                await new EventHooksDeliveriesApi(elevatedConfig).coreEventHooksDeliveriesRetry({
+                  eventHookId,
+                  deliveryId,
+                  body: {},
+                });
+              }),
+          },
+        },
+        events: {
+          get: (eventId: string) =>
+            handleApiCall(() => new EventsApi(elevatedConfig).coreEventsGet({ eventId })),
+          list: (params = {}) =>
+            handleApiCall(() => new EventsApi(elevatedConfig).coreEventsList(params)),
+        },
+        service_accounts: {
+          create: (input: CreateServiceAccountInput) =>
+            handleApiCall(() =>
+              new ServiceAccountsApi(elevatedConfig).coreServiceAccountsCreate({
+                createServiceAccountInput: input,
+              }),
+            ),
+          delete: (serviceAccountId: string) =>
+            handleApiCall(async () => {
+              await new ServiceAccountsApi(elevatedConfig).coreServiceAccountsDelete({
+                serviceAccountId,
               });
             }),
+          get: (serviceAccountId: string) =>
+            handleApiCall(() =>
+              new ServiceAccountsApi(elevatedConfig).coreServiceAccountsGet({ serviceAccountId }),
+            ),
+          list: () =>
+            handleApiCall(() => new ServiceAccountsApi(elevatedConfig).coreServiceAccountsList()),
+          update: (serviceAccountId: string, input: UpdateServiceAccountInput) =>
+            handleApiCall(() =>
+              new ServiceAccountsApi(elevatedConfig).coreServiceAccountsUpdate({
+                serviceAccountId,
+                updateServiceAccountInput: input,
+              }),
+            ),
         },
-      },
-      events: {
-        get: (eventId: string) =>
-          handleApiCall(() => new EventsApi(elevatedConfig).coreEventsGet({ eventId })),
-        list: (params = {}) =>
-          handleApiCall(() => new EventsApi(elevatedConfig).coreEventsList(params)),
-      },
-      service_accounts: {
-        create: (input: CreateServiceAccountInput) =>
-          handleApiCall(() =>
-            new ServiceAccountsApi(elevatedConfig).coreServiceAccountsCreate({
-              createServiceAccountInput: input,
-            })
-          ),
-        delete: (serviceAccountId: string) =>
-          handleApiCall(async () => {
-            await new ServiceAccountsApi(elevatedConfig).coreServiceAccountsDelete({
-              serviceAccountId,
-            });
-          }),
-        get: (serviceAccountId: string) =>
-          handleApiCall(() =>
-            new ServiceAccountsApi(elevatedConfig).coreServiceAccountsGet({ serviceAccountId })
-          ),
-        list: () =>
-          handleApiCall(() => new ServiceAccountsApi(elevatedConfig).coreServiceAccountsList()),
-        update: (serviceAccountId: string, input: UpdateServiceAccountInput) =>
-          handleApiCall(() =>
-            new ServiceAccountsApi(elevatedConfig).coreServiceAccountsUpdate({
-              serviceAccountId,
-              updateServiceAccountInput: input,
-            })
-          ),
-      },
-    }),
+      };
+    },
   };
 
   return service;

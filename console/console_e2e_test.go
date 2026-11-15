@@ -31,7 +31,7 @@ func TestConsoleFullLifecycleE2E(t *testing.T) {
 	require.NotNil(t, consoleService.ControlPlaneHandler())
 
 	coreServer := core.NewServer(kernel)
-	consoleService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	consoleService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	// 2. Create Service Account with full console control plane scopes
 	createdServiceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{

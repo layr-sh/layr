@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  description: Public Application & Client APIs for Layr Platform
+  title: Layr Client API Engine
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /v1/manifest:
+    get:
+      description: "Returns cluster metadata, list of enabled platform services, public\
+        \ server base URL, and the derived publishable key required for SDK client\
+        \ initialization. Unrestricted public endpoint."
+      operationId: core__manifest
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetManifestResponse"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/GetManifestResponse"
+          description: OK
+      summary: Get dynamic cluster manifest and enabled services
+      tags:
+      - Manifest
+      x-sdk-group-name:
+      - core
+      x-sdk-method-name: manifest
+components:
+  schemas:
+    GetManifestResponse:
+      description: GetManifestResponse schema
+      example:
+        enabled_services:
+        - enabled_services
+        - enabled_services
+        project:
+          description: description
+          name: name
+        publishable_key: publishable_key
+        server:
+          base_url: base_url
+          listen_addr: listen_addr
+      properties:
+        enabled_services:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        project:
+          $ref: "#/components/schemas/ManifestProjectInfo"
+        publishable_key:
+          type: string
+        server:
+          $ref: "#/components/schemas/ManifestServerInfo"
+      required:
+      - enabled_services
+      - project
+      - server
+    ManifestProjectInfo:
+      example:
+        description: description
+        name: name
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+      required:
+      - description
+      - name
+    ManifestServerInfo:
+      example:
+        base_url: base_url
+        listen_addr: listen_addr
+      properties:
+        base_url:
+          type: string
+        listen_addr:
+          type: string
+      required:
+      - base_url
+      - listen_addr
+    unknown-interface:
+      description: unknown-interface schema

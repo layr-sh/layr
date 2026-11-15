@@ -1,14 +1,35 @@
 package auth
 
 import (
+	"encoding/json"
+	"net/http"
+
+	"gopkg.in/yaml.v3"
 	"layr.sh/auth/passkey"
 	"layr.sh/core"
 )
 
 // RegisterRoutes registers all Auth service REST and OpenAPI 3.1 endpoints on public and control plane routers.
-func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
+func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router, gatewayServeMux *http.ServeMux) {
 	service.registerBaseRoutes(baseRouter)
 	service.registerControlPlaneRoutes(controlPlaneRouter)
+
+	gatewayServeMux.HandleFunc("GET /v1/auth/spec.json", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(responseWriter).Encode(baseRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/auth/spec.yaml", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/yaml")
+		_ = yaml.NewEncoder(responseWriter).Encode(baseRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/_/auth/spec.json", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(responseWriter).Encode(controlPlaneRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/_/auth/spec.yaml", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/yaml")
+		_ = yaml.NewEncoder(responseWriter).Encode(controlPlaneRouter.OutputOpenAPISpec())
+	})
 }
 
 func (service *Service) registerBaseRoutes(router *core.Router) {

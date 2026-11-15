@@ -31,7 +31,7 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 	}
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	// Create privileged service account for E2E flow
 	createdServiceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{

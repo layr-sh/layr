@@ -22,7 +22,7 @@ func TestTasksControlPlaneHandlerConfigIntegration(t *testing.T) {
 	defer tasksService.Stop()
 
 	coreServer := core.NewServer(kernel)
-	tasksService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	tasksService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	serviceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "tasks-config-admin",

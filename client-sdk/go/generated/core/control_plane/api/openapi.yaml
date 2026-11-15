@@ -1,0 +1,1132 @@
+openapi: 3.1.0
+info:
+  description: Protected Control Plane APIs for Layr Platform
+  title: Layr Control Plane API Engine
+  version: 1.0.0
+servers:
+- url: /
+paths:
+  /v1/_/core/event-hooks:
+    get:
+      description: "Lists event hook subscriptions from core.event_hooks with driver\
+        \ (sql or http), target function or URL, subscribed event type patterns, retry\
+        \ limits, and enabled status. Requires core:event-hook.read scope."
+      operationId: core__event_hooks__list
+      parameters:
+      - description: Filter event hooks by delivery driver ('sql' or 'http')
+        explode: true
+        in: query
+        name: driver
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter event hooks by active enabled status
+        explode: true
+        in: query
+        name: is_enabled
+        required: false
+        schema:
+          type: boolean
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/EventHook"
+                type: array
+                default: null
+            application/xml:
+              schema:
+                items:
+                  $ref: "#/components/schemas/EventHook"
+                type: array
+                default: null
+          description: OK
+      summary: List event hook subscriptions
+      tags:
+      - Event Hooks
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      x-sdk-method-name: list
+    post:
+      description: "Creates an event hook subscription in core.event_hooks for SQL\
+        \ stored procedures (sql driver) or HTTP webhooks (http driver) with HMAC-SHA256\
+        \ signing secret encryption, wildcard event patterns, timeout guards, and\
+        \ retry policies. Requires core:event-hook.write scope."
+      operationId: core__event_hooks__create
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              $ref: "#/components/schemas/CreateEventHookInput"
+        description: Request body for core.CreateEventHookInput
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+          description: Created
+      summary: Create an event hook subscription
+      tags:
+      - Event Hooks
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      x-sdk-method-name: create
+  /v1/_/core/event-hooks/{event_hook_id}:
+    delete:
+      description: "Permanently removes an event hook subscription from core.event_hooks,\
+        \ immediately unbinding event dispatches. Delivery history is preserved or\
+        \ cascaded according to retention rules. Requires core:event-hook.write scope."
+      operationId: core__event_hooks__delete
+      parameters:
+      - explode: false
+        in: path
+        name: event_hook_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empty"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Empty"
+          description: OK
+        "204":
+          description: Event hook deleted
+      summary: Delete event hook subscription
+      tags:
+      - Event Hooks
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      x-sdk-method-name: delete
+    get:
+      description: "Retrieves event hook configuration by UUID from core.event_hooks,\
+        \ including driver type, target endpoint, subscribed event patterns, retry\
+        \ limits, and secret configuration indicator. Requires core:event-hook.read\
+        \ scope."
+      operationId: core__event_hooks__get
+      parameters:
+      - explode: false
+        in: path
+        name: event_hook_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+          description: OK
+      summary: Get event hook subscription details by UUID
+      tags:
+      - Event Hooks
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      x-sdk-method-name: get
+    put:
+      description: "Modifies event hook parameters in core.event_hooks including target\
+        \ URL or stored procedure, subscribed event patterns, retry count (0-10),\
+        \ timeout (1-60s), signing secret, or enabled status. Requires core:event-hook.write\
+        \ scope."
+      operationId: core__event_hooks__update
+      parameters:
+      - explode: false
+        in: path
+        name: event_hook_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              $ref: "#/components/schemas/UpdateEventHookInput"
+        description: Request body for core.UpdateEventHookInput
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/EventHook"
+          description: OK
+      summary: Update event hook subscription
+      tags:
+      - Event Hooks
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      x-sdk-method-name: update
+  /v1/_/core/event-hooks/{event_hook_id}/deliveries:
+    get:
+      description: "Queries the 100 most recent dispatch attempts for an event hook\
+        \ from core.event_hook_deliveries, detailing event ID, payload, HTTP status\
+        \ code, duration in milliseconds, error messages, and delivery state. Requires\
+        \ core:event-hook.read scope."
+      operationId: core__event_hooks__deliveries__list
+      parameters:
+      - explode: false
+        in: path
+        name: event_hook_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/EventHookDelivery"
+                type: array
+                default: null
+            application/xml:
+              schema:
+                items:
+                  $ref: "#/components/schemas/EventHookDelivery"
+                type: array
+                default: null
+          description: OK
+      summary: List delivery audit logs for an event hook
+      tags:
+      - Event Hooks Deliveries
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      - deliveries
+      x-sdk-method-name: list
+  /v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry:
+    post:
+      description: "Manually redrives an event hook delivery using the recorded event\
+        \ payload, re-dispatching via the configured driver (SQL procedure or HTTP\
+        \ POST webhook) and recording the new attempt outcome. Requires core:event-hook.write\
+        \ scope."
+      operationId: core__event_hooks__deliveries__retry
+      parameters:
+      - explode: false
+        in: path
+        name: event_hook_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      - explode: false
+        in: path
+        name: delivery_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              $ref: "#/components/schemas/Empty"
+        description: Request body for core.Empty
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventHookDelivery"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/EventHookDelivery"
+          description: OK
+      summary: Retry a past event hook delivery attempt
+      tags:
+      - Event Hooks Deliveries
+      x-sdk-group-name:
+      - core
+      - event_hooks
+      - deliveries
+      x-sdk-method-name: retry
+  /v1/_/core/events:
+    get:
+      description: "Queries immutable system and domain events from core.events with\
+        \ multi-field filtering by event type, actor type, date ranges, and pagination\
+        \ limits. Returns full event context, actor, and payload data. Requires core:event.read\
+        \ scope."
+      operationId: core__events__list
+      parameters:
+      - description: "Maximum number of items to return (default 50, maximum 1000)"
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          type: integer
+        style: form
+      - description: Number of items to skip before returning results (default 0)
+        explode: true
+        in: query
+        name: offset
+        required: false
+        schema:
+          default: 0
+          type: integer
+        style: form
+      - description: Filter by specific event type name
+        explode: true
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: "Filter by actor principal type (user, service_account, system)"
+        explode: true
+        in: query
+        name: actor_type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by actor principal UUID
+        explode: true
+        in: query
+        name: actor_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by target resource entity type
+        explode: true
+        in: query
+        name: resource_type
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter by target resource unique identifier
+        explode: true
+        in: query
+        name: resource_id
+        required: false
+        schema:
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListEventsResponse"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/ListEventsResponse"
+          description: OK
+      summary: Query immutable system and domain audit events
+      tags:
+      - Events
+      x-sdk-group-name:
+      - core
+      - events
+      x-sdk-method-name: list
+  /v1/_/core/events/{event_id}:
+    get:
+      description: "Retrieves a specific canonical event record by UUID from core.events,\
+        \ including event type, actor principal, transport context (IP, user agent,\
+        \ request ID), and structured payload data. Requires core:event.read scope."
+      operationId: core__events__get
+      parameters:
+      - explode: false
+        in: path
+        name: event_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Event"
+          description: OK
+      summary: Get individual event record by UUID
+      tags:
+      - Events
+      x-sdk-group-name:
+      - core
+      - events
+      x-sdk-method-name: get
+  /v1/_/core/service-accounts:
+    get:
+      description: "Lists all machine service accounts from core.service_accounts\
+        \ with name, key prefix, granted permission scopes, enabled status, IP allowlists,\
+        \ and expiration timestamps. Requires core:service-account.read scope."
+      operationId: core__service_accounts__list
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ServiceAccount"
+                type: array
+                default: null
+            application/xml:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ServiceAccount"
+                type: array
+                default: null
+          description: OK
+      summary: List machine service accounts
+      tags:
+      - Service Accounts
+      x-sdk-group-name:
+      - core
+      - service_accounts
+      x-sdk-method-name: list
+    post:
+      description: "Creates a machine service account, generates a high-entropy 32-byte\
+        \ hex secret key, hashes it with SHA-256 for storage in core.service_accounts,\
+        \ and returns the plaintext secret key once. Supports scope constraints and\
+        \ CIDR IP restrictions. Requires core:service-account.write scope."
+      operationId: core__service_accounts__create
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              $ref: "#/components/schemas/CreateServiceAccountInput"
+        description: Request body for core.CreateServiceAccountInput
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateServiceAccountResponse"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/CreateServiceAccountResponse"
+          description: Created
+      summary: Create a machine service account
+      tags:
+      - Service Accounts
+      x-sdk-group-name:
+      - core
+      - service_accounts
+      x-sdk-method-name: create
+  /v1/_/core/service-accounts/{service_account_id}:
+    delete:
+      description: "Deletes a machine service account from core.service_accounts.\
+        \ Enforces strict safety invariants: prevents deleting accounts owned by console\
+        \ users and ensures at least one active root account remains. Requires core:service-account.write\
+        \ scope."
+      operationId: core__service_accounts__delete
+      parameters:
+      - explode: false
+        in: path
+        name: service_account_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empty"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Empty"
+          description: OK
+        "204":
+          description: Service account deleted
+      summary: Delete machine service account
+      tags:
+      - Service Accounts
+      x-sdk-group-name:
+      - core
+      - service_accounts
+      x-sdk-method-name: delete
+    get:
+      description: "Retrieves a machine service account by UUID from core.service_accounts,\
+        \ returning metadata, permission scopes, key prefix, and allowed IP patterns.\
+        \ Plaintext key is not recoverable. Requires core:service-account.read scope."
+      operationId: core__service_accounts__get
+      parameters:
+      - explode: false
+        in: path
+        name: service_account_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAccount"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/ServiceAccount"
+          description: OK
+      summary: Get machine service account details by UUID
+      tags:
+      - Service Accounts
+      x-sdk-group-name:
+      - core
+      - service_accounts
+      x-sdk-method-name: get
+    put:
+      description: "Modifies name, description, permission scopes, IP allowlist, or\
+        \ enabled status in core.service_accounts. Enforces safety invariant that\
+        \ at least one enabled root account with wildcard * scope remains. Requires\
+        \ core:service-account.write scope."
+      operationId: core__service_accounts__update
+      parameters:
+      - explode: false
+        in: path
+        name: service_account_id
+        required: true
+        schema:
+          type: string
+        style: simple
+      requestBody:
+        content:
+          '*/*':
+            schema:
+              $ref: "#/components/schemas/UpdateServiceAccountInput"
+        description: Request body for core.UpdateServiceAccountInput
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAccount"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/ServiceAccount"
+          description: OK
+      summary: Update machine service account properties and scopes
+      tags:
+      - Service Accounts
+      x-sdk-group-name:
+      - core
+      - service_accounts
+      x-sdk-method-name: update
+components:
+  schemas:
+    CreateEventHookInput:
+      description: CreateEventHookInput schema
+      example:
+        driver: driver
+        event_types:
+        - event_types
+        - event_types
+        http_target_url: http_target_url
+        is_enabled: true
+        max_retries: 0
+        name: name
+        signing_secret: signing_secret
+        sql_function_name: sql_function_name
+        timeout_seconds: 6
+      properties:
+        driver:
+          type: string
+        event_types:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        http_target_url:
+          type: string
+          nullable: true
+        is_enabled:
+          type: boolean
+          nullable: true
+        max_retries:
+          type: integer
+          nullable: true
+        name:
+          type: string
+        signing_secret:
+          type: string
+        sql_function_name:
+          type: string
+          nullable: true
+        timeout_seconds:
+          type: integer
+          nullable: true
+      required:
+      - driver
+      - event_types
+      - name
+    CreateServiceAccountInput:
+      description: CreateServiceAccountInput schema
+      example:
+        allowed_ips:
+        - allowed_ips
+        - allowed_ips
+        console_user_id: console_user_id
+        description: description
+        expires_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        scopes:
+        - scopes
+        - scopes
+      properties:
+        allowed_ips:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        console_user_id:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        expires_at:
+          format: date-time
+          type: string
+          nullable: true
+        name:
+          type: string
+        scopes:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+      required:
+      - name
+      - scopes
+    CreateServiceAccountResponse:
+      description: CreateServiceAccountResponse schema
+      example:
+        allowed_ips:
+        - allowed_ips
+        - allowed_ips
+        console_user_id: console_user_id
+        created_at: 2000-01-23T04:56:07.000+00:00
+        description: description
+        expires_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        is_enabled: true
+        key_prefix: key_prefix
+        last_updated_at: 2000-01-23T04:56:07.000+00:00
+        last_used_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        scopes:
+        - scopes
+        - scopes
+        secret_key: secret_key
+      properties:
+        allowed_ips:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        console_user_id:
+          type: string
+          nullable: true
+        created_at:
+          format: date-time
+          type: string
+        description:
+          type: string
+          nullable: true
+        expires_at:
+          format: date-time
+          type: string
+          nullable: true
+        id:
+          type: string
+        is_enabled:
+          type: boolean
+        key_prefix:
+          type: string
+        last_updated_at:
+          format: date-time
+          type: string
+        last_used_at:
+          format: date-time
+          type: string
+          nullable: true
+        name:
+          type: string
+        scopes:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        secret_key:
+          type: string
+      required:
+      - created_at
+      - id
+      - is_enabled
+      - key_prefix
+      - last_updated_at
+      - name
+      - scopes
+      - secret_key
+    Empty:
+      description: Empty schema
+    Event:
+      example:
+        action: action
+        actor:
+          id: ""
+          role: role
+          type: type
+        context:
+          ip_address: ip_address
+          request_id: request_id
+          user_agent: user_agent
+        created_at: 2000-01-23T04:56:07.000+00:00
+        data:
+          key: ""
+        id: ""
+        metadata:
+          key: ""
+        resource_id: resource_id
+        resource_type: resource_type
+        type: type
+      properties:
+        action:
+          type: string
+        actor:
+          $ref: "#/components/schemas/EventActor"
+        context:
+          $ref: "#/components/schemas/EventContext"
+        created_at:
+          format: date-time
+          type: string
+        data:
+          additionalProperties:
+            nullable: true
+          nullable: true
+          type: object
+        id: {}
+        metadata:
+          additionalProperties:
+            nullable: true
+          nullable: true
+          type: object
+        resource_id:
+          type: string
+          nullable: true
+        resource_type:
+          type: string
+        type:
+          type: string
+      required:
+      - action
+      - actor
+      - context
+      - created_at
+      - data
+      - id
+      - metadata
+      - resource_type
+      - type
+    EventActor:
+      example:
+        id: ""
+        role: role
+        type: type
+      properties:
+        id:
+          nullable: true
+        role:
+          type: string
+          nullable: true
+        type:
+          type: string
+      required:
+      - type
+    EventContext:
+      example:
+        ip_address: ip_address
+        request_id: request_id
+        user_agent: user_agent
+      properties:
+        ip_address:
+          type: string
+          nullable: true
+        request_id:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+    EventHook:
+      description: EventHook schema
+      example:
+        created_at: 2000-01-23T04:56:07.000+00:00
+        driver: driver
+        event_types:
+        - event_types
+        - event_types
+        http_target_url: http_target_url
+        id: ""
+        is_enabled: true
+        last_updated_at: 2000-01-23T04:56:07.000+00:00
+        max_retries: 0
+        name: name
+        signing_secret_configured: true
+        sql_function_name: sql_function_name
+        timeout_seconds: 6
+      properties:
+        created_at:
+          format: date-time
+          type: string
+        driver:
+          type: string
+        event_types:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        http_target_url:
+          type: string
+          nullable: true
+        id: {}
+        is_enabled:
+          type: boolean
+        last_updated_at:
+          format: date-time
+          type: string
+        max_retries:
+          type: integer
+        name:
+          type: string
+        signing_secret_configured:
+          type: boolean
+        sql_function_name:
+          type: string
+          nullable: true
+        timeout_seconds:
+          type: integer
+      required:
+      - created_at
+      - driver
+      - event_types
+      - id
+      - is_enabled
+      - last_updated_at
+      - max_retries
+      - name
+      - signing_secret_configured
+      - timeout_seconds
+    EventHookDelivery:
+      description: EventHookDelivery schema
+      example:
+        attempt_count: 0
+        created_at: 2000-01-23T04:56:07.000+00:00
+        delivered_at: 2000-01-23T04:56:07.000+00:00
+        duration_ms: 6
+        error_message: error_message
+        event_hook_id: ""
+        event_id: ""
+        event_type: event_type
+        http_response_status: 1
+        id: ""
+        is_delivered: true
+        payload: ""
+        result: result
+      properties:
+        attempt_count:
+          type: integer
+        created_at:
+          format: date-time
+          type: string
+        delivered_at:
+          format: date-time
+          type: string
+          nullable: true
+        duration_ms:
+          format: int64
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+        event_hook_id: {}
+        event_id: {}
+        event_type:
+          type: string
+        http_response_status:
+          type: integer
+          nullable: true
+        id: {}
+        is_delivered:
+          type: boolean
+        payload: {}
+        result:
+          type: string
+          nullable: true
+      required:
+      - attempt_count
+      - created_at
+      - duration_ms
+      - event_hook_id
+      - event_id
+      - event_type
+      - id
+      - is_delivered
+      - payload
+    ListEventsResponse:
+      description: ListEventsResponse schema
+      example:
+        count: 0
+        data:
+        - action: action
+          actor:
+            id: ""
+            role: role
+            type: type
+          context:
+            ip_address: ip_address
+            request_id: request_id
+            user_agent: user_agent
+          created_at: 2000-01-23T04:56:07.000+00:00
+          data:
+            key: ""
+          id: ""
+          metadata:
+            key: ""
+          resource_id: resource_id
+          resource_type: resource_type
+          type: type
+        - action: action
+          actor:
+            id: ""
+            role: role
+            type: type
+          context:
+            ip_address: ip_address
+            request_id: request_id
+            user_agent: user_agent
+          created_at: 2000-01-23T04:56:07.000+00:00
+          data:
+            key: ""
+          id: ""
+          metadata:
+            key: ""
+          resource_id: resource_id
+          resource_type: resource_type
+          type: type
+        limit: 6
+        offset: 1
+        total: 5
+      properties:
+        count:
+          type: integer
+        data:
+          items:
+            $ref: "#/components/schemas/Event"
+          nullable: true
+          type: array
+          default: null
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          type: integer
+      required:
+      - count
+      - data
+      - limit
+      - offset
+    ServiceAccount:
+      description: ServiceAccount schema
+      example:
+        allowed_ips:
+        - allowed_ips
+        - allowed_ips
+        console_user_id: console_user_id
+        created_at: 2000-01-23T04:56:07.000+00:00
+        description: description
+        expires_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        is_enabled: true
+        key_prefix: key_prefix
+        last_updated_at: 2000-01-23T04:56:07.000+00:00
+        last_used_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        scopes:
+        - scopes
+        - scopes
+      properties:
+        allowed_ips:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        console_user_id:
+          type: string
+          nullable: true
+        created_at:
+          format: date-time
+          type: string
+        description:
+          type: string
+          nullable: true
+        expires_at:
+          format: date-time
+          type: string
+          nullable: true
+        id:
+          type: string
+        is_enabled:
+          type: boolean
+        key_prefix:
+          type: string
+        last_updated_at:
+          format: date-time
+          type: string
+        last_used_at:
+          format: date-time
+          type: string
+          nullable: true
+        name:
+          type: string
+        scopes:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+      required:
+      - created_at
+      - id
+      - is_enabled
+      - key_prefix
+      - last_updated_at
+      - name
+      - scopes
+    UpdateEventHookInput:
+      description: UpdateEventHookInput schema
+      example:
+        driver: driver
+        event_types:
+        - event_types
+        - event_types
+        http_target_url: http_target_url
+        is_enabled: true
+        max_retries: 0
+        name: name
+        signing_secret: signing_secret
+        sql_function_name: sql_function_name
+        timeout_seconds: 6
+      properties:
+        driver:
+          type: string
+          nullable: true
+        event_types:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        http_target_url:
+          type: string
+          nullable: true
+        is_enabled:
+          type: boolean
+          nullable: true
+        max_retries:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        signing_secret:
+          type: string
+          nullable: true
+        sql_function_name:
+          type: string
+          nullable: true
+        timeout_seconds:
+          type: integer
+          nullable: true
+    UpdateServiceAccountInput:
+      description: UpdateServiceAccountInput schema
+      example:
+        allowed_ips:
+        - allowed_ips
+        - allowed_ips
+        description: description
+        expires_at: 2000-01-23T04:56:07.000+00:00
+        is_enabled: true
+        name: name
+        scopes:
+        - scopes
+        - scopes
+      properties:
+        allowed_ips:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+        description:
+          type: string
+          nullable: true
+        expires_at:
+          format: date-time
+          type: string
+          nullable: true
+        is_enabled:
+          type: boolean
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        scopes:
+          items:
+            type: string
+          nullable: true
+          type: array
+          default: null
+    unknown-interface:
+      description: unknown-interface schema

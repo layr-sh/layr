@@ -1,11 +1,12 @@
-import { Configuration } from '../../generated/runtime';
+import { Configuration, type ConfigurationParameters } from "../../generated/core/base/runtime";
 import {
   buildHeaders,
   createFetchWithRetry,
   normalizeEndpointURL,
   type RetryOptions,
-} from './transport';
-export type { SchemaClient } from '../services/data';
+} from "./transport";
+export type { ConfigurationParameters } from "../../generated/core/base/runtime";
+export type { SchemaClient } from "../services/data";
 
 export interface ClientOptions extends RetryOptions {
   endpoint: string;
@@ -46,33 +47,31 @@ export function createClient(options: ClientOptions): LayrClient {
 
     setSession(token: string) {
       this.sessionToken = token;
-      const cleanToken = token.replace(/^Bearer\s+/i, '').trim();
+      const cleanToken = token.replace(/^Bearer\s+/i, "").trim();
       if (cleanToken) {
-        this.headers['Authorization'] = `Bearer ${cleanToken}`;
+        this.headers["Authorization"] = `Bearer ${cleanToken}`;
       } else {
-        delete this.headers['Authorization'];
+        delete this.headers["Authorization"];
       }
     },
 
     clearSession() {
       delete this.sessionToken;
-      delete this.headers['Authorization'];
+      delete this.headers["Authorization"];
     },
   };
 
   return client;
 }
 
-export const ATTACH_CONTROL_PLANE = Symbol('attachControlPlane');
+export const ATTACH_CONTROL_PLANE = Symbol("attachControlPlane");
 
 export interface ElevatableService<TCP = unknown> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => TCP;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => TCP;
 }
 
-export type Elevated<T> = T extends ElevatableService<infer TCP>
-  ? T & { cp: TCP }
-  : T;
+export type Elevated<T> = T extends ElevatableService<infer TCP> ? T & { cp: TCP } : T;
 
 export interface WithServiceAccountOptions {
   serviceAccountKey?: string;
@@ -80,11 +79,11 @@ export interface WithServiceAccountOptions {
 
 export function withServiceAccount<T extends ElevatableService<unknown>>(
   service: T,
-  options?: WithServiceAccountOptions
+  options?: WithServiceAccountOptions,
 ): Elevated<T> {
   const elevatable = service as ElevatableService<unknown>;
   if (!elevatable || !elevatable.client) {
-    throw new Error('Provided service is not a valid Layr service client');
+    throw new Error("Provided service is not a valid Layr service client");
   }
 
   const elevatedHeaders: Record<string, string> = {
@@ -93,18 +92,19 @@ export function withServiceAccount<T extends ElevatableService<unknown>>(
 
   const key = options?.serviceAccountKey?.trim();
   if (key) {
-    elevatedHeaders['Service-Account-Key'] = key;
+    elevatedHeaders["Service-Account-Key"] = key;
   }
 
-  const elevatedConfig = new Configuration({
+  const elevatedConfig: ConfigurationParameters = {
     basePath: elevatable.client.endpoint,
     headers: elevatedHeaders,
     fetchApi: elevatable.client.config.fetchApi,
-  });
+  };
 
-  const cp = typeof elevatable[ATTACH_CONTROL_PLANE] === 'function'
-    ? elevatable[ATTACH_CONTROL_PLANE](elevatedConfig)
-    : undefined;
+  const cp =
+    typeof elevatable[ATTACH_CONTROL_PLANE] === "function"
+      ? elevatable[ATTACH_CONTROL_PLANE](elevatedConfig)
+      : undefined;
 
   return Object.assign(Object.create(Object.getPrototypeOf(service)), service, {
     cp,

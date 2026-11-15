@@ -2,6 +2,7 @@ package filestorage
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/go-fuego/fuego"
@@ -74,6 +75,6 @@ func TestFilestorageServiceUnit(t *testing.T) {
 		controlPlaneFuegoEngine := fuego.NewServer()
 		baseRouter := core.NewRouter(baseFuegoEngine)
 		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
-		service.RegisterRoutes(baseRouter, controlPlaneRouter)
+		service.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	})
 }

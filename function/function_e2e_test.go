@@ -26,7 +26,7 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	defer functionService.Stop()
 
 	coreServer := core.NewServer(testKernel)
-	functionService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	functionService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	functionService.RegisterHostRoutes(coreServer)
 
 	// 2. Create Service Account with root scopes

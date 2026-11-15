@@ -1,0 +1,1048 @@
+{
+  "components": {
+    "schemas": {
+      "Config": {
+        "description": "Config schema",
+        "properties": {
+          "concurrency_limit": {
+            "type": "integer"
+          },
+          "poll_interval_ms": {
+            "type": "integer"
+          },
+          "retry_initial_delay_seconds": {
+            "type": "integer"
+          },
+          "retry_max_attempts": {
+            "type": "integer"
+          },
+          "retry_max_delay_seconds": {
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "concurrency_limit",
+          "poll_interval_ms",
+          "retry_initial_delay_seconds",
+          "retry_max_attempts",
+          "retry_max_delay_seconds",
+          "timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "CreateJobInput": {
+        "description": "CreateJobInput schema",
+        "properties": {
+          "cron_expression": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "target_payload": {
+            "type": "object"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cron_expression",
+          "name",
+          "target_payload",
+          "target_type"
+        ],
+        "type": "object"
+      },
+      "DLQExecution": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {},
+          "job_id": {
+            "nullable": true
+          },
+          "last_error": {
+            "nullable": true,
+            "type": "string"
+          },
+          "max_attempts": {
+            "type": "integer"
+          },
+          "payload": {
+            "type": "object"
+          },
+          "run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempts",
+          "created_at",
+          "id",
+          "max_attempts",
+          "payload",
+          "run_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "description": "Empty schema"
+      },
+      "ExecutionLog": {
+        "properties": {
+          "error_message": {
+            "nullable": true,
+            "type": "string"
+          },
+          "executed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "execution_duration_ms": {
+            "type": "integer"
+          },
+          "execution_id": {},
+          "id": {},
+          "job_id": {
+            "nullable": true
+          },
+          "response_body": {
+            "nullable": true,
+            "type": "string"
+          },
+          "response_status_code": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "executed_at",
+          "execution_duration_ms",
+          "execution_id",
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "GetJobResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cron_expression": {
+            "type": "string"
+          },
+          "id": {},
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "next_run_countdown_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "target_payload": {
+            "type": "object"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "cron_expression",
+          "id",
+          "is_enabled",
+          "last_updated_at",
+          "name",
+          "next_run_at",
+          "next_run_countdown_seconds",
+          "target_payload",
+          "target_type",
+          "timezone"
+        ],
+        "type": "object"
+      },
+      "GetStatsResponse": {
+        "description": "GetStatsResponse schema",
+        "properties": {
+          "active_jobs": {
+            "type": "integer"
+          },
+          "completed_executions": {
+            "type": "integer"
+          },
+          "failed_executions": {
+            "type": "integer"
+          },
+          "paused_jobs": {
+            "type": "integer"
+          },
+          "pending_executions": {
+            "type": "integer"
+          },
+          "running_executions": {
+            "type": "integer"
+          },
+          "success_rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "total_jobs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active_jobs",
+          "completed_executions",
+          "failed_executions",
+          "paused_jobs",
+          "pending_executions",
+          "running_executions",
+          "success_rate",
+          "total_jobs"
+        ],
+        "type": "object"
+      },
+      "Job": {
+        "description": "Job schema",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "cron_expression": {
+            "type": "string"
+          },
+          "id": {},
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "next_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "target_payload": {
+            "type": "object"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "cron_expression",
+          "id",
+          "is_enabled",
+          "last_updated_at",
+          "name",
+          "next_run_at",
+          "target_payload",
+          "target_type",
+          "timezone"
+        ],
+        "type": "object"
+      },
+      "ListDLQResponse": {
+        "description": "ListDLQResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DLQExecution"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ListExecutionsResponse": {
+        "description": "ListExecutionsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionLog"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ListJobsResponse": {
+        "description": "ListJobsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/GetJobResponse"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "count",
+          "data"
+        ],
+        "type": "object"
+      },
+      "RetryDLQResponse": {
+        "description": "RetryDLQResponse schema",
+        "properties": {
+          "execution_id": {},
+          "message": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id",
+          "message",
+          "status"
+        ],
+        "type": "object"
+      },
+      "TriggerExecutionInput": {
+        "description": "TriggerExecutionInput schema",
+        "properties": {
+          "job_id": {
+            "nullable": true
+          },
+          "payload": {
+            "nullable": true
+          }
+        },
+        "type": "object"
+      },
+      "TriggerExecutionResponse": {
+        "description": "TriggerExecutionResponse schema",
+        "properties": {
+          "execution_id": {},
+          "run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "execution_id",
+          "run_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "UpdateJobInput": {
+        "description": "UpdateJobInput schema",
+        "properties": {
+          "cron_expression": {
+            "nullable": true,
+            "type": "string"
+          },
+          "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "target_payload": {
+            "nullable": true
+          },
+          "target_type": {
+            "nullable": true,
+            "type": "string"
+          },
+          "timezone": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "unknown-interface": {
+        "description": "unknown-interface schema"
+      }
+    }
+  },
+  "info": {
+    "description": "\nThis is the autogenerated OpenAPI documentation for your [Fuego](https://github.com/go-fuego/fuego) API.\n\nBelow is a Fuego Cheatsheet to help you get started. Don't hesitate to check the [Fuego documentation](https://go-fuego.dev) for more details.\n\nHappy coding! 🔥\n\n## Usage\n\n### Route registration\n\n```go\nfunc main() {\n\t// Create a new server\n\ts := fuego.NewServer()\n\n\t// Register some routes\n\tfuego.Post(s, \"/hello\", myController)\n\tfuego.Get(s, \"/myPath\", otherController)\n\tfuego.Put(s, \"/hello\", thirdController)\n\n\tadminRoutes := fuego.Group(s, \"/admin\")\n\tfuego.Use(adminRoutes, myMiddleware) // This middleware (for authentication, etc...) will be available for routes starting by /admin/*, \n\tfuego.Get(adminRoutes, \"/hello\", groupController) // This route will be available at /admin/hello\n\n\t// Start the server\n\ts.Start()\n}\n```\n\n### Basic controller\n\n```go\ntype MyBody struct {\n\tName string `json:\"name\" validate:\"required,max=30\"`\n}\n\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc hello(ctx fuego.ContextWithBody[MyBody]) (*MyResponse, error) {\n\tbody, err := ctx.Body()\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + body.Name}, nil\n}\n```\n\n### Add openAPI information to the route\n\n```go\nimport (\n\t\"github.com/go-fuego/fuego\"\n\t\"github.com/go-fuego/fuego/option\"\n\t\"github.com/go-fuego/fuego/param\"\n)\n\nfunc main() {\n\ts := fuego.NewServer()\n\n\t// Custom OpenAPI options\n\tfuego.Post(s, \"/\", myController\n\t\toption.Description(\"This route does something...\"),\n\t\toption.Summary(\"This is my summary\"),\n\t\toption.Tags(\"MyTag\"), // A tag is set by default according to the return type (can be deactivated)\n\t\toption.Deprecated(), // Marks the route as deprecated in the OpenAPI spec\n\n\t\toption.Query(\"name\", \"Declares a query parameter with default value\", param.Default(\"Carmack\")),\n\t\toption.Header(\"Authorization\", \"Bearer token\", param.Required()),\n\t\toptionPagination,\n\t\toptionCustomBehavior,\n\t)\n\n\ts.Run()\n}\n\nvar optionPagination = option.Group(\n\toption.QueryInt(\"page\", \"Page number\", param.Default(1), param.Example(\"1st page\", 1), param.Example(\"42nd page\", 42)),\n\toption.QueryInt(\"perPage\", \"Number of items per page\"),\n)\n\nvar optionCustomBehavior = func(r *fuego.BaseRoute) {\n\tr.XXX = \"YYY\"\n}\n```\n\nThen, in the controller\n\n```go\ntype MyResponse struct {\n\tAnswer string `json:\"answer\"`\n}\n\nfunc getAllPets(ctx fuego.ContextNoBody) (*MyResponse, error) {\n\tname := ctx.QueryParam(\"name\")\n\tperPage, _ := ctx.QueryParamIntErr(\"per_page\")\n\n\treturn \u0026MyResponse{Answer: \"Hello \" + name}, nil\n}\n```\n",
+    "title": "OpenAPI",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/_/tasks/config": {
+      "get": {
+        "description": "Returns operational task configuration settings including worker concurrency limits, poller interval, default timeout guards, and exponential retry backoff parameters. Requires tasks:config.read scope.",
+        "operationId": "tasks__config__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get runtime tasks orchestrator configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "config"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "put": {
+        "description": "Updates operational task configuration in tasks.config, dynamically adjusting worker concurrency, polling intervals, and retry backoff limits without restarting workers. Requires tasks:config.write scope.",
+        "operationId": "tasks__config__update",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Config"
+              }
+            }
+          },
+          "description": "Request body for tasks.Config",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update runtime tasks orchestrator configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "config"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/tasks/dlq": {
+      "get": {
+        "description": "Queries dead-lettered executions from tasks.executions that exhausted all configured retry attempts, detailing failure errors, stack traces, and attempt counts. Requires tasks:execution.read scope.",
+        "operationId": "tasks__dlq__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDLQResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDLQResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List dead-lettered failed task executions",
+        "tags": [
+          "DLQ"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "dlq"
+        ],
+        "x-sdk-method-name": "list"
+      }
+    },
+    "/v1/_/tasks/dlq/{execution_id}": {
+      "delete": {
+        "description": "Permanently removes a failed execution record from tasks.executions / dead-letter queue. Requires tasks:execution.write scope.",
+        "operationId": "tasks__dlq__purge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "DLQ execution purged"
+          }
+        },
+        "summary": "Permanently purge a failed task from the DLQ",
+        "tags": [
+          "DLQ"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "dlq"
+        ],
+        "x-sdk-method-name": "purge"
+      }
+    },
+    "/v1/_/tasks/dlq/{execution_id}/retry": {
+      "post": {
+        "description": "Resets a dead-lettered execution in tasks.executions to 'pending' status for immediate worker retry pickup. Requires tasks:execution.write scope.",
+        "operationId": "tasks__dlq__retry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "execution_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryDLQResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryDLQResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Re-queue a failed task execution from the DLQ",
+        "tags": [
+          "DLQ"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "dlq"
+        ],
+        "x-sdk-method-name": "retry"
+      }
+    },
+    "/v1/_/tasks/executions": {
+      "get": {
+        "description": "Queries execution history records from tasks.executions with filtering by job ID, execution status (pending, running, completed, failed, dead_lettered), duration, and date ranges. Requires tasks:execution.read scope.",
+        "operationId": "tasks__executions__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter task executions by job UUID",
+            "in": "query",
+            "name": "job_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExecutionsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListExecutionsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Query execution audit logs",
+        "tags": [
+          "Executions"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "executions"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Manually enqueues an execution for a job in tasks.executions with status 'pending' for immediate worker dispatch out-of-schedule. Requires tasks:execution.write scope.",
+        "operationId": "tasks__executions__create",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerExecutionInput"
+              }
+            }
+          },
+          "description": "Request body for tasks.TriggerExecutionInput",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerExecutionResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerExecutionResponse"
+                }
+              }
+            },
+            "description": "Accepted"
+          }
+        },
+        "summary": "Trigger an immediate out-of-schedule execution",
+        "tags": [
+          "Executions"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "executions"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/_/tasks/jobs": {
+      "get": {
+        "description": "Returns all registered recurring cron jobs from tasks.jobs, detailing cron schedule expressions, target drivers (http, function, sql), target payloads, timezone, next execution countdowns, and active status. Requires tasks:job.read scope.",
+        "operationId": "tasks__jobs__list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListJobsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListJobsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List all recurring cron jobs",
+        "tags": [
+          "Jobs"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "jobs"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Creates a recurring cron job in tasks.jobs with 5-field cron expression, target execution driver (http webhook, serverless function, or SQL stored procedure), payload JSON, timeout guards, retry limits, and timezone. Calculates next run timestamp and emits tasks.job.created event. Requires tasks:job.write scope.",
+        "operationId": "tasks__jobs__create",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobInput"
+              }
+            }
+          },
+          "description": "Request body for tasks.CreateJobInput",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "summary": "Register a new recurring cron job",
+        "tags": [
+          "Jobs"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "jobs"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/_/tasks/jobs/{job_id}": {
+      "delete": {
+        "description": "Deletes a cron job definition from tasks.jobs and cancels any associated pending executions in tasks.executions. Emits tasks.job.deleted event. Requires tasks:job.write scope.",
+        "operationId": "tasks__jobs__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Job deleted"
+          }
+        },
+        "summary": "Delete a cron job and cancel queued executions",
+        "tags": [
+          "Jobs"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "jobs"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves a single cron job definition from tasks.jobs by ID, including cron expression, target payload, execution driver, next run countdown, and status. Requires tasks:job.read scope.",
+        "operationId": "tasks__jobs__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetJobResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetJobResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get cron job definition by ID",
+        "tags": [
+          "Jobs"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "jobs"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "patch": {
+        "description": "Modifies cron schedule expressions, timezone, target payloads, retry parameters, or active status in tasks.jobs. Recalculates next run timestamp and emits tasks.job.updated event. Requires tasks:job.write scope.",
+        "operationId": "tasks__jobs__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJobInput"
+              }
+            }
+          },
+          "description": "Request body for tasks.UpdateJobInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update an existing cron job definition",
+        "tags": [
+          "Jobs"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "jobs"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/tasks/stats": {
+      "get": {
+        "description": "Returns real-time task statistics including total job counts, active queue depth, currently running executions, DLQ size, and execution success rate. Requires tasks:stats.read scope.",
+        "operationId": "tasks__stats__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetStatsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get operational task telemetry and queue statistics",
+        "tags": [
+          "Stats"
+        ],
+        "x-sdk-group-name": [
+          "tasks",
+          "stats"
+        ],
+        "x-sdk-method-name": "get"
+      }
+    }
+  }
+}

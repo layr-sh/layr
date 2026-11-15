@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/go-fuego/fuego"
@@ -66,6 +67,6 @@ func TestConsoleServiceUnit(t *testing.T) {
 		baseRouter := core.NewRouter(fuegoServer)
 		controlPlaneRouter := core.NewRouter(fuegoServer)
 
-		consoleService.RegisterRoutes(baseRouter, controlPlaneRouter)
+		consoleService.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	})
 }

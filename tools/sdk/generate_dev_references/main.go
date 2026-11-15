@@ -99,9 +99,12 @@ func getOperations(openAPISpec *openapi3.T, plane string) []OperationRecord {
 }
 
 func generateMethodsMarkdown() (string, string) {
-	baseOpenAPISpec, controlPlaneOpenAPISpec, _ := core.ExportOpenAPISpecs()
-	baseOperations := getOperations(baseOpenAPISpec, "base")
-	controlPlaneOperations := getOperations(controlPlaneOpenAPISpec, "control_plane")
+	baseOpenAPISpecs, controlPlaneOpenAPISpecs := core.ExportOpenAPISpecs()
+	var baseOperations, controlPlaneOperations []OperationRecord
+	for serviceName, baseOpenAPISpec := range baseOpenAPISpecs {
+		baseOperations = append(baseOperations, getOperations(baseOpenAPISpec, "base")...)
+		controlPlaneOperations = append(controlPlaneOperations, getOperations(controlPlaneOpenAPISpecs[serviceName], "control_plane")...)
+	}
 
 	sortOperations := func(records []OperationRecord) {
 		sort.Slice(records, func(leftIndex, rightIndex int) bool {

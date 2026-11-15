@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["oxc", "typescript", "unicorn"],
+  "ignorePatterns": ["generated/**/*", "tests/**/*.d.test.ts"]
+}

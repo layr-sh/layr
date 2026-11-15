@@ -24,7 +24,7 @@ func TestConsoleControlPlaneHandlerUsersIntegration(t *testing.T) {
 	defer service.Stop()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	serviceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "console-users-operator",

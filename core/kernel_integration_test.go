@@ -337,7 +337,7 @@ type failingServiceRunner struct{}
 func (failingRunner *failingServiceRunner) Start(ctx context.Context) error {
 	return errors.New("mock service start failed")
 }
-func (failingRunner *failingServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (failingRunner *failingServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 }
 func (failingRunner *failingServiceRunner) Stop() {}
 
@@ -405,7 +405,7 @@ func TestCoreKernelServiceStartErrorIntegration(t *testing.T) {
 type plainMockRunner struct{}
 
 func (plainRunner *plainMockRunner) Start(ctx context.Context) error { return nil }
-func (plainRunner *plainMockRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (plainRunner *plainMockRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 }
 func (plainRunner *plainMockRunner) Stop() {}
 
@@ -430,7 +430,7 @@ func (failingService *failingService) Start(ctx context.Context) error {
 func (failingService *failingService) Stop() {
 }
 
-func (failingService *failingService) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (failingService *failingService) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 }
 
 func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {

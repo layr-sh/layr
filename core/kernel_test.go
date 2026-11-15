@@ -20,7 +20,7 @@ func (mock *mockServiceRunner) Start(ctx context.Context) error {
 	return mock.startErr
 }
 
-func (mock *mockServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (mock *mockServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 	mock.registered = true
 	mock.openAPIRegistered = true
 }

@@ -1,0 +1,40 @@
+
+# RealtimeConfig
+
+
+## Properties
+
+Name | Type
+------------ | -------------
+`enabled` | boolean
+`heartbeatIntervalMs` | number
+`maxChannelsPerConnection` | number
+`maxConnections` | number
+
+## Example
+
+```typescript
+import type { RealtimeConfig } from ''
+
+// TODO: Update the object below with actual values
+const example = {
+  "enabled": null,
+  "heartbeatIntervalMs": null,
+  "maxChannelsPerConnection": null,
+  "maxConnections": null,
+} satisfies RealtimeConfig
+
+console.log(example)
+
+// Convert the instance to a JSON string
+const exampleJSON: string = JSON.stringify(example)
+console.log(exampleJSON)
+
+// Parse the JSON string back to an object
+const exampleParsed = JSON.parse(exampleJSON) as RealtimeConfig
+console.log(exampleParsed)
+```
+
+[[Back to top]](#) [[Back to API list]](../README.md#api-endpoints) [[Back to Model list]](../README.md#models) [[Back to README]](../README.md)
+
+

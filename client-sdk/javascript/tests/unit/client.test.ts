@@ -1,59 +1,59 @@
-import { describe, it, expect, expectTypeOf } from 'vitest';
-import { createClient, withServiceAccount, ATTACH_CONTROL_PLANE, type ElevatableService } from '../../src/core/client';
-import type { QueryBuilder } from '../../src/extensions/query-builder';
-import { useAuth } from '../../src/services/auth';
-import { useData } from '../../src/services/data';
+import { describe, it, expect, expectTypeOf } from "vitest";
+import { createClient, withServiceAccount, type ElevatableService } from "../../src/core/client";
+import type { QueryBuilder } from "../../src/extensions/query-builder";
+import { useAuth } from "../../src/services/auth";
+import { useData } from "../../src/services/data";
 
-describe('Client Context & Elevation Unit Tests', () => {
-  it('CL-01: Factory Instantiation produces valid LayrClient', () => {
-    const publishableKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+describe("Client Context & Elevation Unit Tests", () => {
+  it("CL-01: Factory Instantiation produces valid LayrClient", () => {
+    const publishableKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     const client = createClient({
-      endpoint: 'https://api.layr.sh',
+      endpoint: "https://api.layr.sh",
       publishableKey,
     });
 
-    expect(client.endpoint).toBe('https://api.layr.sh');
-    expect(client.headers['Publishable-Key']).toBe(publishableKey);
+    expect(client.endpoint).toBe("https://api.layr.sh");
+    expect(client.headers["Publishable-Key"]).toBe(publishableKey);
     expect(client._singletons).toBeInstanceOf(Map);
     expect(client.config).toBeDefined();
     expect((client as any).from).toBeUndefined();
     expect((client as any).schema).toBeUndefined();
   });
 
-  it('CL-02: Session Mutability sets Authorization header', () => {
-    const client = createClient({ endpoint: 'http://localhost:5297' });
-    expect(client.headers['Authorization']).toBeUndefined();
+  it("CL-02: Session Mutability sets Authorization header", () => {
+    const client = createClient({ endpoint: "http://localhost:5297" });
+    expect(client.headers["Authorization"]).toBeUndefined();
 
-    client.setSession('session_jwt_xyz');
-    expect(client.sessionToken).toBe('session_jwt_xyz');
-    expect(client.headers['Authorization']).toBe('Bearer session_jwt_xyz');
+    client.setSession("session_jwt_xyz");
+    expect(client.sessionToken).toBe("session_jwt_xyz");
+    expect(client.headers["Authorization"]).toBe("Bearer session_jwt_xyz");
 
-    client.setSession('Bearer token_with_prefix');
-    expect(client.headers['Authorization']).toBe('Bearer token_with_prefix');
+    client.setSession("Bearer token_with_prefix");
+    expect(client.headers["Authorization"]).toBe("Bearer token_with_prefix");
 
-    client.setSession('');
-    expect(client.headers['Authorization']).toBeUndefined();
+    client.setSession("");
+    expect(client.headers["Authorization"]).toBeUndefined();
   });
 
-  it('CL-03: Session Mutability clears session', () => {
+  it("CL-03: Session Mutability clears session", () => {
     const client = createClient({
-      endpoint: 'http://localhost:5297',
-      sessionToken: 'initial_token',
+      endpoint: "http://localhost:5297",
+      sessionToken: "initial_token",
     });
-    expect(client.headers['Authorization']).toBe('Bearer initial_token');
+    expect(client.headers["Authorization"]).toBe("Bearer initial_token");
 
     client.clearSession();
     expect(client.sessionToken).toBeUndefined();
-    expect(client.headers['Authorization']).toBeUndefined();
+    expect(client.headers["Authorization"]).toBeUndefined();
   });
 
-  it('CL-04: Elevation attaches .cp control plane namespace', () => {
-    const client = createClient({ endpoint: 'http://localhost:5297' });
+  it("CL-04: Elevation attaches .cp control plane namespace", () => {
+    const client = createClient({ endpoint: "http://localhost:5297" });
     const auth = useAuth(client);
     expect((auth as any).cp).toBeUndefined();
 
     const elevatedAuth = withServiceAccount(auth, {
-      serviceAccountKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      serviceAccountKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     });
 
     expect(elevatedAuth.cp).toBeDefined();
@@ -61,19 +61,19 @@ describe('Client Context & Elevation Unit Tests', () => {
     expect(elevatedAuth.cp.config).toBeDefined();
   });
 
-  it('CL-05: Elevation preserves base client immutability', () => {
-    const client = createClient({ endpoint: 'http://localhost:5297' });
+  it("CL-05: Elevation preserves base client immutability", () => {
+    const client = createClient({ endpoint: "http://localhost:5297" });
     const auth = useAuth(client);
     withServiceAccount(auth, {
-      serviceAccountKey: 'secret_key',
+      serviceAccountKey: "secret_key",
     });
 
-    expect(client.headers['Service-Account-Key']).toBeUndefined();
+    expect(client.headers["Service-Account-Key"]).toBeUndefined();
     expect((auth as any).cp).toBeUndefined();
   });
 
-  it('CL-06: Elevation with optional options attaches .cp without Service-Account-Key header', () => {
-    const client = createClient({ endpoint: 'http://localhost:5297' });
+  it("CL-06: Elevation with optional options attaches .cp without Service-Account-Key header", () => {
+    const client = createClient({ endpoint: "http://localhost:5297" });
     const auth = useAuth(client);
 
     // Call without options
@@ -85,30 +85,30 @@ describe('Client Context & Elevation Unit Tests', () => {
     expect(elevatedEmptyOpts.cp).toBeDefined();
 
     // Call with empty or whitespace serviceAccountKey
-    const elevatedEmptyKey = withServiceAccount(auth, { serviceAccountKey: '' });
+    const elevatedEmptyKey = withServiceAccount(auth, { serviceAccountKey: "" });
     expect(elevatedEmptyKey.cp).toBeDefined();
 
-    const elevatedWhitespaceKey = withServiceAccount(auth, { serviceAccountKey: '   ' });
+    const elevatedWhitespaceKey = withServiceAccount(auth, { serviceAccountKey: "   " });
     expect(elevatedWhitespaceKey.cp).toBeDefined();
   });
 
-  it('CL-07: Elevation Guard throws on invalid service', () => {
+  it("CL-07: Elevation Guard throws on invalid service", () => {
     expect(() => withServiceAccount({} as any)).toThrow(
-      'Provided service is not a valid Layr service client'
+      "Provided service is not a valid Layr service client",
     );
-    expect(() =>
-      withServiceAccount({} as any, { serviceAccountKey: 'valid_key' })
-    ).toThrow('Provided service is not a valid Layr service client');
+    expect(() => withServiceAccount({} as any, { serviceAccountKey: "valid_key" })).toThrow(
+      "Provided service is not a valid Layr service client",
+    );
   });
 
-  it('CL-08: Elevation on service without ATTACH_CONTROL_PLANE yields undefined cp', () => {
-    const client = createClient({ endpoint: 'http://localhost:5297' });
+  it("CL-08: Elevation on service without ATTACH_CONTROL_PLANE yields undefined cp", () => {
+    const client = createClient({ endpoint: "http://localhost:5297" });
     const simpleService: ElevatableService<unknown> = { client };
     const elevated = withServiceAccount(simpleService);
     expect(elevated.cp).toBeUndefined();
   });
 
-  describe('CL-09: Typed client.from and client.schema', () => {
+  describe("CL-09: Typed client.from and client.schema", () => {
     interface MyDatabase {
       public: {
         Tables: {
@@ -135,11 +135,11 @@ describe('Client Context & Elevation Unit Tests', () => {
       };
     }
 
-    it('instantiates useData(client).from and useData(client).schema with schema routing', () => {
-      const client = createClient({ endpoint: 'http://localhost:5297' });
+    it("instantiates useData(client).from and useData(client).schema with schema routing", () => {
+      const client = createClient({ endpoint: "http://localhost:5297" });
       const data = useData<MyDatabase>(client);
 
-      const todosBuilder = data.from('todos');
+      const todosBuilder = data.from("todos");
       expect(todosBuilder).toBeDefined();
       expectTypeOf(todosBuilder).toEqualTypeOf<
         QueryBuilder<
@@ -149,7 +149,7 @@ describe('Client Context & Elevation Unit Tests', () => {
         >
       >();
 
-      const auditLogsBuilder = data.schema('audit').from('logs');
+      const auditLogsBuilder = data.schema("audit").from("logs");
       expect(auditLogsBuilder).toBeDefined();
       expectTypeOf(auditLogsBuilder).toEqualTypeOf<
         QueryBuilder<
@@ -163,7 +163,7 @@ describe('Client Context & Elevation Unit Tests', () => {
         postId: string;
         body: string;
       }
-      const customBuilder = data.from<AdHocPost>('posts');
+      const customBuilder = data.from<AdHocPost>("posts");
       expect(customBuilder).toBeDefined();
       expectTypeOf(customBuilder).toEqualTypeOf<
         QueryBuilder<AdHocPost, Partial<AdHocPost>, Partial<AdHocPost>>

@@ -3,13 +3,15 @@ package function
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
+
+	"uuid"
 
 	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
-	"uuid"
 )
 
 func TestFunctionServiceUnit(t *testing.T) {
@@ -58,7 +60,7 @@ func TestFunctionServiceUnit(t *testing.T) {
 		controlPlaneFuegoEngine := fuego.NewServer()
 		baseRouter := core.NewRouter(baseFuegoEngine)
 		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
-		service.RegisterRoutes(baseRouter, controlPlaneRouter)
+		service.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	})
 
 	t.Run("register host routes is idempotent and handles nil", func(t *testing.T) {

@@ -1,4 +1,4 @@
-import type { Configuration } from '../../generated/runtime';
+import { Configuration } from "../../generated/function/control_plane/runtime";
 import {
   ConfigApi,
   DeploymentsApi,
@@ -9,7 +9,7 @@ import {
   StatsApi,
   type FunctionEndpointsExecutionsRequest,
   type FunctionExecutionsListRequest,
-} from '../../generated/apis';
+} from "../../generated/function/control_plane/apis";
 import type {
   Config,
   CreateCustomDomainInput,
@@ -29,9 +29,14 @@ import type {
   RollbackDeploymentInput,
   UpdateCustomDomainInput,
   UpdateEndpointInput,
-} from '../../generated/models';
-import { ATTACH_CONTROL_PLANE, type ElevatableService, type LayrClient } from '../core/client';
-import { handleApiCall } from '../core/transport';
+} from "../../generated/function/control_plane/models";
+import {
+  ATTACH_CONTROL_PLANE,
+  type ConfigurationParameters,
+  type ElevatableService,
+  type LayrClient,
+} from "../core/client";
+import { handleApiCall } from "../core/transport";
 
 export interface FunctionControlPlane {
   config: {
@@ -59,7 +64,10 @@ export interface FunctionControlPlane {
   endpoints: {
     create: (input: CreateEndpointInput) => Promise<Endpoint>;
     delete: (endpointId: string) => Promise<void>;
-    executions: (endpointId: string, params?: Omit<FunctionEndpointsExecutionsRequest, 'endpointId'>) => Promise<ListExecutionsResponse>;
+    executions: (
+      endpointId: string,
+      params?: Omit<FunctionEndpointsExecutionsRequest, "endpointId">,
+    ) => Promise<ListExecutionsResponse>;
     get: (endpointId: string) => Promise<Endpoint>;
     list: () => Promise<ListEndpointsResponse>;
     update: (endpointId: string, input: UpdateEndpointInput) => Promise<Endpoint>;
@@ -74,129 +82,132 @@ export interface FunctionControlPlane {
 
 export interface FunctionService extends ElevatableService<FunctionControlPlane> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => FunctionControlPlane;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => FunctionControlPlane;
 }
 
 export function useFunction(client: LayrClient): FunctionService {
   const service: FunctionService = {
     client,
 
-    [ATTACH_CONTROL_PLANE]: (elevatedConfig: Configuration): FunctionControlPlane => ({
-      config: {
-        get: () => handleApiCall(() => new ConfigApi(elevatedConfig).functionConfigGet()),
-        update: (input: Config) =>
-          handleApiCall(() => new ConfigApi(elevatedConfig).functionConfigUpdate({ config: input })),
-      },
-      deployments: {
-        create: (endpointId: string, input: CreateDeploymentInput) =>
-          handleApiCall(() =>
-            new DeploymentsApi(elevatedConfig).functionDeploymentsCreate({
-              endpointId,
-              createDeploymentInput: input,
-            })
-          ),
-        list: (endpointId: string) =>
-          handleApiCall(() =>
-            new DeploymentsApi(elevatedConfig).functionDeploymentsList({ endpointId })
-          ),
-        rollback: (endpointId: string, input: RollbackDeploymentInput) =>
-          handleApiCall(() =>
-            new DeploymentsApi(elevatedConfig).functionDeploymentsRollback({
-              endpointId,
-              rollbackDeploymentInput: input,
-            })
-          ),
-      },
-      domains: {
-        create: (input: CreateCustomDomainInput) =>
-          handleApiCall(() =>
-            new DomainsApi(elevatedConfig).functionDomainsCreate({
-              createCustomDomainInput: input,
-            })
-          ),
-        delete: (domainId: string) =>
-          handleApiCall(async () => {
-            await new DomainsApi(elevatedConfig).functionDomainsDelete({ domainId });
-          }),
-        get: (domainId: string) =>
-          handleApiCall(() => new DomainsApi(elevatedConfig).functionDomainsGet({ domainId })),
-        list: () => handleApiCall(() => new DomainsApi(elevatedConfig).functionDomainsList()),
-        update: (domainId: string, input: UpdateCustomDomainInput) =>
-          handleApiCall(() =>
-            new DomainsApi(elevatedConfig).functionDomainsUpdate({
-              domainId,
-              updateCustomDomainInput: input,
-            })
-          ),
-        verify: (domainId: string) =>
-          handleApiCall(() =>
-            new DomainsApi(elevatedConfig).functionDomainsVerify({
-              domainId,
-              body: null,
-            })
-          ),
-      },
-      endpoint_domains: {
-        create: (endpointId: string, input: CreateCustomDomainRouteInput) =>
-          handleApiCall(() =>
-            new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsCreate({
-              endpointId,
-              createCustomDomainRouteInput: input,
-            })
-          ),
-        delete: (endpointId: string, routeId: string) =>
-          handleApiCall(() =>
-            new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsDelete({
-              endpointId,
-              routeId,
-            })
-          ),
-        list: (endpointId: string) =>
-          handleApiCall(() =>
-            new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsList({ endpointId })
-          ),
-      },
-      endpoints: {
-        create: (input: CreateEndpointInput) =>
-          handleApiCall(() =>
-            new EndpointsApi(elevatedConfig).functionEndpointsCreate({
-              createEndpointInput: input,
-            })
-          ),
-        delete: (endpointId: string) =>
-          handleApiCall(() =>
-            new EndpointsApi(elevatedConfig).functionEndpointsDelete({ endpointId })
-          ),
-        executions: (endpointId: string, params = {}) =>
-          handleApiCall(() =>
-            new EndpointsApi(elevatedConfig).functionEndpointsExecutions({
-              endpointId,
-              ...params,
-            })
-          ),
-        get: (endpointId: string) =>
-          handleApiCall(() =>
-            new EndpointsApi(elevatedConfig).functionEndpointsGet({ endpointId })
-          ),
-        list: () => handleApiCall(() => new EndpointsApi(elevatedConfig).functionEndpointsList()),
-        update: (endpointId: string, input: UpdateEndpointInput) =>
-          handleApiCall(() =>
-            new EndpointsApi(elevatedConfig).functionEndpointsUpdate({
-              endpointId,
-              updateEndpointInput: input,
-            })
-          ),
-      },
-      executions: {
-        list: (params = {}) =>
-          handleApiCall(() =>
-            new ExecutionsApi(elevatedConfig).functionExecutionsList(params)
-          ),
-      },
-      stats: {
-        get: () => handleApiCall(() => new StatsApi(elevatedConfig).functionStatsGet()),
-      },
-    }),
+    [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): FunctionControlPlane => {
+      const elevatedConfig = new Configuration(configuration);
+      return {
+        config: {
+          get: () => handleApiCall(() => new ConfigApi(elevatedConfig).functionConfigGet()),
+          update: (input: Config) =>
+            handleApiCall(() =>
+              new ConfigApi(elevatedConfig).functionConfigUpdate({ config: input }),
+            ),
+        },
+        deployments: {
+          create: (endpointId: string, input: CreateDeploymentInput) =>
+            handleApiCall(() =>
+              new DeploymentsApi(elevatedConfig).functionDeploymentsCreate({
+                endpointId,
+                createDeploymentInput: input,
+              }),
+            ),
+          list: (endpointId: string) =>
+            handleApiCall(() =>
+              new DeploymentsApi(elevatedConfig).functionDeploymentsList({ endpointId }),
+            ),
+          rollback: (endpointId: string, input: RollbackDeploymentInput) =>
+            handleApiCall(() =>
+              new DeploymentsApi(elevatedConfig).functionDeploymentsRollback({
+                endpointId,
+                rollbackDeploymentInput: input,
+              }),
+            ),
+        },
+        domains: {
+          create: (input: CreateCustomDomainInput) =>
+            handleApiCall(() =>
+              new DomainsApi(elevatedConfig).functionDomainsCreate({
+                createCustomDomainInput: input,
+              }),
+            ),
+          delete: (domainId: string) =>
+            handleApiCall(async () => {
+              await new DomainsApi(elevatedConfig).functionDomainsDelete({ domainId });
+            }),
+          get: (domainId: string) =>
+            handleApiCall(() => new DomainsApi(elevatedConfig).functionDomainsGet({ domainId })),
+          list: () => handleApiCall(() => new DomainsApi(elevatedConfig).functionDomainsList()),
+          update: (domainId: string, input: UpdateCustomDomainInput) =>
+            handleApiCall(() =>
+              new DomainsApi(elevatedConfig).functionDomainsUpdate({
+                domainId,
+                updateCustomDomainInput: input,
+              }),
+            ),
+          verify: (domainId: string) =>
+            handleApiCall(() =>
+              new DomainsApi(elevatedConfig).functionDomainsVerify({
+                domainId,
+                body: null,
+              }),
+            ),
+        },
+        endpoint_domains: {
+          create: (endpointId: string, input: CreateCustomDomainRouteInput) =>
+            handleApiCall(() =>
+              new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsCreate({
+                endpointId,
+                createCustomDomainRouteInput: input,
+              }),
+            ),
+          delete: (endpointId: string, routeId: string) =>
+            handleApiCall(() =>
+              new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsDelete({
+                endpointId,
+                routeId,
+              }),
+            ),
+          list: (endpointId: string) =>
+            handleApiCall(() =>
+              new EndpointDomainsApi(elevatedConfig).functionEndpointDomainsList({ endpointId }),
+            ),
+        },
+        endpoints: {
+          create: (input: CreateEndpointInput) =>
+            handleApiCall(() =>
+              new EndpointsApi(elevatedConfig).functionEndpointsCreate({
+                createEndpointInput: input,
+              }),
+            ),
+          delete: (endpointId: string) =>
+            handleApiCall(() =>
+              new EndpointsApi(elevatedConfig).functionEndpointsDelete({ endpointId }),
+            ),
+          executions: (endpointId: string, params = {}) =>
+            handleApiCall(() =>
+              new EndpointsApi(elevatedConfig).functionEndpointsExecutions({
+                endpointId,
+                ...params,
+              }),
+            ),
+          get: (endpointId: string) =>
+            handleApiCall(() =>
+              new EndpointsApi(elevatedConfig).functionEndpointsGet({ endpointId }),
+            ),
+          list: () => handleApiCall(() => new EndpointsApi(elevatedConfig).functionEndpointsList()),
+          update: (endpointId: string, input: UpdateEndpointInput) =>
+            handleApiCall(() =>
+              new EndpointsApi(elevatedConfig).functionEndpointsUpdate({
+                endpointId,
+                updateEndpointInput: input,
+              }),
+            ),
+        },
+        executions: {
+          list: (params = {}) =>
+            handleApiCall(() => new ExecutionsApi(elevatedConfig).functionExecutionsList(params)),
+        },
+        stats: {
+          get: () => handleApiCall(() => new StatsApi(elevatedConfig).functionStatsGet()),
+        },
+      };
+    },
   };
 
   return service;
