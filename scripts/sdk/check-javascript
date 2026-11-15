@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${REPO_ROOT}"
+
+pnpm --dir client-sdk/javascript run fmt --check
+pnpm --dir client-sdk/javascript run lint
+pnpm --dir client-sdk/javascript run typecheck
+pnpm --dir client-sdk/javascript test "$@"
+pnpm --dir client-sdk/javascript run build

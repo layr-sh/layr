@@ -1,28 +1,34 @@
-import type { Configuration, HttpFile } from '../../generated/runtime';
+import { Configuration } from "../../generated/image/control_plane/runtime";
 import {
-  ConfigApi,
+  Configuration as BaseConfiguration,
+  type HttpFile,
+} from "../../generated/image/base/runtime";
+import { ConfigApi, PresetsApi, StatsApi, URLsApi } from "../../generated/image/control_plane/apis";
+import {
   InfoApi,
-  PresetsApi,
-  StatsApi,
   TransformApi,
-  URLsApi,
   type ImageInfoGetRequest,
   type ImageTransformGetRequest,
-} from '../../generated/apis';
+} from "../../generated/image/base/apis";
 import type {
   Config,
   CreatePresetInput,
-  GetInfoResponse,
   GetStatsResponse,
   ListPresetsResponse,
   Preset,
   SignURLInput,
   SignURLResponse,
   UpdatePresetInput,
-} from '../../generated/models';
-import { ATTACH_CONTROL_PLANE, type ElevatableService, type LayrClient } from '../core/client';
-import { handleApiCall } from '../core/transport';
-import { ImageURLBuilder } from '../extensions/image-url-builder';
+} from "../../generated/image/control_plane/models";
+import type { GetInfoResponse } from "../../generated/image/base/models";
+import {
+  ATTACH_CONTROL_PLANE,
+  type ConfigurationParameters,
+  type ElevatableService,
+  type LayrClient,
+} from "../core/client";
+import { handleApiCall } from "../core/transport";
+import { ImageURLBuilder } from "../extensions/image-url-builder";
 
 export interface ImageControlPlane {
   config: {
@@ -46,7 +52,7 @@ export interface ImageControlPlane {
 
 export interface ImageService extends ElevatableService<ImageControlPlane> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => ImageControlPlane;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => ImageControlPlane;
 
   url: (source: string) => ImageURLBuilder;
 
@@ -61,7 +67,7 @@ export interface ImageService extends ElevatableService<ImageControlPlane> {
 }
 
 export function useImage(client: LayrClient): ImageService {
-  const config = client.config;
+  const config = new BaseConfiguration(client.config);
 
   const service: ImageService = {
     client,
@@ -80,38 +86,41 @@ export function useImage(client: LayrClient): ImageService {
         handleApiCall(() => new TransformApi(config).imageTransformGet(params)),
     },
 
-    [ATTACH_CONTROL_PLANE]: (elevatedConfig: Configuration): ImageControlPlane => ({
-      config: {
-        get: () => handleApiCall(() => new ConfigApi(elevatedConfig).imageConfigGet()),
-        update: (input: Config) =>
-          handleApiCall(() => new ConfigApi(elevatedConfig).imageConfigUpdate({ config: input })),
-      },
-      presets: {
-        create: (input: CreatePresetInput) =>
-          handleApiCall(() =>
-            new PresetsApi(elevatedConfig).imagePresetsCreate({ createPresetInput: input })
-          ),
-        delete: (presetId: string) =>
-          handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsDelete({ presetId })),
-        get: (presetId: string) =>
-          handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsGet({ presetId })),
-        list: () => handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsList()),
-        update: (presetId: string, input: UpdatePresetInput) =>
-          handleApiCall(() =>
-            new PresetsApi(elevatedConfig).imagePresetsUpdate({
-              presetId,
-              updatePresetInput: input,
-            })
-          ),
-      },
-      stats: {
-        get: () => handleApiCall(() => new StatsApi(elevatedConfig).imageStatsGet()),
-      },
-      url: {
-        sign: (input: SignURLInput) =>
-          handleApiCall(() => new URLsApi(elevatedConfig).imageUrlSign({ signURLInput: input })),
-      },
-    }),
+    [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): ImageControlPlane => {
+      const elevatedConfig = new Configuration(configuration);
+      return {
+        config: {
+          get: () => handleApiCall(() => new ConfigApi(elevatedConfig).imageConfigGet()),
+          update: (input: Config) =>
+            handleApiCall(() => new ConfigApi(elevatedConfig).imageConfigUpdate({ config: input })),
+        },
+        presets: {
+          create: (input: CreatePresetInput) =>
+            handleApiCall(() =>
+              new PresetsApi(elevatedConfig).imagePresetsCreate({ createPresetInput: input }),
+            ),
+          delete: (presetId: string) =>
+            handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsDelete({ presetId })),
+          get: (presetId: string) =>
+            handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsGet({ presetId })),
+          list: () => handleApiCall(() => new PresetsApi(elevatedConfig).imagePresetsList()),
+          update: (presetId: string, input: UpdatePresetInput) =>
+            handleApiCall(() =>
+              new PresetsApi(elevatedConfig).imagePresetsUpdate({
+                presetId,
+                updatePresetInput: input,
+              }),
+            ),
+        },
+        stats: {
+          get: () => handleApiCall(() => new StatsApi(elevatedConfig).imageStatsGet()),
+        },
+        url: {
+          sign: (input: SignURLInput) =>
+            handleApiCall(() => new URLsApi(elevatedConfig).imageUrlSign({ signURLInput: input })),
+        },
+      };
+    },
   };
 
   return service;

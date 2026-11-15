@@ -1,11 +1,11 @@
-import type { LayrClient } from '../core/client';
+import type { LayrClient } from "../core/client";
 
-export type RealtimeEvent = 'INSERT' | 'UPDATE' | 'DELETE' | '*';
+export type RealtimeEvent = "INSERT" | "UPDATE" | "DELETE" | "*";
 
 export interface CDCMessage<T = Record<string, unknown>> {
   channel?: string;
   topic?: string;
-  event: 'INSERT' | 'UPDATE' | 'DELETE';
+  event: "INSERT" | "UPDATE" | "DELETE";
   schema: string;
   table: string;
   commit_timestamp: string;
@@ -36,7 +36,7 @@ export class RealtimeChannel<T = Record<string, unknown>> {
   constructor(client: RealtimeManager, table: string, options: SubscribeOptions = {}) {
     this.client = client;
     this.table = table;
-    this.schema = options.schema || 'public';
+    this.schema = options.schema || "public";
     this.channel = options.channel || `${this.schema}:${this.table}`;
     this.filter = options.filter;
   }
@@ -62,9 +62,9 @@ export class RealtimeChannel<T = Record<string, unknown>> {
   }
 
   on(event: RealtimeEvent, callback: EventCallback<T>): this {
-    if (event === 'INSERT') return this.onInsert(callback);
-    if (event === 'UPDATE') return this.onUpdate(callback);
-    if (event === 'DELETE') return this.onDelete(callback);
+    if (event === "INSERT") return this.onInsert(callback);
+    if (event === "UPDATE") return this.onUpdate(callback);
+    if (event === "DELETE") return this.onDelete(callback);
     return this.onAll(callback);
   }
 
@@ -74,11 +74,11 @@ export class RealtimeChannel<T = Record<string, unknown>> {
   }
 
   _dispatch(message: CDCMessage<unknown>) {
-    if (message.event === 'INSERT') {
+    if (message.event === "INSERT") {
       for (const cb of this.insertCallbacks) cb(message as CDCMessage<T>);
-    } else if (message.event === 'UPDATE') {
+    } else if (message.event === "UPDATE") {
       for (const cb of this.updateCallbacks) cb(message as CDCMessage<T>);
-    } else if (message.event === 'DELETE') {
+    } else if (message.event === "DELETE") {
       for (const cb of this.deleteCallbacks) cb(message as CDCMessage<T>);
     }
     for (const cb of this.allCallbacks) cb(message as CDCMessage<T>);
@@ -86,13 +86,13 @@ export class RealtimeChannel<T = Record<string, unknown>> {
 
   getSubscribePayload(): Record<string, unknown> {
     return {
-      action: 'subscribe',
+      action: "subscribe",
       channel: this.channel,
       topic: this.channel,
       schema: this.schema,
       table: this.table,
-      event: '*',
-      filter: this.filter || '',
+      event: "*",
+      filter: this.filter || "",
     };
   }
 
@@ -118,12 +118,18 @@ export class RealtimeManager {
     this.layrClient = layrClient;
   }
 
-  channel<T = Record<string, unknown>>(table: string, options: SubscribeOptions = {}): RealtimeChannel<T> {
+  channel<T = Record<string, unknown>>(
+    table: string,
+    options: SubscribeOptions = {},
+  ): RealtimeChannel<T> {
     return this.subscribe<T>(table, options);
   }
 
-  subscribe<T = Record<string, unknown>>(table: string, options: SubscribeOptions = {}): RealtimeChannel<T> {
-    const parts = table.split('.');
+  subscribe<T = Record<string, unknown>>(
+    table: string,
+    options: SubscribeOptions = {},
+  ): RealtimeChannel<T> {
+    const parts = table.split(".");
     let schema = options.schema;
     let actualTable = table;
     if (parts.length > 1 && parts[0] && parts[1]) {
@@ -145,14 +151,14 @@ export class RealtimeManager {
     if (this.channels.has(channelName)) {
       this.channels.delete(channelName);
       if (this.ws && this.ws.readyState === 1) {
-        this.ws.send(JSON.stringify({ action: 'unsubscribe', channel: channelName }));
+        this.ws.send(JSON.stringify({ action: "unsubscribe", channel: channelName }));
       }
     }
   }
 
   ping(): void {
     if (this.ws && this.ws.readyState === 1) {
-      this.ws.send(JSON.stringify({ event: 'ping', action: 'ping' }));
+      this.ws.send(JSON.stringify({ event: "ping", action: "ping" }));
     }
   }
 
@@ -161,8 +167,8 @@ export class RealtimeManager {
       return;
     }
     this.isExplicitClose = false;
-    const cleanToken = this.layrClient.sessionToken?.replace(/^Bearer\s+/i, '').trim();
-    let wsURL = this.layrClient.endpoint.replace(/^http/i, 'ws') + '/v1/realtime';
+    const cleanToken = this.layrClient.sessionToken?.replace(/^Bearer\s+/i, "").trim();
+    let wsURL = this.layrClient.endpoint.replace(/^http/i, "ws") + "/v1/realtime";
     if (cleanToken) {
       wsURL += `?token=${encodeURIComponent(cleanToken)}`;
     }
@@ -187,7 +193,7 @@ export class RealtimeManager {
 
     this.ws.onmessage = (event: MessageEvent<unknown>) => {
       try {
-        const raw = typeof event.data === 'string' ? event.data : String(event.data);
+        const raw = typeof event.data === "string" ? event.data : String(event.data);
         const data = JSON.parse(raw) as CDCMessage;
         const targetChannel = data.channel || data.topic;
         if (data && data.event && targetChannel) {
@@ -237,10 +243,10 @@ export class RealtimeManager {
 }
 
 export function useRealtime(client: LayrClient): RealtimeManager {
-  let rtManager = client._singletons.get('realtimeManager') as RealtimeManager | undefined;
+  let rtManager = client._singletons.get("realtimeManager") as RealtimeManager | undefined;
   if (!rtManager) {
     rtManager = new RealtimeManager(client);
-    client._singletons.set('realtimeManager', rtManager);
+    client._singletons.set("realtimeManager", rtManager);
   }
   return rtManager;
 }

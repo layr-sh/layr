@@ -39,7 +39,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
-	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
+	dataService.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	serveMux := controlPlaneRouter.Mux()
 
 	// 2. Control Plane GET /v1/_/data/config
@@ -241,7 +241,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
 
 	// Register actual routes
-	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
+	dataService.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 
 	// Test OpenAPI spec endpoints contain Data service operations
 	baseOpenAPISpec := baseRouter.OutputOpenAPISpec()

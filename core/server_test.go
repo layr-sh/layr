@@ -81,6 +81,21 @@ func TestCoreServerAllEndpointsUnit(t *testing.T) {
 		t.Fatalf("expected manifest 200 without key, got %d", noKeyManifestResponseRecorder.Code)
 	}
 
+	for _, path := range []string{
+
+		"/v1/data/public/items/spec.json", "/v1/data/public/items/spec.yaml",
+	} {
+		t.Run(path, func(t *testing.T) {
+			handler := server.PublishableKeyMiddleware(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				responseWriter.WriteHeader(http.StatusNoContent)
+			}))
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+			responseRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(responseRecorder, request)
+			require.Equal(t, http.StatusUnauthorized, responseRecorder.Code)
+		})
+	}
+
 	// Register a base client test endpoint on router
 	GetRoute[string](server.BaseRouter(), "/v1/client-test", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.WriteHeader(http.StatusOK)

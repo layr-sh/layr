@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/go-fuego/fuego"
@@ -69,6 +70,6 @@ func TestTasksServiceUnit(t *testing.T) {
 		baseRouter := core.NewRouter(fuegoServer)
 		controlPlaneRouter := core.NewRouter(fuegoServer)
 
-		tasksService.RegisterRoutes(baseRouter, controlPlaneRouter)
+		tasksService.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	})
 }

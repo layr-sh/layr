@@ -1,0 +1,1279 @@
+{
+  "components": {
+    "schemas": {
+      "CreateEventHookInput": {
+        "description": "CreateEventHookInput schema",
+        "properties": {
+          "driver": {
+            "type": "string"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "http_target_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "max_retries": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "signing_secret": {
+            "type": "string"
+          },
+          "sql_function_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "driver",
+          "event_types",
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateServiceAccountInput": {
+        "description": "CreateServiceAccountInput schema",
+        "properties": {
+          "allowed_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "console_user_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "CreateServiceAccountResponse": {
+        "description": "CreateServiceAccountResponse schema",
+        "properties": {
+          "allowed_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "console_user_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "secret_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "is_enabled",
+          "key_prefix",
+          "last_updated_at",
+          "name",
+          "scopes",
+          "secret_key"
+        ],
+        "type": "object"
+      },
+      "Empty": {
+        "description": "Empty schema"
+      },
+      "Event": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/EventActor"
+          },
+          "context": {
+            "$ref": "#/components/schemas/EventContext"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "id": {},
+          "metadata": {
+            "additionalProperties": {},
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "resource_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "resource_type": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "actor",
+          "context",
+          "created_at",
+          "data",
+          "id",
+          "metadata",
+          "resource_type",
+          "type"
+        ],
+        "type": "object"
+      },
+      "EventActor": {
+        "properties": {
+          "id": {
+            "nullable": true
+          },
+          "role": {
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "EventContext": {
+        "properties": {
+          "ip_address": {
+            "nullable": true,
+            "type": "string"
+          },
+          "request_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "user_agent": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "EventHook": {
+        "description": "EventHook schema",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "driver": {
+            "type": "string"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "http_target_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {},
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "max_retries": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "signing_secret_configured": {
+            "type": "boolean"
+          },
+          "sql_function_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created_at",
+          "driver",
+          "event_types",
+          "id",
+          "is_enabled",
+          "last_updated_at",
+          "max_retries",
+          "name",
+          "signing_secret_configured",
+          "timeout_seconds"
+        ],
+        "type": "object"
+      },
+      "EventHookDelivery": {
+        "description": "EventHookDelivery schema",
+        "properties": {
+          "attempt_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "delivered_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "duration_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "error_message": {
+            "nullable": true,
+            "type": "string"
+          },
+          "event_hook_id": {},
+          "event_id": {},
+          "event_type": {
+            "type": "string"
+          },
+          "http_response_status": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "id": {},
+          "is_delivered": {
+            "type": "boolean"
+          },
+          "payload": {},
+          "result": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempt_count",
+          "created_at",
+          "duration_ms",
+          "event_hook_id",
+          "event_id",
+          "event_type",
+          "id",
+          "is_delivered",
+          "payload"
+        ],
+        "type": "object"
+      },
+      "ListEventsResponse": {
+        "description": "ListEventsResponse schema",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "data",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "ServiceAccount": {
+        "description": "ServiceAccount schema",
+        "properties": {
+          "allowed_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "console_user_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "created_at",
+          "id",
+          "is_enabled",
+          "key_prefix",
+          "last_updated_at",
+          "name",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "UpdateEventHookInput": {
+        "description": "UpdateEventHookInput schema",
+        "properties": {
+          "driver": {
+            "nullable": true,
+            "type": "string"
+          },
+          "event_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "http_target_url": {
+            "nullable": true,
+            "type": "string"
+          },
+          "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "max_retries": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "signing_secret": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sql_function_name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateServiceAccountInput": {
+        "description": "UpdateServiceAccountInput schema",
+        "properties": {
+          "allowed_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "description": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "is_enabled": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "unknown-interface": {
+        "description": "unknown-interface schema"
+      }
+    }
+  },
+  "info": {
+    "description": "Protected Control Plane APIs for Layr Platform",
+    "title": "Layr Control Plane API Engine",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/v1/_/core/event-hooks": {
+      "get": {
+        "description": "Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.",
+        "operationId": "core__event_hooks__list",
+        "parameters": [
+          {
+            "description": "Filter event hooks by delivery driver ('sql' or 'http')",
+            "in": "query",
+            "name": "driver",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter event hooks by active enabled status",
+            "in": "query",
+            "name": "is_enabled",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventHook"
+                  },
+                  "type": "array"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventHook"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List event hook subscriptions",
+        "tags": [
+          "Event Hooks"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Creates an event hook subscription in core.event_hooks for SQL stored procedures (sql driver) or HTTP webhooks (http driver) with HMAC-SHA256 signing secret encryption, wildcard event patterns, timeout guards, and retry policies. Requires core:event-hook.write scope.",
+        "operationId": "core__event_hooks__create",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventHookInput"
+              }
+            }
+          },
+          "description": "Request body for core.CreateEventHookInput",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "summary": "Create an event hook subscription",
+        "tags": [
+          "Event Hooks"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/_/core/event-hooks/{event_hook_id}": {
+      "delete": {
+        "description": "Permanently removes an event hook subscription from core.event_hooks, immediately unbinding event dispatches. Delivery history is preserved or cascaded according to retention rules. Requires core:event-hook.write scope.",
+        "operationId": "core__event_hooks__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Event hook deleted"
+          }
+        },
+        "summary": "Delete event hook subscription",
+        "tags": [
+          "Event Hooks"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves event hook configuration by UUID from core.event_hooks, including driver type, target endpoint, subscribed event patterns, retry limits, and secret configuration indicator. Requires core:event-hook.read scope.",
+        "operationId": "core__event_hooks__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get event hook subscription details by UUID",
+        "tags": [
+          "Event Hooks"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "put": {
+        "description": "Modifies event hook parameters in core.event_hooks including target URL or stored procedure, subscribed event patterns, retry count (0-10), timeout (1-60s), signing secret, or enabled status. Requires core:event-hook.write scope.",
+        "operationId": "core__event_hooks__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventHookInput"
+              }
+            }
+          },
+          "description": "Request body for core.UpdateEventHookInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHook"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update event hook subscription",
+        "tags": [
+          "Event Hooks"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/core/event-hooks/{event_hook_id}/deliveries": {
+      "get": {
+        "description": "Queries the 100 most recent dispatch attempts for an event hook from core.event_hook_deliveries, detailing event ID, payload, HTTP status code, duration in milliseconds, error messages, and delivery state. Requires core:event-hook.read scope.",
+        "operationId": "core__event_hooks__deliveries__list",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventHookDelivery"
+                  },
+                  "type": "array"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EventHookDelivery"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List delivery audit logs for an event hook",
+        "tags": [
+          "Event Hooks Deliveries"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks",
+          "deliveries"
+        ],
+        "x-sdk-method-name": "list"
+      }
+    },
+    "/v1/_/core/event-hooks/{event_hook_id}/deliveries/{delivery_id}/retry": {
+      "post": {
+        "description": "Manually redrives an event hook delivery using the recorded event payload, re-dispatching via the configured driver (SQL procedure or HTTP POST webhook) and recording the new attempt outcome. Requires core:event-hook.write scope.",
+        "operationId": "core__event_hooks__deliveries__retry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHookDelivery"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventHookDelivery"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Retry a past event hook delivery attempt",
+        "tags": [
+          "Event Hooks Deliveries"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "event_hooks",
+          "deliveries"
+        ],
+        "x-sdk-method-name": "retry"
+      }
+    },
+    "/v1/_/core/events": {
+      "get": {
+        "description": "Queries immutable system and domain events from core.events with multi-field filtering by event type, actor type, date ranges, and pagination limits. Returns full event context, actor, and payload data. Requires core:event.read scope.",
+        "operationId": "core__events__list",
+        "parameters": [
+          {
+            "description": "Maximum number of items to return (default 50, maximum 1000)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of items to skip before returning results (default 0)",
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "default": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filter by specific event type name",
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by actor principal type (user, service_account, system)",
+            "in": "query",
+            "name": "actor_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by actor principal UUID",
+            "in": "query",
+            "name": "actor_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by target resource entity type",
+            "in": "query",
+            "name": "resource_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by target resource unique identifier",
+            "in": "query",
+            "name": "resource_id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEventsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListEventsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Query immutable system and domain audit events",
+        "tags": [
+          "Events"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "events"
+        ],
+        "x-sdk-method-name": "list"
+      }
+    },
+    "/v1/_/core/events/{event_id}": {
+      "get": {
+        "description": "Retrieves a specific canonical event record by UUID from core.events, including event type, actor principal, transport context (IP, user agent, request ID), and structured payload data. Requires core:event.read scope.",
+        "operationId": "core__events__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get individual event record by UUID",
+        "tags": [
+          "Events"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "events"
+        ],
+        "x-sdk-method-name": "get"
+      }
+    },
+    "/v1/_/core/service-accounts": {
+      "get": {
+        "description": "Lists all machine service accounts from core.service_accounts with name, key prefix, granted permission scopes, enabled status, IP allowlists, and expiration timestamps. Requires core:service-account.read scope.",
+        "operationId": "core__service_accounts__list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceAccount"
+                  },
+                  "type": "array"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceAccount"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List machine service accounts",
+        "tags": [
+          "Service Accounts"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "service_accounts"
+        ],
+        "x-sdk-method-name": "list"
+      },
+      "post": {
+        "description": "Creates a machine service account, generates a high-entropy 32-byte hex secret key, hashes it with SHA-256 for storage in core.service_accounts, and returns the plaintext secret key once. Supports scope constraints and CIDR IP restrictions. Requires core:service-account.write scope.",
+        "operationId": "core__service_accounts__create",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateServiceAccountInput"
+              }
+            }
+          },
+          "description": "Request body for core.CreateServiceAccountInput",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateServiceAccountResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateServiceAccountResponse"
+                }
+              }
+            },
+            "description": "Created"
+          }
+        },
+        "summary": "Create a machine service account",
+        "tags": [
+          "Service Accounts"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "service_accounts"
+        ],
+        "x-sdk-method-name": "create"
+      }
+    },
+    "/v1/_/core/service-accounts/{service_account_id}": {
+      "delete": {
+        "description": "Deletes a machine service account from core.service_accounts. Enforces strict safety invariants: prevents deleting accounts owned by console users and ensures at least one active root account remains. Requires core:service-account.write scope.",
+        "operationId": "core__service_accounts__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "service_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "204": {
+            "description": "Service account deleted"
+          }
+        },
+        "summary": "Delete machine service account",
+        "tags": [
+          "Service Accounts"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "service_accounts"
+        ],
+        "x-sdk-method-name": "delete"
+      },
+      "get": {
+        "description": "Retrieves a machine service account by UUID from core.service_accounts, returning metadata, permission scopes, key prefix, and allowed IP patterns. Plaintext key is not recoverable. Requires core:service-account.read scope.",
+        "operationId": "core__service_accounts__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "service_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccount"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccount"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get machine service account details by UUID",
+        "tags": [
+          "Service Accounts"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "service_accounts"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "put": {
+        "description": "Modifies name, description, permission scopes, IP allowlist, or enabled status in core.service_accounts. Enforces safety invariant that at least one enabled root account with wildcard * scope remains. Requires core:service-account.write scope.",
+        "operationId": "core__service_accounts__update",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "service_account_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceAccountInput"
+              }
+            }
+          },
+          "description": "Request body for core.UpdateServiceAccountInput",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccount"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceAccount"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update machine service account properties and scopes",
+        "tags": [
+          "Service Accounts"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "service_accounts"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    }
+  }
+}

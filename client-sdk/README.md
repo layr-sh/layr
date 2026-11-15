@@ -596,15 +596,15 @@ Export OpenAPI 3.1 specifications:
 Run the unified generator script to regenerate Layer 1 base SDKs:
 
 ```bash
-# Generate all SDKs
-./scripts/sdk/generate --all
+# Generate all SDKs (also the default when --target is omitted)
+./scripts/sdk/generate --target all
 
 # Or generate a single target:
-./scripts/sdk/generate --js
-./scripts/sdk/generate --python
-./scripts/sdk/generate --go
-./scripts/sdk/generate --rust
-./scripts/sdk/generate --swift
+./scripts/sdk/generate --target js
+./scripts/sdk/generate --target python
+./scripts/sdk/generate --target go
+./scripts/sdk/generate --target rust
+./scripts/sdk/generate --target swift
 ```
 
 ### Step 3: Run SDK Test Suites & Verify Coverage
@@ -660,14 +660,14 @@ Layr enforces drift verification to ensure consistency between route controllers
 3. SDK codegen drift: verifies generated code in `client-sdk/*/generated/` matches fresh codegen output:
 
    ```bash
-   ./scripts/sdk/generate --all
+   ./scripts/sdk/generate --target all
    git diff --exit-code client-sdk/*/generated/
    ```
 
 4. Complete drift check: runs all verification checks in sequence:
 
    ```bash
-   ./scripts/sdk/check_drifts
+   ./scripts/sdk/check-drifts
    ```
 
 ---
@@ -677,7 +677,7 @@ Layr enforces drift verification to ensure consistency between route controllers
 When adding support for a new language (such as Java, Kotlin, C#, Dart, or PHP):
 
 1. Target directory: create `client-sdk/<language>/` with standard package layout and manifests.
-2. Codegen target: add `--<language>` flag and openapi-generator configuration in `scripts/sdk/generate`.
+2. Codegen target: add a `--target <language>` value and openapi-generator configuration in `scripts/sdk/generate`.
 3. Fluent builders: implement fluent builders for Data (`QueryBuilder`), File Storage (`BucketClient`), and Image (`ImageURLBuilder`).
 4. Client and hooks: implement `create_client`, modular `use_<service>` hooks, and `with_service_account` elevation.
 5. Error mapping and retry: include typed error mapping and exponential backoff retry.

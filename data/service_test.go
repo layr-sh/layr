@@ -49,7 +49,7 @@ func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 	// RegisterRoutes on Routers
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
-	dataService.RegisterRoutes(baseRouter, controlPlaneRouter)
+	dataService.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 }
 
 func TestDataServiceCacheInvalidationUnit(t *testing.T) {

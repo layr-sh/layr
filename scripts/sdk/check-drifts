@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Compare fresh artifacts without modifying the working tree or relying on Git tracking.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "${ROOT_DIR}"
+
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/layr-sdk-drift-XXXXXX")"
+trap 'rm -rf "${TEMP_DIR}"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+echo "=== Layr SDK Drift Verification ==="
+
+echo "==> [Gate 1/3] Verifying OpenAPI Specification Consistency..."
+./scripts/sdk/generate-openapi-specs --output-dir="${TEMP_DIR}/openapi"
+if ! diff -ru generated/openapi "${TEMP_DIR}/openapi"; then
+  echo "Error: OpenAPI specification drift detected."
+  echo "Run: ./scripts/sdk/generate-openapi-specs --output-dir=generated/openapi"
+  exit 1
+fi
+echo "Gate 1 Passed: OpenAPI specifications match route controllers."
+
+echo "==> [Gate 2/3] Verifying SDK Documentation Consistency..."
+./scripts/sdk/generate-dev-references --check
+echo "Gate 2 Passed: SDK documentation matches route controllers."
+
+echo "==> [Gate 3/3] Verifying SDK Code Generation Consistency..."
+if ! ./scripts/sdk/generate --target all \
+  --output-dir="${TEMP_DIR}/client-sdk" \
+  --spec-dir="${TEMP_DIR}/openapi" > "${TEMP_DIR}/generate.log" 2>&1; then
+  cat "${TEMP_DIR}/generate.log"
+  exit 1
+fi
+
+DRIFTED_SDKS=()
+for language in javascript python go rust swift; do
+  SDK_DIR="client-sdk/${language}/generated"
+  if ! diff -ru "${SDK_DIR}" "${TEMP_DIR}/client-sdk/${language}/generated"; then
+    DRIFTED_SDKS+=("${SDK_DIR}")
+  fi
+done
+
+if [[ ${#DRIFTED_SDKS[@]} -gt 0 ]]; then
+  echo "Error: SDK codegen drift detected."
+  printf '  - %s\n' "${DRIFTED_SDKS[@]}"
+  echo "Run: ./scripts/sdk/generate --target all"
+  exit 1
+fi
+echo "Gate 3 Passed: All language SDKs match fresh codegen output."
+echo "All drift gates passed."

@@ -107,14 +107,6 @@ func NewServer(kernel *Kernel) *Server {
 	serveMux.Handle("/console", baseRouter.Mux())
 	serveMux.Handle("/console/", baseRouter.Mux())
 
-	// Public OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/v1/spec.json", server.handleGetBaseSpecJSON)
-	serveMux.HandleFunc("/v1/spec.yaml", server.handleGetBaseSpecYAML)
-
-	// Control Plane OpenAPI 3.1 Spec (Unrestricted)
-	serveMux.HandleFunc("/v1/_/spec.json", server.handleGetControlPlaneSpecJSON)
-	serveMux.HandleFunc("/v1/_/spec.yaml", server.handleGetControlPlaneSpecYAML)
-
 	// Mount Control Plane API Router
 	serveMux.Handle("/v1/_/", controlPlaneRouter.Mux())
 
@@ -629,8 +621,6 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 		if path == "/v1/manifest" ||
 			strings.HasPrefix(path, "/v1/_/") ||
 			path == "/v1/_" ||
-			path == "/v1/spec.json" ||
-			path == "/v1/spec.yaml" ||
 			strings.HasPrefix(path, "/.well-known/") ||
 			strings.HasPrefix(path, "/v1/function/") ||
 			path == "/v1/function" {
@@ -661,6 +651,9 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 
 func (server *Server) registerBaseRoutes() {
 	baseRouter := server.baseRouter
+
+	server.serveMux.HandleFunc("GET /v1/spec.json", server.handleGetBaseSpecJSON)
+	server.serveMux.HandleFunc("GET /v1/spec.yaml", server.handleGetBaseSpecYAML)
 
 	GetRoute[GetHealthResponse](baseRouter, "/healthz", server.handleGetHealth,
 		RouteHide(),
@@ -701,6 +694,9 @@ func (server *Server) registerBaseRoutes() {
 
 func (server *Server) registerControlPlaneRoutes() {
 	controlPlaneRouter := server.controlPlaneRouter
+
+	server.serveMux.HandleFunc("GET /v1/_/spec.json", server.handleGetControlPlaneSpecJSON)
+	server.serveMux.HandleFunc("GET /v1/_/spec.yaml", server.handleGetControlPlaneSpecYAML)
 
 	// Register Core Routes on Control Plane Router
 	GetRoute[ListServiceAccountsResponse](controlPlaneRouter, "/v1/_/core/service-accounts", server.handleListServiceAccounts,

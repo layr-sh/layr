@@ -27,7 +27,7 @@ func TestAuthRouterIntegration(t *testing.T) {
 	controlPlaneFuegoEngine := fuego.NewServer()
 	controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
 
-	service.RegisterRoutes(baseRouter, controlPlaneRouter)
+	service.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 
 	// 1. Verify Public OIDC Discovery endpoint
 	discoveryRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/.well-known/openid-configuration", nil)

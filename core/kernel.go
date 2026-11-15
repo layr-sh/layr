@@ -15,6 +15,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/go-fuego/fuego"
 	"github.com/jackc/pgx/v5"
 	"layr.sh/auth/password"
 )
@@ -30,7 +31,7 @@ const (
 type ServiceRunner interface {
 	Start(ctx context.Context) error
 	Stop()
-	RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router)
+	RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux)
 }
 
 // ServiceFactory defines a constructor function for a modular service given an active kernel.
@@ -158,7 +159,15 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 		if err := serviceRunner.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start service: %w", err)
 		}
-		serviceRunner.RegisterRoutes(kernel.server.BaseRouter(), kernel.server.ControlPlaneRouter())
+		baseRouter := NewRouter(fuego.NewServer(fuego.WithEngineOptions(
+			fuego.WithOpenAPIConfig(kernel.server.baseRouter.engine.OpenAPI.Config),
+		)))
+		controlPlaneRouter := NewRouter(fuego.NewServer(fuego.WithEngineOptions(
+			fuego.WithOpenAPIConfig(kernel.server.controlPlaneRouter.engine.OpenAPI.Config),
+		)))
+		baseRouter.engine.Mux = kernel.server.BaseRouter().Mux()
+		controlPlaneRouter.engine.Mux = kernel.server.ControlPlaneRouter().Mux()
+		serviceRunner.RegisterRoutes(baseRouter, controlPlaneRouter, kernel.server.Mux())
 		if hostRouteRegistrar, ok := serviceRunner.(interface{ RegisterHostRoutes(*Server) }); ok {
 			hostRouteRegistrar.RegisterHostRoutes(kernel.server)
 		}

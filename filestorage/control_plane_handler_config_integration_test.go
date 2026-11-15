@@ -22,7 +22,7 @@ func TestFilestorageControlPlaneHandlerConfigIntegration(t *testing.T) {
 	defer service.Stop()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	serviceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "filestorage-config-admin",

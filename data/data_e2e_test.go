@@ -27,7 +27,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	defer func() { dataService.Stop() }()
 
 	coreServer := core.NewServer(kernel)
-	dataService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	dataService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	publicServeMux := coreServer.BaseRouter().Mux()
 	controlPlaneServeMux := coreServer.ControlPlaneRouter().Mux()

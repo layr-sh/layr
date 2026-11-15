@@ -27,7 +27,7 @@ func TestAuthAppUserLifecycleE2E(t *testing.T) {
 	defer func() { service.Stop() }()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	userEmail := "e2e-app-user@example.com"
@@ -145,7 +145,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	defer func() { service.Stop() }()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	userEmail := "e2e-sessions-user@example.com"
@@ -249,7 +249,7 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 	service.configManager.SetMemoryConfig(activeConfig)
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	publishableKey := kernel.CryptoKeyManager().DerivePublishableKey()
 
 	// 1. Anonymous User Setup

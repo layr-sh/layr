@@ -2,14 +2,33 @@
 package tasks
 
 import (
+	"encoding/json"
 	"net/http"
 
+	"gopkg.in/yaml.v3"
 	"layr.sh/core"
 )
 
 // RegisterRoutes registers all Tasks control plane routes.
-func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router) {
+func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRouter *core.Router, gatewayServeMux *http.ServeMux) {
 	service.registerControlPlaneRoutes(controlPlaneRouter)
+
+	gatewayServeMux.HandleFunc("GET /v1/tasks/spec.json", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(responseWriter).Encode(baseRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/tasks/spec.yaml", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/yaml")
+		_ = yaml.NewEncoder(responseWriter).Encode(baseRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/_/tasks/spec.json", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(responseWriter).Encode(controlPlaneRouter.OutputOpenAPISpec())
+	})
+	gatewayServeMux.HandleFunc("GET /v1/_/tasks/spec.yaml", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "application/yaml")
+		_ = yaml.NewEncoder(responseWriter).Encode(controlPlaneRouter.OutputOpenAPISpec())
+	})
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {

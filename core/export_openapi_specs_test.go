@@ -14,7 +14,7 @@ type dummyServiceWithRegistrar struct{}
 
 func (service *dummyServiceWithRegistrar) Start(ctx context.Context) error { return nil }
 func (service *dummyServiceWithRegistrar) Stop()                           {}
-func (service *dummyServiceWithRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (service *dummyServiceWithRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 	GetRoute[string](baseRouter, "/v1/dummy/test", func(responseWriter http.ResponseWriter, request *http.Request) {},
 		RouteTag("Dummy"),
 		RouteSummary("Dummy route"),
@@ -28,7 +28,7 @@ type dummyServiceWithoutRegistrar struct{}
 
 func (service *dummyServiceWithoutRegistrar) Start(ctx context.Context) error { return nil }
 func (service *dummyServiceWithoutRegistrar) Stop()                           {}
-func (service *dummyServiceWithoutRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router) {
+func (service *dummyServiceWithoutRegistrar) RegisterRoutes(baseRouter *Router, controlPlaneRouter *Router, gatewayServeMux *http.ServeMux) {
 }
 
 func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
@@ -45,76 +45,23 @@ func TestCoreExportOpenAPISpecsUnit(t *testing.T) {
 		return &dummyServiceWithRegistrar{}, nil
 	})
 
-	openAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpecs := ExportOpenAPISpecs()
-	require.NotNil(t, openAPISpec)
-	require.NotNil(t, controlPlaneOpenAPISpec)
-	require.NotNil(t, unifiedOpenAPISpecs)
+	baseOpenAPISpecs, controlPlaneOpenAPISpecs := ExportOpenAPISpecs()
+	require.NotNil(t, baseOpenAPISpecs["core"])
+	require.NotNil(t, controlPlaneOpenAPISpecs["core"])
+	assert.NotNil(t, baseOpenAPISpecs["core"].Paths.Find("/v1/manifest"))
+	assert.Nil(t, controlPlaneOpenAPISpecs["core"].Paths.Find("/v1/manifest"))
+	assert.Nil(t, baseOpenAPISpecs["core"].Paths.Find("/healthz"))
+	assert.Nil(t, baseOpenAPISpecs["core"].Paths.Find("/v1/spec.json"))
+	assert.Nil(t, controlPlaneOpenAPISpecs["core"].Paths.Find("/v1/_/spec.json"))
+	assert.NotNil(t, controlPlaneOpenAPISpecs["core"].Paths.Find("/v1/_/core/service-accounts"))
+	assert.Nil(t, baseOpenAPISpecs["core"].Paths.Find("/v1/_/core/service-accounts"))
 
-	assert.NotEmpty(t, openAPISpec.Paths.Map())
-	assert.NotEmpty(t, controlPlaneOpenAPISpec.Paths.Map())
-	assert.NotEmpty(t, unifiedOpenAPISpecs.Paths.Map())
-
-	// Public manifest route should be present in public and unified
-	assert.NotNil(t, openAPISpec.Paths.Find("/v1/manifest"))
-	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/v1/manifest"))
-	assert.Nil(t, controlPlaneOpenAPISpec.Paths.Find("/v1/manifest"))
-
-	// Hidden probe route should be absent from OpenAPI specs
-	assert.Nil(t, openAPISpec.Paths.Find("/healthz"))
-	assert.Nil(t, unifiedOpenAPISpecs.Paths.Find("/healthz"))
-
-	// Control plane route should be present in control and unified
-	assert.NotNil(t, controlPlaneOpenAPISpec.Paths.Find("/v1/_/core/service-accounts"))
-	assert.NotNil(t, unifiedOpenAPISpecs.Paths.Find("/v1/_/core/service-accounts"))
-	assert.Nil(t, openAPISpec.Paths.Find("/v1/_/core/service-accounts"))
-
-	// Dummy route registered via mock registrar
-	assert.NotNil(t, openAPISpec.Paths.Find("/v1/dummy/test"))
-}
-
-func TestCoreExportOpenAPISpecsMergeEdgeCasesUnit(t *testing.T) {
-	// 1. Both nil
-	mergedNilOpenAPISpecs := MergeOpenAPISpecs(nil, nil)
-	require.NotNil(t, mergedNilOpenAPISpecs)
-	assert.Equal(t, "3.1.0", mergedNilOpenAPISpecs.OpenAPI)
-
-	// 2. Only public with custom openapi version and empty schemas
-	openAPISpec := &openapi3.T{
-		OpenAPI: "3.1.0",
-		Paths:   openapi3.NewPaths(),
-		Components: &openapi3.Components{
-			Schemas: openapi3.Schemas{
-				"TestSchema": &openapi3.SchemaRef{
-					Value: openapi3.NewStringSchema(),
-				},
-			},
-		},
-	}
-	openAPISpec.Paths.Set("/test", &openapi3.PathItem{})
-
-	mergedOneOpenAPISpec := MergeOpenAPISpecs(openAPISpec, nil)
-	require.NotNil(t, mergedOneOpenAPISpec)
-	assert.NotNil(t, mergedOneOpenAPISpec.Paths.Find("/test"))
-	assert.NotNil(t, mergedOneOpenAPISpec.Components.Schemas["TestSchema"])
-
-	// 3. Only control plane with paths and schemas
-	controlPlaneOpenAPISpec := &openapi3.T{
-		OpenAPI: "3.1.0",
-		Paths:   openapi3.NewPaths(),
-		Components: &openapi3.Components{
-			Schemas: openapi3.Schemas{
-				"ControlSchema": &openapi3.SchemaRef{
-					Value: openapi3.NewIntegerSchema(),
-				},
-			},
-		},
-	}
-	controlPlaneOpenAPISpec.Paths.Set("/control", &openapi3.PathItem{})
-
-	mergedOpenAPISpecs := MergeOpenAPISpecs(nil, controlPlaneOpenAPISpec)
-	require.NotNil(t, mergedOpenAPISpecs)
-	assert.NotNil(t, mergedOpenAPISpecs.Paths.Find("/control"))
-	assert.NotNil(t, mergedOpenAPISpecs.Components.Schemas["ControlSchema"])
+	require.NotNil(t, baseOpenAPISpecs["test_dummy_registrar"])
+	assert.NotNil(t, baseOpenAPISpecs["test_dummy_registrar"].Paths.Find("/v1/dummy/test"))
+	assert.Nil(t, baseOpenAPISpecs["test_dummy_registrar"].Paths.Find("/v1/manifest"))
+	assert.Nil(t, baseOpenAPISpecs["core"].Paths.Find("/v1/dummy/test"))
+	assert.NotContains(t, baseOpenAPISpecs, "test_dummy_registrar_dup")
+	assert.NotContains(t, baseOpenAPISpecs, "test_dummy_error")
 }
 
 func TestCoreSanitizeOpenAPISpecUnit(t *testing.T) {

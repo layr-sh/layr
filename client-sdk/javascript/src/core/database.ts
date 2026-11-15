@@ -13,24 +13,21 @@ export interface GenericDatabase {
   [schema: string]: GenericSchema;
 }
 
-export type ResolveTable<
-  DB,
-  SchemaName extends string,
-  TableName extends string,
-  AdHoc = void
-> = [AdHoc] extends [void]
+export type ResolveTable<DB, SchemaName extends string, TableName extends string, AdHoc = void> = [
+  AdHoc,
+] extends [void]
   ? DB extends Record<string, any>
     ? SchemaName extends keyof DB
-      ? 'Tables' extends keyof DB[SchemaName]
-        ? TableName extends keyof DB[SchemaName]['Tables']
-          ? DB[SchemaName]['Tables'][TableName]
+      ? "Tables" extends keyof DB[SchemaName]
+        ? TableName extends keyof DB[SchemaName]["Tables"]
+          ? DB[SchemaName]["Tables"][TableName]
           : GenericTable
         : GenericTable
       : GenericTable
     : GenericTable
   : AdHoc extends Record<string, any>
-  ? { Row: AdHoc; Insert: Partial<AdHoc>; Update: Partial<AdHoc> }
-  : GenericTable;
+    ? { Row: AdHoc; Insert: Partial<AdHoc>; Update: Partial<AdHoc> }
+    : GenericTable;
 
 export type ResolveRow<T> = T extends { Row: infer R } ? R : Record<string, unknown>;
 export type ResolveInsert<T> = T extends { Insert: infer I } ? I : Partial<ResolveRow<T>>;

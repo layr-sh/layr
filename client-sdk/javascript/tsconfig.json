@@ -3,11 +3,7 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ESNext",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "strict": true,
     "skipLibCheck": true,
     "declaration": true,
@@ -15,11 +11,5 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": [
-    "src/**/*",
-    "tests/**/*",
-    "generated/**/*",
-    "tsdown.config.ts",
-    "vitest.config.ts"
-  ]
+  "include": ["src/**/*", "tests/**/*", "generated/**/*", "tsdown.config.ts", "vitest.config.ts"]
 }

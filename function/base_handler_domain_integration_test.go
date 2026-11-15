@@ -29,7 +29,7 @@ func TestFunctionBaseHandlerDomainIntegration(t *testing.T) {
 	deployTestEndpoint(testCtx, t, service, &publicEndpoint, "export default { integration: true };")
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	service.RegisterHostRoutes(coreServer)
 
 	// 2. Dispatch request to custom domain with path matching route prefix
@@ -80,7 +80,7 @@ func TestFunctionBaseHandlerDomainTLSIntegration(t *testing.T) {
 
 	// 3. Setup core server with TLS and register routes
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 	service.RegisterHostRoutes(coreServer)
 
 	require.NotNil(t, coreServer.TLSConfig())

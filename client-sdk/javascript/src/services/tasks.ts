@@ -1,4 +1,4 @@
-import type { Configuration } from '../../generated/runtime';
+import { Configuration } from "../../generated/tasks/control_plane/runtime";
 import {
   ConfigApi,
   DLQApi,
@@ -7,7 +7,7 @@ import {
   StatsApi,
   type TasksDlqListRequest,
   type TasksExecutionsListRequest,
-} from '../../generated/apis';
+} from "../../generated/tasks/control_plane/apis";
 import type {
   Config,
   CreateJobInput,
@@ -21,9 +21,14 @@ import type {
   TriggerExecutionInput,
   TriggerExecutionResponse,
   UpdateJobInput,
-} from '../../generated/models';
-import { ATTACH_CONTROL_PLANE, type ElevatableService, type LayrClient } from '../core/client';
-import { handleApiCall } from '../core/transport';
+} from "../../generated/tasks/control_plane/models";
+import {
+  ATTACH_CONTROL_PLANE,
+  type ConfigurationParameters,
+  type ElevatableService,
+  type LayrClient,
+} from "../core/client";
+import { handleApiCall } from "../core/transport";
 
 export interface TasksControlPlane {
   config: {
@@ -53,61 +58,64 @@ export interface TasksControlPlane {
 
 export interface TasksService extends ElevatableService<TasksControlPlane> {
   client: LayrClient;
-  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: Configuration) => TasksControlPlane;
+  [ATTACH_CONTROL_PLANE]?: (elevatedConfig: ConfigurationParameters) => TasksControlPlane;
 }
 
 export function useTasks(client: LayrClient): TasksService {
   const service: TasksService = {
     client,
 
-    [ATTACH_CONTROL_PLANE]: (elevatedConfig: Configuration): TasksControlPlane => ({
-      config: {
-        get: () => handleApiCall(() => new ConfigApi(elevatedConfig).tasksConfigGet()),
-        update: (input: Config) =>
-          handleApiCall(() => new ConfigApi(elevatedConfig).tasksConfigUpdate({ config: input })),
-      },
-      dlq: {
-        list: (params = {}) =>
-          handleApiCall(() => new DLQApi(elevatedConfig).tasksDlqList(params)),
-        purge: (executionId: string) =>
-          handleApiCall(() => new DLQApi(elevatedConfig).tasksDlqPurge({ executionId })),
-        retry: (executionId: string) =>
-          handleApiCall(() =>
-            new DLQApi(elevatedConfig).tasksDlqRetry({ executionId, body: {} })
-          ),
-      },
-      executions: {
-        create: (input: TriggerExecutionInput) =>
-          handleApiCall(() =>
-            new ExecutionsApi(elevatedConfig).tasksExecutionsCreate({
-              triggerExecutionInput: input,
-            })
-          ),
-        list: (params = {}) =>
-          handleApiCall(() => new ExecutionsApi(elevatedConfig).tasksExecutionsList(params)),
-      },
-      jobs: {
-        create: (input: CreateJobInput) =>
-          handleApiCall(() =>
-            new JobsApi(elevatedConfig).tasksJobsCreate({ createJobInput: input })
-          ),
-        delete: (jobId: string) =>
-          handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsDelete({ jobId })),
-        get: (jobId: string) =>
-          handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsGet({ jobId })),
-        list: () => handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsList()),
-        update: (jobId: string, input: UpdateJobInput) =>
-          handleApiCall(() =>
-            new JobsApi(elevatedConfig).tasksJobsUpdate({
-              jobId,
-              updateJobInput: input,
-            })
-          ),
-      },
-      stats: {
-        get: () => handleApiCall(() => new StatsApi(elevatedConfig).tasksStatsGet()),
-      },
-    }),
+    [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): TasksControlPlane => {
+      const elevatedConfig = new Configuration(configuration);
+      return {
+        config: {
+          get: () => handleApiCall(() => new ConfigApi(elevatedConfig).tasksConfigGet()),
+          update: (input: Config) =>
+            handleApiCall(() => new ConfigApi(elevatedConfig).tasksConfigUpdate({ config: input })),
+        },
+        dlq: {
+          list: (params = {}) =>
+            handleApiCall(() => new DLQApi(elevatedConfig).tasksDlqList(params)),
+          purge: (executionId: string) =>
+            handleApiCall(() => new DLQApi(elevatedConfig).tasksDlqPurge({ executionId })),
+          retry: (executionId: string) =>
+            handleApiCall(() =>
+              new DLQApi(elevatedConfig).tasksDlqRetry({ executionId, body: {} }),
+            ),
+        },
+        executions: {
+          create: (input: TriggerExecutionInput) =>
+            handleApiCall(() =>
+              new ExecutionsApi(elevatedConfig).tasksExecutionsCreate({
+                triggerExecutionInput: input,
+              }),
+            ),
+          list: (params = {}) =>
+            handleApiCall(() => new ExecutionsApi(elevatedConfig).tasksExecutionsList(params)),
+        },
+        jobs: {
+          create: (input: CreateJobInput) =>
+            handleApiCall(() =>
+              new JobsApi(elevatedConfig).tasksJobsCreate({ createJobInput: input }),
+            ),
+          delete: (jobId: string) =>
+            handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsDelete({ jobId })),
+          get: (jobId: string) =>
+            handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsGet({ jobId })),
+          list: () => handleApiCall(() => new JobsApi(elevatedConfig).tasksJobsList()),
+          update: (jobId: string, input: UpdateJobInput) =>
+            handleApiCall(() =>
+              new JobsApi(elevatedConfig).tasksJobsUpdate({
+                jobId,
+                updateJobInput: input,
+              }),
+            ),
+        },
+        stats: {
+          get: () => handleApiCall(() => new StatsApi(elevatedConfig).tasksStatsGet()),
+        },
+      };
+    },
   };
 
   return service;

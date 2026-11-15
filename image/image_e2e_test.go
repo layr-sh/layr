@@ -30,8 +30,8 @@ func TestImageFullLifecycleE2E(t *testing.T) {
 	defer imageService.Stop()
 
 	coreServer := core.NewServer(kernel)
-	fileStorageService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
-	imageService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	fileStorageService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
+	imageService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	// 1. Create Service Account with full file storage and image scopes
 	createdServiceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{

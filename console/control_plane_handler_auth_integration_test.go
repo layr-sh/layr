@@ -24,7 +24,7 @@ func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 	defer service.Stop()
 
 	coreServer := core.NewServer(kernel)
-	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	service.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	// Create test console user in DB
 	hasher := service.hasher

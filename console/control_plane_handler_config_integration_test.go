@@ -22,7 +22,7 @@ func TestConsoleControlPlaneHandlerConfigIntegration(t *testing.T) {
 	defer consoleService.Stop()
 
 	coreServer := core.NewServer(kernel)
-	consoleService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter())
+	consoleService.RegisterRoutes(coreServer.BaseRouter(), coreServer.ControlPlaneRouter(), coreServer.Mux())
 
 	serviceAccount, accountErr := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{
 		Name: "console-config-admin",

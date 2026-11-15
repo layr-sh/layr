@@ -5,10 +5,11 @@ import (
 	"sort"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/go-fuego/fuego"
 )
 
-// ExportOpenAPISpecs builds and returns the Base, Control Plane, and Unified OpenAPI 3.1 specifications.
-func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
+// ExportOpenAPISpecs builds independent Base and Control Plane OpenAPI specifications for each service.
+func ExportOpenAPISpecs() (map[string]*openapi3.T, map[string]*openapi3.T) {
 	log.Debug("exporting OpenAPI 3.1 specifications")
 	config := DefaultConfig()
 
@@ -31,6 +32,9 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
 	sort.Strings(serviceNames)
 	log.Tracef("registering service routes for OpenAPI export: %v", serviceNames)
 
+	baseOpenAPISpecs := map[string]*openapi3.T{"core": server.BaseRouter().OutputOpenAPISpec()}
+	controlPlaneOpenAPISpecs := map[string]*openapi3.T{"core": server.ControlPlaneRouter().OutputOpenAPISpec()}
+
 	seenRunnerTypes := make(map[reflect.Type]bool)
 	for _, serviceName := range serviceNames {
 		serviceFactory, ok := GetServiceFactory(serviceName)
@@ -42,21 +46,26 @@ func ExportOpenAPISpecs() (*openapi3.T, *openapi3.T, *openapi3.T) {
 					continue
 				}
 				seenRunnerTypes[runnerType] = true
-				serviceRunner.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter())
+				baseRouter := NewRouter(fuego.NewServer(fuego.WithEngineOptions(
+					fuego.WithOpenAPIConfig(server.baseRouter.engine.OpenAPI.Config),
+				)))
+				controlPlaneRouter := NewRouter(fuego.NewServer(fuego.WithEngineOptions(
+					fuego.WithOpenAPIConfig(server.controlPlaneRouter.engine.OpenAPI.Config),
+				)))
+				serviceRunner.RegisterRoutes(baseRouter, controlPlaneRouter, server.Mux())
+				baseOpenAPISpecs[serviceName] = baseRouter.OutputOpenAPISpec()
+				controlPlaneOpenAPISpecs[serviceName] = controlPlaneRouter.OutputOpenAPISpec()
 			}
 		}
 	}
 
-	baseOpenAPISpec := server.BaseRouter().OutputOpenAPISpec()
-	controlPlaneOpenAPISpec := server.ControlPlaneRouter().OutputOpenAPISpec()
-	sanitizeOpenAPISpec(baseOpenAPISpec)
-	sanitizeOpenAPISpec(controlPlaneOpenAPISpec)
+	for serviceName, baseOpenAPISpec := range baseOpenAPISpecs {
+		sanitizeOpenAPISpec(baseOpenAPISpec)
+		sanitizeOpenAPISpec(controlPlaneOpenAPISpecs[serviceName])
+	}
+	log.Trace("synthesized independent base and control plane OpenAPI specifications for each service")
 
-	unifiedOpenAPISpec := MergeOpenAPISpecs(baseOpenAPISpec, controlPlaneOpenAPISpec)
-	sanitizeOpenAPISpec(unifiedOpenAPISpec)
-	log.Trace("synthesized base, control plane, and unified OpenAPI specifications")
-
-	return baseOpenAPISpec, controlPlaneOpenAPISpec, unifiedOpenAPISpec
+	return baseOpenAPISpecs, controlPlaneOpenAPISpecs
 }
 
 // sanitizeOpenAPISpec normalizes known artifacts produced by Fuego's OpenAPI reflection
@@ -158,51 +167,4 @@ func sanitizeSchemaValue(schema *openapi3.Schema) {
 	if schema.Items != nil && schema.Items.Value != nil {
 		sanitizeSchemaValue(schema.Items.Value)
 	}
-}
-
-// MergeOpenAPISpecs combines base and control plane OpenAPI 3.1 specifications into a single unified specification.
-func MergeOpenAPISpecs(baseOpenAPISpec, controlPlaneOpenAPISpec *openapi3.T) *openapi3.T {
-	unifiedOpenAPISpec := &openapi3.T{
-		OpenAPI: "3.1.0",
-		Info: &openapi3.Info{
-			Title:       "Layr Unified API Engine",
-			Version:     "1.0.0",
-			Description: "Unified Base Client and Protected Control Plane APIs for Layr Platform",
-		},
-		Paths: openapi3.NewPaths(),
-		Components: &openapi3.Components{
-			Schemas: make(openapi3.Schemas),
-		},
-	}
-
-	if baseOpenAPISpec != nil {
-		if baseOpenAPISpec.OpenAPI != "" {
-			unifiedOpenAPISpec.OpenAPI = baseOpenAPISpec.OpenAPI
-		}
-		if baseOpenAPISpec.Paths != nil {
-			for _, path := range baseOpenAPISpec.Paths.InMatchingOrder() {
-				unifiedOpenAPISpec.Paths.Set(path, baseOpenAPISpec.Paths.Find(path))
-			}
-		}
-		if baseOpenAPISpec.Components != nil && baseOpenAPISpec.Components.Schemas != nil {
-			for name, schema := range baseOpenAPISpec.Components.Schemas {
-				unifiedOpenAPISpec.Components.Schemas[name] = schema
-			}
-		}
-	}
-
-	if controlPlaneOpenAPISpec != nil {
-		if controlPlaneOpenAPISpec.Paths != nil {
-			for _, path := range controlPlaneOpenAPISpec.Paths.InMatchingOrder() {
-				unifiedOpenAPISpec.Paths.Set(path, controlPlaneOpenAPISpec.Paths.Find(path))
-			}
-		}
-		if controlPlaneOpenAPISpec.Components != nil && controlPlaneOpenAPISpec.Components.Schemas != nil {
-			for name, schema := range controlPlaneOpenAPISpec.Components.Schemas {
-				unifiedOpenAPISpec.Components.Schemas[name] = schema
-			}
-		}
-	}
-
-	return unifiedOpenAPISpec
 }

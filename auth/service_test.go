@@ -75,7 +75,7 @@ func TestAuthServiceUnit(t *testing.T) {
 		controlPlaneFuegoEngine := fuego.NewServer()
 		baseRouter := core.NewRouter(baseFuegoEngine)
 		controlPlaneRouter := core.NewRouter(controlPlaneFuegoEngine)
-		service.RegisterRoutes(baseRouter, controlPlaneRouter)
+		service.RegisterRoutes(baseRouter, controlPlaneRouter, http.NewServeMux())
 	})
 
 	t.Run("check scope unit branches", func(t *testing.T) {

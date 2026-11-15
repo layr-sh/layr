@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 	"layr.sh/core"
 )
 
@@ -20,7 +22,36 @@ func TestConsoleRouterUnit(t *testing.T) {
 	// 1. Register routes on routers
 	baseRouter := core.NewRouter(fuego.NewServer())
 	controlPlaneRouter := core.NewRouter(fuego.NewServer())
-	service.RegisterRoutes(baseRouter, controlPlaneRouter)
+	gatewayServeMux := http.NewServeMux()
+	service.RegisterRoutes(baseRouter, controlPlaneRouter, gatewayServeMux)
+	gatewayServeMux.Handle("/v1/_/", controlPlaneRouter.Mux())
+	gatewayServeMux.Handle("/v1/", baseRouter.Mux())
+
+	for prefix, router := range map[string]*core.Router{
+		"/v1/console/":   baseRouter,
+		"/v1/_/console/": controlPlaneRouter,
+	} {
+		for extension, contentType := range map[string]string{"json": "application/json", "yaml": "application/yaml"} {
+			t.Run(prefix+extension, func(t *testing.T) {
+				responseRecorder := httptest.NewRecorder()
+				request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, prefix+"spec."+extension, nil)
+				gatewayServeMux.ServeHTTP(responseRecorder, request)
+				assert.Equal(t, http.StatusOK, responseRecorder.Code)
+				assert.Equal(t, contentType, responseRecorder.Header().Get("Content-Type"))
+				var expectedPayload []byte
+				var err error
+				if extension == "json" {
+					expectedPayload, err = json.Marshal(router.OutputOpenAPISpec())
+					expectedPayload = append(expectedPayload, '\n')
+				} else {
+					expectedPayload, err = yaml.Marshal(router.OutputOpenAPISpec())
+				}
+				require.NoError(t, err)
+				assert.Equal(t, string(expectedPayload), responseRecorder.Body.String())
+				assert.Nil(t, router.OutputOpenAPISpec().Paths.Find(prefix+"spec."+extension))
+			})
+		}
+	}
 
 	// Test nil router handling in registerBaseRoutes
 	service.registerBaseRoutes(nil)
