@@ -93,7 +93,7 @@ func TestAuthControlPlaneHandlerSessionBrokenPoolIntegration(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 	randomID := uuid.NewV7().String()
 
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-sessions", JWT: core.JWTClaims{Scope: core.ScopeAuthUserWrite}})
 
 	// 1. List Sessions error
 	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+randomID+"/sessions", nil)

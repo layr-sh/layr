@@ -15,6 +15,103 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+func TestCoreControlPlaneScopeEnforcementIntegration(t *testing.T) {
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+	server := NewServer(kernel)
+	for _, testCase := range []struct{ method, path string }{
+		{http.MethodGet, "/v1/_/core/service-accounts"},
+		{http.MethodPost, "/v1/_/core/service-accounts"},
+		{http.MethodGet, "/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000"},
+		{http.MethodPut, "/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000"},
+		{http.MethodDelete, "/v1/_/core/service-accounts/00000000-0000-0000-0000-000000000000"},
+		{http.MethodGet, "/v1/_/core/events"},
+		{http.MethodGet, "/v1/_/core/events/00000000-0000-0000-0000-000000000000"},
+		{http.MethodGet, "/v1/_/core/event-hooks"},
+		{http.MethodPost, "/v1/_/core/event-hooks"},
+		{http.MethodGet, "/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000"},
+		{http.MethodPut, "/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000"},
+		{http.MethodDelete, "/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000"},
+		{http.MethodGet, "/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000/deliveries"},
+		{http.MethodPost, "/v1/_/core/event-hooks/00000000-0000-0000-0000-000000000000/deliveries/00000000-0000-0000-0000-000000000000/retry"},
+	} {
+		t.Run(testCase.method+" "+testCase.path, func(t *testing.T) {
+			for _, authContext := range []AuthContext{{}, {UserID: "end-user", JWT: JWTClaims{Scope: ScopeRoot}}} {
+				request := httptest.NewRequestWithContext(WithAuthContext(t.Context(), authContext), testCase.method, testCase.path, nil)
+				responseRecorder := httptest.NewRecorder()
+				server.Handler().ServeHTTP(responseRecorder, request)
+				if responseRecorder.Code != http.StatusForbidden {
+					t.Fatalf("expected forbidden control-plane access, got %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestCoreConsoleServiceAccountAuthenticationIntegration(t *testing.T) {
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+	ctx := t.Context()
+	consoleRootUser, serviceAccount, _, err := kernel.CreateConsoleRootUser(ctx, "console-auth@example.com", "ValidPassword123!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawToken := kernel.JWTSigner().GenerateRefreshToken()
+	var sessionID string
+	err = kernel.DB().QueryRow(ctx, `
+		INSERT INTO console.sessions (user_id, session_token_hash, ip_address, expires_at)
+		VALUES ($1, $2, '127.0.0.1', clock_timestamp() + interval '1 hour') RETURNING id
+	`, consoleRootUser.ID, kernel.JWTSigner().HashRefreshToken(rawToken)).Scan(&sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accessToken := kernel.JWTSigner().GenerateAccessToken(JWTClaims{Subject: consoleRootUser.ID, SessionID: sessionID, Role: "console_operator", Audience: "layr:console:user", Scope: ScopeRoot}, 900)
+	server := NewServer(kernel)
+	var capturedAuthContext AuthContext
+	handler := server.middleware(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		capturedAuthContext = GetAuthContext(request.Context())
+		responseWriter.WriteHeader(http.StatusOK)
+	}))
+	for _, credential := range []string{"Bearer", ConsoleCookieNameInsecure, ConsoleCookieNameSecure} {
+		t.Run(credential, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+			if credential == "Bearer" {
+				request.Header.Set("Authorization", "Bearer "+accessToken)
+			} else {
+				request.AddCookie(&http.Cookie{Name: credential, Value: rawToken})
+			}
+			handler.ServeHTTP(httptest.NewRecorder(), request)
+			if !capturedAuthContext.IsServiceAccount() || capturedAuthContext.IsUser() || capturedAuthContext.ServiceAccountID != serviceAccount.ID || !capturedAuthContext.HasScope(ScopeRoot) {
+				t.Fatalf("expected linked service account for %s, got %+v", credential, capturedAuthContext)
+			}
+		})
+	}
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	for _, mutation := range []string{
+		`UPDATE core.service_accounts SET scopes = '["console:config.read"]'::jsonb`,
+		`UPDATE core.service_accounts SET is_enabled = false`,
+		`UPDATE core.service_accounts SET is_enabled = true, expires_at = clock_timestamp() - interval '1 minute'`,
+		`UPDATE core.service_accounts SET expires_at = NULL, allowed_ips = ARRAY['10.0.0.1']`,
+		`UPDATE core.service_accounts SET allowed_ips = '{}'; UPDATE console.users SET is_enabled = false`,
+		`UPDATE console.users SET is_enabled = true; DELETE FROM console.sessions`,
+	} {
+		t.Run(mutation, func(t *testing.T) {
+			if _, err := kernel.DB().Exec(ctx, mutation); err != nil {
+				t.Fatal(err)
+			}
+			handler.ServeHTTP(httptest.NewRecorder(), request)
+			if strings.Contains(mutation, "SET scopes") {
+				if capturedAuthContext.HasScope(ScopeRoot) || !capturedAuthContext.HasScope(ScopeConsoleConfigRead) {
+					t.Fatalf("expected current service account scopes, got %+v", capturedAuthContext)
+				}
+			} else if capturedAuthContext.IsAuthenticated() {
+				t.Fatalf("invalid Console credentials authenticated after %s: %+v", mutation, capturedAuthContext)
+			}
+		})
+	}
+}
+
 func TestCoreServerWithLiveDBPoolIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -217,7 +314,8 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 			email VARCHAR(255),
 			phone VARCHAR(32),
 			role VARCHAR(64) NOT NULL DEFAULT 'authenticated',
-			is_anonymous BOOLEAN NOT NULL DEFAULT false
+			is_anonymous BOOLEAN NOT NULL DEFAULT false,
+			locked_until TIMESTAMPTZ
 		);
 		CREATE TABLE IF NOT EXISTS auth.sessions (
 			id UUID PRIMARY KEY,

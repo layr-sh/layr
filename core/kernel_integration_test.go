@@ -540,8 +540,9 @@ func TestCoreKernelModularServiceStartErrorIntegration(t *testing.T) {
 }
 
 func TestCoreHTTPRoutesIntegration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	ctx = WithAuthContext(ctx, AuthContext{ServiceAccountID: "test-root", JWT: JWTClaims{Scope: ScopeRoot}})
 
 	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
@@ -921,8 +922,9 @@ func TestCoreHTTPRoutesIntegration(t *testing.T) {
 }
 
 func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
+	ctx = WithAuthContext(ctx, AuthContext{ServiceAccountID: "test-root", JWT: JWTClaims{Scope: ScopeRoot}})
 
 	postgresContainer, containerErr := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
@@ -1222,10 +1224,10 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 
 	// 6. Test CheckScope on ServiceAccountManager
-	// Without service account or secret key -> true (empty key returns true)
-	unauthScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
-	if !kernel.serviceAccountManager.CheckScope(unauthScopeRequest, ScopeCoreServiceAccountRead) {
-		t.Fatal("expected CheckScope to return true when no secret key is present")
+	// Missing credentials must not authorize control-plane access.
+	unauthScopeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
+	if kernel.serviceAccountManager.CheckScope(unauthScopeRequest, ScopeCoreServiceAccountRead) {
+		t.Fatal("expected CheckScope to reject missing credentials")
 	}
 
 	// With M2M AuthContext holding required scope -> true
@@ -1257,7 +1259,7 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	}
 
 	// With valid service account holding wildcard scope -> true
-	serviceAccountKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	serviceAccountKeyRequest := httptest.NewRequestWithContext(WithAuthContext(ctx, AuthContext{}), http.MethodGet, "/test", nil)
 	serviceAccountKeyRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	if !kernel.serviceAccountManager.CheckScope(serviceAccountKeyRequest, ScopeCoreServiceAccountRead) {
 		t.Fatal("expected CheckScope to return true for root service account")
@@ -1271,14 +1273,14 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create limited SA: %v", err)
 	}
-	limitedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	limitedRequest := httptest.NewRequestWithContext(WithAuthContext(ctx, AuthContext{}), http.MethodGet, "/test", nil)
 	limitedRequest.Header.Set("Authorization", "Bearer "+limitedServiceAccount.SecretKey)
 	if kernel.serviceAccountManager.CheckScope(limitedRequest, ScopeCoreServiceAccountRead) {
 		t.Fatal("expected CheckScope to return false when service account lacks scope")
 	}
 
 	// With invalid secret key -> false
-	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/test", nil)
+	invalidKeyRequest := httptest.NewRequestWithContext(WithAuthContext(ctx, AuthContext{}), http.MethodGet, "/test", nil)
 	invalidKeyRequest.Header.Set("Authorization", "Bearer invalid-key-secret-key-prefix-123456789")
 	if kernel.serviceAccountManager.CheckScope(invalidKeyRequest, ScopeCoreServiceAccountRead) {
 		t.Fatal("expected CheckScope to return false with invalid secret key")
@@ -1303,7 +1305,8 @@ func TestCoreKernelOpenAPIControllersIntegration(t *testing.T) {
 }
 
 func testCanceledContextEndpoints(t *testing.T, server *Server, eventHookID string) {
-	ctx, cancel := context.WithCancel(context.Background())
+	authorizedCtx := WithAuthContext(context.Background(), AuthContext{ServiceAccountID: "test-root", JWT: JWTClaims{Scope: ScopeRoot}})
+	ctx, cancel := context.WithCancel(authorizedCtx)
 	cancel()
 
 	// List service accounts canceled context

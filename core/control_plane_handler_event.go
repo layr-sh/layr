@@ -6,6 +6,9 @@ import (
 )
 
 func (server *Server) handleListEvents(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventRead) {
+		return
+	}
 	log.Trace("handling list events request")
 	queryValues := request.URL.Query()
 	eventFilter := EventFilter{}
@@ -47,6 +50,9 @@ func (server *Server) handleListEvents(responseWriter http.ResponseWriter, reque
 }
 
 func (server *Server) handleGetEvent(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventRead) {
+		return
+	}
 	eventParam := request.PathValue("event_id")
 	log.Tracef("handling get event request: id=%s", eventParam)
 	eventID, err := uuid.Parse(eventParam)

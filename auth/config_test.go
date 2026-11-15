@@ -138,6 +138,7 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 }
 
 func TestAuthConfigManagerUnit(t *testing.T) {
+	authorizedCtx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	cryptoKeyManager := kernel.CryptoKeyManager()
@@ -263,7 +264,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	// Test handleUpdateConfig success and event bus publish
 
 	validPutBody := `{"password":{"enabled":true,"min_length":10},"smtp":{"password":"new-smtp-password"}}`
-	validPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(validPutBody))
+	validPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(validPutBody))
 	validPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(validPutResponseRecorder, validPutRequest)
 	if validPutResponseRecorder.Code != http.StatusOK {
@@ -274,7 +275,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test handleUpdateConfig invalid JSON body -> 400
-	invalidJSONPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{invalid-json`))
+	invalidJSONPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{invalid-json`))
 	invalidJSONPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidJSONPutResponseRecorder, invalidJSONPutRequest)
 	if invalidJSONPutResponseRecorder.Code != http.StatusBadRequest {
@@ -282,7 +283,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test handleUpdateConfig invalid configuration -> 400
-	invalidConfigPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{"sessions":{"access_token_expiry_seconds":-1}}`))
+	invalidConfigPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(`{"sessions":{"access_token_expiry_seconds":-1}}`))
 	invalidConfigPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(invalidConfigPutResponseRecorder, invalidConfigPutRequest)
 	if invalidConfigPutResponseRecorder.Code != http.StatusBadRequest {
@@ -290,7 +291,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 	}
 
 	// Test handleUpdateConfig body read error -> 400
-	brokenReaderRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", brokenBodyReader{})
+	brokenReaderRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", brokenBodyReader{})
 	brokenReaderResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(brokenReaderResponseRecorder, brokenReaderRequest)
 	if brokenReaderResponseRecorder.Code != http.StatusBadRequest {
@@ -299,7 +300,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with OAuth provider secret update
 	oauthPutBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":"new-plaintext-secret"}}}`
-	oauthPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(oauthPutBody))
+	oauthPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(oauthPutBody))
 	oauthPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(oauthPutResponseRecorder, oauthPutRequest)
 	if oauthPutResponseRecorder.Code != http.StatusOK {
@@ -311,7 +312,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig preserving OAuth secret when empty
 	preserveOAuthBody := `{"oauth_providers":{"google":{"enabled":true,"client_id":"new-client-id","client_secret":""}}}`
-	preserveOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveOAuthBody))
+	preserveOAuthRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveOAuthBody))
 	preserveOAuthResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveOAuthResponseRecorder, preserveOAuthRequest)
 	if preserveOAuthResponseRecorder.Code != http.StatusOK {
@@ -320,7 +321,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oauth_providers preserving current
 	nullOAuthBody := `{"oauth_providers":null}`
-	nullOAuthRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOAuthBody))
+	nullOAuthRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOAuthBody))
 	nullOAuthResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullOAuthResponseRecorder, nullOAuthRequest)
 	if nullOAuthResponseRecorder.Code != http.StatusOK {
@@ -329,7 +330,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oidc.clients preserving current
 	nullOIDCBody := `{"oidc":{"clients":null}}`
-	nullOIDCRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOIDCBody))
+	nullOIDCRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullOIDCBody))
 	nullOIDCResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullOIDCResponseRecorder, nullOIDCRequest)
 	if nullOIDCResponseRecorder.Code != http.StatusOK {
@@ -338,7 +339,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig with null oidc.resource_servers preserving current
 	nullResourceServersBody := `{"oidc":{"resource_servers":null}}`
-	nullResourceServersRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
+	nullResourceServersRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullResourceServersBody))
 	nullResourceServersResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullResourceServersResponseRecorder, nullResourceServersRequest)
 	if nullResourceServersResponseRecorder.Code != http.StatusOK {
@@ -358,7 +359,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"url": "https://test.com/sms", "signing_secret": "new-sms-secret"}
 		}
 	}`
-	emailSMSPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(emailSMSPutBody))
+	emailSMSPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(emailSMSPutBody))
 	emailSMSPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(emailSMSPutResponseRecorder, emailSMSPutRequest)
 	if emailSMSPutResponseRecorder.Code != http.StatusOK {
@@ -401,7 +402,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"url": "https://test.com/sms", "signing_secret": ""}
 		}
 	}`
-	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveBody))
+	preserveRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveBody))
 	preserveResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 	if preserveResponseRecorder.Code != http.StatusOK {
@@ -425,7 +426,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"driver": null
 		}
 	}`
-	nullDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullDriverBody))
+	nullDriverRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullDriverBody))
 	nullDriverResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullDriverResponseRecorder, nullDriverRequest)
 	if nullDriverResponseRecorder.Code != http.StatusOK {
@@ -458,7 +459,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"driver": ""
 		}
 	}`
-	emptyDriverRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(emptyDriverBody))
+	emptyDriverRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(emptyDriverBody))
 	emptyDriverResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(emptyDriverResponseRecorder, emptyDriverRequest)
 	if emptyDriverResponseRecorder.Code != http.StatusOK {
@@ -477,7 +478,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 		"email_dispatcher": null,
 		"sms_dispatcher": null
 	}`
-	nullConfigRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullConfigBody))
+	nullConfigRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(nullConfigBody))
 	nullConfigResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(nullConfigResponseRecorder, nullConfigRequest)
 	if nullConfigResponseRecorder.Code != http.StatusOK {
@@ -502,7 +503,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"webhook": {"signing_secret": "plain-secret"}
 		}
 	}`
-	plainRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(plainSecretBody))
+	plainRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(plainSecretBody))
 	plainResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(plainResponseRecorder, plainRequest)
 	if plainResponseRecorder.Code != http.StatusOK {
@@ -515,7 +516,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig rejecting email_otp.enabled without active SMTP -> 422
 	unconfiguredOTPPutBody := `{"email_otp":{"enabled":true}}`
-	unconfiguredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredOTPPutBody))
+	unconfiguredOTPPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredOTPPutBody))
 	unconfiguredOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(unconfiguredOTPPutResponseRecorder, unconfiguredOTPPutRequest)
 	if unconfiguredOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
@@ -527,7 +528,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 
 	// Test handleUpdateConfig rejecting sms_otp.enabled without active SMS provider -> 422
 	unconfiguredSMSOTPPutBody := `{"sms_otp":{"enabled":true}}`
-	unconfiguredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredSMSOTPPutBody))
+	unconfiguredSMSOTPPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(unconfiguredSMSOTPPutBody))
 	unconfiguredSMSOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(unconfiguredSMSOTPPutResponseRecorder, unconfiguredSMSOTPPutRequest)
 	if unconfiguredSMSOTPPutResponseRecorder.Code != http.StatusUnprocessableEntity {
@@ -545,7 +546,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"smtp":{"host":"smtp.example.com","port":587,"username":"user","password":"password"}
 		}
 	}`
-	configuredOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredOTPPutBody))
+	configuredOTPPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredOTPPutBody))
 	configuredOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(configuredOTPPutResponseRecorder, configuredOTPPutRequest)
 	if configuredOTPPutResponseRecorder.Code != http.StatusOK {
@@ -560,7 +561,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 			"twilio":{"account_sid":"AC123","auth_token":"token123","from_number":"+15551234567"}
 		}
 	}`
-	configuredSMSOTPPutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredSMSOTPPutBody))
+	configuredSMSOTPPutRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(configuredSMSOTPPutBody))
 	configuredSMSOTPPutResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(configuredSMSOTPPutResponseRecorder, configuredSMSOTPPutRequest)
 	if configuredSMSOTPPutResponseRecorder.Code != http.StatusOK {
@@ -569,6 +570,7 @@ func TestAuthConfigManagerUnit(t *testing.T) {
 }
 
 func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
+	authorizedCtx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
@@ -622,7 +624,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 		}
 	}`
 
-	putRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(oidcPutBody))
+	putRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(oidcPutBody))
 	putResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(putResponseRecorder, putRequest)
 
@@ -723,7 +725,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 			]
 		}
 	}`
-	preserveRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveSecretBody))
+	preserveRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(preserveSecretBody))
 	preserveResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(preserveResponseRecorder, preserveRequest)
 
@@ -744,6 +746,7 @@ func TestAuthConfigManagerOIDCAndSignInUIUnit(t *testing.T) {
 }
 
 func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
+	authorizedCtx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	configManager := NewConfigManager(kernel)
 
@@ -802,7 +805,7 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 
 	for _, currentTestCase := range testCases {
 		t.Run(currentTestCase.name, func(t *testing.T) {
-			validationRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(currentTestCase.putBody))
+			validationRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(currentTestCase.putBody))
 			validationResponseRecorder := httptest.NewRecorder()
 			controlPlaneHandler.handleUpdateConfig(validationResponseRecorder, validationRequest)
 
@@ -817,6 +820,7 @@ func TestAuthConfigUIValidationRejectionsUnit(t *testing.T) {
 }
 
 func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
+	authorizedCtx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
@@ -835,7 +839,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"github": {"enabled": false}
 		}
 	}`
-	disableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(disableAllBody))
+	disableRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(disableAllBody))
 	disableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(disableResponseRecorder, disableRequest)
 	if disableResponseRecorder.Code != http.StatusOK {
@@ -865,7 +869,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"google": {"enabled": true, "preset": "google"}
 		}
 	}`
-	enableRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(enableAllBody))
+	enableRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(enableAllBody))
 	enableResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(enableResponseRecorder, enableRequest)
 	if enableResponseRecorder.Code != http.StatusOK {
@@ -896,7 +900,7 @@ func TestAuthConfigUIAutoSynchronizationUnit(t *testing.T) {
 			"google": {"enabled": false}
 		}
 	}`
-	disableMethodRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/auth/config", strings.NewReader(disablePassAndOAuth))
+	disableMethodRequest := httptest.NewRequestWithContext(authorizedCtx, http.MethodPut, "/v1/_/auth/config", strings.NewReader(disablePassAndOAuth))
 	disableMethodResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(disableMethodResponseRecorder, disableMethodRequest)
 	if disableMethodResponseRecorder.Code != http.StatusOK {
@@ -1128,7 +1132,7 @@ func TestAuthConfigThreatPutConfigUnit(t *testing.T) {
 	service := NewService(kernel)
 	configManager := service.configManager
 	controlPlaneHandler := service.controlPlaneHandler
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{ServiceAccountID: "test-config", JWT: core.JWTClaims{Scope: core.ScopeAuthConfigWrite}})
 
 	// 1. Unsupported provider -> 400
 	unsupportedProviderBody := `{"threat":{"bot_protection":{"enabled":true,"provider":"unknown_captcha","secret_key":"secret123"}}}`

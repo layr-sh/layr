@@ -97,9 +97,9 @@ func TestAuthServiceUnit(t *testing.T) {
 		require.True(t, service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserRead))
 		require.False(t, service.kernel.ServiceAccountManager().CheckScope(m2mValidRequest, core.ScopeAuthUserWrite))
 
-		// Branch B: serviceAccountManager present, but request has no service account key -> returns true
+		// Missing credentials must not authorize a control-plane request.
 		noKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)
-		require.True(t, service.kernel.ServiceAccountManager().CheckScope(noKeyRequest, "auth:test.scope"))
+		require.False(t, service.kernel.ServiceAccountManager().CheckScope(noKeyRequest, "auth:test.scope"))
 
 		// Branch C: serviceAccountManager present, request has invalid secret key -> Authenticate fails -> returns false
 		invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/test", nil)

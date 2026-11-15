@@ -81,13 +81,23 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateConsoleUser(response
 
 	passwordHash, _ := controlPlaneHandler.hasher.Hash(createConsoleUserInput.Password)
 
+	prefix, _, keyHash := core.GenerateServiceAccountSecretKey()
+	scopesJSON, _ := json.Marshal(defaultConsoleScopes)
 	const insertUserSQL = `
-		INSERT INTO console.users (email, password_hash)
-		VALUES ($1, $2)
-		RETURNING id, email, is_enabled, created_at, last_updated_at
+		WITH new_user AS (
+			INSERT INTO console.users (email, password_hash)
+			VALUES ($1, $2)
+			RETURNING id, email, is_enabled, created_at, last_updated_at
+		), new_service_account AS (
+			INSERT INTO core.service_accounts (name, key_prefix, key_hash, scopes, console_user_id)
+			SELECT email, $3, $4, $5, id FROM new_user
+			RETURNING console_user_id
+		)
+		SELECT u.id, u.email, u.is_enabled, u.created_at, u.last_updated_at
+		FROM new_user u JOIN new_service_account sa ON sa.console_user_id = u.id
 	`
 	var user User
-	err := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), insertUserSQL, email, passwordHash).Scan(
+	err := controlPlaneHandler.kernel.DB().QueryRow(request.Context(), insertUserSQL, email, passwordHash, prefix, keyHash, scopesJSON).Scan(
 		&user.ID,
 		&user.Email,
 		&user.IsEnabled,
@@ -180,6 +190,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConsoleUser(response
 		}
 	}
 
+	authContext := core.GetAuthContext(request.Context())
+	if updateConsoleUserInput.IsEnabled != nil && !*updateConsoleUserInput.IsEnabled && authContext.IsServiceAccount() && authContext.JWT.Audience == "layr:console:user" && authContext.JWT.Subject == userID {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Cannot disable your own Console User")
+		return
+	}
+
 	var newEmail *string
 	if updateConsoleUserInput.Email != nil {
 		trimmed := strings.ToLower(strings.TrimSpace(*updateConsoleUserInput.Email))
@@ -212,6 +228,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConsoleUser(response
 			return
 		}
 		var pgError *pgconn.PgError
+		if errors.As(err, &pgError) && pgError.ConstraintName == "console_root_user_required" {
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Cannot disable the last enabled root Console User")
+			return
+		}
 		if errors.As(err, &pgError) && pgError.Code == "23505" {
 			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Email already in use")
 			return
@@ -245,6 +265,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteConsoleUser(response
 		return
 	}
 
+	authContext := core.GetAuthContext(request.Context())
+	if authContext.IsServiceAccount() && authContext.JWT.Audience == "layr:console:user" && authContext.JWT.Subject == userID {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Cannot delete your own Console User")
+		return
+	}
+
 	var sessionCount int
 	const countSessionsSQL = `SELECT COUNT(*) FROM console.sessions WHERE user_id = $1`
 	_ = controlPlaneHandler.kernel.DB().QueryRow(request.Context(), countSessionsSQL, userID).Scan(&sessionCount)
@@ -263,6 +289,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteConsoleUser(response
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Console user not found")
+			return
+		}
+		var pgError *pgconn.PgError
+		if errors.As(err, &pgError) && pgError.ConstraintName == "console_root_user_required" {
+			core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "Cannot delete the last enabled root Console User")
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, err.Error())

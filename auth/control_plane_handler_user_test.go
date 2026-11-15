@@ -3,17 +3,20 @@ package auth
 import (
 	"bytes"
 	"context"
-	"layr.sh/auth/password"
-	"layr.sh/core"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 	"uuid"
+
+	"layr.sh/auth/password"
+	"layr.sh/core"
 )
 
 func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := core.WithAuthContext(context.Background(), core.AuthContext{
+		ServiceAccountID: "test-root", JWT: core.JWTClaims{Scope: core.ScopeRoot},
+	})
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
@@ -68,7 +71,7 @@ func TestAuthControlPlaneHandlerUserUnit(t *testing.T) {
 
 	// 4. Test Forbidden Scope on all user handlers
 
-	forbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/auth/users/"+testUserID, nil)
+	forbiddenRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/_/auth/users/"+testUserID, nil)
 	forbiddenRequest.Header.Set("Authorization", "Bearer invalid-key")
 	forbiddenRequest.SetPathValue("user_id", testUserID)
 

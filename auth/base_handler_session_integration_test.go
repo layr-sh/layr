@@ -8,8 +8,131 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
+
+func TestAuthBearerSignOutIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	server := core.NewServer(kernel)
+	service.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter(), server.Mux())
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		INSERT INTO auth.users (email, role) VALUES ('bearer-sign-out@example.com', 'authenticated') RETURNING id
+	`).Scan(&userID))
+
+	for _, testCase := range []struct {
+		name     string
+		fastPath bool
+	}{
+		{name: "With Session Cache", fastPath: true},
+		{name: "Without Session Cache", fastPath: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			config := DefaultConfig()
+			config.Cache.FastPathSessionsEnabled = testCase.fastPath
+			service.configManager.SetMemoryConfig(config)
+			for _, withCookie := range []bool{false, true} {
+				signInResponseRecorder := httptest.NewRecorder()
+				service.baseHandler.issueSessionResponse(signInResponseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil), User{ID: userID, Role: "authenticated"})
+				require.Equal(t, http.StatusOK, signInResponseRecorder.Code)
+				var authTokenResponse AuthTokenResponse
+				require.NoError(t, json.Unmarshal(signInResponseRecorder.Body.Bytes(), &authTokenResponse))
+				tokenHash := kernel.JWTSigner().HashRefreshToken(authTokenResponse.RefreshToken)
+				jwtClaims, err := kernel.JWTSigner().VerifyAccessToken(authTokenResponse.AccessToken)
+				require.NoError(t, err)
+				profileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user", nil)
+				profileRequest.Header.Set("Authorization", "Bearer "+authTokenResponse.AccessToken)
+				profileResponseRecorder := httptest.NewRecorder()
+				server.Handler().ServeHTTP(profileResponseRecorder, profileRequest)
+				require.Equal(t, http.StatusOK, profileResponseRecorder.Code, profileResponseRecorder.Body.String())
+
+				for _, invalidClaims := range []core.JWTClaims{
+					{Subject: userID, SessionID: jwtClaims.SessionID, Audience: "layr:console:user"},
+					{Subject: userID, SessionID: jwtClaims.SessionID, Role: "service_role"},
+					{Subject: userID},
+					{Subject: "another-user", SessionID: jwtClaims.SessionID},
+				} {
+					request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", nil)
+					request.Header.Set("Authorization", "Bearer "+kernel.JWTSigner().GenerateAccessToken(invalidClaims, 900))
+					responseRecorder := httptest.NewRecorder()
+					service.baseHandler.handleSignOut(responseRecorder, request)
+					require.Equal(t, http.StatusNoContent, responseRecorder.Code)
+					var count int
+					require.NoError(t, kernel.DB().QueryRow(ctx, `SELECT COUNT(*) FROM auth.sessions WHERE id = $1`, jwtClaims.SessionID).Scan(&count))
+					require.Equal(t, 1, count)
+				}
+
+				request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", nil)
+				request.Header.Set("Authorization", "Bearer "+authTokenResponse.AccessToken)
+				if withCookie {
+					for _, cookie := range signInResponseRecorder.Result().Cookies() {
+						request.AddCookie(cookie)
+					}
+				}
+				responseRecorder := httptest.NewRecorder()
+				service.baseHandler.handleSignOut(responseRecorder, request)
+				require.Equal(t, http.StatusNoContent, responseRecorder.Code)
+				var count int
+				require.NoError(t, kernel.DB().QueryRow(ctx, `SELECT COUNT(*) FROM auth.sessions WHERE id = $1`, jwtClaims.SessionID).Scan(&count))
+				require.Zero(t, count)
+				profileResponseRecorder = httptest.NewRecorder()
+				server.Handler().ServeHTTP(profileResponseRecorder, profileRequest)
+				require.Equal(t, http.StatusUnauthorized, profileResponseRecorder.Code)
+				_, err = kernel.KVStore().Get(ctx, "auth:session:"+tokenHash)
+				require.ErrorIs(t, err, core.ErrKVStoreKeyNotFound)
+
+				refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", nil)
+				refreshRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: authTokenResponse.RefreshToken})
+				refreshResponseRecorder := httptest.NewRecorder()
+				service.baseHandler.handleRefreshToken(refreshResponseRecorder, refreshRequest)
+				require.Equal(t, http.StatusUnauthorized, refreshResponseRecorder.Code)
+			}
+		})
+	}
+
+	t.Run("Stale Cached Refresh Is Rejected", func(t *testing.T) {
+		service.configManager.SetMemoryConfig(DefaultConfig())
+		tokenHash := kernel.JWTSigner().HashRefreshToken("revoked-cached-refresh")
+		cachedData, err := json.Marshal(CachedSession{User: User{ID: userID, Role: "authenticated"}})
+		require.NoError(t, err)
+		require.NoError(t, kernel.KVStore().Set(ctx, "auth:session:"+tokenHash, string(cachedData), time.Hour))
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", nil)
+		request.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: "revoked-cached-refresh"})
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.handleRefreshToken(responseRecorder, request)
+		require.Equal(t, http.StatusUnauthorized, responseRecorder.Code)
+	})
+
+	t.Run("Cache Deletion Failure Is Reported", func(t *testing.T) {
+		kvStore := core.NewDatabaseKVStore(ctx, kernel.DB(), time.Hour)
+		defer func() { require.NoError(t, kvStore.Close()) }()
+		cacheKernel := core.NewTestKernel(kernel.DB(), core.WithKVStore(kvStore))
+		cacheService := NewService(cacheKernel)
+		tokenHash := cacheKernel.JWTSigner().HashRefreshToken("cache-delete-failure-refresh")
+		_, err := kernel.DB().Exec(ctx, `INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at) VALUES ($1, $2, clock_timestamp() + interval '1 hour')`, userID, tokenHash)
+		require.NoError(t, err)
+		_, err = kernel.DB().Exec(ctx, `
+			CREATE FUNCTION core.reject_test_cache_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN RAISE EXCEPTION 'cache deletion failed'; END; $$;
+			CREATE TRIGGER reject_test_cache_delete BEFORE DELETE ON core.kv_store
+			FOR EACH STATEMENT EXECUTE FUNCTION core.reject_test_cache_delete();
+		`)
+		require.NoError(t, err)
+		defer func() {
+			_, err := kernel.DB().Exec(ctx, `DROP TRIGGER reject_test_cache_delete ON core.kv_store; DROP FUNCTION core.reject_test_cache_delete();`)
+			require.NoError(t, err)
+		}()
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-out", nil)
+		request.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: "cache-delete-failure-refresh"})
+		responseRecorder := httptest.NewRecorder()
+		cacheService.baseHandler.handleSignOut(responseRecorder, request)
+		require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+	})
+}
 
 func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 	kernel, cleanupDatabase := core.SetupTestKernel(t, Migrations)
@@ -53,7 +176,7 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 
 	_, _ = db.Exec(ctx, `
 		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, user_agent, expires_at, created_at)
-		VALUES 
+		VALUES
 			($1, $4, 'client-session-test', $5, $8, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '20 minutes'),
 			($2, $4, 'client-session-test', $6, $9, clock_timestamp() + interval '1 hour', clock_timestamp() - interval '10 minutes'),
 			($3, $4, NULL, $7, $10, clock_timestamp() + interval '1 hour', clock_timestamp());

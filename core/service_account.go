@@ -267,8 +267,8 @@ func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, 
 	// Check root protection if modifying scopes or disabling
 	if HasScope(currentServiceAccount.Scopes, ScopeRoot) {
 		if (updateServiceAccountInput.IsEnabled != nil && !*updateServiceAccountInput.IsEnabled) || (len(updateServiceAccountInput.Scopes) > 0 && !HasScope(updateServiceAccountInput.Scopes, ScopeRoot)) {
-			if err := serviceAccountManager.assertOtherRootExists(ctx, serviceAccountID); err != nil {
-				return nil, err
+			if rootCheckErr := serviceAccountManager.assertOtherRootExists(ctx, serviceAccountID); rootCheckErr != nil {
+				return nil, rootCheckErr
 			}
 		}
 	}
@@ -311,12 +311,15 @@ func (serviceAccountManager *ServiceAccountManager) Update(ctx context.Context, 
 	var serviceAccount ServiceAccount
 	var scopesRaw []byte
 
-	_ = serviceAccountManager.db.QueryRow(ctx, query,
+	err = serviceAccountManager.db.QueryRow(ctx, query,
 		name, description, scopesJSON, isEnabled, allowedIPs, expiresAt, now, serviceAccountID,
 	).Scan(
 		&serviceAccount.ID, &serviceAccount.Name, &serviceAccount.Description, &serviceAccount.KeyPrefix, &scopesRaw, &serviceAccount.IsEnabled, &serviceAccount.AllowedIPs, &serviceAccount.ExpiresAt, &serviceAccount.ConsoleUserID, &serviceAccount.LastUsedAt, &serviceAccount.CreatedAt, &serviceAccount.LastUpdatedAt,
 	)
 
+	if err != nil {
+		return nil, err
+	}
 	_ = json.Unmarshal(scopesRaw, &serviceAccount.Scopes)
 	log.Tracef("updated service account %s successfully", serviceAccountID)
 	return &serviceAccount, nil
@@ -411,7 +414,7 @@ func (serviceAccountManager *ServiceAccountManager) CheckScope(request *http.Req
 	}
 	secretKey := ExtractRequestServiceAccountKey(request)
 	if secretKey == "" {
-		return true
+		return false
 	}
 	clientIP := ExtractRequestClientIP(request)
 	serviceAccount, err := serviceAccountManager.Authenticate(request.Context(), secretKey, clientIP)

@@ -286,6 +286,15 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected updated fields, got: %+v", updatedServiceAccount)
 	}
 
+	_, err = db.Exec(ctx, `ALTER TABLE core.service_accounts ADD CONSTRAINT test_rejected_update CHECK (name <> 'Rejected Update')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rejectedName := "Rejected Update"
+	if _, rejectedUpdateErr := serviceAccountManager.Update(ctx, expiredServiceAccount.ID, UpdateServiceAccountInput{Name: &rejectedName}); rejectedUpdateErr == nil {
+		t.Fatal("expected a rejected database update to return an error")
+	}
+
 	// 20. Removing Root Scope from only root account -> ErrRootAccountProtected
 	_, err = serviceAccountManager.Update(ctx, secondRootServiceAccount.ID, UpdateServiceAccountInput{
 		Scopes: []string{"data:query.read"},

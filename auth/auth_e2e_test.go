@@ -262,7 +262,16 @@ func TestAuthUserSelfServiceLifecycleE2E(t *testing.T) {
 		t.Fatalf("failed to insert anonymous test user: %v", err)
 	}
 
+	var sessionID string
+	err = kernel.DB().QueryRow(ctx, `
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at)
+		VALUES ($1, 'self-service-session', clock_timestamp() + interval '1 hour') RETURNING id
+	`, anonUserID).Scan(&sessionID)
+	if err != nil {
+		t.Fatalf("failed to create anonymous session: %v", err)
+	}
 	currentAccessToken := kernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
+		SessionID:   sessionID,
 		Subject:     anonUserID,
 		Role:        "authenticated",
 		IsAnonymous: true,

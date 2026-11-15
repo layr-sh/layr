@@ -8,6 +8,9 @@ import (
 )
 
 func (server *Server) handleListEventHooks(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookRead) {
+		return
+	}
 	log.Trace("handling list event hooks request")
 	queryValues := request.URL.Query()
 	eventHookFilter := EventHookFilter{}
@@ -29,6 +32,9 @@ func (server *Server) handleListEventHooks(responseWriter http.ResponseWriter, r
 }
 
 func (server *Server) handleCreateEventHook(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookWrite) {
+		return
+	}
 	log.Trace("handling create event hook request")
 	var createEventHookInput CreateEventHookInput
 	if err := json.NewDecoder(request.Body).Decode(&createEventHookInput); err != nil {
@@ -47,6 +53,9 @@ func (server *Server) handleCreateEventHook(responseWriter http.ResponseWriter, 
 }
 
 func (server *Server) handleGetEventHook(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookRead) {
+		return
+	}
 	hookParam := request.PathValue("event_hook_id")
 	log.Tracef("handling get event hook request: id=%s", hookParam)
 	hookID, err := uuid.Parse(hookParam)
@@ -64,6 +73,9 @@ func (server *Server) handleGetEventHook(responseWriter http.ResponseWriter, req
 }
 
 func (server *Server) handleUpdateEventHook(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookWrite) {
+		return
+	}
 	hookParam := request.PathValue("event_hook_id")
 	log.Tracef("handling update event hook request: id=%s", hookParam)
 	hookID, err := uuid.Parse(hookParam)
@@ -92,6 +104,9 @@ func (server *Server) handleUpdateEventHook(responseWriter http.ResponseWriter, 
 }
 
 func (server *Server) handleDeleteEventHook(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookWrite) {
+		return
+	}
 	hookParam := request.PathValue("event_hook_id")
 	log.Tracef("handling delete event hook request: id=%s", hookParam)
 	hookID, err := uuid.Parse(hookParam)
@@ -112,6 +127,9 @@ func (server *Server) handleDeleteEventHook(responseWriter http.ResponseWriter, 
 }
 
 func (server *Server) handleListEventHookDeliveries(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookRead) {
+		return
+	}
 	hookParam := request.PathValue("event_hook_id")
 	log.Tracef("handling list event hook deliveries request: hook_id=%s", hookParam)
 	hookID, err := uuid.Parse(hookParam)
@@ -129,6 +147,9 @@ func (server *Server) handleListEventHookDeliveries(responseWriter http.Response
 }
 
 func (server *Server) handleRetryEventHookDelivery(responseWriter http.ResponseWriter, request *http.Request) {
+	if !server.kernel.serviceAccountManager.RequireScope(responseWriter, request, ScopeCoreEventHookWrite) {
+		return
+	}
 	hookParam := request.PathValue("event_hook_id")
 	deliveryParam := request.PathValue("delivery_id")
 	log.Tracef("handling retry event hook delivery request: hook_id=%s delivery_id=%s", hookParam, deliveryParam)
