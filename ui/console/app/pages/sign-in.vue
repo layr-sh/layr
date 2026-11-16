@@ -1,4 +1,8 @@
 <script setup lang="ts">
+definePageMeta({
+  layout: false,
+});
+
 const auth = useAuth();
 
 const email = ref("");
@@ -334,7 +338,7 @@ async function handleMFA() {
         <!-- MFA Form -->
         <form v-if="isMFA" class="space-y-4" @submit.prevent="handleMFA">
           <UFormField label="Authentication code" name="totp" class="w-full">
-            <div class="flex justify-center py-2">
+            <div class="py-2">
               <UPinInput
                 v-model="mfaPin"
                 type="number"

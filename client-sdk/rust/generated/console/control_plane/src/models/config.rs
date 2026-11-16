@@ -14,10 +14,6 @@ use serde::{Deserialize, Serialize};
 /// Config : Config schema
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
-    #[serde(rename = "allowed_cidrs", deserialize_with = "Option::deserialize")]
-    pub allowed_cidrs: Option<Vec<String>>,
-    #[serde(rename = "audit_retention_days")]
-    pub audit_retention_days: i32,
     #[serde(rename = "mfa_enforced")]
     pub mfa_enforced: bool,
     #[serde(rename = "session_idle_timeout_seconds")]
@@ -28,10 +24,8 @@ pub struct Config {
 
 impl Config {
     /// Config schema
-    pub fn new(allowed_cidrs: Option<Vec<String>>, audit_retention_days: i32, mfa_enforced: bool, session_idle_timeout_seconds: i32, session_max_lifetime_seconds: i32) -> Config {
+    pub fn new(mfa_enforced: bool, session_idle_timeout_seconds: i32, session_max_lifetime_seconds: i32) -> Config {
         Config {
-            allowed_cidrs,
-            audit_retention_days,
             mfa_enforced,
             session_idle_timeout_seconds,
             session_max_lifetime_seconds,

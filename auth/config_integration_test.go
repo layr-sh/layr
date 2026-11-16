@@ -124,8 +124,8 @@ func TestAuthConfigManagerDatabaseIntegration(t *testing.T) {
 	if capturedEvent.Type != "auth.config.updated" {
 		t.Fatalf("expected auth.config.updated event, got: %+v", capturedEvent)
 	}
-	if capturedEvent.ResourceID == nil || *capturedEvent.ResourceID != "auth.config" {
-		t.Fatalf("expected auth.config resource ID, got: %v", capturedEvent.ResourceID)
+	if capturedEvent.ResourceID == nil || *capturedEvent.ResourceID != "" || capturedEvent.ResourceType != "" {
+		t.Fatalf("expected no resource identity for config event, got: %+v", capturedEvent)
 	}
 
 	// 5. Preserving existing secrets when omitted in subsequent PUT

@@ -21,9 +21,19 @@ const (
 	defaultEventDispatchChannelCapacity = 1000
 	defaultEventDispatchTimeout         = 30 * time.Second
 	defaultEventWorkerCount             = 4
+	defaultEventRetentionInterval       = time.Hour
+	defaultEventRetentionTimeout        = 30 * time.Second
 	defaultEventListLimit               = 50
 	maxEventListLimit                   = 200
 )
+
+// ConfigUpdatedEventData represents the payload for core.config.updated.
+type ConfigUpdatedEventData RuntimeConfig
+
+// NewConfigUpdatedEvent creates a typed event for Core runtime configuration updates.
+func NewConfigUpdatedEvent(resourceID string, configUpdatedEventData ConfigUpdatedEventData) Event {
+	return NewEvent("core.config.updated", configUpdatedEventData).WithResourceID(resourceID)
+}
 
 // EventActor represents the principal that triggered the event.
 type EventActor struct {
@@ -69,6 +79,9 @@ func (event Event) WithContext(eventContext EventContext) Event {
 func (event Event) WithResourceID(resourceID string) Event {
 	if resourceID != "" {
 		event.ResourceID = &resourceID
+	} else {
+		event.ResourceID = nil
+		event.ResourceType = ""
 	}
 	return event
 }
@@ -95,6 +108,16 @@ type EventManager struct {
 // NewEventManager creates a new EventManager backed by the database pool.
 func NewEventManager(db *DatabasePool) *EventManager {
 	return &EventManager{db: db}
+}
+
+// Prune removes expired events from every service and their cascading delivery history.
+func (eventManager *EventManager) Prune(ctx context.Context) error {
+	_, err := eventManager.db.Exec(ctx, `
+		DELETE FROM core.events WHERE created_at < clock_timestamp() - make_interval(days => (
+			SELECT (value->>'audit_retention_days')::integer FROM core.config WHERE key = 'runtime'
+		))
+	`)
+	return err
 }
 
 // Record inserts a new event record into core.events.
@@ -334,16 +357,19 @@ func (eventManager *EventManager) List(ctx context.Context, eventFilter EventFil
 // EventBus coordinates event publishing and dispatching to in-memory listeners, database events, and event hooks.
 type EventBus struct {
 	rwMutex          sync.RWMutex
+	publishRWMutex   sync.RWMutex
+	closed           bool
+	closeOnce        sync.Once
 	subscribers      map[string][]EventHandler
 	db               *DatabasePool
 	cryptoKeyManager *CryptoKeyManager
 	eventManager     *EventManager
 	eventHookManager *EventHookManager
 	dispatchChannel  chan Event
-	stopChannel      chan struct{}
 	waitGroup        sync.WaitGroup
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
+	retentionCancel  context.CancelFunc
 }
 
 // NewEventBus initializes the universal EventBus and starts background worker goroutines.
@@ -355,7 +381,6 @@ func NewEventBus(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *EventBus
 		db:               db,
 		cryptoKeyManager: cryptoKeyManager,
 		dispatchChannel:  make(chan Event, defaultEventDispatchChannelCapacity),
-		stopChannel:      make(chan struct{}),
 		ctx:              eventBusCtx,
 		ctxCancel:        eventBusCancel,
 	}
@@ -371,6 +396,25 @@ func NewEventBus(db *DatabasePool, cryptoKeyManager *CryptoKeyManager) *EventBus
 	}
 
 	return eventBus
+}
+
+func (eventBus *EventBus) runRetention(ctx context.Context, interval time.Duration) {
+	defer eventBus.waitGroup.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		cleanupCtx, cancel := context.WithTimeout(ctx, defaultEventRetentionTimeout)
+		err := eventBus.eventManager.Prune(cleanupCtx)
+		cancel()
+		if err != nil && ctx.Err() == nil {
+			log.Errorf("failed to prune expired events: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // EventManager returns the underlying EventManager instance.
@@ -403,6 +447,12 @@ func (eventBus *EventBus) Publish(ctx context.Context, event Event) {
 	}
 	log.Tracef("publishing event %s (%s)", preparedEvent.ID, preparedEvent.Type)
 
+	eventBus.publishRWMutex.RLock()
+	defer eventBus.publishRWMutex.RUnlock()
+	if eventBus.closed {
+		return
+	}
+
 	eventBus.dispatchInMemory(ctx, preparedEvent)
 
 	select {
@@ -421,6 +471,15 @@ func (eventBus *EventBus) PublishSync(ctx context.Context, event Event) {
 	}
 	log.Tracef("synchronously publishing event %s (%s)", preparedEvent.ID, preparedEvent.Type)
 
+	eventBus.publishRWMutex.RLock()
+	if eventBus.closed {
+		eventBus.publishRWMutex.RUnlock()
+		return
+	}
+	eventBus.waitGroup.Add(1)
+	eventBus.publishRWMutex.RUnlock()
+	defer eventBus.waitGroup.Done()
+
 	eventBus.rwMutex.RLock()
 	var matchedHandlers []EventHandler
 	for pattern, handlers := range eventBus.subscribers {
@@ -438,8 +497,15 @@ func (eventBus *EventBus) PublishSync(ctx context.Context, event Event) {
 }
 
 func prepareEvent(ctx context.Context, event Event) (Event, error) {
-	if event.Type == "" || event.ResourceType == "" || event.Action == "" || event.ResourceID == nil || *event.ResourceID == "" {
-		return Event{}, errors.New("event requires non-empty type, resource_type, action, and resource_id")
+	if event.Type == "" || event.Action == "" {
+		return Event{}, errors.New("event requires non-empty type and action")
+	}
+	if event.ResourceID == nil || *event.ResourceID == "" {
+		resourceID := ""
+		event.ResourceID = &resourceID
+		event.ResourceType = ""
+	} else if event.ResourceType == "" {
+		return Event{}, errors.New("event requires non-empty resource_type when resource_id is set")
 	}
 
 	if event.ID == uuid.Nil() {
@@ -489,24 +555,28 @@ func (eventBus *EventBus) dispatchInMemory(ctx context.Context, event Event) {
 	}
 }
 
-// Close stops all background dispatch workers cleanly.
+// Close stops accepting events and drains accepted work before canceling the dispatch context.
 func (eventBus *EventBus) Close() {
-	log.Debugf("closing EventBus")
-	close(eventBus.stopChannel)
-	eventBus.ctxCancel()
-	eventBus.waitGroup.Wait()
-	log.Tracef("EventBus closed cleanly")
+	eventBus.closeOnce.Do(func() {
+		log.Debugf("closing EventBus")
+		eventBus.publishRWMutex.Lock()
+		eventBus.closed = true
+		close(eventBus.dispatchChannel)
+		eventBus.publishRWMutex.Unlock()
+
+		if eventBus.retentionCancel != nil {
+			eventBus.retentionCancel()
+		}
+		eventBus.waitGroup.Wait()
+		eventBus.ctxCancel()
+		log.Tracef("EventBus closed cleanly")
+	})
 }
 
 func (eventBus *EventBus) worker() {
 	defer eventBus.waitGroup.Done()
-	for {
-		select {
-		case <-eventBus.stopChannel:
-			return
-		case event := <-eventBus.dispatchChannel:
-			eventBus.dispatch(eventBus.ctx, event)
-		}
+	for event := range eventBus.dispatchChannel {
+		eventBus.dispatch(eventBus.ctx, event)
 	}
 }
 

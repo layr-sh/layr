@@ -238,6 +238,6 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 	}
 
 	configManager.SetMemoryConfig(config)
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("data.config", ConfigUpdatedEventData(config)))
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(config)))
 	return nil
 }

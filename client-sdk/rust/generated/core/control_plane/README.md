@@ -26,6 +26,8 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*ConfigApi* | [**core_config_get**](docs/ConfigApi.md#core_config_get) | **GET** /v1/_/core/config | Get Core runtime configuration
+*ConfigApi* | [**core_config_update**](docs/ConfigApi.md#core_config_update) | **PUT** /v1/_/core/config | Update Core runtime configuration
 *EventHooksApi* | [**core_event_hooks_create**](docs/EventHooksApi.md#core_event_hooks_create) | **POST** /v1/_/core/event-hooks | Create an event hook subscription
 *EventHooksApi* | [**core_event_hooks_delete**](docs/EventHooksApi.md#core_event_hooks_delete) | **DELETE** /v1/_/core/event-hooks/{event_hook_id} | Delete event hook subscription
 *EventHooksApi* | [**core_event_hooks_get**](docs/EventHooksApi.md#core_event_hooks_get) | **GET** /v1/_/core/event-hooks/{event_hook_id} | Get event hook subscription details by UUID
@@ -53,6 +55,7 @@ Class | Method | HTTP request | Description
  - [EventHook](docs/EventHook.md)
  - [EventHookDelivery](docs/EventHookDelivery.md)
  - [ListEventsResponse](docs/ListEventsResponse.md)
+ - [RuntimeConfig](docs/RuntimeConfig.md)
  - [ServiceAccount](docs/ServiceAccount.md)
  - [UpdateEventHookInput](docs/UpdateEventHookInput.md)
  - [UpdateServiceAccountInput](docs/UpdateServiceAccountInput.md)

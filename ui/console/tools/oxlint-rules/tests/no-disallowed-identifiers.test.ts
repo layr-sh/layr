@@ -113,7 +113,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       errors: [
         {
           message:
-            'disallowed abbreviation "Cols" in "tableCols". Use a descriptive name. Did you mean \'columns\' or \'colors\'?',
+            "disallowed abbreviation \"Cols\" in \"tableCols\". Use a descriptive name. Did you mean 'columns' or 'colors'?",
         },
       ],
     },
@@ -158,8 +158,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       options: [{ disallowedWords: ["er"] }],
       errors: [
         {
-          message:
-            'disallowed abbreviation "er" in "erFollowers". full descriptive name',
+          message: 'disallowed abbreviation "er" in "erFollowers". full descriptive name',
         },
       ],
     },
@@ -168,8 +167,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       options: [{ disallowedWords: ["er"] }],
       errors: [
         {
-          message:
-            'disallowed abbreviation "ER" in "totalERReachSum". full descriptive name',
+          message: 'disallowed abbreviation "ER" in "totalERReachSum". full descriptive name',
         },
       ],
     },
@@ -178,7 +176,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       errors: [
         {
           message:
-            'disallowed abbreviation "Subs" in "acceptedSubs". Use a descriptive name. Did you mean \'subjects\' or \'subscriptions\'?',
+            "disallowed abbreviation \"Subs\" in \"acceptedSubs\". Use a descriptive name. Did you mean 'subjects' or 'subscriptions'?",
         },
       ],
     },
@@ -187,7 +185,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       errors: [
         {
           message:
-            'disallowed abbreviation "sub" in "sub". Use a descriptive name. Did you mean \'subject\' or \'subscription\'?',
+            "disallowed abbreviation \"sub\" in \"sub\". Use a descriptive name. Did you mean 'subject' or 'subscription'?",
         },
       ],
     },
@@ -197,8 +195,7 @@ ruleTester.run("no-disallowed-identifiers", noDisallowedIdentifiers, {
       options: [{ disallowedWords: ["buffer"] }],
       errors: [
         {
-          message:
-            'disallowed abbreviation "Buffer" in "tempBuffer". full descriptive name',
+          message: 'disallowed abbreviation "Buffer" in "tempBuffer". full descriptive name',
         },
       ],
     },

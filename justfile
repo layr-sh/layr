@@ -5,12 +5,16 @@ default:
     @just --list
 
 # Start both Layr server and Console UI development server concurrently
-dev:
-    @bash -c 'trap "kill 0" INT TERM EXIT; just dev-server & just dev-console-ui & wait'
+dev: build-dev-server
+    @bash scripts/dev
 
-# Start only the Layr server (monolith start)
-dev-server:
-    go run ./cmd/layr up
+# Start only the Layr server (monolith start by default, or specific services)
+dev-server *ARGS: build-dev-server
+    @exec ./dev-server up {{ ARGS }}
+
+# Build the Layr server binary for development
+build-dev-server:
+    @go build -o ./dev-server ./cmd/layr
 
 # Start only the Console UI dev server with Hot Module Reloading (HMR)
 dev-console-ui:

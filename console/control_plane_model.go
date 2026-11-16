@@ -21,8 +21,9 @@ type SignInConsoleResponse struct {
 // GetConsoleSessionResponse returns profile and status of the currently authenticated console session.
 type GetConsoleSessionResponse struct {
 	Session
-	User   User     `json:"user"`
-	Scopes []string `json:"scopes"`
+	User        User     `json:"user"`
+	Scopes      []string `json:"scopes"`
+	MFARequired bool     `json:"mfa_required"`
 }
 
 // CreateConsoleUserInput holds input parameters for creating a new console user.

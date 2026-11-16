@@ -36,14 +36,15 @@ func TestConsoleConfigPostgresIntegration(t *testing.T) {
 	customConfig := initialConfig
 	customConfig.SessionIdleTimeoutSeconds = 3600
 	customConfig.MFAEnforced = true
-	customConfig.AllowedCIDRs = []string{"10.0.0.0/8"}
+
 	require.NoError(t, configManager.Set(ctx, customConfig))
 
 	time.Sleep(50 * time.Millisecond)
 	eventMutex.Lock()
 	require.Len(t, capturedEvents, 1)
 	require.NotNil(t, capturedEvents[0].ResourceID)
-	require.Equal(t, "console.config", *capturedEvents[0].ResourceID)
+	require.Empty(t, *capturedEvents[0].ResourceID)
+	require.Empty(t, capturedEvents[0].ResourceType)
 	eventMutex.Unlock()
 
 	freshConfigManager := NewConfigManager(kernel)
@@ -51,7 +52,6 @@ func TestConsoleConfigPostgresIntegration(t *testing.T) {
 	loadedConfig := freshConfigManager.Get()
 	require.Equal(t, 3600, loadedConfig.SessionIdleTimeoutSeconds)
 	require.True(t, loadedConfig.MFAEnforced)
-	require.Equal(t, []string{"10.0.0.0/8"}, loadedConfig.AllowedCIDRs)
 
 	// 3. Stored corrupt JSON fails on Load
 	const corruptSQLStatement = `UPDATE console.config SET value = '{"session_idle_timeout_seconds":"not-a-number"}' WHERE key = 'runtime'`

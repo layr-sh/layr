@@ -45,16 +45,15 @@ configuration = generated.core.control_plane.Configuration(
 # Enter a context with an instance of the API client
 with generated.core.control_plane.ApiClient(configuration) as api_client:
     # Create an instance of the API class
-    api_instance = generated.core.control_plane.EventHooksApi(api_client)
-    create_event_hook_input = generated.core.control_plane.CreateEventHookInput() # CreateEventHookInput | Request body for core.CreateEventHookInput
+    api_instance = generated.core.control_plane.ConfigApi(api_client)
 
     try:
-        # Create an event hook subscription
-        api_response = api_instance.core_event_hooks_create(create_event_hook_input)
-        print("The response of EventHooksApi->core_event_hooks_create:\n")
+        # Get Core runtime configuration
+        api_response = api_instance.core_config_get()
+        print("The response of ConfigApi->core_config_get:\n")
         pprint(api_response)
     except ApiException as e:
-        print("Exception when calling EventHooksApi->core_event_hooks_create: %s\n" % e)
+        print("Exception when calling ConfigApi->core_config_get: %s\n" % e)
 
 ```
 
@@ -64,6 +63,8 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*ConfigApi* | [**core_config_get**](generated/core/control_plane/docs/ConfigApi.md#core_config_get) | **GET** /v1/_/core/config | Get Core runtime configuration
+*ConfigApi* | [**core_config_update**](generated/core/control_plane/docs/ConfigApi.md#core_config_update) | **PUT** /v1/_/core/config | Update Core runtime configuration
 *EventHooksApi* | [**core_event_hooks_create**](generated/core/control_plane/docs/EventHooksApi.md#core_event_hooks_create) | **POST** /v1/_/core/event-hooks | Create an event hook subscription
 *EventHooksApi* | [**core_event_hooks_delete**](generated/core/control_plane/docs/EventHooksApi.md#core_event_hooks_delete) | **DELETE** /v1/_/core/event-hooks/{event_hook_id} | Delete event hook subscription
 *EventHooksApi* | [**core_event_hooks_get**](generated/core/control_plane/docs/EventHooksApi.md#core_event_hooks_get) | **GET** /v1/_/core/event-hooks/{event_hook_id} | Get event hook subscription details by UUID
@@ -91,6 +92,7 @@ Class | Method | HTTP request | Description
  - [EventHook](generated/core/control_plane/docs/EventHook.md)
  - [EventHookDelivery](generated/core/control_plane/docs/EventHookDelivery.md)
  - [ListEventsResponse](generated/core/control_plane/docs/ListEventsResponse.md)
+ - [RuntimeConfig](generated/core/control_plane/docs/RuntimeConfig.md)
  - [ServiceAccount](generated/core/control_plane/docs/ServiceAccount.md)
  - [UpdateEventHookInput](generated/core/control_plane/docs/UpdateEventHookInput.md)
  - [UpdateServiceAccountInput](generated/core/control_plane/docs/UpdateServiceAccountInput.md)

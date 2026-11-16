@@ -120,7 +120,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 		log.Trace("handling multipart image info probe request")
 		const maxMultipartMemory = 32 << 20 // 32MB
 		if parseMultipartErr := request.ParseMultipartForm(maxMultipartMemory); parseMultipartErr != nil {
-			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("", InspectFailedEventData{
 				SourceURL:  "upload",
 				Reason:     "Failed to parse multipart payload",
 				StatusCode: http.StatusBadRequest,
@@ -134,7 +134,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 			file, _, fileErr = request.FormFile("image")
 		}
 		if fileErr != nil {
-			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("", InspectFailedEventData{
 				SourceURL:  "upload",
 				Reason:     "No file uploaded in multipart form",
 				StatusCode: http.StatusBadRequest,
@@ -146,7 +146,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 
 		getInfoResponse, inspectErr := baseHandler.engine.Inspect(file, infoOptions)
 		if inspectErr != nil {
-			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("", InspectFailedEventData{
 				SourceURL:  "upload",
 				Reason:     inspectErr.Error(),
 				StatusCode: http.StatusUnprocessableEntity,
@@ -155,7 +155,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 			return
 		}
 
-		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("", InspectCompletedEventData{
 			SourceURL: "upload",
 			Format:    getInfoResponse.Format,
 			ByteSize:  getInfoResponse.Size,
@@ -171,7 +171,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 	defer func() { _ = request.Body.Close() }()
 	getInfoResponse, inspectErr := baseHandler.engine.Inspect(request.Body, infoOptions)
 	if inspectErr != nil {
-		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("upload", InspectFailedEventData{
+		baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectFailedEvent("", InspectFailedEventData{
 			SourceURL:  "upload",
 			Reason:     inspectErr.Error(),
 			StatusCode: http.StatusUnprocessableEntity,
@@ -180,7 +180,7 @@ func (baseHandler *BaseHandler) handleProbeInfo(responseWriter http.ResponseWrit
 		return
 	}
 
-	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("upload", InspectCompletedEventData{
+	baseHandler.kernel.EventBus().Publish(request.Context(), NewInspectCompletedEvent("", InspectCompletedEventData{
 		SourceURL: "upload",
 		Format:    getInfoResponse.Format,
 		ByteSize:  getInfoResponse.Size,

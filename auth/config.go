@@ -631,7 +631,7 @@ func (configManager *ConfigManager) Set(ctx context.Context, updatedConfig Confi
 		return fmt.Errorf("failed to persist auth.config: %w", err)
 	}
 
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("auth.config", ConfigUpdatedEventData(configManager.GetUnencrypted())))
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(configManager.GetUnencrypted())))
 	return nil
 }
 

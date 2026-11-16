@@ -1,17 +1,193 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"uuid"
+
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"uuid"
 )
+
+func TestCoreEventConfigAndRetentionIntegration(t *testing.T) {
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+	ctx := t.Context()
+	require.NoError(t, kernel.configManager.Load(ctx))
+	require.Equal(t, 90, kernel.configManager.Get().AuditRetentionDays)
+	require.ErrorIs(t, kernel.configManager.Set(ctx, RuntimeConfig{}), ErrInvalidConfig)
+	recordedEvent, recordErr := kernel.EventManager().Record(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(DefaultRuntimeConfig())))
+	require.NoError(t, recordErr)
+	require.Empty(t, recordedEvent.ResourceType)
+	require.NotNil(t, recordedEvent.ResourceID)
+	require.Empty(t, *recordedEvent.ResourceID)
+	storedEvent, getErr := kernel.EventManager().Get(ctx, recordedEvent.ID)
+	require.NoError(t, getErr)
+	require.Empty(t, storedEvent.ResourceType)
+	require.NotNil(t, storedEvent.ResourceID)
+	require.Empty(t, *storedEvent.ResourceID)
+	var err error
+	var eventID, hookID, deliveryID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		INSERT INTO core.events(type, action, resource_type, resource_id)
+		VALUES ('auth.user.created', 'created', 'auth.user', 'retention-test') RETURNING id
+	`).Scan(&eventID))
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		INSERT INTO core.event_hooks(name, driver, event_types, http_target_url)
+		VALUES ('Retention Test', 'http', '{}', 'https://example.com/hook') RETURNING id
+	`).Scan(&hookID))
+	require.NoError(t, kernel.DB().QueryRow(ctx, `
+		INSERT INTO core.event_hook_deliveries(event_hook_id, event_id, event_type, payload)
+		VALUES ($1, $2, 'auth.user.created', '{}') RETURNING id
+	`, hookID, eventID).Scan(&deliveryID))
+	_, err = kernel.DB().Exec(ctx, "UPDATE core.events SET created_at = clock_timestamp() - interval '100 days' WHERE id = $1", eventID)
+	require.NoError(t, err)
+	require.NoError(t, kernel.EventManager().Prune(ctx))
+	var exists bool
+	require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM core.events WHERE id = $1)", eventID).Scan(&exists))
+	require.False(t, exists)
+	require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM core.event_hook_deliveries WHERE id = $1)", deliveryID).Scan(&exists))
+	require.False(t, exists)
+
+	server := NewServer(kernel)
+	for _, testCase := range []struct {
+		method, payload, scope string
+		status                 int
+	}{
+		{http.MethodGet, "", "", http.StatusForbidden},
+		{http.MethodPut, `{}`, ScopeCoreConfigRead, http.StatusForbidden},
+		{http.MethodGet, "", ScopeCoreConfigRead, http.StatusOK},
+		{http.MethodPut, `{invalid`, ScopeCoreConfigWrite, http.StatusBadRequest},
+		{http.MethodPut, `{"audit_retention_days":0}`, ScopeCoreConfigWrite, http.StatusBadRequest},
+		{http.MethodPut, `{"audit_retention_days":1}`, ScopeCoreConfigWrite, http.StatusOK},
+	} {
+		t.Run(testCase.method+testCase.payload+testCase.scope, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(WithAuthContext(ctx, AuthContext{ServiceAccountID: "test", JWT: JWTClaims{Scope: testCase.scope}}), testCase.method, "/v1/_/core/config", bytes.NewBufferString(testCase.payload))
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			require.Equal(t, testCase.status, responseRecorder.Code, responseRecorder.Body.String())
+			if testCase.status == http.StatusOK {
+				var runtimeConfig RuntimeConfig
+				require.NoError(t, json.Unmarshal(responseRecorder.Body.Bytes(), &runtimeConfig))
+				require.Positive(t, runtimeConfig.AuditRetentionDays)
+			}
+		})
+	}
+	_, err = kernel.DB().Exec(ctx, `INSERT INTO core.events(type, action, resource_type, resource_id, created_at) VALUES ('storage.object.created','created','storage.object','retention-test',clock_timestamp()-interval '2 days')`)
+	require.NoError(t, err)
+	retentionCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan struct{})
+	kernel.EventBus().waitGroup.Add(1)
+	go func() {
+		kernel.EventBus().runRetention(retentionCtx, 5*time.Millisecond)
+		close(done)
+	}()
+	require.Eventually(t, func() bool {
+		queryErr := kernel.DB().QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM core.events WHERE type='storage.object.created')").Scan(&exists)
+		return queryErr == nil && !exists
+	}, 5*time.Second, 5*time.Millisecond)
+	cancel()
+	<-done
+
+	canceledCtx, canceledCancel := context.WithCancel(ctx)
+	canceledCancel()
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		t.Run("unavailable configuration "+method, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(WithAuthContext(canceledCtx, AuthContext{ServiceAccountID: "test", JWT: JWTClaims{Scope: ScopeRoot}}), method, "/v1/_/core/config", bytes.NewBufferString(`{"audit_retention_days":30}`))
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			if method == http.MethodPut {
+				require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+			} else {
+				require.Equal(t, http.StatusOK, responseRecorder.Code)
+			}
+		})
+	}
+	_, err = kernel.DB().Exec(ctx, "DROP TABLE core.config")
+	require.NoError(t, err)
+	failureCtx, failureCancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer failureCancel()
+	kernel.EventBus().waitGroup.Add(1)
+	kernel.EventBus().runRetention(failureCtx, time.Millisecond)
+}
+
+func TestCoreEventResourceLessWildcardDeliveryIntegration(t *testing.T) {
+	kernel, cleanup := SetupTestKernel(t, nil)
+	defer cleanup()
+	ctx := t.Context()
+	deliveredEvents := make(chan Event, 3)
+	inMemoryEvents := make(chan Event, 3)
+	webhookServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		var event Event
+		if err := json.NewDecoder(request.Body).Decode(&event); err != nil {
+			responseWriter.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		deliveredEvents <- event
+		responseWriter.WriteHeader(http.StatusOK)
+	}))
+	defer webhookServer.Close()
+	for _, pattern := range []string{"*", "core.*", "core.config.updated"} {
+		t.Run("register "+pattern, func(t *testing.T) {
+			_, err := kernel.EventBus().eventHookManager.Create(ctx, CreateEventHookInput{
+				Name: pattern, Driver: EventHookDriverHTTP, HTTPTargetURL: &webhookServer.URL, EventTypes: []string{pattern},
+			})
+			require.NoError(t, err)
+			kernel.EventBus().Subscribe(pattern, func(_ context.Context, event Event) error {
+				inMemoryEvents <- event
+				return nil
+			})
+		})
+	}
+	configEvent := NewConfigUpdatedEvent("", ConfigUpdatedEventData(DefaultRuntimeConfig()))
+	kernel.EventBus().Publish(ctx, configEvent)
+	for name, deliveries := range map[string]chan Event{"in memory": inMemoryEvents, "webhook": deliveredEvents} {
+		t.Run(name, func(t *testing.T) {
+			for range 3 {
+				t.Run("delivery", func(t *testing.T) {
+					select {
+					case event := <-deliveries:
+						require.Equal(t, configEvent.ID, event.ID)
+						require.Equal(t, "core.config.updated", event.Type)
+						require.Empty(t, event.ResourceType)
+						require.NotNil(t, event.ResourceID)
+						require.Empty(t, *event.ResourceID)
+					case <-time.After(15 * time.Second):
+						t.Fatal("timed out waiting for resource-less event delivery")
+					}
+				})
+			}
+		})
+	}
+	storedEvent, err := kernel.EventManager().Get(ctx, configEvent.ID)
+	require.NoError(t, err)
+	require.Empty(t, storedEvent.ResourceType)
+	require.NotNil(t, storedEvent.ResourceID)
+	require.Empty(t, *storedEvent.ResourceID)
+
+	t.Run("unreachable webhook preserves resource-less payload", func(t *testing.T) {
+		webhookServer.Close()
+		eventHook, createErr := kernel.EventBus().eventHookManager.Create(ctx, CreateEventHookInput{
+			Name: "Unavailable Hook", Driver: EventHookDriverHTTP, HTTPTargetURL: &webhookServer.URL, EventTypes: []string{"core.config.updated"},
+		})
+		require.NoError(t, createErr)
+		eventHook.MaxRetries = 1
+		eventHookDelivery, deliveryErr := kernel.EventBus().eventHookManager.DeliverWithID(ctx, *eventHook, storedEvent, uuid.NewV7())
+		require.ErrorContains(t, deliveryErr, "failed to execute http request")
+		require.NotNil(t, eventHookDelivery)
+		require.False(t, eventHookDelivery.IsDelivered)
+		require.Equal(t, storedEvent, eventHookDelivery.Payload)
+	})
+}
 
 func TestCoreEventUniversalPipelineIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

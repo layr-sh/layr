@@ -26,6 +26,8 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
+*ConfigAPI* | [**coreConfigGet**](docs/ConfigAPI.md#coreconfigget) | **GET** /v1/_/core/config | Get Core runtime configuration
+*ConfigAPI* | [**coreConfigUpdate**](docs/ConfigAPI.md#coreconfigupdate) | **PUT** /v1/_/core/config | Update Core runtime configuration
 *EventHooksAPI* | [**coreEventHooksCreate**](docs/EventHooksAPI.md#coreeventhookscreate) | **POST** /v1/_/core/event-hooks | Create an event hook subscription
 *EventHooksAPI* | [**coreEventHooksDelete**](docs/EventHooksAPI.md#coreeventhooksdelete) | **DELETE** /v1/_/core/event-hooks/{event_hook_id} | Delete event hook subscription
 *EventHooksAPI* | [**coreEventHooksGet**](docs/EventHooksAPI.md#coreeventhooksget) | **GET** /v1/_/core/event-hooks/{event_hook_id} | Get event hook subscription details by UUID
@@ -53,6 +55,7 @@ Class | Method | HTTP request | Description
  - [EventHook](docs/EventHook.md)
  - [EventHookDelivery](docs/EventHookDelivery.md)
  - [ListEventsResponse](docs/ListEventsResponse.md)
+ - [RuntimeConfig](docs/RuntimeConfig.md)
  - [ServiceAccount](docs/ServiceAccount.md)
  - [UpdateEventHookInput](docs/UpdateEventHookInput.md)
  - [UpdateServiceAccountInput](docs/UpdateServiceAccountInput.md)

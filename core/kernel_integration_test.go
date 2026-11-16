@@ -26,6 +26,7 @@ func TestCoreKernelFullLifecycleEmbeddedIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = dataDirectory
+	config.Server.ListenAddr = "127.0.0.1:0"
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -133,6 +134,7 @@ func TestCoreKernelWithTestcontainerIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
+	config.Server.ListenAddr = "127.0.0.1:0"
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()
@@ -195,6 +197,7 @@ func TestCoreKernelSignalInterruptIntegration(t *testing.T) {
 
 	config := DefaultConfig()
 	config.Database.URL = databaseURL
+	config.Server.ListenAddr = "127.0.0.1:0"
 	config.Security.MasterEncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	SetLoadedConfig(config)
 	defer UnloadConfig()

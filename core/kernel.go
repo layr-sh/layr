@@ -67,6 +67,7 @@ type Kernel struct {
 	serviceAccountManager *ServiceAccountManager
 	eventBus              *EventBus
 	eventManager          *EventManager
+	configManager         *ConfigManager
 	eventHookManager      *EventHookManager
 	nodeManager           *NodeManager
 	server                *Server
@@ -91,6 +92,7 @@ func NewKernel(db *DatabasePool) (*Kernel, error) {
 		jwtSigner:        jwtSigner,
 	}
 
+	kernel.configManager = NewConfigManager(kernel)
 	if db != nil {
 		kernel.serviceAccountManager = NewServiceAccountManager(db)
 		kernel.eventBus = NewEventBus(db, cryptoKeyManager)
@@ -114,6 +116,11 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 			kernel.Stop(ctx)
 		}
 	}()
+
+	// Signal handling
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signalChannel)
 
 	config := GetConfig()
 
@@ -181,10 +188,6 @@ func (kernel *Kernel) Start(ctx context.Context) (err error) {
 			errChannel <- err
 		}
 	}()
-
-	// Signal handling
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
 
 	select {
 	case err := <-errChannel:
@@ -393,6 +396,13 @@ func (kernel *Kernel) InitDatabase(ctx context.Context) error {
 	if migrationErr := kernel.db.RunMigrations(ctx, allMigrations); migrationErr != nil {
 		return fmt.Errorf("database migration failed: %w", migrationErr)
 	}
+	if err := kernel.configManager.Load(ctx); err != nil {
+		return fmt.Errorf("failed to load core config: %w", err)
+	}
+	retentionCtx, retentionCancel := context.WithCancel(ctx)
+	kernel.eventBus.retentionCancel = retentionCancel
+	kernel.eventBus.waitGroup.Add(1)
+	go kernel.eventBus.runRetention(retentionCtx, defaultEventRetentionInterval)
 
 	return nil
 }

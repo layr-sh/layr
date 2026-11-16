@@ -169,7 +169,7 @@ func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) e
 	}
 
 	configManager.SetMemoryConfig(newConfig)
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("image.config", ConfigUpdatedEventData(newConfig)))
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(newConfig)))
 
 	return nil
 }

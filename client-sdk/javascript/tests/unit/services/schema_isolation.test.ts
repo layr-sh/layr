@@ -79,8 +79,6 @@ describe("Service schema isolation", () => {
 
   it("serializes Console configuration with Console fields only", async () => {
     const input = {
-      allowedCidrs: ["127.0.0.1/32"],
-      auditRetentionDays: 30,
       mfaEnforced: true,
       sessionIdleTimeoutSeconds: 600,
       sessionMaxLifetimeSeconds: 3600,
@@ -89,8 +87,6 @@ describe("Service schema isolation", () => {
     const service = withServiceAccount(useConsole(client), { serviceAccountKey: "console-key" });
     await service.cp.config.update(input);
     expect(JSON.parse(getLastInit()?.body as string)).toEqual({
-      allowed_cidrs: ["127.0.0.1/32"],
-      audit_retention_days: 30,
       mfa_enforced: true,
       session_idle_timeout_seconds: 600,
       session_max_lifetime_seconds: 3600,

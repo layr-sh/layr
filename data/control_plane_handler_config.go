@@ -62,7 +62,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleFlushCache(responseWriter 
 	controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true, Catalog: true})
 
 	now := time.Now().UTC()
-	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewCacheFlushedEvent("*", CacheFlushedEventData{
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewCacheFlushedEvent("", CacheFlushedEventData{
 		Pattern:   "*",
 		FlushedAt: now,
 	}))

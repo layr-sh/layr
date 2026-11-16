@@ -19,6 +19,13 @@ func TestConsoleControlPlaneHandlerAuthUnit(t *testing.T) {
 	controlPlaneHandler := service.controlPlaneHandler
 	ctx := context.Background()
 
+	t.Run("policy lookup fails closed", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/console/sign-in", nil)
+		responseRecorder := httptest.NewRecorder()
+		require.False(t, service.AuthorizeRequest(responseRecorder, request))
+		require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	})
+
 	t.Run("authenticateSession error branches", func(t *testing.T) {
 		// Missing token
 		missingTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/console/session", nil)

@@ -1,6 +1,12 @@
 export default defineAppConfig({
   ui: {
+    alert: {
+      defaultVariants: {
+        variant: "subtle",
+      },
+    },
     colors: {
+      primary: "teal",
       neutral: "neutral",
     },
     input: {

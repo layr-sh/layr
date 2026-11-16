@@ -22,6 +22,7 @@ from generated.core.control_plane.models.event_context import EventContext
 from generated.core.control_plane.models.event_hook import EventHook
 from generated.core.control_plane.models.event_hook_delivery import EventHookDelivery
 from generated.core.control_plane.models.list_events_response import ListEventsResponse
+from generated.core.control_plane.models.runtime_config import RuntimeConfig
 from generated.core.control_plane.models.service_account import ServiceAccount
 from generated.core.control_plane.models.update_event_hook_input import UpdateEventHookInput
 from generated.core.control_plane.models.update_service_account_input import UpdateServiceAccountInput

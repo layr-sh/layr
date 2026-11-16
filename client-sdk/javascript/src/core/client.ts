@@ -86,18 +86,16 @@ export function withServiceAccount<T extends ElevatableService<unknown>>(
     throw new Error("Provided service is not a valid Layr service client");
   }
 
-  const elevatedHeaders: Record<string, string> = {
-    ...elevatable.client.headers,
-  };
-
   const key = options?.serviceAccountKey?.trim();
-  if (key) {
-    elevatedHeaders["Service-Account-Key"] = key;
-  }
 
   const elevatedConfig: ConfigurationParameters = {
     basePath: elevatable.client.endpoint,
-    headers: elevatedHeaders,
+    get headers() {
+      return {
+        ...elevatable.client.headers,
+        ...(key ? { "Service-Account-Key": key } : {}),
+      };
+    },
     fetchApi: elevatable.client.config.fetchApi,
   };
 

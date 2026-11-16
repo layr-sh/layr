@@ -17,8 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
-from typing import Any, ClassVar, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt
+from typing import Any, ClassVar, Dict, List
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -27,12 +27,10 @@ class Config(BaseModel):
     """
     Config schema
     """ # noqa: E501
-    allowed_cidrs: Optional[List[StrictStr]]
-    audit_retention_days: StrictInt
     mfa_enforced: StrictBool
     session_idle_timeout_seconds: StrictInt
     session_max_lifetime_seconds: StrictInt
-    __properties: ClassVar[List[str]] = ["allowed_cidrs", "audit_retention_days", "mfa_enforced", "session_idle_timeout_seconds", "session_max_lifetime_seconds"]
+    __properties: ClassVar[List[str]] = ["mfa_enforced", "session_idle_timeout_seconds", "session_max_lifetime_seconds"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -73,11 +71,6 @@ class Config(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # set to None if allowed_cidrs (nullable) is None
-        # and model_fields_set contains the field
-        if self.allowed_cidrs is None and "allowed_cidrs" in self.model_fields_set:
-            _dict['allowed_cidrs'] = None
-
         return _dict
 
     @classmethod
@@ -90,8 +83,6 @@ class Config(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "allowed_cidrs": obj.get("allowed_cidrs"),
-            "audit_retention_days": obj.get("audit_retention_days"),
             "mfa_enforced": obj.get("mfa_enforced"),
             "session_idle_timeout_seconds": obj.get("session_idle_timeout_seconds"),
             "session_max_lifetime_seconds": obj.get("session_max_lifetime_seconds")

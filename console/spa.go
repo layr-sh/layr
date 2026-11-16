@@ -21,7 +21,7 @@ const (
   <title>Layr Console - Dev Server Not Running</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #ededed; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { border: 1px solid #262626; border-radius: 0px; padding: 1.5rem; max-width: 600px; width: 100%; }
+    .card { padding: 1.5rem; max-width: 600px; width: 100%; }
     h2 { margin-top: 0; font-size: 1.125rem; }
     p { color: #a1a1a1; font-size: 0.9rem; line-height: 1.5; }
     code { background: #262626; padding: 0.2rem 0.4rem; border-radius: 0px; font-size: 0.75rem; }
