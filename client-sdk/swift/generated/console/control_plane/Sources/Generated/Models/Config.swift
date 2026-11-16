@@ -10,23 +10,17 @@ import Foundation
 /** Config schema */
 public struct Config: Sendable, Codable, Hashable {
 
-    public var allowedCidrs: [String]?
-    public var auditRetentionDays: Int
     public var mfaEnforced: Bool
     public var sessionIdleTimeoutSeconds: Int
     public var sessionMaxLifetimeSeconds: Int
 
-    public init(allowedCidrs: [String]?, auditRetentionDays: Int, mfaEnforced: Bool, sessionIdleTimeoutSeconds: Int, sessionMaxLifetimeSeconds: Int) {
-        self.allowedCidrs = allowedCidrs
-        self.auditRetentionDays = auditRetentionDays
+    public init(mfaEnforced: Bool, sessionIdleTimeoutSeconds: Int, sessionMaxLifetimeSeconds: Int) {
         self.mfaEnforced = mfaEnforced
         self.sessionIdleTimeoutSeconds = sessionIdleTimeoutSeconds
         self.sessionMaxLifetimeSeconds = sessionMaxLifetimeSeconds
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
-        case allowedCidrs = "allowed_cidrs"
-        case auditRetentionDays = "audit_retention_days"
         case mfaEnforced = "mfa_enforced"
         case sessionIdleTimeoutSeconds = "session_idle_timeout_seconds"
         case sessionMaxLifetimeSeconds = "session_max_lifetime_seconds"
@@ -36,8 +30,6 @@ public struct Config: Sendable, Codable, Hashable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(allowedCidrs, forKey: .allowedCidrs)
-        try container.encode(auditRetentionDays, forKey: .auditRetentionDays)
         try container.encode(mfaEnforced, forKey: .mfaEnforced)
         try container.encode(sessionIdleTimeoutSeconds, forKey: .sessionIdleTimeoutSeconds)
         try container.encode(sessionMaxLifetimeSeconds, forKey: .sessionMaxLifetimeSeconds)

@@ -16,6 +16,8 @@ pub mod event_hook_delivery;
 pub use self::event_hook_delivery::EventHookDelivery;
 pub mod list_events_response;
 pub use self::list_events_response::ListEventsResponse;
+pub mod runtime_config;
+pub use self::runtime_config::RuntimeConfig;
 pub mod service_account;
 pub use self::service_account::ServiceAccount;
 pub mod update_event_hook_input;

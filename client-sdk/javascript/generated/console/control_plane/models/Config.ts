@@ -22,14 +22,6 @@ export interface Config {
     /**
      * 
      */
-    allowedCidrs: Array<string> | null;
-    /**
-     * 
-     */
-    auditRetentionDays: number;
-    /**
-     * 
-     */
     mfaEnforced: boolean;
     /**
      * 
@@ -45,8 +37,6 @@ export interface Config {
  * Check if a given object implements the Config interface.
  */
 export function instanceOfConfig(value: object): value is Config {
-    if ((!('allowedCidrs' in (value as Record<string, any>)) && !('allowed_cidrs' in (value as Record<string, any>))) || ((value as Record<string, any>)['allowedCidrs'] === undefined && (value as Record<string, any>)['allowed_cidrs'] === undefined)) return false;
-    if ((!('auditRetentionDays' in (value as Record<string, any>)) && !('audit_retention_days' in (value as Record<string, any>))) || ((value as Record<string, any>)['auditRetentionDays'] === undefined && (value as Record<string, any>)['audit_retention_days'] === undefined)) return false;
     if ((!('mfaEnforced' in (value as Record<string, any>)) && !('mfa_enforced' in (value as Record<string, any>))) || ((value as Record<string, any>)['mfaEnforced'] === undefined && (value as Record<string, any>)['mfa_enforced'] === undefined)) return false;
     if ((!('sessionIdleTimeoutSeconds' in (value as Record<string, any>)) && !('session_idle_timeout_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['sessionIdleTimeoutSeconds'] === undefined && (value as Record<string, any>)['session_idle_timeout_seconds'] === undefined)) return false;
     if ((!('sessionMaxLifetimeSeconds' in (value as Record<string, any>)) && !('session_max_lifetime_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['sessionMaxLifetimeSeconds'] === undefined && (value as Record<string, any>)['session_max_lifetime_seconds'] === undefined)) return false;
@@ -63,8 +53,6 @@ export function ConfigFromJSONTyped(json: any, ignoreDiscriminator: boolean): Co
     }
     return {
         
-        'allowedCidrs': json['allowed_cidrs'] == null ? null : json['allowed_cidrs'],
-        'auditRetentionDays': json['audit_retention_days'],
         'mfaEnforced': json['mfa_enforced'],
         'sessionIdleTimeoutSeconds': json['session_idle_timeout_seconds'],
         'sessionMaxLifetimeSeconds': json['session_max_lifetime_seconds'],
@@ -82,8 +70,6 @@ export function ConfigToJSONTyped(value?: Config | null, ignoreDiscriminator: bo
 
     return {
         
-        'allowed_cidrs': value['allowedCidrs'],
-        'audit_retention_days': value['auditRetentionDays'],
         'mfa_enforced': value['mfaEnforced'],
         'session_idle_timeout_seconds': value['sessionIdleTimeoutSeconds'],
         'session_max_lifetime_seconds': value['sessionMaxLifetimeSeconds'],

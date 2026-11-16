@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS console.sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
+ALTER TABLE console.sessions ADD COLUMN mfa_verified BOOLEAN NOT NULL DEFAULT false;
+
 CREATE INDEX IF NOT EXISTS idx_sessions_hash ON console.sessions(session_token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON console.sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON console.sessions(expires_at);

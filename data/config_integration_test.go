@@ -52,8 +52,8 @@ func TestDataConfigPostgresIntegration(t *testing.T) {
 	if len(capturedEvents) != 1 {
 		t.Fatalf("expected 1 event published, got %d", len(capturedEvents))
 	}
-	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "data.config" {
-		t.Fatalf("expected resource ID data.config, got: %v", capturedEvents[0].ResourceID)
+	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "" || capturedEvents[0].ResourceType != "" {
+		t.Fatalf("expected no resource identity for config event, got: %+v", capturedEvents[0])
 	}
 	eventsMutex.Unlock()
 

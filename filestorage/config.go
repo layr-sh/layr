@@ -134,6 +134,6 @@ func (configManager *ConfigManager) Set(ctx context.Context, config Config) erro
 	}
 
 	configManager.SetMemoryConfig(config)
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("filestorage.config", ConfigUpdatedEventData(config)))
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(config)))
 	return nil
 }

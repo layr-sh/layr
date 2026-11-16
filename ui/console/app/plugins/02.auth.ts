@@ -19,6 +19,7 @@ export interface ConsoleSession {
   created_at: string;
   user: ConsoleUser;
   scopes: string[];
+  mfa_required: boolean;
 }
 
 export interface ConsoleSignInResponse {
@@ -43,6 +44,12 @@ export default defineNuxtPlugin(async ({ $client }) => {
   const state = useState<ConsoleSession | null>("auth", () => null);
   const mfaTicket = useState<string | null>("auth_mfa_ticket", () => null);
 
+  const clear = () => {
+    $client.value.clearSession();
+    state.value = null;
+    mfaTicket.value = null;
+  };
+
   const initialize = async (): Promise<ConsoleSession | null> => {
     try {
       const response = await fetch(`${$client.value.endpoint}/v1/_/console/session`, {
@@ -58,7 +65,7 @@ export default defineNuxtPlugin(async ({ $client }) => {
       if (!response.ok) {
         const error = await LayrAPIError.fromResponse(response);
         console.error(error);
-        state.value = null;
+        if (response.status === 401) clear();
         return null;
       }
 
@@ -67,7 +74,6 @@ export default defineNuxtPlugin(async ({ $client }) => {
       return consoleSession;
     } catch (err) {
       console.error(err);
-      state.value = null;
       return null;
     }
   };
@@ -212,9 +218,7 @@ export default defineNuxtPlugin(async ({ $client }) => {
         };
       }
 
-      $client.value.clearSession();
-      state.value = null;
-      mfaTicket.value = null;
+      clear();
 
       return {
         response: undefined,
@@ -231,6 +235,37 @@ export default defineNuxtPlugin(async ({ $client }) => {
     }
   };
 
+  const setupMFA = async (): Promise<{ secret: string; uri: string }> => {
+    const response = await fetch(`${$client.value.endpoint}/v1/_/console/mfa`, {
+      method: "POST",
+      credentials: "include",
+      headers: { Accept: "application/json", ...$client.value.headers },
+    });
+    if (!response.ok) throw await LayrAPIError.fromResponse(response);
+    return response.json();
+  };
+
+  const enableMFA = async (code: string) => {
+    const response = await fetch(`${$client.value.endpoint}/v1/_/console/mfa/verify`, {
+      method: "POST",
+      credentials: "include",
+      headers: { ...$client.value.headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ code: code.trim() }),
+    });
+    if (!response.ok) throw await LayrAPIError.fromResponse(response);
+    await initialize();
+  };
+
+  const disableMFA = async () => {
+    const response = await fetch(`${$client.value.endpoint}/v1/_/console/mfa`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: { Accept: "application/json", ...$client.value.headers },
+    });
+    if (!response.ok) throw await LayrAPIError.fromResponse(response);
+    await initialize();
+  };
+
   await callOnce(initialize);
 
   return {
@@ -243,6 +278,10 @@ export default defineNuxtPlugin(async ({ $client }) => {
         signIn,
         verifyMFA,
         signOut,
+        clear,
+        setupMFA,
+        enableMFA,
+        disableMFA,
       },
     },
   };

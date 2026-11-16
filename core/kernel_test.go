@@ -25,6 +25,14 @@ func (mock *mockServiceRunner) RegisterRoutes(baseRouter *Router, controlPlaneRo
 	mock.openAPIRegistered = true
 }
 
+func (mock *mockServiceRunner) AuthorizeRequest(responseWriter http.ResponseWriter, request *http.Request) bool {
+	if request.URL.Path == "/service-denied" {
+		responseWriter.WriteHeader(http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 func (mock *mockServiceRunner) RegisterHostRoutes(server *Server) {
 }
 

@@ -18,6 +18,7 @@ __version__ = "1.0.0"
 
 # Define package exports
 __all__ = [
+    "ConfigApi",
     "EventHooksApi",
     "EventHooksDeliveriesApi",
     "EventsApi",
@@ -40,12 +41,14 @@ __all__ = [
     "EventHook",
     "EventHookDelivery",
     "ListEventsResponse",
+    "RuntimeConfig",
     "ServiceAccount",
     "UpdateEventHookInput",
     "UpdateServiceAccountInput",
 ]
 
 # import apis into sdk package
+from generated.core.control_plane.api.config_api import ConfigApi as ConfigApi
 from generated.core.control_plane.api.event_hooks_api import EventHooksApi as EventHooksApi
 from generated.core.control_plane.api.event_hooks_deliveries_api import EventHooksDeliveriesApi as EventHooksDeliveriesApi
 from generated.core.control_plane.api.events_api import EventsApi as EventsApi
@@ -72,6 +75,7 @@ from generated.core.control_plane.models.event_context import EventContext as Ev
 from generated.core.control_plane.models.event_hook import EventHook as EventHook
 from generated.core.control_plane.models.event_hook_delivery import EventHookDelivery as EventHookDelivery
 from generated.core.control_plane.models.list_events_response import ListEventsResponse as ListEventsResponse
+from generated.core.control_plane.models.runtime_config import RuntimeConfig as RuntimeConfig
 from generated.core.control_plane.models.service_account import ServiceAccount as ServiceAccount
 from generated.core.control_plane.models.update_event_hook_input import UpdateEventHookInput as UpdateEventHookInput
 from generated.core.control_plane.models.update_service_account_input import UpdateServiceAccountInput as UpdateServiceAccountInput

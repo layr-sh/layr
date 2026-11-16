@@ -12,6 +12,8 @@ const (
 	ScopeCoreServiceAccountRead  = "core:service-account.read"
 	ScopeCoreServiceAccountWrite = "core:service-account.write"
 	ScopeCoreEventRead           = "core:event.read"
+	ScopeCoreConfigRead          = "core:config.read"
+	ScopeCoreConfigWrite         = "core:config.write"
 	ScopeCoreEventHookRead       = "core:event-hook.read"
 	ScopeCoreEventHookWrite      = "core:event-hook.write"
 

@@ -7,8 +7,6 @@ Config schema
 
 Name | Type
 ------------ | -------------
-`allowedCidrs` | Array&lt;string&gt;
-`auditRetentionDays` | number
 `mfaEnforced` | boolean
 `sessionIdleTimeoutSeconds` | number
 `sessionMaxLifetimeSeconds` | number
@@ -20,8 +18,6 @@ import type { Config } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "allowedCidrs": null,
-  "auditRetentionDays": null,
   "mfaEnforced": null,
   "sessionIdleTimeoutSeconds": null,
   "sessionMaxLifetimeSeconds": null,

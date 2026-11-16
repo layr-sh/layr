@@ -3,8 +3,6 @@
 ## Properties
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**allowedCidrs** | **[String]** |  | 
-**auditRetentionDays** | **Int** |  | 
 **mfaEnforced** | **Bool** |  | 
 **sessionIdleTimeoutSeconds** | **Int** |  | 
 **sessionMaxLifetimeSeconds** | **Int** |  | 

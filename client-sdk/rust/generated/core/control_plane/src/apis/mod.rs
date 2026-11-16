@@ -111,6 +111,7 @@ impl From<&str> for ContentType {
     }
 }
 
+pub mod config_api;
 pub mod event_hooks_api;
 pub mod event_hooks_deliveries_api;
 pub mod events_api;

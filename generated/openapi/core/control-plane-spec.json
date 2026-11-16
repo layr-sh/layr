@@ -411,6 +411,28 @@
         ],
         "type": "object"
       },
+      "RuntimeConfig": {
+        "description": "RuntimeConfig schema",
+        "properties": {
+          "allowed_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "audit_retention_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allowed_cidrs",
+          "audit_retention_days"
+        ],
+        "type": "object"
+      },
       "ServiceAccount": {
         "description": "ServiceAccount schema",
         "properties": {
@@ -582,6 +604,79 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/_/core/config": {
+      "get": {
+        "description": "#### Controller: \n\n`layr.sh/core.(*Server).handleGetConfig`\n\n---\n\n",
+        "operationId": "core__config__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfig"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfig"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get Core runtime configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "config"
+        ],
+        "x-sdk-method-name": "get"
+      },
+      "put": {
+        "description": "#### Controller: \n\n`layr.sh/core.(*Server).handleUpdateConfig`\n\n---\n\n",
+        "operationId": "core__config__update",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimeConfig"
+              }
+            }
+          },
+          "description": "Request body for core.RuntimeConfig",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfig"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeConfig"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update Core runtime configuration",
+        "tags": [
+          "Config"
+        ],
+        "x-sdk-group-name": [
+          "core",
+          "config"
+        ],
+        "x-sdk-method-name": "update"
+      }
+    },
     "/v1/_/core/event-hooks": {
       "get": {
         "description": "Lists event hook subscriptions from core.event_hooks with driver (sql or http), target function or URL, subscribed event type patterns, retry limits, and enabled status. Requires core:event-hook.read scope.",

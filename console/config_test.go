@@ -24,8 +24,6 @@ func TestConsoleConfigUnit(t *testing.T) {
 		require.Equal(t, DefaultSessionIdleTimeoutSeconds, defaultConfig.SessionIdleTimeoutSeconds)
 		require.Equal(t, DefaultSessionMaxLifetimeSeconds, defaultConfig.SessionMaxLifetimeSeconds)
 		require.False(t, defaultConfig.MFAEnforced)
-		require.Empty(t, defaultConfig.AllowedCIDRs)
-		require.Equal(t, DefaultAuditRetentionDays, defaultConfig.AuditRetentionDays)
 	})
 
 	t.Run("config validation failure paths", func(t *testing.T) {
@@ -43,18 +41,6 @@ func TestConsoleConfigUnit(t *testing.T) {
 		idleExceedsLifetimeConfig.SessionIdleTimeoutSeconds = 50000
 		idleExceedsLifetimeConfig.SessionMaxLifetimeSeconds = 1000
 		require.Error(t, idleExceedsLifetimeConfig.Validate())
-
-		zeroAuditDaysConfig := DefaultConfig()
-		zeroAuditDaysConfig.AuditRetentionDays = 0
-		require.Error(t, zeroAuditDaysConfig.Validate())
-
-		invalidCIDRConfig := DefaultConfig()
-		invalidCIDRConfig.AllowedCIDRs = []string{"not-a-cidr"}
-		require.Error(t, invalidCIDRConfig.Validate())
-
-		validCIDRConfig := DefaultConfig()
-		validCIDRConfig.AllowedCIDRs = []string{"192.168.1.0/24", "10.0.0.1"}
-		require.NoError(t, validCIDRConfig.Validate())
 	})
 
 	t.Run("config manager in-memory concurrency", func(t *testing.T) {

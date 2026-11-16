@@ -122,6 +122,9 @@ func NewServer(kernel *Kernel) *Server {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	if kernel.configManager == nil {
+		kernel.configManager = NewConfigManager(kernel)
+	}
 	server.initTLS(config)
 
 	return server
@@ -446,6 +449,10 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 		server.requestCount.Add(1)
 
 		clientIP := ExtractRequestClientIP(request)
+		if allowedCIDRs := server.kernel.configManager.Get().AllowedCIDRs; len(allowedCIDRs) > 0 && !IsIPAllowed(clientIP, allowedCIDRs) {
+			WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access is not allowed from this network")
+			return
+		}
 		userAgent := request.UserAgent()
 		requestID := request.Header.Get("Request-ID")
 		if requestID == "" {
@@ -567,8 +574,9 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 			}
 		}
 
-		// Console sessions authenticate their linked service account.
-		if !authenticated {
+		// The public Console UI shell does not need Service Account permissions.
+		// Console sessions authenticate their linked account on API and other service requests.
+		if !authenticated && request.URL.Path != "/console" && !strings.HasPrefix(request.URL.Path, "/console/") {
 			var consoleToken string
 			if cookie, err := request.Cookie(ConsoleCookieNameSecure); err == nil && cookie.Value != "" {
 				consoleToken = cookie.Value
@@ -659,6 +667,14 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 						})
 					}
 				}
+			}
+		}
+
+		for _, service := range server.kernel.services {
+			if requestAuthorizer, ok := service.(interface {
+				AuthorizeRequest(http.ResponseWriter, *http.Request) bool
+			}); ok && !requestAuthorizer.AuthorizeRequest(responseWriter, request.WithContext(ctx)) {
+				return
 			}
 		}
 
@@ -799,6 +815,21 @@ func (server *Server) registerControlPlaneRoutes() {
 		RouteOperationID("core__service_accounts__delete"),
 		RouteSDKGroupName("core", "service_accounts"),
 		RouteSDKMethodName("delete"),
+	)
+
+	GetRoute[RuntimeConfig](controlPlaneRouter, "/v1/_/core/config", server.handleGetConfig,
+		RouteTag("Config"),
+		RouteSummary("Get Core runtime configuration"),
+		RouteOperationID("core__config__get"),
+		RouteSDKGroupName("core", "config"),
+		RouteSDKMethodName("get"),
+	)
+	PutRoute[RuntimeConfig, RuntimeConfig](controlPlaneRouter, "/v1/_/core/config", server.handleUpdateConfig,
+		RouteTag("Config"),
+		RouteSummary("Update Core runtime configuration"),
+		RouteOperationID("core__config__update"),
+		RouteSDKGroupName("core", "config"),
+		RouteSDKMethodName("update"),
 	)
 
 	// Event Hooks Routes

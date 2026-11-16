@@ -9,6 +9,7 @@ export * from './EventContext';
 export * from './EventHook';
 export * from './EventHookDelivery';
 export * from './ListEventsResponse';
+export * from './RuntimeConfig';
 export * from './ServiceAccount';
 export * from './UpdateEventHookInput';
 export * from './UpdateServiceAccountInput';

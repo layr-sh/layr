@@ -5,6 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
+if [[ "${1:-}" == "--fix" ]]; then
+  pnpm --dir client-sdk/javascript run fmt
+  pnpm --dir client-sdk/javascript run lint:fix
+  shift
+fi
+
 pnpm --dir client-sdk/javascript run fmt --check
 pnpm --dir client-sdk/javascript run lint
 pnpm --dir client-sdk/javascript run typecheck

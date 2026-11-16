@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+
 	"sync"
 
 	"github.com/jackc/pgx/v5"
@@ -20,7 +20,7 @@ const ConfigKey = "runtime"
 const (
 	DefaultSessionIdleTimeoutSeconds = 1800  // 30 minutes
 	DefaultSessionMaxLifetimeSeconds = 86400 // 24 hours
-	DefaultAuditRetentionDays        = 90    // 90 days
+
 )
 
 // ErrInvalidConfig is returned when runtime configuration validation fails.
@@ -28,11 +28,9 @@ var ErrInvalidConfig = errors.New("invalid console configuration")
 
 // Config represents dynamic operational configuration for the console control plane.
 type Config struct {
-	SessionIdleTimeoutSeconds int      `json:"session_idle_timeout_seconds"`
-	SessionMaxLifetimeSeconds int      `json:"session_max_lifetime_seconds"`
-	MFAEnforced               bool     `json:"mfa_enforced"`
-	AllowedCIDRs              []string `json:"allowed_cidrs"`
-	AuditRetentionDays        int      `json:"audit_retention_days"`
+	SessionIdleTimeoutSeconds int  `json:"session_idle_timeout_seconds"`
+	SessionMaxLifetimeSeconds int  `json:"session_max_lifetime_seconds"`
+	MFAEnforced               bool `json:"mfa_enforced"`
 }
 
 // DefaultConfig returns the default operational configuration for the console service.
@@ -41,8 +39,6 @@ func DefaultConfig() Config {
 		SessionIdleTimeoutSeconds: DefaultSessionIdleTimeoutSeconds,
 		SessionMaxLifetimeSeconds: DefaultSessionMaxLifetimeSeconds,
 		MFAEnforced:               false,
-		AllowedCIDRs:              []string{},
-		AuditRetentionDays:        DefaultAuditRetentionDays,
 	}
 }
 
@@ -57,16 +53,7 @@ func (config Config) Validate() error {
 	if config.SessionIdleTimeoutSeconds > config.SessionMaxLifetimeSeconds {
 		return errors.New("session_idle_timeout_seconds cannot exceed session_max_lifetime_seconds")
 	}
-	if config.AuditRetentionDays <= 0 {
-		return errors.New("audit_retention_days must be positive")
-	}
-	for _, cidr := range config.AllowedCIDRs {
-		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			if net.ParseIP(cidr) == nil {
-				return fmt.Errorf("invalid CIDR or IP address: %s", cidr)
-			}
-		}
-	}
+
 	return nil
 }
 
@@ -145,6 +132,6 @@ func (configManager *ConfigManager) Set(ctx context.Context, newConfig Config) e
 	}
 
 	configManager.SetMemoryConfig(newConfig)
-	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("console.config", ConfigUpdatedEventData(newConfig)))
+	configManager.kernel.EventBus().Publish(ctx, NewConfigUpdatedEvent("", ConfigUpdatedEventData(newConfig)))
 	return nil
 }

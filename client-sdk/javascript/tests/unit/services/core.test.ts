@@ -3,6 +3,24 @@ import { useCore } from "../../../src/services/core";
 import { createMockServiceContext } from "./helpers";
 
 describe("Core Service Unit Tests", () => {
+  it("reads and updates Core runtime configuration", async () => {
+    const { client, elevate, getLastUrl, getLastInit } = createMockServiceContext({
+      allowed_cidrs: ["127.0.0.1"],
+      audit_retention_days: 30,
+    });
+    const core = elevate(useCore(client));
+    expect(await core.cp.config.get()).toEqual({
+      allowedCidrs: ["127.0.0.1"],
+      auditRetentionDays: 30,
+    });
+    expect(getLastUrl()).toContain("/v1/_/core/config");
+    await core.cp.config.update({ allowedCidrs: [], auditRetentionDays: 90 });
+    expect(getLastInit()?.method).toBe("PUT");
+    expect(JSON.parse(String(getLastInit()?.body))).toEqual({
+      allowed_cidrs: [],
+      audit_retention_days: 90,
+    });
+  });
   it("exercises base manifest endpoint", async () => {
     const { client, getLastUrl } = createMockServiceContext({
       project: { name: "test-project" },

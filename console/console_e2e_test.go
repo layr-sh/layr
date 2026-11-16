@@ -59,7 +59,7 @@ func TestConsoleFullLifecycleE2E(t *testing.T) {
 
 	// Mutate configuration
 	activeConfig.SessionIdleTimeoutSeconds = 3600
-	activeConfig.AllowedCIDRs = []string{"127.0.0.1/32"}
+
 	updateConfigPayload, _ := json.Marshal(activeConfig)
 	updateConfigRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/console/config", bytes.NewReader(updateConfigPayload))
 	updateConfigRequest.Header.Set("Content-Type", "application/json")

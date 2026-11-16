@@ -19,6 +19,7 @@
 
 # Go (Binaries, Build Outputs & Caches)
 /layr
+/dev-server
 /custom-gcl
 bin/
 dist/

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPO_ROOT}"
+
+if [[ "${1:-}" == "--fix" ]]; then
+  pnpm --dir ui/console run fmt
+  pnpm --dir ui/console run lint:fix
+  shift
+fi
+
+pnpm --dir ui/console run fmt:check
+pnpm --dir ui/console run lint
+pnpm --dir ui/console run typecheck
+bash scripts/sdk/spawn-test-server --timeout 180 data console -- pnpm --dir ui/console run test --coverage "$@"

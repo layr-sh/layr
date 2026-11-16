@@ -7,12 +7,164 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
+
+func TestConsolePolicyEnforcementIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := t.Context()
+	service := NewService(kernel)
+	require.NoError(t, service.Start(ctx))
+	defer service.Stop()
+	server := core.NewServer(kernel)
+	service.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter(), server.Mux())
+	kernel.RegisterService(service)
+	consoleRootUser, serviceAccount, _, err := kernel.CreateConsoleRootUser(ctx, "policy@example.com", "Policy-password-123!")
+	require.NoError(t, err)
+	call := func(method, path, payload, token string, cookie bool) *httptest.ResponseRecorder {
+		request := httptest.NewRequestWithContext(ctx, method, path, bytes.NewBufferString(payload))
+		request.RemoteAddr = "127.0.0.1:1234"
+		if token != "" {
+			if cookie {
+				request.AddCookie(&http.Cookie{Name: core.ConsoleCookieNameInsecure, Value: token})
+			} else {
+				request.Header.Set("Authorization", "Bearer "+token)
+			}
+		}
+		responseRecorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(responseRecorder, request)
+		return responseRecorder
+	}
+	signInPayload := `{"email":"policy@example.com","password":"Policy-password-123!"}`
+	responseRecorder := call(http.MethodPost, "/v1/_/console/sign-in", signInPayload, "", false)
+	require.Equal(t, http.StatusOK, responseRecorder.Code, responseRecorder.Body.String())
+	var signInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(responseRecorder.Body.Bytes(), &signInConsoleResponse))
+	oldResponseRecorder := call(http.MethodPost, "/v1/_/console/sign-in", signInPayload, "", false)
+	var oldSignInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(oldResponseRecorder.Body.Bytes(), &oldSignInConsoleResponse))
+	var cookieToken string
+	for _, cookie := range responseRecorder.Result().Cookies() {
+		if cookie.Name == core.ConsoleCookieNameInsecure {
+			cookieToken = cookie.Value
+		}
+	}
+	require.NotEmpty(t, cookieToken)
+	uiDirectory := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(uiDirectory, "index.html"), []byte("Console Enrollment UI"), 0o600))
+	t.Setenv("CONSOLE_UI_DIST_DIRECTORY", uiDirectory)
+
+	config := service.ConfigManager().Get()
+	config.MFAEnforced = true
+	require.NoError(t, NewConfigManager(kernel).Set(ctx, config))
+	uiResponseRecorder := call(http.MethodGet, "/console/control-plane/account-security", "", cookieToken, true)
+	require.Equal(t, http.StatusOK, uiResponseRecorder.Code, uiResponseRecorder.Body.String())
+	require.Equal(t, "Console Enrollment UI", uiResponseRecorder.Body.String())
+	for _, cookie := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unenrolled cookie=%t", cookie), func(t *testing.T) {
+			token := signInConsoleResponse.AccessToken
+			if cookie {
+				token = cookieToken
+			}
+			for _, path := range []string{"/v1/_/core/events", "/v1/_/console/users", "/v1/auth/users", "/healthz"} {
+				t.Run(path, func(t *testing.T) {
+					blockedResponseRecorder := call(http.MethodGet, path, "", token, cookie)
+					require.Equal(t, http.StatusForbidden, blockedResponseRecorder.Code, blockedResponseRecorder.Body.String())
+				})
+			}
+			profileResponseRecorder := call(http.MethodGet, "/v1/_/console/session", "", token, cookie)
+			require.Equal(t, http.StatusOK, profileResponseRecorder.Code)
+			var getConsoleSessionResponse GetConsoleSessionResponse
+			require.NoError(t, json.Unmarshal(profileResponseRecorder.Body.Bytes(), &getConsoleSessionResponse))
+			require.True(t, getConsoleSessionResponse.MFARequired)
+			require.Empty(t, getConsoleSessionResponse.Scopes)
+		})
+	}
+	setupResponseRecorder := call(http.MethodPost, "/v1/_/console/mfa", "", signInConsoleResponse.AccessToken, false)
+	require.Equal(t, http.StatusOK, setupResponseRecorder.Code, setupResponseRecorder.Body.String())
+	var setupConsoleMFAResponse SetupConsoleMFAResponse
+	require.NoError(t, json.Unmarshal(setupResponseRecorder.Body.Bytes(), &setupConsoleMFAResponse))
+	code, err := service.totpManager.GenerateCode(setupConsoleMFAResponse.Secret, time.Now().UTC())
+	require.NoError(t, err)
+	verifiedResponseRecorder := call(http.MethodPost, "/v1/_/console/mfa/verify", `{"code":"`+code+`"}`, signInConsoleResponse.AccessToken, false)
+	require.Equal(t, http.StatusOK, verifiedResponseRecorder.Code, verifiedResponseRecorder.Body.String())
+	require.Equal(t, http.StatusOK, call(http.MethodGet, "/v1/_/core/events", "", signInConsoleResponse.AccessToken, false).Code)
+	require.Equal(t, http.StatusForbidden, call(http.MethodGet, "/v1/_/core/events", "", oldSignInConsoleResponse.AccessToken, false).Code)
+	oldProfileResponseRecorder := call(http.MethodGet, "/v1/_/console/session", "", oldSignInConsoleResponse.AccessToken, false)
+	var oldGetConsoleSessionResponse GetConsoleSessionResponse
+	require.NoError(t, json.Unmarshal(oldProfileResponseRecorder.Body.Bytes(), &oldGetConsoleSessionResponse))
+	require.True(t, oldGetConsoleSessionResponse.MFARequired)
+	require.Empty(t, oldGetConsoleSessionResponse.Scopes)
+	require.Equal(t, http.StatusConflict, call(http.MethodPost, "/v1/_/console/mfa", "", oldSignInConsoleResponse.AccessToken, false).Code)
+	require.Equal(t, http.StatusConflict, call(http.MethodPost, "/v1/_/console/mfa/verify", `{"code":"`+code+`"}`, oldSignInConsoleResponse.AccessToken, false).Code)
+	require.Equal(t, http.StatusForbidden, call(http.MethodDelete, "/v1/_/console/mfa", "", signInConsoleResponse.AccessToken, false).Code)
+
+	challengeResponseRecorder := call(http.MethodPost, "/v1/_/console/sign-in", signInPayload, "", false)
+	var challengeSignInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(challengeResponseRecorder.Body.Bytes(), &challengeSignInConsoleResponse))
+	require.True(t, challengeSignInConsoleResponse.MFARequired)
+	completedResponseRecorder := call(http.MethodPost, "/v1/_/console/mfa/challenge", `{"mfa_ticket":"`+challengeSignInConsoleResponse.MFATicket+`","code":"`+code+`"}`, "", false)
+	var completedSignInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(completedResponseRecorder.Body.Bytes(), &completedSignInConsoleResponse))
+	require.Equal(t, http.StatusOK, call(http.MethodGet, "/v1/_/core/events", "", completedSignInConsoleResponse.AccessToken, false).Code)
+	standaloneServiceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{Name: "Independent Policy Client", Scopes: []string{core.ScopeRoot}})
+	require.NoError(t, err)
+	keyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/core/events", nil)
+	keyRequest.Header.Set("Service-Account-Key", standaloneServiceAccount.SecretKey)
+	keyResponseRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(keyResponseRecorder, keyRequest)
+	require.Equal(t, http.StatusOK, keyResponseRecorder.Code)
+
+	require.Equal(t, http.StatusNoContent, call(http.MethodPost, "/v1/_/console/sign-out", "", oldSignInConsoleResponse.AccessToken, false).Code)
+	jwtClaims, err := kernel.JWTSigner().VerifyAccessToken(signInConsoleResponse.AccessToken)
+	require.NoError(t, err)
+	_, err = kernel.DB().Exec(ctx, "DELETE FROM console.sessions WHERE id = $1", jwtClaims.SessionID)
+	require.NoError(t, err)
+	request := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{ServiceAccountID: serviceAccount.ID, JWT: *jwtClaims}), http.MethodGet, "/v1/_/core/events", nil)
+	request.RemoteAddr = "127.0.0.1:1234"
+	request.Header.Set("Authorization", "Bearer "+signInConsoleResponse.AccessToken)
+	responseRecorder = httptest.NewRecorder()
+	require.False(t, service.AuthorizeRequest(responseRecorder, request))
+	require.Equal(t, http.StatusUnauthorized, responseRecorder.Code)
+
+	config.MFAEnforced = true
+	_, err = kernel.DB().Exec(ctx, "UPDATE console.users SET encrypted_mfa_secret = NULL WHERE id = $1", consoleRootUser.ID)
+	require.NoError(t, err)
+	unenrolledResponseRecorder := call(http.MethodPost, "/v1/_/console/sign-in", signInPayload, "", false)
+	var unenrolledSignInConsoleResponse SignInConsoleResponse
+	require.NoError(t, json.Unmarshal(unenrolledResponseRecorder.Body.Bytes(), &unenrolledSignInConsoleResponse))
+	unenrolledJWTClaims, err := kernel.JWTSigner().VerifyAccessToken(unenrolledSignInConsoleResponse.AccessToken)
+	require.NoError(t, err)
+	require.Empty(t, unenrolledJWTClaims.Scope)
+	setupResponseRecorder = call(http.MethodPost, "/v1/_/console/mfa", "", unenrolledSignInConsoleResponse.AccessToken, false)
+	require.Equal(t, http.StatusOK, setupResponseRecorder.Code)
+	require.NoError(t, json.Unmarshal(setupResponseRecorder.Body.Bytes(), &setupConsoleMFAResponse))
+	code, err = service.totpManager.GenerateCode(setupConsoleMFAResponse.Secret, time.Now().UTC())
+	require.NoError(t, err)
+	_, err = kernel.DB().Exec(ctx, `
+		CREATE FUNCTION console.reject_mfa_update() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN RAISE EXCEPTION 'enrollment write failed'; END; $$;
+		CREATE TRIGGER reject_mfa_update BEFORE UPDATE OF encrypted_mfa_secret ON console.users
+		FOR EACH ROW EXECUTE FUNCTION console.reject_mfa_update();
+	`)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusInternalServerError, call(http.MethodPost, "/v1/_/console/mfa/verify", `{"code":"`+code+`"}`, unenrolledSignInConsoleResponse.AccessToken, false).Code)
+	_, err = kernel.DB().Exec(ctx, `CREATE OR REPLACE FUNCTION console.reject_mfa_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END; $$;`)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusConflict, call(http.MethodPost, "/v1/_/console/mfa/verify", `{"code":"`+code+`"}`, unenrolledSignInConsoleResponse.AccessToken, false).Code)
+	_, err = kernel.DB().Exec(ctx, `DROP TABLE console.sessions`)
+	require.NoError(t, err)
+	failedResponseRecorder := call(http.MethodPost, "/v1/_/console/sign-in", signInPayload, "", false)
+	require.Equal(t, http.StatusInternalServerError, failedResponseRecorder.Code)
+	require.Empty(t, failedResponseRecorder.Result().Cookies())
+}
 
 func TestConsoleControlPlaneHandlerAuthIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)

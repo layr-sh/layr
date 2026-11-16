@@ -127,6 +127,13 @@ CREATE TABLE IF NOT EXISTS console.sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_console_sessions_hash ON console.sessions(session_token_hash);
 
+CREATE TABLE IF NOT EXISTS core.config (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    last_updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+
 CREATE TABLE IF NOT EXISTS core.events (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
     type TEXT NOT NULL,
@@ -308,7 +315,7 @@ func (db *DatabasePool) MigrateDown(ctx context.Context, migrations []DatabaseMi
 	var tableExists bool
 	_ = tx.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM information_schema.tables 
+			SELECT 1 FROM information_schema.tables
 			WHERE table_schema = 'core' AND table_name = 'migrations'
 		)
 	`).Scan(&tableExists)

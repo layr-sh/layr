@@ -22,6 +22,43 @@ var defaultConsoleScopes = []string{
 	core.ScopeConsoleConfigWrite,
 }
 
+// AuthorizeRequest applies Console access policy within the gateway authentication pipeline.
+func (service *Service) AuthorizeRequest(responseWriter http.ResponseWriter, request *http.Request) bool {
+	authContext := core.GetAuthContext(request.Context())
+	consoleSession := authContext.JWT.Audience == "layr:console:user"
+	if !consoleSession && !strings.HasPrefix(request.URL.Path, "/v1/_/console/") {
+		return true
+	}
+
+	// Read the persisted policy so another node's configuration changes take effect here too.
+	if err := service.configManager.Load(request.Context()); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Console configuration is unavailable")
+		return false
+	}
+	config := service.configManager.Get()
+
+	if !consoleSession || !config.MFAEnforced {
+		return true
+	}
+
+	// Password-authenticated sessions can enroll and sign out, but cannot use Service Account permissions.
+	switch request.Method + " " + request.URL.Path {
+	case "GET /v1/_/console/session", "POST /v1/_/console/sign-in", "POST /v1/_/console/sign-out",
+		"POST /v1/_/console/mfa", "POST /v1/_/console/mfa/verify", "POST /v1/_/console/mfa/challenge":
+		return true
+	}
+	user, session, err := service.controlPlaneHandler.authenticateSession(request)
+	if err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
+		return false
+	}
+	if !user.MFAEnabled || !session.MFAVerified {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Complete MFA in My Security before accessing the platform")
+		return false
+	}
+	return true
+}
+
 func (controlPlaneHandler *ControlPlaneHandler) extractConsoleToken(request *http.Request) string {
 	if request == nil {
 		return ""
@@ -54,7 +91,7 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 	ctx := request.Context()
 	const selectSQLStatement = `
 		SELECT
-			s.id, s.user_id, host(s.ip_address), COALESCE(s.user_agent, ''), s.expires_at, s.created_at,
+			s.id, s.user_id, host(s.ip_address), COALESCE(s.user_agent, ''), s.expires_at, s.created_at, s.mfa_verified,
 			u.id, u.email, u.encrypted_mfa_secret, u.is_enabled, u.last_signed_in_at, u.created_at, u.last_updated_at
 		FROM console.sessions s
 		JOIN console.users u ON s.user_id = u.id
@@ -72,6 +109,7 @@ func (controlPlaneHandler *ControlPlaneHandler) authenticateSession(request *htt
 		&session.UserAgent,
 		&session.ExpiresAt,
 		&session.CreatedAt,
+		&session.MFAVerified,
 		&user.ID,
 		&user.Email,
 		&encryptedMFASecret,
@@ -184,16 +222,19 @@ func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(resp
 	clientIP := core.ExtractRequestClientIP(request)
 
 	const insertSessionSQL = `
-		INSERT INTO console.sessions (user_id, session_token_hash, ip_address, user_agent, expires_at)
-		VALUES ($1, $2, $3::inet, $4, $5)
+		INSERT INTO console.sessions (user_id, session_token_hash, ip_address, user_agent, expires_at, mfa_verified)
+		VALUES ($1, $2, $3::inet, $4, $5, $6)
 		RETURNING id, created_at
 	`
 	var sessionID string
 	var sessionCreatedAt time.Time
-	_ = controlPlaneHandler.kernel.DB().QueryRow(ctx, insertSessionSQL, user.ID, tokenHash, clientIP, request.UserAgent(), expiresAt).Scan(
+	if err := controlPlaneHandler.kernel.DB().QueryRow(ctx, insertSessionSQL, user.ID, tokenHash, clientIP, request.UserAgent(), expiresAt, user.MFAEnabled).Scan(
 		&sessionID,
 		&sessionCreatedAt,
-	)
+	); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to create Console session")
+		return
+	}
 
 	isSecure := core.IsSecureRequest(request)
 	cookieName := core.ConsoleCookieNameInsecure
@@ -211,6 +252,9 @@ func (controlPlaneHandler *ControlPlaneHandler) issueConsoleSessionResponse(resp
 	})
 
 	scopes := controlPlaneHandler.resolveUserScopes(ctx, user.ID)
+	if controlPlaneHandler.configManager.Get().MFAEnforced && !user.MFAEnabled {
+		scopes = []string{}
+	}
 
 	jwtClaims := core.JWTClaims{
 		Subject:   user.ID,
@@ -345,11 +389,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleGetConsoleSession(response
 	}
 
 	scopes := controlPlaneHandler.resolveUserScopes(request.Context(), user.ID)
+	mfaRequired := controlPlaneHandler.configManager.Get().MFAEnforced && (!user.MFAEnabled || !session.MFAVerified)
+	if mfaRequired {
+		scopes = []string{}
+	}
 
 	getConsoleSessionResponse := GetConsoleSessionResponse{
-		User:    *user,
-		Session: *session,
-		Scopes:  scopes,
+		User:        *user,
+		Session:     *session,
+		Scopes:      scopes,
+		MFARequired: mfaRequired,
 	}
 	core.WriteJSONResponse(responseWriter, http.StatusOK, getConsoleSessionResponse)
 }
@@ -361,6 +410,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSetupConsoleMFA(responseWr
 	user, _, err := controlPlaneHandler.authenticateSession(request)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if user.MFAEnabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "MFA is already enabled")
 		return
 	}
 
@@ -378,9 +432,13 @@ func (controlPlaneHandler *ControlPlaneHandler) handleSetupConsoleMFA(responseWr
 func (controlPlaneHandler *ControlPlaneHandler) handleVerifyConsoleMFA(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling verify console MFA request")
 
-	user, _, err := controlPlaneHandler.authenticateSession(request)
+	user, session, err := controlPlaneHandler.authenticateSession(request)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	if user.MFAEnabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "MFA is already enabled")
 		return
 	}
 
@@ -402,8 +460,23 @@ func (controlPlaneHandler *ControlPlaneHandler) handleVerifyConsoleMFA(responseW
 	}
 
 	encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(secret))
-	const updateSecretSQL = `UPDATE console.users SET encrypted_mfa_secret = $1, last_updated_at = clock_timestamp() WHERE id = $2`
-	_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSecretSQL, []byte(encryptedSecret), user.ID)
+	const updateSecretSQL = `
+		WITH enrolled AS (
+			UPDATE console.users SET encrypted_mfa_secret = $1, last_updated_at = clock_timestamp()
+			WHERE id = $2 AND encrypted_mfa_secret IS NULL RETURNING id
+		)
+		UPDATE console.sessions SET mfa_verified = (id::text = $3)
+		WHERE user_id IN (SELECT id FROM enrolled)
+	`
+	result, updateErr := controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSecretSQL, []byte(encryptedSecret), user.ID, session.ID)
+	if updateErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to enable MFA")
+		return
+	}
+	if result.RowsAffected() == 0 {
+		core.WriteErrorResponse(responseWriter, request, http.StatusConflict, "MFA enrollment is no longer available")
+		return
+	}
 
 	_ = controlPlaneHandler.kernel.KVStore().Delete(request.Context(), "console:mfa_setup:"+user.ID)
 
@@ -417,6 +490,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDisableConsoleMFA(response
 	user, _, err := controlPlaneHandler.authenticateSession(request)
 	if err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if controlPlaneHandler.configManager.Get().MFAEnforced {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "MFA is required by the Console policy")
 		return
 	}
 

@@ -6,10 +6,13 @@ import (
 	"go/parser"
 	"go/token"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"uuid"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCoreEventMatchesPatternUnit(t *testing.T) {
@@ -61,7 +64,7 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 			{name: "empty event", event: Event{}},
 			{name: "missing resource type and action", event: Event{Type: "test.event"}},
 			{name: "missing action", event: Event{Type: "test.event", ResourceType: "test"}},
-			{name: "missing resource ID", event: Event{Type: "test.event", ResourceType: "test", Action: "event"}},
+			{name: "missing resource type for resource ID", event: Event{Type: "test.event", Action: "event", ResourceID: &resourceID}},
 		}
 		for _, testCase := range invalidEvents {
 			t.Run(testCase.name, func(t *testing.T) {
@@ -71,6 +74,24 @@ func TestCoreEventPrepareUnit(t *testing.T) {
 				}
 			})
 		}
+	})
+
+	t.Run("events without a specific resource have empty identity", func(t *testing.T) {
+		emptyResourceID := ""
+		for _, event := range []Event{
+			NewConfigUpdatedEvent("", ConfigUpdatedEventData{}),
+			{Type: "test.completed", Action: "completed", ResourceType: "test"},
+			{Type: "test.completed", Action: "completed", ResourceType: "test", ResourceID: &emptyResourceID},
+		} {
+			preparedEvent, err := prepareEvent(ctx, event)
+			require.NoError(t, err)
+			require.Empty(t, preparedEvent.ResourceType)
+			require.NotNil(t, preparedEvent.ResourceID)
+			require.Empty(t, *preparedEvent.ResourceID)
+		}
+		clearedEvent := NewEvent("test.resource.updated", nil).WithResourceID(resourceID).WithResourceID("")
+		require.Nil(t, clearedEvent.ResourceID)
+		require.Empty(t, clearedEvent.ResourceType)
 	})
 
 	t.Run("valid event receives defaults", func(t *testing.T) {
@@ -211,6 +232,146 @@ func TestCoreEventBusLifecycleUnit(t *testing.T) {
 		Action:       "overflow",
 		ResourceID:   &overflowResourceID,
 	})
+}
+
+func waitForEventBusClosing(t *testing.T, eventBus *EventBus) {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	for {
+		eventBus.publishRWMutex.RLock()
+		closed := eventBus.closed
+		eventBus.publishRWMutex.RUnlock()
+		if closed {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for event bus to stop accepting events")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func TestCoreEventBusCloseDrainsQueuedEventsUnit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	eventBus := &EventBus{
+		dispatchChannel: make(chan Event, 16),
+		ctx:             ctx,
+		ctxCancel:       cancel,
+	}
+	for index := 0; index < cap(eventBus.dispatchChannel); index++ {
+		eventBus.dispatchChannel <- Event{ID: uuid.NewV7(), Type: "test.queued"}
+	}
+
+	// Hold the worker until shutdown starts, so the entire queue must be drained
+	// during Close rather than being processed before the test reaches it.
+	releaseWorker := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseWorker:
+		default:
+			close(releaseWorker)
+		}
+	})
+	eventBus.waitGroup.Add(1)
+	go func() {
+		<-releaseWorker
+		eventBus.worker()
+	}()
+	done := make(chan struct{})
+	go func() {
+		eventBus.Close()
+		close(done)
+	}()
+	waitForEventBusClosing(t, eventBus)
+	if ctx.Err() != nil {
+		t.Fatal("shutdown canceled the dispatch context before draining accepted events")
+	}
+
+	select {
+	case <-done:
+		t.Fatal("Close returned before all workers finished")
+	default:
+	}
+	close(releaseWorker)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not finish after the worker drained its queue")
+	}
+	if remaining := len(eventBus.dispatchChannel); remaining != 0 {
+		t.Fatalf("shutdown left %d queued events unprocessed", remaining)
+	}
+	if ctx.Err() != context.Canceled {
+		t.Fatal("dispatch context was not canceled after shutdown finished")
+	}
+}
+
+func TestCoreEventBusCloseWaitsForSyncPublishUnit(t *testing.T) {
+	eventBus := NewEventBus(nil, nil)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	eventBus.Subscribe("test.sync", func(context.Context, Event) error {
+		close(entered)
+		<-release
+		return nil
+	})
+	resourceID := "sync-shutdown"
+	published := make(chan struct{})
+	go func() {
+		eventBus.PublishSync(context.Background(), Event{
+			Type: "test.sync", ResourceType: "test", Action: "sync", ResourceID: &resourceID,
+		})
+		close(published)
+	}()
+	<-entered
+	done := make(chan struct{})
+	go func() {
+		eventBus.Close()
+		close(done)
+	}()
+	waitForEventBusClosing(t, eventBus)
+	select {
+	case <-done:
+		t.Error("Close returned before synchronous event publishing finished")
+	default:
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not finish after publishing completed")
+	}
+	<-published
+	// Closing again and publishing after closure must be safe.
+	eventBus.Close()
+	eventBus.Publish(context.Background(), Event{
+		Type: "test.sync", ResourceType: "test", Action: "sync", ResourceID: &resourceID,
+	})
+	eventBus.PublishSync(context.Background(), Event{
+		Type: "test.sync", ResourceType: "test", Action: "sync", ResourceID: &resourceID,
+	})
+}
+
+func TestCoreEventBusConcurrentPublishAndCloseUnit(t *testing.T) {
+	eventBus := NewEventBus(nil, nil)
+	var publishersWaitGroup sync.WaitGroup
+	resourceID := "concurrent-shutdown"
+	event := Event{Type: "test.concurrent", ResourceType: "test", Action: "publish", ResourceID: &resourceID}
+	for index := 0; index < 32; index++ {
+		publishersWaitGroup.Add(1)
+		go func() {
+			defer publishersWaitGroup.Done()
+			eventBus.Publish(context.Background(), event)
+			eventBus.PublishSync(context.Background(), event)
+		}()
+	}
+	eventBus.Close()
+	publishersWaitGroup.Wait()
+	if remaining := len(eventBus.dispatchChannel); remaining != 0 {
+		t.Fatalf("shutdown left %d queued events unprocessed", remaining)
+	}
 }
 
 func TestCoreEventNewEventUnit(t *testing.T) {

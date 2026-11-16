@@ -4,18 +4,6 @@
       "Config": {
         "description": "Config schema",
         "properties": {
-          "allowed_cidrs": {
-            "items": {
-              "type": "string"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "audit_retention_days": {
-            "type": "integer"
-          },
           "mfa_enforced": {
             "type": "boolean"
           },
@@ -27,8 +15,6 @@
           }
         },
         "required": [
-          "allowed_cidrs",
-          "audit_retention_days",
           "mfa_enforced",
           "session_idle_timeout_seconds",
           "session_max_lifetime_seconds"

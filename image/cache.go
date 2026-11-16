@@ -227,7 +227,7 @@ func (cacheManager *CacheManager) Clear(ctx context.Context) {
 	const truncateSQLStatement = `DELETE FROM image.cache_entries;`
 	_, _ = cacheManager.kernel.DB().Exec(ctx, truncateSQLStatement)
 
-	cacheManager.kernel.EventBus().Publish(ctx, NewCacheFlushedEvent("*", CacheFlushedEventData{
+	cacheManager.kernel.EventBus().Publish(ctx, NewCacheFlushedEvent("", CacheFlushedEventData{
 		SourceURL: "*",
 	}))
 }

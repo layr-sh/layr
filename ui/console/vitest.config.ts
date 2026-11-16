@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { defineVitestProject } from "@nuxt/test-utils/config";
+
 // import { resolve } from "node:path";
 
 export default defineConfig({
@@ -15,36 +16,29 @@ export default defineConfig({
     hookTimeout: 120000,
     pool: "forks",
     isolate: true,
+    coverage: {
+      provider: "v8",
+      reportsDirectory: "../../.cache/coverage/console",
+      include: [
+        "app/composables/use-control-plane.ts",
+        "app/composables/use-auth.ts",
+        "app/pages/control-plane.vue",
+        "app/pages/control-plane/*.vue",
+      ],
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
+    },
     projects: [
-      {
-        test: {
-          name: "server",
-          include: ["server/tests/**/*.test.ts"],
-          environment: "node",
-        },
-      },
       await defineVitestProject({
         test: {
-          name: "unit",
-          include: ["app/tests/unit/**/*.test.ts"],
+          name: "control-plane",
+          include: ["app/tests/control-plane/**/*.test.ts"],
           environment: "nuxt",
-          // setupFiles: ["app/tests/setup.ts"],
-        },
-      }),
-      await defineVitestProject({
-        test: {
-          name: "integration",
-          include: ["app/tests/integration/**/*.test.ts"],
-          environment: "nuxt",
-          // setupFiles: ["app/tests/setup.ts"],
-        },
-      }),
-      await defineVitestProject({
-        test: {
-          name: "e2e",
-          include: ["app/tests/e2e/**/*.test.ts"],
-          environment: "nuxt",
-          // setupFiles: ["app/tests/setup.ts"],
+          testTimeout: 120000,
+          hookTimeout: 120000,
+          fileParallelism: false,
+          environmentOptions: {
+            nuxt: { url: process.env.LAYR__SERVER__BASE_URL },
+          },
         },
       }),
       {

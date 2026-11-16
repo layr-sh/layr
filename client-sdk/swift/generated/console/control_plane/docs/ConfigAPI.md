@@ -64,7 +64,7 @@ Mutates runtime console configuration parameters in console.config, validating s
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
-let config = Config(allowedCidrs: ["allowedCidrs_example"], auditRetentionDays: 123, mfaEnforced: false, sessionIdleTimeoutSeconds: 123, sessionMaxLifetimeSeconds: 123) // Config | Request body for console.Config
+let config = Config(mfaEnforced: false, sessionIdleTimeoutSeconds: 123, sessionMaxLifetimeSeconds: 123) // Config | Request body for console.Config
 
 // Update dynamic runtime console configuration
 do {

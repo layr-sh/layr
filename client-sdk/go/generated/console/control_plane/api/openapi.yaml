@@ -413,22 +413,10 @@ components:
     Config:
       description: Config schema
       example:
-        allowed_cidrs:
-        - allowed_cidrs
-        - allowed_cidrs
-        audit_retention_days: 0
         mfa_enforced: true
-        session_idle_timeout_seconds: 6
-        session_max_lifetime_seconds: 1
+        session_idle_timeout_seconds: 0
+        session_max_lifetime_seconds: 6
       properties:
-        allowed_cidrs:
-          items:
-            type: string
-          nullable: true
-          type: array
-          default: null
-        audit_retention_days:
-          type: integer
         mfa_enforced:
           type: boolean
         session_idle_timeout_seconds:
@@ -436,8 +424,6 @@ components:
         session_max_lifetime_seconds:
           type: integer
       required:
-      - allowed_cidrs
-      - audit_retention_days
       - mfa_enforced
       - session_idle_timeout_seconds
       - session_max_lifetime_seconds

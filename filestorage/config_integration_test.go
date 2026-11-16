@@ -53,8 +53,8 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 	if len(capturedEvents) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(capturedEvents))
 	}
-	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "filestorage.config" {
-		t.Fatalf("expected resourceID 'filestorage.config', got %v", capturedEvents[0].ResourceID)
+	if capturedEvents[0].ResourceID == nil || *capturedEvents[0].ResourceID != "" || capturedEvents[0].ResourceType != "" {
+		t.Fatalf("expected no resource identity for config event, got: %+v", capturedEvents[0])
 	}
 	eventMutex.Unlock()
 

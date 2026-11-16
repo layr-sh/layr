@@ -44,7 +44,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleExecuteSQL(responseWriter 
 
 	controlPlaneHandler.InvalidateCatalog(request.Context())
 
-	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSQLExecutedEvent("raw_sql", SQLExecutedEventData{
+	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewSQLExecutedEvent("", SQLExecutedEventData{
 		Query:        rawSQL,
 		RowsAffected: executeSQLResponse.RowsAffected,
 	}))

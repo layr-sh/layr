@@ -3,6 +3,7 @@ import { createClient, withServiceAccount, type ElevatableService } from "../../
 import type { QueryBuilder } from "../../src/extensions/query-builder";
 import { useAuth } from "../../src/services/auth";
 import { useData } from "../../src/services/data";
+import { useCore } from "../../src/services/core";
 
 describe("Client Context & Elevation Unit Tests", () => {
   it("CL-01: Factory Instantiation produces valid LayrClient", () => {
@@ -45,6 +46,37 @@ describe("Client Context & Elevation Unit Tests", () => {
     client.clearSession();
     expect(client.sessionToken).toBeUndefined();
     expect(client.headers["Authorization"]).toBeUndefined();
+  });
+
+  it("keeps existing control-plane clients synchronized with session changes", async () => {
+    for (const serviceAccountKey of [undefined, "explicit-service-account-key"]) {
+      const requests: Headers[] = [];
+      const client = createClient({
+        endpoint: "https://api.layr.sh",
+        fetch: async (_input, init) => {
+          requests.push(new Headers(init?.headers));
+          return Response.json([]);
+        },
+      });
+      const core = withServiceAccount(useCore(client), { serviceAccountKey }).cp;
+      await core.service_accounts.list();
+      client.setSession("first-session");
+      await core.service_accounts.list();
+      client.setSession("replacement-session");
+      await core.service_accounts.list();
+      client.clearSession();
+      await core.service_accounts.list();
+      expect(requests.map((headers) => headers.get("Authorization"))).toEqual([
+        null,
+        "Bearer first-session",
+        "Bearer replacement-session",
+        null,
+      ]);
+      expect(requests.map((headers) => headers.get("Service-Account-Key"))).toEqual(
+        Array(4).fill(serviceAccountKey ?? null),
+      );
+      expect(client.headers["Service-Account-Key"]).toBeUndefined();
+    }
   });
 
   it("CL-04: Elevation attaches .cp control plane namespace", () => {

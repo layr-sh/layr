@@ -21,8 +21,6 @@ var _ MappedNullable = &Config{}
 
 // Config Config schema
 type Config struct {
-	AllowedCidrs []string `json:"allowed_cidrs"`
-	AuditRetentionDays int32 `json:"audit_retention_days"`
 	MfaEnforced bool `json:"mfa_enforced"`
 	SessionIdleTimeoutSeconds int32 `json:"session_idle_timeout_seconds"`
 	SessionMaxLifetimeSeconds int32 `json:"session_max_lifetime_seconds"`
@@ -34,10 +32,8 @@ type _Config Config
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewConfig(allowedCidrs []string, auditRetentionDays int32, mfaEnforced bool, sessionIdleTimeoutSeconds int32, sessionMaxLifetimeSeconds int32) *Config {
+func NewConfig(mfaEnforced bool, sessionIdleTimeoutSeconds int32, sessionMaxLifetimeSeconds int32) *Config {
 	this := Config{}
-	this.AllowedCidrs = allowedCidrs
-	this.AuditRetentionDays = auditRetentionDays
 	this.MfaEnforced = mfaEnforced
 	this.SessionIdleTimeoutSeconds = sessionIdleTimeoutSeconds
 	this.SessionMaxLifetimeSeconds = sessionMaxLifetimeSeconds
@@ -50,56 +46,6 @@ func NewConfig(allowedCidrs []string, auditRetentionDays int32, mfaEnforced bool
 func NewConfigWithDefaults() *Config {
 	this := Config{}
 	return &this
-}
-
-// GetAllowedCidrs returns the AllowedCidrs field value
-// If the value is explicit nil, the zero value for []string will be returned
-func (o *Config) GetAllowedCidrs() []string {
-	if o == nil {
-		var ret []string
-		return ret
-	}
-
-	return o.AllowedCidrs
-}
-
-// GetAllowedCidrsOk returns a tuple with the AllowedCidrs field value
-// and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *Config) GetAllowedCidrsOk() ([]string, bool) {
-	if o == nil || IsNil(o.AllowedCidrs) {
-		return nil, false
-	}
-	return o.AllowedCidrs, true
-}
-
-// SetAllowedCidrs sets field value
-func (o *Config) SetAllowedCidrs(v []string) {
-	o.AllowedCidrs = v
-}
-
-// GetAuditRetentionDays returns the AuditRetentionDays field value
-func (o *Config) GetAuditRetentionDays() int32 {
-	if o == nil {
-		var ret int32
-		return ret
-	}
-
-	return o.AuditRetentionDays
-}
-
-// GetAuditRetentionDaysOk returns a tuple with the AuditRetentionDays field value
-// and a boolean to check if the value has been set.
-func (o *Config) GetAuditRetentionDaysOk() (*int32, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.AuditRetentionDays, true
-}
-
-// SetAuditRetentionDays sets field value
-func (o *Config) SetAuditRetentionDays(v int32) {
-	o.AuditRetentionDays = v
 }
 
 // GetMfaEnforced returns the MfaEnforced field value
@@ -184,10 +130,6 @@ func (o Config) MarshalJSON() ([]byte, error) {
 
 func (o Config) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if o.AllowedCidrs != nil {
-		toSerialize["allowed_cidrs"] = o.AllowedCidrs
-	}
-	toSerialize["audit_retention_days"] = o.AuditRetentionDays
 	toSerialize["mfa_enforced"] = o.MfaEnforced
 	toSerialize["session_idle_timeout_seconds"] = o.SessionIdleTimeoutSeconds
 	toSerialize["session_max_lifetime_seconds"] = o.SessionMaxLifetimeSeconds
@@ -199,8 +141,6 @@ func (o *Config) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"allowed_cidrs",
-		"audit_retention_days",
 		"mfa_enforced",
 		"session_idle_timeout_seconds",
 		"session_max_lifetime_seconds",

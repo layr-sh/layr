@@ -1,6 +1,7 @@
 import { Configuration } from "../../generated/core/control_plane/runtime";
 import { Configuration as BaseConfiguration } from "../../generated/core/base/runtime";
 import {
+  ConfigApi,
   EventHooksApi,
   EventHooksDeliveriesApi,
   EventsApi,
@@ -17,6 +18,7 @@ import type {
   EventHook,
   EventHookDelivery,
   ListEventsResponse,
+  RuntimeConfig,
   ServiceAccount,
   UpdateEventHookInput,
   UpdateServiceAccountInput,
@@ -31,6 +33,10 @@ import {
 import { handleApiCall } from "../core/transport";
 
 export interface CoreControlPlane {
+  config: {
+    get: () => Promise<RuntimeConfig>;
+    update: (input: RuntimeConfig) => Promise<RuntimeConfig>;
+  };
   event_hooks: {
     create: (input: CreateEventHookInput) => Promise<EventHook>;
     delete: (eventHookId: string) => Promise<void>;
@@ -73,6 +79,13 @@ export function useCore(client: LayrClient): CoreService {
     [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): CoreControlPlane => {
       const elevatedConfig = new Configuration(configuration);
       return {
+        config: {
+          get: () => handleApiCall(() => new ConfigApi(elevatedConfig).coreConfigGet()),
+          update: (input: RuntimeConfig) =>
+            handleApiCall(() =>
+              new ConfigApi(elevatedConfig).coreConfigUpdate({ runtimeConfig: input }),
+            ),
+        },
         event_hooks: {
           create: (input: CreateEventHookInput) =>
             handleApiCall(() =>

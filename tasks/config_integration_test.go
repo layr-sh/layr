@@ -41,7 +41,8 @@ func TestTasksConfigPostgresIntegration(t *testing.T) {
 	eventMutex.Lock()
 	require.Len(t, capturedEvents, 1)
 	require.NotNil(t, capturedEvents[0].ResourceID)
-	require.Equal(t, "tasks.config", *capturedEvents[0].ResourceID)
+	require.Empty(t, *capturedEvents[0].ResourceID)
+	require.Empty(t, capturedEvents[0].ResourceType)
 	eventMutex.Unlock()
 
 	freshConfigManager := NewConfigManager(kernel)

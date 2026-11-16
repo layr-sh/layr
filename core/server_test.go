@@ -519,6 +519,22 @@ func TestCoreWriteJSONResponseUnit(t *testing.T) {
 	}
 }
 
+func TestCoreServerServiceAuthorizationUnit(t *testing.T) {
+	kernel := NewTestKernel(nil)
+	kernel.RegisterService(&mockServiceRunner{})
+	server := NewServer(kernel)
+	for path, expectedStatus := range map[string]int{"/service-denied": http.StatusForbidden, "/unhandled": http.StatusNotFound} {
+		t.Run(path, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+			responseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(responseRecorder, request)
+			if responseRecorder.Code != expectedStatus {
+				t.Fatalf("expected %d, got %d", expectedStatus, responseRecorder.Code)
+			}
+		})
+	}
+}
+
 func TestCoreServerHostHandlerUnit(t *testing.T) {
 	cryptoKeyManager, _ := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
 	jwtSigner := NewJWTSigner(cryptoKeyManager)

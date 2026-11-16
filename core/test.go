@@ -354,6 +354,7 @@ func NewTestKernel(db *DatabasePool, options ...TestKernelOption) *Kernel {
 		kvStore:          NewInMemoryKVStore(),
 	}
 
+	kernel.configManager = NewConfigManager(kernel)
 	if db != nil {
 		kernel.serviceAccountManager = NewServiceAccountManager(db)
 		kernel.eventBus = NewEventBus(db, cryptoKeyManager)

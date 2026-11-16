@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"layr.sh/core"
@@ -76,7 +78,9 @@ type cliOptions struct {
 
 // Run parses command-line arguments and executes the Layr CLI.
 func Run(args []string) error {
-	return Execute(context.Background(), args)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return Execute(ctx, args)
 }
 
 // Execute executes the Layr CLI with a provided context and argument slice.
