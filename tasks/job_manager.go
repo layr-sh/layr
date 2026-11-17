@@ -145,10 +145,12 @@ func (jobManager *JobManager) ListJobs(ctx context.Context) ([]GetJobResponse, e
 	var jobs []GetJobResponse
 	for rows.Next() {
 		var job Job
-		_ = rows.Scan(
+		if scanErr := rows.Scan(
 			&job.ID, &job.Name, &job.CronExpression, &job.Timezone, &job.TargetType, &job.TargetPayload,
 			&job.IsEnabled, &job.LastRunAt, &job.NextRunAt, &job.CreatedAt, &job.LastUpdatedAt,
-		)
+		); scanErr != nil {
+			return nil, fmt.Errorf("failed to scan job: %w", scanErr)
+		}
 
 		countdown := int64(time.Until(job.NextRunAt).Seconds())
 		if countdown < 0 {
@@ -161,6 +163,9 @@ func (jobManager *JobManager) ListJobs(ctx context.Context) ([]GetJobResponse, e
 		})
 	}
 
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("failed to read jobs: %w", rowsErr)
+	}
 	return jobs, nil
 }
 
@@ -266,8 +271,23 @@ func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) er
 		return err
 	}
 
+	tx, beginErr := jobManager.kernel.DB().Begin(ctx)
+	if beginErr != nil {
+		return fmt.Errorf("failed to begin job deletion: %w", beginErr)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// Serialize deletion with the scheduler and the foreign-key checks used
+	// when manual executions are enqueued.
+	var lockedJobID uuid.UUID
+	if lockErr := tx.QueryRow(ctx, `SELECT id FROM tasks.jobs WHERE id = $1 FOR UPDATE`, jobID).Scan(&lockedJobID); lockErr != nil {
+		if errors.Is(lockErr, pgx.ErrNoRows) {
+			return ErrJobNotFound
+		}
+		return fmt.Errorf("failed to lock job for deletion: %w", lockErr)
+	}
+
 	// Delete pending executions
-	execResult, err := jobManager.kernel.DB().Exec(ctx, `
+	execResult, err := tx.Exec(ctx, `
 		DELETE FROM tasks.executions
 		WHERE job_id = $1 AND status = 'pending'
 	`, jobID)
@@ -277,11 +297,14 @@ func (jobManager *JobManager) DeleteJob(ctx context.Context, jobID uuid.UUID) er
 	deletedExecutionsCount := int(execResult.RowsAffected())
 
 	// Delete job
-	_, err = jobManager.kernel.DB().Exec(ctx, `DELETE FROM tasks.jobs WHERE id = $1`, jobID)
+	_, err = tx.Exec(ctx, `DELETE FROM tasks.jobs WHERE id = $1`, jobID)
 	if err != nil {
 		return fmt.Errorf("failed to delete job: %w", err)
 	}
 
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return fmt.Errorf("failed to commit job deletion: %w", commitErr)
+	}
 	jobManager.kernel.EventBus().Publish(ctx, NewJobDeletedEvent(jobID.String(), JobDeletedEventData{
 		Job:                    getJobResponse.Job,
 		DeletedExecutionsCount: deletedExecutionsCount,
@@ -396,7 +419,9 @@ func (jobManager *JobManager) ListExecutions(ctx context.Context, jobID *uuid.UU
 	}
 
 	logs := []ExecutionLog{}
-	_ = json.Unmarshal(rawJSON, &logs)
+	if decodeErr := json.Unmarshal(rawJSON, &logs); decodeErr != nil {
+		return nil, 0, fmt.Errorf("failed to decode execution logs: %w", decodeErr)
+	}
 
 	return logs, totalCount, nil
 }
@@ -445,7 +470,9 @@ func (jobManager *JobManager) ListDLQ(ctx context.Context, limit, offset int) ([
 	}
 
 	items := []DLQExecution{}
-	_ = json.Unmarshal(rawJSON, &items)
+	if decodeErr := json.Unmarshal(rawJSON, &items); decodeErr != nil {
+		return nil, 0, fmt.Errorf("failed to decode dlq items: %w", decodeErr)
+	}
 
 	return items, totalCount, nil
 }
@@ -489,7 +516,7 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 			last_error = NULL,
 			locked_at = NULL,
 			locked_by = NULL
-		WHERE id = $2
+		WHERE id = $2 AND status = 'failed'
 		RETURNING id, job_id, status, run_at, payload, attempts, max_attempts, locked_at, locked_by, last_error, created_at
 	`, StatusPending, executionID).Scan(
 		&execution.ID,
@@ -505,6 +532,9 @@ func (jobManager *JobManager) RetryDLQExecution(ctx context.Context, executionID
 		&execution.CreatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrDLQItemNotFound
+		}
 		return nil, fmt.Errorf("failed to re-queue dlq item: %w", err)
 	}
 

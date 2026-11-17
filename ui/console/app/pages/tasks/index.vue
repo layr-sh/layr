@@ -1,68 +1,86 @@
 <script setup lang="ts">
-const queues = [
-  { name: "default", pending: 0, processing: 0, failed: 0, status: "Active" },
-  { name: "notifications", pending: 0, processing: 0, failed: 0, status: "Active" },
-];
+const auth = useAuth();
+const client = useClient();
+const tasksControlPlane = useTasksControlPlane(client.value.tasks.cp);
+const metrics = computed(() => {
+  if (!tasksControlPlane.stats.value) return [];
+  const stats = tasksControlPlane.stats.value;
+  return [
+    { label: "Total Jobs", value: stats.totalJobs, description: "Registered recurring jobs" },
+    { label: "Active Jobs", value: stats.activeJobs, description: "Enabled scheduled jobs" },
+    { label: "Paused Jobs", value: stats.pausedJobs, description: "Jobs with scheduling disabled" },
+    {
+      label: "Pending Executions",
+      value: stats.pendingExecutions,
+      description: "Executions waiting for a worker",
+    },
+    {
+      label: "Running Executions",
+      value: stats.runningExecutions,
+      description: "Executions currently in progress",
+    },
+    {
+      label: "Completed Executions",
+      value: stats.completedExecutions,
+      description: "Successfully completed executions",
+    },
+    {
+      label: "Failed Executions",
+      value: stats.failedExecutions,
+      description: "Executions that failed",
+    },
+  ];
+});
+onMounted(() => {
+  if (auth.hasScope("tasks:stats.read")) return tasksControlPlane.load("statistics");
+});
 </script>
 
 <template>
-  <div class="space-y-8">
-    <!-- Header -->
-    <div
-      class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-default"
+  <div class="space-y-6" :aria-busy="tasksControlPlane.busy.value">
+    <UAlert
+      v-if="tasksControlPlane.error.value"
+      title="Request Failed"
+      :description="tasksControlPlane.error.value"
+      color="error"
+      role="alert"
+    />
+    <UCard
+      title="Tasks Statistics"
+      description="A current snapshot of scheduled jobs and execution queue activity."
     >
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-highlighted">Tasks</h1>
-        <p class="text-sm text-muted mt-1">Queues and scheduled background jobs.</p>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <UButton
-          label="Dispatch Task"
-          icon="i-lucide-play"
-          color="neutral"
-          variant="solid"
-          size="sm"
-        />
-      </div>
-    </div>
-
-    <!-- Queues -->
-    <div class="rounded-lg border border-default bg-muted/20 overflow-hidden">
-      <div class="p-4 border-b border-default flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <UIcon name="i-lucide-clock" class="size-4 text-muted" />
-          <span class="text-sm font-semibold text-highlighted">Active Job Queues</span>
+      <dl v-if="tasksControlPlane.stats.value" class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+        <div v-for="metric in metrics" :key="metric.label" class="space-y-2">
+          <dt class="text-sm text-muted">{{ metric.label }}</dt>
+          <dd class="text-3xl font-semibold tracking-tight tabular-nums text-highlighted">
+            {{ metric.value.toLocaleString() }}
+          </dd>
+          <dd class="text-sm text-muted">{{ metric.description }}</dd>
         </div>
-        <span class="text-xs text-muted font-mono">{{ queues.length }} queues</span>
-      </div>
-
-      <div class="divide-y divide-default">
-        <div
-          v-for="queue in queues"
-          :key="queue.name"
-          class="p-4 flex items-center justify-between hover:bg-accented/30 transition"
-        >
-          <div class="flex items-center gap-3">
-            <div
-              class="size-8 rounded bg-accented/50 border border-default flex items-center justify-center text-highlighted"
-            >
-              <UIcon name="i-lucide-layers" class="size-4" />
-            </div>
-            <div>
-              <span class="font-mono text-sm font-semibold text-highlighted">{{ queue.name }}</span>
-              <p class="text-xs text-dimmed mt-0.5">
-                {{ queue.pending }} pending &bull; {{ queue.processing }} running &bull;
-                {{ queue.failed }} failed
-              </p>
-            </div>
-          </div>
-
-          <UBadge color="success" variant="subtle" size="xs" class="text-[10px]">
-            {{ queue.status }}
-          </UBadge>
-        </div>
-      </div>
-    </div>
+      </dl>
+      <UEmpty
+        v-else
+        :title="
+          tasksControlPlane.busy.value ? 'Loading Tasks Statistics…' : 'Statistics Unavailable'
+        "
+        :loading="tasksControlPlane.busy.value"
+        icon="i-lucide-chart-no-axes-combined"
+      />
+    </UCard>
+    <UCard
+      v-if="tasksControlPlane.stats.value"
+      title="Execution Success Rate"
+      description="Completed executions as a share of completed and failed executions. The service reports 100% when none have finished."
+      :ui="{ body: 'space-y-4' }"
+    >
+      <p class="text-3xl font-semibold tabular-nums text-highlighted">
+        {{ tasksControlPlane.stats.value.successRate.toFixed(2) }}%
+      </p>
+      <UProgress
+        :model-value="tasksControlPlane.stats.value.successRate"
+        :max="100"
+        :get-value-label="(value) => `Execution Success Rate: ${value}%`"
+      />
+    </UCard>
   </div>
 </template>

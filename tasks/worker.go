@@ -253,27 +253,40 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 
 	durationMs := time.Since(start).Milliseconds()
 	historyCtx := context.WithoutCancel(ctx)
+	tx, beginErr := workerQueue.kernel.DB().Begin(historyCtx)
+	if beginErr != nil {
+		log.Errorf("failed to begin execution result transaction for %s: %v", execution.ID, beginErr)
+		return
+	}
+	defer func() { _ = tx.Rollback(historyCtx) }()
+	var resultEvents []core.Event
 
 	if execErr == nil {
 		// --- Success ---
-		_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
+		if _, updateErr := tx.Exec(historyCtx, `
 			UPDATE tasks.executions SET
 				status = $1,
 				locked_at = NULL,
 				locked_by = NULL
 			WHERE id = $2
-		`, StatusCompleted, execution.ID)
+		`, StatusCompleted, execution.ID); updateErr != nil {
+			log.Errorf("failed to persist completed execution %s: %v", execution.ID, updateErr)
+			return
+		}
 
 		logStatus := StatusSuccess
-		_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
+		if _, insertErr := tx.Exec(historyCtx, `
 			INSERT INTO tasks.execution_logs (
 				job_id, execution_id, status, response_status_code, execution_duration_ms, response_body, executed_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, clock_timestamp()
 			)
-		`, execution.JobID, execution.ID, logStatus, responseStatusCode, durationMs, responseBody)
+		`, execution.JobID, execution.ID, logStatus, responseStatusCode, durationMs, responseBody); insertErr != nil {
+			log.Errorf("failed to record successful execution %s: %v", execution.ID, insertErr)
+			return
+		}
 
-		workerQueue.kernel.EventBus().Publish(ctx, NewExecutionCompletedEvent(execution.ID.String(), ExecutionCompletedEventData{
+		resultEvents = append(resultEvents, NewExecutionCompletedEvent(execution.ID.String(), ExecutionCompletedEventData{
 			Execution:          *execution,
 			JobName:            jobName,
 			DurationMs:         durationMs,
@@ -287,7 +300,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 		logStatus := StatusFailed
 		if errors.Is(execErr, context.DeadlineExceeded) || strings.Contains(strings.ToLower(errMsg), "deadline exceeded") {
 			logStatus = StatusTimeout
-			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionTimedOutEvent(execution.ID.String(), ExecutionTimedOutEventData{
+			resultEvents = append(resultEvents, NewExecutionTimedOutEvent(execution.ID.String(), ExecutionTimedOutEventData{
 				Execution:           *execution,
 				JobName:             jobName,
 				DurationMs:          durationMs,
@@ -296,7 +309,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			}))
 			log.Warnf("execution %s timed out after %ds", execution.ID, timeoutSeconds)
 		} else {
-			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionFailedEvent(execution.ID.String(), ExecutionFailedEventData{
+			resultEvents = append(resultEvents, NewExecutionFailedEvent(execution.ID.String(), ExecutionFailedEventData{
 				Execution:          *execution,
 				JobName:            jobName,
 				DurationMs:         durationMs,
@@ -306,13 +319,16 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			}))
 		}
 
-		_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
+		if _, insertErr := tx.Exec(historyCtx, `
 			INSERT INTO tasks.execution_logs (
 				job_id, execution_id, status, response_status_code, execution_duration_ms, response_body, error_message, executed_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7, clock_timestamp()
 			)
-		`, execution.JobID, execution.ID, logStatus, responseStatusCode, durationMs, responseBody, errMsg)
+		`, execution.JobID, execution.ID, logStatus, responseStatusCode, durationMs, responseBody, errMsg); insertErr != nil {
+			log.Errorf("failed to record failed execution %s: %v", execution.ID, insertErr)
+			return
+		}
 
 		nextAttempt := execution.Attempts + 1
 		// Check if we should retry or isolate in DLQ
@@ -320,7 +336,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			delay := CalculateTaskBackoff(nextAttempt, tasksConfig.RetryInitialDelaySeconds, tasksConfig.RetryMaxDelaySeconds)
 			nextRunAt := time.Now().Add(delay)
 
-			_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
+			if _, updateErr := tx.Exec(historyCtx, `
 				UPDATE tasks.executions SET
 					status = $1,
 					attempts = $2,
@@ -329,9 +345,12 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 					locked_by = NULL,
 					last_error = $4
 				WHERE id = $5
-			`, StatusPending, nextAttempt, nextRunAt, errMsg, execution.ID)
+			`, StatusPending, nextAttempt, nextRunAt, errMsg, execution.ID); updateErr != nil {
+				log.Errorf("failed to persist retry for execution %s: %v", execution.ID, updateErr)
+				return
+			}
 
-			workerQueue.kernel.EventBus().Publish(ctx, NewExecutionRetriedEvent(execution.ID.String(), ExecutionRetriedEventData{
+			resultEvents = append(resultEvents, NewExecutionRetriedEvent(execution.ID.String(), ExecutionRetriedEventData{
 				Execution:      *execution,
 				JobName:        jobName,
 				Attempt:        nextAttempt,
@@ -343,7 +362,7 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			log.Warnf("execution %s failed: %v (retrying in %ds)", execution.ID, execErr, int(delay.Seconds()))
 		} else {
 			// Move to Dead-Letter Queue
-			_, _ = workerQueue.kernel.DB().Exec(historyCtx, `
+			if _, updateErr := tx.Exec(historyCtx, `
 				UPDATE tasks.executions SET
 					status = $1,
 					attempts = $2,
@@ -351,9 +370,12 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 					locked_by = NULL,
 					last_error = $3
 				WHERE id = $4
-			`, StatusFailed, nextAttempt, errMsg, execution.ID)
+			`, StatusFailed, nextAttempt, errMsg, execution.ID); updateErr != nil {
+				log.Errorf("failed to persist dead-lettered execution %s: %v", execution.ID, updateErr)
+				return
+			}
 
-			workerQueue.kernel.EventBus().Publish(ctx, NewDLQIsolatedEvent(execution.ID.String(), DLQIsolatedEventData{
+			resultEvents = append(resultEvents, NewDLQIsolatedEvent(execution.ID.String(), DLQIsolatedEventData{
 				Execution:     *execution,
 				JobName:       jobName,
 				TotalAttempts: nextAttempt,
@@ -361,5 +383,12 @@ func (workerQueue *WorkerQueue) processExecution(ctx context.Context, execution 
 			}))
 			log.Errorf("execution %s failed permanently: %v (moved to DLQ)", execution.ID, execErr)
 		}
+	}
+	if commitErr := tx.Commit(historyCtx); commitErr != nil {
+		log.Errorf("failed to commit result for execution %s: %v", execution.ID, commitErr)
+		return
+	}
+	for _, resultEvent := range resultEvents {
+		workerQueue.kernel.EventBus().Publish(ctx, resultEvent)
 	}
 }

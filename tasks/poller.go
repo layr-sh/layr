@@ -95,22 +95,27 @@ func (jobPoller *JobPoller) PollOnce(ctx context.Context) (int, error) {
 		_ = tx.Rollback(ctx)
 	}()
 
-	rows, _ := tx.Query(ctx, `
+	rows, queryErr := tx.Query(ctx, `
 		SELECT id, name, cron_expression, timezone, target_type, target_payload, is_enabled, last_run_at, next_run_at, created_at, last_updated_at
 		FROM tasks.jobs
 		WHERE is_enabled = true AND next_run_at <= clock_timestamp()
 		FOR UPDATE SKIP LOCKED
 	`)
+	if queryErr != nil {
+		return 0, fmt.Errorf("failed to query due jobs: %w", queryErr)
+	}
 	defer rows.Close()
 
 	var dueJobs []Job
 	for rows.Next() {
 		var targetDueJob Job
-		_ = rows.Scan(
+		if scanErr := rows.Scan(
 			&targetDueJob.ID, &targetDueJob.Name, &targetDueJob.CronExpression, &targetDueJob.Timezone,
 			&targetDueJob.TargetType, &targetDueJob.TargetPayload, &targetDueJob.IsEnabled,
 			&targetDueJob.LastRunAt, &targetDueJob.NextRunAt, &targetDueJob.CreatedAt, &targetDueJob.LastUpdatedAt,
-		)
+		); scanErr != nil {
+			return 0, fmt.Errorf("failed to scan due job: %w", scanErr)
+		}
 		dueJobs = append(dueJobs, targetDueJob)
 	}
 	rows.Close()
@@ -120,7 +125,9 @@ func (jobPoller *JobPoller) PollOnce(ctx context.Context) (int, error) {
 	}
 
 	if len(dueJobs) == 0 {
-		_ = tx.Commit(ctx)
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return 0, fmt.Errorf("failed to commit scheduling transaction: %w", commitErr)
+		}
 		return 0, nil
 	}
 

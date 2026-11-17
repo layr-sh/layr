@@ -23,6 +23,11 @@ export default defineConfig({
         "app/composables/use-control-plane.ts",
         "app/composables/use-auth.ts",
         "app/composables/use-image-control-plane.ts",
+        "app/composables/use-tasks-control-plane.ts",
+        "app/utils/task-forms.ts",
+        "app/components/tasks/*.vue",
+        "app/pages/tasks.vue",
+        "app/pages/tasks/*.vue",
         "app/pages/image.vue",
         "app/pages/image/*.vue",
         "app/pages/control-plane.vue",
@@ -33,8 +38,12 @@ export default defineConfig({
     projects: [
       await defineVitestProject({
         test: {
-          name: "control-plane",
-          include: ["app/tests/control-plane/**/*.test.ts", "app/tests/images/**/*.test.ts"],
+          name: "services",
+          include: [
+            "app/tests/control-plane/**/*.test.ts",
+            "app/tests/images/**/*.test.ts",
+            "app/tests/tasks/**/*.test.ts",
+          ],
           environment: "nuxt",
           testTimeout: 120000,
           hookTimeout: 120000,
