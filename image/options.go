@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+
 	"net/url"
 	"strconv"
 	"strings"
@@ -111,6 +112,11 @@ type ProcessingOptions struct {
 	VideoThumbnailSecond float64
 	FallbackImageURL     string
 	SkipProcessing       []string
+
+	stripMetadataSet     bool
+	keepCopyrightSet     bool
+	stripColorProfileSet bool
+	watermarkData        []byte
 }
 
 // NewDefaultProcessingOptions creates a baseline options struct with default values.
@@ -123,6 +129,7 @@ func NewDefaultProcessingOptions() ProcessingOptions {
 		ExtendGravity:     GravityOption{Type: GravityCenter},
 		CropGravity:       GravityOption{Type: GravityCenter},
 		WatermarkGravity:  GravityOption{Type: GravityCenter},
+		WatermarkOpacity:  1.0,
 		AutoRotate:        true,
 		BackgroundAlpha:   1.0,
 		StripMetadata:     true,
@@ -398,14 +405,17 @@ func ParseProcessingOptions(optionsString string, presetResolver func(name strin
 		case "strip_metadata", "sm":
 			if len(args) > 0 {
 				processingOptions.StripMetadata = parseBooleanFlag(args[0])
+				processingOptions.stripMetadataSet = true
 			}
 		case "keep_copyright", "kcr":
 			if len(args) > 0 {
 				processingOptions.KeepCopyright = parseBooleanFlag(args[0])
+				processingOptions.keepCopyrightSet = true
 			}
 		case "strip_color_profile", "scp":
 			if len(args) > 0 {
 				processingOptions.StripColorProfile = parseBooleanFlag(args[0])
+				processingOptions.stripColorProfileSet = true
 			}
 		case "zoom", "z":
 			parseZoomOption(&processingOptions, args)

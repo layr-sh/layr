@@ -7,7 +7,7 @@ export default defineNuxtRouteMiddleware(async ({ path: toPath }) => {
     "/storage": "file_storage",
     "/functions": "function",
     "/tasks": "tasks",
-    "/images": "image",
+    "/image": "image",
   };
 
   const matchedPrefix = Object.keys(serviceRouteMap).find(

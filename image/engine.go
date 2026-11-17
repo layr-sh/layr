@@ -2,18 +2,20 @@ package image
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
-	"image/jpeg"
-	"image/png"
 	"io"
+
 	"strconv"
 	"strings"
 
 	"github.com/KarpelesLab/gowebp"
 	"github.com/disintegration/imaging"
+	"github.com/gen2brain/jpegn"
+	"github.com/gen2brain/pngn"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
 )
@@ -32,6 +34,17 @@ const (
 	rgbComponentLength3    = 3
 	rgbComponentLength6    = 6
 	rgbColonPartsCount     = 3
+	bitsPerByte            = 8
+	pngChunkOverhead       = 12
+	jpegMarkerPrefix       = 0xff
+	exifEntrySize          = 12
+	exifInlineValueSize    = 4
+	exifCopyrightOffset    = 26
+	jpegAPP1Marker         = 0xe1
+	gifTrailerMarker       = 0x3b
+	gifExtensionMarker     = 0x21
+	gifImageMarker         = 0x2c
+	gifFrameDescriptorSize = 9
 )
 
 // Engine performs pure-Go image transformations, decodings, encodings, and metadata introspection.
@@ -56,6 +69,17 @@ func (engine *Engine) Transform(inputReader io.Reader, processingOptions Process
 	sourceImage, detectedFormat, decodeErr := engine.decodeImage(bytes.NewReader(inputBytes))
 	if decodeErr != nil {
 		return nil, "", fmt.Errorf("failed to decode source image: %w", decodeErr)
+	}
+
+	runtimeConfig := engine.configManager.Get()
+	if !processingOptions.stripMetadataSet {
+		processingOptions.StripMetadata = runtimeConfig.StripMetadata
+	}
+	if !processingOptions.keepCopyrightSet {
+		processingOptions.KeepCopyright = runtimeConfig.KeepCopyright
+	}
+	if !processingOptions.stripColorProfileSet {
+		processingOptions.StripColorProfile = runtimeConfig.StripColorProfile
 	}
 
 	// 1. Raw Mode Passthrough Check
@@ -114,17 +138,81 @@ func (engine *Engine) Transform(inputReader io.Reader, processingOptions Process
 	// 10. Watermark
 	if processingOptions.WatermarkURL != "" {
 		watermarkedNRGBA, watermarkErr := engine.applyWatermark(workingNRGBA, processingOptions)
-		if watermarkErr == nil {
-			workingNRGBA = watermarkedNRGBA
+		if watermarkErr != nil {
+			return nil, "", fmt.Errorf("failed to apply watermark: %w", watermarkErr)
 		}
+		workingNRGBA = watermarkedNRGBA
 	}
 
 	// 11. Format Encoding
-	outputBytes, encodeErr := encodeImage(workingNRGBA, targetFormat, processingOptions.Quality, engine.configManager.Get())
+	var outputBytes []byte
+	var encodeErr error
+	if detectedFormat == FormatPNG && targetFormat == FormatPNG {
+		metadata, metadataErr := pngn.DecodeMetadata(bytes.NewReader(inputBytes))
+		if metadataErr != nil {
+			return nil, "", fmt.Errorf("failed to read source metadata: %w", metadataErr)
+		}
+		if processingOptions.StripMetadata {
+			retainedMetadata := &pngn.Metadata{}
+			if processingOptions.KeepCopyright {
+				for _, text := range metadata.Text {
+					if strings.EqualFold(text.Keyword, "Copyright") {
+						retainedMetadata.Text = append(retainedMetadata.Text, text)
+					}
+				}
+			}
+			retainedMetadata.ICCProfile = metadata.ICCProfile
+			metadata = retainedMetadata
+		}
+		if processingOptions.StripColorProfile {
+			metadata.ICCProfile = nil
+		}
+		var outputBuffer bytes.Buffer
+		encodeErr = pngn.Encode(&outputBuffer, workingNRGBA, &pngn.EncodeOptions{Interlace: runtimeConfig.PNGInterlaced, Metadata: metadata})
+		outputBytes = outputBuffer.Bytes()
+	} else {
+		outputBytes, encodeErr = encodeImage(workingNRGBA, targetFormat, processingOptions.Quality, runtimeConfig)
+	}
 	if encodeErr != nil {
 		return nil, "", fmt.Errorf("failed to encode output image to %s: %w", targetFormat, encodeErr)
 	}
 
+	if detectedFormat == FormatJPEG && (targetFormat == FormatJPEG || targetFormat == FormatJPG) {
+		var retainedSegments []byte
+		for offset := 2; offset+4 <= len(inputBytes); {
+			marker := inputBytes[offset+1]
+			if marker == 0xda || marker == 0xd9 {
+				break
+			}
+			segmentLength := int(binary.BigEndian.Uint16(inputBytes[offset+2:]))
+			if segmentLength < 2 || segmentLength > len(inputBytes)-offset-2 {
+				return nil, "", fmt.Errorf("invalid JPEG metadata segment length")
+			}
+			payload := inputBytes[offset+4 : offset+2+segmentLength]
+			isProfile := marker == 0xe2 && bytes.HasPrefix(payload, []byte("ICC_PROFILE\x00"))
+			if (isProfile && !processingOptions.StripColorProfile) || (!isProfile && !processingOptions.StripMetadata && (marker >= 0xe1 && marker <= 0xef || marker == 0xfe)) {
+				retainedSegments = append(retainedSegments, inputBytes[offset:offset+2+segmentLength]...)
+			}
+			offset += segmentLength + 2
+		}
+		if processingOptions.StripMetadata && processingOptions.KeepCopyright {
+			exif, exifErr := jpegn.DecodeExif(bytes.NewReader(inputBytes))
+			if exifErr == nil && exif.Copyright != "" {
+				copyright := append([]byte(exif.Copyright), 0)
+				payload := append([]byte("Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x98\x82\x02\x00"), make([]byte, exifEntrySize)...)
+				binary.LittleEndian.PutUint32(payload[20:], uint32(len(copyright)))
+				if len(copyright) <= exifInlineValueSize {
+					copy(payload[24:28], copyright)
+				} else {
+					binary.LittleEndian.PutUint32(payload[24:], exifCopyrightOffset)
+					payload = append(payload, copyright...)
+				}
+				retainedSegments = append(retainedSegments, jpegMarkerPrefix, jpegAPP1Marker, byte((len(payload)+2)>>bitsPerByte), byte(len(payload)+2))
+				retainedSegments = append(retainedSegments, payload...)
+			}
+		}
+		outputBytes = append(append(append([]byte{}, outputBytes[:2]...), retainedSegments...), outputBytes[2:]...)
+	}
 	return outputBytes, resolveMIMEType(targetFormat), nil
 }
 
@@ -184,7 +272,79 @@ func (engine *Engine) Inspect(inputReader io.Reader, infoOptions InfoOptions) (*
 }
 
 func (engine *Engine) decodeImage(inputReader io.Reader) (image.Image, string, error) {
-	decodedImage, formatName, decodeErr := image.Decode(inputReader)
+	inputBytes, readErr := io.ReadAll(inputReader)
+	if readErr != nil {
+		return nil, "", fmt.Errorf("failed reading image input stream: %w", readErr)
+	}
+	imageConfig, formatName, configErr := image.DecodeConfig(bytes.NewReader(inputBytes))
+	if configErr != nil {
+		return nil, "", fmt.Errorf("unsupported or corrupted image format: %w", configErr)
+	}
+	runtimeConfig := engine.configManager.Get()
+	if runtimeConfig.MaxSrcResolution > 0 && uint64(imageConfig.Width)*uint64(imageConfig.Height) > uint64(runtimeConfig.MaxSrcResolution)*1000000 {
+		return nil, "", fmt.Errorf("source image exceeds maximum resolution of %d megapixels", runtimeConfig.MaxSrcResolution)
+	}
+	if formatName == FormatGIF && runtimeConfig.MaxAnimationFrames > 0 {
+		offset := 13
+		if inputBytes[10]&0x80 != 0 {
+			offset += 3 << (1 + (inputBytes[10] & 7))
+		}
+		frames := 0
+		for offset < len(inputBytes) {
+			blockType := inputBytes[offset]
+			offset++
+			if blockType == gifTrailerMarker {
+				break
+			}
+			switch blockType {
+			case gifExtensionMarker:
+				offset++
+			case gifImageMarker:
+				if len(inputBytes)-offset < gifFrameDescriptorSize {
+					return nil, "", fmt.Errorf("truncated GIF frame descriptor")
+				}
+				packedFields := inputBytes[offset+8]
+				offset += gifFrameDescriptorSize
+				if packedFields&0x80 != 0 {
+					offset += 3 << (1 + (packedFields & 7))
+				}
+				offset++
+				frames++
+				if frames > runtimeConfig.MaxAnimationFrames {
+					return nil, "", fmt.Errorf("source image exceeds maximum animation frames of %d", runtimeConfig.MaxAnimationFrames)
+				}
+			default:
+				return nil, "", fmt.Errorf("invalid GIF block type")
+			}
+			for {
+				if offset >= len(inputBytes) {
+					return nil, "", fmt.Errorf("truncated GIF data block")
+				}
+				blockSize := int(inputBytes[offset])
+				offset++
+				if blockSize == 0 {
+					break
+				}
+				if blockSize > len(inputBytes)-offset {
+					return nil, "", fmt.Errorf("truncated GIF sub-block")
+				}
+				offset += blockSize
+			}
+		}
+	}
+	if formatName == FormatPNG {
+		for offset := 8; offset+pngChunkOverhead <= len(inputBytes); {
+			chunkLength := uint64(binary.BigEndian.Uint32(inputBytes[offset:]))
+			if chunkLength > uint64(len(inputBytes)-offset-pngChunkOverhead) {
+				return nil, "", fmt.Errorf("unsupported or corrupted PNG chunk length")
+			}
+			if string(inputBytes[offset+4:offset+8]) == "acTL" && chunkLength == 8 && runtimeConfig.MaxAnimationFrames > 0 && binary.BigEndian.Uint32(inputBytes[offset+8:]) > uint32(runtimeConfig.MaxAnimationFrames) {
+				return nil, "", fmt.Errorf("source image exceeds maximum animation frames of %d", runtimeConfig.MaxAnimationFrames)
+			}
+			offset += int(chunkLength) + pngChunkOverhead
+		}
+	}
+	decodedImage, formatName, decodeErr := image.Decode(bytes.NewReader(inputBytes))
 	if decodeErr != nil {
 		return nil, "", fmt.Errorf("unsupported or corrupted image format: %w", decodeErr)
 	}
@@ -293,7 +453,7 @@ func pixelateImage(sourceNRGBA *image.NRGBA, pixelSize int) *image.NRGBA {
 }
 
 func (engine *Engine) applyWatermark(sourceNRGBA *image.NRGBA, processingOptions ProcessingOptions) (*image.NRGBA, error) {
-	watermarkImage, _, decodeErr := engine.decodeImage(strings.NewReader(processingOptions.WatermarkURL))
+	watermarkImage, _, decodeErr := engine.decodeImage(bytes.NewReader(processingOptions.watermarkData))
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
@@ -307,9 +467,6 @@ func (engine *Engine) applyWatermark(sourceNRGBA *image.NRGBA, processingOptions
 	}
 
 	opacity := processingOptions.WatermarkOpacity
-	if opacity <= 0 {
-		opacity = 1.0
-	}
 
 	return imaging.Overlay(sourceNRGBA, watermarkNRGBA, image.Pt(processingOptions.WatermarkXOffset, processingOptions.WatermarkYOffset), opacity), nil
 }
@@ -333,7 +490,7 @@ func encodeImage(sourceImage image.Image, format string, quality int, runtimeCon
 		return outputBuffer.Bytes(), encodeErr
 
 	case FormatPNG:
-		encodeErr := png.Encode(&outputBuffer, sourceImage)
+		encodeErr := pngn.Encode(&outputBuffer, sourceImage, &pngn.EncodeOptions{Interlace: runtimeConfig.PNGInterlaced})
 		return outputBuffer.Bytes(), encodeErr
 
 	case FormatGIF:
@@ -349,8 +506,9 @@ func encodeImage(sourceImage image.Image, format string, quality int, runtimeCon
 		return outputBuffer.Bytes(), encodeErr
 
 	case FormatJPEG, FormatJPG, "":
-		encodeErr := jpeg.Encode(&outputBuffer, sourceImage, &jpeg.Options{
-			Quality: effectiveQuality,
+		encodeErr := jpegn.Encode(&outputBuffer, sourceImage, &jpegn.EncodeOptions{
+			Quality:     effectiveQuality,
+			Progressive: runtimeConfig.JPEGProgressive,
 		})
 		return outputBuffer.Bytes(), encodeErr
 

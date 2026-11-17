@@ -2,18 +2,66 @@ package image
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
+	"fmt"
+
 	"image"
 	"image/color"
+	"image/gif"
 	"image/png"
+	"io"
 	"testing"
 
 	"github.com/KarpelesLab/gowebp"
+	"github.com/gen2brain/jpegn"
+	"github.com/gen2brain/pngn"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
 	"layr.sh/core"
 )
+
+func TestImageMetadataValidationUnit(t *testing.T) {
+	t.Parallel()
+	engine := NewEngine(NewConfigManager(core.NewTestKernel(nil)))
+
+	t.Run("PNG metadata reader rejects decoded source", func(t *testing.T) {
+		t.Parallel()
+		// The built-in PNG decoder validates the same chunks as the metadata
+		// reader. A uniquely matched codec exercises metadata-reader failure
+		// independently without replacing the production decoder or its API.
+		const codecMagic = "LYR\x00PNG\x00"
+		image.RegisterFormat(FormatPNG, codecMagic, func(io.Reader) (image.Image, error) {
+			return image.NewNRGBA(image.Rect(0, 0, 1, 1)), nil
+		}, func(io.Reader) (image.Config, error) {
+			return image.Config{ColorModel: color.NRGBAModel, Width: 1, Height: 1}, nil
+		})
+		inputBytes := []byte(codecMagic)
+		_, _, decodeErr := image.Decode(bytes.NewReader(inputBytes))
+		require.NoError(t, decodeErr)
+
+		outputBytes, contentType, transformErr := engine.Transform(bytes.NewReader(inputBytes), NewDefaultProcessingOptions())
+		require.ErrorContains(t, transformErr, "failed to read source metadata")
+		require.Empty(t, outputBytes)
+		require.Empty(t, contentType)
+	})
+
+	t.Run("JPEG invalid metadata segment length", func(t *testing.T) {
+		t.Parallel()
+		var inputBuffer bytes.Buffer
+		require.NoError(t, jpegn.Encode(&inputBuffer, image.NewNRGBA(image.Rect(0, 0, 1, 1)), nil))
+		inputBytes := inputBuffer.Bytes()
+		inputBytes = append(append(append([]byte{}, inputBytes[:2]...), 0, 0, 0, 1), inputBytes[2:]...)
+		_, _, decodeErr := image.Decode(bytes.NewReader(inputBytes))
+		require.NoError(t, decodeErr)
+
+		outputBytes, contentType, transformErr := engine.Transform(bytes.NewReader(inputBytes), NewDefaultProcessingOptions())
+		require.ErrorContains(t, transformErr, "invalid JPEG metadata segment length")
+		require.Empty(t, outputBytes)
+		require.Empty(t, contentType)
+	})
+}
 
 func createTestImagePNG(width int, height int) []byte {
 	targetRectangle := image.Rect(0, 0, width, height)
@@ -65,6 +113,187 @@ func createTestImageWebP(width int, height int) []byte {
 	var buffer bytes.Buffer
 	_ = gowebp.Encode(&buffer, targetRGBA, &gowebp.Options{Quality: 80})
 	return buffer.Bytes()
+}
+
+func TestImageRuntimeEncodingUnit(t *testing.T) {
+	t.Parallel()
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			t.Parallel()
+			configManager := NewConfigManager(core.NewTestKernel(nil))
+			config := DefaultConfig()
+			config.PNGInterlaced = enabled
+			config.JPEGProgressive = enabled
+			configManager.SetMemoryConfig(config)
+			engine := NewEngine(configManager)
+			processingOptions := NewDefaultProcessingOptions()
+			processingOptions.Format = FormatPNG
+			output, _, err := engine.Transform(bytes.NewReader(createTestImagePNG(8, 8)), processingOptions)
+			require.NoError(t, err)
+			require.Equal(t, enabled, output[28] == 1)
+			_, err = png.Decode(bytes.NewReader(output))
+			require.NoError(t, err)
+			processingOptions.Format = FormatJPEG
+			output, _, err = engine.Transform(bytes.NewReader(createTestImagePNG(8, 8)), processingOptions)
+			require.NoError(t, err)
+			require.Equal(t, enabled, bytes.Contains(output, []byte{0xff, 0xc2}))
+			require.Equal(t, !enabled, bytes.Contains(output, []byte{0xff, 0xc0}))
+		})
+	}
+}
+
+func TestImageRuntimeMetadataUnit(t *testing.T) {
+	t.Parallel()
+	for _, strip := range []bool{false, true} {
+		t.Run(fmt.Sprint(strip), func(t *testing.T) {
+			t.Parallel()
+			configManager := NewConfigManager(core.NewTestKernel(nil))
+			config := DefaultConfig()
+			config.StripMetadata = strip
+			configManager.SetMemoryConfig(config)
+			engine := NewEngine(configManager)
+			var inputBuffer bytes.Buffer
+			err := pngn.Encode(&inputBuffer, image.NewNRGBA(image.Rect(0, 0, 8, 8)), &pngn.EncodeOptions{Metadata: &pngn.Metadata{Text: []pngn.Text{{Keyword: "Copyright", Value: "owner"}, {Keyword: "Description", Value: "private"}}}})
+			require.NoError(t, err)
+			output, _, err := engine.Transform(bytes.NewReader(inputBuffer.Bytes()), NewDefaultProcessingOptions())
+			require.NoError(t, err)
+			metadata, err := pngn.DecodeMetadata(bytes.NewReader(output))
+			require.NoError(t, err)
+			require.Contains(t, metadata.Text, pngn.Text{Keyword: "Copyright", Value: "owner"})
+			require.Equal(t, !strip, bytes.Contains(output, []byte("private")))
+		})
+	}
+}
+
+func TestImageJPEGMetadataUnit(t *testing.T) {
+	t.Parallel()
+	for _, copyright := range []string{"ab", "copyright owner"} {
+		t.Run(copyright, func(t *testing.T) {
+			t.Parallel()
+			for _, strip := range []bool{false, true} {
+				t.Run(fmt.Sprint(strip), func(t *testing.T) {
+					t.Parallel()
+					configManager := NewConfigManager(core.NewTestKernel(nil))
+					config := DefaultConfig()
+					config.StripMetadata = strip
+					config.StripColorProfile = strip
+					configManager.SetMemoryConfig(config)
+					engine := NewEngine(configManager)
+					payload := append([]byte("Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x98\x82\x02\x00"), make([]byte, 12)...)
+					binary.LittleEndian.PutUint32(payload[20:], uint32(len(copyright)+1))
+					if len(copyright)+1 <= 4 {
+						copy(payload[24:28], copyright)
+					} else {
+						binary.LittleEndian.PutUint32(payload[24:], 26)
+						payload = append(append(payload, []byte(copyright)...), 0)
+					}
+					var inputBuffer bytes.Buffer
+					require.NoError(t, jpegn.Encode(&inputBuffer, image.NewNRGBA(image.Rect(0, 0, 8, 8)), &jpegn.EncodeOptions{Exif: payload, Segments: []jpegn.Segment{{Marker: 0xfe, Data: []byte("private metadata")}, {Marker: 0xe2, Data: []byte("ICC_PROFILE\x00profile")}}}))
+					processingOptions := NewDefaultProcessingOptions()
+					processingOptions.Format = FormatJPEG
+					output, _, err := engine.Transform(bytes.NewReader(inputBuffer.Bytes()), processingOptions)
+					require.NoError(t, err)
+					exif, err := jpegn.DecodeExif(bytes.NewReader(output))
+					require.NoError(t, err)
+					require.Equal(t, copyright, exif.Copyright)
+					require.Equal(t, !strip, bytes.Contains(output, []byte("private metadata")))
+					require.Equal(t, !strip, bytes.Contains(output, []byte("ICC_PROFILE")))
+				})
+			}
+		})
+	}
+}
+
+func TestImageWatermarkTransparencyUnit(t *testing.T) {
+	t.Parallel()
+	engine := NewEngine(NewConfigManager(core.NewTestKernel(nil)))
+	sourceNRGBA := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	watermarkNRGBA := image.NewNRGBA(sourceNRGBA.Bounds())
+	for y := range 4 {
+		for x := range 4 {
+			sourceNRGBA.SetNRGBA(x, y, color.NRGBA{R: 255, A: 255})
+			watermarkNRGBA.SetNRGBA(x, y, color.NRGBA{B: 255, A: 255})
+		}
+	}
+	var watermarkBuffer bytes.Buffer
+	require.NoError(t, png.Encode(&watermarkBuffer, watermarkNRGBA))
+	processingOptions := NewDefaultProcessingOptions()
+	processingOptions.WatermarkURL = "https://example.com/watermark.png"
+	processingOptions.watermarkData = watermarkBuffer.Bytes()
+	processingOptions.WatermarkOpacity = 0
+	outputNRGBA, err := engine.applyWatermark(sourceNRGBA, processingOptions)
+	require.NoError(t, err)
+	require.Equal(t, sourceNRGBA.Pix, outputNRGBA.Pix)
+	processingOptions.WatermarkOpacity = 1
+	outputNRGBA, err = engine.applyWatermark(sourceNRGBA, processingOptions)
+	require.NoError(t, err)
+	require.Equal(t, watermarkNRGBA.Pix, outputNRGBA.Pix)
+}
+
+func TestImageSourceLimitsUnit(t *testing.T) {
+	t.Parallel()
+	configManager := NewConfigManager(core.NewTestKernel(nil))
+	config := DefaultConfig()
+	config.MaxSrcResolution = 1
+	config.MaxAnimationFrames = 1
+	configManager.SetMemoryConfig(config)
+	engine := NewEngine(configManager)
+	t.Run("resolution", func(t *testing.T) {
+		_, _, err := engine.decodeImage(bytes.NewReader(createTestImagePNG(1001, 1000)))
+		require.ErrorContains(t, err, "maximum resolution")
+	})
+	t.Run("animated GIF", func(t *testing.T) {
+		framePaletted := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black, color.White})
+		var inputBuffer bytes.Buffer
+		require.NoError(t, gif.EncodeAll(&inputBuffer, &gif.GIF{Image: []*image.Paletted{framePaletted, framePaletted}, Delay: []int{0, 0}}))
+		_, _, err := engine.decodeImage(bytes.NewReader(inputBuffer.Bytes()))
+		require.ErrorContains(t, err, "maximum animation frames")
+	})
+	t.Run("animated PNG", func(t *testing.T) {
+		inputBytes := createTestImagePNG(1, 1)
+		chunk := make([]byte, 20)
+		binary.BigEndian.PutUint32(chunk, 8)
+		copy(chunk[4:], "acTL")
+		binary.BigEndian.PutUint32(chunk[8:], 2)
+		inputBytes = append(append(append([]byte{}, inputBytes[:33]...), chunk...), inputBytes[33:]...)
+		_, _, err := engine.decodeImage(bytes.NewReader(inputBytes))
+		require.ErrorContains(t, err, "maximum animation frames")
+	})
+}
+
+func TestImageMalformedSourcesUnit(t *testing.T) {
+	t.Parallel()
+	engine := NewEngine(NewConfigManager(core.NewTestKernel(nil)))
+	gifHeader := []byte{'G', 'I', 'F', '8', '9', 'a', 1, 0, 1, 0, 0, 0, 0}
+	for _, testCase := range []struct {
+		name    string
+		data    []byte
+		message string
+	}{
+		{name: "descriptor", data: append(bytes.Clone(gifHeader), 0x2c), message: "truncated GIF frame descriptor"},
+		{name: "block type", data: append(bytes.Clone(gifHeader), 0x7f), message: "invalid GIF block type"},
+		{name: "data block", data: append(bytes.Clone(gifHeader), 0x21, 0xfe), message: "truncated GIF data block"},
+		{name: "sub-block", data: append(bytes.Clone(gifHeader), 0x21, 0xfe, 4, 1), message: "truncated GIF sub-block"},
+		{name: "missing pixels", data: append(bytes.Clone(gifHeader), 0x3b), message: "unsupported or corrupted image format"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, _, err := engine.decodeImage(bytes.NewReader(testCase.data))
+			require.ErrorContains(t, err, testCase.message)
+		})
+	}
+	t.Run("global palette", func(t *testing.T) {
+		framePaletted := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black, color.White})
+		var inputBuffer bytes.Buffer
+		require.NoError(t, gif.Encode(&inputBuffer, framePaletted, nil))
+		_, _, err := engine.decodeImage(bytes.NewReader(inputBuffer.Bytes()))
+		require.NoError(t, err)
+	})
+	t.Run("PNG chunk length", func(t *testing.T) {
+		inputBytes := createTestImagePNG(1, 1)
+		binary.BigEndian.PutUint32(inputBytes[33:], 0xffffffff)
+		_, _, err := engine.decodeImage(bytes.NewReader(inputBytes))
+		require.ErrorContains(t, err, "PNG chunk length")
+	})
 }
 
 func TestImageEngineUnit(t *testing.T) {
@@ -225,11 +454,12 @@ func TestImageEngineUnit(t *testing.T) {
 		require.NotEmpty(t, pixelatedBytes)
 	})
 
-	t.Run("watermark application and fallback", func(t *testing.T) {
+	t.Run("watermark application and invalid data", func(t *testing.T) {
 		t.Parallel()
 		watermarkPNG := createTestImagePNG(20, 20)
 		watermarkProcessingOptions := ProcessingOptions{
-			WatermarkURL:     string(watermarkPNG),
+			WatermarkURL:     "https://example.com/watermark.png",
+			watermarkData:    watermarkPNG,
 			WatermarkScale:   0.2,
 			WatermarkOpacity: 0.5,
 			WatermarkXOffset: 5,
@@ -246,8 +476,8 @@ func TestImageEngineUnit(t *testing.T) {
 			Format:       FormatPNG,
 		}
 		fallbackBytes, _, badWatermarkErr := engine.Transform(bytes.NewReader(pngBytes), badWatermarkProcessingOptions)
-		require.NoError(t, badWatermarkErr)
-		require.NotEmpty(t, fallbackBytes)
+		require.ErrorContains(t, badWatermarkErr, "failed to apply watermark")
+		require.Empty(t, fallbackBytes)
 	})
 
 	t.Run("color hex and colon parsing", func(t *testing.T) {
@@ -434,10 +664,11 @@ func TestImageEngineUnit(t *testing.T) {
 		require.NoError(t, fillWidthOnlyErr)
 		require.NotEmpty(t, fillWidthOnlyBytes)
 
-		// 5. Watermark opacity <= 0 defaults to 1.0 and scale <= 0
+		// 5. Zero watermark opacity remains transparent.
 		watermarkBytes := createTestImagePNG(20, 20)
 		watermarkDefaultOpacityProcessingOptions := ProcessingOptions{
-			WatermarkURL:     string(watermarkBytes),
+			WatermarkURL:     "https://example.com/watermark.png",
+			watermarkData:    watermarkBytes,
 			WatermarkOpacity: 0,
 			WatermarkScale:   0,
 			Format:           FormatPNG,

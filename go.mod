@@ -10,6 +10,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.113.1
 	github.com/disintegration/imaging v1.6.2
 	github.com/fergusstrange/embedded-postgres v1.34.0
+	github.com/gen2brain/jpegn v0.6.2
+	github.com/gen2brain/pngn v0.1.3
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-fuego/fuego v0.20.0
 	github.com/gorilla/websocket v1.5.3

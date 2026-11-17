@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -93,6 +94,35 @@ func TestImageBaseHandlerTransformUnit(t *testing.T) {
 	_, err = kernel.DB().Exec(ctx, insertPublicChunkSQL, privateObjectID, pngBytes)
 	require.NoError(t, err)
 
+	t.Run("runtime watermark is fetched from storage", func(t *testing.T) {
+		originalConfig := service.ConfigManager().Get()
+		defer service.ConfigManager().SetMemoryConfig(originalConfig)
+		for _, testCase := range []struct {
+			name         string
+			watermarkURL string
+			status       int
+		}{
+			{name: "valid", watermarkURL: "transform-public/photo.png", status: http.StatusOK},
+			{name: "missing", watermarkURL: "transform-public/missing.png", status: http.StatusUnprocessableEntity},
+			{name: "invalid image", watermarkURL: "transform-public/corrupt.png", status: http.StatusUnprocessableEntity},
+		} {
+			t.Run(testCase.name, func(t *testing.T) {
+				runtimeConfig := originalConfig
+				runtimeConfig.WatermarkURL = testCase.watermarkURL
+				runtimeConfig.WatermarkOpacity = 0
+				service.ConfigManager().SetMemoryConfig(runtimeConfig)
+				targetPath := "/rs:fill:16:16/plain/transform-public/photo.png"
+				signature := SignPath(signingKey, signingSalt, targetPath)
+				request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/image/"+signature+targetPath, nil)
+				request.SetPathValue("signature", signature)
+				request.SetPathValue("path", targetPath)
+				responseRecorder := httptest.NewRecorder()
+				baseHandler.handleTransform(responseRecorder, request)
+				require.Equal(t, testCase.status, responseRecorder.Code, responseRecorder.Body.String())
+			})
+		}
+	})
+
 	t.Run("missing signature or path returns 400", func(t *testing.T) {
 		noSignatureRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/image//path", nil)
 		noSignatureResponseRecorder := httptest.NewRecorder()
@@ -131,6 +161,56 @@ func TestImageBaseHandlerTransformUnit(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, badPathResponseRecorder.Code)
 	})
 
+	t.Run("request options override runtime defaults before cache lookup", func(t *testing.T) {
+		originalConfig := service.ConfigManager().Get()
+		defer service.ConfigManager().SetMemoryConfig(originalConfig)
+		runtimeConfig := originalConfig
+		runtimeConfig.StripMetadata = false
+		runtimeConfig.KeepCopyright = false
+		runtimeConfig.StripColorProfile = false
+		runtimeConfig.WatermarkURL = "transform-public/photo.png"
+		runtimeConfig.WatermarkOpacity = 0.5
+		service.ConfigManager().SetMemoryConfig(runtimeConfig)
+		for _, testCase := range []struct {
+			name     string
+			options  string
+			opacity  float64
+			metadata bool
+		}{
+			{name: "defaults", options: "_", opacity: 0.5},
+			{name: "disabled watermark", options: "wm:0", opacity: 0},
+			{name: "opacity modifier", options: "watermark:0.5", opacity: 0.25},
+			{name: "short metadata overrides", options: "sm:1/kcr:1/scp:1", opacity: 0.5, metadata: true},
+			{name: "long metadata overrides", options: "strip_metadata:1/keep_copyright:1/strip_color_profile:1", opacity: 0.5, metadata: true},
+		} {
+			t.Run(testCase.name, func(t *testing.T) {
+				processingOptions, parseErr := ParseProcessingOptions(testCase.options, nil)
+				require.NoError(t, parseErr)
+				processingOptions.WatermarkURL = runtimeConfig.WatermarkURL
+				processingOptions.WatermarkOpacity = testCase.opacity
+				processingOptions.StripMetadata = testCase.metadata
+				processingOptions.KeepCopyright = testCase.metadata
+				processingOptions.StripColorProfile = testCase.metadata
+				runtimeConfigJSON, marshalErr := json.Marshal(runtimeConfig)
+				require.NoError(t, marshalErr)
+				processingOptions.Cachebuster += ":" + string(runtimeConfigJSON)
+				sourceURL := "transform-public/photo.png"
+				cacheKey, optionsHash := ComputeCacheKey(sourceURL, processingOptions)
+				cachedData := []byte(testCase.name)
+				service.CacheManager().Set(ctx, cacheKey, sourceURL, optionsHash, "image/png", cachedData)
+				targetPath := "/" + testCase.options + "/plain/" + sourceURL
+				signature := SignPath(signingKey, signingSalt, targetPath)
+				request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/image/"+signature+targetPath, nil)
+				request.SetPathValue("signature", signature)
+				request.SetPathValue("path", targetPath)
+				responseRecorder := httptest.NewRecorder()
+				baseHandler.handleTransform(responseRecorder, request)
+				require.Equal(t, http.StatusOK, responseRecorder.Code)
+				require.Equal(t, cachedData, responseRecorder.Body.Bytes())
+			})
+		}
+	})
+
 	t.Run("cached response returned on cache hit and not modified on etag match", func(t *testing.T) {
 		sourceURL := "local/cache-bucket/avatar.png"
 		targetPath := "/rs:fill:64:64/plain/" + sourceURL
@@ -138,6 +218,12 @@ func TestImageBaseHandlerTransformUnit(t *testing.T) {
 
 		// Pre-populate cache
 		processingOptions, _ := ParseProcessingOptions("rs:fill:64:64", nil)
+		runtimeConfig := service.ConfigManager().Get()
+		processingOptions.WatermarkURL = runtimeConfig.WatermarkURL
+		processingOptions.WatermarkOpacity = runtimeConfig.WatermarkOpacity
+		runtimeConfigJSON, marshalErr := json.Marshal(runtimeConfig)
+		require.NoError(t, marshalErr)
+		processingOptions.Cachebuster += ":" + string(runtimeConfigJSON)
 		cacheKey, optionsHash := ComputeCacheKey(sourceURL, processingOptions)
 		cachedData := []byte("cached-image-bytes")
 		eTag := service.CacheManager().Set(ctx, cacheKey, sourceURL, optionsHash, "image/png", cachedData)

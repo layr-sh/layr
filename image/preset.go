@@ -9,6 +9,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"layr.sh/core"
 )
 
@@ -185,7 +186,11 @@ func (presetManager *PresetManager) Create(ctx context.Context, createPresetInpu
 		&preset.LastUpdatedAt,
 	)
 	if queryErr != nil {
-		return nil, fmt.Errorf("%w: %v", ErrPresetExists, queryErr)
+		var pgError *pgconn.PgError
+		if errors.As(queryErr, &pgError) && pgError.Code == "23505" {
+			return nil, fmt.Errorf("%w: %v", ErrPresetExists, queryErr)
+		}
+		return nil, fmt.Errorf("failed to create preset: %w", queryErr)
 	}
 	if descriptionNullString.Valid {
 		descString := descriptionNullString.String
