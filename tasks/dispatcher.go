@@ -10,11 +10,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 
 	"uuid"
@@ -26,8 +28,11 @@ import (
 const (
 	maxLoggedResponseBodyBytes = 1024
 	defaultDispatcherTimeout   = 30
+	maxWebhookRedirects        = 10
 	maxBackoffExponentShift    = 30
 )
+
+var errWebhookSSRFErr = errors.New("ssrf blocked")
 
 // Dispatcher executes HTTP and SQL tasks mirroring the core event hook architecture.
 type Dispatcher struct {
@@ -37,15 +42,35 @@ type Dispatcher struct {
 
 // NewDispatcher initializes a new Dispatcher.
 func NewDispatcher(kernel *core.Kernel) *Dispatcher {
+	dialer := &net.Dialer{
+		ControlContext: func(_ context.Context, _ string, address string, _ syscall.RawConn) error {
+			// The dialer supplies the resolved socket address here, preventing DNS
+			// rebinding between hostname validation and the actual connection.
+			hostname, _, _ := net.SplitHostPort(address)
+			parsedIP := net.ParseIP(hostname)
+			if parsedIP.IsLinkLocalUnicast() || parsedIP.IsLinkLocalMulticast() {
+				return fmt.Errorf("%w: webhook target to link-local address is prohibited: %s", errWebhookSSRFErr, hostname)
+			}
+			return nil
+		},
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// A proxy would resolve and connect to the destination outside this dialer.
+	transport.Proxy = nil
+	transport.DialContext = dialer.DialContext
 	return &Dispatcher{
 		kernel:     kernel,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Transport: transport},
 	}
 }
 
 // SetHTTPClient overrides the HTTP client (useful for unit/integration tests).
 func (dispatcher *Dispatcher) SetHTTPClient(httpClient *http.Client) {
-	dispatcher.httpClient = httpClient
+	client := *httpClient
+	if client.Transport == nil {
+		client.Transport = dispatcher.httpClient.Transport
+	}
+	dispatcher.httpClient = &client
 }
 
 // ExecuteHTTPAttempt dispatches an HTTP POST webhook request with SSRF protection and HMAC signature.
@@ -84,21 +109,40 @@ func (dispatcher *Dispatcher) ExecuteHTTPAttempt(ctx context.Context, targetURL 
 		request.Header.Set(headerKey, headerValue)
 	}
 
-	response, err := dispatcher.httpClient.Do(request)
+	httpClient := *dispatcher.httpClient
+	checkRedirect := httpClient.CheckRedirect
+	httpClient.CheckRedirect = func(redirectRequest *http.Request, via []*http.Request) error {
+		if redirectErr := validateWebhookTargetURL(redirectRequest.URL.String()); redirectErr != nil {
+			return fmt.Errorf("%w: %v", errWebhookSSRFErr, redirectErr)
+		}
+		if checkRedirect != nil {
+			return checkRedirect(redirectRequest, via)
+		}
+		if len(via) >= maxWebhookRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxWebhookRedirects)
+		}
+		return nil
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("failed to execute http request: %w", err)
+		isSSRFBlocked := errors.Is(err, errWebhookSSRFErr)
+		if isSSRFBlocked {
+			dispatcher.kernel.EventBus().Publish(ctx, NewThreatSSRFBlockedEvent(targetURL, ThreatSSRFBlockedEventData{
+				TargetURL: targetURL, Reason: err.Error(),
+			}))
+		}
+		return nil, nil, isSSRFBlocked, fmt.Errorf("failed to execute http request: %w", err)
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 
 	statusCode := response.StatusCode
-	var responseBuffer bytes.Buffer
-	_, _ = responseBuffer.ReadFrom(response.Body)
-	responseText := responseBuffer.String()
-	if len(responseText) > maxLoggedResponseBodyBytes {
-		responseText = responseText[:maxLoggedResponseBodyBytes]
+	responseBytes, readErr := io.ReadAll(io.LimitReader(response.Body, maxLoggedResponseBodyBytes))
+	if readErr != nil {
+		return &statusCode, nil, false, fmt.Errorf("failed to read http response: %w", readErr)
 	}
+	responseText := string(responseBytes)
 
 	isClientError := (statusCode >= 400 && statusCode < 500 && statusCode != http.StatusTooManyRequests)
 	return &statusCode, &responseText, isClientError, nil

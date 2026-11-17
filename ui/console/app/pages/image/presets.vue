@@ -103,17 +103,11 @@ onMounted(() => {
           <UEmpty
             title="No Presets Yet"
             description="Create a preset to reuse image transformation options."
-            variant="naked"
             icon="i-lucide-sliders-horizontal"
           />
         </template>
         <template #loading>
-          <UEmpty
-            title="Loading Presets…"
-            variant="naked"
-            loading
-            icon="i-lucide-sliders-horizontal"
-          />
+          <UEmpty title="Loading Presets…" loading icon="i-lucide-sliders-horizontal" />
         </template>
       </UTable>
       <template #footer>

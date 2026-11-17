@@ -9,6 +9,11 @@ export default defineAppConfig({
       primary: "teal",
       neutral: "neutral",
     },
+    empty: {
+      defaultVariants: {
+        variant: "naked",
+      },
+    },
     input: {
       defaultVariants: {
         variant: "subtle",

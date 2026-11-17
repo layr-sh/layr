@@ -31,6 +31,10 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 	tasksService := NewService(kernel)
 	controlPlaneHandler := tasksService.ControlPlaneHandler()
 	require.NotNil(t, controlPlaneHandler)
+	authorizedCtx := core.WithAuthContext(context.Background(), core.AuthContext{
+		ServiceAccountID: "tasks-test-account",
+		JWT:              core.JWTClaims{Subject: "tasks-test-account", Role: "service_role", Audience: "test:service_account", Scope: "*"},
+	})
 
 	t.Run("scope check failures on all endpoints", func(t *testing.T) {
 		t.Parallel()
@@ -109,7 +113,7 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 
 	t.Run("bad json and uuid validation errors", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.Background()
+		ctx := authorizedCtx
 
 		// Bad JSON on create
 		badBodyReader := strings.NewReader("{invalid-json}")
@@ -182,7 +186,7 @@ func TestTasksControlPlaneHandlerUnit(t *testing.T) {
 
 	t.Run("config endpoints get and update", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.Background()
+		ctx := authorizedCtx
 
 		// Get config succeeds
 		getConfigRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/tasks/config", nil)

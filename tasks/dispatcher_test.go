@@ -16,6 +16,82 @@ import (
 	"layr.sh/core"
 )
 
+func TestTasksDispatcherProtectionUnit(t *testing.T) {
+	t.Parallel()
+	kernel := core.NewTestKernel(nil)
+	t.Run("resolved link-local connection is rejected before dialing", func(t *testing.T) {
+		t.Parallel()
+		dispatcher := NewDispatcher(kernel)
+		transport := dispatcher.httpClient.Transport.(*http.Transport)
+		connection, err := transport.DialContext(context.Background(), "tcp", "169.254.169.254:80")
+		require.ErrorIs(t, err, errWebhookSSRFErr)
+		require.Nil(t, connection)
+	})
+	for _, target := range []string{"http://metadata/blocked", "http://169.254.169.254/blocked"} {
+		t.Run(target, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				http.Redirect(responseWriter, request, target, http.StatusTemporaryRedirect)
+			}))
+			defer server.Close()
+			dispatcher := NewDispatcher(kernel)
+			_, _, permanent, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL, nil, nil, nil, uuid.NewV7(), 1)
+			require.ErrorIs(t, err, errWebhookSSRFErr)
+			require.True(t, permanent)
+		})
+	}
+	t.Run("redirects preserve caller policy and enforce the default limit", func(t *testing.T) {
+		t.Parallel()
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/done" {
+				responseWriter.WriteHeader(http.StatusOK)
+				return
+			}
+			target := "/done"
+			if request.URL.Path == "/loop" {
+				target = "/loop"
+			}
+			http.Redirect(responseWriter, request, target, http.StatusTemporaryRedirect)
+		}))
+		defer server.Close()
+		dispatcher := NewDispatcher(kernel)
+		_, _, _, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL, nil, nil, nil, uuid.NewV7(), 1)
+		require.NoError(t, err)
+		_, _, permanent, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL+"/loop", nil, nil, nil, uuid.NewV7(), 1)
+		require.ErrorContains(t, err, "stopped after 10 redirects")
+		require.False(t, permanent)
+		policyCalled := false
+		dispatcher.SetHTTPClient(&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+			policyCalled = true
+			return http.ErrUseLastResponse
+		}})
+		status, _, _, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL, nil, nil, nil, uuid.NewV7(), 1)
+		require.NoError(t, err)
+		require.True(t, policyCalled)
+		require.Equal(t, http.StatusTemporaryRedirect, *status)
+	})
+	t.Run("response bodies are bounded and truncated reads fail", func(t *testing.T) {
+		t.Parallel()
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/short" {
+				responseWriter.Header().Set("Content-Length", "100")
+				_, _ = responseWriter.Write([]byte("short"))
+				return
+			}
+			_, _ = responseWriter.Write([]byte(strings.Repeat("x", maxLoggedResponseBodyBytes*4)))
+		}))
+		defer server.Close()
+		dispatcher := NewDispatcher(kernel)
+		_, body, _, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL, nil, nil, nil, uuid.NewV7(), 1)
+		require.NoError(t, err)
+		require.Len(t, *body, maxLoggedResponseBodyBytes)
+		_, body, permanent, err := dispatcher.ExecuteHTTPAttempt(context.Background(), server.URL+"/short", nil, nil, nil, uuid.NewV7(), 1)
+		require.ErrorContains(t, err, "failed to read http response")
+		require.False(t, permanent)
+		require.Nil(t, body)
+	})
+}
+
 func TestTasksDispatcherUnit(t *testing.T) {
 	t.Parallel()
 
