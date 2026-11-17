@@ -104,7 +104,7 @@ const overviewServices = computed(() => [
   },
   {
     title: "Images",
-    to: "/images",
+    to: "/image/presets",
     icon: "i-lucide-image",
     serviceKey: "image",
     metric: `${presetsCount.value} ${presetsCount.value === 1 ? "Preset" : "Presets"}`,

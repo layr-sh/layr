@@ -13,4 +13,4 @@ fi
 pnpm --dir ui/console run fmt:check
 pnpm --dir ui/console run lint
 pnpm --dir ui/console run typecheck
-bash scripts/sdk/spawn-test-server --timeout 180 data console -- pnpm --dir ui/console run test --coverage "$@"
+bash scripts/sdk/spawn-test-server --timeout 180 -- pnpm --dir ui/console run test --coverage "$@"

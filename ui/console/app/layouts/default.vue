@@ -40,7 +40,7 @@ const navItems = [
     serviceKey: "function",
   },
   { label: "Tasks", to: "/tasks", icon: "i-lucide-clock", serviceKey: "tasks" },
-  { label: "Images", to: "/images", icon: "i-lucide-image", serviceKey: "image" },
+  { label: "Images", to: "/image", icon: "i-lucide-image", serviceKey: "image" },
   { label: "Control Plane", to: "/control-plane", icon: "i-lucide-shield-check" },
 ];
 

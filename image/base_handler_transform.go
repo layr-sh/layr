@@ -1,8 +1,10 @@
 package image
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,6 +73,23 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 	if extensionOverride != "" {
 		processingOptions.Format = extensionOverride
 	}
+
+	runtimeConfig := baseHandler.configManager.Get()
+	if processingOptions.WatermarkURL == "" {
+		processingOptions.WatermarkURL = runtimeConfig.WatermarkURL
+	}
+	processingOptions.WatermarkOpacity *= runtimeConfig.WatermarkOpacity
+	if !processingOptions.stripMetadataSet {
+		processingOptions.StripMetadata = runtimeConfig.StripMetadata
+	}
+	if !processingOptions.keepCopyrightSet {
+		processingOptions.KeepCopyright = runtimeConfig.KeepCopyright
+	}
+	if !processingOptions.stripColorProfileSet {
+		processingOptions.StripColorProfile = runtimeConfig.StripColorProfile
+	}
+	runtimeConfigJSON, _ := json.Marshal(runtimeConfig)
+	processingOptions.Cachebuster += ":" + string(runtimeConfigJSON)
 
 	// 3. Cache Lookup
 	cacheKey, optionsHash := ComputeCacheKey(sourceURL, processingOptions)
@@ -149,6 +168,21 @@ func (baseHandler *BaseHandler) handleTransform(responseWriter http.ResponseWrit
 		return
 	}
 	defer func() { _ = bodyReadCloser.Close() }()
+
+	if processingOptions.WatermarkURL != "" {
+		watermarkReadCloser, _, _, watermarkErr := baseHandler.fetcher.Fetch(request.Context(), processingOptions.WatermarkURL, request)
+		if watermarkErr == nil {
+			processingOptions.watermarkData, watermarkErr = io.ReadAll(watermarkReadCloser)
+			_ = watermarkReadCloser.Close()
+		}
+		if watermarkErr != nil {
+			baseHandler.kernel.EventBus().Publish(request.Context(), NewTransformFailedEvent(sourceURL, TransformFailedEventData{
+				SourceURL: sourceURL, Reason: watermarkErr.Error(), StatusCode: http.StatusUnprocessableEntity,
+			}))
+			core.WriteErrorResponse(responseWriter, request, http.StatusUnprocessableEntity, "Unable to load watermark", watermarkErr.Error())
+			return
+		}
+	}
 
 	// 5. Image Transformation
 	outputBytes, outputContentType, transformErr := baseHandler.engine.Transform(bodyReadCloser, processingOptions)
