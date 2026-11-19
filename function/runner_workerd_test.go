@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 
 	"uuid"
 
@@ -28,6 +31,121 @@ const (
 	testFilePermissions = 0644
 )
 
+func TestFunctionWorkerdRunnerRegressionUnit(t *testing.T) {
+	ctx := context.Background()
+	binaryPath, err := ResolveWorkerdBinary(ctx)
+	require.NoError(t, err)
+	binaryPath, err = filepath.Abs(binaryPath)
+	require.NoError(t, err)
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(".layr/bin", testDirPermissions))
+	require.NoError(t, os.Symlink(binaryPath, WorkerdBinaryPath))
+	workerdRunner := NewWorkerdRunner(nil)
+	require.NoError(t, workerdRunner.Start(ctx))
+	defer func() { require.NoError(t, workerdRunner.Stop()) }()
+	t.Run("compressed archive expands beyond configured bundle limit", func(t *testing.T) {
+		var buffer bytes.Buffer
+		zipWriter := zip.NewWriter(&buffer)
+		writer, err := zipWriter.Create("index.js")
+		require.NoError(t, err)
+		_, err = writer.Write([]byte(strings.Repeat(" ", 1024*1024) + "export default {};"))
+		require.NoError(t, err)
+		require.NoError(t, zipWriter.Close())
+		require.Less(t, buffer.Len(), 4096)
+		directory := t.TempDir()
+		require.ErrorIs(t, extractBundle(directory, &Deployment{BundleFormat: "zip", BundleContent: buffer.Bytes(), bundleSizeLimit: 4096}, "index.js"), ErrBundleTooLarge)
+		_, statErr := os.Stat(filepath.Join(directory, "index.js"))
+		require.True(t, os.IsNotExist(statErr))
+	})
+	t.Run("raw and tar bundles honor cumulative expanded limits", func(t *testing.T) {
+		require.ErrorIs(t, extractBundle(t.TempDir(), &Deployment{BundleFormat: "raw", BundleContent: []byte("four"), bundleSizeLimit: 3}, "index.js"), ErrBundleTooLarge)
+		var buffer bytes.Buffer
+		tarWriter := tar.NewWriter(&buffer)
+		for _, name := range []string{"one.js", "two.js"} {
+			require.NoError(t, tarWriter.WriteHeader(&tar.Header{Name: name, Mode: filePermissions, Size: 2}))
+			_, writeErr := tarWriter.Write([]byte("ok"))
+			require.NoError(t, writeErr)
+		}
+		require.NoError(t, tarWriter.Close())
+		require.ErrorIs(t, extractBundle(t.TempDir(), &Deployment{BundleFormat: "tar", BundleContent: buffer.Bytes(), bundleSizeLimit: 3}, "index.js"), ErrBundleTooLarge)
+	})
+	t.Run("runtime allowlist also protects restored deployments", func(t *testing.T) {
+		config := workerdRunner.configManager.Get()
+		config.AllowedEnvironmentKeys = []string{"OTHER", "ALLOWED"}
+		workerdRunner.configManager.SetMemoryConfig(config)
+		deployment := &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { fetch() { return new Response("ok"); } };`), EnvironmentVariables: map[string]string{"DENIED": "value"}}
+		require.ErrorIs(t, workerdRunner.Deploy(ctx, &Endpoint{Name: "allowed-environment"}, deployment), ErrInvalidConfig)
+		deployment.EnvironmentVariables = map[string]string{"ALLOWED": "value"}
+		require.NoError(t, workerdRunner.Deploy(ctx, &Endpoint{Name: "allowed-environment"}, deployment))
+		config.AllowedEnvironmentKeys = nil
+		workerdRunner.configManager.SetMemoryConfig(config)
+	})
+	t.Run("configured timeout returns gateway timeout", func(t *testing.T) {
+		endpoint := &Endpoint{Name: "audit-timeout", TimeoutSeconds: 1}
+		deployment := &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { async fetch() { await new Promise(r=>setTimeout(r,1500)); return new Response("completed"); } };`)}
+		require.NoError(t, workerdRunner.Deploy(ctx, endpoint, deployment))
+		requestCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+		defer cancel()
+		responseRecorder := httptest.NewRecorder()
+		start := time.Now()
+		require.ErrorIs(t, workerdRunner.Forward(responseRecorder, httptest.NewRequestWithContext(requestCtx, http.MethodGet, "/", nil), endpoint), ErrExecutionTimeout)
+		require.GreaterOrEqual(t, time.Since(start), time.Second)
+		require.Equal(t, http.StatusGatewayTimeout, responseRecorder.Code)
+	})
+	t.Run("distinct endpoint names generate distinct runtime identifiers", func(t *testing.T) {
+		deployment := &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { fetch() { return new Response("ok"); } };`)}
+		require.NoError(t, workerdRunner.Deploy(ctx, &Endpoint{Name: "audit-collision"}, deployment))
+		err := workerdRunner.Deploy(ctx, &Endpoint{Name: "audit_collision"}, deployment)
+		require.NoError(t, err)
+		require.NotEqual(t, sanitizeCapnpIdentifier("audit-collision"), sanitizeCapnpIdentifier("audit_collision"))
+	})
+	t.Run("module containing addEventListener text remains a module", func(t *testing.T) {
+		deployment := &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { fetch() { return new Response("addEventListener"); } };`)}
+		err := workerdRunner.Deploy(ctx, &Endpoint{Name: "audit-module-text"}, deployment)
+		require.NoError(t, err)
+	})
+	t.Run("inflight invocation drains before another endpoint deployment", func(t *testing.T) {
+		endpoint := &Endpoint{Name: "audit-inflight"}
+		deployment := &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { async fetch(request) { if(new URL(request.url).pathname==="/slow") await new Promise(r=>setTimeout(r,2000)); return new Response("completed"); } };`)}
+		require.NoError(t, workerdRunner.Deploy(ctx, endpoint, deployment))
+
+		started := make(chan struct{})
+		done := make(chan error, 1)
+		go func() {
+			close(started)
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/slow", nil)
+			responseRecorder := httptest.NewRecorder()
+			done <- workerdRunner.Forward(responseRecorder, request, endpoint)
+		}()
+		<-started
+		time.Sleep(200 * time.Millisecond)
+		require.NoError(t, workerdRunner.Deploy(ctx, &Endpoint{Name: "audit-unrelated"}, &Deployment{BundleFormat: "raw", BundleContent: []byte(`export default { fetch() { return new Response("ok"); } };`)}))
+		require.NoError(t, <-done)
+	})
+	t.Run("crashed process reports unhealthy and recovers on invocation", func(t *testing.T) {
+		require.NoError(t, workerdRunner.processCmd.Process.Kill())
+		<-workerdRunner.processDone
+		runnerHealth, err := workerdRunner.Health(ctx)
+		require.NoError(t, err)
+		require.False(t, runnerHealth.Available)
+		require.Zero(t, runnerHealth.ProcessPID)
+		previousExec := execCommandContext
+		t.Cleanup(func() { execCommandContext = previousExec })
+		execCommandContext = func(commandCtx context.Context, _ string, _ ...string) *exec.Cmd {
+			return exec.CommandContext(commandCtx, "/nonexistent-workerd")
+		}
+		failedResponseRecorder := httptest.NewRecorder()
+		require.Error(t, workerdRunner.Forward(failedResponseRecorder, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil), &Endpoint{Name: "audit-timeout"}))
+		execCommandContext = previousExec
+		responseRecorder := httptest.NewRecorder()
+		require.NoError(t, workerdRunner.Forward(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil), &Endpoint{Name: "audit-timeout"}))
+		require.Equal(t, http.StatusOK, responseRecorder.Code)
+		runnerHealth, err = workerdRunner.Health(ctx)
+		require.NoError(t, err)
+		require.True(t, runnerHealth.Available)
+	})
+}
+
 func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 	t.Run("runner initialization and name", func(t *testing.T) {
 		workerdRunner := NewWorkerdRunner(nil)
@@ -36,10 +154,10 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 	})
 
 	t.Run("sanitizeCapnpIdentifier edge cases", func(t *testing.T) {
-		require.Equal(t, "helloWorld", sanitizeCapnpIdentifier("hello-world"))
-		require.Equal(t, "myFuncV1", sanitizeCapnpIdentifier("my.func.v1"))
-		require.Equal(t, "fn123func", sanitizeCapnpIdentifier("123func"))
-		require.Equal(t, "validName", sanitizeCapnpIdentifier("validName"))
+		require.Equal(t, "helloWorldId"+fmt.Sprintf("%x", "hello-world"), sanitizeCapnpIdentifier("hello-world"))
+		require.Equal(t, "myFuncV1Id"+fmt.Sprintf("%x", "my.func.v1"), sanitizeCapnpIdentifier("my.func.v1"))
+		require.Equal(t, "fn123funcId"+fmt.Sprintf("%x", "123func"), sanitizeCapnpIdentifier("123func"))
+		require.Equal(t, "validNameId"+fmt.Sprintf("%x", "validName"), sanitizeCapnpIdentifier("validName"))
 		require.Equal(t, "fnDefault", sanitizeCapnpIdentifier(""))
 	})
 
@@ -72,9 +190,9 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 
 		capnpConfig := workerdRunner.BuildCapnpConfig()
 		require.Contains(t, capnpConfig, `using Workerd = import "/workerd/workerd.capnp";`)
-		require.Contains(t, capnpConfig, `(name = "hello", worker = .helloWorker)`)
-		require.Contains(t, capnpConfig, `(name = "worldApi", address = "127.0.0.1:9002"`)
-		require.Contains(t, capnpConfig, `const helloWorker :Workerd.Worker = (`)
+		require.Contains(t, capnpConfig, fmt.Sprintf(`(name = "hello", worker = .%sWorker)`, sanitizeCapnpIdentifier("hello")))
+		require.Contains(t, capnpConfig, fmt.Sprintf(`(name = "%s", address = "127.0.0.1:9002"`, sanitizeCapnpIdentifier("world-api")))
+		require.Contains(t, capnpConfig, fmt.Sprintf(`const %sWorker :Workerd.Worker = (`, sanitizeCapnpIdentifier("hello")))
 		require.Contains(t, capnpConfig, `(name = "runner.js", esModule = embed "functions/hello/runner.js")`)
 		require.Contains(t, capnpConfig, `(name = "./extra.js", esModule = embed "functions/hello/extra.js")`)
 		require.Contains(t, capnpConfig, `(name = "./config.json", json = embed "functions/hello/config.json")`)
@@ -729,15 +847,16 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 		require.NoError(t, os.MkdirAll(functionsDir, testDirPermissions))
 		readOnlyEndpointDir := filepath.Join(functionsDir, "read-only-ep")
 		require.NoError(t, os.MkdirAll(readOnlyEndpointDir, testDirPermissions))
-		require.NoError(t, os.Chmod(readOnlyEndpointDir, 0555))
+		require.NoError(t, os.Chmod(functionsDir, 0555))
 		defer func() {
-			_ = os.Chmod(readOnlyEndpointDir, testDirPermissions)
+			_ = os.Chmod(functionsDir, testDirPermissions)
 			_ = os.RemoveAll(readOnlyEndpointDir)
 		}()
 		readOnlyEndpoint := &Endpoint{Name: "read-only-ep", Entrypoint: "index.js"}
 		rawDeployment := &Deployment{BundleFormat: "raw", BundleContent: []byte("export default {};")}
 		deployReadOnlyErr := workerdRunner.Deploy(context.Background(), readOnlyEndpoint, rawDeployment)
 		require.Error(t, deployReadOnlyErr)
+		require.NoError(t, os.Chmod(functionsDir, testDirPermissions))
 
 		tarDeployFailDeployment := &Deployment{BundleFormat: "tar", BundleContent: []byte("corrupted tar")}
 		deployTarFailErr := workerdRunner.Deploy(context.Background(), &Endpoint{Name: "tar-fail-ep"}, tarDeployFailDeployment)
@@ -810,5 +929,137 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 		runnerFailDeployment := &Deployment{BundleFormat: "raw", BundleContent: []byte("export default {};")}
 		deployRunnerFailErr := workerdRunner.Deploy(context.Background(), runnerFailEndpoint, runnerFailDeployment)
 		require.Error(t, deployRunnerFailErr)
+	})
+}
+
+func TestFunctionWorkerdReplacementUnit(t *testing.T) {
+	ctx := context.Background()
+	binaryPath, err := ResolveWorkerdBinary(ctx)
+	require.NoError(t, err)
+	binaryPath, err = filepath.Abs(binaryPath)
+	require.NoError(t, err)
+	t.Chdir(t.TempDir())
+	require.NoError(t, os.MkdirAll(".layr/bin", testDirPermissions))
+	require.NoError(t, os.Symlink(binaryPath, WorkerdBinaryPath))
+	workerdRunner := NewWorkerdRunner(nil)
+	t.Cleanup(func() { require.NoError(t, workerdRunner.Stop()) })
+	firstEndpoint := &Endpoint{Name: "stable", Entrypoint: "index.js"}
+	firstDeployment := &Deployment{BundleFormat: "raw", BundleContent: []byte("export default { fetch() { return new Response('stable'); }, test() { throw new Error('user tests must not run during deployment'); } };")}
+	require.NoError(t, workerdRunner.Deploy(ctx, firstEndpoint, firstDeployment))
+	secondEndpoint := &Endpoint{Name: "neighbor", Entrypoint: "index.js"}
+	require.NoError(t, workerdRunner.Deploy(ctx, secondEndpoint, firstDeployment))
+	previousCmd := workerdRunner.processCmd
+	previousPort := workerdRunner.activePorts[firstEndpoint.Name]
+	previousReverseProxy := workerdRunner.activeProxies[firstEndpoint.Name]
+
+	t.Run("invalid replacement preserves both live endpoints and bundle", func(t *testing.T) {
+		invalidDeployment := &Deployment{BundleFormat: "raw", BundleContent: []byte("export default {")}
+		deployErr := workerdRunner.Deploy(ctx, firstEndpoint, invalidDeployment)
+		require.ErrorContains(t, deployErr, "validation failed")
+		require.Same(t, previousCmd, workerdRunner.processCmd)
+		require.Equal(t, previousPort, workerdRunner.activePorts[firstEndpoint.Name])
+		require.Same(t, previousReverseProxy, workerdRunner.activeProxies[firstEndpoint.Name])
+		require.Same(t, firstDeployment, workerdRunner.activeDeployments[firstEndpoint.Name])
+		code, readErr := os.ReadFile(filepath.Join(WorkerdStorageDir, "functions", firstEndpoint.Name, "user_code.js"))
+		require.NoError(t, readErr)
+		require.Equal(t, firstDeployment.BundleContent, code)
+		for _, endpoint := range []*Endpoint{firstEndpoint, secondEndpoint} {
+			responseRecorder := httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+			require.NoError(t, workerdRunner.Forward(responseRecorder, request, endpoint))
+			require.Equal(t, http.StatusOK, responseRecorder.Code)
+			require.Equal(t, "stable", responseRecorder.Body.String())
+		}
+	})
+
+	t.Run("failed undeploy restores routing and deployment state", func(t *testing.T) {
+		previousExec := execCommandContext
+		execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+			return exec.CommandContext(ctx, "/nonexistent-workerd")
+		}
+		t.Cleanup(func() { execCommandContext = previousExec })
+		require.Error(t, workerdRunner.Undeploy(ctx, firstEndpoint.Name))
+		require.Same(t, previousCmd, workerdRunner.processCmd)
+		require.Equal(t, previousPort, workerdRunner.activePorts[firstEndpoint.Name])
+		require.Same(t, previousReverseProxy, workerdRunner.activeProxies[firstEndpoint.Name])
+		require.Same(t, firstDeployment, workerdRunner.activeDeployments[firstEndpoint.Name])
+	})
+
+	t.Run("replacement spawn and readiness failures preserve live runtime", func(t *testing.T) {
+		previousExec := execCommandContext
+		t.Cleanup(func() { execCommandContext = previousExec })
+		for _, failure := range []string{"spawn", "readiness"} {
+			execCommandContext = func(commandCtx context.Context, name string, args ...string) *exec.Cmd {
+				if args[0] == "serve" {
+					if failure == "spawn" {
+						return exec.CommandContext(commandCtx, "/nonexistent-workerd")
+					}
+					return exec.CommandContext(commandCtx, "/bin/sh", "-c", "exit 1")
+				}
+				return previousExec(commandCtx, name, args...)
+			}
+			require.Error(t, workerdRunner.Deploy(ctx, firstEndpoint, firstDeployment))
+			require.Same(t, previousCmd, workerdRunner.processCmd)
+		}
+	})
+
+	t.Run("validation config write failure preserves live runtime", func(t *testing.T) {
+		validationPath := filepath.Join(WorkerdStorageDir, "validation.capnp")
+		require.NoError(t, os.Mkdir(validationPath, testDirPermissions))
+		t.Cleanup(func() { require.NoError(t, os.Remove(validationPath)) })
+		require.ErrorContains(t, workerdRunner.Deploy(ctx, firstEndpoint, firstDeployment), "failed to write runtime validation config")
+		require.Same(t, previousCmd, workerdRunner.processCmd)
+	})
+
+	t.Run("filesystem failures leave active runtime unchanged", func(t *testing.T) {
+		functionsDir := filepath.Join(WorkerdStorageDir, "functions")
+		require.NoError(t, os.Chmod(functionsDir, 0555))
+		require.ErrorContains(t, workerdRunner.Deploy(ctx, &Endpoint{Name: "missing"}, firstDeployment), "failed to create endpoint directory")
+		require.NoError(t, os.Chmod(functionsDir, testDirPermissions))
+		var bundleBuffer bytes.Buffer
+		tarWriter := tar.NewWriter(&bundleBuffer)
+		require.NoError(t, tarWriter.WriteHeader(&tar.Header{Name: "runner.js/", Mode: 0755, Typeflag: tar.TypeDir}))
+		require.NoError(t, tarWriter.Close())
+		require.ErrorContains(t, workerdRunner.Deploy(ctx, firstEndpoint, &Deployment{BundleFormat: "tar", BundleContent: bundleBuffer.Bytes()}), "failed to write runner script")
+		require.Same(t, previousCmd, workerdRunner.processCmd)
+		readOnlyDir := t.TempDir()
+		require.NoError(t, os.Chmod(readOnlyDir, 0555))
+		t.Cleanup(func() { require.NoError(t, os.Chmod(readOnlyDir, testDirPermissions)) })
+		require.ErrorContains(t, extractBundle(readOnlyDir, &Deployment{BundleFormat: "tar"}, "index.js"), "failed to write user_code.js wrapper")
+		require.ErrorContains(t, extractBundle(readOnlyDir, firstDeployment, "index.js"), "failed to write user code")
+	})
+
+	t.Run("cancellation during port allocation preserves live runtime", func(t *testing.T) {
+		previousListen := netListen
+		canceledCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		netListen = func(network, address string) (net.Listener, error) {
+			listener, listenErr := previousListen(network, address)
+			if listenErr != nil {
+				return nil, listenErr
+			}
+			cancel()
+			return listener, nil
+		}
+		t.Cleanup(func() { netListen = previousListen })
+		isolatedWorkerdRunner := NewWorkerdRunner(nil)
+		isolatedWorkerdRunner.activePorts["single"] = 1234
+		require.ErrorIs(t, isolatedWorkerdRunner.regenerateAndReloadLocked(canceledCtx), context.Canceled)
+		require.Equal(t, 1234, isolatedWorkerdRunner.activePorts["single"])
+	})
+
+	t.Run("cancellation after process startup preserves live runtime", func(t *testing.T) {
+		previousExec := execCommandContext
+		canceledCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		execCommandContext = func(commandCtx context.Context, name string, args ...string) *exec.Cmd {
+			if args[0] == "serve" {
+				cancel()
+			}
+			return exec.CommandContext(commandCtx, name, args...)
+		}
+		t.Cleanup(func() { execCommandContext = previousExec })
+		require.ErrorIs(t, workerdRunner.Deploy(canceledCtx, firstEndpoint, firstDeployment), context.Canceled)
+		require.Same(t, previousCmd, workerdRunner.processCmd)
 	})
 }

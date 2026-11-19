@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"layr.sh/auth"
 	"layr.sh/core"
 )
 
 func TestFunctionFullLifecycleE2E(t *testing.T) {
-	testKernel, cleanup := core.SetupTestKernel(t, Migrations)
+	databaseMigrations := append([]core.DatabaseMigration{}, auth.Migrations...)
+	databaseMigrations = append(databaseMigrations, Migrations...)
+	testKernel, cleanup := core.SetupTestKernel(t, databaseMigrations)
 	defer cleanup()
 
 	testCtx := context.Background()
@@ -233,10 +236,19 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.Equal(t, "service_role", privServiceAccountResponse["role"])
 
 	// 4. Invocation of private endpoint with End-User JWT should succeed with user auth context
+	var userID, sessionID string
+	require.NoError(t, testKernel.DB().QueryRow(testCtx, `
+		INSERT INTO auth.users (email, role) VALUES ('tester@layr.sh', 'user') RETURNING id
+	`).Scan(&userID))
+	require.NoError(t, testKernel.DB().QueryRow(testCtx, `
+		INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at)
+		VALUES ($1, $2, clock_timestamp() + interval '1 hour') RETURNING id
+	`, userID, testKernel.JWTSigner().HashRefreshToken("function-e2e-session")).Scan(&sessionID))
 	userToken := testKernel.JWTSigner().GenerateAccessToken(core.JWTClaims{
-		Subject: "usr_e2e_tester_123",
-		Role:    "user",
-		Email:   "tester@layr.sh",
+		Subject:   userID,
+		SessionID: sessionID,
+		Role:      "user",
+		Email:     "tester@layr.sh",
 	})
 	userPrivRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/private-worker", nil)
 	userPrivRequest.Header.Set("Authorization", "Bearer "+userToken)
@@ -249,10 +261,19 @@ func TestFunctionFullLifecycleE2E(t *testing.T) {
 	require.Equal(t, true, privUserResponse["is_authenticated"])
 	require.Equal(t, true, privUserResponse["is_user"])
 	require.Equal(t, false, privUserResponse["is_service_account"])
-	require.Equal(t, "usr_e2e_tester_123", privUserResponse["userId"])
+	require.Equal(t, userID, privUserResponse["userId"])
 	require.Equal(t, "user", privUserResponse["role"])
 
-	// 4. Test Core EventHook triggering function over HTTP webhook
+	// An access token must not authorize a private endpoint after its session is revoked.
+	_, revokeSessionErr := testKernel.DB().Exec(testCtx, `DELETE FROM auth.sessions WHERE id = $1`, sessionID)
+	require.NoError(t, revokeSessionErr)
+	revokedUserRequest := httptest.NewRequestWithContext(testCtx, http.MethodGet, "/v1/function/private-worker", nil)
+	revokedUserRequest.Header.Set("Authorization", "Bearer "+userToken)
+	revokedUserResponseRecorder := httptest.NewRecorder()
+	coreServer.Handler().ServeHTTP(revokedUserResponseRecorder, revokedUserRequest)
+	require.Equal(t, http.StatusUnauthorized, revokedUserResponseRecorder.Code)
+
+	// 5. Test Core EventHook triggering function over HTTP webhook
 	eventServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		request.Header.Set("Publishable-Key", publishableKey)
 		coreServer.Handler().ServeHTTP(responseWriter, request)

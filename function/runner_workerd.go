@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ import (
 const (
 	dirPermissions   = 0755
 	filePermissions  = 0644
-	maxPortAttempts  = 50
+	maxPortAttempts  = 250
 	portWaitInterval = 20 * time.Millisecond
 
 	// WorkerdStorageDir defines the static directory for workerd storage and function files.
@@ -52,6 +53,8 @@ type WorkerdRunner struct {
 	configManager     *ConfigManager
 	isStarted         bool
 	processCmd        *exec.Cmd
+	processDone       <-chan struct{}
+	serviceWorkers    map[string]bool
 	activePorts       map[string]int
 	activeDeployments map[string]*Deployment
 	activeProxies     map[string]*httputil.ReverseProxy
@@ -66,6 +69,7 @@ func NewWorkerdRunner(configManager *ConfigManager) *WorkerdRunner {
 	return &WorkerdRunner{
 		configManager:     configManager,
 		activePorts:       make(map[string]int),
+		serviceWorkers:    make(map[string]bool),
 		activeDeployments: make(map[string]*Deployment),
 		activeProxies:     make(map[string]*httputil.ReverseProxy),
 	}
@@ -236,13 +240,15 @@ func (runner *WorkerdRunner) Stop() error {
 	runner.isStarted = false
 	if runner.processCmd != nil && runner.processCmd.Process != nil {
 		_ = runner.processCmd.Process.Kill()
+		<-runner.processDone
 		runner.processCmd = nil
+		runner.processDone = nil
 	}
 
 	return nil
 }
 
-// Deploy writes the code bundle and triggers zero-downtime hot reload.
+// Deploy writes the code bundle and activates it only after the replacement runtime is ready.
 func (runner *WorkerdRunner) Deploy(
 	ctx context.Context,
 	targetEndpoint *Endpoint,
@@ -254,16 +260,63 @@ func (runner *WorkerdRunner) Deploy(
 	if deployment == nil {
 		return ErrDeploymentNotFound
 	}
+	allowedKeys := runner.configManager.Get().AllowedEnvironmentKeys
+	if len(allowedKeys) > 0 {
+		for key := range deployment.EnvironmentVariables {
+			allowed := false
+			for _, allowedKey := range allowedKeys {
+				if key == allowedKey {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return fmt.Errorf("%w: environment key is not allowed: %s", ErrInvalidConfig, key)
+			}
+		}
+	}
 
 	runner.rwMutex.Lock()
 	defer runner.rwMutex.Unlock()
 
 	endpointDir := filepath.Join(WorkerdStorageDir, "functions", targetEndpoint.Name)
+	previousPort, hadPort := runner.activePorts[targetEndpoint.Name]
+	previousDeployment, hadDeployment := runner.activeDeployments[targetEndpoint.Name]
+	previousServiceWorker := runner.serviceWorkers[targetEndpoint.Name]
+	previousReverseProxy, hadProxy := runner.activeProxies[targetEndpoint.Name]
+	backupDir := endpointDir + ".previous"
+	if renameErr := os.Rename(endpointDir, backupDir); renameErr != nil && !os.IsNotExist(renameErr) {
+		return fmt.Errorf("failed to preserve endpoint directory: %w", renameErr)
+	}
+	committed := false
+	defer func() {
+		if committed {
+			_ = os.RemoveAll(backupDir)
+			return
+		}
+		_ = os.RemoveAll(endpointDir)
+		_ = os.Rename(backupDir, endpointDir)
+		delete(runner.activePorts, targetEndpoint.Name)
+		delete(runner.activeDeployments, targetEndpoint.Name)
+		delete(runner.activeProxies, targetEndpoint.Name)
+		runner.serviceWorkers[targetEndpoint.Name] = previousServiceWorker
+		if hadPort {
+			runner.activePorts[targetEndpoint.Name] = previousPort
+		}
+		if hadDeployment {
+			runner.activeDeployments[targetEndpoint.Name] = previousDeployment
+		}
+		if hadProxy {
+			runner.activeProxies[targetEndpoint.Name] = previousReverseProxy
+		}
+	}()
 	if mkdirErr := os.MkdirAll(endpointDir, dirPermissions); mkdirErr != nil {
 		return fmt.Errorf("failed to create endpoint directory: %w", mkdirErr)
 	}
 
-	if extractErr := extractBundle(endpointDir, deployment, targetEndpoint.Entrypoint); extractErr != nil {
+	boundedDeployment := *deployment
+	boundedDeployment.bundleSizeLimit = runner.configManager.Get().MaxBundleSizeBytes
+	if extractErr := extractBundle(endpointDir, &boundedDeployment, targetEndpoint.Entrypoint); extractErr != nil {
 		return fmt.Errorf("failed to extract bundle: %w", extractErr)
 	}
 
@@ -288,14 +341,33 @@ func (runner *WorkerdRunner) Deploy(
 	targetURL, _ := url.Parse("http://127.0.0.1:" + strconv.Itoa(port))
 	reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
 	reverseProxy.ErrorHandler = func(responseWriter http.ResponseWriter, proxyRequest *http.Request, proxyErr error) {
-		core.WriteErrorResponse(responseWriter, proxyRequest, http.StatusBadGateway, "Bad gateway", proxyErr.Error())
+		statusCode := http.StatusBadGateway
+		if errors.Is(proxyRequest.Context().Err(), context.DeadlineExceeded) {
+			statusCode = http.StatusGatewayTimeout
+		}
+		core.WriteErrorResponse(responseWriter, proxyRequest, statusCode, http.StatusText(statusCode), proxyErr.Error())
 	}
 	runner.activeProxies[targetEndpoint.Name] = reverseProxy
 
-	return runner.regenerateAndReloadLocked(ctx)
+	runner.serviceWorkers[targetEndpoint.Name] = false
+	if reloadErr := runner.regenerateAndReloadLocked(ctx); reloadErr != nil {
+		if !errors.Is(reloadErr, ErrExecutionFailed) {
+			return reloadErr
+		}
+		runner.serviceWorkers[targetEndpoint.Name] = true
+		if retryErr := runner.regenerateAndReloadLocked(ctx); retryErr != nil {
+			return reloadErr
+		}
+	}
+	committed = true
+	return nil
 }
 
 func extractBundle(destDir string, deployment *Deployment, entrypoint string) error {
+	remaining := deployment.bundleSizeLimit
+	if remaining <= 0 {
+		remaining = DefaultMaxBundleSizeBytes
+	}
 	switch deployment.BundleFormat {
 	case "tar":
 		tarReader := tar.NewReader(bytes.NewReader(deployment.BundleContent))
@@ -321,10 +393,14 @@ func extractBundle(destDir string, deployment *Deployment, entrypoint string) er
 			if err := os.MkdirAll(filepath.Dir(targetPath), dirPermissions); err != nil {
 				return fmt.Errorf("failed to create parent directory: %w", err)
 			}
-			fileBytes, readErr := io.ReadAll(tarReader)
+			if header.Size > remaining {
+				return ErrBundleTooLarge
+			}
+			fileBytes, readErr := io.ReadAll(io.LimitReader(tarReader, remaining+1))
 			if readErr != nil {
 				return fmt.Errorf("failed to read tar file entry: %w", readErr)
 			}
+			remaining -= int64(len(fileBytes))
 			if err := os.WriteFile(targetPath, fileBytes, filePermissions); err != nil {
 				return fmt.Errorf("failed to write extracted file: %w", err)
 			}
@@ -349,20 +425,27 @@ func extractBundle(destDir string, deployment *Deployment, entrypoint string) er
 			if err := os.MkdirAll(filepath.Dir(targetPath), dirPermissions); err != nil {
 				return fmt.Errorf("failed to create parent directory: %w", err)
 			}
+			if file.UncompressedSize64 > uint64(remaining) {
+				return ErrBundleTooLarge
+			}
 			readCloser, openErr := file.Open()
 			if openErr != nil {
 				return fmt.Errorf("failed to open zip file entry: %w", openErr)
 			}
-			fileBytes, readErr := io.ReadAll(readCloser)
+			fileBytes, readErr := io.ReadAll(io.LimitReader(readCloser, remaining+1))
 			_ = readCloser.Close()
 			if readErr != nil {
 				return fmt.Errorf("failed to read zip file entry: %w", readErr)
 			}
+			remaining -= int64(len(fileBytes))
 			if err := os.WriteFile(targetPath, fileBytes, filePermissions); err != nil {
 				return fmt.Errorf("failed to write extracted file: %w", err)
 			}
 		}
 	default: // "raw"
+		if int64(len(deployment.BundleContent)) > remaining {
+			return ErrBundleTooLarge
+		}
 		userCodePath := filepath.Join(destDir, "user_code.js")
 		if writeErr := os.WriteFile(userCodePath, deployment.BundleContent, filePermissions); writeErr != nil {
 			return fmt.Errorf("failed to write user code: %w", writeErr)
@@ -391,17 +474,47 @@ func (runner *WorkerdRunner) Undeploy(ctx context.Context, endpointName string) 
 	runner.rwMutex.Lock()
 	defer runner.rwMutex.Unlock()
 
+	previousPort, hadPort := runner.activePorts[endpointName]
+	previousDeployment, hadDeployment := runner.activeDeployments[endpointName]
+	previousReverseProxy, hadProxy := runner.activeProxies[endpointName]
 	delete(runner.activePorts, endpointName)
 	delete(runner.activeDeployments, endpointName)
 	delete(runner.activeProxies, endpointName)
 
+	if reloadErr := runner.regenerateAndReloadLocked(ctx); reloadErr != nil {
+		if hadPort {
+			runner.activePorts[endpointName] = previousPort
+		}
+		if hadDeployment {
+			runner.activeDeployments[endpointName] = previousDeployment
+		}
+		if hadProxy {
+			runner.activeProxies[endpointName] = previousReverseProxy
+		}
+		return reloadErr
+	}
 	endpointDir := filepath.Join(WorkerdStorageDir, "functions", endpointName)
 	_ = os.RemoveAll(endpointDir)
-
-	return runner.regenerateAndReloadLocked(ctx)
+	return nil
 }
 
 func (runner *WorkerdRunner) regenerateAndReloadLocked(ctx context.Context) error {
+	previousPorts := runner.activePorts
+	candidatePorts := make(map[string]int, len(previousPorts))
+	for endpointName := range previousPorts {
+		port, portErr := runner.allocateFreeTCPPort(ctx)
+		if portErr != nil {
+			return fmt.Errorf("failed to allocate replacement port: %w", portErr)
+		}
+		candidatePorts[endpointName] = port
+	}
+	runner.activePorts = candidatePorts
+	committed := false
+	defer func() {
+		if !committed {
+			runner.activePorts = previousPorts
+		}
+	}()
 	capnpContent := runner.BuildCapnpConfig()
 	configPath := filepath.Join(WorkerdStorageDir, "config.capnp")
 	if writeErr := os.WriteFile(configPath, []byte(capnpContent), filePermissions); writeErr != nil {
@@ -411,9 +524,11 @@ func (runner *WorkerdRunner) regenerateAndReloadLocked(ctx context.Context) erro
 	if len(runner.activePorts) == 0 {
 		if runner.processCmd != nil && runner.processCmd.Process != nil {
 			_ = runner.processCmd.Process.Kill()
-			_ = runner.processCmd.Wait()
+			<-runner.processDone
 			runner.processCmd = nil
+			runner.processDone = nil
 		}
+		committed = true
 		return nil
 	}
 
@@ -422,15 +537,22 @@ func (runner *WorkerdRunner) regenerateAndReloadLocked(ctx context.Context) erro
 		return resolveErr
 	}
 
-	if runner.processCmd != nil && runner.processCmd.Process != nil {
-		_ = runner.processCmd.Process.Kill()
-		_ = runner.processCmd.Wait()
-		runner.processCmd = nil
-	}
-
 	absBinaryPath, _ := filepath.Abs(resolvedPath)
 	absStorageDir, _ := filepath.Abs(WorkerdStorageDir)
 	absConfigPath, _ := filepath.Abs(configPath)
+
+	// Validate every isolate, selecting only an internal test service so user handlers never run.
+	validationConfig := strings.Replace(capnpContent, "services = [", fmt.Sprintf(`services = [(name = "/", worker = (modules = [(name = "validate.js", esModule = "export default { test() {} };")], compatibilityDate = %q)),`, DefaultWorkerdCompatibilityDate), 1)
+	validationPath := filepath.Join(absStorageDir, "validation.capnp")
+	if writeErr := os.WriteFile(validationPath, []byte(validationConfig), filePermissions); writeErr != nil {
+		return fmt.Errorf("failed to write runtime validation config: %w", writeErr)
+	}
+	defer func() { _ = os.Remove(validationPath) }()
+	validationCmd := execCommandContext(ctx, absBinaryPath, "test", validationPath, "/")
+	validationCmd.Dir = absStorageDir
+	if output, validationErr := validationCmd.CombinedOutput(); validationErr != nil {
+		return fmt.Errorf("replacement runtime validation failed: %w: %w: %s", ErrExecutionFailed, validationErr, output)
+	}
 
 	workerdCmd := execCommandContext(context.WithoutCancel(ctx), absBinaryPath, "serve", absConfigPath)
 	workerdCmd.Dir = absStorageDir
@@ -439,15 +561,48 @@ func (runner *WorkerdRunner) regenerateAndReloadLocked(ctx context.Context) erro
 		return fmt.Errorf("failed to spawn workerd process: %w", startErr)
 	}
 
-	runner.processCmd = workerdCmd
-
-	expectedBinary := workerdBinaryFilename(runtime.GOOS)
-	if filepath.Base(resolvedPath) == expectedBinary {
-		for _, port := range runner.activePorts {
-			runner.waitForPortLocked(ctx, port)
+	processDone := make(chan struct{})
+	go func() {
+		_ = workerdCmd.Wait()
+		close(processDone)
+	}()
+	defer func() {
+		if !committed {
+			_ = workerdCmd.Process.Kill()
+			<-processDone
 		}
+	}()
+
+	for _, port := range runner.activePorts {
+		runner.waitForPortLocked(ctx, port)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("replacement runtime startup canceled: %w", ctxErr)
+		}
+		dialer := &net.Dialer{Timeout: portWaitInterval}
+		connection, dialErr := dialer.DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if dialErr != nil {
+			return fmt.Errorf("replacement runtime did not become ready on port %d: %w", port, dialErr)
+		}
+		_ = connection.Close()
 	}
 
+	for endpointName, port := range candidatePorts {
+		targetURL, _ := url.Parse("http://127.0.0.1:" + strconv.Itoa(port))
+		reverseProxy := httputil.NewSingleHostReverseProxy(targetURL)
+		if previousReverseProxy := runner.activeProxies[endpointName]; previousReverseProxy != nil {
+			reverseProxy.ErrorHandler = previousReverseProxy.ErrorHandler
+		}
+		runner.activeProxies[endpointName] = reverseProxy
+	}
+	previousCmd := runner.processCmd
+	previousDone := runner.processDone
+	runner.processCmd = workerdCmd
+	runner.processDone = processDone
+	committed = true
+	if previousCmd != nil && previousCmd.Process != nil {
+		_ = previousCmd.Process.Kill()
+		<-previousDone
+	}
 	return nil
 }
 
@@ -486,14 +641,46 @@ func (runner *WorkerdRunner) Forward(
 	}
 
 	runner.rwMutex.RLock()
-	reverseProxy, exists := runner.activeProxies[targetEndpoint.Name]
+	processDone := runner.processDone
+	exited := false
+	if processDone != nil {
+		select {
+		case <-processDone:
+			exited = true
+		default:
+		}
+	}
 	runner.rwMutex.RUnlock()
+	if exited {
+		runner.rwMutex.Lock()
+		if runner.processDone == processDone {
+			if reloadErr := runner.regenerateAndReloadLocked(request.Context()); reloadErr != nil {
+				runner.rwMutex.Unlock()
+				return reloadErr
+			}
+		}
+		runner.rwMutex.Unlock()
+	}
+
+	// Replacement waits until invocations using the current process have drained.
+	runner.rwMutex.RLock()
+	defer runner.rwMutex.RUnlock()
+	reverseProxy, exists := runner.activeProxies[targetEndpoint.Name]
 
 	if !exists || reverseProxy == nil {
 		return fmt.Errorf("%w: endpoint %s is not deployed", ErrDeploymentNotFound, targetEndpoint.Name)
 	}
 
-	reverseProxy.ServeHTTP(responseWriter, request)
+	timeoutSeconds := targetEndpoint.TimeoutSeconds
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = runner.configManager.Get().DefaultTimeoutSeconds
+	}
+	requestCtx, cancel := context.WithTimeout(request.Context(), time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	reverseProxy.ServeHTTP(responseWriter, request.Clone(requestCtx))
+	if errors.Is(requestCtx.Err(), context.DeadlineExceeded) {
+		return ErrExecutionTimeout
+	}
 	return nil
 }
 
@@ -509,7 +696,13 @@ func (runner *WorkerdRunner) Health(ctx context.Context) (*RunnerHealth, error) 
 	}
 
 	if runner.processCmd != nil && runner.processCmd.Process != nil {
-		runnerHealth.ProcessPID = runner.processCmd.Process.Pid
+		select {
+		case <-runner.processDone:
+			runnerHealth.Available = false
+			runnerHealth.ErrorMessage = "workerd process exited"
+		default:
+			runnerHealth.ProcessPID = runner.processCmd.Process.Pid
+		}
 	}
 
 	return runnerHealth, nil
@@ -550,10 +743,7 @@ func (runner *WorkerdRunner) BuildCapnpConfig() string {
 		runnerRelativePath := filepath.ToSlash(filepath.Join("functions", endpointName, "runner.js"))
 		userRelativePath := filepath.ToSlash(filepath.Join("functions", endpointName, "user_code.js"))
 
-		isServiceWorkerScript := false
-		if activeDeployment != nil && bytes.Contains(activeDeployment.BundleContent, []byte("addEventListener")) {
-			isServiceWorkerScript = true
-		}
+		isServiceWorkerScript := runner.serviceWorkers[endpointName]
 
 		fmt.Fprintf(&configBuilder, "const %sWorker :Workerd.Worker = (\n", sanitizedName)
 		if isServiceWorkerScript {
@@ -906,7 +1096,7 @@ func sanitizeCapnpIdentifier(rawName string) string {
 	if sanitized == "" {
 		return "fnDefault"
 	}
-	return sanitized
+	return sanitized + "Id" + hex.EncodeToString([]byte(rawName))
 }
 
 func (runner *WorkerdRunner) allocateFreeTCPPort(ctx context.Context) (int, error) {

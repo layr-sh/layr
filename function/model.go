@@ -23,6 +23,7 @@ type Endpoint struct {
 
 // Deployment represents an immutable deployment version containing bundled code in function.deployments.
 type Deployment struct {
+	bundleSizeLimit      int64
 	ID                   uuid.UUID             `json:"id"`
 	EndpointID           uuid.UUID             `json:"endpoint_id"`
 	Version              int                   `json:"version"`

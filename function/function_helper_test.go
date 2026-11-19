@@ -16,9 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"uuid"
+
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
-	"uuid"
 )
 
 func generateTestCertAndKeyPEM(t *testing.T) (string, string) {
@@ -202,6 +204,21 @@ func bindTestCustomDomainRoute(ctx context.Context, t *testing.T, kernel *core.K
 	_, err := kernel.DB().Exec(ctx, insertSQL, domainID, endpointID, pathPrefix)
 	require.NoError(t, err)
 }
+
+type queryFailureTracer struct {
+	matches func(string) bool
+}
+
+func (tracer *queryFailureTracer) TraceQueryStart(ctx context.Context, _ *pgx.Conn, traceQueryStartData pgx.TraceQueryStartData) context.Context {
+	if tracer.matches(traceQueryStartData.SQL) {
+		canceledCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		return canceledCtx
+	}
+	return ctx
+}
+
+func (*queryFailureTracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {}
 
 type failingResponseWriter struct{}
 

@@ -4,6 +4,7 @@ package function
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
@@ -153,12 +154,41 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 		environmentVariables = make(map[string]string)
 	}
 
+	allowedKeys := controlPlaneHandler.configManager.Get().AllowedEnvironmentKeys
+	if len(allowedKeys) > 0 {
+		for key := range environmentVariables {
+			allowed := false
+			for _, allowedKey := range allowedKeys {
+				if key == allowedKey {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Environment key is not allowed: "+key)
+				return
+			}
+		}
+	}
+
 	environmentJSON, _ := json.Marshal(environmentVariables)
 	filesJSON, _ := json.Marshal(bundleFilesManifest)
 
 	var workerdRuntimeConfigJSON []byte
 	if createDeploymentInput.WorkerdRuntimeConfig != nil {
 		workerdRuntimeConfigJSON, _ = json.Marshal(createDeploymentInput.WorkerdRuntimeConfig)
+	}
+
+	tx, beginErr := controlPlaneHandler.kernel.DB().Begin(request.Context())
+	if beginErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, beginErr.Error())
+		return
+	}
+	defer func(ctx context.Context) { _ = tx.Rollback(ctx) }(context.WithoutCancel(request.Context()))
+	var lockedEndpointID uuid.UUID
+	if lockErr := tx.QueryRow(request.Context(), "SELECT id FROM function.endpoints WHERE id = $1 FOR UPDATE", endpointID).Scan(&lockedEndpointID); lockErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, lockErr.Error())
+		return
 	}
 
 	const insertDeploymentSQL = `
@@ -171,12 +201,6 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 				$2, $3, $4, $5, $6, $7, 'active', clock_timestamp()
 			)
 			RETURNING id, endpoint_id, version, bundle_format, bundle_hash, bundle_files, workerd_runtime_config, status, created_at
-		),
-		updated_ep AS (
-			UPDATE function.endpoints f
-			SET active_deployment_id = new_dep.id, last_updated_at = clock_timestamp()
-			FROM new_dep
-			WHERE f.id = new_dep.endpoint_id
 		)
 		SELECT id, endpoint_id, version, bundle_format, bundle_hash, bundle_files, workerd_runtime_config, status, created_at FROM new_dep;
 	`
@@ -190,7 +214,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 
 	var rawFilesJSON []byte
 	var rawWorkerdRuntimeConfigJSON []byte
-	queryErr := controlPlaneHandler.kernel.DB().QueryRow(
+	queryErr := tx.QueryRow(
 		request.Context(),
 		insertDeploymentSQL,
 		endpointID,
@@ -226,12 +250,27 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateDeployment(responseW
 	// Deploy to the runtime runner
 	existingEndpoint.ActiveDeploymentID = &deployment.ID
 	if deployErr := controlPlaneHandler.engine.Deploy(request.Context(), existingEndpoint, &deployment); deployErr != nil {
-		_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), "DELETE FROM function.deployments WHERE id = $1;", deployment.ID)
+		if errors.Is(deployErr, ErrBundleTooLarge) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusRequestEntityTooLarge, deployErr.Error())
+			return
+		}
 		if errors.Is(deployErr, ErrRunnerDownloadFailed) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, deployErr.Error())
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deployErr.Error())
+		return
+	}
+
+	activationCtx := context.WithoutCancel(request.Context())
+	_, activationErr := tx.Exec(activationCtx, `UPDATE function.endpoints SET active_deployment_id = $1, last_updated_at = clock_timestamp() WHERE id = $2`, deployment.ID, endpointID)
+	if activationErr == nil {
+		activationErr = tx.Commit(activationCtx)
+	}
+	if activationErr != nil {
+		_ = tx.Rollback(activationCtx)
+		restoreErr := controlPlaneHandler.restoreEndpointRuntime(activationCtx, endpointID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, errors.Join(activationErr, restoreErr).Error())
 		return
 	}
 
@@ -381,10 +420,16 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRollbackDeployment(respons
 		_ = json.Unmarshal(rawWorkerdRuntimeConfigJSON, &deployment.WorkerdRuntimeConfig)
 	}
 
-	var previousDeploymentID *uuid.UUID
-	if existingEndpoint.ActiveDeploymentID != nil {
-		previousActiveID := *existingEndpoint.ActiveDeploymentID
-		previousDeploymentID = &previousActiveID
+	tx, beginErr := controlPlaneHandler.kernel.DB().Begin(request.Context())
+	if beginErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, beginErr.Error())
+		return
+	}
+	defer func(ctx context.Context) { _ = tx.Rollback(ctx) }(context.WithoutCancel(request.Context()))
+	var lockedEndpointID uuid.UUID
+	if lockErr := tx.QueryRow(request.Context(), "SELECT id FROM function.endpoints WHERE id = $1 FOR UPDATE", endpointID).Scan(&lockedEndpointID); lockErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, lockErr.Error())
+		return
 	}
 
 	const updateSQL = `
@@ -392,21 +437,29 @@ func (controlPlaneHandler *ControlPlaneHandler) handleRollbackDeployment(respons
 		SET active_deployment_id = $1, last_updated_at = clock_timestamp()
 		WHERE id = $2;
 	`
-	if _, updateErr := controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSQL, deployment.ID, endpointID); updateErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, updateErr.Error())
-		return
-	}
-
 	existingEndpoint.ActiveDeploymentID = &deployment.ID
 	if deployErr := controlPlaneHandler.engine.Deploy(request.Context(), existingEndpoint, &deployment); deployErr != nil {
-		if previousDeploymentID != nil {
-			_, _ = controlPlaneHandler.kernel.DB().Exec(request.Context(), updateSQL, *previousDeploymentID, endpointID)
+		if errors.Is(deployErr, ErrBundleTooLarge) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusRequestEntityTooLarge, deployErr.Error())
+			return
 		}
 		if errors.Is(deployErr, ErrRunnerDownloadFailed) {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadGateway, deployErr.Error())
 			return
 		}
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, deployErr.Error())
+		return
+	}
+
+	activationCtx := context.WithoutCancel(request.Context())
+	_, activationErr := tx.Exec(activationCtx, updateSQL, deployment.ID, endpointID)
+	if activationErr == nil {
+		activationErr = tx.Commit(activationCtx)
+	}
+	if activationErr != nil {
+		_ = tx.Rollback(activationCtx)
+		restoreErr := controlPlaneHandler.restoreEndpointRuntime(activationCtx, endpointID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, errors.Join(activationErr, restoreErr).Error())
 		return
 	}
 
