@@ -325,12 +325,32 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteEndpoint(responseWri
 		return
 	}
 
-	// Undeploy from runtime runner
-	_ = controlPlaneHandler.engine.Undeploy(request.Context(), existingEndpoint.Runtime, existingEndpoint.Name)
+	tx, beginErr := controlPlaneHandler.kernel.DB().Begin(request.Context())
+	if beginErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, beginErr.Error())
+		return
+	}
+	defer func(ctx context.Context) { _ = tx.Rollback(ctx) }(context.WithoutCancel(request.Context()))
+	var lockedEndpointID uuid.UUID
+	if lockErr := tx.QueryRow(request.Context(), "SELECT id FROM function.endpoints WHERE id = $1 FOR UPDATE", endpointID).Scan(&lockedEndpointID); lockErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, lockErr.Error())
+		return
+	}
+	if undeployErr := controlPlaneHandler.engine.Undeploy(request.Context(), existingEndpoint.Runtime, existingEndpoint.Name); undeployErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, undeployErr.Error())
+		return
+	}
 
 	const deleteSQL = `DELETE FROM function.endpoints WHERE id = $1;`
-	if _, queryErr := controlPlaneHandler.kernel.DB().Exec(request.Context(), deleteSQL, endpointID); queryErr != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, queryErr.Error())
+	mutationCtx := context.WithoutCancel(request.Context())
+	_, mutationErr := tx.Exec(mutationCtx, deleteSQL, endpointID)
+	if mutationErr == nil {
+		mutationErr = tx.Commit(mutationCtx)
+	}
+	if mutationErr != nil {
+		_ = tx.Rollback(mutationCtx)
+		restoreErr := controlPlaneHandler.restoreEndpointRuntime(mutationCtx, endpointID)
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, errors.Join(mutationErr, restoreErr).Error())
 		return
 	}
 

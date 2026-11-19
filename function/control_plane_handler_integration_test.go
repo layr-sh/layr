@@ -5,10 +5,27 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"uuid"
 
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
+
+func TestFunctionControlPlaneHandlerRestoreRuntimeIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	service.engine.RegisterRunner(&mockRunner{name: "workerd"})
+	controlPlaneHandler := service.ControlPlaneHandler()
+	require.ErrorIs(t, controlPlaneHandler.restoreEndpointRuntime(ctx, uuid.NewV7()), ErrEndpointNotFound)
+	endpoint := insertTestEndpoint(ctx, t, kernel, "restore-query-failure", true)
+	_, renameErr := kernel.DB().Exec(ctx, `ALTER TABLE function.deployments RENAME TO deployments_unavailable`)
+	require.NoError(t, renameErr)
+	require.ErrorContains(t, controlPlaneHandler.restoreEndpointRuntime(ctx, endpoint.ID), "failed to query active deployment")
+	_, restoreErr := kernel.DB().Exec(ctx, `ALTER TABLE function.deployments_unavailable RENAME TO deployments`)
+	require.NoError(t, restoreErr)
+}
 
 func TestFunctionControlPlaneHandlerBaseScopeIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)

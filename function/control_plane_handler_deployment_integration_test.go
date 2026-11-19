@@ -5,15 +5,183 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
+
+func TestFunctionControlPlaneHandlerDeploymentsRegressionIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	service.engine.RegisterRunner(&mockRunner{name: "workerd", deployErr: errors.New("audit deployment failure")})
+	serviceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{Name: "audit", Scopes: []string{core.ScopeRoot}})
+	require.NoError(t, err)
+	controlPlaneHandler := service.ControlPlaneHandler()
+	t.Run("failed replacement preserves existing database deployment", func(t *testing.T) {
+		endpoint := insertTestEndpoint(ctx, t, kernel, "audit-replacement", true)
+		var previousID uuid.UUID
+		require.NoError(t, kernel.DB().QueryRow(ctx, `INSERT INTO function.deployments (endpoint_id, version, bundle_content, bundle_hash) VALUES ($1, 1, 'code', 'hash') RETURNING id`, endpoint.ID).Scan(&previousID))
+		_, err := kernel.DB().Exec(ctx, `UPDATE function.endpoints SET active_deployment_id=$1 WHERE id=$2`, previousID, endpoint.ID)
+		require.NoError(t, err)
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"bundle_content":"export default {};"}`))
+		request.SetPathValue("endpoint_id", endpoint.ID.String())
+		request.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+		responseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleCreateDeployment(responseRecorder, request)
+		require.Equal(t, 500, responseRecorder.Code)
+		storedEndpoint, err := controlPlaneHandler.fetchEndpointByID(ctx, endpoint.ID)
+		require.NoError(t, err)
+		require.Equal(t, &previousID, storedEndpoint.ActiveDeploymentID)
+		invocationRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+		invocationRequest.SetPathValue("endpoint_name", endpoint.Name)
+		invocationResponseRecorder := httptest.NewRecorder()
+		service.BaseHandler().handleInvokeEndpoint(invocationResponseRecorder, invocationRequest)
+		require.Equal(t, http.StatusOK, invocationResponseRecorder.Code)
+	})
+	t.Run("failed rollback preserves inactive endpoint", func(t *testing.T) {
+		endpoint := insertTestEndpoint(ctx, t, kernel, "audit-rollback", true)
+		var deploymentID uuid.UUID
+		require.NoError(t, kernel.DB().QueryRow(ctx, `INSERT INTO function.deployments (endpoint_id, version, bundle_content, bundle_hash) VALUES ($1, 1, 'code', 'hash') RETURNING id`, endpoint.ID).Scan(&deploymentID))
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"target_version":1}`))
+		request.SetPathValue("endpoint_id", endpoint.ID.String())
+		request.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+		responseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleRollbackDeployment(responseRecorder, request)
+		require.Equal(t, 500, responseRecorder.Code)
+		storedEndpoint, err := controlPlaneHandler.fetchEndpointByID(ctx, endpoint.ID)
+		require.NoError(t, err)
+		require.Nil(t, storedEndpoint.ActiveDeploymentID)
+	})
+	t.Run("environment key allowlist rejects unlisted keys", func(t *testing.T) {
+		endpoint := insertTestEndpoint(ctx, t, kernel, "audit-env", true)
+		allowedService := NewService(kernel)
+		allowedService.engine.RegisterRunner(&mockRunner{name: "workerd"})
+		config := allowedService.configManager.Get()
+		config.AllowedEnvironmentKeys = []string{"ALLOWED"}
+		allowedService.configManager.SetMemoryConfig(config)
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"bundle_content":"export default {};", "environment_variables":{"DISALLOWED":"accepted"}}`))
+		request.SetPathValue("endpoint_id", endpoint.ID.String())
+		request.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+		responseRecorder := httptest.NewRecorder()
+		allowedService.ControlPlaneHandler().handleCreateDeployment(responseRecorder, request)
+		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+		request = httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"bundle_content":"export default {};", "environment_variables":{"ALLOWED":"accepted"}}`))
+		request.SetPathValue("endpoint_id", endpoint.ID.String())
+		request.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+		responseRecorder = httptest.NewRecorder()
+		allowedService.ControlPlaneHandler().handleCreateDeployment(responseRecorder, request)
+		require.Equal(t, http.StatusCreated, responseRecorder.Code)
+		var value string
+		require.NoError(t, kernel.DB().QueryRow(ctx, `SELECT environment_variables->>'ALLOWED' FROM function.deployments WHERE endpoint_id=$1`, endpoint.ID).Scan(&value))
+		require.Equal(t, "accepted", value)
+	})
+	t.Run("concurrent deployment versions are serialized", func(t *testing.T) {
+		endpoint := insertTestEndpoint(ctx, t, kernel, "audit-concurrency", true)
+		_, err := kernel.DB().Exec(ctx, `CREATE FUNCTION function.audit_delay() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_sleep(0.3); RETURN NEW; END $$; CREATE TRIGGER audit_delay BEFORE INSERT ON function.deployments FOR EACH ROW EXECUTE FUNCTION function.audit_delay();`)
+		require.NoError(t, err)
+		defer func() {
+			_, _ = kernel.DB().Exec(ctx, `DROP TRIGGER audit_delay ON function.deployments; DROP FUNCTION function.audit_delay();`)
+		}()
+		concurrentService := NewService(kernel)
+		concurrentService.engine.RegisterRunner(&mockRunner{name: "workerd"})
+		start := make(chan struct{})
+		statuses := make(chan int, 2)
+		var waitGroup sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			waitGroup.Add(1)
+			go func() {
+				defer waitGroup.Done()
+				<-start
+				request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"bundle_content":"export default {};"}`))
+				request.SetPathValue("endpoint_id", endpoint.ID.String())
+				request.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+				responseRecorder := httptest.NewRecorder()
+				concurrentService.ControlPlaneHandler().handleCreateDeployment(responseRecorder, request)
+				statuses <- responseRecorder.Code
+			}()
+		}
+		close(start)
+		waitGroup.Wait()
+		first, second := <-statuses, <-statuses
+		require.ElementsMatch(t, []int{201, 201}, []int{first, second})
+	})
+}
+
+func TestFunctionControlPlaneHandlerDeploymentTransactionsIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	endpoint := insertTestEndpoint(ctx, t, kernel, "transaction-failures", true)
+	var deploymentID uuid.UUID
+	require.NoError(t, kernel.DB().QueryRow(ctx, `INSERT INTO function.deployments (endpoint_id, version, bundle_content, bundle_hash) VALUES ($1, 1, 'code', 'hash') RETURNING id`, endpoint.ID).Scan(&deploymentID))
+	for _, operation := range []string{"deploy", "rollback"} {
+		for _, stage := range []string{"begin", "FOR UPDATE", "UPDATE function.endpoints", "commit"} {
+			t.Run(operation+"/"+stage, func(t *testing.T) {
+				config := kernel.DB().Config()
+				config.ConnConfig.Tracer = &queryFailureTracer{matches: func(query string) bool { return strings.Contains(query, stage) }}
+				pool, connectionErr := pgxpool.NewWithConfig(ctx, config)
+				require.NoError(t, connectionErr)
+				defer pool.Close()
+				service := NewService(core.NewTestKernel(&core.DatabasePool{Pool: pool}))
+				service.engine.RegisterRunner(&mockRunner{name: "workerd"})
+				authCtx := core.WithAuthContext(ctx, core.AuthContext{ServiceAccountID: "transaction-test", JWT: core.JWTClaims{Role: "service_role", Scope: core.ScopeRoot}})
+				payload := `{"bundle_content":"export default {};"}`
+				if operation == "rollback" {
+					payload = `{"target_version":1}`
+				}
+				request := httptest.NewRequestWithContext(authCtx, http.MethodPost, "/", strings.NewReader(payload))
+				request.SetPathValue("endpoint_id", endpoint.ID.String())
+				responseRecorder := httptest.NewRecorder()
+				if operation == "deploy" {
+					service.ControlPlaneHandler().handleCreateDeployment(responseRecorder, request)
+				} else {
+					service.ControlPlaneHandler().handleRollbackDeployment(responseRecorder, request)
+				}
+				require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+			})
+		}
+	}
+}
+
+func TestFunctionControlPlaneHandlerExpandedBundleLimitIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	service.engine.RegisterRunner(&mockRunner{name: "workerd", deployErr: ErrBundleTooLarge})
+	endpoint := insertTestEndpoint(ctx, t, kernel, "expanded-bundle", true)
+	var deploymentID uuid.UUID
+	require.NoError(t, kernel.DB().QueryRow(ctx, `INSERT INTO function.deployments (endpoint_id, version, bundle_content, bundle_hash) VALUES ($1, 1, 'code', 'hash') RETURNING id`, endpoint.ID).Scan(&deploymentID))
+	authCtx := core.WithAuthContext(ctx, core.AuthContext{ServiceAccountID: "bundle-limit", JWT: core.JWTClaims{Role: "service_role", Scope: core.ScopeRoot}})
+	for _, operation := range []string{"deploy", "rollback"} {
+		t.Run(operation, func(t *testing.T) {
+			payload := `{"bundle_content":"export default {};"}`
+			if operation == "rollback" {
+				payload = `{"target_version":1}`
+			}
+			request := httptest.NewRequestWithContext(authCtx, http.MethodPost, "/", strings.NewReader(payload))
+			request.SetPathValue("endpoint_id", endpoint.ID.String())
+			responseRecorder := httptest.NewRecorder()
+			if operation == "deploy" {
+				service.ControlPlaneHandler().handleCreateDeployment(responseRecorder, request)
+			} else {
+				service.ControlPlaneHandler().handleRollbackDeployment(responseRecorder, request)
+			}
+			require.Equal(t, http.StatusRequestEntityTooLarge, responseRecorder.Code)
+		})
+	}
+}
 
 func TestFunctionControlPlaneHandlerDeploymentsIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)

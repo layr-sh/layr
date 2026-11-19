@@ -42,6 +42,8 @@ export async function mountPage(component: Component) {
     await vi.waitFor(() => expect(wrapper.setupState.imageControlPlane.busy.value).toBe(false));
   if (wrapper.setupState.tasksControlPlane)
     await vi.waitFor(() => expect(wrapper.setupState.tasksControlPlane.busy.value).toBe(false));
+  if (wrapper.setupState.functionControlPlane)
+    await vi.waitFor(() => expect(wrapper.setupState.functionControlPlane.busy.value).toBe(false));
   return { wrapper, controlPlane };
 }
 
