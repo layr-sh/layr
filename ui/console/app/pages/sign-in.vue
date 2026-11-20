@@ -175,7 +175,7 @@ async function handleMFA() {
       <!-- Cell 5: Empty Grid Space Behind Centered Form Card (Center) -->
       <div class="flex items-center justify-center p-6" />
 
-      <!-- Cell 6: layr/storage — Morphing 2D Diamond into 3D Isometric Storage Box (Middle Right) -->
+      <!-- Cell 6: layr/file-storage — Morphing 2D Diamond into 3D Isometric Storage Box (Middle Right) -->
       <div class="flex items-center justify-center p-6">
         <div class="art-morph-rotate">
           <svg viewBox="0 0 200 200" class="size-56 text-primary overflow-visible">

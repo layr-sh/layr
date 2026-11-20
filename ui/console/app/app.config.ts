@@ -61,13 +61,15 @@ export default defineAppConfig({
     },
     modal: {
       slots: {
-        overlay: "bg-default!",
+        overlay:
+          "bg-default! data-[state=open]:animate-[fade-in_200ms_var(--ease-in-out)]! data-[state=closed]:animate-[fade-out_600ms_var(--ease-in-out)]!",
         content:
-          "ring-0! shadow-none! data-[state=open]:animate-[fade-in_200ms_var(--ease-out)]! data-[state=closed]:animate-[fade-out_200ms_var(--ease-out)]!",
+          "ring-0! shadow-none! data-[state=open]:animate-[modal-slide-up_300ms_var(--ease-in-out)]! data-[state=closed]:animate-[modal-slide-down_300ms_var(--ease-in-out)]!",
         header: "px-0 sm:px-0",
         body: "px-0 sm:px-0",
         footer: "px-0 sm:px-0",
-        close: "top-3 right-0 bg-elevated/50 p-1 text-muted hover:text-default",
+        close:
+          "top-4 right-0 bg-elevated hover:bg-elevated/75 p-0.5 text-muted hover:text-default [&>span]:size-4!",
       },
     },
     pinInput: {

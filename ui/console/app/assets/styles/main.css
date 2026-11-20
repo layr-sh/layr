@@ -46,3 +46,25 @@
   --ui-border-accented: var(--ui-color-neutral-800);
   --ui-border-inverted: white;
 }
+
+@keyframes modal-slide-up {
+  from {
+    transform: translateY(100dvh);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes modal-slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100dvh);
+    opacity: 0;
+  }
+}
