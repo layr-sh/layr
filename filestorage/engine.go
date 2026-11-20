@@ -5,16 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
+	"strings"
 )
 
 // Standard file storage error definitions.
 var (
-	ErrObjectNotFound       = errors.New("object not found")
-	ErrBucketNotFound       = errors.New("bucket not found")
-	ErrInvalidRange         = errors.New("invalid content range")
-	ErrPayloadTooLarge      = errors.New("payload exceeds maximum allowed file size")
-	ErrUnsupportedBackend   = errors.New("unsupported file storage backend")
-	ErrEngineNotInitialized = errors.New("file storage engine is not initialized")
+	ErrObjectNotFound        = errors.New("object not found")
+	ErrBucketNotFound        = errors.New("bucket not found")
+	ErrInvalidRange          = errors.New("invalid content range")
+	ErrPayloadTooLarge       = errors.New("payload exceeds maximum allowed file size")
+	ErrContentTypeNotAllowed = errors.New("content type not allowed for this bucket")
+	ErrUnsupportedBackend    = errors.New("unsupported file storage backend")
+	ErrEngineNotInitialized  = errors.New("file storage engine is not initialized")
 )
 
 // ContentRange specifies a byte range for partial downloads.
@@ -84,6 +87,29 @@ func (engine *Engine) Upload(
 ) (*Object, error) {
 	if engine == nil || engine.driver == nil {
 		return nil, ErrEngineNotInitialized
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if len(bucket.AllowedMIMETypes) > 0 {
+		mediaType, _, parseErr := mime.ParseMediaType(contentType)
+		allowed := false
+		if parseErr == nil {
+			for _, pattern := range bucket.AllowedMIMETypes {
+				pattern = strings.ToLower(strings.TrimSpace(pattern))
+				if pattern == "*/*" || pattern == mediaType ||
+					(strings.HasSuffix(pattern, "/*") && strings.SplitN(pattern, "/", 2)[0] == strings.SplitN(mediaType, "/", 2)[0]) {
+					allowed = true
+					break
+				}
+			}
+		}
+		if !allowed {
+			return nil, ErrContentTypeNotAllowed
+		}
+	}
+	if bucket.MaxFileSizeBytes > 0 && sizeBytes > bucket.MaxFileSizeBytes {
+		return nil, ErrPayloadTooLarge
 	}
 	uploadedObject, uploadErr := engine.driver.Upload(ctx, bucket, key, reader, sizeBytes, contentType)
 	if uploadErr != nil {

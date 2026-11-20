@@ -10,7 +10,10 @@ beforeEach(async () => {
   await signInConsoleUser();
   const manifest = useNuxtApp().$manifest;
   enabledServices = manifest.state.value.enabledServices;
-  manifest.state.value = { ...manifest.state.value, enabledServices: ["function", "image"] };
+  manifest.state.value = {
+    ...manifest.state.value,
+    enabledServices: ["function", "image", "file_storage"],
+  };
 });
 afterEach(async () => {
   wrapper?.unmount();
@@ -20,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("Canonical service names and routes", () => {
-  it("labels main navigation Function and Image and links to their singular routes", async () => {
+  it("uses canonical service names and routes in main navigation", async () => {
     ({ wrapper } = await mountPage(DefaultLayout));
     const router = useNuxtApp().$router;
     const links = wrapper
@@ -30,6 +33,7 @@ describe("Canonical service names and routes", () => {
       expect.arrayContaining([
         { label: "Function", href: router.resolve("/function").href },
         { label: "Image", href: router.resolve("/image").href },
+        { label: "File Storage", href: router.resolve("/file-storage").href },
       ]),
     );
     expect(links.some((link) => link.label === "Functions" || link.label === "Images")).toBe(false);
@@ -44,6 +48,9 @@ describe("Canonical service names and routes", () => {
     expect(
       services.find((service: { serviceKey: string }) => service.serviceKey === "image"),
     ).toMatchObject({ title: "Image", to: "/image/presets", quickAction: "View Presets" });
+    expect(
+      services.find((service: { serviceKey: string }) => service.serviceKey === "file_storage"),
+    ).toMatchObject({ title: "File Storage", to: "/file-storage", quickAction: "Browse Buckets" });
   });
 
   it.each([
@@ -57,6 +64,11 @@ describe("Canonical service names and routes", () => {
     "/image/presets",
     "/image/signing",
     "/image/configurations",
+    "/file-storage",
+    "/file-storage/buckets",
+    "/file-storage/objects",
+    "/file-storage/signing",
+    "/file-storage/configurations",
   ])("resolves %s through generated Nuxt routes", (path) => {
     expect(useNuxtApp().$router.resolve(path).matched.length).toBeGreaterThan(0);
   });
@@ -64,13 +76,14 @@ describe("Canonical service names and routes", () => {
   it.each([
     ["function", "/function/endpoints"],
     ["image", "/image/presets"],
+    ["file_storage", "/file-storage/buckets"],
   ])("guards disabled %s services using the singular route prefix", async (service, path) => {
     const nuxtApp = useNuxtApp();
     await nuxtApp.$router.push(path);
     expect(nuxtApp.$router.currentRoute.value.path).toBe(path);
     nuxtApp.$manifest.state.value = {
       ...nuxtApp.$manifest.state.value,
-      enabledServices: ["function", "image"].filter((name) => name !== service),
+      enabledServices: ["function", "image", "file_storage"].filter((name) => name !== service),
     };
     await nuxtApp.$router.push("/");
     await nuxtApp.$router.push(path);

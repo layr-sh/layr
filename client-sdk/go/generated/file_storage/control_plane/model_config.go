@@ -24,7 +24,6 @@ type Config struct {
 	ChunkSizeBytes int32 `json:"chunk_size_bytes"`
 	DefaultAllowedMimeTypes []string `json:"default_allowed_mime_types"`
 	DefaultMaxFileSizeBytes int64 `json:"default_max_file_size_bytes"`
-	Enabled bool `json:"enabled"`
 	PresignTokenExpirySeconds int32 `json:"presign_token_expiry_seconds"`
 }
 
@@ -34,12 +33,11 @@ type _Config Config
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewConfig(chunkSizeBytes int32, defaultAllowedMimeTypes []string, defaultMaxFileSizeBytes int64, enabled bool, presignTokenExpirySeconds int32) *Config {
+func NewConfig(chunkSizeBytes int32, defaultAllowedMimeTypes []string, defaultMaxFileSizeBytes int64, presignTokenExpirySeconds int32) *Config {
 	this := Config{}
 	this.ChunkSizeBytes = chunkSizeBytes
 	this.DefaultAllowedMimeTypes = defaultAllowedMimeTypes
 	this.DefaultMaxFileSizeBytes = defaultMaxFileSizeBytes
-	this.Enabled = enabled
 	this.PresignTokenExpirySeconds = presignTokenExpirySeconds
 	return &this
 }
@@ -126,30 +124,6 @@ func (o *Config) SetDefaultMaxFileSizeBytes(v int64) {
 	o.DefaultMaxFileSizeBytes = v
 }
 
-// GetEnabled returns the Enabled field value
-func (o *Config) GetEnabled() bool {
-	if o == nil {
-		var ret bool
-		return ret
-	}
-
-	return o.Enabled
-}
-
-// GetEnabledOk returns a tuple with the Enabled field value
-// and a boolean to check if the value has been set.
-func (o *Config) GetEnabledOk() (*bool, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.Enabled, true
-}
-
-// SetEnabled sets field value
-func (o *Config) SetEnabled(v bool) {
-	o.Enabled = v
-}
-
 // GetPresignTokenExpirySeconds returns the PresignTokenExpirySeconds field value
 func (o *Config) GetPresignTokenExpirySeconds() int32 {
 	if o == nil {
@@ -189,7 +163,6 @@ func (o Config) ToMap() (map[string]interface{}, error) {
 		toSerialize["default_allowed_mime_types"] = o.DefaultAllowedMimeTypes
 	}
 	toSerialize["default_max_file_size_bytes"] = o.DefaultMaxFileSizeBytes
-	toSerialize["enabled"] = o.Enabled
 	toSerialize["presign_token_expiry_seconds"] = o.PresignTokenExpirySeconds
 	return toSerialize, nil
 }
@@ -202,7 +175,6 @@ func (o *Config) UnmarshalJSON(data []byte) (err error) {
 		"chunk_size_bytes",
 		"default_allowed_mime_types",
 		"default_max_file_size_bytes",
-		"enabled",
 		"presign_token_expiry_seconds",
 	}
 

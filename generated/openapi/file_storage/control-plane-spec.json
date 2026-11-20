@@ -54,6 +54,41 @@
         ],
         "type": "object"
       },
+      "BucketUsage": {
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "object_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "backend",
+          "is_public",
+          "last_updated_at",
+          "name",
+          "object_count",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
       "Config": {
         "description": "Config schema",
         "properties": {
@@ -73,9 +108,6 @@
             "format": "int64",
             "type": "integer"
           },
-          "enabled": {
-            "type": "boolean"
-          },
           "presign_token_expiry_seconds": {
             "type": "integer"
           }
@@ -84,8 +116,28 @@
           "chunk_size_bytes",
           "default_allowed_mime_types",
           "default_max_file_size_bytes",
-          "enabled",
           "presign_token_expiry_seconds"
+        ],
+        "type": "object"
+      },
+      "ContentTypeUsage": {
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "object_count": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "content_type",
+          "object_count",
+          "size_bytes"
         ],
         "type": "object"
       },
@@ -232,6 +284,120 @@
           "metadata",
           "object_key",
           "size_bytes"
+        ],
+        "type": "object"
+      },
+      "StatsResponse": {
+        "description": "StatsResponse schema",
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/BucketUsage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "content_types": {
+            "items": {
+              "$ref": "#/components/schemas/ContentTypeUsage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "database_buckets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "database_chunk_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "database_chunks": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "database_objects": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "database_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_updated_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "multipart_parts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "multipart_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "multipart_uploads": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "private_buckets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "public_buckets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "s3_buckets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "s3_objects": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "s3_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_buckets": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_objects": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "buckets",
+          "content_types",
+          "database_buckets",
+          "database_chunk_bytes",
+          "database_chunks",
+          "database_objects",
+          "database_size_bytes",
+          "last_updated_at",
+          "multipart_parts",
+          "multipart_size_bytes",
+          "multipart_uploads",
+          "private_buckets",
+          "public_buckets",
+          "s3_buckets",
+          "s3_objects",
+          "s3_size_bytes",
+          "total_buckets",
+          "total_objects",
+          "total_size_bytes"
         ],
         "type": "object"
       },
@@ -622,6 +788,38 @@
           "config"
         ],
         "x-sdk-method-name": "update"
+      }
+    },
+    "/v1/_/file-storage/stats": {
+      "get": {
+        "description": "Reports bucket counts, tracked object counts and logical bytes by backend, database chunk payload bytes, pending multipart usage, per-bucket usage and content type distribution. S3 usage includes only locally registered objects, not untracked upstream contents. Requires storage:bucket.read scope.",
+        "operationId": "file_storage__stats__get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get file storage usage statistics",
+        "tags": [
+          "Stats"
+        ],
+        "x-sdk-group-name": [
+          "file_storage",
+          "stats"
+        ],
+        "x-sdk-method-name": "get"
       }
     }
   }

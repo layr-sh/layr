@@ -26,7 +26,6 @@ const (
 
 // Config represents the dynamic runtime configuration for layr/file-storage.
 type Config struct {
-	Enabled                   bool     `json:"enabled"`
 	DefaultMaxFileSizeBytes   int64    `json:"default_max_file_size_bytes"`
 	DefaultAllowedMIMETypes   []string `json:"default_allowed_mime_types"`
 	ChunkSizeBytes            int      `json:"chunk_size_bytes"`
@@ -36,7 +35,6 @@ type Config struct {
 // DefaultConfig returns standard baseline configuration for file storage.
 func DefaultConfig() Config {
 	return Config{
-		Enabled:                   true,
 		DefaultMaxFileSizeBytes:   DefaultMaxFileSizeBytes,
 		DefaultAllowedMIMETypes:   []string{},
 		ChunkSizeBytes:            DefaultChunkSizeBytes,

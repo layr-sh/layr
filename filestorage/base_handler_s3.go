@@ -17,11 +17,6 @@ import (
 )
 
 func (baseHandler *BaseHandler) authenticateS3(responseWriter http.ResponseWriter, request *http.Request, requiredScope string) (*core.ServiceAccount, bool) {
-	if !baseHandler.configManager.Get().Enabled {
-		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusForbidden, "AccessDenied", "Access denied")
-		return nil, false
-	}
-
 	authContext := core.GetAuthContext(request.Context())
 	if authContext.IsServiceAccount() {
 		if !authContext.HasScope(requiredScope) {
@@ -386,6 +381,10 @@ func (baseHandler *BaseHandler) handlePutS3Object(responseWriter http.ResponseWr
 
 	uploadedObject, uploadErr := fileStorageEngine.Upload(ctx, *bucket, objectKey, request.Body, request.ContentLength, contentType)
 	if uploadErr != nil {
+		if errors.Is(uploadErr, ErrContentTypeNotAllowed) {
+			baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusBadRequest, "InvalidRequest", uploadErr.Error())
+			return
+		}
 		if errors.Is(uploadErr, ErrPayloadTooLarge) {
 			baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusBadRequest, "EntityTooLarge", "Your proposed upload exceeds the maximum allowed object size.")
 			return
@@ -489,7 +488,10 @@ func (baseHandler *BaseHandler) processCreateMultipartUpload(responseWriter http
 			id, bucket_id, object_key, content_type
 		) VALUES ($1, $2, $3, $4);
 	`
-	_, _ = baseHandler.kernel.DB().Exec(ctx, insertSQL, uploadID, bucket.ID, objectKey, contentType)
+	if _, err := baseHandler.kernel.DB().Exec(ctx, insertSQL, uploadID, bucket.ID, objectKey, contentType); err != nil {
+		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", err.Error())
+		return
+	}
 
 	baseHandler.kernel.EventBus().Publish(ctx, NewMultipartInitiatedEvent(uploadID.String(), MultipartInitiatedEventData{
 		UploadID:  uploadID.String(),
@@ -599,13 +601,20 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 		WHERE upload_id = $1;
 	`
 	var totalSizeBytes int64
-	_ = baseHandler.kernel.DB().QueryRow(ctx, queryTotalSizeSQL, uploadID).Scan(&totalSizeBytes)
+	if err := baseHandler.kernel.DB().QueryRow(ctx, queryTotalSizeSQL, uploadID).Scan(&totalSizeBytes); err != nil {
+		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", err.Error())
+		return
+	}
 
 	contentType := "application/octet-stream"
-	const queryUploadSQL = `SELECT content_type FROM file_storage.multipart_uploads WHERE id = $1;`
-	_ = baseHandler.kernel.DB().QueryRow(ctx, queryUploadSQL, uploadID).Scan(&contentType)
+	const queryUploadSQL = `SELECT content_type FROM file_storage.multipart_uploads WHERE id = $1 AND bucket_id = $2 AND object_key = $3;`
+	if err := baseHandler.kernel.DB().QueryRow(ctx, queryUploadSQL, uploadID, bucket.ID, objectKey).Scan(&contentType); err != nil {
+		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusNotFound, "NoSuchUpload", "The specified upload does not exist for this object.")
+		return
+	}
 
 	pipeReader, pipeWriter := io.Pipe()
+	defer func() { _ = pipeReader.Close() }()
 	go func() {
 		defer func() {
 			_ = pipeWriter.Close()
@@ -633,6 +642,14 @@ func (baseHandler *BaseHandler) processCompleteMultipartUpload(responseWriter ht
 		contentType,
 	)
 	if uploadErr != nil {
+		if errors.Is(uploadErr, ErrPayloadTooLarge) {
+			baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusBadRequest, "EntityTooLarge", uploadErr.Error())
+			return
+		}
+		if errors.Is(uploadErr, ErrContentTypeNotAllowed) {
+			baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusBadRequest, "InvalidRequest", uploadErr.Error())
+			return
+		}
 		baseHandler.writeS3ErrorResponse(responseWriter, request, http.StatusInternalServerError, "InternalError", uploadErr.Error())
 		return
 	}

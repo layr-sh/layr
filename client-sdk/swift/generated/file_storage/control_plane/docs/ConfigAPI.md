@@ -64,7 +64,7 @@ Updates dynamic operational configuration for the file storage subsystem in stor
 // The following code samples are still beta. For any issue, please report via http://github.com/OpenAPITools/openapi-generator/issues/new
 import Generated
 
-let config = Config(chunkSizeBytes: 123, defaultAllowedMimeTypes: ["defaultAllowedMimeTypes_example"], defaultMaxFileSizeBytes: 123, enabled: false, presignTokenExpirySeconds: 123) // Config | Request body for filestorage.Config
+let config = Config(chunkSizeBytes: 123, defaultAllowedMimeTypes: ["defaultAllowedMimeTypes_example"], defaultMaxFileSizeBytes: 123, presignTokenExpirySeconds: 123) // Config | Request body for filestorage.Config
 
 // Update runtime file storage configuration
 do {

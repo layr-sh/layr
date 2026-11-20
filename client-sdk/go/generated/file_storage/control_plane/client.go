@@ -52,6 +52,8 @@ type APIClient struct {
 	BucketsAPI *BucketsAPIService
 
 	ConfigAPI *ConfigAPIService
+
+	StatsAPI *StatsAPIService
 }
 
 type service struct {
@@ -72,6 +74,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	// API Services
 	c.BucketsAPI = (*BucketsAPIService)(&c.common)
 	c.ConfigAPI = (*ConfigAPIService)(&c.common)
+	c.StatsAPI = (*StatsAPIService)(&c.common)
 
 	return c
 }

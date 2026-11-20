@@ -13,6 +13,10 @@ func (service *Service) RegisterRoutes(baseRouter *core.Router, controlPlaneRout
 	service.registerBaseRoutes(baseRouter)
 	service.registerControlPlaneRoutes(controlPlaneRouter)
 
+	// Object handlers enforce bucket policy and capability tokens, including for
+	// anonymous shared URLs that cannot supply a separate publishable-key header.
+	gatewayServeMux.Handle("/v1/file-storage/objects/", baseRouter.Mux())
+
 	gatewayServeMux.HandleFunc("GET /v1/file-storage/spec.json", func(responseWriter http.ResponseWriter, request *http.Request) {
 		responseWriter.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(responseWriter).Encode(baseRouter.OutputOpenAPISpec())
@@ -190,6 +194,14 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
+	core.GetRoute[StatsResponse](router, "/v1/_/file-storage/stats", service.controlPlaneHandler.handleGetStats,
+		core.RouteTag("Stats"),
+		core.RouteSummary("Get file storage usage statistics"),
+		core.RouteDescription("Reports bucket counts, tracked object counts and logical bytes by backend, database chunk payload bytes, pending multipart usage, per-bucket usage and content type distribution. S3 usage includes only locally registered objects, not untracked upstream contents. Requires storage:bucket.read scope."),
+		core.RouteOperationID("file_storage__stats__get"),
+		core.RouteSDKGroupName("file_storage", "stats"),
+		core.RouteSDKMethodName("get"),
+	)
 	core.GetRoute[ListBucketsResponse](router, "/v1/_/file-storage/buckets", service.controlPlaneHandler.handleListBuckets,
 		core.RouteTag("Buckets"),
 		core.RouteSummary("List all storage buckets and backend configurations"),

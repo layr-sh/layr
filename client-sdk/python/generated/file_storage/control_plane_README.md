@@ -72,16 +72,20 @@ Class | Method | HTTP request | Description
 *BucketsApi* | [**file_storage_buckets_update**](generated/file_storage/control_plane/docs/BucketsApi.md#file_storage_buckets_update) | **PATCH** /v1/_/file-storage/buckets/{bucket} | Update storage bucket configuration and constraints
 *ConfigApi* | [**file_storage_config_get**](generated/file_storage/control_plane/docs/ConfigApi.md#file_storage_config_get) | **GET** /v1/_/file-storage/config | Get runtime file storage configuration
 *ConfigApi* | [**file_storage_config_update**](generated/file_storage/control_plane/docs/ConfigApi.md#file_storage_config_update) | **PUT** /v1/_/file-storage/config | Update runtime file storage configuration
+*StatsApi* | [**file_storage_stats_get**](generated/file_storage/control_plane/docs/StatsApi.md#file_storage_stats_get) | **GET** /v1/_/file-storage/stats | Get file storage usage statistics
 
 
 ## Documentation For Models
 
  - [Bucket](generated/file_storage/control_plane/docs/Bucket.md)
+ - [BucketUsage](generated/file_storage/control_plane/docs/BucketUsage.md)
  - [Config](generated/file_storage/control_plane/docs/Config.md)
+ - [ContentTypeUsage](generated/file_storage/control_plane/docs/ContentTypeUsage.md)
  - [CreateBucketInput](generated/file_storage/control_plane/docs/CreateBucketInput.md)
  - [ListBucketObjectsResponse](generated/file_storage/control_plane/docs/ListBucketObjectsResponse.md)
  - [ListBucketsResponse](generated/file_storage/control_plane/docs/ListBucketsResponse.md)
  - [Object](generated/file_storage/control_plane/docs/Object.md)
+ - [StatsResponse](generated/file_storage/control_plane/docs/StatsResponse.md)
  - [UpdateBucketInput](generated/file_storage/control_plane/docs/UpdateBucketInput.md)
 
 

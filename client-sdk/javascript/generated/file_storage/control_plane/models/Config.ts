@@ -34,10 +34,6 @@ export interface Config {
     /**
      * 
      */
-    enabled: boolean;
-    /**
-     * 
-     */
     presignTokenExpirySeconds: number;
 }
 
@@ -48,7 +44,6 @@ export function instanceOfConfig(value: object): value is Config {
     if ((!('chunkSizeBytes' in (value as Record<string, any>)) && !('chunk_size_bytes' in (value as Record<string, any>))) || ((value as Record<string, any>)['chunkSizeBytes'] === undefined && (value as Record<string, any>)['chunk_size_bytes'] === undefined)) return false;
     if ((!('defaultAllowedMimeTypes' in (value as Record<string, any>)) && !('default_allowed_mime_types' in (value as Record<string, any>))) || ((value as Record<string, any>)['defaultAllowedMimeTypes'] === undefined && (value as Record<string, any>)['default_allowed_mime_types'] === undefined)) return false;
     if ((!('defaultMaxFileSizeBytes' in (value as Record<string, any>)) && !('default_max_file_size_bytes' in (value as Record<string, any>))) || ((value as Record<string, any>)['defaultMaxFileSizeBytes'] === undefined && (value as Record<string, any>)['default_max_file_size_bytes'] === undefined)) return false;
-    if (!('enabled' in value) || value['enabled'] === undefined) return false;
     if ((!('presignTokenExpirySeconds' in (value as Record<string, any>)) && !('presign_token_expiry_seconds' in (value as Record<string, any>))) || ((value as Record<string, any>)['presignTokenExpirySeconds'] === undefined && (value as Record<string, any>)['presign_token_expiry_seconds'] === undefined)) return false;
     return true;
 }
@@ -66,7 +61,6 @@ export function ConfigFromJSONTyped(json: any, ignoreDiscriminator: boolean): Co
         'chunkSizeBytes': json['chunk_size_bytes'],
         'defaultAllowedMimeTypes': json['default_allowed_mime_types'] == null ? null : json['default_allowed_mime_types'],
         'defaultMaxFileSizeBytes': json['default_max_file_size_bytes'],
-        'enabled': json['enabled'],
         'presignTokenExpirySeconds': json['presign_token_expiry_seconds'],
     };
 }
@@ -85,7 +79,6 @@ export function ConfigToJSONTyped(value?: Config | null, ignoreDiscriminator: bo
         'chunk_size_bytes': value['chunkSizeBytes'],
         'default_allowed_mime_types': value['defaultAllowedMimeTypes'],
         'default_max_file_size_bytes': value['defaultMaxFileSizeBytes'],
-        'enabled': value['enabled'],
         'presign_token_expiry_seconds': value['presignTokenExpirySeconds'],
     };
 }

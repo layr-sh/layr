@@ -115,7 +115,11 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 	if backend == "s3" {
 		if rawSecretKey, ok := backendConfig["secret_access_key"].(string); ok && rawSecretKey != "" {
 			if !strings.HasPrefix(rawSecretKey, "enc:v1:aes256gcm:") {
-				encryptedSecret, _ := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(rawSecretKey))
+				encryptedSecret, encryptErr := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(rawSecretKey))
+				if encryptErr != nil {
+					core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to encrypt S3 credentials", encryptErr.Error())
+					return
+				}
 				backendConfig["secret_access_key"] = encryptedSecret
 			}
 		}
@@ -123,14 +127,18 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreateBucket(responseWrite
 
 	rawConfigBytes, _ := json.Marshal(backendConfig)
 
+	config := controlPlaneHandler.configManager.Get()
 	maxFileSizeBytes := createBucketInput.MaxFileSizeBytes
 	if maxFileSizeBytes <= 0 {
-		maxFileSizeBytes = 52428800 // 50MB default
+		maxFileSizeBytes = config.DefaultMaxFileSizeBytes
 	}
 
 	allowedMIMETypes := createBucketInput.AllowedMIMETypes
 	if allowedMIMETypes == nil {
-		allowedMIMETypes = []string{}
+		allowedMIMETypes = config.DefaultAllowedMIMETypes
+		if allowedMIMETypes == nil {
+			allowedMIMETypes = []string{}
+		}
 	}
 
 	bucketID := uuid.NewV7()
@@ -308,14 +316,19 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		bucket.Backend = newBackend
 	}
 	if updateBucketInput.BackendConfig != nil {
+		if bucket.BackendConfig == nil {
+			bucket.BackendConfig = map[string]any{}
+		}
 		for itemKey, itemValue := range updateBucketInput.BackendConfig {
 			if itemKey == "secret_access_key" {
 				if secretString, ok := itemValue.(string); ok && secretString != "" && secretString != "********" {
 					if !strings.HasPrefix(secretString, "enc:v1:aes256gcm:") {
 						encryptedSecret, encryptErr := controlPlaneHandler.kernel.CryptoKeyManager().EncryptField([]byte(secretString))
-						if encryptErr == nil {
-							itemValue = encryptedSecret
+						if encryptErr != nil {
+							core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to encrypt S3 credentials", encryptErr.Error())
+							return
 						}
+						itemValue = encryptedSecret
 					}
 				} else if secretString == "********" {
 					continue
@@ -342,7 +355,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 	`
 	var updatedBucket Bucket
 	var returnedConfigBytes []byte
-	_ = controlPlaneHandler.kernel.DB().QueryRow(
+	updateErr := controlPlaneHandler.kernel.DB().QueryRow(
 		ctx,
 		updateSQL,
 		bucket.IsPublic,
@@ -363,6 +376,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateBucket(responseWrite
 		&updatedBucket.CreatedAt,
 		&updatedBucket.LastUpdatedAt,
 	)
+	if updateErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update bucket", updateErr.Error())
+		return
+	}
 
 	if len(returnedConfigBytes) > 0 {
 		_ = json.Unmarshal(returnedConfigBytes, &updatedBucket.BackendConfig)
@@ -390,6 +407,46 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 	}
 
 	ctx := request.Context()
+	tx, beginErr := controlPlaneHandler.kernel.DB().Begin(ctx)
+	if beginErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to begin bucket deletion", beginErr.Error())
+		return
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var bucket Bucket
+	var backendConfig []byte
+	lookupErr := tx.QueryRow(ctx, `SELECT id, name, backend, backend_config FROM file_storage.buckets WHERE name = $1 FOR UPDATE`, bucketName).
+		Scan(&bucket.ID, &bucket.Name, &bucket.Backend, &backendConfig)
+	if lookupErr != nil {
+		if errors.Is(lookupErr, pgx.ErrNoRows) {
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, fmt.Sprintf("Bucket %q not found", bucketName))
+			return
+		}
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to load bucket", lookupErr.Error())
+		return
+	}
+	if bucket.Backend == "s3" {
+		if err := json.Unmarshal(backendConfig, &bucket.BackendConfig); err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Invalid S3 bucket configuration", err.Error())
+			return
+		}
+		rows, queryErr := tx.Query(ctx, `SELECT object_key FROM file_storage.objects WHERE bucket_id = $1 ORDER BY object_key`, bucket.ID)
+		if queryErr != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to list bucket objects", queryErr.Error())
+			return
+		}
+		keys, collectErr := pgx.CollectRows(rows, pgx.RowTo[string])
+		if collectErr != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to read bucket objects", collectErr.Error())
+			return
+		}
+		for _, key := range keys {
+			if err := controlPlaneHandler.s3Engine.Delete(ctx, bucket, key); err != nil {
+				core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete upstream object; retry bucket deletion", err.Error())
+				return
+			}
+		}
+	}
 	const deleteSQL = `
 		DELETE FROM file_storage.buckets
 		WHERE name = $1
@@ -397,7 +454,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 	`
 	var deletedBucket Bucket
 	var rawBackendConfig []byte
-	deleteErr := controlPlaneHandler.kernel.DB().QueryRow(ctx, deleteSQL, bucketName).Scan(
+	deleteErr := tx.QueryRow(ctx, deleteSQL, bucketName).Scan(
 		&deletedBucket.ID,
 		&deletedBucket.Name,
 		&deletedBucket.IsPublic,
@@ -417,6 +474,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeleteBucket(responseWrite
 		return
 	}
 
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to delete bucket", commitErr.Error())
+		return
+	}
 	deletedBucket.BackendConfig = map[string]any{}
 	if len(rawBackendConfig) > 0 {
 		_ = json.Unmarshal(rawBackendConfig, &deletedBucket.BackendConfig)
@@ -459,7 +520,10 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 
 	var totalCount int
 	const countObjectsSQL = `SELECT COUNT(*) FROM file_storage.objects WHERE bucket_id = $1;`
-	_ = controlPlaneHandler.kernel.DB().QueryRow(ctx, countObjectsSQL, bucketID).Scan(&totalCount)
+	if err := controlPlaneHandler.kernel.DB().QueryRow(ctx, countObjectsSQL, bucketID).Scan(&totalCount); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to count objects", err.Error())
+		return
+	}
 
 	const queryObjectsSQL = `
 		SELECT id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata, created_at, last_updated_at
@@ -470,28 +534,38 @@ func (controlPlaneHandler *ControlPlaneHandler) handleListBucketObjects(response
 	`
 	objects := []Object{}
 	rows, queryErr := controlPlaneHandler.kernel.DB().Query(ctx, queryObjectsSQL, bucketID, paginationInput.Limit, paginationInput.Offset)
-	if queryErr == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var object Object
-			var rawMetadata []byte
-			_ = rows.Scan(
-				&object.ID,
-				&object.BucketID,
-				&object.ObjectKey,
-				&object.ContentType,
-				&object.SizeBytes,
-				&object.ChecksumSHA256,
-				&rawMetadata,
-				&object.CreatedAt,
-				&object.LastUpdatedAt,
-			)
-			object.Metadata = map[string]any{}
-			if len(rawMetadata) > 0 {
-				_ = json.Unmarshal(rawMetadata, &object.Metadata)
-			}
-			objects = append(objects, object)
+	if queryErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to list objects", queryErr.Error())
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var object Object
+		var rawMetadata []byte
+		scanErr := rows.Scan(
+			&object.ID,
+			&object.BucketID,
+			&object.ObjectKey,
+			&object.ContentType,
+			&object.SizeBytes,
+			&object.ChecksumSHA256,
+			&rawMetadata,
+			&object.CreatedAt,
+			&object.LastUpdatedAt,
+		)
+		if scanErr != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to read object", scanErr.Error())
+			return
 		}
+		object.Metadata = map[string]any{}
+		if len(rawMetadata) > 0 {
+			_ = json.Unmarshal(rawMetadata, &object.Metadata)
+		}
+		objects = append(objects, object)
+	}
+	if err := rows.Err(); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to read objects", err.Error())
+		return
 	}
 
 	listBucketObjectsResponse := ListBucketObjectsResponse{

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 	"uuid"
@@ -119,6 +120,36 @@ func (s3Engine *S3Engine) Upload(
 		contentType = "application/octet-stream"
 	}
 
+	// Stage bounded uploads so unknown or inaccurate lengths cannot bypass bucket limits.
+	if bucket.MaxFileSizeBytes > 0 || sizeBytes < 0 {
+		file, err := os.CreateTemp("", "layr-file-storage-*")
+		if err != nil {
+			return nil, fmt.Errorf("failed to stage upload: %w", err)
+		}
+		defer func() { _ = file.Close(); _ = os.Remove(file.Name()) }()
+		sourceReader := reader
+		if bucket.MaxFileSizeBytes > 0 {
+			sourceReader = io.LimitReader(reader, bucket.MaxFileSizeBytes)
+		}
+		copied, copyErr := io.Copy(file, sourceReader)
+		if copyErr != nil {
+			return nil, fmt.Errorf("failed to stage upload: %w", copyErr)
+		}
+		if bucket.MaxFileSizeBytes > 0 && copied == bucket.MaxFileSizeBytes {
+			var extra [1]byte
+			if n, err := io.ReadFull(reader, extra[:]); n > 0 {
+				return nil, ErrPayloadTooLarge
+			} else if err != nil && !errors.Is(err, io.EOF) {
+				return nil, fmt.Errorf("failed reading upload: %w", err)
+			}
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return nil, fmt.Errorf("failed to rewind upload: %w", err)
+		}
+		reader = io.Reader(file)
+		sizeBytes = copied
+	}
+
 	putObjectInput := &s3.PutObjectInput{
 		Bucket:        aws.String(s3UpstreamConfiguration.BucketName),
 		Key:           aws.String(key),
@@ -137,17 +168,26 @@ func (s3Engine *S3Engine) Upload(
 		etag = strings.Trim(*putObjectOutput.ETag, "\"")
 	}
 
-	return &Object{
-		ID:             uuid.NewV7(),
-		BucketID:       bucket.ID,
-		ObjectKey:      key,
-		ContentType:    contentType,
-		SizeBytes:      sizeBytes,
-		ChecksumSHA256: etag,
-		Metadata:       map[string]any{},
-		CreatedAt:      time.Now().UTC(),
-		LastUpdatedAt:  time.Now().UTC(),
-	}, nil
+	object := &Object{
+		ID: uuid.NewV7(), BucketID: bucket.ID, ObjectKey: key,
+		ContentType: contentType, SizeBytes: sizeBytes, ChecksumSHA256: etag,
+		Metadata: map[string]any{}, CreatedAt: time.Now().UTC(), LastUpdatedAt: time.Now().UTC(),
+	}
+	if s3Engine.kernel.DB() != nil {
+		const upsertSQL = `
+			INSERT INTO file_storage.objects (id, bucket_id, object_key, content_type, size_bytes, checksum_sha256, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb)
+			ON CONFLICT (bucket_id, object_key) DO UPDATE
+			SET content_type = EXCLUDED.content_type, size_bytes = EXCLUDED.size_bytes,
+			    checksum_sha256 = EXCLUDED.checksum_sha256, last_updated_at = clock_timestamp()
+			RETURNING id, created_at, last_updated_at;
+		`
+		if err := s3Engine.kernel.DB().QueryRow(ctx, upsertSQL, object.ID, bucket.ID, key, contentType, sizeBytes, etag).
+			Scan(&object.ID, &object.CreatedAt, &object.LastUpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to register upstream object metadata: %w", err)
+		}
+	}
+	return object, nil
 }
 
 // Head retrieves metadata from upstream S3.
@@ -230,6 +270,11 @@ func (s3Engine *S3Engine) Delete(
 		return fmt.Errorf("upstream s3 delete object failed: %w", deleteErr)
 	}
 
+	if s3Engine.kernel.DB() != nil {
+		if _, err := s3Engine.kernel.DB().Exec(ctx, `DELETE FROM file_storage.objects WHERE bucket_id = $1 AND object_key = $2`, bucket.ID, key); err != nil {
+			return fmt.Errorf("failed to delete upstream object metadata: %w", err)
+		}
+	}
 	return nil
 }
 

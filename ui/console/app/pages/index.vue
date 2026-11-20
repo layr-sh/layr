@@ -76,8 +76,8 @@ const overviewServices = computed(() => [
     quickAction: "Manage Users",
   },
   {
-    title: "Storage",
-    to: "/storage",
+    title: "File Storage",
+    to: "/file-storage",
     icon: "i-lucide-hard-drive",
     serviceKey: "file_storage",
     metric: `${bucketsCount.value} ${bucketsCount.value === 1 ? "Bucket" : "Buckets"}`,

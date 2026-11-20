@@ -13,14 +13,12 @@ public struct Config: Sendable, Codable, Hashable {
     public var chunkSizeBytes: Int
     public var defaultAllowedMimeTypes: [String]?
     public var defaultMaxFileSizeBytes: Int64
-    public var enabled: Bool
     public var presignTokenExpirySeconds: Int
 
-    public init(chunkSizeBytes: Int, defaultAllowedMimeTypes: [String]?, defaultMaxFileSizeBytes: Int64, enabled: Bool, presignTokenExpirySeconds: Int) {
+    public init(chunkSizeBytes: Int, defaultAllowedMimeTypes: [String]?, defaultMaxFileSizeBytes: Int64, presignTokenExpirySeconds: Int) {
         self.chunkSizeBytes = chunkSizeBytes
         self.defaultAllowedMimeTypes = defaultAllowedMimeTypes
         self.defaultMaxFileSizeBytes = defaultMaxFileSizeBytes
-        self.enabled = enabled
         self.presignTokenExpirySeconds = presignTokenExpirySeconds
     }
 
@@ -28,7 +26,6 @@ public struct Config: Sendable, Codable, Hashable {
         case chunkSizeBytes = "chunk_size_bytes"
         case defaultAllowedMimeTypes = "default_allowed_mime_types"
         case defaultMaxFileSizeBytes = "default_max_file_size_bytes"
-        case enabled
         case presignTokenExpirySeconds = "presign_token_expiry_seconds"
     }
 
@@ -39,7 +36,6 @@ public struct Config: Sendable, Codable, Hashable {
         try container.encode(chunkSizeBytes, forKey: .chunkSizeBytes)
         try container.encode(defaultAllowedMimeTypes, forKey: .defaultAllowedMimeTypes)
         try container.encode(defaultMaxFileSizeBytes, forKey: .defaultMaxFileSizeBytes)
-        try container.encode(enabled, forKey: .enabled)
         try container.encode(presignTokenExpirySeconds, forKey: .presignTokenExpirySeconds)
     }
 }

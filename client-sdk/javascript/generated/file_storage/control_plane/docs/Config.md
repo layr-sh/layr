@@ -10,7 +10,6 @@ Name | Type
 `chunkSizeBytes` | number
 `defaultAllowedMimeTypes` | Array&lt;string&gt;
 `defaultMaxFileSizeBytes` | number
-`enabled` | boolean
 `presignTokenExpirySeconds` | number
 
 ## Example
@@ -23,7 +22,6 @@ const example = {
   "chunkSizeBytes": null,
   "defaultAllowedMimeTypes": null,
   "defaultMaxFileSizeBytes": null,
-  "enabled": null,
   "presignTokenExpirySeconds": null,
 } satisfies Config
 

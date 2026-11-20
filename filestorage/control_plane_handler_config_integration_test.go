@@ -47,7 +47,7 @@ func TestFilestorageControlPlaneHandlerConfigIntegration(t *testing.T) {
 		require.Equal(t, DefaultMaxFileSizeBytes, currentConfig.DefaultMaxFileSizeBytes)
 
 		// 2. PUT /v1/_/file-storage/config
-		updatePayload := `{"enabled":true,"default_max_file_size_bytes":104857600,"default_allowed_mime_types":["image/png"],"chunk_size_bytes":1048576,"presign_token_expiry_seconds":7200}`
+		updatePayload := `{"default_max_file_size_bytes":104857600,"default_allowed_mime_types":["image/png"],"chunk_size_bytes":1048576,"presign_token_expiry_seconds":7200}`
 		putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/file-storage/config", bytes.NewReader([]byte(updatePayload)))
 		putRequest.Header.Set("Content-Type", "application/json")
 		putRequest.Header.Set("X-Service-Account-Key", authSecretKey)

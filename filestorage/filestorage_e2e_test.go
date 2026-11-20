@@ -126,12 +126,38 @@ func TestFilestorageFullLifecycleE2E(t *testing.T) {
 
 	// 7. Data Plane: Anonymous Download via Presigned URL (no service account headers)
 	presignedDownloadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, presignURLResponse.URL, nil)
-	presignedDownloadRequest.Header.Set("Publishable-Key", kernel.CryptoKeyManager().DerivePublishableKey())
+
 	presignedDownloadResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(presignedDownloadResponseRecorder, presignedDownloadRequest)
 	if presignedDownloadResponseRecorder.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK on presigned download, got %d: %s", presignedDownloadResponseRecorder.Code, presignedDownloadResponseRecorder.Body.String())
 	}
+
+	t.Run("object gateway retains private bucket and capability restrictions", func(t *testing.T) {
+		for _, test := range []struct {
+			name   string
+			method string
+			path   string
+			status int
+		}{
+			{"private read without credentials", http.MethodGet, "/v1/file-storage/objects/e2e-lifecycle-bucket/reports/annual.pdf", http.StatusForbidden},
+			{"private write without credentials", http.MethodPut, "/v1/file-storage/objects/e2e-lifecycle-bucket/reports/annual.pdf", http.StatusForbidden},
+			{"private delete without credentials", http.MethodDelete, "/v1/file-storage/objects/e2e-lifecycle-bucket/reports/annual.pdf", http.StatusForbidden},
+			{"read capability permits metadata inspection", http.MethodHead, presignURLResponse.URL, http.StatusOK},
+			{"read capability cannot write", http.MethodPut, presignURLResponse.URL, http.StatusForbidden},
+			{"read capability cannot delete", http.MethodDelete, presignURLResponse.URL, http.StatusForbidden},
+			{"tampered capability is rejected", http.MethodGet, presignURLResponse.URL + "tampered", http.StatusForbidden},
+		} {
+			t.Run(test.name, func(t *testing.T) {
+				request := httptest.NewRequestWithContext(ctx, test.method, test.path, nil)
+				responseRecorder := httptest.NewRecorder()
+				coreServer.Handler().ServeHTTP(responseRecorder, request)
+				if responseRecorder.Code != test.status {
+					t.Fatalf("expected %d, got %d: %s", test.status, responseRecorder.Code, responseRecorder.Body.String())
+				}
+			})
+		}
+	})
 
 	// 8. Data Plane: Delete Object via DELETE
 	deleteObjectRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/file-storage/objects/e2e-lifecycle-bucket/reports/annual.pdf", nil)

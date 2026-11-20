@@ -140,42 +140,4 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 			t.Fatalf("expected authenticated user to be authorized for write")
 		}
 	})
-
-	t.Run("disabled filestorage configuration returns 403", func(t *testing.T) {
-		disabledService := NewService(kernel)
-		disabledService.configManager.SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := disabledService.BaseHandler()
-
-		disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/objects/b/k", nil)
-		disabledRequest.SetPathValue("bucket", "b")
-		disabledRequest.SetPathValue("key", "k")
-
-		// Download
-		downloadResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handleDownloadObject(downloadResponseRecorder, disabledRequest)
-		if downloadResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on download when disabled, got %d", downloadResponseRecorder.Code)
-		}
-
-		// Head
-		headResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handleHeadObject(headResponseRecorder, disabledRequest)
-		if headResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on head when disabled, got %d", headResponseRecorder.Code)
-		}
-
-		// Upload
-		uploadResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handleUploadObject(uploadResponseRecorder, disabledRequest)
-		if uploadResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on upload when disabled, got %d", uploadResponseRecorder.Code)
-		}
-
-		// Delete
-		deleteResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handleDeleteObject(deleteResponseRecorder, disabledRequest)
-		if deleteResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on delete when disabled, got %d", deleteResponseRecorder.Code)
-		}
-	})
 }

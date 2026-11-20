@@ -137,16 +137,20 @@ Class | Method | HTTP request | Description
 *BucketsAPI* | [**fileStorageBucketsUpdate**](docs/BucketsAPI.md#filestoragebucketsupdate) | **PATCH** /v1/_/file-storage/buckets/{bucket} | Update storage bucket configuration and constraints
 *ConfigAPI* | [**fileStorageConfigGet**](docs/ConfigAPI.md#filestorageconfigget) | **GET** /v1/_/file-storage/config | Get runtime file storage configuration
 *ConfigAPI* | [**fileStorageConfigUpdate**](docs/ConfigAPI.md#filestorageconfigupdate) | **PUT** /v1/_/file-storage/config | Update runtime file storage configuration
+*StatsAPI* | [**fileStorageStatsGet**](docs/StatsAPI.md#filestoragestatsget) | **GET** /v1/_/file-storage/stats | Get file storage usage statistics
 
 
 ## Documentation For Models
 
  - [Bucket](docs/Bucket.md)
+ - [BucketUsage](docs/BucketUsage.md)
  - [Config](docs/Config.md)
+ - [ContentTypeUsage](docs/ContentTypeUsage.md)
  - [CreateBucketInput](docs/CreateBucketInput.md)
  - [ListBucketObjectsResponse](docs/ListBucketObjectsResponse.md)
  - [ListBucketsResponse](docs/ListBucketsResponse.md)
  - [Object](docs/Object.md)
+ - [StatsResponse](docs/StatsResponse.md)
  - [UpdateBucketInput](docs/UpdateBucketInput.md)
 
 

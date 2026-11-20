@@ -31,7 +31,9 @@ type Service struct {
 // NewService initializes the File Storage service coordinator.
 func NewService(kernel *core.Kernel) *Service {
 	configManager := NewConfigManager(kernel)
-	databaseEngine := NewDatabaseFileStorageEngine(kernel)
+	configuredDatabaseEngine := NewDatabaseEngine(kernel)
+	configuredDatabaseEngine.configManager = configManager
+	databaseEngine := NewEngine(configuredDatabaseEngine)
 	s3Engine := NewS3FileStorageEngine(kernel)
 	sigv4Validator := s3sigv4.NewValidator(kernel)
 

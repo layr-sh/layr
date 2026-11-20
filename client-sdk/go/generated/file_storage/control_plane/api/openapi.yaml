@@ -293,6 +293,30 @@ paths:
       - file_storage
       - config
       x-sdk-method-name: update
+  /v1/_/file-storage/stats:
+    get:
+      description: "Reports bucket counts, tracked object counts and logical bytes\
+        \ by backend, database chunk payload bytes, pending multipart usage, per-bucket\
+        \ usage and content type distribution. S3 usage includes only locally registered\
+        \ objects, not untracked upstream contents. Requires storage:bucket.read scope."
+      operationId: file_storage__stats__get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+          description: OK
+      summary: Get file storage usage statistics
+      tags:
+      - Stats
+      x-sdk-group-name:
+      - file_storage
+      - stats
+      x-sdk-method-name: get
 components:
   schemas:
     Bucket:
@@ -346,6 +370,38 @@ components:
       - last_updated_at
       - max_file_size_bytes
       - name
+    BucketUsage:
+      example:
+        backend: backend
+        is_public: true
+        last_updated_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        object_count: 0
+        size_bytes: 6
+      properties:
+        backend:
+          type: string
+        is_public:
+          type: boolean
+        last_updated_at:
+          format: date-time
+          type: string
+          nullable: true
+        name:
+          type: string
+        object_count:
+          format: int64
+          type: integer
+        size_bytes:
+          format: int64
+          type: integer
+      required:
+      - backend
+      - is_public
+      - last_updated_at
+      - name
+      - object_count
+      - size_bytes
     Config:
       description: Config schema
       example:
@@ -354,7 +410,6 @@ components:
         - default_allowed_mime_types
         - default_allowed_mime_types
         default_max_file_size_bytes: 6
-        enabled: true
         presign_token_expiry_seconds: 1
       properties:
         chunk_size_bytes:
@@ -368,16 +423,31 @@ components:
         default_max_file_size_bytes:
           format: int64
           type: integer
-        enabled:
-          type: boolean
         presign_token_expiry_seconds:
           type: integer
       required:
       - chunk_size_bytes
       - default_allowed_mime_types
       - default_max_file_size_bytes
-      - enabled
       - presign_token_expiry_seconds
+    ContentTypeUsage:
+      example:
+        content_type: content_type
+        object_count: 1
+        size_bytes: 5
+      properties:
+        content_type:
+          type: string
+        object_count:
+          format: int64
+          type: integer
+        size_bytes:
+          format: int64
+          type: integer
+      required:
+      - content_type
+      - object_count
+      - size_bytes
     CreateBucketInput:
       description: CreateBucketInput schema
       example:
@@ -553,6 +623,131 @@ components:
       - metadata
       - object_key
       - size_bytes
+    StatsResponse:
+      description: StatsResponse schema
+      example:
+        buckets:
+        - backend: backend
+          is_public: true
+          last_updated_at: 2000-01-23T04:56:07.000+00:00
+          name: name
+          object_count: 0
+          size_bytes: 6
+        - backend: backend
+          is_public: true
+          last_updated_at: 2000-01-23T04:56:07.000+00:00
+          name: name
+          object_count: 0
+          size_bytes: 6
+        content_types:
+        - content_type: content_type
+          object_count: 1
+          size_bytes: 5
+        - content_type: content_type
+          object_count: 1
+          size_bytes: 5
+        database_buckets: 5
+        database_chunk_bytes: 2
+        database_chunks: 7
+        database_objects: 9
+        database_size_bytes: 3
+        last_updated_at: 2000-01-23T04:56:07.000+00:00
+        multipart_parts: 2
+        multipart_size_bytes: 4
+        multipart_uploads: 7
+        private_buckets: 1
+        public_buckets: 1
+        s3_buckets: 1
+        s3_objects: 6
+        s3_size_bytes: 7
+        total_buckets: 1
+        total_objects: 4
+        total_size_bytes: 5
+      properties:
+        buckets:
+          items:
+            $ref: "#/components/schemas/BucketUsage"
+          nullable: true
+          type: array
+          default: null
+        content_types:
+          items:
+            $ref: "#/components/schemas/ContentTypeUsage"
+          nullable: true
+          type: array
+          default: null
+        database_buckets:
+          format: int64
+          type: integer
+        database_chunk_bytes:
+          format: int64
+          type: integer
+        database_chunks:
+          format: int64
+          type: integer
+        database_objects:
+          format: int64
+          type: integer
+        database_size_bytes:
+          format: int64
+          type: integer
+        last_updated_at:
+          format: date-time
+          type: string
+          nullable: true
+        multipart_parts:
+          format: int64
+          type: integer
+        multipart_size_bytes:
+          format: int64
+          type: integer
+        multipart_uploads:
+          format: int64
+          type: integer
+        private_buckets:
+          format: int64
+          type: integer
+        public_buckets:
+          format: int64
+          type: integer
+        s3_buckets:
+          format: int64
+          type: integer
+        s3_objects:
+          format: int64
+          type: integer
+        s3_size_bytes:
+          format: int64
+          type: integer
+        total_buckets:
+          format: int64
+          type: integer
+        total_objects:
+          format: int64
+          type: integer
+        total_size_bytes:
+          format: int64
+          type: integer
+      required:
+      - buckets
+      - content_types
+      - database_buckets
+      - database_chunk_bytes
+      - database_chunks
+      - database_objects
+      - database_size_bytes
+      - last_updated_at
+      - multipart_parts
+      - multipart_size_bytes
+      - multipart_uploads
+      - private_buckets
+      - public_buckets
+      - s3_buckets
+      - s3_objects
+      - s3_size_bytes
+      - total_buckets
+      - total_objects
+      - total_size_bytes
     UpdateBucketInput:
       description: UpdateBucketInput schema
       example:

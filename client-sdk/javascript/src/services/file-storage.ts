@@ -6,6 +6,7 @@ import {
 import {
   BucketsApi,
   ConfigApi,
+  StatsApi,
   type FileStorageBucketsListObjectsRequest,
 } from "../../generated/file_storage/control_plane/apis";
 import {
@@ -21,6 +22,7 @@ import type {
   CreateBucketInput,
   ListBucketObjectsResponse,
   ListBucketsResponse,
+  StatsResponse,
   UpdateBucketInput,
 } from "../../generated/file_storage/control_plane/models";
 import type {
@@ -38,6 +40,7 @@ import { handleApiCall } from "../core/transport";
 import { BucketClient } from "../extensions/bucket-client";
 
 export interface FileStorageControlPlane {
+  stats: { get: () => Promise<StatsResponse> };
   buckets: {
     create: (input: CreateBucketInput) => Promise<Bucket>;
     delete: (bucket: string) => Promise<void>;
@@ -164,6 +167,9 @@ export function useFileStorage(client: LayrClient): FileStorageService {
     [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): FileStorageControlPlane => {
       const elevatedConfig = new Configuration(configuration);
       return {
+        stats: {
+          get: () => handleApiCall(() => new StatsApi(elevatedConfig).fileStorageStatsGet()),
+        },
         buckets: {
           create: (input: CreateBucketInput) =>
             handleApiCall(() =>

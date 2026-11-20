@@ -20,6 +20,7 @@ const DefaultDatabaseChunkSize = 524288
 type DatabaseEngine struct {
 	kernel         *core.Kernel
 	chunkSizeBytes int
+	configManager  *ConfigManager
 }
 
 // NewDatabaseEngine initializes a database chunk streaming driver.
@@ -60,7 +61,13 @@ func (databaseEngine *DatabaseEngine) Upload(
 	chunkIndex := 0
 	var totalBytes int64
 
-	chunkBuffer := make([]byte, databaseEngine.chunkSizeBytes)
+	chunkSize := databaseEngine.chunkSizeBytes
+	if databaseEngine.configManager != nil {
+		if configuredSize := databaseEngine.configManager.Get().ChunkSizeBytes; configuredSize > 0 {
+			chunkSize = configuredSize
+		}
+	}
+	chunkBuffer := make([]byte, chunkSize)
 
 	tx, txErr := databaseEngine.kernel.DB().Begin(ctx)
 	if txErr != nil {
@@ -90,7 +97,9 @@ func (databaseEngine *DatabaseEngine) Upload(
 
 	// Remove any existing chunks if updating an existing object key
 	const deleteOldChunksSQL = `DELETE FROM file_storage.chunks WHERE object_id = $1;`
-	_, _ = tx.Exec(ctx, deleteOldChunksSQL, targetObjectID)
+	if _, deleteErr := tx.Exec(ctx, deleteOldChunksSQL, targetObjectID); deleteErr != nil {
+		return nil, fmt.Errorf("failed to remove old object chunks: %w", deleteErr)
+	}
 
 	const insertChunkSQL = `
 		INSERT INTO file_storage.chunks (object_id, chunk_index, chunk_data)
@@ -134,7 +143,7 @@ func (databaseEngine *DatabaseEngine) Upload(
 	`
 
 	var storedObject Object
-	_ = tx.QueryRow(ctx, finalizeObjectSQL, totalBytes, checksum, targetObjectID).Scan(
+	finalizeErr := tx.QueryRow(ctx, finalizeObjectSQL, totalBytes, checksum, targetObjectID).Scan(
 		&storedObject.ID,
 		&storedObject.BucketID,
 		&storedObject.ObjectKey,
@@ -146,7 +155,12 @@ func (databaseEngine *DatabaseEngine) Upload(
 		&storedObject.LastUpdatedAt,
 	)
 
-	_ = tx.Commit(ctx)
+	if finalizeErr != nil {
+		return nil, fmt.Errorf("failed to finalize object: %w", finalizeErr)
+	}
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return nil, fmt.Errorf("failed to commit object upload: %w", commitErr)
+	}
 
 	log.Debugf("object %s stored in database bucket %s (%d bytes)", key, bucket.Name, totalBytes)
 	return &storedObject, nil
@@ -237,10 +251,6 @@ func (databaseEngine *DatabaseEngine) Download(
 		return io.NopCloser(io.LimitReader(nil, 0)), 0, nil
 	}
 
-	chunkSize := int64(databaseEngine.chunkSizeBytes)
-	startChunkIndex := int(startByte / chunkSize)
-	endChunkIndex := int(endByte / chunkSize)
-
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
@@ -249,50 +259,41 @@ func (databaseEngine *DatabaseEngine) Download(
 		}()
 
 		const selectChunksSQL = `
-			SELECT chunk_index, chunk_data
+			SELECT chunk_data
 			FROM file_storage.chunks
-			WHERE object_id = $1 AND chunk_index >= $2 AND chunk_index <= $3
+			WHERE object_id = $1
 			ORDER BY chunk_index ASC;
 		`
 
-		rows, queryErr := databaseEngine.kernel.DB().Query(ctx, selectChunksSQL, object.ID, startChunkIndex, endChunkIndex)
-		if queryErr == nil {
-			defer rows.Close()
-
-			for rows.Next() {
-				var currentChunkIndex int
-				var rawChunkData []byte
-
-				_ = rows.Scan(&currentChunkIndex, &rawChunkData)
-
-				chunkSlice := rawChunkData
-
-				// If this is the start chunk, slice off preceding bytes
-				if currentChunkIndex == startChunkIndex {
-					offsetInChunk := startByte % chunkSize
-					if offsetInChunk < int64(len(chunkSlice)) {
-						chunkSlice = chunkSlice[offsetInChunk:]
-					}
-				}
-
-				// If this is the end chunk, slice off trailing bytes
-				if currentChunkIndex == endChunkIndex {
-					relativeEnd := (endByte % chunkSize) + 1
-					if currentChunkIndex == startChunkIndex {
-						offsetInChunk := startByte % chunkSize
-						relativeEnd -= offsetInChunk
-					}
-					if relativeEnd >= 0 && relativeEnd < int64(len(chunkSlice)) {
-						chunkSlice = chunkSlice[:relativeEnd]
-					}
-				}
-
-				if len(chunkSlice) > 0 {
-					if _, writeErr := pipeWriter.Write(chunkSlice); writeErr != nil {
-						return
-					}
+		rows, queryErr := databaseEngine.kernel.DB().Query(ctx, selectChunksSQL, object.ID)
+		if queryErr != nil {
+			_ = pipeWriter.CloseWithError(queryErr)
+			return
+		}
+		defer rows.Close()
+		var offset int64
+		for rows.Next() {
+			var rawChunkData []byte
+			if scanErr := rows.Scan(&rawChunkData); scanErr != nil {
+				_ = pipeWriter.CloseWithError(scanErr)
+				return
+			}
+			// Stored chunks retain their original sizes after configuration changes.
+			chunkEnd := offset + int64(len(rawChunkData))
+			from := max(startByte-offset, 0)
+			to := min(endByte+1-offset, int64(len(rawChunkData)))
+			if from < to {
+				if _, writeErr := pipeWriter.Write(rawChunkData[from:to]); writeErr != nil {
+					return
 				}
 			}
+			offset = chunkEnd
+			if offset > endByte {
+				return
+			}
+		}
+		if rowsErr := rows.Err(); rowsErr != nil {
+			_ = pipeWriter.CloseWithError(rowsErr)
 		}
 	}()
 

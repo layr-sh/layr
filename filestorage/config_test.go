@@ -11,9 +11,6 @@ import (
 func TestFilestorageConfigDefaultsUnit(t *testing.T) {
 	storageConfig := DefaultConfig()
 
-	if !storageConfig.Enabled {
-		t.Fatal("expected file storage to be enabled by default")
-	}
 	if storageConfig.DefaultMaxFileSizeBytes != DefaultMaxFileSizeBytes {
 		t.Fatalf("expected default max file size %d, got %d", DefaultMaxFileSizeBytes, storageConfig.DefaultMaxFileSizeBytes)
 	}
@@ -64,9 +61,6 @@ func TestFilestorageConfigManagerMemoryUnit(t *testing.T) {
 	}
 
 	currentConfig := configManager.Get()
-	if !currentConfig.Enabled {
-		t.Fatal("expected default settings in new config manager")
-	}
 
 	updatedConfig := currentConfig
 	updatedConfig.ChunkSizeBytes = 1048576 // 1MB

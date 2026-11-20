@@ -108,22 +108,4 @@ func TestFilestorageBaseHandlerURLUnit(t *testing.T) {
 			t.Fatalf("expected mismatched operation to fail")
 		}
 	})
-
-	t.Run("disabled filestorage configuration returns 403 on url presign", func(t *testing.T) {
-		disabledService := NewService(kernel)
-		disabledService.ConfigManager().SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := disabledService.BaseHandler()
-
-		disabledRequest := httptest.NewRequestWithContext(
-			ctx,
-			http.MethodPost,
-			"/v1/file-storage/url/presign",
-			bytes.NewReader([]byte(`{"bucket":"test-bucket","key":"test.txt","operation":"read"}`)),
-		)
-		disabledResponseRecorder := httptest.NewRecorder()
-		disabledBaseHandler.handlePresignURL(disabledResponseRecorder, disabledRequest)
-		if disabledResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 on url presign when disabled, got %d", disabledResponseRecorder.Code)
-		}
-	})
 }

@@ -42,8 +42,8 @@ describe("Service schema isolation", () => {
     },
     {
       name: "file_storage",
-      response: { enabled: true, default_max_file_size_bytes: 1024 },
-      expected: { enabled: true, defaultMaxFileSizeBytes: 1024 },
+      response: { default_max_file_size_bytes: 1024 },
+      expected: { defaultMaxFileSizeBytes: 1024 },
       get: (client: LayrClient) => withServiceAccount(useFileStorage(client)).cp.config.get(),
     },
     {

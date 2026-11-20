@@ -78,6 +78,10 @@ describe("FileStorage Service Unit Tests", () => {
     await storage.cp.buckets.delete("docs");
     expect(getLastUrl()).toContain("/v1/_/file-storage/buckets/docs");
 
+    await storage.cp.stats.get();
+    expect(getLastUrl()).toContain("/v1/_/file-storage/stats");
+    expect(getLastInit()?.headers).toMatchObject({ "Service-Account-Key": serviceAccountKey });
+
     // config
     await storage.cp.config.get();
     expect(getLastUrl()).toContain("/v1/_/file-storage/config");

@@ -17,7 +17,7 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
 from typing import Optional, Set
 from typing_extensions import Self
@@ -30,9 +30,8 @@ class Config(BaseModel):
     chunk_size_bytes: StrictInt
     default_allowed_mime_types: Optional[List[StrictStr]]
     default_max_file_size_bytes: StrictInt
-    enabled: StrictBool
     presign_token_expiry_seconds: StrictInt
-    __properties: ClassVar[List[str]] = ["chunk_size_bytes", "default_allowed_mime_types", "default_max_file_size_bytes", "enabled", "presign_token_expiry_seconds"]
+    __properties: ClassVar[List[str]] = ["chunk_size_bytes", "default_allowed_mime_types", "default_max_file_size_bytes", "presign_token_expiry_seconds"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -93,7 +92,6 @@ class Config(BaseModel):
             "chunk_size_bytes": obj.get("chunk_size_bytes"),
             "default_allowed_mime_types": obj.get("default_allowed_mime_types"),
             "default_max_file_size_bytes": obj.get("default_max_file_size_bytes"),
-            "enabled": obj.get("enabled"),
             "presign_token_expiry_seconds": obj.get("presign_token_expiry_seconds")
         })
         return _obj

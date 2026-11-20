@@ -321,7 +321,18 @@ func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
 		t.Fatalf("expected 500 on canceled list bucket objects, got %d", cancelListObjectsResponseRecorder.Code)
 	}
 
-	// 7. Delete Buckets
+	// 7. Delete Buckets. Registered S3 objects must be removed upstreamServer first.
+	upstreamServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodDelete {
+			t.Errorf("unexpected upstreamServer method %s", request.Method)
+		}
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstreamServer.Close()
+	_, configureErr := kernel.DB().Exec(privilegedCtx, `UPDATE file_storage.buckets SET backend_config = backend_config || jsonb_build_object('endpoint', $1::text) WHERE id = $2`, upstreamServer.URL, updatedBucket.ID)
+	if configureErr != nil {
+		t.Fatal(configureErr)
+	}
 	deleteRequest := httptest.NewRequestWithContext(privilegedCtx, http.MethodDelete, "/v1/_/file-storage/buckets/"+updatedBucket.Name, nil)
 	deleteRequest.SetPathValue("bucket", updatedBucket.Name)
 	deleteResponseRecorder := httptest.NewRecorder()

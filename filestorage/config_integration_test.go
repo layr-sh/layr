@@ -24,7 +24,7 @@ func TestFilestorageConfigPostgresIntegration(t *testing.T) {
 		t.Fatalf("failed initial Load: %v", err)
 	}
 	initialConfig := configManager.Get()
-	if !initialConfig.Enabled || initialConfig.ChunkSizeBytes != DefaultChunkSizeBytes {
+	if initialConfig.ChunkSizeBytes != DefaultChunkSizeBytes {
 		t.Fatalf("unexpected initial settings: %+v", initialConfig)
 	}
 

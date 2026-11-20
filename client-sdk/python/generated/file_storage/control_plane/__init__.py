@@ -20,6 +20,7 @@ __version__ = "1.0.0"
 __all__ = [
     "BucketsApi",
     "ConfigApi",
+    "StatsApi",
     "ApiResponse",
     "ApiClient",
     "Configuration",
@@ -30,17 +31,21 @@ __all__ = [
     "ApiAttributeError",
     "ApiException",
     "Bucket",
+    "BucketUsage",
     "Config",
+    "ContentTypeUsage",
     "CreateBucketInput",
     "ListBucketObjectsResponse",
     "ListBucketsResponse",
     "Object",
+    "StatsResponse",
     "UpdateBucketInput",
 ]
 
 # import apis into sdk package
 from generated.file_storage.control_plane.api.buckets_api import BucketsApi as BucketsApi
 from generated.file_storage.control_plane.api.config_api import ConfigApi as ConfigApi
+from generated.file_storage.control_plane.api.stats_api import StatsApi as StatsApi
 
 # import ApiClient
 from generated.file_storage.control_plane.api_response import ApiResponse as ApiResponse
@@ -55,10 +60,13 @@ from generated.file_storage.control_plane.exceptions import ApiException as ApiE
 
 # import models into sdk package
 from generated.file_storage.control_plane.models.bucket import Bucket as Bucket
+from generated.file_storage.control_plane.models.bucket_usage import BucketUsage as BucketUsage
 from generated.file_storage.control_plane.models.config import Config as Config
+from generated.file_storage.control_plane.models.content_type_usage import ContentTypeUsage as ContentTypeUsage
 from generated.file_storage.control_plane.models.create_bucket_input import CreateBucketInput as CreateBucketInput
 from generated.file_storage.control_plane.models.list_bucket_objects_response import ListBucketObjectsResponse as ListBucketObjectsResponse
 from generated.file_storage.control_plane.models.list_buckets_response import ListBucketsResponse as ListBucketsResponse
 from generated.file_storage.control_plane.models.object import Object as Object
+from generated.file_storage.control_plane.models.stats_response import StatsResponse as StatsResponse
 from generated.file_storage.control_plane.models.update_bucket_input import UpdateBucketInput as UpdateBucketInput
 

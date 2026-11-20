@@ -32,7 +32,12 @@ const navItems = [
   { label: "Overview", to: "/", icon: "i-lucide-layout-dashboard" },
   { label: "Data", to: "/data", icon: "i-lucide-database", serviceKey: "data" },
   { label: "Auth", to: "/auth", icon: "i-lucide-users", serviceKey: "auth" },
-  { label: "Storage", to: "/storage", icon: "i-lucide-hard-drive", serviceKey: "file_storage" },
+  {
+    label: "File Storage",
+    to: "/file-storage",
+    icon: "i-lucide-hard-drive",
+    serviceKey: "file_storage",
+  },
   {
     label: "Function",
     to: "/function",

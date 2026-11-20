@@ -4,7 +4,7 @@ export default defineNuxtRouteMiddleware(async ({ path: toPath }) => {
   const serviceRouteMap: Record<string, string> = {
     "/data": "data",
     "/auth": "auth",
-    "/storage": "file_storage",
+    "/file-storage": "file_storage",
     "/function": "function",
     "/tasks": "tasks",
     "/image": "image",

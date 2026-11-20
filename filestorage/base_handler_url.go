@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ const (
 // handlePresignURL handles POST /v1/file-storage/url/presign.
 func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling presigned URL request")
+	config := baseHandler.configManager.Get()
 	var presignURLInput PresignURLInput
 	if decodeErr := json.NewDecoder(request.Body).Decode(&presignURLInput); decodeErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
@@ -84,7 +86,10 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 
 	expiresInSeconds := presignURLInput.ExpiresInSeconds
 	if expiresInSeconds <= 0 {
-		expiresInSeconds = defaultPresignedExpirationSeconds
+		expiresInSeconds = config.PresignTokenExpirySeconds
+		if expiresInSeconds <= 0 {
+			expiresInSeconds = defaultPresignedExpirationSeconds
+		}
 	}
 	if expiresInSeconds > maxPresignedExpirationSeconds {
 		expiresInSeconds = maxPresignedExpirationSeconds
@@ -96,8 +101,15 @@ func (baseHandler *BaseHandler) handlePresignURL(responseWriter http.ResponseWri
 	signingKey := baseHandler.presignSecretKey()
 	token := baseHandler.computePresignSignature(signingKey, bucket.Name, presignURLInput.Key, operation, expiresUnix)
 
-	presignedURL := fmt.Sprintf("/v1/file-storage/objects/%s/%s?token=%s&expires=%d&op=%s",
-		bucket.Name, presignURLInput.Key, token, expiresUnix, operation)
+	objectURL := url.URL{
+		Path: fmt.Sprintf("/v1/file-storage/objects/%s/%s", bucket.Name, presignURLInput.Key),
+		RawQuery: url.Values{
+			"token":   {token},
+			"expires": {fmt.Sprintf("%d", expiresUnix)},
+			"op":      {operation},
+		}.Encode(),
+	}
+	presignedURL := objectURL.String()
 
 	log.Debugf("presigned url generated for bucket=%s key=%s operation=%s", bucket.Name, presignURLInput.Key, operation)
 

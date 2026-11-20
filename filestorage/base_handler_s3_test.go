@@ -265,17 +265,4 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 			t.Fatalf("expected 401 on unauth abort multipart, got %d", abortMultipartResponseRecorder.Code)
 		}
 	})
-
-	t.Run("authenticateS3 disabled filestorage returns 403", func(t *testing.T) {
-		disabledService := NewService(kernel)
-		disabledService.configManager.SetMemoryConfig(Config{Enabled: false})
-		disabledBaseHandler := disabledService.BaseHandler()
-
-		disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/file-storage/s3", nil)
-		disabledResponseRecorder := httptest.NewRecorder()
-		_, isAuth := disabledBaseHandler.authenticateS3(disabledResponseRecorder, disabledRequest, core.ScopeFileStorageBucketRead)
-		if isAuth || disabledResponseRecorder.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 when filestorage disabled, got %d", disabledResponseRecorder.Code)
-		}
-	})
 }

@@ -20,20 +20,17 @@ pub struct Config {
     pub default_allowed_mime_types: Option<Vec<String>>,
     #[serde(rename = "default_max_file_size_bytes")]
     pub default_max_file_size_bytes: i64,
-    #[serde(rename = "enabled")]
-    pub enabled: bool,
     #[serde(rename = "presign_token_expiry_seconds")]
     pub presign_token_expiry_seconds: i32,
 }
 
 impl Config {
     /// Config schema
-    pub fn new(chunk_size_bytes: i32, default_allowed_mime_types: Option<Vec<String>>, default_max_file_size_bytes: i64, enabled: bool, presign_token_expiry_seconds: i32) -> Config {
+    pub fn new(chunk_size_bytes: i32, default_allowed_mime_types: Option<Vec<String>>, default_max_file_size_bytes: i64, presign_token_expiry_seconds: i32) -> Config {
         Config {
             chunk_size_bytes,
             default_allowed_mime_types,
             default_max_file_size_bytes,
-            enabled,
             presign_token_expiry_seconds,
         }
     }

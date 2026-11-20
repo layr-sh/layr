@@ -14,10 +14,13 @@
 
 # import models into model package
 from generated.file_storage.control_plane.models.bucket import Bucket
+from generated.file_storage.control_plane.models.bucket_usage import BucketUsage
 from generated.file_storage.control_plane.models.config import Config
+from generated.file_storage.control_plane.models.content_type_usage import ContentTypeUsage
 from generated.file_storage.control_plane.models.create_bucket_input import CreateBucketInput
 from generated.file_storage.control_plane.models.list_bucket_objects_response import ListBucketObjectsResponse
 from generated.file_storage.control_plane.models.list_buckets_response import ListBucketsResponse
 from generated.file_storage.control_plane.models.object import Object
+from generated.file_storage.control_plane.models.stats_response import StatsResponse
 from generated.file_storage.control_plane.models.update_bucket_input import UpdateBucketInput
 
