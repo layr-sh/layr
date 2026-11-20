@@ -62,7 +62,8 @@ export default defineAppConfig({
     modal: {
       slots: {
         overlay: "bg-default!",
-        content: "ring-0! shadow-none! data-[state=open]:animate-[fade-in_200ms_var(--ease-out)]! data-[state=closed]:animate-[fade-out_200ms_var(--ease-out)]!",
+        content:
+          "ring-0! shadow-none! data-[state=open]:animate-[fade-in_200ms_var(--ease-out)]! data-[state=closed]:animate-[fade-out_200ms_var(--ease-out)]!",
         header: "px-0 sm:px-0",
         body: "px-0 sm:px-0",
         footer: "px-0 sm:px-0",
@@ -74,5 +75,11 @@ export default defineAppConfig({
         variant: "subtle",
       },
     },
+    table: {
+      slots: {
+        th: 'first:pl-0 last:pr-0 whitespace-nowrap',
+        td: 'first:pl-0 last:pr-0'
+      }
+    }
   },
 });

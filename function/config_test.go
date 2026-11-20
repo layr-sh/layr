@@ -27,6 +27,7 @@ func TestFunctionConfigUnit(t *testing.T) {
 		require.Equal(t, int64(DefaultMaxBundleSizeBytes), defaultConfig.MaxBundleSizeBytes)
 		require.Equal(t, DefaultWorkerdCompatibilityDate, defaultConfig.WorkerdRuntime.CompatibilityDate)
 		require.Equal(t, DefaultWorkerdCompatibilityFlags, defaultConfig.WorkerdRuntime.CompatibilityFlags)
+		require.Empty(t, defaultConfig.WorkerdRuntime.CompatibilityFlags)
 	})
 
 	t.Run("config validation failure paths", func(t *testing.T) {

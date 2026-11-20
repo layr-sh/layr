@@ -151,6 +151,9 @@ describe("Record row shortcuts and modal lifecycle", () => {
         "content",
         expect.stringMatching(/max-w-(?:3|4|5)xl/),
       );
+      expect([...activeDialog()!.querySelector('[data-slot="footer"]')!.classList]).toEqual(
+        expect.arrayContaining(["flex", "flex-wrap", "justify-end", "gap-3"]),
+      );
       expect(modal.props("ui")).toHaveProperty("body", "space-y-6");
       expect(modal.props("ui")).toHaveProperty("footer", "flex flex-wrap justify-end gap-3");
       modal.vm.$emit("update:open", true);
@@ -188,6 +191,12 @@ describe("Record row shortcuts and modal lifecycle", () => {
     await action(label).trigger("click");
     await vi.waitFor(() => expect(activeDialog()).not.toBeNull());
     const modal = wrapper.findAllComponents(UModal).find((modal) => modal.props("open"))!;
+    const footer = activeDialog()!.querySelector('[data-slot="footer"]')!;
+    expect([...footer.classList]).toEqual(
+      expect.arrayContaining(["flex", "flex-wrap", "justify-end", "gap-3"]),
+    );
+    expect(footer.querySelector("button")!.textContent?.trim()).toBe("Cancel");
+    expect(footer.querySelectorAll("button")).toHaveLength(2);
     modal.vm.$emit("update:open", true);
     await nextTick();
     expect(wrapper.setupState[stateKey].value).toBe(true);
@@ -236,6 +245,9 @@ describe("Record row shortcuts and modal lifecycle", () => {
     await flushPromises();
     await vi.waitFor(() => expect(activeDialog()).not.toBeNull());
     expect(activeDialog()!.querySelector('[data-slot="body"]')).toBeNull();
+    expect([...activeDialog()!.querySelector('[data-slot="footer"]')!.classList]).toEqual(
+      expect.arrayContaining(["flex", "flex-wrap", "justify-end", "gap-3"]),
+    );
     wrapper.setupState[plane].error.value = "The operation failed. Please try again.";
     await nextTick();
     expect(activeDialog()!.querySelector('[data-slot="body"]')!.textContent).toContain(
