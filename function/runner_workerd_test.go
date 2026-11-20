@@ -43,6 +43,31 @@ func TestFunctionWorkerdRunnerRegressionUnit(t *testing.T) {
 	workerdRunner := NewWorkerdRunner(nil)
 	require.NoError(t, workerdRunner.Start(ctx))
 	defer func() { require.NoError(t, workerdRunner.Stop()) }()
+	t.Run("default compatibility supports node imports and rejects invalid source without replacing active code", func(t *testing.T) {
+		endpoint := &Endpoint{Name: "syntax-regression", Entrypoint: "index.js"}
+		bundle, _, packageErr := packageBundleFiles(map[string]string{
+			"index.js": `import { Buffer } from "node:buffer";
+export default { fetch() { return new Response(Buffer.from("valid source").toString()); } };`,
+		})
+		require.NoError(t, packageErr)
+		require.NoError(t, workerdRunner.Deploy(ctx, endpoint, &Deployment{BundleFormat: "tar", BundleContent: bundle}))
+		require.NotContains(t, workerdRunner.BuildCapnpConfig(), "nodejs_compat")
+
+		invalidBundle, _, packageErr := packageBundleFiles(map[string]string{
+			"index.js": "export default {\n fetch: 'hello' 'world'\n};",
+		})
+		require.NoError(t, packageErr)
+		deployErr := workerdRunner.Deploy(ctx, endpoint, &Deployment{BundleFormat: "tar", BundleContent: invalidBundle})
+		require.ErrorIs(t, deployErr, ErrExecutionFailed)
+		require.ErrorContains(t, deployErr, "SyntaxError")
+		require.ErrorContains(t, deployErr, "index.js:2:")
+		require.NotContains(t, deployErr.Error(), "nodejs_compat")
+
+		responseRecorder := httptest.NewRecorder()
+		require.NoError(t, workerdRunner.Forward(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil), endpoint))
+		require.Equal(t, http.StatusOK, responseRecorder.Code)
+		require.Equal(t, "valid source", responseRecorder.Body.String())
+	})
 	t.Run("compressed archive expands beyond configured bundle limit", func(t *testing.T) {
 		var buffer bytes.Buffer
 		zipWriter := zip.NewWriter(&buffer)
@@ -197,7 +222,7 @@ func TestFunctionWorkerdRunnerUnit(t *testing.T) {
 		require.Contains(t, capnpConfig, `(name = "./extra.js", esModule = embed "functions/hello/extra.js")`)
 		require.Contains(t, capnpConfig, `(name = "./config.json", json = embed "functions/hello/config.json")`)
 		require.Contains(t, capnpConfig, `compatibilityDate = "2026-08-04"`)
-		require.Contains(t, capnpConfig, `compatibilityFlags = ["nodejs_compat"]`)
+		require.NotContains(t, capnpConfig, `compatibilityFlags =`)
 
 		// Global config override via ConfigManager
 		configManager := NewConfigManager(nil)

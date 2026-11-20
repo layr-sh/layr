@@ -291,7 +291,7 @@ onMounted(async () => {
       title="New Deployment"
       description="Prepare a bundle, environment, and runtime settings, then review before activation."
       :dismissible="!functionControlPlane.busy.value && !readingArchive"
-      :ui="{ content: 'max-w-5xl', body: 'space-y-6' }"
+      :ui="{ content: 'max-w-5xl', body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
       :close="{ disabled: functionControlPlane.busy.value || readingArchive }"
       ><template #body
         ><UAlert

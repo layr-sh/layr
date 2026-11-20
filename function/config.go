@@ -28,8 +28,8 @@ const (
 	DefaultWorkerdCompatibilityDate = "2026-08-04"
 )
 
-// DefaultWorkerdCompatibilityFlags defines standard compatibility flags for workerd.
-var DefaultWorkerdCompatibilityFlags = []string{"nodejs_compat"}
+// DefaultWorkerdCompatibilityFlags contains opt-ins not enabled by the default compatibility date.
+var DefaultWorkerdCompatibilityFlags []string
 
 // WorkerdRuntimeConfig defines runtime configuration for workerd runners and deployments.
 type WorkerdRuntimeConfig struct {
