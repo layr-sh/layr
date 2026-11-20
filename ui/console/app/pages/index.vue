@@ -85,13 +85,13 @@ const overviewServices = computed(() => [
     quickAction: "Browse Buckets",
   },
   {
-    title: "Functions",
-    to: "/functions",
+    title: "Function",
+    to: "/function",
     icon: "i-lucide-square-terminal",
     serviceKey: "function",
     metric: `${endpointsCount.value} ${endpointsCount.value === 1 ? "Endpoint" : "Endpoints"}`,
     description: "Serverless function runtime, HTTP routing, and execution logs.",
-    quickAction: "View Functions",
+    quickAction: "View Endpoints",
   },
   {
     title: "Tasks",
@@ -103,7 +103,7 @@ const overviewServices = computed(() => [
     quickAction: "Inspect Queues",
   },
   {
-    title: "Images",
+    title: "Image",
     to: "/image/presets",
     icon: "i-lucide-image",
     serviceKey: "image",

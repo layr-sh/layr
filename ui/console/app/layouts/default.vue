@@ -34,13 +34,13 @@ const navItems = [
   { label: "Auth", to: "/auth", icon: "i-lucide-users", serviceKey: "auth" },
   { label: "Storage", to: "/storage", icon: "i-lucide-hard-drive", serviceKey: "file_storage" },
   {
-    label: "Functions",
-    to: "/functions",
+    label: "Function",
+    to: "/function",
     icon: "i-lucide-square-terminal",
     serviceKey: "function",
   },
   { label: "Tasks", to: "/tasks", icon: "i-lucide-clock", serviceKey: "tasks" },
-  { label: "Images", to: "/image", icon: "i-lucide-image", serviceKey: "image" },
+  { label: "Image", to: "/image", icon: "i-lucide-image", serviceKey: "image" },
   { label: "Control Plane", to: "/control-plane", icon: "i-lucide-shield-check" },
 ];
 

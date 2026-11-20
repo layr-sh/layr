@@ -5,7 +5,7 @@ export default defineNuxtRouteMiddleware(async ({ path: toPath }) => {
     "/data": "data",
     "/auth": "auth",
     "/storage": "file_storage",
-    "/functions": "function",
+    "/function": "function",
     "/tasks": "tasks",
     "/image": "image",
   };

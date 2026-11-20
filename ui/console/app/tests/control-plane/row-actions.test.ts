@@ -2,10 +2,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { nextTick } from "vue";
 import { useNuxtApp } from "#app";
 import { UModal } from "#components";
-import Endpoints from "../../pages/functions/endpoints.vue";
-import Domains from "../../pages/functions/domains.vue";
-import Deployments from "../../pages/functions/deployments.vue";
-import FunctionExecutions from "../../pages/functions/executions.vue";
+import Endpoints from "../../pages/function/endpoints.vue";
+import Domains from "../../pages/function/domains.vue";
+import Deployments from "../../pages/function/deployments.vue";
+import FunctionExecutions from "../../pages/function/executions.vue";
 import Jobs from "../../pages/tasks/jobs.vue";
 import TaskExecutions from "../../pages/tasks/executions.vue";
 import DLQ from "../../pages/tasks/dead-letter-queue.vue";

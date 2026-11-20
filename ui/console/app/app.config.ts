@@ -77,9 +77,9 @@ export default defineAppConfig({
     },
     table: {
       slots: {
-        th: 'first:pl-0 last:pr-0 whitespace-nowrap',
-        td: 'first:pl-0 last:pr-0'
-      }
-    }
+        th: "first:pl-0 last:pr-0 whitespace-nowrap",
+        td: "first:pl-0 last:pr-0",
+      },
+    },
   },
 });

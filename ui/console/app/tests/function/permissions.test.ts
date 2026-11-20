@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import { useNuxtApp } from "#app";
 import { UFileUpload, UModal } from "#components";
-import Layout from "../../pages/functions.vue";
-import Statistics from "../../pages/functions/index.vue";
-import Configuration from "../../pages/functions/configurations.vue";
-import Endpoints from "../../pages/functions/endpoints.vue";
-import Deployments from "../../pages/functions/deployments.vue";
-import Executions from "../../pages/functions/executions.vue";
-import Domains from "../../pages/functions/domains.vue";
+import Layout from "../../pages/function.vue";
+import Statistics from "../../pages/function/index.vue";
+import Configuration from "../../pages/function/configurations.vue";
+import Endpoints from "../../pages/function/endpoints.vue";
+import Deployments from "../../pages/function/deployments.vue";
+import Executions from "../../pages/function/executions.vue";
+import Domains from "../../pages/function/domains.vue";
 import useFunctionControlPlane from "../../composables/use-function-control-plane";
 import {
   action,
@@ -38,9 +38,9 @@ describe("Function permissions and failures", () => {
   it("filters navigation and prevents fetching sections without read scopes", async () => {
     const router = useNuxtApp().$router;
     for (const [scope, path] of [
-      ["function:stats.read", "/functions"],
-      ["function:endpoint.read", "/functions/endpoints"],
-      ["function:config.read", "/functions/configurations"],
+      ["function:stats.read", "/function"],
+      ["function:endpoint.read", "/function/endpoints"],
+      ["function:config.read", "/function/configurations"],
     ]) {
       await signInConsoleUser([scope!]);
       await router.push(path!);
@@ -50,7 +50,7 @@ describe("Function permissions and failures", () => {
         wrapper.setupState.items.value.every((item: { scope: string }) => item.scope === scope),
       ).toBe(true);
       wrapper.unmount();
-      await router.push(scope === "function:stats.read" ? "/functions/endpoints" : "/functions");
+      await router.push(scope === "function:stats.read" ? "/function/endpoints" : "/function");
       ({ wrapper } = await mountPage(Layout));
       expect(pageDOM().text()).toContain("Access Restricted");
       wrapper.unmount();
@@ -275,7 +275,7 @@ describe("Function permissions and failures", () => {
     });
     const router = useNuxtApp().$router;
     try {
-      await router.push({ path: "/functions/deployments", query: { endpoint: endpoint.id } });
+      await router.push({ path: "/function/deployments", query: { endpoint: endpoint.id } });
       ({ wrapper } = await mountPage(Deployments));
       await action("New Deployment").trigger("click");
       await action("Source Files").trigger("keydown", { key: "Enter" });

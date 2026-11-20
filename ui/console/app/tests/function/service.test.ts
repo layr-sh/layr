@@ -3,13 +3,13 @@ import { nextTick } from "vue";
 import { gunzipSync } from "node:zlib";
 import { useNuxtApp } from "#app";
 import { UCard, UInputTags } from "#components";
-import Layout from "../../pages/functions.vue";
-import Statistics from "../../pages/functions/index.vue";
-import Configuration from "../../pages/functions/configurations.vue";
-import Endpoints from "../../pages/functions/endpoints.vue";
-import Deployments from "../../pages/functions/deployments.vue";
-import Executions from "../../pages/functions/executions.vue";
-import Domains from "../../pages/functions/domains.vue";
+import Layout from "../../pages/function.vue";
+import Statistics from "../../pages/function/index.vue";
+import Configuration from "../../pages/function/configurations.vue";
+import Endpoints from "../../pages/function/endpoints.vue";
+import Deployments from "../../pages/function/deployments.vue";
+import Executions from "../../pages/function/executions.vue";
+import Domains from "../../pages/function/domains.vue";
 import {
   action,
   pageDOM,
@@ -57,12 +57,12 @@ describe("Function service integration", () => {
     ]);
     const router = useNuxtApp().$router;
     for (const path of [
-      "/functions",
-      "/functions/endpoints",
-      "/functions/deployments",
-      "/functions/executions",
-      "/functions/domains",
-      "/functions/configurations",
+      "/function",
+      "/function/endpoints",
+      "/function/deployments",
+      "/function/executions",
+      "/function/domains",
+      "/function/configurations",
     ]) {
       wrapper.unmount();
       await router.push(path);
@@ -440,7 +440,7 @@ describe("Function service integration", () => {
       expect(pageDOM().find('a[target="_blank"]').exists()).toBe(true);
       wrapper.unmount();
       const router = useNuxtApp().$router;
-      await router.push({ path: "/functions/executions", query: { endpoint: endpoint.id } });
+      await router.push({ path: "/function/executions", query: { endpoint: endpoint.id } });
       ({ wrapper } = await mountPage(Executions));
       expect(pageDOM().text()).toContain("GET");
       await wrapper

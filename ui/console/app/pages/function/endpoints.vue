@@ -332,7 +332,7 @@ onMounted(() => {
           <div class="flex flex-wrap justify-end gap-3">
             <UButton
               :to="{
-                path: '/functions/deployments',
+                path: '/function/deployments',
                 query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
               }"
               label="Deployments"
@@ -341,7 +341,7 @@ onMounted(() => {
             />
             <UButton
               :to="{
-                path: '/functions/executions',
+                path: '/function/executions',
                 query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
               }"
               label="Execution Logs"
