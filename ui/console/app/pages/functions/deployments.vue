@@ -8,6 +8,7 @@ const route = useRoute();
 const functionControlPlane = useFunctionControlPlane(client.value.function.cp);
 const endpointId = ref("");
 const draftReady = ref(false);
+const composing = ref(false);
 const selectedDeployment = ref<FunctionControlPlaneModels.Deployment | null>(null);
 const confirmingDeploy = ref(false);
 const confirmingRollback = ref(false);
@@ -40,6 +41,7 @@ const columns: TableColumn<FunctionControlPlaneModels.Deployment>[] = [
   { accessorKey: "bundleFormat", header: "Format" },
   { accessorKey: "createdAt", header: "Created" },
   { accessorKey: "bundleHash", header: "Bundle Hash" },
+  { id: "actions", header: "" },
 ];
 const activeDeployment = computed(() =>
   functionControlPlane.deployments.value?.data?.find(
@@ -77,6 +79,7 @@ const environment = computed(() =>
 async function chooseEndpoint(id: string) {
   endpointId.value = id;
   draftReady.value = false;
+  composing.value = false;
   selectedDeployment.value = null;
   archiveFile.value = null;
   deploymentForm.archive = null;
@@ -228,12 +231,18 @@ async function deploy() {
     confirmingDeploy.value = false;
     return;
   }
-  if (await functionControlPlane.deploy(endpointId.value, input)) confirmingDeploy.value = false;
+  if (await functionControlPlane.deploy(endpointId.value, input)) {
+    confirmingDeploy.value = false;
+    composing.value = false;
+  }
 }
 async function rollback() {
   if (!selectedDeployment.value) return;
-  if (await functionControlPlane.rollback(endpointId.value, selectedDeployment.value.version))
+  if (await functionControlPlane.rollback(endpointId.value, selectedDeployment.value.version)) {
     confirmingRollback.value = false;
+    selectedDeployment.value = null;
+    showValues.value = false;
+  }
 }
 onMounted(async () => {
   if (!auth.hasScope("function:endpoint.read")) return;
@@ -274,248 +283,291 @@ onMounted(async () => {
         />
       </UFormField>
     </UCard>
-    <UForm
-      v-if="
-        draftReady &&
-        functionControlPlane.selectedEndpoint.value &&
-        auth.hasScope('function:endpoint.deploy')
-      "
-      id="function-deployment"
-      ref="deploymentFormElement"
-      :state="deploymentForm"
-      :validate="validateDeployment"
-      :disabled="functionControlPlane.busy.value || readingArchive"
-      class="space-y-6"
-      @submit="reviewDeployment"
-    >
-      <UCard
-        title="New Deployment"
-        description="Upload a prepared bundle, or edit source files for this version. Nothing changes until you review and activate the deployment."
-        :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-      >
-        <div class="space-y-5">
-          <UTabs
-            v-model="deploymentForm.bundleSource"
-            :items="[
-              { label: 'Upload Archive', value: 'archive', icon: 'i-lucide-upload' },
-              { label: 'Source Files', value: 'files', icon: 'i-lucide-code' },
-            ]"
-            :content="false"
-          />
-          <template v-if="deploymentForm.bundleSource === 'archive'">
-            <UFormField
-              label="Bundle Archive"
-              name="archive"
-              :error="archiveError || undefined"
-              :description="`Include ${functionControlPlane.selectedEndpoint.value.entrypoint} at its configured path, without an enclosing project folder.`"
-              required
-            >
-              <UFileUpload
-                :model-value="archiveFile"
-                accept=".zip,.tar"
-                label="Drop your deployment bundle here"
-                :description="
-                  functionControlPlane.config.value
-                    ? `ZIP or uncompressed TAR · up to ${(functionControlPlane.config.value.maxBundleSizeBytes / (1024 * 1024)).toLocaleString()} MiB`
-                    : 'ZIP or uncompressed TAR · service size limits apply'
-                "
-                layout="list"
-                :file-image="false"
-                :file-delete="false"
-                :disabled="functionControlPlane.busy.value || readingArchive"
-                class="w-full min-h-40"
-                @update:model-value="selectArchive"
-                @reject="rejectArchive"
+    <div v-if="draftReady && auth.hasScope('function:endpoint.deploy')" class="flex justify-end">
+      <UButton label="New Deployment" icon="i-lucide-plus" @click="composing = true" />
+    </div>
+    <UModal
+      v-model:open="composing"
+      title="New Deployment"
+      description="Prepare a bundle, environment, and runtime settings, then review before activation."
+      :dismissible="!functionControlPlane.busy.value && !readingArchive"
+      :ui="{ content: 'max-w-5xl', body: 'space-y-6' }"
+      :close="{ disabled: functionControlPlane.busy.value || readingArchive }"
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert" /><UForm
+          v-if="
+            draftReady &&
+            functionControlPlane.selectedEndpoint.value &&
+            auth.hasScope('function:endpoint.deploy')
+          "
+          id="function-deployment"
+          ref="deploymentFormElement"
+          :state="deploymentForm"
+          :validate="validateDeployment"
+          :disabled="functionControlPlane.busy.value || readingArchive"
+          class="space-y-6"
+          @submit="reviewDeployment"
+        >
+          <section class="space-y-5">
+            <div class="space-y-5">
+              <UTabs
+                v-model="deploymentForm.bundleSource"
+                :items="[
+                  { label: 'Upload Archive', value: 'archive', icon: 'i-lucide-upload' },
+                  { label: 'Source Files', value: 'files', icon: 'i-lucide-code' },
+                ]"
+                :content="false"
               />
-            </UFormField>
-            <UAlert
-              v-if="readingArchive"
-              title="Reading Bundle…"
-              description="Preparing the selected archive. Keep this page open."
-              color="info"
-            />
-          </template>
-          <UFormField
-            v-else
-            label="Bundle Files"
-            name="files"
-            description="Edit one file at a time. Paths are relative to the bundle root and must include the endpoint entrypoint."
-            required
-          >
-            <div class="space-y-4">
-              <UFormField
-                v-if="deploymentForm.files.length > 1"
-                label="File"
-                description="Choose the file to edit."
-              >
-                <USelect
-                  v-model="selectedFileIndex"
-                  :items="fileOptions"
-                  value-key="value"
-                  class="w-full"
-                />
-              </UFormField>
-              <template v-if="selectedFile">
+              <template v-if="deploymentForm.bundleSource === 'archive'">
                 <UFormField
-                  label="File Path"
-                  :name="`files.${selectedFileIndex}.path`"
-                  description="For example, index.js or lib/helper.js."
+                  label="Bundle Archive"
+                  name="archive"
+                  :error="archiveError || undefined"
+                  :description="`Include ${functionControlPlane.selectedEndpoint.value.entrypoint} at its configured path, without an enclosing project folder.`"
                   required
-                  ><UInput
-                    v-model="selectedFile.path"
-                    placeholder="lib/helper.js"
-                    class="w-full font-mono"
-                /></UFormField>
-                <UFormField label="Source Code" :name="`files.${selectedFileIndex}.content`"
-                  ><UTextarea
-                    v-model="selectedFile.content"
-                    :rows="14"
-                    class="w-full font-mono"
-                    placeholder="Enter the source for this file"
-                /></UFormField>
+                >
+                  <UFileUpload
+                    :model-value="archiveFile"
+                    accept=".zip,.tar"
+                    label="Drop your deployment bundle here"
+                    :description="
+                      functionControlPlane.config.value
+                        ? `ZIP or uncompressed TAR · up to ${(functionControlPlane.config.value.maxBundleSizeBytes / (1024 * 1024)).toLocaleString()} MiB`
+                        : 'ZIP or uncompressed TAR · service size limits apply'
+                    "
+                    layout="list"
+                    :file-image="false"
+                    :file-delete="false"
+                    :disabled="functionControlPlane.busy.value || readingArchive"
+                    class="w-full min-h-40"
+                    @update:model-value="selectArchive"
+                    @reject="rejectArchive"
+                  />
+                </UFormField>
+                <UAlert
+                  v-if="readingArchive"
+                  title="Reading Bundle…"
+                  description="Preparing the selected archive. Keep this page open."
+                  color="info"
+                />
               </template>
-              <UEmpty
+              <UFormField
                 v-else
-                title="No Source Files"
-                description="Add a file to start writing this bundle."
-                icon="i-lucide-file-code"
+                label="Bundle Files"
+                name="files"
+                description="Edit one file at a time. Paths are relative to the bundle root and must include the endpoint entrypoint."
+                required
+              >
+                <div class="space-y-5">
+                  <UFormField
+                    v-if="deploymentForm.files.length > 1"
+                    label="File"
+                    description="Choose the file to edit."
+                  >
+                    <USelect
+                      v-model="selectedFileIndex"
+                      :items="fileOptions"
+                      value-key="value"
+                      class="w-full"
+                    />
+                  </UFormField>
+                  <template v-if="selectedFile">
+                    <UFormField
+                      label="File Path"
+                      :name="`files.${selectedFileIndex}.path`"
+                      description="For example, index.js or lib/helper.js."
+                      required
+                      ><UInput
+                        v-model="selectedFile.path"
+                        placeholder="lib/helper.js"
+                        class="w-full font-mono"
+                    /></UFormField>
+                    <UFormField label="Source Code" :name="`files.${selectedFileIndex}.content`"
+                      ><UTextarea
+                        v-model="selectedFile.content"
+                        :rows="14"
+                        class="w-full font-mono"
+                        placeholder="Enter the source for this file"
+                    /></UFormField>
+                  </template>
+                  <UEmpty
+                    v-else
+                    title="No Source Files"
+                    description="Add a file to start writing this bundle."
+                    icon="i-lucide-file-code"
+                  />
+                </div>
+              </UFormField>
+            </div>
+            <div
+              v-if="deploymentForm.bundleSource === 'files' || archiveFile"
+              class="flex flex-wrap justify-end gap-3"
+            >
+              <template v-if="deploymentForm.bundleSource === 'files'">
+                <UButton
+                  label="Add File"
+                  color="neutral"
+                  variant="outline"
+                  :disabled="functionControlPlane.busy.value || readingArchive"
+                  @click="addFile"
+                />
+                <UButton
+                  label="Remove File"
+                  color="error"
+                  variant="outline"
+                  :disabled="
+                    functionControlPlane.busy.value ||
+                    deploymentForm.files.length <= 1 ||
+                    !selectedFile
+                  "
+                  @click="removingDraftItem = 'file'"
+                />
+              </template>
+              <UButton
+                v-else-if="archiveFile"
+                label="Clear Archive"
+                color="neutral"
+                variant="outline"
+                :disabled="functionControlPlane.busy.value || readingArchive"
+                @click="selectArchive(null)"
               />
             </div>
-          </UFormField>
-        </div>
-        <template v-if="deploymentForm.bundleSource === 'files' || archiveFile" #footer>
-          <template v-if="deploymentForm.bundleSource === 'files'">
-            <UButton
-              label="Add File"
-              color="neutral"
-              variant="outline"
-              :disabled="functionControlPlane.busy.value || readingArchive"
-              @click="addFile"
-            />
-            <UButton
-              label="Remove Selected File"
-              color="error"
-              variant="outline"
-              :disabled="
-                functionControlPlane.busy.value || deploymentForm.files.length <= 1 || !selectedFile
-              "
-              @click="removingDraftItem = 'file'"
-            />
-          </template>
-          <UButton
-            v-else-if="archiveFile"
-            label="Clear Archive"
-            color="neutral"
-            variant="outline"
-            :disabled="functionControlPlane.busy.value || readingArchive"
-            @click="selectArchive(null)"
-          />
-        </template>
-      </UCard>
-      <UCard
-        title="Environment Variables"
-        :description="
-          activeDeployment
-            ? `Starting with variables from version ${activeDeployment.version}. Edits apply only to the new deployment; values stay hidden in this list.`
-            : 'Add values your function needs at runtime. Variables belong to this deployment, not the service configuration.'
-        "
-        :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-      >
-        <UTable
-          :data="deploymentForm.variables"
-          :columns="[
-            { accessorKey: 'name', header: 'Variable' },
-            { id: 'value', header: 'Value' },
-          ]"
-          caption="Select a variable to edit or remove it from the draft."
-          @select="(_event, row) => (selectedVariableIndex = row.index)"
-        >
-          <template #value-cell
-            ><UBadge label="Hidden" color="neutral" variant="subtle"
-          /></template>
-          <template #empty
-            ><UEmpty
-              title="No Environment Variables"
-              description="Add a variable if your function needs configuration or secrets."
-              icon="i-lucide-key-round"
-          /></template>
-        </UTable>
-        <template #footer>
-          <UButton
-            label="Add Variable"
-            color="neutral"
-            variant="outline"
-            :disabled="functionControlPlane.busy.value || readingArchive"
-            @click="newVariable"
-          />
-          <UButton
-            label="Edit Selected Variable"
-            color="neutral"
-            variant="outline"
-            :disabled="
-              functionControlPlane.busy.value || readingArchive || selectedVariableIndex < 0
-            "
-            @click="editVariable"
-          />
-          <UButton
-            label="Remove Selected Variable"
-            color="error"
-            variant="outline"
-            :disabled="
-              functionControlPlane.busy.value || readingArchive || selectedVariableIndex < 0
-            "
-            @click="removingDraftItem = 'variable'"
-          />
-        </template>
-      </UCard>
-      <UCard
-        title="Runtime Compatibility"
-        description="Use service defaults, or pin compatibility behavior for this version. Overrides from the active deployment are retained in the draft."
-        :ui="{ footer: 'flex justify-end' }"
-      >
-        <div class="space-y-4">
-          <USwitch
-            v-model="deploymentForm.overrideRuntime"
-            label="Override Workerd Compatibility"
-            description="Pin a compatibility date instead of inheriting the service default."
-          />
-          <template v-if="deploymentForm.overrideRuntime">
-            <UFormField label="Deployment Compatibility Date" name="compatibilityDate" required
-              ><UInput v-model="deploymentForm.compatibilityDate" type="date" class="w-full"
-            /></UFormField>
-            <USwitch
-              v-model="deploymentForm.overrideFlags"
-              label="Override Compatibility Flags"
-              description="Leave off to inherit service flags. An explicit empty list disables all default flags for this version."
-            />
-            <UFormField
-              v-if="deploymentForm.overrideFlags"
-              label="Deployment Compatibility Flags"
-              name="compatibilityFlags"
-              description="Press Enter to add a flag supported by the installed workerd version."
-              ><UInputTags
-                v-model="deploymentForm.compatibilityFlags"
-                placeholder="nodejs_compat"
-                :delimiter="/[\n,]/"
-                add-on-paste
-                add-on-blur
-                class="w-full"
-            /></UFormField>
-          </template>
-        </div>
-        <template #footer
-          ><UButton
-            type="submit"
-            form="function-deployment"
-            label="Review Deployment"
-            :disabled="functionControlPlane.busy.value || readingArchive"
-        /></template>
-      </UCard>
-    </UForm>
+          </section>
+          <section class="space-y-5">
+            <header class="space-y-2">
+              <USeparator label="Environment Variables" position="start" />
+              <p class="text-sm text-muted">
+                {{
+                  activeDeployment
+                    ? `Starting with variables from version ${activeDeployment.version}. Edits apply only to the new deployment; values stay hidden in this list.`
+                    : "Add values your function needs at runtime. Variables belong to this deployment, not the service configuration."
+                }}
+              </p>
+            </header>
+            <UTable
+              :data="deploymentForm.variables"
+              :columns="[
+                { accessorKey: 'name', header: 'Variable' },
+                { id: 'value', header: 'Value' },
+                { id: 'actions', header: '' },
+              ]"
+              caption="Deployment draft variables and edit or remove actions."
+            >
+              <template #actions-cell="{ row }"
+                ><div class="flex justify-end">
+                  <UDropdownMenu
+                    :items="[
+                      {
+                        label: 'Edit Variable',
+                        icon: 'i-lucide-pencil',
+                        color: 'neutral' as const,
+                        disabled: functionControlPlane.busy.value || readingArchive,
+                        onSelect: () => {
+                          selectedVariableIndex = row.index;
+                          editVariable();
+                        },
+                      },
+                      {
+                        label: 'Remove Variable',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: functionControlPlane.busy.value || readingArchive,
+                        onSelect: () => {
+                          selectedVariableIndex = row.index;
+                          removingDraftItem = 'variable';
+                        },
+                      },
+                    ]"
+                    :content="{ align: 'end' }"
+                  >
+                    <UButton
+                      icon="i-lucide-ellipsis"
+                      color="neutral"
+                      variant="ghost"
+                      :aria-label="`Actions for ${row.original.name}`"
+                    />
+                  </UDropdownMenu></div
+              ></template>
+              <template #value-cell
+                ><UBadge label="Hidden" color="neutral" variant="subtle"
+              /></template>
+              <template #empty
+                ><UEmpty
+                  title="No Environment Variables"
+                  description="Add a variable if your function needs configuration or secrets."
+                  icon="i-lucide-key-round"
+              /></template>
+            </UTable>
+            <div class="flex flex-wrap justify-end gap-3">
+              <UButton
+                label="Add Variable"
+                color="neutral"
+                variant="outline"
+                :disabled="functionControlPlane.busy.value || readingArchive"
+                @click="newVariable"
+              />
+            </div>
+          </section>
+          <section class="space-y-5">
+            <header class="space-y-2">
+              <USeparator label="Runtime Compatibility" position="start" />
+              <p class="text-sm text-muted">
+                Use service defaults, or pin compatibility behavior for this version. Overrides from
+                the active deployment are retained in the draft.
+              </p>
+            </header>
+            <div class="space-y-5">
+              <USwitch
+                v-model="deploymentForm.overrideRuntime"
+                label="Override Workerd Compatibility"
+                description="Pin a compatibility date instead of inheriting the service default."
+              />
+              <template v-if="deploymentForm.overrideRuntime">
+                <UFormField label="Deployment Compatibility Date" name="compatibilityDate" required
+                  ><UInput v-model="deploymentForm.compatibilityDate" type="date" class="w-full"
+                /></UFormField>
+                <USwitch
+                  v-model="deploymentForm.overrideFlags"
+                  label="Override Compatibility Flags"
+                  description="Leave off to inherit service flags. An explicit empty list disables all default flags for this version."
+                />
+                <UFormField
+                  v-if="deploymentForm.overrideFlags"
+                  label="Deployment Compatibility Flags"
+                  name="compatibilityFlags"
+                  description="Press Enter to add a flag supported by the installed workerd version."
+                  ><UInputTags
+                    v-model="deploymentForm.compatibilityFlags"
+                    placeholder="nodejs_compat"
+                    :delimiter="/[\n,]/"
+                    add-on-paste
+                    add-on-blur
+                    class="w-full"
+                /></UFormField>
+              </template>
+            </div>
+          </section> </UForm></template
+      ><template #footer
+        ><UButton
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          :disabled="functionControlPlane.busy.value || readingArchive"
+          @click="composing = false" /><UButton
+          type="submit"
+          form="function-deployment"
+          label="Review Deployment"
+          :disabled="functionControlPlane.busy.value || readingArchive" /></template
+    ></UModal>
     <UCard
       v-if="functionControlPlane.selectedEndpoint.value"
       title="Deployment History"
-      description="Select a version to inspect its manifest or restore its code, environment, and runtime overrides."
+      description="Inspect each version or restore its code, environment, and runtime overrides using its row actions."
       :ui="{ footer: 'flex justify-end' }"
     >
       <UTable
@@ -523,9 +575,56 @@ onMounted(async () => {
         :columns="columns"
         :loading="functionControlPlane.busy.value"
         :ui="{ td: 'whitespace-normal break-all' }"
-        caption="Immutable deployments. Select a version to inspect it."
-        @select="(_event, row) => (selectedDeployment = row.original)"
+        caption="Immutable deployments with version details and rollback actions."
+        @select="
+          (_event, row) => {
+            selectedDeployment = row.original;
+            showValues = false;
+          }
+        "
       >
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: functionControlPlane.busy.value,
+                  onSelect: () => {
+                    selectedDeployment = row.original;
+                    showValues = false;
+                  },
+                },
+                ...(auth.hasScope('function:endpoint.deploy')
+                  ? [
+                      {
+                        label: 'Roll Back',
+                        icon: 'i-lucide-history',
+                        color: 'neutral' as const,
+                        disabled:
+                          functionControlPlane.busy.value ||
+                          row.original.id ===
+                            functionControlPlane.selectedEndpoint.value.activeDeploymentId,
+                        onSelect: () => {
+                          selectedDeployment = row.original;
+                          confirmingRollback = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.version}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #active-cell="{ row }"
           ><UBadge
             :label="
@@ -551,51 +650,64 @@ onMounted(async () => {
           ><UEmpty title="Loading Deployments…" loading icon="i-lucide-rocket"
         /></template>
       </UTable>
-      <template v-if="auth.hasScope('function:endpoint.deploy')" #footer
-        ><UButton
-          label="Roll Back to Selected Version"
-          color="neutral"
-          variant="outline"
-          :disabled="
-            functionControlPlane.busy.value ||
-            !selectedDeployment ||
-            selectedDeployment.id === functionControlPlane.selectedEndpoint.value.activeDeploymentId
-          "
-          @click="confirmingRollback = true"
-      /></template>
     </UCard>
-    <UCard
+    <UModal
       v-if="selectedDeployment"
-      :title="`Deployment Version ${selectedDeployment.version}`"
+      :open="!!(selectedDeployment && !confirmingRollback)"
+      :dismissible="!functionControlPlane.busy.value"
+      :title="`Deployment Version ${selectedDeployment!.version}`"
       description="File manifest and environment for the selected version. Source code is not returned by the history API."
-      :ui="{ footer: 'flex justify-end' }"
-    >
-      <UTable :data="manifest" :columns="[{ accessorKey: 'path', header: 'File' }]" />
-      <UTable
-        :data="environment"
-        :columns="[
-          { accessorKey: 'name', header: 'Environment Key' },
-          { accessorKey: 'value', header: 'Value' },
-        ]"
-      />
-      <USwitch
-        v-model="showValues"
-        label="Show Stored Variable Values"
-        description="Environment values can contain secrets."
-      />
-      <template #footer
+      :ui="{ body: 'space-y-6', content: 'max-w-5xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            selectedDeployment = null;
+            showValues = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <section class="space-y-5">
+          <USeparator label="Bundle Manifest" position="start" /><UTable
+            :data="manifest"
+            :columns="[{ accessorKey: 'path', header: 'File' }]"
+          />
+        </section>
+        <section class="space-y-5">
+          <USeparator label="Environment Variables" position="start" /><UTable
+            :data="environment"
+            :columns="[
+              { accessorKey: 'name', header: 'Environment Key' },
+              { accessorKey: 'value', header: 'Value' },
+            ]"
+          />
+          <USwitch
+            v-model="showValues"
+            label="Show Stored Variable Values"
+            description="Environment values can contain secrets."
+          />
+        </section> </template
+      ><template #footer
         ><UButton
-          label="Close Version Details"
+          label="Close"
           color="neutral"
           variant="outline"
           @click="selectedDeployment = null"
       /></template>
-    </UCard>
+    </UModal>
     <UModal
       v-model:open="editingVariable"
       :title="editingVariableIndex >= 0 ? 'Edit Environment Variable' : 'Add Environment Variable'"
       description="This changes only the deployment draft. Empty values are stored as empty strings."
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ content: 'max-w-xl', body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
     >
       <template #body>
         <UForm
@@ -603,7 +715,7 @@ onMounted(async () => {
           ref="variableFormElement"
           :state="variableForm"
           :validate="validateVariable"
-          class="space-y-4"
+          class="space-y-5"
           @submit="saveVariable"
         >
           <UFormField label="Variable Name" name="name" required
@@ -638,7 +750,7 @@ onMounted(async () => {
       :open="!!removingDraftItem"
       title="Remove from Deployment Draft?"
       description="This removes the selected item from this draft only. The active deployment is unchanged until you activate a new version."
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
       @update:open="
         (open) => {
           if (!open) removingDraftItem = null;
@@ -661,7 +773,8 @@ onMounted(async () => {
       title="Activate New Deployment?"
       description="Confirm the bundle and configuration below. Activation replaces the endpoint's current version immediately."
       :dismissible="!functionControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ content: 'max-w-3xl', body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
     >
       <template #body>
         <div class="space-y-5">
@@ -762,11 +875,11 @@ onMounted(async () => {
       title="Roll Back Deployment?"
       description="The selected version's code and environment will become active immediately. External side effects are not undone."
       :dismissible="!functionControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
     >
-      <template #body
+      <template v-if="functionControlPlane.error.value" #body
         ><UAlert
-          v-if="functionControlPlane.error.value"
           title="Rollback Failed"
           :description="functionControlPlane.error.value"
           color="error"

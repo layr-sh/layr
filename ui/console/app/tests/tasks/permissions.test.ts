@@ -10,6 +10,9 @@ import Executions from "../../pages/tasks/executions.vue";
 import DLQ from "../../pages/tasks/dead-letter-queue.vue";
 import {
   action,
+  pageDOM,
+  activeDialog,
+  menuAction,
   field,
   mountPage,
   signInConsoleUser,
@@ -48,7 +51,7 @@ describe("Tasks permissions and errors", () => {
       await router.push(scope === "tasks:stats.read" ? "/tasks/jobs" : "/tasks");
       ({ wrapper } = await mountPage(Layout));
       expect(wrapper.setupState.canView.value).toBe(false);
-      expect(wrapper.text()).toContain("Access Restricted");
+      expect(pageDOM().text()).toContain("Access Restricted");
       wrapper.unmount();
     }
     await router.push("/");
@@ -59,7 +62,7 @@ describe("Tasks permissions and errors", () => {
     for (const page of [Configuration, Statistics, Jobs, Executions, DLQ]) {
       ({ wrapper } = await mountPage(page));
       expect(wrapper.setupState.tasksControlPlane.error.value).toBe("");
-      expect(wrapper.findAll('button[type="submit"]')).toHaveLength(page === Executions ? 1 : 0);
+      expect(pageDOM().findAll('button[type="submit"]')).toHaveLength(page === Executions ? 1 : 0);
       wrapper.unmount();
     }
   });
@@ -68,20 +71,20 @@ describe("Tasks permissions and errors", () => {
     await signInConsoleUser(["tasks:config.read"]);
     ({ wrapper } = await mountPage(Configuration));
     expect(field("Worker Concurrency").attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).not.toContain("Save Tasks Config");
+    expect(pageDOM().text()).not.toContain("Save Tasks Config");
     expect(
       await wrapper.setupState.tasksControlPlane.saveConfig(
         wrapper.setupState.tasksControlPlane.config.value,
       ),
     ).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     wrapper.setupState.tasksControlPlane.config.value = null;
     await wrapper.setupState.save();
     await nextTick();
-    expect(wrapper.text()).toContain("Configuration Unavailable");
+    expect(pageDOM().text()).toContain("Configuration Unavailable");
     wrapper.setupState.tasksControlPlane.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Tasks Configuration");
+    expect(pageDOM().text()).toContain("Loading Tasks Configuration");
     wrapper.setupState.tasksControlPlane.busy.value = false;
   });
 
@@ -93,21 +96,21 @@ describe("Tasks permissions and errors", () => {
         concurrencyLimit: 0,
       }),
     ).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
-    expect(wrapper.find("#tasks-configuration").exists()).toBe(true);
+    expect(pageDOM().text()).toContain("Request Failed");
+    expect(pageDOM().find("#tasks-configuration").exists()).toBe(true);
   });
 
   it("handles unavailable statistics and loading placeholders", async () => {
     await signInConsoleUser([]);
     ({ wrapper } = await mountPage(Statistics));
     expect(wrapper.setupState.metrics.value).toEqual([]);
-    expect(wrapper.text()).toContain("Statistics Unavailable");
+    expect(pageDOM().text()).toContain("Statistics Unavailable");
     wrapper.setupState.tasksControlPlane.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Tasks Statistics");
+    expect(pageDOM().text()).toContain("Loading Tasks Statistics");
     wrapper.setupState.tasksControlPlane.busy.value = false;
     expect(await wrapper.setupState.tasksControlPlane.load("statistics")).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("keeps failed job forms open and handles stale or empty selections", async () => {
@@ -115,9 +118,9 @@ describe("Tasks permissions and errors", () => {
     await wrapper.setupState.editJob();
     await wrapper.setupState.deleteJob();
     await action("New Job").trigger("click");
-    expect(wrapper.text()).toContain("HTTP sends a POST");
+    expect(pageDOM().text()).toContain("HTTP sends a POST");
     await action("Cancel").trigger("click");
-    expect(wrapper.find("#tasks-job").exists()).toBe(false);
+    expect(pageDOM().find("#tasks-job").exists()).toBe(false);
     await action("New Job").trigger("click");
     wrapper.setupState.schedule.value = "custom";
     Object.assign(wrapper.setupState.jobForm, {
@@ -128,7 +131,7 @@ describe("Tasks permissions and errors", () => {
     await nextTick();
     await wrapper.setupState.saveJob();
     await nextTick();
-    expect(wrapper.find("#tasks-job").exists()).toBe(true);
+    expect(pageDOM().find("#tasks-job").exists()).toBe(true);
     expect(wrapper.setupState.validateJob()).toContainEqual(
       expect.objectContaining({
         name: "cronExpression",
@@ -148,12 +151,12 @@ describe("Tasks permissions and errors", () => {
     }
     wrapper.setupState.selectedJobId.value = crypto.randomUUID();
     await wrapper.setupState.editJob();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await wrapper.setupState.deleteJob();
-    expect(wrapper.text()).toContain("Request Failed");
-    await action("Delete Job").trigger("click");
+    expect(pageDOM().text()).toContain("Request Failed");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Close", activeDialog()!).trigger("click");
   });
 
   it("shows job details without write controls and records last run metadata", async () => {
@@ -168,18 +171,19 @@ describe("Tasks permissions and errors", () => {
     try {
       await signInConsoleUser(["tasks:job.read"]);
       ({ wrapper } = await mountPage(Jobs));
-      const row = wrapper.findAll("tbody tr").find((row) => row.text().includes(job.name))!;
-      await row.trigger("click");
-      await action("Job Details").trigger("click");
+      const row = pageDOM()
+        .findAll("tbody tr")
+        .find((row) => row.text().includes(job.name))!;
+      await menuAction("Details", row.element);
       await settle();
       expect(field("Name").attributes("disabled")).toBeDefined();
       for (const label of ["New Job", "Delete Job", "Save Job"])
-        expect(wrapper.text()).not.toContain(label);
+        expect(pageDOM().text()).not.toContain(label);
       wrapper.setupState.tasksControlPlane.selectedJob.value.lastRunAt = new Date(
         "2026-01-01T00:00:00Z",
       );
       await nextTick();
-      expect(wrapper.text()).toContain(new Date("2026-01-01T00:00:00Z").toLocaleString());
+      expect(pageDOM().text()).toContain(new Date("2026-01-01T00:00:00Z").toLocaleString());
     } finally {
       await signInConsoleUser();
       await api.jobs.delete(job.id);
@@ -188,20 +192,24 @@ describe("Tasks permissions and errors", () => {
 
   it("reports invalid trigger payloads and clears previous queue results", async () => {
     ({ wrapper } = await mountPage(Executions));
+    if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+      await action("New Execution").trigger("click");
     for (const payload of ["{", "null", "[]", '"text"']) {
       await wrapper.setupState.tasksControlPlane.trigger("", payload);
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().text()).toContain("Request Failed");
       expect(wrapper.setupState.tasksControlPlane.triggered.value).toBeNull();
     }
     expect(await wrapper.setupState.tasksControlPlane.trigger(crypto.randomUUID(), "")).toBe(false);
     await field("Filter by Job ID").setValue("invalid");
     await action("Apply Filter").trigger("click");
     await settle();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("paginates execution logs and displays all recorded and missing details", async () => {
     ({ wrapper } = await mountPage(Executions));
+    if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+      await action("New Execution").trigger("click");
     const state = wrapper.setupState.tasksControlPlane;
     const log = {
       id: crypto.randomUUID(),
@@ -216,13 +224,13 @@ describe("Tasks permissions and errors", () => {
     };
     state.executions.value = { data: [log], total: 11, count: 1, limit: 10, offset: 0 };
     await nextTick();
-    await wrapper.get("tbody tr[data-selectable]").trigger("click");
-    expect(wrapper.text()).toContain("failed target");
-    expect(wrapper.text()).toContain("bad request");
-    expect(wrapper.text()).toContain("400");
+    await action("Details").trigger("click");
+    expect(pageDOM().text()).toContain("failed target");
+    expect(pageDOM().text()).toContain("bad request");
+    expect(pageDOM().text()).toContain("400");
     wrapper.setupState.selectedExecution.value.responseBody = undefined;
     await nextTick();
-    expect(wrapper.text()).toContain("Not Recorded");
+    expect(pageDOM().text()).toContain("Not Recorded");
     await action("Next").trigger("click");
     await settle();
     expect(state.executionOffset.value).toBe(10);
@@ -232,7 +240,7 @@ describe("Tasks permissions and errors", () => {
     state.executions.value = { data: [], total: 0, count: 0, limit: 10, offset: 0 };
     state.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Executions");
+    expect(pageDOM().text()).toContain("Loading Executions");
     state.busy.value = false;
   });
 
@@ -253,17 +261,17 @@ describe("Tasks permissions and errors", () => {
     };
     state.dlq.value = { data: [item], total: 11, count: 1, limit: 10, offset: 0 };
     await nextTick();
-    await wrapper.get("tbody tr[data-selectable]").trigger("click");
-    expect(wrapper.text()).toContain("Not Recorded");
+    await menuAction("Details");
+    expect(pageDOM().text()).toContain("Not Recorded");
     await wrapper.setupState.retry();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     expect(wrapper.setupState.selectedExecution.value).not.toBeNull();
-    await action("Purge Execution").trigger("click");
+    await menuAction("Purge Execution");
     await flushPromises();
-    await action("Purge Execution", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Purge Execution", activeDialog()!).trigger("click");
     await settle();
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+    expect(activeDialog()).not.toBeNull();
+    await action("Close", activeDialog()!).trigger("click");
     await action("Next").trigger("click");
     await settle();
     expect(state.dlqOffset.value).toBe(10);
@@ -273,20 +281,22 @@ describe("Tasks permissions and errors", () => {
     state.dlq.value = { data: [] };
     state.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Dead-Letter Queue");
+    expect(pageDOM().text()).toContain("Loading Dead-Letter Queue");
     state.busy.value = false;
   });
 
   it("hides execution mutations for read-only Service Accounts", async () => {
     await signInConsoleUser(["tasks:execution.read"]);
     ({ wrapper } = await mountPage(Executions));
-    expect(wrapper.text()).not.toContain("Trigger Execution");
+    if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+      await action("New Execution").trigger("click");
+    expect(pageDOM().text()).not.toContain("Trigger Execution");
     wrapper.unmount();
     ({ wrapper } = await mountPage(DLQ));
-    expect(wrapper.text()).not.toContain("Retry Execution");
-    expect(wrapper.text()).not.toContain("Purge Execution");
+    expect(pageDOM().text()).not.toContain("Retry Execution");
+    expect(pageDOM().text()).not.toContain("Purge Execution");
     expect(await wrapper.setupState.tasksControlPlane.retryDLQ(crypto.randomUUID())).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("serializes requests, handles unknown errors, and preserves JSON object validation", async () => {

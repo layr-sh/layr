@@ -6,6 +6,9 @@ import Executions from "../../pages/tasks/executions.vue";
 import Configuration from "../../pages/tasks/configurations.vue";
 import {
   action,
+  pageDOM,
+  activeDialog,
+  menuAction,
   field,
   flushPromises,
   mountPage,
@@ -49,7 +52,7 @@ describe("Tasks guided forms", () => {
     await field("Request Body (JSON)").setValue('{"sync":true}');
     await action("Create Job").trigger("click");
     await settle();
-    expect(wrapper.text()).toContain("Saved Paused");
+    expect(pageDOM().text()).toContain("Saved Paused");
     const job = ((await api.jobs.list()).data || []).find((job) => job.name === name)!;
     try {
       expect(job.targetPayload).toEqual({
@@ -57,15 +60,12 @@ describe("Tasks guided forms", () => {
         headers: { "X-Source": "console", Authorization: "Bearer test" },
         body: { sync: true },
       });
-      await action(`Select ${name}`).trigger("click");
-      expect(wrapper.setupState.selectedJobId.value).toBe(job.id);
-      await action(`Select ${name}`).trigger("click");
-      expect(wrapper.setupState.selectedJobId.value).toBe("");
-      await wrapper
+      const row = pageDOM()
         .findAll("tbody tr")
-        .find((row) => row.text().includes(name))!
-        .trigger("click");
-      await action("Job Details").trigger("click");
+        .find((row) => row.text().includes(name))!;
+      expect(row.find('[role="checkbox"]').exists()).toBe(false);
+      expect(row.attributes("data-selectable")).toBe("true");
+      await menuAction("Details", row.element);
       await settle();
       await field("Advanced JSON").trigger("click");
       expect(
@@ -87,8 +87,8 @@ describe("Tasks guided forms", () => {
       await field("Webhook URL").setValue("https://example.com/duplicate");
       await action("Create Job").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Request Failed");
-      expect(wrapper.find("#tasks-job").exists()).toBe(true);
+      expect(pageDOM().text()).toContain("Request Failed");
+      expect(pageDOM().find("#tasks-job").exists()).toBe(true);
     } finally {
       await api.jobs.delete(job.id);
     }
@@ -100,49 +100,53 @@ describe("Tasks guided forms", () => {
     await field("Name").setValue("schedule-validation");
     await field("Webhook URL").setValue("https://example.com/task");
     await selectOption("Schedule", "Every 15 minutes");
-    expect(wrapper.text()).toContain("minutes 0, 15, 30, and 45");
+    expect(pageDOM().text()).toContain("minutes 0, 15, 30, and 45");
     expect(wrapper.setupState.jobForm.cronExpression).toBe("*/15 * * * *");
     await selectOption("Schedule", "Custom cron expression");
     await field("Cron Expression").setValue("invalid");
     await action("Create Job").trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("Use five cron fields");
+    expect(pageDOM().text()).toContain("Use five cron fields");
     await field("Cron Expression").setValue("0 9 * * 1-5");
-    expect(wrapper.text()).toContain("Custom cron: 0 9 * * 1-5");
+    expect(pageDOM().text()).toContain("Custom cron: 0 9 * * 1-5");
     await field("Name").setValue(" ");
     wrapper.setupState.jobForm.timezone = "Bogus/Timezone";
     await wrapper.setupState.saveJob();
-    expect(wrapper.text()).toContain("Enter a job name");
-    expect(wrapper.text()).toContain("Choose a valid IANA timezone");
+    expect(pageDOM().text()).toContain("Enter a job name");
+    expect(pageDOM().text()).toContain("Choose a valid IANA timezone");
     wrapper.setupState.jobForm.timezone = "";
     expect(
       wrapper.setupState.validateJob().some((error: { name: string }) => error.name === "timezone"),
     ).toBe(true);
     wrapper.setupState.jobForm.timezone = "UTC";
     await field("Enable Schedule").trigger("click");
-    expect(wrapper.text()).toContain("The scheduler will queue future runs");
+    expect(pageDOM().text()).toContain("The scheduler will queue future runs");
     await action("Cancel").trigger("click");
   });
 
   it("keeps invalid target input while switching between structured and advanced modes", async () => {
     ({ wrapper } = await mountPage(Executions));
+    if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+      await action("New Execution").trigger("click");
     await wrapper.setupState.queueExecution();
-    expect(wrapper.text()).toContain("Choose a job or enter a valid job UUID");
+    expect(pageDOM().text()).toContain("Choose a job or enter a valid job UUID");
     await selectOption("Execution Mode", "Run a Standalone Task");
     await action("Queue Execution").trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("Enter a complete HTTP or HTTPS URL");
+    expect(pageDOM().text()).toContain("Enter a complete HTTP or HTTPS URL");
     await field("Request Headers").setValue("invalid header line");
     await field("Advanced JSON").trigger("click");
-    expect(wrapper.text()).toContain("Your input has been kept");
+    expect(pageDOM().text()).toContain("Your input has been kept");
     expect(
-      wrapper.findAll("textarea").some((textarea) => textarea.attributes("name") === "target.raw"),
+      pageDOM()
+        .findAll("textarea")
+        .some((textarea) => textarea.attributes("name") === "target.raw"),
     ).toBe(false);
     await field("Webhook URL").setValue("https://example.com/task");
     await field("Request Headers").setValue("X-Valid: true");
     await field("Request Body (JSON)").setValue("{");
     await field("Advanced JSON").trigger("click");
-    expect(wrapper.text()).toContain("Target Needs Attention");
+    expect(pageDOM().text()).toContain("Target Needs Attention");
     await field("Request Body (JSON)").setValue('{"valid":true}');
     await field("Advanced JSON").trigger("click");
     await field("Target Payload (JSON)").setValue("{");
@@ -158,7 +162,7 @@ describe("Tasks guided forms", () => {
     await field("SQL Query").setValue("SELECT $1");
     await field("SQL Parameters (JSON)").setValue("{}");
     await wrapper.setupState.queueExecution();
-    expect(wrapper.text()).toContain("Parameters must be a JSON array");
+    expect(pageDOM().text()).toContain("Parameters must be a JSON array");
     await field("SQL Parameters (JSON)").setValue("[42]");
     expect(wrapper.setupState.validateExecution()).toEqual([]);
   });
@@ -174,18 +178,20 @@ describe("Tasks guided forms", () => {
     });
     try {
       ({ wrapper } = await mountPage(Executions));
+      if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+        await action("New Execution").trigger("click");
       wrapper.setupState.chooseJob("missing");
       await selectOption("Job", job.name);
-      expect(wrapper.text()).toContain("Active schedule");
+      expect(pageDOM().text()).toContain("Active schedule");
       await field("Override Saved Payload").trigger("click");
-      expect(wrapper.text()).toContain("REPLACES");
+      expect(pageDOM().text()).toContain("REPLACES");
       expect(field("Target Type").attributes("disabled")).toBeDefined();
       await field("SQL Query").setValue("SELECT $1::integer");
       await field("SQL Parameters (JSON)").setValue("[42]");
       await field("Advanced JSON").trigger("click");
       await action("Queue Execution").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Task Execution Queued");
+      expect(pageDOM().text()).toContain("Task Execution Queued");
       expect((await api.jobs.get(job.id)).targetPayload).toEqual({ query: "SELECT 1" });
       const id = wrapper.setupState.tasksControlPlane.triggered.value.executionId;
       await vi.waitFor(async () =>
@@ -212,25 +218,24 @@ describe("Tasks guided forms", () => {
     try {
       ({ wrapper } = await mountPage(Jobs));
       await wrapper.setupState.runJob();
-      await action(`Select ${job.name}`).trigger("click");
-      await action("Run Now").trigger("click");
+      await menuAction("Run Now");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Run Now").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await menuAction("Run Now");
       await flushPromises();
-      await action("Queue Execution", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Queue Execution", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Execution Queued, Not Yet Completed");
+      expect(pageDOM().text()).toContain("Execution Queued, Not Yet Completed");
       expect((await api.jobs.get(job.id)).isEnabled).toBe(false);
-      expect(wrapper.find('a[href$="/tasks/executions"]').exists()).toBe(true);
+      expect(pageDOM().find('a[href$="/tasks/executions"]').exists()).toBe(true);
+      await menuAction("Run Now");
       wrapper.setupState.selectedJobId.value = crypto.randomUUID();
-      await action("Run Now").trigger("click");
       await flushPromises();
-      await action("Queue Execution", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Queue Execution", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Request Failed");
-      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(pageDOM().text()).toContain("Request Failed");
+      expect(activeDialog()).not.toBeNull();
+      await action("Close", activeDialog()!).trigger("click");
     } finally {
       await api.jobs.delete(job.id);
     }
@@ -248,14 +253,16 @@ describe("Tasks guided forms", () => {
     try {
       await signInConsoleUser(["tasks:execution.write"]);
       ({ wrapper } = await mountPage(Executions));
-      expect(wrapper.text()).toContain("Your Service Account cannot list jobs");
+      if (wrapper.setupState.auth.hasScope("tasks:execution.write"))
+        await action("New Execution").trigger("click");
+      expect(pageDOM().text()).toContain("Your Service Account cannot list jobs");
       await field("Job ID").setValue(job.id);
       await field("Override Saved Payload").trigger("click");
       await selectOption("Target Type", "SQL Query");
       await field("SQL Query").setValue("SELECT 2");
       await action("Queue Execution").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Task Execution Queued");
+      expect(pageDOM().text()).toContain("Task Execution Queued");
       expect(wrapper.setupState.tasksControlPlane.jobs.value).toBeNull();
     } finally {
       await signInConsoleUser();
@@ -272,8 +279,8 @@ describe("Tasks guided forms", () => {
     config.retryInitialDelaySeconds = 10;
     config.retryMaxDelaySeconds = 5;
     await wrapper.setupState.save();
-    expect(wrapper.text()).toContain("Enter a whole number");
-    expect(wrapper.text()).toContain(
+    expect(pageDOM().text()).toContain("Enter a whole number");
+    expect(pageDOM().text()).toContain(
       "Maximum retry delay must be at least the initial retry delay",
     );
     expect(wrapper.setupState.tasksControlPlane.error.value).toBe("");

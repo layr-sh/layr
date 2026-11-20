@@ -27,6 +27,7 @@ const columns: TableColumn<FunctionControlPlaneModels.Endpoint>[] = [
   { accessorKey: "runtime", header: "Runtime" },
   { accessorKey: "isPublic", header: "Access" },
   { accessorKey: "activeDeploymentId", header: "Deployment" },
+  { id: "actions", header: "" },
 ];
 const invocationUrl = computed(() =>
   functionControlPlane.selectedEndpoint.value
@@ -133,7 +134,7 @@ onMounted(() => {
     />
     <UCard
       title="Function Endpoints"
-      description="Select an endpoint to inspect or edit it. New endpoints are private and need a deployment before they can run."
+      description="Configure endpoint access and runtime settings. New endpoints are private and need a deployment before they can run."
       :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
     >
       <UTable
@@ -142,9 +143,13 @@ onMounted(() => {
         :loading="functionControlPlane.busy.value"
         :inert="editing || functionControlPlane.busy.value"
         :get-row-id="(endpoint) => endpoint.id"
-        :row-selection="{ [selectedEndpointId]: true }"
-        caption="Serverless endpoints. Select a row to manage it."
-        @select="(_event, row) => (selectedEndpointId = row.original.id)"
+        caption="Serverless endpoints and management actions."
+        @select="
+          (_event, row) => {
+            selectedEndpointId = row.original.id;
+            editEndpoint();
+          }
+        "
       >
         <template #name-cell="{ row }"
           ><span class="font-medium text-highlighted">{{ row.original.name }}</span></template
@@ -161,6 +166,46 @@ onMounted(() => {
             :color="row.original.activeDeploymentId ? 'success' : 'neutral'"
             variant="subtle"
         /></template>
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: functionControlPlane.busy.value,
+                  onSelect: () => {
+                    selectedEndpointId = row.original.id;
+                    editEndpoint();
+                  },
+                },
+                ...(auth.hasScope('function:endpoint.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete Endpoint',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: functionControlPlane.busy.value,
+                        onSelect: () => {
+                          selectedEndpointId = row.original.id;
+                          confirmingDelete = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.name}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Function Endpoints"
@@ -174,21 +219,6 @@ onMounted(() => {
       <template #footer>
         <UButton
           v-if="auth.hasScope('function:endpoint.write')"
-          label="Delete Endpoint"
-          color="error"
-          variant="outline"
-          :disabled="functionControlPlane.busy.value || !selectedEndpointId"
-          @click="confirmingDelete = true"
-        />
-        <UButton
-          label="Endpoint Details"
-          color="neutral"
-          variant="outline"
-          :disabled="functionControlPlane.busy.value || !selectedEndpointId"
-          @click="editEndpoint"
-        />
-        <UButton
-          v-if="auth.hasScope('function:endpoint.write')"
           label="New Endpoint"
           icon="i-lucide-plus"
           :disabled="functionControlPlane.busy.value"
@@ -196,83 +226,141 @@ onMounted(() => {
         />
       </template>
     </UCard>
-    <UCard
-      v-if="editing"
-      :title="selectedEndpointId ? 'Manage Function Endpoint' : 'Create Function Endpoint'"
+    <UModal
+      :open="!!editing"
+      :dismissible="!functionControlPlane.busy.value"
+      :title="selectedEndpointId ? 'Endpoint Details' : 'New Endpoint'"
       description="Configure the endpoint identity and runtime settings. Changing settings on a deployed endpoint may require redeployment."
-      :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-    >
-      <UForm
-        id="function-endpoint"
-        ref="endpointFormElement"
-        :state="endpointForm"
-        :validate="validateEndpoint"
-        :disabled="functionControlPlane.busy.value || !auth.hasScope('function:endpoint.write')"
-        class="space-y-5"
-        @submit="saveEndpoint"
-      >
-        <UFormField
-          label="Name"
-          name="name"
-          description="Used in the invocation URL. Names cannot be changed after creation."
-          required
-          ><UInput v-model="endpointForm.name" :disabled="!!selectedEndpointId" class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Description"
-          name="description"
-          description="Optional explanation of what this endpoint does."
-          ><UTextarea v-model="endpointForm.description" class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Runtime"
-          name="runtime"
-          description="workerd is the runtime registered by this service. New endpoints can inherit the configured default."
-          required
-          ><USelect
-            v-model="endpointForm.runtime"
-            :items="[
-              ...(!selectedEndpointId ? [{ label: 'Service Default', value: 'default' }] : []),
-              ...runtimeOptions.map((value) => ({ label: value, value })),
-            ]"
-            class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Entrypoint"
-          name="entrypoint"
-          description="The relative file path to include in every deployment, such as index.js."
-          required
-          ><UInput v-model="endpointForm.entrypoint" class="w-full"
-        /></UFormField>
-        <USwitch
-          v-if="!selectedEndpointId"
-          v-model="endpointForm.overrideLimits"
-          label="Customize Resource Settings"
-          description="Leave off to inherit service defaults when the endpoint is created."
-        />
-        <div v-if="endpointForm.overrideLimits" class="grid items-end gap-4 sm:grid-cols-2">
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            editing = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert" />
+        <UForm
+          id="function-endpoint"
+          ref="endpointFormElement"
+          :state="endpointForm"
+          :validate="validateEndpoint"
+          :disabled="functionControlPlane.busy.value || !auth.hasScope('function:endpoint.write')"
+          class="space-y-5"
+          @submit="saveEndpoint"
+        >
           <UFormField
-            label="Memory Setting (MB)"
-            name="memoryLimitMb"
-            description="The memory setting stored with this endpoint."
+            label="Name"
+            name="name"
+            description="Used in the invocation URL. Names cannot be changed after creation."
             required
-            ><UInputNumber v-model="endpointForm.memoryLimitMb" :min="1" class="w-full"
+            ><UInput v-model="endpointForm.name" :disabled="!!selectedEndpointId" class="w-full"
           /></UFormField>
           <UFormField
-            label="Timeout (Seconds)"
-            name="timeoutSeconds"
-            description="The timeout setting stored with this endpoint."
-            required
-            ><UInputNumber v-model="endpointForm.timeoutSeconds" :min="1" class="w-full"
+            label="Description"
+            name="description"
+            description="Optional explanation of what this endpoint does."
+            ><UTextarea v-model="endpointForm.description" class="w-full"
           /></UFormField>
-        </div>
-        <USwitch
-          v-model="endpointForm.isPublic"
-          label="Public Endpoint"
-          description="Allow unauthenticated invocation. Private endpoints require a Service Account with function:endpoint.invoke scope."
-        />
-      </UForm>
-      <template #footer
+          <UFormField
+            label="Runtime"
+            name="runtime"
+            description="workerd is the runtime registered by this service. New endpoints can inherit the configured default."
+            required
+            ><USelect
+              v-model="endpointForm.runtime"
+              :items="[
+                ...(!selectedEndpointId ? [{ label: 'Service Default', value: 'default' }] : []),
+                ...runtimeOptions.map((value) => ({ label: value, value })),
+              ]"
+              class="w-full"
+          /></UFormField>
+          <UFormField
+            label="Entrypoint"
+            name="entrypoint"
+            description="The relative file path to include in every deployment, such as index.js."
+            required
+            ><UInput v-model="endpointForm.entrypoint" class="w-full"
+          /></UFormField>
+          <USwitch
+            v-if="!selectedEndpointId"
+            v-model="endpointForm.overrideLimits"
+            label="Customize Resource Settings"
+            description="Leave off to inherit service defaults when the endpoint is created."
+          />
+          <div v-if="endpointForm.overrideLimits" class="grid items-end gap-4 sm:grid-cols-2">
+            <UFormField
+              label="Memory Setting (MB)"
+              name="memoryLimitMb"
+              description="The memory setting stored with this endpoint."
+              required
+              ><UInputNumber v-model="endpointForm.memoryLimitMb" :min="1" class="w-full"
+            /></UFormField>
+            <UFormField
+              label="Timeout (Seconds)"
+              name="timeoutSeconds"
+              description="The timeout setting stored with this endpoint."
+              required
+              ><UInputNumber v-model="endpointForm.timeoutSeconds" :min="1" class="w-full"
+            /></UFormField>
+          </div>
+          <USwitch
+            v-model="endpointForm.isPublic"
+            label="Public Endpoint"
+            description="Allow unauthenticated invocation. Private endpoints require a Service Account with function:endpoint.invoke scope."
+          />
+        </UForm>
+        <section v-if="functionControlPlane.selectedEndpoint.value" class="space-y-5">
+          <header class="space-y-2">
+            <USeparator label="Endpoint Access" position="start" />
+            <p class="text-sm text-muted">
+              The gateway invocation URL. Deploy code before invoking this endpoint.
+            </p>
+          </header>
+          <code class="break-all text-sm">{{ invocationUrl }}</code>
+          <p class="text-sm text-muted">
+            Private endpoints require Service Account authentication; Console session cookies alone
+            do not grant invocation access.
+          </p>
+          <div class="flex flex-wrap justify-end gap-3">
+            <UButton
+              :to="{
+                path: '/functions/deployments',
+                query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
+              }"
+              label="Deployments"
+              color="neutral"
+              variant="outline"
+            />
+            <UButton
+              :to="{
+                path: '/functions/executions',
+                query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
+              }"
+              label="Execution Logs"
+              color="neutral"
+              variant="outline"
+            />
+            <UButton
+              v-if="
+                functionControlPlane.selectedEndpoint.value.isPublic &&
+                functionControlPlane.selectedEndpoint.value.activeDeploymentId
+              "
+              :to="invocationUrl"
+              target="_blank"
+              label="Open Public Endpoint"
+              color="neutral"
+              variant="outline"
+            />
+          </div></section></template
+      ><template #footer
         ><UButton
           label="Cancel"
           color="neutral"
@@ -285,56 +373,21 @@ onMounted(() => {
           :label="selectedEndpointId ? 'Save Endpoint' : 'Create Endpoint'"
           :disabled="functionControlPlane.busy.value"
       /></template>
-    </UCard>
-    <UCard
-      v-if="functionControlPlane.selectedEndpoint.value"
-      title="Endpoint Access"
-      description="The gateway invocation URL. Deploy code before invoking this endpoint."
-      :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-    >
-      <code class="break-all text-sm">{{ invocationUrl }}</code>
-      <p class="mt-3 text-sm text-muted">
-        Private endpoints require Service Account authentication; Console session cookies alone do
-        not grant invocation access.
-      </p>
-      <template #footer>
-        <UButton
-          :to="{
-            path: '/functions/deployments',
-            query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
-          }"
-          label="Deployments"
-          color="neutral"
-          variant="outline"
-        />
-        <UButton
-          :to="{
-            path: '/functions/executions',
-            query: { endpoint: functionControlPlane.selectedEndpoint.value.id },
-          }"
-          label="Execution Logs"
-          color="neutral"
-          variant="outline"
-        />
-        <UButton
-          v-if="
-            functionControlPlane.selectedEndpoint.value.isPublic &&
-            functionControlPlane.selectedEndpoint.value.activeDeploymentId
-          "
-          :to="invocationUrl"
-          target="_blank"
-          label="Open Public Endpoint"
-          color="neutral"
-          variant="outline"
-        />
-      </template>
-    </UCard>
+    </UModal>
+
     <UModal
       v-model:open="confirmingDelete"
       title="Delete Function Endpoint?"
       description="This removes the endpoint, deployment history, execution records, and custom-domain route mappings. This cannot be undone."
       :dismissible="!functionControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      ><template v-if="functionControlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert" /></template
       ><template #footer
         ><UButton
           label="Cancel"

@@ -10,6 +10,9 @@ import Hooks from "../../pages/control-plane/event-hooks.vue";
 import Events from "../../pages/control-plane/events.vue";
 import {
   action,
+  pageDOM,
+  menuAction,
+  activeDialog,
   createOption,
   field,
   flushPromises,
@@ -59,7 +62,7 @@ describe("Console failures and model rendering", () => {
     page.controlPlane.config.value = null;
     await nextTick();
     await wrapper.setupState.saveSettings();
-    expect(wrapper.text()).toContain("Settings Unavailable");
+    expect(pageDOM().text()).toContain("Settings Unavailable");
 
     await consoleUser.serviceAccount.console.config.update(original);
   });
@@ -71,9 +74,9 @@ describe("Console failures and model rendering", () => {
     try {
       await field("Allowed IP Addresses and CIDRs").setValue("127.0.0.1, ::1\n");
       await field("Audit Retention (Days)").setValue("30");
-      await wrapper.get("#platform-settings").trigger("submit");
+      await pageDOM().get("#platform-settings").trigger("submit");
       await settle(page.controlPlane);
-      expect(wrapper.text()).toContain("Platform Settings Saved");
+      expect(pageDOM().text()).toContain("Platform Settings Saved");
       expect(await consoleUser.serviceAccount.core.config.get()).toEqual({
         allowedCidrs: ["127.0.0.1", "::1"],
         auditRetentionDays: 30,
@@ -88,10 +91,10 @@ describe("Console failures and model rendering", () => {
       page.controlPlane.coreConfig.value = null;
       await nextTick();
       await wrapper.setupState.savePlatformSettings();
-      expect(wrapper.text()).toContain("Settings Unavailable");
+      expect(pageDOM().text()).toContain("Settings Unavailable");
       page.controlPlane.busy.value = true;
       await nextTick();
-      expect(wrapper.text()).toContain("Loading Platform Settings");
+      expect(pageDOM().text()).toContain("Loading Platform Settings");
       page.controlPlane.busy.value = false;
     } finally {
       await consoleUser.serviceAccount.core.config.update(original);
@@ -101,15 +104,16 @@ describe("Console failures and model rendering", () => {
   it("preserves failed user forms and handles stale records", async () => {
     const page = await mountPage(Users);
     wrapper = page.wrapper;
+    await action("New Console User").trigger("click");
     const setup = wrapper.setupState;
     await setup.saveUser();
     await setup.resetPassword();
     await setup.confirmAction();
     await field("Email").setValue(consoleUser.user.email);
     await field("Initial Password").setValue(consoleUser.password);
-    await wrapper.get("#console-user-form").trigger("submit");
+    await pageDOM().get("#console-user-form").trigger("submit");
     await settle(page.controlPlane);
-    expect(wrapper.text()).toContain("Console user already exists");
+    expect(pageDOM().text()).toContain("Console user already exists");
     await setup.editUser(crypto.randomUUID());
     const email = `session-${crypto.randomUUID()}@example.com`;
     const user = await consoleUser.serviceAccount.console.users.create({
@@ -127,25 +131,38 @@ describe("Console failures and model rendering", () => {
     expect(field("New Password").element).toHaveProperty("value", "short");
     await action("Revoke All Sessions").trigger("click");
     await flushPromises();
-    await action("Confirm", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Confirm", activeDialog()!).trigger("click");
     await settle(page.controlPlane);
     expect(page.controlPlane.sessions.value).toEqual([]);
     page.controlPlane.users.value = [{ ...user, mfaEnabled: true, lastSignedInAt: new Date() }];
     await nextTick();
-    expect(wrapper.text()).toContain("Enrolled");
-    await action("Delete User").trigger("click");
+    expect(pageDOM().text()).toContain("Enrolled");
+    await menuAction(
+      "Delete User",
+      pageDOM()
+        .findAll("tbody tr")
+        .find((row) => row.text().includes(user.email))!.element,
+    );
     await flushPromises();
-    wrapper.findComponent(UModal).vm.$emit("update:open", true);
+    wrapper
+      .findAllComponents(UModal)
+      .find((modal) => modal.props("title") === "Delete Console User?")!
+      .vm.$emit("update:open", true);
     await nextTick();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Close", activeDialog()!).trigger("click");
     await flushPromises();
-    await action("Delete User").trigger("click");
+    await menuAction(
+      "Delete User",
+      pageDOM()
+        .findAll("tbody tr")
+        .find((row) => row.text().includes(user.email))!.element,
+    );
     await flushPromises();
     await consoleUser.serviceAccount.console.users.delete(user.id);
-    await action("Confirm", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Confirm", activeDialog()!).trigger("click");
     await settle(page.controlPlane);
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+    expect(activeDialog()).not.toBeNull();
+    await action("Cancel", activeDialog()!).trigger("click");
     await action("Close").trigger("click");
   });
 
@@ -160,16 +177,20 @@ describe("Console failures and model rendering", () => {
     const page = await mountPage(Accounts);
     wrapper = page.wrapper;
     const setup = wrapper.setupState;
-    const accountRow = wrapper.findAll("tr").find((row) => row.text().includes(account.keyPrefix))!;
-    await action("Manage", accountRow.element).trigger("click");
+    const accountRow = pageDOM()
+      .findAll("tr")
+      .find((row) => row.text().includes(account.keyPrefix))!;
+    await menuAction("Details", accountRow.element);
     await settle(page.controlPlane);
     await field("Account Enabled").trigger("click");
     await field("Account Enabled").trigger("click");
-    expect(wrapper.text()).toContain("Console User Owned Service Account");
-    expect(wrapper.findAll("button").some((button) => button.text() === "Delete Account")).toBe(
-      false,
-    );
-    expect(wrapper.find('a[href*="/control-plane/users"]').exists()).toBe(true);
+    expect(pageDOM().text()).toContain("Console User Owned Service Account");
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Delete Account"),
+    ).toBe(false);
+    expect(pageDOM().find('a[href*="/control-plane/users"]').exists()).toBe(true);
     page.controlPlane.selectedAccount.value = {
       ...account,
       description: undefined,
@@ -186,7 +207,7 @@ describe("Console failures and model rendering", () => {
     expect(page.controlPlane.selectedAccount.value).not.toBeNull();
     await action("Cancel").trigger("click");
     await setup.editAccount(crypto.randomUUID());
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await consoleUser.serviceAccount.console.users.delete(user.id);
   });
 
@@ -204,41 +225,47 @@ describe("Console failures and model rendering", () => {
     await wrapper.setupState.editAccount(account.id);
     await consoleUser.serviceAccount.core.service_accounts.delete(account.id);
     await wrapper.setupState.saveAccount();
-    expect(wrapper.text()).toContain("Request Failed");
-    await action("Delete Account").trigger("click");
+    expect(pageDOM().text()).toContain("Request Failed");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-    await action("Delete Account").trigger("click");
     await flushPromises();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Cancel", activeDialog()!).trigger("click");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Delete Account").trigger("click");
     await flushPromises();
-    await action("Delete Account", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Close", activeDialog()!).trigger("click");
+    await flushPromises();
+    wrapper.setupState.confirmingDelete.value = true;
+    await flushPromises();
+    await flushPromises();
+    await action("Delete Account", activeDialog()!).trigger("click");
     await settle(page.controlPlane);
-    expect(wrapper.text()).toContain("Request Failed");
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+    expect(pageDOM().text()).toContain("Request Failed");
+    await action("Cancel", activeDialog()!).trigger("click");
   });
 
   it("validates SQL hooks and preserves failed edits", async () => {
     const page = await mountPage(Hooks);
     wrapper = page.wrapper;
+    await action("New Event Hook").trigger("click");
     const setup = wrapper.setupState;
     await selectOption("Delivery Driver", "SQL Function");
     await field("Name").setValue("SQL Integration Hook");
     await createOption("Event Types", "console.user.created");
     await field("SQL Function Name").setValue("public.console_integration_hook");
-    await wrapper.get("#event-hook-form").trigger("submit");
+    await pageDOM().get("#event-hook-form").trigger("submit");
     await settle(page.controlPlane);
     const hook = (await consoleUser.serviceAccount.core.event_hooks.list()).find(
       (hook) => hook.name === "SQL Integration Hook",
     )!;
     await selectOption("Driver Filter", "SQL");
     await selectOption("Status Filter", "Enabled");
-    await wrapper.get("#event-hook-filters").trigger("submit");
+    await pageDOM().get("#event-hook-filters").trigger("submit");
     await settle(page.controlPlane);
-    const hookRow = wrapper.findAll("tr").find((row) => row.text().includes(hook.name))!;
-    await action("Manage", hookRow.element).trigger("click");
+    const hookRow = pageDOM()
+      .findAll("tr")
+      .find((row) => row.text().includes(hook.name))!;
+    await menuAction("Details", hookRow.element);
     await settle(page.controlPlane);
     const loading = page.controlPlane.load("event-hooks");
     await setup.saveHook();
@@ -253,20 +280,22 @@ describe("Console failures and model rendering", () => {
     expect(wrapper.setupState.hookForm.eventTypes).toEqual([]);
     await createOption("Event Types", "*");
     await field("SQL Function Name").setValue("invalid-function-name");
-    await wrapper.get("#event-hook-form").trigger("submit");
+    await pageDOM().get("#event-hook-form").trigger("submit");
     await settle(page.controlPlane);
     await action("Cancel").trigger("click");
     await setup.editHook(String(hook.id));
-    await action("Delete Hook").trigger("click");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
     await flushPromises();
-    await action("Delete Hook").trigger("click");
+    await action("Close", activeDialog()!).trigger("click");
     await flushPromises();
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+    wrapper.setupState.confirmingDelete.value = true;
+    await flushPromises();
+    await flushPromises();
+    await action("Cancel", activeDialog()!).trigger("click");
     await consoleUser.serviceAccount.core.event_hooks.delete(String(hook.id));
     await setup.deleteHook();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await setup.editHook(crypto.randomUUID());
   });
 
@@ -294,7 +323,7 @@ describe("Console failures and model rendering", () => {
     const page = await mountPage(Hooks);
     wrapper = page.wrapper;
     await wrapper.setupState.editHook(String(hook.id));
-    expect(wrapper.text()).toContain("Pending / Failed");
+    expect(pageDOM().text()).toContain("Pending / Failed");
     await consoleUser.serviceAccount.core.event_hooks.update(String(hook.id), {
       httpTargetUrl: `${webhookUrl}/success`,
     });
@@ -310,7 +339,7 @@ describe("Console failures and model rendering", () => {
       { timeout: 30000 },
     );
     await wrapper.setupState.editHook(String(hook.id));
-    expect(wrapper.text()).toContain("Delivered");
+    expect(pageDOM().text()).toContain("Delivered");
     await consoleUser.serviceAccount.core.event_hooks.delete(String(hook.id));
   });
 
@@ -347,7 +376,7 @@ describe("Console failures and model rendering", () => {
     await nextTick();
     await action("Metadata").trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("Not Recorded");
+    expect(pageDOM().text()).toContain("Not Recorded");
     page.controlPlane.selectedEvent.value = { ...event, data: null, metadata: null };
     await nextTick();
     expect(setup.eventData.value).toEqual([]);
@@ -358,9 +387,9 @@ describe("Console failures and model rendering", () => {
     await selectOption("Actor Type", "User");
     await field("Actor ID").setValue(consoleUser.user.id);
     await field("Resource ID").setValue(event.resourceId || "missing");
-    await wrapper.get("form").trigger("submit");
+    await pageDOM().get("form").trigger("submit");
     await settle(page.controlPlane);
     await page.controlPlane.selectEvent("invalid-id");
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 });

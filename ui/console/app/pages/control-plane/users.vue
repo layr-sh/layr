@@ -3,6 +3,7 @@ import type { TableColumn } from "@nuxt/ui";
 import type { ConsoleControlPlaneModels } from "layr-client";
 
 const auth = useAuth();
+const editorOpen = ref(false);
 const route = useRoute();
 const client = useClient();
 const controlPlane = useControlPlane(client.value.core.cp, client.value.console.cp);
@@ -67,6 +68,7 @@ const sessionColumns: TableColumn<ConsoleControlPlaneModels.Session>[] = [
   { id: "actions" },
 ];
 function closeUser() {
+  editorOpen.value = false;
   controlPlane.selectedUser.value = null;
   userForm.email = "";
   userForm.password = "";
@@ -78,6 +80,7 @@ async function createUser() {
 async function editUser(userId: string) {
   userForm.password = "";
   if (await controlPlane.selectUser(userId)) {
+    editorOpen.value = true;
     userForm.email = controlPlane.selectedUser.value!.email;
     userForm.isEnabled = controlPlane.selectedUser.value!.isEnabled;
   }
@@ -129,6 +132,11 @@ onMounted(async () => {
         :data="controlPlane.users.value"
         :columns="userColumns"
         :loading="controlPlane.busy.value"
+        @select="
+          (_event, row) => {
+            editUser(row.original.id);
+          }
+        "
       >
         <template #isEnabled-cell="cell"
           ><UBadge :color="cell.row.original.isEnabled ? 'success' : 'neutral'" variant="subtle">{{
@@ -151,93 +159,243 @@ onMounted(async () => {
           cell.row.original.lastSignedInAt?.toLocaleString() || "Never"
         }}</template>
         <template #actions-cell="cell"
-          ><UButton
-            label="Manage"
-            color="neutral"
-            variant="outline"
-            :disabled="controlPlane.busy.value"
-            @click="editUser(cell.row.original.id)"
-        /></template>
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: controlPlane.busy.value,
+                  onSelect: () => editUser(cell.row.original.id),
+                },
+                ...(auth.hasScope('console:user.write') &&
+                cell.row.original.id !== auth.state.value?.user.id &&
+                !(
+                  cell.row.original.isEnabled &&
+                  rootUserIds.has(cell.row.original.id) &&
+                  !controlPlane.users.value.some(
+                    (user) =>
+                      user.id !== cell.row.original.id &&
+                      user.isEnabled &&
+                      rootUserIds.has(user.id),
+                  )
+                )
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete User',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: controlPlane.busy.value,
+                        onSelect: () => {
+                          confirmation = {
+                            title: 'Delete Console User?',
+                            description:
+                              'This permanently removes the Console User, its linked Service Account, and its sessions. This cannot be undone.',
+                            action: () => controlPlane.deleteUser(cell.row.original.id),
+                          };
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${cell.row.original.email}`"
+              />
+            </UDropdownMenu></div
+        ></template>
       </UTable>
-    </UCard>
-    <UCard
-      v-if="controlPlane.selectedUser.value || auth.hasScope('console:user.write')"
-      :title="controlPlane.selectedUser.value ? 'Manage Console User' : 'Add Console User'"
+      <template #footer
+        ><div class="flex justify-end">
+          <UButton
+            v-if="auth.hasScope('console:user.write')"
+            label="New Console User"
+            icon="i-lucide-plus"
+            :disabled="controlPlane.busy.value"
+            @click="
+              closeUser();
+              editorOpen = true;
+            "
+          /></div></template
+    ></UCard>
+    <UModal
+      :open="!!editorOpen"
+      :dismissible="!controlPlane.busy.value"
+      :title="controlPlane.selectedUser.value ? 'Console User Details' : 'New Console User'"
       description="Manage this Console User's identity and access."
-      :ui="{ body: 'space-y-5', footer: 'flex flex-wrap items-center justify-end gap-3' }"
-    >
-      <UForm
-        id="console-user-form"
-        :state="userForm"
-        :disabled="controlPlane.busy.value || !auth.hasScope('console:user.write')"
-        class="space-y-5"
-        @submit="controlPlane.selectedUser.value ? saveUser() : createUser()"
-      >
-        <UFormField label="Email" required
-          ><UInput v-model="userForm.email" type="email" autocomplete="off" required class="w-full"
-        /></UFormField>
-        <UFormField v-if="!controlPlane.selectedUser.value" label="Initial Password" required
-          ><UInput
-            v-model="userForm.password"
-            type="password"
-            autocomplete="new-password"
-            required
-            class="w-full"
-        /></UFormField>
-        <USwitch
-          v-if="controlPlane.selectedUser.value"
-          v-model="userForm.isEnabled"
-          label="Account Enabled"
-          :disabled="isSelf || isLastRoot"
+      :ui="{
+        content: 'max-w-5xl',
+        body: 'space-y-6',
+        footer: 'flex flex-wrap justify-end gap-3',
+      }"
+      :close="{ disabled: controlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            closeUser();
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="controlPlane.error.value"
+          title="Request Failed"
+          :description="controlPlane.error.value"
+          color="error"
+          role="alert"
         />
-        <UAlert
-          v-if="isSelf || isLastRoot"
-          color="info"
-          title="Account Protection"
-          :description="
-            isSelf
-              ? 'You cannot disable or delete your own Console User.'
-              : 'The last enabled root Console User must retain access.'
-          "
-        />
-        <UAlert
-          v-if="linkedAccount"
-          color="neutral"
-          title="Linked Service Account"
-          :description="linkedAccount.name"
-        />
-      </UForm>
-      <template #footer>
+        <UForm
+          id="console-user-form"
+          :state="userForm"
+          :disabled="controlPlane.busy.value || !auth.hasScope('console:user.write')"
+          class="space-y-5"
+          @submit="controlPlane.selectedUser.value ? saveUser() : createUser()"
+        >
+          <UFormField label="Email" required
+            ><UInput
+              v-model="userForm.email"
+              type="email"
+              autocomplete="off"
+              required
+              class="w-full"
+          /></UFormField>
+          <UFormField v-if="!controlPlane.selectedUser.value" label="Initial Password" required
+            ><UInput
+              v-model="userForm.password"
+              type="password"
+              autocomplete="new-password"
+              required
+              class="w-full"
+          /></UFormField>
+          <USwitch
+            v-if="controlPlane.selectedUser.value"
+            v-model="userForm.isEnabled"
+            label="Account Enabled"
+            :disabled="isSelf || isLastRoot"
+          />
+          <UAlert
+            v-if="isSelf || isLastRoot"
+            color="info"
+            title="Account Protection"
+            :description="
+              isSelf
+                ? 'You cannot disable or delete your own Console User.'
+                : 'The last enabled root Console User must retain access.'
+            "
+          />
+          <UAlert
+            v-if="linkedAccount"
+            color="neutral"
+            title="Linked Service Account"
+            :description="linkedAccount.name"
+          />
+        </UForm>
+
+        <section
+          v-if="controlPlane.selectedUser.value && auth.hasScope('console:user.write')"
+          class="space-y-5"
+        >
+          <header class="space-y-2">
+            <USeparator label="Reset Password" position="start" />
+            <p class="text-sm text-muted">
+              Set a new password and revoke this Console User's existing sessions.
+            </p>
+          </header>
+          <UForm
+            id="console-password-form"
+            :state="userForm"
+            :disabled="controlPlane.busy.value"
+            class="space-y-5"
+            @submit="resetPassword"
+          >
+            <UFormField label="New Password" required
+              ><UInput
+                v-model="userForm.password"
+                type="password"
+                autocomplete="new-password"
+                required
+                class="w-full"
+            /></UFormField>
+          </UForm>
+          <div class="flex flex-wrap justify-end gap-3">
+            <UButton
+              type="submit"
+              form="console-password-form"
+              label="Reset Password"
+              color="neutral"
+              variant="outline"
+              :disabled="controlPlane.busy.value"
+            />
+          </div>
+        </section>
+        <section v-if="controlPlane.selectedUser.value" class="space-y-5">
+          <header class="space-y-2">
+            <USeparator label="Active Sessions" position="start" />
+            <p class="text-sm text-muted">
+              Review devices and revoke access for this Console User.
+            </p>
+          </header>
+          <UTable
+            :data="controlPlane.sessions.value"
+            :columns="sessionColumns"
+            :loading="controlPlane.busy.value"
+            :ui="{ th: 'whitespace-nowrap' }"
+          >
+            <template #expiresAt-cell="cell">{{
+              cell.row.original.expiresAt.toLocaleString()
+            }}</template>
+            <template #actions-cell="cell"
+              ><UButton
+                v-if="auth.hasScope('console:user.write')"
+                label="Revoke"
+                color="error"
+                variant="ghost"
+                :disabled="controlPlane.busy.value"
+                @click="
+                  confirmation = {
+                    title: 'Revoke Session?',
+                    description: 'The device will need to sign in again.',
+                    action: () =>
+                      controlPlane.revokeSession(cell.row.original.userId, cell.row.original.id),
+                  }
+                "
+            /></template>
+          </UTable>
+          <div class="flex flex-wrap justify-end gap-3">
+            <UButton
+              v-if="auth.hasScope('console:user.write')"
+              label="Revoke All Sessions"
+              color="error"
+              variant="outline"
+              :disabled="controlPlane.busy.value || !controlPlane.sessions.value.length"
+              @click="
+                confirmation = {
+                  title: 'Revoke All Sessions?',
+                  description:
+                    'This signs the user out of all devices, including this browser if this is your account.',
+                  action: () => controlPlane.revokeSession(controlPlane.selectedUser.value!.id),
+                }
+              "
+            />
+          </div>
+        </section> </template
+      ><template #footer>
         <UButton
           v-if="linkedAccount && auth.hasScope('core:service-account.read')"
-          label="Manage Service Account"
+          label="Service Account Details"
           color="neutral"
           variant="outline"
           :to="{ path: '/control-plane/service-accounts', query: { account: linkedAccount.id } }"
         />
+
         <UButton
-          v-if="
-            auth.hasScope('console:user.write') &&
-            controlPlane.selectedUser.value &&
-            !isSelf &&
-            !isLastRoot
-          "
-          label="Delete User"
-          color="error"
-          variant="outline"
-          :disabled="controlPlane.busy.value"
-          @click="
-            confirmation = {
-              title: 'Delete Console User?',
-              description:
-                'This permanently removes the Console User, its linked Service Account, and its sessions. This cannot be undone.',
-              action: () => controlPlane.deleteUser(controlPlane.selectedUser.value!.id),
-            }
-          "
-        />
-        <UButton
-          v-if="controlPlane.selectedUser.value"
-          label="Close"
+          label="Cancel"
           color="neutral"
           variant="outline"
           :disabled="controlPlane.busy.value"
@@ -251,101 +409,27 @@ onMounted(async () => {
           :disabled="controlPlane.busy.value"
         />
       </template>
-    </UCard>
-    <template v-if="controlPlane.selectedUser.value">
-      <UCard
-        v-if="auth.hasScope('console:user.write')"
-        title="Reset Password"
-        description="Set a new password and revoke this Console User's existing sessions."
-        :ui="{ footer: 'flex justify-end' }"
-      >
-        <UForm
-          id="console-password-form"
-          :state="userForm"
-          :disabled="controlPlane.busy.value"
-          class="space-y-5"
-          @submit="resetPassword"
-        >
-          <UFormField label="New Password" required
-            ><UInput
-              v-model="userForm.password"
-              type="password"
-              autocomplete="new-password"
-              required
-              class="w-full"
-          /></UFormField>
-        </UForm>
-        <template #footer
-          ><UButton
-            type="submit"
-            form="console-password-form"
-            label="Reset Password"
-            color="neutral"
-            variant="outline"
-            :disabled="controlPlane.busy.value"
-        /></template>
-      </UCard>
-      <UCard
-        title="Active Sessions"
-        description="Review devices and revoke access for this Console User."
-        :ui="{ footer: 'flex justify-end' }"
-      >
-        <UTable
-          :data="controlPlane.sessions.value"
-          :columns="sessionColumns"
-          :loading="controlPlane.busy.value"
-          :ui="{ th: 'whitespace-nowrap' }"
-        >
-          <template #expiresAt-cell="cell">{{
-            cell.row.original.expiresAt.toLocaleString()
-          }}</template>
-          <template #actions-cell="cell"
-            ><UButton
-              v-if="auth.hasScope('console:user.write')"
-              label="Revoke"
-              color="error"
-              variant="ghost"
-              :disabled="controlPlane.busy.value"
-              @click="
-                confirmation = {
-                  title: 'Revoke Session?',
-                  description: 'The device will need to sign in again.',
-                  action: () =>
-                    controlPlane.revokeSession(cell.row.original.userId, cell.row.original.id),
-                }
-              "
-          /></template>
-        </UTable>
-        <template #footer>
-          <UButton
-            v-if="auth.hasScope('console:user.write')"
-            label="Revoke All Sessions"
-            color="error"
-            variant="outline"
-            :disabled="controlPlane.busy.value || !controlPlane.sessions.value.length"
-            @click="
-              confirmation = {
-                title: 'Revoke All Sessions?',
-                description:
-                  'This signs the user out of all devices, including this browser if this is your account.',
-                action: () => controlPlane.revokeSession(controlPlane.selectedUser.value!.id),
-              }
-            "
-          />
-        </template>
-      </UCard>
-    </template>
+    </UModal>
+
     <UModal
       :open="!!confirmation"
       :title="confirmation?.title"
       :description="confirmation?.description"
       :dismissible="!controlPlane.busy.value"
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: controlPlane.busy.value }"
       @update:open="
         (open) => {
           if (!open) confirmation = null;
         }
       "
-    >
+      ><template v-if="controlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="controlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer
         ><UButton
           label="Cancel"

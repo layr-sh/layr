@@ -12,6 +12,9 @@ import Domains from "../../pages/functions/domains.vue";
 import useFunctionControlPlane from "../../composables/use-function-control-plane";
 import {
   action,
+  pageDOM,
+  activeDialog,
+  menuAction,
   field,
   flushPromises,
   mountPage,
@@ -49,7 +52,7 @@ describe("Function permissions and failures", () => {
       wrapper.unmount();
       await router.push(scope === "function:stats.read" ? "/functions/endpoints" : "/functions");
       ({ wrapper } = await mountPage(Layout));
-      expect(wrapper.text()).toContain("Access Restricted");
+      expect(pageDOM().text()).toContain("Access Restricted");
       wrapper.unmount();
     }
     await router.push("/");
@@ -65,24 +68,24 @@ describe("Function permissions and failures", () => {
     await signInConsoleUser(["function:config.read"]);
     ({ wrapper } = await mountPage(Configuration));
     expect(field("Default Runtime").attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).not.toContain("Save Function Config");
+    expect(pageDOM().text()).not.toContain("Save Function Config");
     expect(
       await wrapper.setupState.functionControlPlane.saveConfig(
         wrapper.setupState.functionControlPlane.config.value,
       ),
     ).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await wrapper.setupState.save();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     const state = wrapper.setupState.functionControlPlane;
     state.config.value = null;
     await nextTick();
     await wrapper.setupState.save();
     expect(wrapper.setupState.validateConfig()).toEqual([]);
-    expect(wrapper.text()).toContain("Configuration Unavailable");
+    expect(pageDOM().text()).toContain("Configuration Unavailable");
     state.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Function Configuration");
+    expect(pageDOM().text()).toContain("Loading Function Configuration");
     await wrapper.setupState.load();
     expect(wrapper.setupState.allowedKeys.value).toEqual([]);
     expect(wrapper.setupState.compatibilityFlags.value).toEqual([]);
@@ -96,10 +99,10 @@ describe("Function permissions and failures", () => {
     expect(wrapper.setupState.runtimes.value).toEqual([]);
     wrapper.setupState.functionControlPlane.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Function Statistics");
+    expect(pageDOM().text()).toContain("Loading Function Statistics");
     wrapper.setupState.functionControlPlane.busy.value = false;
     expect(await wrapper.setupState.functionControlPlane.load("statistics")).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("validates every configuration field before submission", async () => {
@@ -118,10 +121,10 @@ describe("Function permissions and failures", () => {
     wrapper.setupState.allowedKeys.value = ["BAD KEY"];
     wrapper.setupState.compatibilityFlags.value = ["--bad flag"];
     await wrapper.setupState.save();
-    expect(wrapper.text()).toContain("Only the workerd runtime is available");
-    expect(wrapper.text()).toContain("Use environment variable names");
-    expect(wrapper.text()).toContain("Use compatibility flag names");
-    expect(wrapper.text()).toContain("Choose a valid compatibility date");
+    expect(pageDOM().text()).toContain("Only the workerd runtime is available");
+    expect(pageDOM().text()).toContain("Use environment variable names");
+    expect(pageDOM().text()).toContain("Use compatibility flag names");
+    expect(pageDOM().text()).toContain("Choose a valid compatibility date");
     config.customDomainApexIp = "300.1.1.1";
     expect(
       wrapper.setupState
@@ -173,29 +176,30 @@ describe("Function permissions and failures", () => {
       wrapper.setupState.endpointForm.memoryLimitMb = 0;
       wrapper.setupState.endpointForm.timeoutSeconds = 0;
       await wrapper.setupState.saveEndpoint();
-      expect(wrapper.text()).toContain("Use a relative entrypoint");
-      expect(wrapper.text()).toContain("Enter a positive whole number");
+      expect(pageDOM().text()).toContain("Use a relative entrypoint");
+      expect(pageDOM().text()).toContain("Enter a positive whole number");
       await field("Name").setValue(endpoint.name);
       await field("Entrypoint").setValue("index.js");
       wrapper.setupState.endpointForm.memoryLimitMb = 128;
       wrapper.setupState.endpointForm.timeoutSeconds = 30;
       await action("Create Endpoint").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Request Failed");
-      expect(wrapper.find("#function-endpoint").exists()).toBe(true);
+      expect(pageDOM().text()).toContain("Request Failed");
+      expect(pageDOM().find("#function-endpoint").exists()).toBe(true);
       wrapper.setupState.selectedEndpointId.value = crypto.randomUUID();
       await wrapper.setupState.editEndpoint();
-      expect(wrapper.text()).toContain("Request Failed");
-      await action("Delete Endpoint").trigger("click");
+      expect(pageDOM().text()).toContain("Request Failed");
+      await menuAction("Delete Endpoint");
+      wrapper.setupState.selectedEndpointId.value = crypto.randomUUID();
       await flushPromises();
-      await action("Delete Endpoint", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Delete Endpoint", activeDialog()!).trigger("click");
       await settle();
-      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()).not.toBeNull();
+      await action("Close", activeDialog()!).trigger("click");
       wrapper.setupState.functionControlPlane.endpoints.value = null;
       wrapper.setupState.functionControlPlane.busy.value = true;
       await nextTick();
-      expect(wrapper.text()).toContain("Loading Endpoints");
+      expect(pageDOM().text()).toContain("Loading Endpoints");
       wrapper.setupState.functionControlPlane.busy.value = false;
     } finally {
       await api.endpoints.delete(endpoint.id);
@@ -215,40 +219,47 @@ describe("Function permissions and failures", () => {
     try {
       await signInConsoleUser(["function:endpoint.read"]);
       ({ wrapper } = await mountPage(Endpoints));
-      await wrapper
-        .findAll("tbody tr")
-        .find((row) => row.text().includes(endpoint.name))!
-        .trigger("click");
-      await action("Endpoint Details").trigger("click");
+      await menuAction(
+        "Details",
+        pageDOM()
+          .findAll("tbody tr")
+          .find((row) => row.text().includes(endpoint.name))!.element,
+      );
       await settle();
       expect(field("Description").attributes("disabled")).toBeDefined();
       for (const label of ["New Endpoint", "Save Endpoint", "Delete Endpoint"])
-        expect(wrapper.text()).not.toContain(label);
+        expect(pageDOM().text()).not.toContain(label);
       wrapper.unmount();
       ({ wrapper } = await mountPage(Deployments));
       await selectOption("Endpoint", endpoint.name);
       await settle();
-      expect(wrapper.text()).not.toContain("New Deployment");
+      if (
+        wrapper.setupState.composing &&
+        wrapper.setupState.auth.hasScope("function:endpoint.deploy")
+      )
+        await action("New Deployment").trigger("click");
+      expect(pageDOM().text()).not.toContain("New Deployment");
       wrapper.unmount();
       ({ wrapper } = await mountPage(Domains));
-      await wrapper
-        .findAll("tbody tr")
-        .find((row) => row.text().includes(domain.domain))!
-        .trigger("click");
-      await action("Domain Details").trigger("click");
+      await menuAction(
+        "Details",
+        pageDOM()
+          .findAll("tbody tr")
+          .find((row) => row.text().includes(domain.domain))!.element,
+      );
       await settle();
       expect(field("ACME Contact Email").attributes("disabled")).toBeDefined();
       await selectOption("Route Endpoint", endpoint.name);
       await settle();
       for (const label of [
         "Save Domain",
-        "Add Domain",
+        "New Domain",
         "Delete Domain",
         "Verify DNS",
         "Attach Route",
-        "Remove Selected Route",
+        "Remove Route",
       ])
-        expect(wrapper.text()).not.toContain(label);
+        expect(pageDOM().text()).not.toContain(label);
     } finally {
       await signInConsoleUser();
       await api.domains.delete(domain.id);
@@ -266,22 +277,21 @@ describe("Function permissions and failures", () => {
     try {
       await router.push({ path: "/functions/deployments", query: { endpoint: endpoint.id } });
       ({ wrapper } = await mountPage(Deployments));
+      await action("New Deployment").trigger("click");
       await action("Source Files").trigger("keydown", { key: "Enter" });
       expect(field("File Path").element).toHaveProperty("value", "main.js");
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      expect(wrapper.text()).toContain("Include a non-empty entrypoint");
+      expect(pageDOM().text()).toContain("Include a non-empty entrypoint");
       await wrapper.setupState.reviewDeployment();
       await field("Source Code").setValue("export default {");
       await action("Review Deployment").trigger("click");
       await flushPromises();
 
-      await action("Activate Deployment", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Activate Deployment", activeDialog()!).trigger("click");
       await settle();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Deployment Failed");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("Deployment Failed");
+      await action("Close", activeDialog()!).trigger("click");
 
       wrapper.setupState.selectedDeployment.value = {
         id: crypto.randomUUID(),
@@ -290,12 +300,12 @@ describe("Function permissions and failures", () => {
         environmentVariables: null,
       };
       await nextTick();
-      await action("Roll Back to Selected Version").trigger("click");
+      wrapper.setupState.confirmingRollback.value = true;
       await flushPromises();
-      await action("Confirm Rollback", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Confirm Rollback", activeDialog()!).trigger("click");
       await settle();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Rollback Failed");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("Rollback Failed");
+      await action("Close", activeDialog()!).trigger("click");
       await wrapper.setupState.chooseEndpoint("");
       expect(wrapper.setupState.validateDeployment().length).toBeGreaterThan(0);
       await wrapper.setupState.reviewDeployment();
@@ -303,10 +313,11 @@ describe("Function permissions and failures", () => {
       wrapper.setupState.selectedDeployment.value = null;
       await wrapper.setupState.rollback();
       await wrapper.setupState.chooseEndpoint(endpoint.id);
+      if (wrapper.setupState.composing) await action("New Deployment").trigger("click");
       wrapper.setupState.deploymentForm.files[0].content = "";
       await wrapper.setupState.deploy();
       await wrapper.setupState.chooseEndpoint(crypto.randomUUID());
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().text()).toContain("Request Failed");
     } finally {
       await router.push("/");
       await api.endpoints.delete(endpoint.id);
@@ -320,27 +331,32 @@ describe("Function permissions and failures", () => {
       ({ wrapper } = await mountPage(Deployments));
       await selectOption("Endpoint", endpoint.name);
       await settle();
+      if (
+        wrapper.setupState.composing &&
+        wrapper.setupState.auth.hasScope("function:endpoint.deploy")
+      )
+        await action("New Deployment").trigger("click");
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      expect(wrapper.text()).toContain("Select a ZIP or TAR bundle");
+      expect(pageDOM().text()).toContain("Select a ZIP or TAR bundle");
       await wrapper.setupState.selectArchive(new File(["bytes"], "bundle.txt"));
       await nextTick();
       expect(wrapper.setupState.readingArchive.value).toBe(false);
-      expect(wrapper.text()).toContain("Choose a ZIP");
+      expect(pageDOM().text()).toContain("Choose a ZIP");
       wrapper.findComponent(UFileUpload).vm.$emit("reject", [new File(["bytes"], "bundle.tgz")]);
       await nextTick();
       expect(wrapper.setupState.archiveFile.value).toBeNull();
       wrapper.setupState.functionControlPlane.config.value.maxBundleSizeBytes = 3;
       await wrapper.setupState.selectArchive(new File(["four"], "bundle.zip"));
-      expect(wrapper.text()).toContain("service limit");
+      expect(pageDOM().text()).toContain("service limit");
       wrapper.setupState.functionControlPlane.config.value.maxBundleSizeBytes = 100;
       const failedFile = new File(["four"], "broken.zip");
       vi.spyOn(failedFile, "arrayBuffer").mockRejectedValueOnce(new Error("Unable to read file"));
       await wrapper.setupState.selectArchive(failedFile);
-      expect(wrapper.text()).toContain("Unable to read file");
+      expect(pageDOM().text()).toContain("Unable to read file");
       vi.spyOn(failedFile, "arrayBuffer").mockRejectedValueOnce("Read rejected");
       await wrapper.setupState.selectArchive(failedFile);
-      expect(wrapper.text()).toContain("Read rejected");
+      expect(pageDOM().text()).toContain("Read rejected");
       const delayedFile = new File(["four"], "delayed.zip");
       let complete!: (buffer: ArrayBuffer) => void;
       vi.spyOn(delayedFile, "arrayBuffer").mockImplementationOnce(
@@ -377,8 +393,8 @@ describe("Function permissions and failures", () => {
       wrapper.setupState.deploymentForm.compatibilityFlags = [];
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain("No explicit flags");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("No explicit flags");
+      await action("Close", activeDialog()!).trigger("click");
       await action("Clear Archive").trigger("click");
       expect(wrapper.setupState.deploymentForm.archive).toBeNull();
     } finally {
@@ -394,7 +410,12 @@ describe("Function permissions and failures", () => {
       ({ wrapper } = await mountPage(Deployments));
       await selectOption("Endpoint", endpoint.name);
       await settle();
-      expect(wrapper.text()).toContain("service size limits apply");
+      if (
+        wrapper.setupState.composing &&
+        wrapper.setupState.auth.hasScope("function:endpoint.deploy")
+      )
+        await action("New Deployment").trigger("click");
+      expect(pageDOM().text()).toContain("service size limits apply");
       await wrapper.setupState.editVariable();
       wrapper.setupState.removingDraftItem.value = "file";
       await wrapper.setupState.removeDraftItem();
@@ -403,7 +424,7 @@ describe("Function permissions and failures", () => {
       await action("Source Files").trigger("keydown", { key: "Enter" });
       wrapper.setupState.deploymentForm.files = [];
       await nextTick();
-      expect(wrapper.text()).toContain("No Source Files");
+      expect(pageDOM().text()).toContain("No Source Files");
       await action("Add File").trigger("click");
       await field("File Path").setValue("index.js");
       await field("Source Code").setValue("export default {};");
@@ -415,19 +436,17 @@ describe("Function permissions and failures", () => {
       await selectOption("File", "middle.js");
       expect(wrapper.setupState.selectedFileIndex.value).toBe(1);
       expect(field("File Path").element).toHaveProperty("value", "middle.js");
-      await action("Remove Selected File").trigger("click");
+      await action("Remove File").trigger("click");
       await flushPromises();
       const modal = wrapper
         .findAllComponents(UModal)
         .find((component) => component.props("title") === "Remove from Deployment Draft?")!;
       modal.vm.$emit("update:open", true);
       expect(wrapper.setupState.removingDraftItem.value).toBe("file");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Remove Selected File").trigger("click");
+      await action("Close", activeDialog()!).trigger("click");
+      await action("Remove File").trigger("click");
       await flushPromises();
-      await action("Remove from Draft", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Remove from Draft", activeDialog()!).trigger("click");
       expect(
         wrapper.setupState.deploymentForm.files.map((file: { path: string }) => file.path),
       ).toEqual(["index.js", "last.js"]);
@@ -435,38 +454,32 @@ describe("Function permissions and failures", () => {
       await flushPromises();
       await field("Variable Name").setValue("bad name");
       await wrapper.setupState.saveVariable();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
-        "Enter a unique environment variable name",
-      );
+      expect(activeDialog()!.textContent).toContain("Enter a unique environment variable name");
       wrapper.setupState.functionControlPlane.config.value = {
         allowedEnvironmentKeys: ["ALLOWED"],
       };
       await field("Variable Name").setValue("DENIED");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
       await flushPromises();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
-        "not in the service environment-key allowlist",
-      );
+      expect(activeDialog()!.textContent).toContain("not in the service environment-key allowlist");
       await field("Variable Name").setValue("ALLOWED");
       await field("Variable Value").setValue("private-value");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
       await vi.waitFor(() => expect(wrapper.setupState.editingVariable.value).toBe(false));
       expect(wrapper.setupState.deploymentForm.variables).toEqual([
         { name: "ALLOWED", value: "private-value" },
       ]);
-      expect(wrapper.text()).not.toContain("private-value");
+      expect(pageDOM().text()).not.toContain("private-value");
       await action("Add Variable").trigger("click");
       await flushPromises();
       await field("Variable Name").setValue("ALLOWED");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
       await flushPromises();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
-        "Enter a unique environment variable name",
-      );
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("Enter a unique environment variable name");
+      await action("Cancel", activeDialog()!).trigger("click");
       await action("Add Variable").trigger("click");
       await flushPromises();
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Close", activeDialog()!).trigger("click");
       wrapper.setupState.functionControlPlane.config.value = null;
       wrapper.setupState.variableForm.name = "FREE_KEY";
       expect(wrapper.setupState.validateVariable()).toEqual([]);
@@ -491,18 +504,18 @@ describe("Function permissions and failures", () => {
       await wrapper.setupState.attachRoute();
       await wrapper.setupState.deleteRoute();
       await wrapper.setupState.saveDomain();
-      await action("Add Domain").trigger("click");
+      await action("New Domain").trigger("click");
       await action("Cancel").trigger("click");
-      await action("Add Domain").trigger("click");
+      await action("New Domain").trigger("click");
       await field("Domain").setValue("https://invalid");
       await field("ACME Contact Email").setValue("invalid");
       await wrapper.setupState.saveDomain();
-      expect(wrapper.text()).toContain("Enter a hostname");
+      expect(pageDOM().text()).toContain("Enter a hostname");
       await field("Domain").setValue(domain.domain);
       await field("ACME Contact Email").setValue("");
       await action("Save Domain").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().text()).toContain("Request Failed");
       wrapper.setupState.domainId.value = domain.id;
       await wrapper.setupState.editDomain();
       wrapper.setupState.functionControlPlane.selectedDomain.value.tlsErrorMessage =
@@ -510,20 +523,22 @@ describe("Function permissions and failures", () => {
       wrapper.setupState.functionControlPlane.selectedDomain.value.requiredDnsRecords = undefined;
       wrapper.setupState.functionControlPlane.selectedDomain.value.status = "active";
       await nextTick();
-      expect(wrapper.text()).toContain("Certificate failed");
+      expect(pageDOM().text()).toContain("Certificate failed");
       wrapper.setupState.domainId.value = crypto.randomUUID();
       await wrapper.setupState.editDomain();
       await wrapper.setupState.verifyDomain();
-      await action("Delete Domain").trigger("click");
+      await menuAction("Delete Domain");
+      wrapper.setupState.domainId.value = crypto.randomUUID();
       await flushPromises();
-      await action("Delete Domain", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Delete Domain", activeDialog()!).trigger("click");
       await settle();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Deletion Failed");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("Deletion Failed");
+      await action("Close", activeDialog()!).trigger("click");
       await selectOption("Route Endpoint", endpoint.name);
       await settle();
+      await action("Attach Domain Route").trigger("click");
       await wrapper.setupState.attachRoute();
-      expect(wrapper.text()).toContain("Choose a DNS-verified domain");
+      expect(pageDOM().text()).toContain("Choose a DNS-verified domain");
       for (const prefix of ["bad", "/bad path", "/bad?query", "/" + "a".repeat(255)]) {
         wrapper.setupState.routeForm.pathPrefix = prefix;
         expect(
@@ -534,18 +549,18 @@ describe("Function permissions and failures", () => {
       }
       wrapper.setupState.selectedRouteId.value = crypto.randomUUID();
       await nextTick();
-      await action("Remove Selected Route").trigger("click");
+      wrapper.setupState.confirmingRemove.value = true;
       await flushPromises();
-      await action("Remove Route", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Remove Route", activeDialog()!).trigger("click");
       await settle();
-      expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Removal Failed");
-      await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+      expect(activeDialog()!.textContent).toContain("Removal Failed");
+      await action("Close", activeDialog()!).trigger("click");
       await wrapper.setupState.chooseEndpoint("");
       wrapper.setupState.functionControlPlane.domains.value = null;
       expect(wrapper.setupState.verifiedDomains.value).toEqual([]);
       wrapper.setupState.functionControlPlane.busy.value = true;
       await nextTick();
-      expect(wrapper.text()).toContain("Loading Domains");
+      expect(pageDOM().text()).toContain("Loading Domains");
       wrapper.setupState.functionControlPlane.busy.value = false;
     } finally {
       await api.domains.delete(domain.id);
@@ -577,17 +592,17 @@ describe("Function permissions and failures", () => {
       limit: 10,
     };
     await nextTick();
-    await wrapper.get("tbody tr[data-selectable]").trigger("click");
-    expect(wrapper.text()).toContain("Invocation failed");
-    expect(wrapper.text()).toContain("error output");
-    expect(wrapper.text()).toContain("<script>not HTML</script>");
-    expect(wrapper.findAll("script")).toHaveLength(0);
+    await action("Details").trigger("click");
+    expect(pageDOM().text()).toContain("Invocation failed");
+    expect(pageDOM().text()).toContain("error output");
+    expect(pageDOM().text()).toContain("<script>not HTML</script>");
+    expect(pageDOM().findAll("script")).toHaveLength(0);
     wrapper.setupState.selectedExecution.value.stdout = "";
     wrapper.setupState.selectedExecution.value.stderr = "";
     wrapper.setupState.selectedExecution.value.errorMessage = undefined;
     await nextTick();
-    expect(wrapper.text()).toContain("No standard output");
-    expect(wrapper.text()).toContain("No standard error");
+    expect(pageDOM().text()).toContain("No standard output");
+    expect(pageDOM().text()).toContain("No standard error");
     state.executions.value.data[0].statusCode = 100;
     await nextTick();
     await action("Next").trigger("click");
@@ -599,11 +614,11 @@ describe("Function permissions and failures", () => {
     state.executions.value = { data: [], total: 0 };
     state.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Executions");
+    expect(pageDOM().text()).toContain("Loading Executions");
     state.busy.value = false;
     wrapper.setupState.filterForm.endpoint = "invalid";
     await wrapper.setupState.applyFilter();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("serializes operations, handles unexpected errors, and clears expired authentication", async () => {

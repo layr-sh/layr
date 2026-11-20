@@ -6,6 +6,7 @@ const client = useClient();
 const tasksControlPlane = useTasksControlPlane(client.value.tasks.cp);
 const selectedExecution = ref<TasksControlPlaneModels.DLQExecution | null>(null);
 const confirmingPurge = ref(false);
+const showingDetails = ref(false);
 const columns: TableColumn<TasksControlPlaneModels.DLQExecution>[] = [
   { accessorKey: "id", header: "Execution ID" },
   { accessorKey: "jobId", header: "Job ID" },
@@ -13,6 +14,7 @@ const columns: TableColumn<TasksControlPlaneModels.DLQExecution>[] = [
   { accessorKey: "maxAttempts", header: "Maximum Attempts" },
   { accessorKey: "lastError", header: "Last Error" },
   { accessorKey: "createdAt", header: "Created" },
+  { id: "actions", header: "" },
 ];
 async function retry() {
   if (!selectedExecution.value) return;
@@ -47,7 +49,7 @@ onMounted(() => {
     />
     <UCard
       title="Dead-Letter Queue"
-      description="Executions isolated after a permanent failure or exhausted retries. Select a row to inspect, retry, or purge it."
+      description="Executions isolated after a permanent failure or exhausted retries. Inspect, retry, or purge each execution using its row actions."
       :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
     >
       <UTable
@@ -55,16 +57,75 @@ onMounted(() => {
         :columns="columns"
         :loading="tasksControlPlane.busy.value"
         :get-row-id="(execution) => execution.id"
-        :row-selection="{ [selectedExecution?.id]: true }"
         :ui="{ td: 'whitespace-normal align-top' }"
-        caption="Dead-lettered task executions. Select a row to manage its execution."
-        @select="(_event, row) => (selectedExecution = row.original)"
+        caption="Dead-lettered task executions. Execution details, retry, and purge actions."
+        @select="
+          (_event, row) => {
+            selectedExecution = row.original;
+            showingDetails = true;
+          }
+        "
       >
         <template #jobId-cell="{ row }">{{ row.original.jobId || "Standalone" }}</template>
         <template #lastError-cell="{ row }"
           ><span class="break-all">{{ row.original.lastError || "Not Recorded" }}</span></template
         >
         <template #createdAt-cell="{ row }">{{ row.original.createdAt.toLocaleString() }}</template>
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: tasksControlPlane.busy.value,
+                  onSelect: () => {
+                    selectedExecution = row.original;
+                    showingDetails = true;
+                  },
+                },
+                ...(auth.hasScope('tasks:execution.write')
+                  ? [
+                      {
+                        label: 'Retry Execution',
+                        icon: 'i-lucide-rotate-ccw',
+                        disabled: tasksControlPlane.busy.value,
+                        onSelect: () => {
+                          showingDetails = false;
+                          selectedExecution = row.original;
+                          retry();
+                        },
+                      },
+                    ]
+                  : []),
+                ...(auth.hasScope('tasks:execution.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Purge Execution',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: tasksControlPlane.busy.value,
+                        onSelect: () => {
+                          showingDetails = false;
+                          selectedExecution = row.original;
+                          confirmingPurge = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.id}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Dead-Lettered Executions"
@@ -76,20 +137,6 @@ onMounted(() => {
         /></template>
       </UTable>
       <template #footer>
-        <UButton
-          v-if="auth.hasScope('tasks:execution.write')"
-          label="Purge Execution"
-          color="error"
-          variant="outline"
-          :disabled="tasksControlPlane.busy.value || !selectedExecution"
-          @click="confirmingPurge = true"
-        />
-        <UButton
-          v-if="auth.hasScope('tasks:execution.write')"
-          label="Retry Execution"
-          :disabled="tasksControlPlane.busy.value || !selectedExecution"
-          @click="retry"
-        />
         <UButton
           label="Previous"
           color="neutral"
@@ -114,49 +161,70 @@ onMounted(() => {
         />
       </template>
     </UCard>
-    <UCard
+    <UModal
       v-if="selectedExecution"
+      :open="!!selectedExecution && showingDetails"
+      :dismissible="!tasksControlPlane.busy.value"
       title="Failed Execution Details"
       description="Inspect the payload and most recent error before retrying. Retrying can repeat side effects."
-      :ui="{ footer: 'flex justify-end' }"
-    >
-      <dl class="space-y-4 text-sm">
-        <div>
-          <dt class="text-muted">Execution ID</dt>
-          <dd class="break-all font-mono">{{ selectedExecution.id }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Status</dt>
-          <dd><UBadge :label="selectedExecution.status" color="error" variant="subtle" /></dd>
-        </div>
-        <div>
-          <dt class="text-muted">Last Error</dt>
-          <dd class="whitespace-pre-wrap break-all">
-            {{ selectedExecution.lastError || "Not Recorded" }}
-          </dd>
-        </div>
-        <div>
-          <dt class="text-muted">Payload</dt>
-          <dd class="whitespace-pre-wrap break-all font-mono">
-            {{ JSON.stringify(selectedExecution.payload, null, 2) }}
-          </dd>
-        </div>
-      </dl>
-      <template #footer
-        ><UButton
-          label="Close Details"
-          color="neutral"
-          variant="outline"
-          @click="selectedExecution = null"
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            showingDetails = false;
+            selectedExecution = null;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="tasksControlPlane.error.value"
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <dl class="space-y-4 text-sm">
+          <div>
+            <dt class="text-muted">Execution ID</dt>
+            <dd class="break-all font-mono">{{ selectedExecution.id }}</dd>
+          </div>
+          <div>
+            <dt class="text-muted">Status</dt>
+            <dd><UBadge :label="selectedExecution.status" color="error" variant="subtle" /></dd>
+          </div>
+          <div>
+            <dt class="text-muted">Last Error</dt>
+            <dd class="whitespace-pre-wrap break-all">
+              {{ selectedExecution.lastError || "Not Recorded" }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-muted">Payload</dt>
+            <dd class="whitespace-pre-wrap break-all font-mono">
+              {{ JSON.stringify(selectedExecution.payload, null, 2) }}
+            </dd>
+          </div>
+        </dl> </template
+      ><template #footer
+        ><UButton label="Close" color="neutral" variant="outline" @click="selectedExecution = null"
       /></template>
-    </UCard>
+    </UModal>
     <UModal
       v-model:open="confirmingPurge"
       title="Purge Failed Execution?"
       description="Permanently delete this dead-lettered execution and its payload. This cannot be undone."
       :dismissible="!tasksControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-    >
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      ><template v-if="tasksControlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer>
         <UButton
           label="Cancel"

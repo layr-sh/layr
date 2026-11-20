@@ -3,6 +3,7 @@ import type { TableColumn } from "@nuxt/ui";
 import type { CoreControlPlaneModels } from "layr-client";
 
 const auth = useAuth();
+const editorOpen = ref(false);
 const client = useClient();
 const controlPlane = useControlPlane(client.value.core.cp, client.value.console.cp);
 const hookForm = reactive({
@@ -172,6 +173,7 @@ async function reload() {
   await controlPlane.load("event-hooks");
 }
 function clearHook() {
+  editorOpen.value = false;
   controlPlane.selectedHook.value = null;
   Object.assign(hookForm, {
     name: "",
@@ -202,6 +204,7 @@ watch(controlPlane.selectedHook, () => {
 async function editHook(hookId: string) {
   hookForm.signingSecret = "";
   await controlPlane.selectHook(hookId);
+  if (controlPlane.selectedHook.value) editorOpen.value = true;
 }
 async function saveHook() {
   if (!hookForm.eventTypes.length) {
@@ -305,6 +308,11 @@ onMounted(reload);
         :data="controlPlane.hooks.value"
         :columns="hookColumns"
         :loading="controlPlane.busy.value"
+        @select="
+          (_event, row) => {
+            editHook(String(row.original.id));
+          }
+        "
       >
         <template #isEnabled-cell="cell"
           ><UBadge :color="cell.row.original.isEnabled ? 'success' : 'neutral'" variant="subtle">{{
@@ -312,112 +320,198 @@ onMounted(reload);
           }}</UBadge></template
         >
         <template #actions-cell="cell"
-          ><UButton
-            label="Manage"
-            color="neutral"
-            variant="outline"
-            :disabled="controlPlane.busy.value"
-            @click="editHook(String(cell.row.original.id))"
-        /></template>
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: controlPlane.busy.value,
+                  onSelect: () => editHook(String(cell.row.original.id)),
+                },
+                ...(auth.hasScope('core:event-hook.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete Hook',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: controlPlane.busy.value,
+                        onSelect: () => {
+                          controlPlane.selectedHook.value = cell.row.original;
+                          confirmingDelete = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${cell.row.original.name}`"
+              />
+            </UDropdownMenu></div
+        ></template>
       </UTable>
-    </UCard>
-    <UCard
-      v-if="controlPlane.selectedHook.value || auth.hasScope('core:event-hook.write')"
-      :title="controlPlane.selectedHook.value ? 'Manage Event Hook' : 'Create Event Hook'"
+      <template #footer
+        ><div class="flex justify-end">
+          <UButton
+            v-if="auth.hasScope('core:event-hook.write')"
+            label="New Event Hook"
+            icon="i-lucide-plus"
+            :disabled="controlPlane.busy.value"
+            @click="
+              clearHook();
+              editorOpen = true;
+            "
+          /></div></template
+    ></UCard>
+    <UModal
+      :open="!!editorOpen"
+      :dismissible="!controlPlane.busy.value"
+      :title="controlPlane.selectedHook.value ? 'Event Hook Details' : 'New Event Hook'"
       description="Configure event subscriptions and delivery."
-      :ui="{ body: 'space-y-5', footer: 'flex flex-wrap items-center justify-end gap-3' }"
-    >
-      <UForm
-        id="event-hook-form"
-        :state="hookForm"
-        :disabled="controlPlane.busy.value || !auth.hasScope('core:event-hook.write')"
-        class="space-y-5"
-        @submit="saveHook"
-      >
-        <UFormField label="Name" required
-          ><UInput v-model="hookForm.name" required class="w-full"
-        /></UFormField>
-        <UFormField label="Delivery Driver"
-          ><USelect
-            v-model="hookForm.driver"
-            :items="[
-              { label: 'HTTP Webhook', value: 'http' },
-              { label: 'SQL Function', value: 'sql' },
-            ]"
-            class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Event Types"
-          description="Select or enter event patterns. Use * to subscribe to all events."
-          required
-          ><USelectMenu
-            v-model="hookForm.eventTypes"
-            :items="eventTypeOptions"
-            multiple
-            create-item
-            required
-            class="w-full"
-            placeholder="Select Event Types"
-            @create="(eventType) => hookForm.eventTypes.push(eventType)"
-        /></UFormField>
-        <template v-if="hookForm.driver === 'http'">
-          <UFormField label="Target URL" required
-            ><UInput v-model="hookForm.httpTargetUrl" type="url" required class="w-full"
+      :ui="{
+        content: 'max-w-4xl',
+        body: 'space-y-6',
+        footer: 'flex flex-wrap justify-end gap-3',
+      }"
+      :close="{ disabled: controlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            clearHook();
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="controlPlane.error.value"
+          title="Request Failed"
+          :description="controlPlane.error.value"
+          color="error"
+          role="alert" />
+        <UForm
+          id="event-hook-form"
+          :state="hookForm"
+          :disabled="controlPlane.busy.value || !auth.hasScope('core:event-hook.write')"
+          class="space-y-5"
+          @submit="saveHook"
+        >
+          <UFormField label="Name" required
+            ><UInput v-model="hookForm.name" required class="w-full"
+          /></UFormField>
+          <UFormField label="Delivery Driver"
+            ><USelect
+              v-model="hookForm.driver"
+              :items="[
+                { label: 'HTTP Webhook', value: 'http' },
+                { label: 'SQL Function', value: 'sql' },
+              ]"
+              class="w-full"
           /></UFormField>
           <UFormField
-            label="Signing Secret"
-            :description="
-              controlPlane.selectedHook.value?.signingSecretConfigured
-                ? 'A secret is configured. Leave empty to preserve it.'
-                : 'Optional HMAC signing secret.'
-            "
-            ><UInput
-              v-model="hookForm.signingSecret"
-              type="password"
-              autocomplete="new-password"
-              class="w-full"
-          /></UFormField>
-        </template>
-        <UFormField v-else label="SQL Function Name" required
-          ><UInput
-            v-model="hookForm.sqlFunctionName"
+            label="Event Types"
+            description="Select or enter event patterns. Use * to subscribe to all events."
             required
-            class="w-full"
-            placeholder="public.handle_event"
-        /></UFormField>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <UFormField label="Maximum Retries"
-            ><UInput
-              v-model.number="hookForm.maxRetries"
-              type="number"
-              :min="0"
-              :max="10"
+            ><USelectMenu
+              v-model="hookForm.eventTypes"
+              :items="eventTypeOptions"
+              multiple
+              create-item
               required
               class="w-full"
+              placeholder="Select Event Types"
+              @create="(eventType) => hookForm.eventTypes.push(eventType)"
           /></UFormField>
-          <UFormField label="Timeout (Seconds)"
+          <template v-if="hookForm.driver === 'http'">
+            <UFormField label="Target URL" required
+              ><UInput v-model="hookForm.httpTargetUrl" type="url" required class="w-full"
+            /></UFormField>
+            <UFormField
+              label="Signing Secret"
+              :description="
+                controlPlane.selectedHook.value?.signingSecretConfigured
+                  ? 'A secret is configured. Leave empty to preserve it.'
+                  : 'Optional HMAC signing secret.'
+              "
+              ><UInput
+                v-model="hookForm.signingSecret"
+                type="password"
+                autocomplete="new-password"
+                class="w-full"
+            /></UFormField>
+          </template>
+          <UFormField v-else label="SQL Function Name" required
             ><UInput
-              v-model.number="hookForm.timeoutSeconds"
-              type="number"
-              :min="1"
-              :max="60"
+              v-model="hookForm.sqlFunctionName"
               required
               class="w-full"
+              placeholder="public.handle_event"
           /></UFormField>
-        </div>
-        <USwitch v-model="hookForm.isEnabled" label="Hook Enabled" />
-      </UForm>
-      <template #footer>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Maximum Retries"
+              ><UInput
+                v-model.number="hookForm.maxRetries"
+                type="number"
+                :min="0"
+                :max="10"
+                required
+                class="w-full"
+            /></UFormField>
+            <UFormField label="Timeout (Seconds)"
+              ><UInput
+                v-model.number="hookForm.timeoutSeconds"
+                type="number"
+                :min="1"
+                :max="60"
+                required
+                class="w-full"
+            /></UFormField>
+          </div>
+          <USwitch v-model="hookForm.isEnabled" label="Hook Enabled" />
+        </UForm>
+        <section v-if="controlPlane.selectedHook.value" class="space-y-5">
+          <header class="space-y-2">
+            <USeparator label="Delivery History" position="start" />
+            <p class="text-sm text-muted">Review delivery attempts and retry failed events.</p>
+          </header>
+          <UTable
+            :data="controlPlane.deliveries.value"
+            :columns="deliveryColumns"
+            :loading="controlPlane.busy.value"
+          >
+            <template #isDelivered-cell="cell"
+              ><UBadge
+                :color="cell.row.original.isDelivered ? 'success' : 'warning'"
+                variant="subtle"
+                >{{ cell.row.original.isDelivered ? "Delivered" : "Pending / Failed" }}</UBadge
+              ></template
+            >
+            <template #createdAt-cell="cell">{{
+              cell.row.original.createdAt.toLocaleString()
+            }}</template>
+            <template #actions-cell="cell"
+              ><UButton
+                v-if="!cell.row.original.isDelivered && auth.hasScope('core:event-hook.write')"
+                label="Retry Delivery"
+                color="neutral"
+                variant="outline"
+                :disabled="controlPlane.busy.value"
+                @click="
+                  controlPlane.retryDelivery(
+                    String(controlPlane.selectedHook.value.id),
+                    String(cell.row.original.id),
+                  )
+                "
+            /></template>
+          </UTable></section></template
+      ><template #footer>
         <UButton
-          v-if="controlPlane.selectedHook.value && auth.hasScope('core:event-hook.write')"
-          label="Delete Hook"
-          color="error"
-          variant="outline"
-          :disabled="controlPlane.busy.value"
-          @click="confirmingDelete = true"
-        />
-        <UButton
-          v-if="controlPlane.selectedHook.value"
           label="Cancel"
           color="neutral"
           variant="outline"
@@ -432,49 +526,22 @@ onMounted(reload);
           :disabled="controlPlane.busy.value"
         />
       </template>
-    </UCard>
-    <UCard
-      v-if="controlPlane.selectedHook.value"
-      title="Delivery History"
-      description="Review delivery attempts and retry failed events."
-    >
-      <UTable
-        :data="controlPlane.deliveries.value"
-        :columns="deliveryColumns"
-        :loading="controlPlane.busy.value"
-      >
-        <template #isDelivered-cell="cell"
-          ><UBadge
-            :color="cell.row.original.isDelivered ? 'success' : 'warning'"
-            variant="subtle"
-            >{{ cell.row.original.isDelivered ? "Delivered" : "Pending / Failed" }}</UBadge
-          ></template
-        >
-        <template #createdAt-cell="cell">{{
-          cell.row.original.createdAt.toLocaleString()
-        }}</template>
-        <template #actions-cell="cell"
-          ><UButton
-            v-if="!cell.row.original.isDelivered && auth.hasScope('core:event-hook.write')"
-            label="Retry Delivery"
-            color="neutral"
-            variant="outline"
-            :disabled="controlPlane.busy.value"
-            @click="
-              controlPlane.retryDelivery(
-                String(controlPlane.selectedHook.value.id),
-                String(cell.row.original.id),
-              )
-            "
-        /></template>
-      </UTable>
-    </UCard>
+    </UModal>
+
     <UModal
       v-model:open="confirmingDelete"
       title="Delete Event Hook?"
       description="This stops future deliveries and removes the hook. This cannot be undone."
       :dismissible="!controlPlane.busy.value"
-    >
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: controlPlane.busy.value }"
+      ><template v-if="controlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="controlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer
         ><UButton
           label="Cancel"

@@ -59,6 +59,16 @@ export default defineAppConfig({
         variant: "subtle",
       },
     },
+    modal: {
+      slots: {
+        overlay: "bg-default!",
+        content: "ring-0! shadow-none! data-[state=open]:animate-[fade-in_200ms_var(--ease-out)]! data-[state=closed]:animate-[fade-out_200ms_var(--ease-out)]!",
+        header: "px-0 sm:px-0",
+        body: "px-0 sm:px-0",
+        footer: "px-0 sm:px-0",
+        close: "top-3 right-0 bg-elevated/50 p-1 text-muted hover:text-default",
+      },
+    },
     pinInput: {
       defaultVariants: {
         variant: "subtle",

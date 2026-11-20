@@ -14,7 +14,16 @@ import Settings from "../../pages/control-plane/index.vue";
 import Users from "../../pages/control-plane/users.vue";
 import Accounts from "../../pages/control-plane/service-accounts.vue";
 import Hooks from "../../pages/control-plane/event-hooks.vue";
-import { action, flushPromises, mountPage, settle, signInConsoleUser } from "./mount-page";
+import {
+  activeDialog,
+  action,
+  pageDOM,
+  menuAction,
+  flushPromises,
+  mountPage,
+  settle,
+  signInConsoleUser,
+} from "./mount-page";
 
 type Wrapper = Awaited<ReturnType<typeof mountPage>>["wrapper"];
 let wrapper: Wrapper;
@@ -71,12 +80,14 @@ describe("Console security and permissions", () => {
     auth.state.value = original;
     const limited = await signInConsoleUser(["console:config.read"]);
     ({ wrapper } = await mountPage(Layout));
-    expect(wrapper.text()).not.toContain("Audit Events");
-    expect(wrapper.text()).toContain("Account Security");
+    expect(pageDOM().text()).not.toContain("Audit Events");
+    expect(pageDOM().text()).toContain("Account Security");
     wrapper.unmount();
     ({ wrapper } = await mountPage(Settings));
     expect(
-      wrapper.findAll("button").some((button) => button.text() === "Save Console Config"),
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Save Console Config"),
     ).toBe(false);
     const client = limited.nuxtApp.$client.value;
     const controlPlane = useControlPlane(client.core.cp, client.console.cp);
@@ -95,7 +106,7 @@ describe("Console security and permissions", () => {
     await signInConsoleUser(["console:user.read"]);
     await router.push("/control-plane/events");
     ({ wrapper } = await mountPage(Layout));
-    expect(wrapper.text()).toContain("Access Restricted");
+    expect(pageDOM().text()).toContain("Access Restricted");
     wrapper.unmount();
     await router.push("/");
   });
@@ -106,12 +117,12 @@ describe("Console security and permissions", () => {
     await router.push("/control-plane");
     ({ wrapper } = await mountPage(Layout));
     expect(wrapper.setupState.canView.value).toBe(true);
-    expect(wrapper.text()).toContain("Configuration");
+    expect(pageDOM().text()).toContain("Configuration");
     wrapper.unmount();
     await signInConsoleUser(["console:user.read"]);
     ({ wrapper } = await mountPage(Layout));
     expect(wrapper.setupState.canView.value).toBe(false);
-    expect(wrapper.text()).toContain("Access Restricted");
+    expect(pageDOM().text()).toContain("Access Restricted");
     wrapper.unmount();
     await router.push("/");
   });
@@ -141,9 +152,9 @@ describe("Console security and permissions", () => {
     expect(await controlPlane.createUser({ email, password: limited.password })).toBe(true);
     const user = controlPlane.users.value.find((user) => user.email === email)!;
     ({ wrapper } = await mountPage(Users));
-    await action("Manage").trigger("click");
+    await menuAction("Details");
     await settle(wrapper.setupState.controlPlane);
-    expect(wrapper.text()).toContain("Not Visible");
+    expect(pageDOM().text()).toContain("Not Visible");
     await limited.serviceAccount.console.users.delete(user.id);
   });
 
@@ -196,8 +207,8 @@ describe("Console security and permissions", () => {
     wrapper.unmount();
     ({ wrapper } = await mountPage(Users));
     await wrapper.setupState.editUser(limited.user.id);
-    expect(wrapper.find("#console-password-form").exists()).toBe(false);
-    expect(wrapper.text()).toContain("Active Sessions");
+    expect(pageDOM().find("#console-password-form").exists()).toBe(false);
+    expect(pageDOM().text()).toContain("Active Sessions");
     expect(limited.nuxtApp.$auth.state.value?.scopes).not.toContain("*");
   });
 
@@ -219,7 +230,7 @@ describe("Console security and permissions", () => {
     page.controlPlane.accounts.value = [{ ...account, scopes: ["*"] }];
     page.controlPlane.users.value = [other, { ...consoleUser.user, isEnabled: false }];
     await nextTick();
-    expect(wrapper.text()).toContain("The last enabled root Console User must retain access.");
+    expect(pageDOM().text()).toContain("The last enabled root Console User must retain access.");
     page.controlPlane.users.value = [other, consoleUser.user];
     await nextTick();
     expect(wrapper.setupState.isLastRoot.value).toBe(true);
@@ -265,16 +276,26 @@ describe("Console security and permissions", () => {
       (account) => account.consoleUserId === limited.user.id,
     )!;
     await wrapper.setupState.editAccount(owned.id);
-    expect(wrapper.findAll("a").some((link) => link.text() === "View Console User")).toBe(false);
+    expect(
+      pageDOM()
+        .findAll("a")
+        .some((link) => link.text() === "Console User Details"),
+    ).toBe(false);
     await wrapper.setupState.editAccount(account.id);
-    expect(wrapper.text()).toContain("Disabled");
-    expect(wrapper.findAll("button").some((button) => button.text() === "Save Account")).toBe(
-      false,
-    );
+    expect(pageDOM().text()).toContain("Disabled");
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Save Account"),
+    ).toBe(false);
     wrapper.unmount();
     ({ wrapper } = await mountPage(Hooks));
     await wrapper.setupState.editHook(String(hook.id));
-    expect(wrapper.findAll("button").some((button) => button.text() === "Save Hook")).toBe(false);
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Save Hook"),
+    ).toBe(false);
     await consoleUser.serviceAccount.core.event_hooks.delete(String(hook.id));
     await consoleUser.serviceAccount.core.service_accounts.delete(account.id);
   });
@@ -295,7 +316,7 @@ describe("Console security and permissions", () => {
       expect(consoleUser.nuxtApp.$auth.state.value?.mfa_required).toBe(true);
       const page = await mountPage(Security);
       wrapper = page.wrapper;
-      expect(wrapper.text()).toContain("Enroll your authenticator below");
+      expect(pageDOM().text()).toContain("Enroll your authenticator below");
       expect(await controlPlane.load("platform")).toBe(false);
       await action("Set Up MFA").trigger("click");
       await settle(page.controlPlane);
@@ -303,17 +324,17 @@ describe("Console security and permissions", () => {
       const code = verificationCode(secret);
       wrapper.findComponent(UPinInput).vm.$emit("update:modelValue", [...code].map(Number));
       await nextTick();
-      await wrapper.get("#mfa-enrollment").trigger("submit");
+      await pageDOM().get("#mfa-enrollment").trigger("submit");
       await settle(page.controlPlane);
       expect(consoleUser.nuxtApp.$auth.state.value?.mfa_required).toBe(false);
       expect(await controlPlane.load("platform")).toBe(true);
       await wrapper.setupState.disableMFA();
-      expect(wrapper.text()).toContain("MFA is required by the Console policy");
+      expect(pageDOM().text()).toContain("MFA is required by the Console policy");
       client.setSession(oldToken);
       await consoleUser.nuxtApp.$auth.refresh();
       await nextTick();
       expect(consoleUser.nuxtApp.$auth.state.value?.mfa_required).toBe(true);
-      expect(wrapper.text()).toContain("Sign out and sign in again with your authenticator code");
+      expect(pageDOM().text()).toContain("Sign out and sign in again with your authenticator code");
       expect(await controlPlane.load("platform")).toBe(false);
       const challenge = await consoleUser.nuxtApp.$auth.signIn(
         consoleUser.user.email,
@@ -333,10 +354,10 @@ describe("Console security and permissions", () => {
     const page = await mountPage(Security);
     wrapper = page.wrapper;
     await wrapper.setupState.enableMFA();
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await action("Set Up MFA").trigger("click");
     await settle(page.controlPlane);
-    expect(wrapper.text()).toContain("Setup Key");
+    expect(pageDOM().text()).toContain("Setup Key");
     await action("Cancel Enrollment").trigger("click");
     await action("Set Up MFA").trigger("click");
     await settle(page.controlPlane);
@@ -345,27 +366,27 @@ describe("Console security and permissions", () => {
     const invalidCode = String((Number(code) + 1) % 1000000).padStart(6, "0");
     wrapper.findComponent(UPinInput).vm.$emit("update:modelValue", [...invalidCode].map(Number));
     await nextTick();
-    await wrapper.get("#mfa-enrollment").trigger("submit");
+    await pageDOM().get("#mfa-enrollment").trigger("submit");
     await settle(page.controlPlane);
-    expect(wrapper.text()).toContain("Invalid MFA code");
+    expect(pageDOM().text()).toContain("Invalid MFA code");
     wrapper.findComponent(UPinInput).vm.$emit("update:modelValue", [...code].map(Number));
     await nextTick();
-    await wrapper.get("#mfa-enrollment").trigger("submit");
+    await pageDOM().get("#mfa-enrollment").trigger("submit");
     await settle(page.controlPlane);
     expect(
       (await consoleUser.serviceAccount.console.users.get(consoleUser.user.id)).mfaEnabled,
     ).toBe(true);
-    expect(wrapper.text()).toContain("Multi-Factor Authentication Enabled");
+    expect(pageDOM().text()).toContain("Multi-Factor Authentication Enabled");
     await action("Disable MFA").trigger("click");
     await flushPromises();
     wrapper.findComponent(UModal).vm.$emit("update:open", false);
     await flushPromises();
     await action("Disable MFA").trigger("click");
     await flushPromises();
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Cancel", activeDialog()!).trigger("click");
     await action("Disable MFA").trigger("click");
     await flushPromises();
-    await action("Disable MFA", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Disable MFA", activeDialog()!).trigger("click");
     await settle(page.controlPlane);
     expect(
       (await consoleUser.serviceAccount.console.users.get(consoleUser.user.id)).mfaEnabled,
@@ -387,7 +408,7 @@ describe("Console security and permissions", () => {
     try {
       await action("Sign Out This Session").trigger("click");
       await settle(page.controlPlane);
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().text()).toContain("Request Failed");
       expect(consoleUser.nuxtApp.$auth.state.value?.user.id).toBe(consoleUser.user.id);
     } finally {
       transport.mockRestore();
@@ -401,7 +422,7 @@ describe("Console security and permissions", () => {
     await consoleUser.serviceAccount.console.users.sessions.delete(consoleUser.user.id, state.id);
     await wrapper.setupState.disableMFA();
     await settle(page.controlPlane);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     await wrapper.setupState.setupMFA();
     await settle(page.controlPlane);
     expect(wrapper.setupState.enrollment.value).toBeNull();

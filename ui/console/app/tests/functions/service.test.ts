@@ -12,6 +12,9 @@ import Executions from "../../pages/functions/executions.vue";
 import Domains from "../../pages/functions/domains.vue";
 import {
   action,
+  pageDOM,
+  activeDialog,
+  menuAction,
   field,
   flushPromises,
   mountPage,
@@ -29,17 +32,21 @@ async function settle() {
     timeout: 90000,
   });
 }
-function selectRow(text: string) {
-  const row = wrapper.findAll("tbody tr").find((row) => row.text().includes(text));
+function rowAction(text: string, label: string) {
+  const row = pageDOM()
+    .findAll("tbody tr")
+    .find((row) => row.text().includes(text));
   expect(row, `Missing row: ${text}`).toBeDefined();
-  return row!.trigger("click");
+  return menuAction(label, row!.element);
 }
 
 describe("Function service integration", () => {
   it("uses the Image service layout, ordered navigation, and card/footer patterns", async () => {
     ({ wrapper } = await mountPage(Layout));
     expect(
-      wrapper.findAll('nav[aria-label="Function Service Settings"] a').map((link) => link.text()),
+      pageDOM()
+        .findAll('nav[aria-label="Function Service Settings"] a')
+        .map((link) => link.text()),
     ).toEqual([
       "Statistics",
       "Endpoints",
@@ -70,7 +77,7 @@ describe("Function service integration", () => {
         expect(card.props("title")).toBeTruthy();
         expect(card.props("description")).toBeTruthy();
       }
-      for (const button of wrapper.findAll('button[type="submit"]')) {
+      for (const button of pageDOM().findAll('button[type="submit"]')) {
         expect(button.element.closest('[data-slot="footer"]')).not.toBeNull();
         expect(document.getElementById(button.attributes("form")!)).not.toBeNull();
       }
@@ -83,9 +90,11 @@ describe("Function service integration", () => {
     ({ wrapper } = await mountPage(Configuration));
     try {
       await selectOption("Default Runtime", "workerd");
-      expect(wrapper.findAll("label").map((label) => label.text())).not.toContain(
-        "Default Memory Setting (MB)",
-      );
+      expect(
+        pageDOM()
+          .findAll("label")
+          .map((label) => label.text()),
+      ).not.toContain("Default Memory Setting (MB)");
       for (const title of [
         "Endpoint Defaults",
         "Deployment Policy",
@@ -94,7 +103,7 @@ describe("Function service integration", () => {
         "Memory Limits Are Not Enforced",
         "Applied on Runtime Reload",
       ])
-        expect(wrapper.text()).toContain(title);
+        expect(pageDOM().text()).toContain(title);
       for (const [label, value] of [
         ["Default Timeout (Seconds)", "25"],
         ["Maximum Bundle Size (MiB)", "32"],
@@ -116,7 +125,7 @@ describe("Function service integration", () => {
       await field("Custom Domain Apex IP").setValue("127.0.0.1");
       await action("Save Function Config").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Configuration Saved");
+      expect(pageDOM().text()).toContain("Function Configuration Saved");
       expect(await api.config.get()).toEqual({
         defaultRuntime: "workerd",
         defaultMemoryLimitMb: original.defaultMemoryLimitMb,
@@ -195,8 +204,10 @@ describe("Function service integration", () => {
     const endpoint = (await api.endpoints.list()).data!.find((item) => item.name === name)!;
     try {
       expect(endpoint.isPublic).toBe(false);
-      expect(wrapper.text()).toContain(`/v1/function/${name}`);
-      await action("Endpoint Details").trigger("click");
+      await menuAction("Details");
+      await settle();
+      expect(pageDOM().text()).toContain(`/v1/function/${name}`);
+      await menuAction("Details");
       await settle();
       await field("Description").setValue("Updated endpoint");
       await selectOption("Runtime", "workerd");
@@ -215,14 +226,14 @@ describe("Function service integration", () => {
           timeoutSeconds: 20,
         }),
       );
-      await action("Delete Endpoint").trigger("click");
+      await menuAction("Delete Endpoint");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Delete Endpoint").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await menuAction("Delete Endpoint");
       await flushPromises();
-      await action("Delete Endpoint", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Delete Endpoint", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Endpoint Deleted");
+      expect(pageDOM().text()).toContain("Function Endpoint Deleted");
     } finally {
       if ((await api.endpoints.list()).data!.some((item) => item.id === endpoint.id))
         await api.endpoints.delete(endpoint.id);
@@ -251,12 +262,17 @@ describe("Function service integration", () => {
         ({ wrapper } = await mountPage(Deployments));
         await selectOption("Endpoint", endpoint.name);
         await settle();
-        expect(wrapper.find('input[type="file"]').attributes("accept")).toBe(".zip,.tar");
-        Object.defineProperty(wrapper.find('input[type="file"]').element, "files", {
+        if (
+          wrapper.setupState.composing &&
+          wrapper.setupState.auth.hasScope("function:endpoint.deploy")
+        )
+          await action("New Deployment").trigger("click");
+        expect(pageDOM().find('input[type="file"]').attributes("accept")).toBe(".zip,.tar");
+        Object.defineProperty(pageDOM().find('input[type="file"]').element, "files", {
           value: [file],
           configurable: true,
         });
-        await wrapper.find('input[type="file"]').trigger("change");
+        await pageDOM().find('input[type="file"]').trigger("change");
         await vi.waitFor(() =>
           expect(wrapper.setupState.deploymentForm.archive?.name).toBe(file.name),
         );
@@ -264,16 +280,13 @@ describe("Function service integration", () => {
         await flushPromises();
         await field("Variable Name").setValue("SECRET");
         await field("Variable Value").setValue("do-not-show-this-value");
-        await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
+        await action("Save Variable", activeDialog()!).trigger("click");
+        await vi.waitFor(() => expect(wrapper.setupState.editingVariable.value).toBe(false));
         await action("Review Deployment").trigger("click");
         await flushPromises();
-        expect(document.querySelector('[role="dialog"]')!.textContent).toContain(file.name);
-        expect(document.querySelector('[role="dialog"]')!.textContent).not.toContain(
-          "do-not-show-this-value",
-        );
-        await action("Activate Deployment", document.querySelector('[role="dialog"]')!).trigger(
-          "click",
-        );
+        expect(activeDialog()!.textContent).toContain(file.name);
+        expect(activeDialog()!.textContent).not.toContain("do-not-show-this-value");
+        await action("Activate Deployment", activeDialog()!).trigger("click");
         await settle();
         expect((await api.deployments.list(endpoint.id)).data![0]!.bundleFormat).toBe(format);
         const url = `${useNuxtApp().$client.value.endpoint}/v1/function/${endpoint.name}`;
@@ -281,32 +294,26 @@ describe("Function service integration", () => {
           expect(await (await fetch(url)).text()).toBe("archive-upload"),
         );
         await wrapper.setupState.chooseEndpoint(endpoint.id);
+        if (wrapper.setupState.composing) await action("New Deployment").trigger("click");
         expect(wrapper.setupState.deploymentForm.variables).toEqual([
           { name: "SECRET", value: "do-not-show-this-value" },
         ]);
-        expect(wrapper.text()).not.toContain("do-not-show-this-value");
-        await selectRow("SECRET");
-        await action("Remove Selected Variable").trigger("click");
+        expect(pageDOM().text()).not.toContain("do-not-show-this-value");
+        await rowAction("SECRET", "Remove Variable");
         await flushPromises();
-        await action("Remove from Draft", document.querySelector('[role="dialog"]')!).trigger(
-          "click",
-        );
-        Object.defineProperty(wrapper.find('input[type="file"]').element, "files", {
+        await action("Remove from Draft", activeDialog()!).trigger("click");
+        Object.defineProperty(pageDOM().find('input[type="file"]').element, "files", {
           value: [file],
           configurable: true,
         });
-        await wrapper.find('input[type="file"]').trigger("change");
+        await pageDOM().find('input[type="file"]').trigger("change");
         await vi.waitFor(() =>
           expect(wrapper.setupState.deploymentForm.archive?.name).toBe(file.name),
         );
         await action("Review Deployment").trigger("click");
         await flushPromises();
-        expect(document.querySelector('[role="dialog"]')!.textContent).toContain(
-          "Variables Will Be Removed",
-        );
-        await action("Activate Deployment", document.querySelector('[role="dialog"]')!).trigger(
-          "click",
-        );
+        expect(activeDialog()!.textContent).toContain("Variables Will Be Removed");
+        await action("Activate Deployment", activeDialog()!).trigger("click");
         await settle();
         expect((await api.deployments.list(endpoint.id)).data![0]!.environmentVariables).toEqual(
           {},
@@ -329,6 +336,11 @@ describe("Function service integration", () => {
       ({ wrapper } = await mountPage(Deployments));
       await selectOption("Endpoint", endpoint.name);
       await settle();
+      if (
+        wrapper.setupState.composing &&
+        wrapper.setupState.auth.hasScope("function:endpoint.deploy")
+      )
+        await action("New Deployment").trigger("click");
       await action("Source Files").trigger("keydown", { key: "Enter" });
       await field("Source Code").setValue(
         'export default { async fetch(request, env) { console.log("console invocation"); return new Response(env.MESSAGE); } };',
@@ -343,7 +355,8 @@ describe("Function service integration", () => {
       expect(field("Variable Value").attributes("type")).toBe("password");
       await field("Show Variable Value").trigger("click");
       expect(field("Variable Value").attributes("type")).toBe("text");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
+      await vi.waitFor(() => expect(wrapper.setupState.editingVariable.value).toBe(false));
       await flushPromises();
       await field("Override Workerd Compatibility").trigger("click");
       await field("Deployment Compatibility Date").setValue("2026-08-04");
@@ -354,18 +367,17 @@ describe("Function service integration", () => {
       await field("Deployment Compatibility Flags").trigger("keydown", { key: "Enter" });
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      await action("Activate Deployment", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Activate Deployment", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Deployment Activated");
+      expect(pageDOM().text()).toContain("Function Deployment Activated");
       const first = (await api.deployments.list(endpoint.id)).data![0]!;
       const url = `${useNuxtApp().$client.value.endpoint}/v1/function/${endpoint.name}`;
       await vi.waitFor(async () => expect(await (await fetch(url)).text()).toBe("version-one"));
       await wrapper.setupState.chooseEndpoint(endpoint.id);
+      if (wrapper.setupState.composing) await action("New Deployment").trigger("click");
       expect(wrapper.setupState.deploymentForm.variables).toEqual([
         { name: "MESSAGE", value: "version-one" },
       ]);
@@ -378,72 +390,66 @@ describe("Function service integration", () => {
       await action("Add File").trigger("click");
       await field("File Path").setValue("helper.js");
       await field("Source Code").setValue("export const value = 1;");
-      await selectRow(first.bundleHash);
-      expect(wrapper.text()).toContain("helper.js");
-      expect(wrapper.text()).toContain("Deployment Version 1");
-      expect(wrapper.text()).toContain("Hidden");
+      await rowAction(first.bundleHash, "Details");
+      expect(pageDOM().text()).toContain("helper.js");
+      expect(pageDOM().text()).toContain("Deployment Version 1");
+      expect(pageDOM().text()).toContain("Hidden");
       await field("Show Stored Variable Values").trigger("click");
-      expect(wrapper.text()).toContain("version-one");
+      expect(pageDOM().text()).toContain("version-one");
       await field("Show Stored Variable Values").trigger("click");
-      expect(wrapper.text()).toContain("Hidden");
-      await action("Close Version Details").trigger("click");
-      await selectRow("MESSAGE");
-      await action("Edit Selected Variable").trigger("click");
+      expect(pageDOM().text()).toContain("Hidden");
+      await action("Close").trigger("click");
+      await rowAction("MESSAGE", "Edit Variable");
       await flushPromises();
       await field("Variable Value").setValue("version-two");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Remove Selected File").trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
+      await vi.waitFor(() => expect(wrapper.setupState.editingVariable.value).toBe(false));
+      await action("Remove File").trigger("click");
       await flushPromises();
-      await action("Remove from Draft", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Remove from Draft", activeDialog()!).trigger("click");
       await action("Add Variable").trigger("click");
       await flushPromises();
       await field("Variable Name").setValue("TEMP");
-      await action("Save Variable", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Remove Selected Variable").trigger("click");
+      await action("Save Variable", activeDialog()!).trigger("click");
+      await vi.waitFor(() => expect(wrapper.setupState.editingVariable.value).toBe(false));
+      await rowAction("TEMP", "Remove Variable");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Remove Selected Variable").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await rowAction("TEMP", "Remove Variable");
       await flushPromises();
-      await action("Remove from Draft", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Remove from Draft", activeDialog()!).trigger("click");
       await field("Override Workerd Compatibility").trigger("click");
       await action("Review Deployment").trigger("click");
       await flushPromises();
-      await action("Activate Deployment", document.querySelector('[role="dialog"]')!).trigger(
-        "click",
-      );
+      await action("Activate Deployment", activeDialog()!).trigger("click");
       await settle();
       await vi.waitFor(async () => expect(await (await fetch(url)).text()).toBe("version-two"));
-      await selectRow(first.bundleHash);
-      await action("Roll Back to Selected Version").trigger("click");
+      await rowAction(first.bundleHash, "Roll Back");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Roll Back to Selected Version").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await rowAction(first.bundleHash, "Roll Back");
       await flushPromises();
-      await action("Confirm Rollback", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Confirm Rollback", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Deployment Rolled Back");
+      expect(pageDOM().text()).toContain("Function Deployment Rolled Back");
       await vi.waitFor(async () => expect(await (await fetch(url)).text()).toBe("version-one"));
       wrapper.unmount();
       ({ wrapper } = await mountPage(Endpoints));
-      await selectRow(endpoint.name);
-      await action("Endpoint Details").trigger("click");
+      await rowAction(endpoint.name, "Details");
       await settle();
-      expect(wrapper.find('a[target="_blank"]').exists()).toBe(true);
+      expect(pageDOM().find('a[target="_blank"]').exists()).toBe(true);
       wrapper.unmount();
       const router = useNuxtApp().$router;
       await router.push({ path: "/functions/executions", query: { endpoint: endpoint.id } });
       ({ wrapper } = await mountPage(Executions));
-      expect(wrapper.text()).toContain("GET");
+      expect(pageDOM().text()).toContain("GET");
       await wrapper
         .findAll("tbody tr")
         .find((row) => row.text().includes("GET"))!
+        .find("button")
         .trigger("click");
-      expect(wrapper.text()).toContain("Invocation Details");
-      await action("Close Details").trigger("click");
+      expect(pageDOM().text()).toContain("Invocation Details");
+      await action("Close").trigger("click");
       await selectOption("Endpoint", "All Endpoints");
       await action("Apply Filter").trigger("click");
       await settle();
@@ -457,7 +463,7 @@ describe("Function service integration", () => {
     const api = useNuxtApp().$client.value.function.cp;
     const domain = `console-${crypto.randomUUID()}.example.test`;
     ({ wrapper } = await mountPage(Domains));
-    await action("Add Domain").trigger("click");
+    await action("New Domain").trigger("click");
     await field("Domain").setValue(domain);
     await field("Enable TLS").trigger("click");
     await field("ACME Contact Email").setValue("ops@example.com");
@@ -465,28 +471,30 @@ describe("Function service integration", () => {
     await settle();
     const stored = (await api.domains.list()).data!.find((item) => item.domain === domain)!;
     try {
-      expect(wrapper.text()).toContain("DNS and TLS Instructions");
-      expect(wrapper.text()).toContain("DNS Not Verified");
+      await menuAction("Details");
+      await settle();
+      expect(pageDOM().text()).toContain("DNS and TLS Instructions");
+      expect(pageDOM().text()).toContain("DNS Not Verified");
       await action("Verify DNS").trigger("click");
       await settle();
       expect(wrapper.setupState.functionControlPlane.selectedDomain.value.status).not.toBe(
         "active",
       );
-      await action("Domain Details").trigger("click");
+      await menuAction("Details");
       await settle();
       await field("Enable TLS").trigger("click");
       await field("ACME Contact Email").setValue("tls@example.com");
       await action("Save Domain").trigger("click");
       await settle();
       expect((await api.domains.get(stored.id)).tlsAcmeEmail).toBe("tls@example.com");
-      await action("Delete Domain").trigger("click");
+      await menuAction("Delete Domain");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Delete Domain").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await menuAction("Delete Domain");
       await flushPromises();
-      await action("Delete Domain", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Delete Domain", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Domain Deleted");
+      expect(pageDOM().text()).toContain("Function Domain Deleted");
     } finally {
       if ((await api.domains.list()).data!.some((item) => item.id === stored.id))
         await api.domains.delete(stored.id);
@@ -508,25 +516,25 @@ describe("Function service integration", () => {
       ({ wrapper } = await mountPage(Domains));
       await selectOption("Route Endpoint", endpoint.name);
       await settle();
+      await action("Attach Domain Route").trigger("click");
       await selectOption("Verified Domain", domain.domain);
       await field("Path Prefix").setValue("/api");
       await action("Attach Route").trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Domain Route Attached");
+      expect(pageDOM().text()).toContain("Function Domain Route Attached");
       expect((await api.endpoint_domains.list(endpoint.id)).data).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ pathPrefix: "/api", customDomainId: domain.id }),
         ]),
       );
-      await selectRow("/api");
-      await action("Remove Selected Route").trigger("click");
+      await rowAction("/api", "Remove Route");
       await flushPromises();
-      await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-      await action("Remove Selected Route").trigger("click");
+      await action("Cancel", activeDialog()!).trigger("click");
+      await rowAction("/api", "Remove Route");
       await flushPromises();
-      await action("Remove Route", document.querySelector('[role="dialog"]')!).trigger("click");
+      await action("Remove Route", activeDialog()!).trigger("click");
       await settle();
-      expect(wrapper.text()).toContain("Function Domain Route Removed");
+      expect(pageDOM().text()).toContain("Function Domain Route Removed");
     } finally {
       await api.domains.delete(domain.id);
       await api.endpoints.delete(endpoint.id);
@@ -536,11 +544,11 @@ describe("Function service integration", () => {
 
   it("renders actual endpoint and runner metrics without readonly inputs", async () => {
     ({ wrapper } = await mountPage(Statistics));
-    expect(wrapper.text()).toContain("Function Statistics");
-    expect(wrapper.findAll("input")).toHaveLength(0);
+    expect(pageDOM().text()).toContain("Function Statistics");
+    expect(pageDOM().findAll("input")).toHaveLength(0);
     const stats = wrapper.setupState.functionControlPlane.stats.value;
-    expect(wrapper.text()).toContain(stats.totalEndpoints.toLocaleString());
-    expect(wrapper.text()).toContain("workerd Runtime");
+    expect(pageDOM().text()).toContain(stats.totalEndpoints.toLocaleString());
+    expect(pageDOM().text()).toContain("workerd Runtime");
     wrapper.setupState.functionControlPlane.stats.value = {
       totalEndpoints: 0,
       runtimes: {
@@ -556,10 +564,10 @@ describe("Function service integration", () => {
       },
     };
     await nextTick();
-    expect(wrapper.text()).toContain("Runner failed");
-    expect(wrapper.text()).toContain("123");
+    expect(pageDOM().text()).toContain("Runner failed");
+    expect(pageDOM().text()).toContain("123");
     wrapper.setupState.functionControlPlane.stats.value.runtimes = {};
     await nextTick();
-    expect(wrapper.text()).toContain("No Runtime Health Reported");
+    expect(pageDOM().text()).toContain("No Runtime Health Reported");
   });
 });

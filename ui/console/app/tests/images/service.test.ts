@@ -7,7 +7,15 @@ import Configuration from "../../pages/image/configurations.vue";
 import Presets from "../../pages/image/presets.vue";
 import Signing from "../../pages/image/signing.vue";
 import Statistics from "../../pages/image/index.vue";
-import { action, field, mountPage, signInConsoleUser } from "../control-plane/mount-page";
+import {
+  activeDialog,
+  menuAction,
+  action,
+  pageDOM,
+  field,
+  mountPage,
+  signInConsoleUser,
+} from "../control-plane/mount-page";
 
 let wrapper: Awaited<ReturnType<typeof mountPage>>["wrapper"];
 
@@ -31,7 +39,7 @@ afterEach(() => wrapper?.unmount());
 describe("Image service integration", () => {
   it("shows nested, scope-aware navigation and standard card structure", async () => {
     ({ wrapper } = await mountPage(Layout));
-    expect(wrapper.find('nav[aria-label="Image Service Settings"]').exists()).toBe(true);
+    expect(pageDOM().find('nav[aria-label="Image Service Settings"]').exists()).toBe(true);
     expect(
       wrapper
         .findAll('nav[aria-label="Image Service Settings"] a')
@@ -50,7 +58,7 @@ describe("Image service integration", () => {
         expect(card.props("title")).toBeTruthy();
         expect(card.props("description")).toBeTruthy();
       }
-      for (const button of wrapper.findAll('button[type="submit"]')) {
+      for (const button of pageDOM().findAll('button[type="submit"]')) {
         expect(button.element.closest('[data-slot="footer"]')).not.toBeNull();
         expect(button.attributes("form")).toBeTruthy();
         expect(document.getElementById(button.attributes("form")!)).not.toBeNull();
@@ -89,7 +97,7 @@ describe("Image service integration", () => {
       await field("Allowed Source Domains").setValue("images.example.com, cdn.example.com\n");
       expect(action("Save Image Config").attributes("disabled")).toBeUndefined();
       await action("Save Image Config").trigger("click");
-      await vi.waitFor(() => expect(wrapper.text()).toContain("Image Configuration Saved"));
+      await vi.waitFor(() => expect(pageDOM().text()).toContain("Image Configuration Saved"));
       expect(await imageControlPlane.config.get()).toEqual({
         defaultQuality: 73,
         allowedDomains: ["images.example.com", "cdn.example.com"],
@@ -119,40 +127,41 @@ describe("Image service integration", () => {
     const page = await mountPage(Presets);
     wrapper = page.wrapper;
     const name = `console-image-${crypto.randomUUID()}`;
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Transformation Presets"));
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Transformation Presets"));
     await action("New Preset").trigger("click");
     await field("Name").setValue(name);
     await field("Description").setValue("Console integration test");
     await field("Processing Options").setValue("w_48,h_48,fit_cover");
     await action("Create Preset").trigger("click");
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Image Preset Created"));
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Image Preset Created"));
     expect((await imageControlPlane.presets.list()).data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name, processingOptions: "w_48,h_48,fit_cover" }),
       ]),
     );
-    expect(wrapper.find('[role="combobox"]').exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("No Presets Yet");
-    const row = wrapper.findAll("tbody tr").find((row) => row.text().includes(name));
+    expect(pageDOM().find('[role="combobox"]').exists()).toBe(false);
+    expect(pageDOM().text()).not.toContain("No Presets Yet");
+    const row = pageDOM()
+      .findAll("tbody tr")
+      .find((row) => row.text().includes(name));
     expect(row).toBeDefined();
     expect(row!.text()).toContain("Console integration test");
     expect(row!.text()).toContain("w_48,h_48,fit_cover");
-    await row!.trigger("click");
-    expect(row!.attributes("data-selected")).toBe("true");
-    await action("Edit Preset").trigger("click");
+    expect(row!.attributes("data-selectable")).toBe("true");
+    await menuAction("Details", row!.element);
     await waitForRequest();
     await field("Description").setValue("Updated description");
     await action("Save Preset").trigger("click");
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Image Preset Updated"));
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Image Preset Updated"));
     expect((await imageControlPlane.presets.list()).data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name, description: "Updated description" }),
       ]),
     );
-    await action("Delete Preset").trigger("click");
-    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
-    await action("Delete Preset", document.querySelector('[role="dialog"]')!).trigger("click");
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Image Preset Deleted"));
+    await menuAction("Delete Preset");
+    await vi.waitFor(() => expect(activeDialog()).not.toBeNull());
+    await action("Delete Preset", activeDialog()!).trigger("click");
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Image Preset Deleted"));
     expect(
       (await imageControlPlane.presets.list()).data!.some((preset) => preset.name === name),
     ).toBe(false);
@@ -162,7 +171,7 @@ describe("Image service integration", () => {
     ({ wrapper } = await mountPage(Signing));
     await field("Image Path").setValue("/resize,w_48/https://example.com/image.jpg");
     await action("Sign URL").trigger("click");
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Image URL Signed"));
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Image URL Signed"));
     expect(field("Signed URL").element).toHaveProperty(
       "value",
       expect.stringContaining("/v1/image/"),
@@ -171,29 +180,33 @@ describe("Image service integration", () => {
     wrapper.unmount();
     ({ wrapper } = await mountPage(Statistics));
     const stats = await imageControlPlane.stats.get();
-    await vi.waitFor(() => expect(wrapper.text()).toContain("Total Requests"));
-    expect(wrapper.get('[data-testid="total-requests"]').text()).toBe(
+    await vi.waitFor(() => expect(pageDOM().text()).toContain("Total Requests"));
+    expect(pageDOM().get('[data-testid="total-requests"]').text()).toBe(
       stats.totalRequests.toLocaleString(),
     );
-    expect(wrapper.findAll("input")).toHaveLength(0);
-    expect(wrapper.get('[data-testid="cache-hits"]').text()).toBe(stats.cacheHits.toLocaleString());
-    expect(wrapper.get('[data-testid="cache-misses"]').text()).toBe(
+    expect(pageDOM().findAll("input")).toHaveLength(0);
+    expect(pageDOM().get('[data-testid="cache-hits"]').text()).toBe(
+      stats.cacheHits.toLocaleString(),
+    );
+    expect(pageDOM().get('[data-testid="cache-misses"]').text()).toBe(
       stats.cacheMisses.toLocaleString(),
     );
-    expect(wrapper.get('[data-testid="cache-hit-ratio"]').text()).toBe(
+    expect(pageDOM().get('[data-testid="cache-hit-ratio"]').text()).toBe(
       `${(stats.cacheHitRatio * 100).toFixed(2)}%`,
     );
-    expect(wrapper.get('[data-testid="bytes-served"]').attributes("title")).toBe(
+    expect(pageDOM().get('[data-testid="bytes-served"]').attributes("title")).toBe(
       `${stats.bytesServed.toLocaleString()} bytes`,
     );
-    expect(wrapper.get('[data-testid="process-memory"]').attributes("title")).toMatch(/bytes$/);
-    expect(wrapper.get('[role="progressbar"]').attributes("aria-label")).toBe(
+    expect(pageDOM().get('[data-testid="process-memory"]').attributes("title")).toMatch(/bytes$/);
+    expect(pageDOM().get('[role="progressbar"]').attributes("aria-label")).toBe(
       `Cache Hit Ratio: ${stats.cacheHitRatio * 100}%`,
     );
-    expect(wrapper.text()).toContain("Cache Hit Ratio");
-    expect(wrapper.findAll("button").some((button) => button.text().includes("Refresh"))).toBe(
-      false,
-    );
+    expect(pageDOM().text()).toContain("Cache Hit Ratio");
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text().includes("Refresh")),
+    ).toBe(false);
     await waitForRequest();
   });
 });
