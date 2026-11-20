@@ -3,6 +3,7 @@ import type { FormError, TableColumn } from "@nuxt/ui";
 import type { FunctionControlPlaneModels } from "layr-client";
 import { validFunctionDomain } from "../../utils/function-forms";
 const auth = useAuth();
+const attachingRoute = ref(false);
 const client = useClient();
 const functionControlPlane = useFunctionControlPlane(client.value.function.cp);
 const domainId = ref("");
@@ -23,10 +24,12 @@ const domainColumns: TableColumn<FunctionControlPlaneModels.CustomDomain>[] = [
   { accessorKey: "status", header: "DNS Status" },
   { accessorKey: "tlsEnabled", header: "TLS" },
   { accessorKey: "tlsStatus", header: "TLS Status" },
+  { id: "actions", header: "" },
 ];
 const routeColumns: TableColumn<FunctionControlPlaneModels.CustomDomainRoute>[] = [
   { accessorKey: "domain", header: "Domain" },
   { accessorKey: "pathPrefix", header: "Path Prefix" },
+  { id: "actions", header: "" },
 ];
 const dnsColumns = [
   { accessorKey: "type", header: "Type" },
@@ -173,9 +176,13 @@ onMounted(async () => {
         :columns="domainColumns"
         :loading="functionControlPlane.busy.value"
         :get-row-id="(domain) => domain.id"
-        :row-selection="{ [domainId]: true }"
-        caption="Custom domains. Select a row to manage DNS and TLS."
-        @select="(_event, row) => (domainId = row.original.id)"
+        caption="Custom domains. DNS, TLS, and domain management actions."
+        @select="
+          (_event, row) => {
+            domainId = row.original.id;
+            editDomain();
+          }
+        "
       >
         <template #status-cell="{ row }"
           ><UBadge
@@ -186,6 +193,46 @@ onMounted(async () => {
         <template #tlsEnabled-cell="{ row }">{{
           row.original.tlsEnabled ? "Enabled" : "Disabled"
         }}</template>
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: functionControlPlane.busy.value,
+                  onSelect: () => {
+                    domainId = row.original.id;
+                    editDomain();
+                  },
+                },
+                ...(auth.hasScope('function:endpoint.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete Domain',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: functionControlPlane.busy.value,
+                        onSelect: () => {
+                          domainId = row.original.id;
+                          confirmingDelete = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.domain}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Custom Domains"
@@ -199,58 +246,109 @@ onMounted(async () => {
       <template #footer
         ><UButton
           v-if="auth.hasScope('function:endpoint.write')"
-          label="Delete Domain"
-          color="error"
-          variant="outline"
-          :disabled="functionControlPlane.busy.value || !domainId"
-          @click="confirmingDelete = true" /><UButton
-          label="Domain Details"
-          color="neutral"
-          variant="outline"
-          :disabled="functionControlPlane.busy.value || !domainId"
-          @click="editDomain" /><UButton
-          v-if="auth.hasScope('function:endpoint.write')"
-          label="Add Domain"
+          label="New Domain"
           icon="i-lucide-plus"
           :disabled="functionControlPlane.busy.value"
           @click="newDomain"
       /></template>
     </UCard>
-    <UCard
-      v-if="editing"
-      :title="domainId ? 'Manage Custom Domain' : 'Register Custom Domain'"
-      description="Hostnames cannot be renamed. TLS provisioning requires verified DNS and an ACME contact email or service default."
-      :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
+    <div
+      v-if="functionControlPlane.selectedEndpoint.value && auth.hasScope('function:endpoint.write')"
+      class="flex justify-end"
     >
-      <UForm
-        id="function-domain"
-        ref="domainFormElement"
-        :state="domainForm"
-        :validate="validateDomain"
-        :disabled="functionControlPlane.busy.value || !auth.hasScope('function:endpoint.write')"
-        class="space-y-5"
-        @submit="saveDomain"
-      >
-        <UFormField
-          label="Domain"
-          name="domain"
-          description="Hostname only, such as api.example.com."
-          required
-          ><UInput v-model="domainForm.domain" :disabled="!!domainId" class="w-full"
-        /></UFormField>
-        <USwitch
-          v-model="domainForm.tlsEnabled"
-          label="Enable TLS"
-          description="Provision and renew a certificate after DNS verification succeeds."
-        />
-        <UFormField
-          label="ACME Contact Email"
-          name="tlsAcmeEmail"
-          description="Leave blank to use the service's default ACME email."
-          ><UInput v-model="domainForm.tlsAcmeEmail" class="w-full"
-        /></UFormField>
-      </UForm>
-      <template #footer
+      <UButton label="Attach Domain Route" icon="i-lucide-plus" @click="attachingRoute = true" />
+    </div>
+    <UModal
+      :open="!!editing"
+      :dismissible="!functionControlPlane.busy.value"
+      :title="domainId ? 'Domain Details' : 'New Domain'"
+      description="Hostnames cannot be renamed. TLS provisioning requires verified DNS and an ACME contact email or service default."
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            editing = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert" />
+        <UForm
+          id="function-domain"
+          ref="domainFormElement"
+          :state="domainForm"
+          :validate="validateDomain"
+          :disabled="functionControlPlane.busy.value || !auth.hasScope('function:endpoint.write')"
+          class="space-y-5"
+          @submit="saveDomain"
+        >
+          <UFormField
+            label="Domain"
+            name="domain"
+            description="Hostname only, such as api.example.com."
+            required
+            ><UInput v-model="domainForm.domain" :disabled="!!domainId" class="w-full"
+          /></UFormField>
+          <USwitch
+            v-model="domainForm.tlsEnabled"
+            label="Enable TLS"
+            description="Provision and renew a certificate after DNS verification succeeds."
+          />
+          <UFormField
+            label="ACME Contact Email"
+            name="tlsAcmeEmail"
+            description="Leave blank to use the service's default ACME email."
+            ><UInput v-model="domainForm.tlsAcmeEmail" class="w-full"
+          /></UFormField>
+        </UForm>
+        <section v-if="functionControlPlane.selectedDomain.value" class="space-y-5">
+          <header class="space-y-2">
+            <USeparator label="DNS and TLS Instructions" position="start" />
+            <p class="text-sm text-muted">
+              {{
+                `DNS setup and certificate status for ${functionControlPlane.selectedDomain.value.domain}.`
+              }}
+            </p>
+          </header>
+          <UAlert
+            v-if="functionControlPlane.selectedDomain.value.status !== 'active'"
+            title="DNS Not Verified"
+            description="Apply the DNS records below, allow propagation, then verify again. Routes can only be attached to active domains."
+            color="warning"
+          />
+          <UBadge
+            :label="`DNS: ${functionControlPlane.selectedDomain.value.status} · TLS: ${functionControlPlane.selectedDomain.value.tlsStatus}`"
+            color="neutral"
+            variant="subtle"
+          />
+          <UAlert
+            v-if="functionControlPlane.selectedDomain.value.tlsErrorMessage"
+            title="TLS Needs Attention"
+            :description="functionControlPlane.selectedDomain.value.tlsErrorMessage"
+            color="warning"
+          />
+          <UTable
+            :data="functionControlPlane.selectedDomain.value.requiredDnsRecords || []"
+            :columns="dnsColumns"
+            :ui="{ td: 'whitespace-normal break-all' }"
+          />
+          <div
+            v-if="auth.hasScope('function:endpoint.write')"
+            class="flex flex-wrap justify-end gap-3"
+          >
+            <UButton
+              label="Verify DNS"
+              :disabled="functionControlPlane.busy.value"
+              @click="verifyDomain"
+            />
+          </div></section></template
+      ><template #footer
         ><UButton
           label="Cancel"
           color="neutral"
@@ -263,42 +361,8 @@ onMounted(async () => {
           label="Save Domain"
           :disabled="functionControlPlane.busy.value"
       /></template>
-    </UCard>
-    <UCard
-      v-if="functionControlPlane.selectedDomain.value"
-      title="DNS and TLS Instructions"
-      :description="`DNS setup and certificate status for ${functionControlPlane.selectedDomain.value.domain}.`"
-      :ui="{ body: 'space-y-5', footer: 'flex justify-end' }"
-    >
-      <UAlert
-        v-if="functionControlPlane.selectedDomain.value.status !== 'active'"
-        title="DNS Not Verified"
-        description="Apply the DNS records below, allow propagation, then verify again. Routes can only be attached to active domains."
-        color="warning"
-      />
-      <UBadge
-        :label="`DNS: ${functionControlPlane.selectedDomain.value.status} · TLS: ${functionControlPlane.selectedDomain.value.tlsStatus}`"
-        color="neutral"
-        variant="subtle"
-      />
-      <UAlert
-        v-if="functionControlPlane.selectedDomain.value.tlsErrorMessage"
-        title="TLS Needs Attention"
-        :description="functionControlPlane.selectedDomain.value.tlsErrorMessage"
-        color="warning"
-      />
-      <UTable
-        :data="functionControlPlane.selectedDomain.value.requiredDnsRecords || []"
-        :columns="dnsColumns"
-        :ui="{ td: 'whitespace-normal break-all' }"
-      />
-      <template v-if="auth.hasScope('function:endpoint.write')" #footer
-        ><UButton
-          label="Verify DNS"
-          :disabled="functionControlPlane.busy.value"
-          @click="verifyDomain"
-      /></template>
-    </UCard>
+    </UModal>
+
     <UCard
       title="Endpoint Domain Routes"
       description="Choose an endpoint to inspect its domain mappings. Only DNS-verified domains can receive new mappings."
@@ -320,9 +384,19 @@ onMounted(async () => {
         :data="functionControlPlane.routes.value?.data || []"
         :columns="routeColumns"
         :loading="functionControlPlane.busy.value"
-        caption="Domain routes attached to the chosen endpoint. Select a row to remove it."
-        @select="(_event, row) => (selectedRouteId = row.original.id)"
+        caption="Domain routes attached to the chosen endpoint. Remove mappings using their row actions."
       >
+        <template #actions-cell="{ row }"
+          ><UButton
+            label="Remove Route"
+            color="error"
+            variant="ghost"
+            :disabled="functionControlPlane.busy.value"
+            @click="
+              selectedRouteId = row.original.id;
+              confirmingRemove = true;
+            "
+        /></template>
         <template #empty
           ><UEmpty
             title="No Domain Routes"
@@ -333,68 +407,81 @@ onMounted(async () => {
           ><UEmpty title="Loading Routes…" loading icon="i-lucide-globe"
         /></template>
       </UTable>
-      <template v-if="auth.hasScope('function:endpoint.write')" #footer
-        ><UButton
-          label="Remove Selected Route"
-          color="error"
-          variant="outline"
-          :disabled="functionControlPlane.busy.value || !selectedRouteId"
-          @click="confirmingRemove = true"
-      /></template>
     </UCard>
-    <UCard
-      v-if="functionControlPlane.selectedEndpoint.value && auth.hasScope('function:endpoint.write')"
+    <UModal
+      :open="!!attachingRoute"
+      :dismissible="!functionControlPlane.busy.value"
       title="Attach Domain Route"
       description="Map a verified hostname and path prefix to the selected endpoint. The backend checks for conflicting routes."
-      :ui="{ footer: 'flex justify-end' }"
-    >
-      <UForm
-        id="function-domain-route"
-        ref="routeFormElement"
-        :state="routeForm"
-        :validate="validateRoute"
-        :disabled="functionControlPlane.busy.value"
-        class="space-y-5"
-        @submit="attachRoute"
-      >
-        <UFormField
-          label="Verified Domain"
-          name="customDomainId"
-          description="Only active, DNS-verified domains appear here."
-          required
-          ><USelectMenu
-            v-model="routeForm.customDomainId"
-            :items="verifiedDomains"
-            value-key="id"
-            label-key="domain"
-            placeholder="Choose a verified domain"
-            class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Path Prefix"
-          name="pathPrefix"
-          description="Use / for the root, or a prefix such as /api."
-          required
-          ><UInput v-model="routeForm.pathPrefix" class="w-full"
-        /></UFormField>
-      </UForm>
-      <template #footer
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            attachingRoute = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <UForm
+          id="function-domain-route"
+          ref="routeFormElement"
+          :state="routeForm"
+          :validate="validateRoute"
+          :disabled="functionControlPlane.busy.value"
+          class="space-y-5"
+          @submit="attachRoute"
+        >
+          <UFormField
+            label="Verified Domain"
+            name="customDomainId"
+            description="Only active, DNS-verified domains appear here."
+            required
+            ><USelectMenu
+              v-model="routeForm.customDomainId"
+              :items="verifiedDomains"
+              value-key="id"
+              label-key="domain"
+              placeholder="Choose a verified domain"
+              class="w-full"
+          /></UFormField>
+          <UFormField
+            label="Path Prefix"
+            name="pathPrefix"
+            description="Use / for the root, or a prefix such as /api."
+            required
+            ><UInput v-model="routeForm.pathPrefix" class="w-full"
+          /></UFormField>
+        </UForm> </template
+      ><template #footer
         ><UButton
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          :disabled="functionControlPlane.busy.value"
+          @click="attachingRoute = false" /><UButton
           type="submit"
           form="function-domain-route"
           label="Attach Route"
           :disabled="functionControlPlane.busy.value"
       /></template>
-    </UCard>
+    </UModal>
     <UModal
       v-model:open="confirmingDelete"
       title="Delete Custom Domain?"
       description="This permanently removes the domain and all its endpoint routes."
       :dismissible="!functionControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-      ><template #body
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      ><template v-if="functionControlPlane.error.value" #body
         ><UAlert
-          v-if="functionControlPlane.error.value"
           title="Deletion Failed"
           :description="functionControlPlane.error.value"
           color="error" /></template
@@ -415,10 +502,10 @@ onMounted(async () => {
       title="Remove Domain Route?"
       description="This removes the selected mapping. The endpoint and custom domain remain registered."
       :dismissible="!functionControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-      ><template #body
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      ><template v-if="functionControlPlane.error.value" #body
         ><UAlert
-          v-if="functionControlPlane.error.value"
           title="Removal Failed"
           :description="functionControlPlane.error.value"
           color="error" /></template

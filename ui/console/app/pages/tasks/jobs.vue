@@ -38,13 +38,13 @@ const scheduleSummary = computed(() => {
   return `${summary} in ${jobForm.timezone}. ${jobForm.isEnabled ? "The scheduler will queue future runs." : "Saved paused: no automatic runs until you enable the schedule."} Next run is calculated by the service when saved.`;
 });
 const columns: TableColumn<TasksControlPlaneModels.GetJobResponse>[] = [
-  { id: "select", header: "Select" },
   { accessorKey: "name", header: "Name" },
   { accessorKey: "cronExpression", header: "Schedule" },
   { accessorKey: "timezone", header: "Timezone" },
   { accessorKey: "targetType", header: "Target" },
   { accessorKey: "isEnabled", header: "Status" },
   { accessorKey: "nextRunAt", header: "Next Run" },
+  { id: "actions", header: "" },
 ];
 function setSchedule(value: string) {
   if (value !== "custom") jobForm.cronExpression = value;
@@ -148,7 +148,7 @@ onMounted(() => {
     />
     <UCard
       title="Scheduled Jobs"
-      description="Select a job using its checkbox or row, then use the actions below. New jobs start paused."
+      description="Schedule recurring HTTP or SQL tasks. New jobs start paused."
       :ui="{ footer: 'flex flex-wrap items-center justify-end gap-3' }"
     >
       <UTable
@@ -157,17 +157,14 @@ onMounted(() => {
         :loading="tasksControlPlane.busy.value"
         :inert="editing || tasksControlPlane.busy.value"
         :get-row-id="(job) => job.id"
-        :row-selection="{ [selectedJobId]: true }"
-        caption="Scheduled jobs. Select one job to manage it."
-        @select="(_event, row) => (selectedJobId = row.original.id)"
+        caption="Scheduled jobs and management actions."
+        @select="
+          (_event, row) => {
+            selectedJobId = row.original.id;
+            editJob();
+          }
+        "
       >
-        <template #select-cell="{ row }"
-          ><UCheckbox
-            :model-value="selectedJobId === row.original.id"
-            :aria-label="`Select ${row.original.name}`"
-            @click.stop
-            @update:model-value="(checked) => (selectedJobId = checked ? row.original.id : '')"
-        /></template>
         <template #name-cell="{ row }"
           ><span class="font-medium text-highlighted">{{ row.original.name }}</span></template
         >
@@ -183,6 +180,60 @@ onMounted(() => {
         <template #nextRunAt-cell="{ row }">{{
           row.original.isEnabled ? row.original.nextRunAt.toLocaleString() : "Paused"
         }}</template>
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: tasksControlPlane.busy.value,
+                  onSelect: () => {
+                    selectedJobId = row.original.id;
+                    editJob();
+                  },
+                },
+                ...(auth.hasScope('tasks:execution.write')
+                  ? [
+                      {
+                        label: 'Run Now',
+                        icon: 'i-lucide-play',
+                        color: 'neutral' as const,
+                        disabled: tasksControlPlane.busy.value,
+                        onSelect: () => {
+                          selectedJobId = row.original.id;
+                          confirmingRun = true;
+                        },
+                      },
+                    ]
+                  : []),
+                ...(auth.hasScope('tasks:job.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete Job',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: tasksControlPlane.busy.value,
+                        onSelect: () => {
+                          selectedJobId = row.original.id;
+                          confirmingDelete = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.name}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Scheduled Jobs"
@@ -194,37 +245,12 @@ onMounted(() => {
         /></template>
       </UTable>
       <template #footer>
-        <p class="mr-auto text-sm text-muted" aria-live="polite">{{ selectedJobName }}</p>
         <UButton
           v-if="tasksControlPlane.triggered.value && auth.hasScope('tasks:execution.read')"
           to="/tasks/executions"
           label="Execution History"
           color="neutral"
           variant="outline"
-        />
-        <UButton
-          v-if="auth.hasScope('tasks:job.write')"
-          label="Delete Job"
-          color="error"
-          variant="outline"
-          :disabled="tasksControlPlane.busy.value || !selectedJobId"
-          @click="confirmingDelete = true"
-        />
-        <UButton
-          v-if="auth.hasScope('tasks:execution.write')"
-          label="Run Now"
-          icon="i-lucide-play"
-          color="neutral"
-          variant="outline"
-          :disabled="tasksControlPlane.busy.value || !selectedJobId"
-          @click="confirmingRun = true"
-        />
-        <UButton
-          label="Job Details"
-          color="neutral"
-          variant="outline"
-          :disabled="tasksControlPlane.busy.value || !selectedJobId"
-          @click="editJob"
         />
         <UButton
           v-if="auth.hasScope('tasks:job.write')"
@@ -235,104 +261,125 @@ onMounted(() => {
         />
       </template>
     </UCard>
-    <UCard
-      v-if="editing"
-      :title="tasksControlPlane.selectedJob.value ? 'Manage Task Job' : 'Create Task Job'"
+    <UModal
+      :open="!!editing"
+      :dismissible="!tasksControlPlane.busy.value"
+      :title="tasksControlPlane.selectedJob.value ? 'Job Details' : 'New Job'"
       description="Choose when this job runs and what it does. Pausing stops future scheduled runs, not executions already queued."
-      :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-    >
-      <UForm
-        id="tasks-job"
-        ref="jobFormRef"
-        :state="jobForm"
-        :validate="validateJob"
-        :disabled="tasksControlPlane.busy.value || !auth.hasScope('tasks:job.write')"
-        class="space-y-5"
-        @submit="saveJob"
-      >
-        <UFormField
-          label="Name"
-          name="name"
-          description="A unique, descriptive name for this job."
-          required
-          ><UInput v-model="jobForm.name" placeholder="Sync product catalog" class="w-full"
-        /></UFormField>
-        <div class="grid items-end gap-4 sm:grid-cols-2">
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            editing = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="tasksControlPlane.error.value"
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <UForm
+          id="tasks-job"
+          ref="jobFormRef"
+          :state="jobForm"
+          :validate="validateJob"
+          :disabled="tasksControlPlane.busy.value || !auth.hasScope('tasks:job.write')"
+          class="space-y-5"
+          @submit="saveJob"
+        >
           <UFormField
-            label="Schedule"
-            description="Choose a common schedule or enter a custom cron expression."
+            label="Name"
+            name="name"
+            description="A unique, descriptive name for this job."
+            required
+            ><UInput v-model="jobForm.name" placeholder="Sync product catalog" class="w-full"
+          /></UFormField>
+          <div class="grid items-end gap-4 sm:grid-cols-2">
+            <UFormField
+              label="Schedule"
+              description="Choose a common schedule or enter a custom cron expression."
+              required
+              ><USelect
+                v-model="schedule"
+                :items="taskSchedules"
+                class="w-full"
+                @update:model-value="setSchedule"
+            /></UFormField>
+            <UFormField
+              label="Timezone"
+              name="timezone"
+              description="Search for an IANA timezone. Scheduled times use this timezone."
+              required
+              ><USelectMenu
+                v-model="jobForm.timezone"
+                :items="timezoneOptions"
+                class="w-full"
+                :search-input="{ placeholder: 'Search timezones…' }"
+            /></UFormField>
+          </div>
+          <UFormField
+            v-if="schedule === 'custom'"
+            label="Cron Expression"
+            name="cronExpression"
+            description="Five numeric fields: minute, hour, day of month, month, day of week. Aliases such as @daily are also supported."
+            required
+            ><UInput
+              v-model="jobForm.cronExpression"
+              placeholder="0 9 * * 1-5"
+              class="w-full font-mono"
+          /></UFormField>
+          <UAlert title="Schedule Preview" :description="scheduleSummary" color="info" />
+          <UFormField
+            label="Target Type"
+            name="targetType"
+            description="HTTP sends a POST request; SQL runs a query against the project database."
             required
             ><USelect
-              v-model="schedule"
-              :items="taskSchedules"
+              v-model="jobForm.targetType"
+              :items="[
+                { label: 'HTTP Webhook', value: 'http' },
+                { label: 'SQL Query', value: 'sql' },
+              ]"
               class="w-full"
-              @update:model-value="setSchedule"
           /></UFormField>
-          <UFormField
-            label="Timezone"
-            name="timezone"
-            description="Search for an IANA timezone. Scheduled times use this timezone."
-            required
-            ><USelectMenu
-              v-model="jobForm.timezone"
-              :items="timezoneOptions"
-              class="w-full"
-              :search-input="{ placeholder: 'Search timezones…' }"
-          /></UFormField>
-        </div>
-        <UFormField
-          v-if="schedule === 'custom'"
-          label="Cron Expression"
-          name="cronExpression"
-          description="Five numeric fields: minute, hour, day of month, month, day of week. Aliases such as @daily are also supported."
-          required
-          ><UInput
-            v-model="jobForm.cronExpression"
-            placeholder="0 9 * * 1-5"
-            class="w-full font-mono"
-        /></UFormField>
-        <UAlert title="Schedule Preview" :description="scheduleSummary" color="info" />
-        <UFormField
-          label="Target Type"
-          name="targetType"
-          description="HTTP sends a POST request; SQL runs a query against the project database."
-          required
-          ><USelect
-            v-model="jobForm.targetType"
-            :items="[
-              { label: 'HTTP Webhook', value: 'http' },
-              { label: 'SQL Query', value: 'sql' },
-            ]"
-            class="w-full"
-        /></UFormField>
-        <TasksTargetFields v-model="jobForm.target" :target-type="jobForm.targetType" />
-        <USwitch
-          v-model="jobForm.isEnabled"
-          label="Enable Schedule"
-          description="Leave off to save the job paused. You can still run a paused job manually."
-        />
-      </UForm>
-      <dl v-if="tasksControlPlane.selectedJob.value" class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-        <div>
-          <dt class="text-muted">Job ID</dt>
-          <dd class="break-all font-mono">{{ tasksControlPlane.selectedJob.value.id }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Last Scheduled Run</dt>
-          <dd>{{ tasksControlPlane.selectedJob.value.lastRunAt?.toLocaleString() || "Never" }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Next Scheduled Run</dt>
-          <dd>
-            {{
-              tasksControlPlane.selectedJob.value.isEnabled
-                ? tasksControlPlane.selectedJob.value.nextRunAt.toLocaleString()
-                : "Paused — no automatic run scheduled"
-            }}
-          </dd>
-        </div>
-      </dl>
-      <template #footer>
+          <TasksTargetFields v-model="jobForm.target" :target-type="jobForm.targetType" />
+          <USwitch
+            v-model="jobForm.isEnabled"
+            label="Enable Schedule"
+            description="Leave off to save the job paused. You can still run a paused job manually."
+          />
+        </UForm>
+        <section v-if="tasksControlPlane.selectedJob.value" class="space-y-5">
+          <USeparator label="Schedule Details" position="start" />
+          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-muted">Job ID</dt>
+              <dd class="break-all font-mono">{{ tasksControlPlane.selectedJob.value.id }}</dd>
+            </div>
+            <div>
+              <dt class="text-muted">Last Scheduled Run</dt>
+              <dd>
+                {{ tasksControlPlane.selectedJob.value.lastRunAt?.toLocaleString() || "Never" }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-muted">Next Scheduled Run</dt>
+              <dd>
+                {{
+                  tasksControlPlane.selectedJob.value.isEnabled
+                    ? tasksControlPlane.selectedJob.value.nextRunAt.toLocaleString()
+                    : "Paused — no automatic run scheduled"
+                }}
+              </dd>
+            </div>
+          </dl>
+        </section> </template
+      ><template #footer>
         <UButton
           label="Cancel"
           color="neutral"
@@ -348,14 +395,21 @@ onMounted(() => {
           :disabled="tasksControlPlane.busy.value"
         />
       </template>
-    </UCard>
+    </UModal>
     <UModal
       v-model:open="confirmingDelete"
       title="Delete Task Job?"
       description="This removes the schedule and cancels its pending executions. Already running executions are not stopped. This cannot be undone."
       :dismissible="!tasksControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-    >
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      ><template v-if="tasksControlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer
         ><UButton
           label="Cancel"
@@ -374,8 +428,15 @@ onMounted(() => {
       title="Run Job Now?"
       :description="`Queue one execution of ${selectedJobName} using its saved settings, not unsaved form changes. This may change data or send an HTTP request. It does not enable a paused schedule.`"
       :dismissible="!tasksControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-    >
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      ><template v-if="tasksControlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer
         ><UButton
           label="Cancel"

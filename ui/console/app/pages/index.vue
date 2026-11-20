@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { h, resolveComponent } from "vue";
-import type { TableColumn, TableRow } from "@nuxt/ui";
+import type { TableColumn } from "@nuxt/ui";
 
 const UButton = resolveComponent("UButton");
 
@@ -164,11 +164,8 @@ function getEventDetails(eventItem: {
   return eventItem.action || "—";
 }
 
-function onSelect(_event: Event, row: TableRow<DisplayEvent>) {
-  row.toggleExpanded();
-}
-
 const eventColumns: TableColumn<DisplayEvent>[] = [
+  { id: "expand", header: "" },
   {
     accessorKey: "type",
     header: "Event",
@@ -485,12 +482,19 @@ export const client = createClient({
             right: ['timestamp'],
           }"
           :ui="{
-            tr: 'cursor-pointer hover:bg-accented/30 transition data-[expanded=true]:bg-accented/50',
+            tr: 'data-[expanded=true]:bg-accented/50',
             td: '[&:has([aria-label=Expand])]:px-3',
             thead: 'hidden',
           }"
-          @select="onSelect"
         >
+          <template #expand-cell="{ row }">
+            <UButton
+              :label="row.getIsExpanded() ? 'Hide Payload' : 'View Payload'"
+              color="neutral"
+              variant="ghost"
+              @click="row.toggleExpanded()"
+            />
+          </template>
           <template #expanded="{ row }">
             <div class="p-3.5 bg-default border border-default rounded-md m-2">
               <div class="flex items-center justify-between mb-2">

@@ -3,6 +3,7 @@ import type { FormError, TableColumn } from "@nuxt/ui";
 import { createTaskTarget, loadTaskTarget, resolveTaskTarget } from "../../utils/task-forms";
 import type { TasksControlPlaneModels } from "layr-client";
 const auth = useAuth();
+const triggerOpen = ref(false);
 const client = useClient();
 const tasksControlPlane = useTasksControlPlane(client.value.tasks.cp);
 const triggerForm = reactive({
@@ -54,6 +55,7 @@ const columns: TableColumn<TasksControlPlaneModels.ExecutionLog>[] = [
   { accessorKey: "status", header: "Status" },
   { accessorKey: "executionDurationMs", header: "Duration (ms)" },
   { accessorKey: "executedAt", header: "Executed" },
+  { id: "actions", header: "" },
 ];
 onMounted(async () => {
   if (auth.hasScope("tasks:execution.read")) await tasksControlPlane.listExecutions();
@@ -77,116 +79,140 @@ onMounted(async () => {
       color="success"
       role="status"
     />
-    <UCard
-      v-if="auth.hasScope('tasks:execution.write')"
+    <div v-if="auth.hasScope('tasks:execution.write')" class="flex justify-end">
+      <UButton label="New Execution" icon="i-lucide-plus" @click="triggerOpen = true" />
+    </div>
+    <UModal
+      :open="!!triggerOpen"
+      :dismissible="!tasksControlPlane.busy.value"
       title="Trigger Execution"
       description="Run a saved job once or create a standalone HTTP or SQL task. Queued means accepted for processing, not completed."
-      :ui="{ footer: 'flex justify-end' }"
-    >
-      <UForm
-        id="tasks-trigger"
-        ref="triggerFormRef"
-        :state="triggerForm"
-        :validate="validateExecution"
-        :disabled="tasksControlPlane.busy.value"
-        class="space-y-5"
-        @submit="queueExecution"
-      >
-        <UFormField
-          label="Execution Mode"
-          name="mode"
-          description="Saved jobs use their configured target. Standalone tasks do not create a schedule."
-          required
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            triggerOpen = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="tasksControlPlane.error.value"
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <UForm
+          id="tasks-trigger"
+          ref="triggerFormRef"
+          :state="triggerForm"
+          :validate="validateExecution"
+          :disabled="tasksControlPlane.busy.value"
+          class="space-y-5"
+          @submit="queueExecution"
         >
-          <USelect
-            v-model="triggerForm.mode"
-            :items="[
-              { label: 'Run a Saved Job', value: 'job' },
-              { label: 'Run a Standalone Task', value: 'standalone' },
-            ]"
-            class="w-full"
-          />
-        </UFormField>
-        <template v-if="triggerForm.mode === 'job'">
           <UFormField
-            v-if="auth.hasScope('tasks:job.read')"
-            label="Job"
-            name="jobId"
-            description="Search by job name. Paused jobs can also be run manually without enabling their schedule."
-            required
-          >
-            <USelectMenu
-              :model-value="triggerForm.jobId"
-              :items="jobChoices"
-              value-key="id"
-              label-key="name"
-              placeholder="Choose a job"
-              :search-input="{ placeholder: 'Search jobs…' }"
-              class="w-full"
-              @update:model-value="chooseJob"
-            />
-          </UFormField>
-          <UFormField
-            v-else
-            label="Job ID"
-            name="jobId"
-            description="Your Service Account cannot list jobs. Enter a known job UUID, or choose a standalone task."
-            required
-            ><UInput v-model="triggerForm.jobId" class="w-full"
-          /></UFormField>
-          <UAlert
-            v-if="selectedJob"
-            :title="selectedJob.name"
-            :description="`${selectedJob.targetType.toUpperCase()} target · ${selectedJob.isEnabled ? 'Active schedule' : 'Paused schedule'}. This execution uses saved settings unless you explicitly override the payload.`"
-            color="info"
-          />
-          <USwitch
-            v-model="triggerForm.override"
-            label="Override Saved Payload"
-            description="Off by default. When enabled, your payload REPLACES the saved payload for this run; it is not merged. The saved job is not changed."
-          />
-        </template>
-        <template v-if="needsPayload">
-          <UFormField
-            label="Target Type"
-            name="targetType"
-            description="HTTP sends a POST request; SQL runs a query. A saved job always uses its existing target type."
+            label="Execution Mode"
+            name="mode"
+            description="Saved jobs use their configured target. Standalone tasks do not create a schedule."
             required
           >
             <USelect
-              v-model="triggerForm.targetType"
-              :disabled="triggerForm.mode === 'job' && !!selectedJob"
+              v-model="triggerForm.mode"
               :items="[
-                { label: 'HTTP Webhook', value: 'http' },
-                { label: 'SQL Query', value: 'sql' },
+                { label: 'Run a Saved Job', value: 'job' },
+                { label: 'Run a Standalone Task', value: 'standalone' },
               ]"
               class="w-full"
             />
           </UFormField>
-          <TasksTargetFields v-model="triggerForm.target" :target-type="triggerForm.targetType" />
-        </template>
-      </UForm>
-      <dl v-if="tasksControlPlane.triggered.value" class="mt-5 space-y-2 text-sm">
-        <div>
-          <dt class="text-muted">Last Queued Execution ID</dt>
-          <dd class="break-all font-mono">{{ tasksControlPlane.triggered.value.executionId }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Queue Status — Check History for the Outcome</dt>
-          <dd>{{ tasksControlPlane.triggered.value.status }}</dd>
-        </div>
-      </dl>
-      <template #footer
+          <template v-if="triggerForm.mode === 'job'">
+            <UFormField
+              v-if="auth.hasScope('tasks:job.read')"
+              label="Job"
+              name="jobId"
+              description="Search by job name. Paused jobs can also be run manually without enabling their schedule."
+              required
+            >
+              <USelectMenu
+                :model-value="triggerForm.jobId"
+                :items="jobChoices"
+                value-key="id"
+                label-key="name"
+                placeholder="Choose a job"
+                :search-input="{ placeholder: 'Search jobs…' }"
+                class="w-full"
+                @update:model-value="chooseJob"
+              />
+            </UFormField>
+            <UFormField
+              v-else
+              label="Job ID"
+              name="jobId"
+              description="Your Service Account cannot list jobs. Enter a known job UUID, or choose a standalone task."
+              required
+              ><UInput v-model="triggerForm.jobId" class="w-full"
+            /></UFormField>
+            <UAlert
+              v-if="selectedJob"
+              :title="selectedJob.name"
+              :description="`${selectedJob.targetType.toUpperCase()} target · ${selectedJob.isEnabled ? 'Active schedule' : 'Paused schedule'}. This execution uses saved settings unless you explicitly override the payload.`"
+              color="info"
+            />
+            <USwitch
+              v-model="triggerForm.override"
+              label="Override Saved Payload"
+              description="Off by default. When enabled, your payload REPLACES the saved payload for this run; it is not merged. The saved job is not changed."
+            />
+          </template>
+          <template v-if="needsPayload">
+            <UFormField
+              label="Target Type"
+              name="targetType"
+              description="HTTP sends a POST request; SQL runs a query. A saved job always uses its existing target type."
+              required
+            >
+              <USelect
+                v-model="triggerForm.targetType"
+                :disabled="triggerForm.mode === 'job' && !!selectedJob"
+                :items="[
+                  { label: 'HTTP Webhook', value: 'http' },
+                  { label: 'SQL Query', value: 'sql' },
+                ]"
+                class="w-full"
+              />
+            </UFormField>
+            <TasksTargetFields v-model="triggerForm.target" :target-type="triggerForm.targetType" />
+          </template>
+        </UForm>
+        <dl v-if="tasksControlPlane.triggered.value" class="mt-5 space-y-2 text-sm">
+          <div>
+            <dt class="text-muted">Last Queued Execution ID</dt>
+            <dd class="break-all font-mono">{{ tasksControlPlane.triggered.value.executionId }}</dd>
+          </div>
+          <div>
+            <dt class="text-muted">Queue Status — Check History for the Outcome</dt>
+            <dd>{{ tasksControlPlane.triggered.value.status }}</dd>
+          </div>
+        </dl> </template
+      ><template #footer
         ><UButton
+          label="Cancel"
+          color="neutral"
+          variant="outline"
+          :disabled="tasksControlPlane.busy.value"
+          @click="triggerOpen = false" /><UButton
           type="submit"
           form="tasks-trigger"
           label="Queue Execution"
           :disabled="tasksControlPlane.busy.value"
       /></template>
-    </UCard>
+    </UModal>
     <UCard
       title="Execution History"
-      description="Attempt-level audit logs, not the live pending queue. Select a row to inspect the response or error."
+      description="Attempt-level audit logs, not the live pending queue. Open execution details to inspect the response or error."
       :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
     >
       <UForm
@@ -206,8 +232,12 @@ onMounted(async () => {
         :data="tasksControlPlane.executions.value?.data || []"
         :columns="columns"
         :loading="tasksControlPlane.busy.value"
-        caption="Task execution attempt history. Select a row to inspect its details."
-        @select="(_event, row) => (selectedExecution = row.original)"
+        caption="Task execution attempt history. Open execution details to inspect recorded output."
+        @select="
+          (_event, row) => {
+            selectedExecution = row.original;
+          }
+        "
       >
         <template #jobId-cell="{ row }">{{ row.original.jobId || "Standalone" }}</template>
         <template #status-cell="{ row }"
@@ -219,6 +249,16 @@ onMounted(async () => {
         <template #executedAt-cell="{ row }">{{
           row.original.executedAt.toLocaleString()
         }}</template>
+        <template #actions-cell="{ row }"
+          ><div>
+            <UButton
+              label="Details"
+              color="neutral"
+              variant="ghost"
+              :disabled="tasksControlPlane.busy.value"
+              @click="selectedExecution = row.original"
+            /></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Execution Logs"
@@ -264,41 +304,54 @@ onMounted(async () => {
         />
       </template>
     </UCard>
-    <UCard
+    <UModal
       v-if="selectedExecution"
+      :open="!!selectedExecution"
+      :dismissible="!tasksControlPlane.busy.value"
       title="Execution Details"
       description="The recorded response and error for this execution attempt."
-      :ui="{ footer: 'flex justify-end' }"
-    >
-      <dl class="grid gap-4 text-sm sm:grid-cols-2">
-        <div>
-          <dt class="text-muted">Execution ID</dt>
-          <dd class="break-all font-mono">{{ selectedExecution.executionId }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Response Status Code</dt>
-          <dd>{{ selectedExecution.responseStatusCode ?? "Not Recorded" }}</dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-muted">Error Message</dt>
-          <dd class="whitespace-pre-wrap break-all">
-            {{ selectedExecution.errorMessage || "None" }}
-          </dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-muted">Response Body</dt>
-          <dd class="whitespace-pre-wrap break-all font-mono">
-            {{ selectedExecution.responseBody || "Not Recorded" }}
-          </dd>
-        </div>
-      </dl>
-      <template #footer
-        ><UButton
-          label="Close Details"
-          color="neutral"
-          variant="outline"
-          @click="selectedExecution = null"
+      :ui="{ body: 'space-y-6', content: 'max-w-4xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: tasksControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            selectedExecution = null;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="tasksControlPlane.error.value"
+          title="Request Failed"
+          :description="tasksControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <dl class="grid gap-4 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-muted">Execution ID</dt>
+            <dd class="break-all font-mono">{{ selectedExecution.executionId }}</dd>
+          </div>
+          <div>
+            <dt class="text-muted">Response Status Code</dt>
+            <dd>{{ selectedExecution.responseStatusCode ?? "Not Recorded" }}</dd>
+          </div>
+          <div class="sm:col-span-2">
+            <dt class="text-muted">Error Message</dt>
+            <dd class="whitespace-pre-wrap break-all">
+              {{ selectedExecution.errorMessage || "None" }}
+            </dd>
+          </div>
+          <div class="sm:col-span-2">
+            <dt class="text-muted">Response Body</dt>
+            <dd class="whitespace-pre-wrap break-all font-mono">
+              {{ selectedExecution.responseBody || "Not Recorded" }}
+            </dd>
+          </div>
+        </dl> </template
+      ><template #footer
+        ><UButton label="Close" color="neutral" variant="outline" @click="selectedExecution = null"
       /></template>
-    </UCard>
+    </UModal>
   </div>
 </template>

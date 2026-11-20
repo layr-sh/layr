@@ -6,6 +6,7 @@ const columns: TableColumn<ImageControlPlaneModels.Preset>[] = [
   { accessorKey: "name", header: "Name" },
   { accessorKey: "description", header: "Description" },
   { accessorKey: "processingOptions", header: "Processing Options" },
+  { id: "actions", header: "" },
 ];
 const auth = useAuth();
 const client = useClient();
@@ -85,10 +86,14 @@ onMounted(() => {
         :columns="columns"
         :loading="imageControlPlane.busy.value"
         :get-row-id="(preset) => preset.id"
-        :row-selection="{ [selectedPresetId]: true }"
         :ui="{ td: 'whitespace-normal align-top' }"
-        caption="Transformation presets. Select a row to view, edit, or delete its preset."
-        @select="(_event, row) => (selectedPresetId = row.original.id)"
+        caption="Transformation presets and management actions."
+        @select="
+          (_event, row) => {
+            selectedPresetId = row.original.id;
+            editPreset();
+          }
+        "
       >
         <template #name-cell="{ row }">
           <span class="font-medium text-highlighted">{{ row.original.name }}</span>
@@ -99,6 +104,46 @@ onMounted(() => {
         <template #processingOptions-cell="{ row }">
           <code class="break-all text-xs">{{ row.original.processingOptions }}</code>
         </template>
+        <template #actions-cell="{ row }"
+          ><div class="flex justify-end">
+            <UDropdownMenu
+              :items="[
+                {
+                  label: 'Details',
+                  icon: 'i-lucide-info',
+                  color: 'neutral' as const,
+                  disabled: imageControlPlane.busy.value,
+                  onSelect: () => {
+                    selectedPresetId = row.original.id;
+                    editPreset();
+                  },
+                },
+                ...(auth.hasScope('image:preset.write')
+                  ? [
+                      { type: 'separator' as const },
+                      {
+                        label: 'Delete Preset',
+                        icon: 'i-lucide-trash-2',
+                        color: 'error' as const,
+                        disabled: imageControlPlane.busy.value,
+                        onSelect: () => {
+                          selectedPresetId = row.original.id;
+                          confirmingDelete = true;
+                        },
+                      },
+                    ]
+                  : []),
+              ]"
+              :content="{ align: 'end' }"
+            >
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                :aria-label="`Actions for ${row.original.name}`"
+              />
+            </UDropdownMenu></div
+        ></template>
         <template #empty>
           <UEmpty
             title="No Presets Yet"
@@ -113,21 +158,6 @@ onMounted(() => {
       <template #footer>
         <UButton
           v-if="auth.hasScope('image:preset.write')"
-          label="Delete Preset"
-          color="error"
-          variant="outline"
-          :disabled="imageControlPlane.busy.value || !selectedPresetId"
-          @click="confirmingDelete = true"
-        />
-        <UButton
-          label="Edit Preset"
-          color="neutral"
-          variant="outline"
-          :disabled="imageControlPlane.busy.value || !selectedPresetId"
-          @click="editPreset"
-        />
-        <UButton
-          v-if="auth.hasScope('image:preset.write')"
           label="New Preset"
           icon="i-lucide-plus"
           :disabled="imageControlPlane.busy.value"
@@ -135,35 +165,49 @@ onMounted(() => {
         />
       </template>
     </UCard>
-    <UCard
-      v-if="editing"
-      :title="
-        imageControlPlane.selectedPreset.value ? 'Manage Image Preset' : 'Create Image Preset'
-      "
+    <UModal
+      :open="!!editing"
+      :dismissible="!imageControlPlane.busy.value"
+      :title="imageControlPlane.selectedPreset.value ? 'Preset Details' : 'New Preset'"
       description="Define a name, description, and imgproxy-compatible processing options."
-      :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
-    >
-      <UForm
-        id="image-preset"
-        :state="presetForm"
-        :disabled="imageControlPlane.busy.value || !auth.hasScope('image:preset.write')"
-        class="space-y-5"
-        @submit="savePreset"
-      >
-        <UFormField label="Name" required
-          ><UInput v-model="presetForm.name" required class="w-full"
-        /></UFormField>
-        <UFormField label="Description"
-          ><UTextarea v-model="presetForm.description" class="w-full"
-        /></UFormField>
-        <UFormField
-          label="Processing Options"
-          description="Use the image service's processing option syntax, such as rs:fill:320:240/q:80."
-          required
-          ><UInput v-model="presetForm.processingOptions" required class="w-full"
-        /></UFormField>
-      </UForm>
-      <template #footer>
+      :ui="{ body: 'space-y-6', content: 'max-w-3xl', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: imageControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            editing = false;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="imageControlPlane.error.value"
+          title="Request Failed"
+          :description="imageControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <UForm
+          id="image-preset"
+          :state="presetForm"
+          :disabled="imageControlPlane.busy.value || !auth.hasScope('image:preset.write')"
+          class="space-y-5"
+          @submit="savePreset"
+        >
+          <UFormField label="Name" required
+            ><UInput v-model="presetForm.name" required class="w-full"
+          /></UFormField>
+          <UFormField label="Description"
+            ><UTextarea v-model="presetForm.description" class="w-full"
+          /></UFormField>
+          <UFormField
+            label="Processing Options"
+            description="Use the image service's processing option syntax, such as rs:fill:320:240/q:80."
+            required
+            ><UInput v-model="presetForm.processingOptions" required class="w-full"
+          /></UFormField>
+        </UForm> </template
+      ><template #footer>
         <UButton
           label="Cancel"
           color="neutral"
@@ -179,14 +223,21 @@ onMounted(() => {
           :disabled="imageControlPlane.busy.value"
         />
       </template>
-    </UCard>
+    </UModal>
     <UModal
       v-model:open="confirmingDelete"
       title="Delete Image Preset?"
       description="Existing image URLs that reference this preset will stop resolving. This cannot be undone."
       :dismissible="!imageControlPlane.busy.value"
-      :ui="{ footer: 'justify-end' }"
-    >
+      :ui="{ body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: imageControlPlane.busy.value }"
+      ><template v-if="imageControlPlane.error.value" #body
+        ><UAlert
+          title="Request Failed"
+          :description="imageControlPlane.error.value"
+          color="error"
+          role="alert"
+      /></template>
       <template #footer
         ><UButton
           label="Cancel"

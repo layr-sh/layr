@@ -150,6 +150,11 @@ onMounted(() => controlPlane.load("events"));
         :data="controlPlane.events.value?.data || []"
         :columns="columns"
         :loading="controlPlane.busy.value"
+        @select="
+          (_event, row) => {
+            controlPlane.selectEvent(String(row.original.id));
+          }
+        "
       >
         <template #createdAt-cell="cell">{{
           cell.row.original.createdAt.toLocaleString()
@@ -198,43 +203,59 @@ onMounted(() => controlPlane.load("events"));
         </div>
       </template>
     </UCard>
-    <UCard
-      v-if="controlPlane.selectedEvent.value"
+    <UModal
+      :open="!!controlPlane.selectedEvent.value"
+      :dismissible="!controlPlane.busy.value"
       title="Event Details"
       description="Review the event's identity, context, and payload."
-      :ui="{ body: 'space-y-5', footer: 'flex justify-end' }"
-    >
-      <UTable
-        :data="details"
-        :columns="detailColumns"
-        :ui="{ td: 'whitespace-normal break-all' }"
-      />
-      <UAccordion
-        :items="[
-          { label: 'Event Data', slot: 'data' },
-          { label: 'Metadata', slot: 'metadata' },
-        ]"
-      >
-        <template #data
-          ><UTable
-            :data="eventData"
-            :columns="payloadColumns"
-            :ui="{ td: 'whitespace-normal break-all' }"
-        /></template>
-        <template #metadata
-          ><UTable
-            :data="eventMetadata"
-            :columns="payloadColumns"
-            :ui="{ td: 'whitespace-normal break-all' }"
-        /></template>
-      </UAccordion>
-      <template #footer
+      :ui="{ content: 'max-w-5xl', body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: controlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            controlPlane.selectedEvent.value = null;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="controlPlane.error.value"
+          title="Request Failed"
+          :description="controlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <UTable
+          :data="details"
+          :columns="detailColumns"
+          :ui="{ td: 'whitespace-normal break-all' }"
+        />
+        <UAccordion
+          :items="[
+            { label: 'Event Data', slot: 'data' },
+            { label: 'Metadata', slot: 'metadata' },
+          ]"
+        >
+          <template #data
+            ><UTable
+              :data="eventData"
+              :columns="payloadColumns"
+              :ui="{ td: 'whitespace-normal break-all' }"
+          /></template>
+          <template #metadata
+            ><UTable
+              :data="eventMetadata"
+              :columns="payloadColumns"
+              :ui="{ td: 'whitespace-normal break-all' }"
+          /></template>
+        </UAccordion> </template
+      ><template #footer
         ><UButton
           label="Close"
           color="neutral"
           variant="outline"
           @click="controlPlane.selectedEvent.value = null"
       /></template>
-    </UCard>
+    </UModal>
   </div>
 </template>

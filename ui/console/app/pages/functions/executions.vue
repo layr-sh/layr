@@ -21,6 +21,7 @@ const columns: TableColumn<FunctionControlPlaneModels.Execution>[] = [
   { accessorKey: "statusCode", header: "Status" },
   { accessorKey: "durationMs", header: "Duration (ms)" },
   { accessorKey: "createdAt", header: "Created" },
+  { id: "actions", header: "" },
 ];
 async function applyFilter() {
   functionControlPlane.executionEndpointId.value =
@@ -45,7 +46,7 @@ onMounted(async () => {
     />
     <UCard
       title="Function Execution History"
-      description="Invocation audit records with response status, duration, stdout, and stderr. Select a row to inspect its logs."
+      description="Invocation audit records with response status, duration, stdout, and stderr. Open invocation details to inspect its logs."
       :ui="{ footer: 'flex flex-wrap justify-end gap-3' }"
     >
       <UForm
@@ -68,8 +69,12 @@ onMounted(async () => {
         :data="functionControlPlane.executions.value?.data || []"
         :columns="columns"
         :loading="functionControlPlane.busy.value"
-        caption="Function invocations. Select a row to view its recorded output."
-        @select="(_event, row) => (selectedExecution = row.original)"
+        caption="Function invocations. Open invocation details to view recorded output."
+        @select="
+          (_event, row) => {
+            selectedExecution = row.original;
+          }
+        "
       >
         <template #statusCode-cell="{ row }"
           ><UBadge
@@ -80,6 +85,16 @@ onMounted(async () => {
             variant="subtle"
         /></template>
         <template #createdAt-cell="{ row }">{{ row.original.createdAt.toLocaleString() }}</template>
+        <template #actions-cell="{ row }"
+          ><div>
+            <UButton
+              label="Details"
+              color="neutral"
+              variant="ghost"
+              :disabled="functionControlPlane.busy.value"
+              @click="selectedExecution = row.original"
+            /></div
+        ></template>
         <template #empty
           ><UEmpty
             title="No Function Executions"
@@ -127,47 +142,60 @@ onMounted(async () => {
         />
       </template>
     </UCard>
-    <UCard
+    <UModal
       v-if="selectedExecution"
+      :open="!!selectedExecution"
+      :dismissible="!functionControlPlane.busy.value"
       title="Invocation Details"
       description="Recorded output from the selected invocation. Output is shown as plain text."
-      :ui="{ body: 'space-y-4', footer: 'flex justify-end' }"
-    >
-      <dl class="grid gap-4 text-sm sm:grid-cols-2">
-        <div>
-          <dt class="text-muted">Execution ID</dt>
-          <dd class="break-all font-mono">{{ selectedExecution.id }}</dd>
-        </div>
-        <div>
-          <dt class="text-muted">Deployment ID</dt>
-          <dd class="break-all font-mono">
-            {{ selectedExecution.deploymentId || "Not Recorded" }}
-          </dd>
-        </div>
-        <div class="sm:col-span-2">
-          <dt class="text-muted">Error</dt>
-          <dd class="whitespace-pre-wrap break-all">
-            {{ selectedExecution.errorMessage || "None" }}
-          </dd>
-        </div>
-      </dl>
-      <UFormField label="Standard Output" description="stdout captured for this invocation.">
-        <pre class="whitespace-pre-wrap break-all text-sm">{{
-          selectedExecution.stdout || "No standard output"
-        }}</pre>
-      </UFormField>
-      <UFormField label="Standard Error" description="stderr captured for this invocation.">
-        <pre class="whitespace-pre-wrap break-all text-sm">{{
-          selectedExecution.stderr || "No standard error"
-        }}</pre>
-      </UFormField>
-      <template #footer
-        ><UButton
-          label="Close Details"
-          color="neutral"
-          variant="outline"
-          @click="selectedExecution = null"
+      :ui="{ content: 'max-w-5xl', body: 'space-y-6', footer: 'flex flex-wrap justify-end gap-3' }"
+      :close="{ disabled: functionControlPlane.busy.value }"
+      @update:open="
+        (open) => {
+          if (!open) {
+            selectedExecution = null;
+          }
+        }
+      "
+      ><template #body
+        ><UAlert
+          v-if="functionControlPlane.error.value"
+          title="Request Failed"
+          :description="functionControlPlane.error.value"
+          color="error"
+          role="alert"
+        />
+        <dl class="grid gap-4 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-muted">Execution ID</dt>
+            <dd class="break-all font-mono">{{ selectedExecution.id }}</dd>
+          </div>
+          <div>
+            <dt class="text-muted">Deployment ID</dt>
+            <dd class="break-all font-mono">
+              {{ selectedExecution.deploymentId || "Not Recorded" }}
+            </dd>
+          </div>
+          <div class="sm:col-span-2">
+            <dt class="text-muted">Error</dt>
+            <dd class="whitespace-pre-wrap break-all">
+              {{ selectedExecution.errorMessage || "None" }}
+            </dd>
+          </div>
+        </dl>
+        <UFormField label="Standard Output" description="stdout captured for this invocation.">
+          <pre class="whitespace-pre-wrap break-all text-sm">{{
+            selectedExecution.stdout || "No standard output"
+          }}</pre>
+        </UFormField>
+        <UFormField label="Standard Error" description="stderr captured for this invocation.">
+          <pre class="whitespace-pre-wrap break-all text-sm">{{
+            selectedExecution.stderr || "No standard error"
+          }}</pre>
+        </UFormField> </template
+      ><template #footer
+        ><UButton label="Close" color="neutral" variant="outline" @click="selectedExecution = null"
       /></template>
-    </UCard>
+    </UModal>
   </div>
 </template>

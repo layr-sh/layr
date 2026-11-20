@@ -9,6 +9,8 @@ import Signing from "../../pages/image/signing.vue";
 import Statistics from "../../pages/image/index.vue";
 import {
   action,
+  pageDOM,
+  activeDialog,
   field,
   flushPromises,
   mountPage,
@@ -39,8 +41,8 @@ describe("Image permissions and failure handling", () => {
     await router.push("/image");
     ({ wrapper } = await mountPage(Layout));
     expect(wrapper.setupState.canView.value).toBe(false);
-    expect(wrapper.text()).toContain("Access Restricted");
-    expect(wrapper.find('a[href="/image/signing"]').exists()).toBe(false);
+    expect(pageDOM().text()).toContain("Access Restricted");
+    expect(pageDOM().find('a[href="/image/signing"]').exists()).toBe(false);
     wrapper.unmount();
     await router.push("/image/presets");
     ({ wrapper } = await mountPage(Layout));
@@ -55,23 +57,25 @@ describe("Image permissions and failure handling", () => {
     expect(
       await wrapper.setupState.imageControlPlane.saveConfig({ ...original, defaultQuality: 0 }),
     ).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
     wrapper.setupState.imageControlPlane.config.value = null;
     await nextTick();
     await wrapper.setupState.save();
-    expect(wrapper.text()).toContain("Configuration Unavailable");
+    expect(pageDOM().text()).toContain("Configuration Unavailable");
     wrapper.setupState.imageControlPlane.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Image Configuration");
+    expect(pageDOM().text()).toContain("Loading Image Configuration");
     wrapper.setupState.imageControlPlane.busy.value = false;
   });
 
   it("renders read-only configuration and denies unauthorized configuration requests", async () => {
     await signInConsoleUser(["image:config.read"]);
     ({ wrapper } = await mountPage(Configuration));
-    expect(wrapper.findAll("button").some((button) => button.text() === "Save Image Config")).toBe(
-      false,
-    );
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Save Image Config"),
+    ).toBe(false);
     expect(field("Default Quality").attributes("disabled")).toBeDefined();
     expect(
       await wrapper.setupState.imageControlPlane.saveConfig(
@@ -82,9 +86,9 @@ describe("Image permissions and failure handling", () => {
     wrapper.unmount();
     await signInConsoleUser(["image:preset.read"]);
     ({ wrapper } = await mountPage(Configuration));
-    expect(wrapper.text()).toContain("Configuration Unavailable");
+    expect(pageDOM().text()).toContain("Configuration Unavailable");
     expect(await wrapper.setupState.imageControlPlane.load("configuration")).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("handles empty selection, canceled forms, and stale presets", async () => {
@@ -93,19 +97,19 @@ describe("Image permissions and failure handling", () => {
     await wrapper.setupState.deletePreset();
     await action("New Preset").trigger("click");
     await action("Cancel").trigger("click");
-    expect(wrapper.find("#image-preset").exists()).toBe(false);
+    expect(pageDOM().find("#image-preset").exists()).toBe(false);
     wrapper.setupState.selectedPresetId.value = crypto.randomUUID();
     await wrapper.setupState.editPreset();
-    expect(wrapper.text()).toContain("Request Failed");
-    await action("Delete Preset").trigger("click");
+    expect(pageDOM().text()).toContain("Request Failed");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Cancel", document.querySelector('[role="dialog"]')!).trigger("click");
-    await action("Delete Preset").trigger("click");
+    await action("Cancel", activeDialog()!).trigger("click");
+    wrapper.setupState.confirmingDelete.value = true;
     await flushPromises();
-    await action("Delete Preset", document.querySelector('[role="dialog"]')!).trigger("click");
+    await action("Delete Preset", activeDialog()!).trigger("click");
     await settle();
-    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
-    await action("Close", document.querySelector('[role="dialog"]')!).trigger("click");
+    expect(activeDialog()).not.toBeNull();
+    await action("Close", activeDialog()!).trigger("click");
   });
 
   it("preserves failed preset edits and displays presets without descriptions", async () => {
@@ -125,13 +129,13 @@ describe("Image permissions and failure handling", () => {
       expect(field("Description").element).toHaveProperty("value", "");
       await field("Name").setValue(conflictingPreset.name);
       await wrapper.setupState.savePreset();
-      expect(wrapper.find("#image-preset").exists()).toBe(true);
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().find("#image-preset").exists()).toBe(true);
+      expect(pageDOM().text()).toContain("Request Failed");
       await action("New Preset").trigger("click");
       await field("Name").setValue(preset.name);
       await field("Processing Options").setValue("rs:fill:48:48");
       await wrapper.setupState.savePreset();
-      expect(wrapper.text()).toContain("Request Failed");
+      expect(pageDOM().text()).toContain("Request Failed");
     } finally {
       await image.presets.delete(preset.id);
       await image.presets.delete(conflictingPreset.id);
@@ -162,7 +166,7 @@ describe("Image permissions and failure handling", () => {
     wrapper.unmount();
     await signInConsoleUser(["image:stats.read"]);
     ({ wrapper } = await mountPage(Presets));
-    expect(wrapper.text()).toContain("No Presets Yet");
+    expect(pageDOM().text()).toContain("No Presets Yet");
   });
 
   it("renders signing errors without retaining a previous signed result", async () => {
@@ -170,27 +174,31 @@ describe("Image permissions and failure handling", () => {
     await field("Image Path").setValue("/plain/https://example.com/a.png");
     await action("Sign URL").trigger("click");
     await settle();
-    expect(wrapper.text()).toContain("Signed Image URL");
+    expect(pageDOM().text()).toContain("Signed Image URL");
     await field("Image Path").setValue("");
     await wrapper.setupState.sign();
-    expect(wrapper.text()).toContain("Request Failed");
-    expect(wrapper.text()).not.toContain("Signed Image URL");
+    expect(pageDOM().text()).toContain("Request Failed");
+    expect(pageDOM().text()).not.toContain("Signed Image URL");
     wrapper.unmount();
     await signInConsoleUser(["image:stats.read"]);
     ({ wrapper } = await mountPage(Signing));
-    expect(wrapper.findAll("button").some((button) => button.text() === "Sign URL")).toBe(false);
+    expect(
+      pageDOM()
+        .findAll("button")
+        .some((button) => button.text() === "Sign URL"),
+    ).toBe(false);
   });
 
   it("handles unavailable statistics and failed statistics requests", async () => {
     await signInConsoleUser(["image:config.read"]);
     ({ wrapper } = await mountPage(Statistics));
-    expect(wrapper.text()).toContain("Statistics Unavailable");
+    expect(pageDOM().text()).toContain("Statistics Unavailable");
     wrapper.setupState.imageControlPlane.busy.value = true;
     await nextTick();
-    expect(wrapper.text()).toContain("Loading Image Statistics");
+    expect(pageDOM().text()).toContain("Loading Image Statistics");
     wrapper.setupState.imageControlPlane.busy.value = false;
     expect(await wrapper.setupState.imageControlPlane.load("statistics")).toBe(false);
-    expect(wrapper.text()).toContain("Request Failed");
+    expect(pageDOM().text()).toContain("Request Failed");
   });
 
   it("serializes requests and provides meaningful errors for thrown values", async () => {

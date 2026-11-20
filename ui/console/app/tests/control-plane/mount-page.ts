@@ -34,10 +34,14 @@ export async function signInConsoleUser(scopes = ["*"]) {
 }
 
 export async function mountPage(component: Component) {
-  const wrapper = await mountSuspended(component, { route: false, attachTo: document.body });
+  const wrapper = await mountSuspended(component, {
+    route: false,
+    attachTo: document.body,
+  });
   const controlPlane = wrapper.setupState.controlPlane as ReturnType<typeof useControlPlane>;
   await flushPromises();
-  if (controlPlane) await vi.waitFor(() => expect(controlPlane.busy.value).toBe(false));
+  if (controlPlane)
+    await vi.waitFor(() => expect(controlPlane.busy.value).toBe(false), { timeout: 10000 });
   if (wrapper.setupState.imageControlPlane)
     await vi.waitFor(() => expect(wrapper.setupState.imageControlPlane.busy.value).toBe(false));
   if (wrapper.setupState.tasksControlPlane)
@@ -48,11 +52,54 @@ export async function mountPage(component: Component) {
 }
 
 export function action(label: string, scope: ParentNode = document) {
-  const element = [...scope.querySelectorAll("button")].find(
+  const buttons = [...scope.querySelectorAll("button")].filter(
     (button) => button.textContent?.trim() === label || button.getAttribute("aria-label") === label,
   );
+  const element = label === "Close" ? buttons.at(-1) : buttons[0];
   expect(element, `Missing action: ${label}`).toBeDefined();
-  return new DOMWrapper(element!);
+  const domWrapper = new DOMWrapper(element!);
+  const trigger = domWrapper.trigger.bind(domWrapper);
+  domWrapper.trigger = async (...args: Parameters<typeof domWrapper.trigger>) => {
+    await trigger(...args);
+    await flushPromises();
+  };
+  return domWrapper;
+}
+
+export function pageDOM() {
+  return new DOMWrapper(document.body);
+}
+
+export function activeDialog() {
+  return (
+    [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+      .filter(
+        (dialog) =>
+          dialog.getAttribute("data-state") !== "closed" && !dialog.closest('[aria-hidden="true"]'),
+      )
+      .at(-1) || null
+  );
+}
+
+export async function menuAction(label: string, scope: ParentNode = document) {
+  const direct = [...scope.querySelectorAll("button")].find(
+    (button) => button.textContent?.trim() === label,
+  );
+  if (direct) {
+    await new DOMWrapper(direct).trigger("click");
+    await flushPromises();
+    return;
+  }
+  const trigger = scope.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+  expect(trigger, `Missing row menu for ${label}`).not.toBeNull();
+  await new DOMWrapper(trigger!).trigger("keydown", { key: "Enter" });
+  await flushPromises();
+  const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+    (item) => item.textContent?.trim() === label,
+  );
+  expect(item, `Missing menu item: ${label}`).toBeDefined();
+  await new DOMWrapper(item!).trigger("click");
+  await flushPromises();
 }
 
 export function field(label: string) {
@@ -67,7 +114,7 @@ export function field(label: string) {
 
 export async function settle(controlPlane: ReturnType<typeof useControlPlane>) {
   await flushPromises();
-  await vi.waitFor(() => expect(controlPlane.busy.value).toBe(false));
+  await vi.waitFor(() => expect(controlPlane.busy.value).toBe(false), { timeout: 10000 });
 }
 
 export async function selectOption(label: string, optionLabel: string) {
@@ -85,7 +132,7 @@ export async function createOption(label: string, optionLabel: string) {
   await field(label).trigger("click");
   await flushPromises();
   const search = document.querySelector<HTMLInputElement>(
-    '[role="dialog"] input, [role="combobox"] input, input[role="combobox"]',
+    '[data-reka-popper-content-wrapper] input[role="combobox"]',
   );
   expect(search).not.toBeNull();
   await new DOMWrapper(search!).setValue(optionLabel);
