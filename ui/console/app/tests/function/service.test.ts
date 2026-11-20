@@ -550,6 +550,7 @@ describe("Function service integration", () => {
     expect(pageDOM().text()).toContain(stats.totalEndpoints.toLocaleString());
     expect(pageDOM().text()).toContain("workerd Runtime");
     wrapper.setupState.functionControlPlane.stats.value = {
+      ...stats,
       totalEndpoints: 0,
       runtimes: {
         missing: null,

@@ -97,6 +97,8 @@ describe("Function permissions and failures", () => {
     await signInConsoleUser([]);
     ({ wrapper } = await mountPage(Statistics));
     expect(wrapper.setupState.runtimes.value).toEqual([]);
+    expect(wrapper.setupState.summary.value).toEqual([]);
+    expect(wrapper.setupState.traffic.value).toEqual([]);
     wrapper.setupState.functionControlPlane.busy.value = true;
     await nextTick();
     expect(pageDOM().text()).toContain("Loading Function Statistics");

@@ -346,6 +346,54 @@
         ],
         "type": "object"
       },
+      "EndpointUsage": {
+        "properties": {
+          "average_duration_ms": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "executions": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "failed_executions": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "is_deployed": {
+            "type": "boolean"
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "last_executed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "p95_duration_ms": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "runtime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "executions",
+          "failed_executions",
+          "is_deployed",
+          "is_public",
+          "name",
+          "runtime"
+        ],
+        "type": "object"
+      },
       "Execution": {
         "properties": {
           "created_at": {
@@ -397,6 +445,67 @@
       "GetStatsResponse": {
         "description": "GetStatsResponse schema",
         "properties": {
+          "average_duration_ms": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "bundle_size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "client_errors_last_24_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "deployed_endpoints": {
+            "type": "integer"
+          },
+          "domain_routes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domains_needing_tls": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/EndpointUsage"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "executions_last_24_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "failed_executions_last_24_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_executed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "p95_duration_ms": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "private_endpoints": {
+            "type": "integer"
+          },
+          "public_endpoints": {
+            "type": "integer"
+          },
           "runtimes": {
             "additionalProperties": {
               "$ref": "#/components/schemas/RunnerHealth"
@@ -406,13 +515,49 @@
               "null"
             ]
           },
+          "server_errors_last_24_hours": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_deployments": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_domains": {
+            "format": "int64",
+            "type": "integer"
+          },
           "total_endpoints": {
             "type": "integer"
+          },
+          "total_executions": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "window_started_at": {
+            "format": "date-time",
+            "type": "string"
           }
         },
         "required": [
+          "bundle_size_bytes",
+          "client_errors_last_24_hours",
+          "deployed_endpoints",
+          "domain_routes",
+          "domains_needing_tls",
+          "endpoints",
+          "executions_last_24_hours",
+          "failed_executions_last_24_hours",
+          "generated_at",
+          "private_endpoints",
+          "public_endpoints",
           "runtimes",
-          "total_endpoints"
+          "server_errors_last_24_hours",
+          "total_deployments",
+          "total_domains",
+          "total_endpoints",
+          "total_executions",
+          "window_started_at"
         ],
         "type": "object"
       },
@@ -1638,7 +1783,7 @@
     },
     "/v1/_/function/stats": {
       "get": {
-        "description": "Returns real-time runtime statistics including active worker isolates count, memory consumption, runner queue depth, and throughput metrics. Requires function:stats.read scope.",
+        "description": "Returns runtime health, endpoint and deployment counts, stored bundle payload bytes, domain and TLS status counts, retained execution totals, and execution counts, failures, and average/P95 latency over a rolling 24-hour window. Includes per-endpoint window usage. Failures include HTTP 4xx/5xx responses or recorded execution errors. Metrics reflect retained logs, not lifetime traffic. Requires function:stats.read scope.",
         "operationId": "function__stats__get",
         "responses": {
           "200": {

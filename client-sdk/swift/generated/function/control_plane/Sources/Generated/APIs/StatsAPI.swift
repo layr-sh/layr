@@ -22,7 +22,7 @@ open class StatsAPI {
     /**
      Get function runtime telemetry and worker statistics
      - GET /v1/_/function/stats
-     - Returns real-time runtime statistics including active worker isolates count, memory consumption, runner queue depth, and throughput metrics. Requires function:stats.read scope.
+     - Returns runtime health, endpoint and deployment counts, stored bundle payload bytes, domain and TLS status counts, retained execution totals, and execution counts, failures, and average/P95 latency over a rolling 24-hour window. Includes per-endpoint window usage. Failures include HTTP 4xx/5xx responses or recorded execution errors. Metrics reflect retained logs, not lifetime traffic. Requires function:stats.read scope.
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<GetStatsResponse> 
      */

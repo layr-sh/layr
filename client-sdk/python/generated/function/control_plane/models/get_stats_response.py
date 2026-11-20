@@ -17,8 +17,10 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, StrictInt
-from typing import Any, ClassVar, Dict, List, Optional
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, StrictFloat, StrictInt
+from typing import Any, ClassVar, Dict, List, Optional, Union
+from generated.function.control_plane.models.endpoint_usage import EndpointUsage
 from generated.function.control_plane.models.runner_health import RunnerHealth
 from typing import Optional, Set
 from typing_extensions import Self
@@ -28,9 +30,28 @@ class GetStatsResponse(BaseModel):
     """
     GetStatsResponse schema
     """ # noqa: E501
+    average_duration_ms: Optional[Union[StrictFloat, StrictInt]] = None
+    bundle_size_bytes: StrictInt
+    client_errors_last_24_hours: StrictInt
+    deployed_endpoints: StrictInt
+    domain_routes: StrictInt
+    domains_needing_tls: StrictInt
+    endpoints: Optional[List[EndpointUsage]]
+    executions_last_24_hours: StrictInt
+    failed_executions_last_24_hours: StrictInt
+    generated_at: datetime
+    last_executed_at: Optional[datetime] = None
+    p95_duration_ms: Optional[Union[StrictFloat, StrictInt]] = None
+    private_endpoints: StrictInt
+    public_endpoints: StrictInt
     runtimes: Optional[Dict[str, RunnerHealth]]
+    server_errors_last_24_hours: StrictInt
+    total_deployments: StrictInt
+    total_domains: StrictInt
     total_endpoints: StrictInt
-    __properties: ClassVar[List[str]] = ["runtimes", "total_endpoints"]
+    total_executions: StrictInt
+    window_started_at: datetime
+    __properties: ClassVar[List[str]] = ["average_duration_ms", "bundle_size_bytes", "client_errors_last_24_hours", "deployed_endpoints", "domain_routes", "domains_needing_tls", "endpoints", "executions_last_24_hours", "failed_executions_last_24_hours", "generated_at", "last_executed_at", "p95_duration_ms", "private_endpoints", "public_endpoints", "runtimes", "server_errors_last_24_hours", "total_deployments", "total_domains", "total_endpoints", "total_executions", "window_started_at"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -71,12 +92,23 @@ class GetStatsResponse(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
+        # override the default output from pydantic by calling `to_dict()` of each item in endpoints (list)
+        _items = []
+        if self.endpoints:
+            for _item_endpoints in self.endpoints:
+                _items.append(_item_endpoints.to_dict() if _item_endpoints is not None else None)
+            _dict['endpoints'] = _items
         # override the default output from pydantic by calling `to_dict()` of each value in runtimes (dict)
         _field_dict = {}
         if self.runtimes:
             for _key_runtimes in self.runtimes:
                 _field_dict[_key_runtimes] = self.runtimes[_key_runtimes].to_dict() if self.runtimes[_key_runtimes] is not None else None
             _dict['runtimes'] = _field_dict
+        # set to None if endpoints (nullable) is None
+        # and model_fields_set contains the field
+        if self.endpoints is None and "endpoints" in self.model_fields_set:
+            _dict['endpoints'] = None
+
         # set to None if runtimes (nullable) is None
         # and model_fields_set contains the field
         if self.runtimes is None and "runtimes" in self.model_fields_set:
@@ -94,13 +126,32 @@ class GetStatsResponse(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
+            "average_duration_ms": obj.get("average_duration_ms"),
+            "bundle_size_bytes": obj.get("bundle_size_bytes"),
+            "client_errors_last_24_hours": obj.get("client_errors_last_24_hours"),
+            "deployed_endpoints": obj.get("deployed_endpoints"),
+            "domain_routes": obj.get("domain_routes"),
+            "domains_needing_tls": obj.get("domains_needing_tls"),
+            "endpoints": [EndpointUsage.from_dict(_item) for _item in obj["endpoints"]] if obj.get("endpoints") is not None else None,
+            "executions_last_24_hours": obj.get("executions_last_24_hours"),
+            "failed_executions_last_24_hours": obj.get("failed_executions_last_24_hours"),
+            "generated_at": obj.get("generated_at"),
+            "last_executed_at": obj.get("last_executed_at"),
+            "p95_duration_ms": obj.get("p95_duration_ms"),
+            "private_endpoints": obj.get("private_endpoints"),
+            "public_endpoints": obj.get("public_endpoints"),
             "runtimes": dict(
                 (_k, RunnerHealth.from_dict(_v))
                 for _k, _v in obj["runtimes"].items()
             )
             if obj.get("runtimes") is not None
             else None,
-            "total_endpoints": obj.get("total_endpoints")
+            "server_errors_last_24_hours": obj.get("server_errors_last_24_hours"),
+            "total_deployments": obj.get("total_deployments"),
+            "total_domains": obj.get("total_domains"),
+            "total_endpoints": obj.get("total_endpoints"),
+            "total_executions": obj.get("total_executions"),
+            "window_started_at": obj.get("window_started_at")
         })
         return _obj
 

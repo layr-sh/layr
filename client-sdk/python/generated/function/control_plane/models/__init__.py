@@ -22,6 +22,7 @@ from generated.function.control_plane.models.custom_domain import CustomDomain
 from generated.function.control_plane.models.custom_domain_route import CustomDomainRoute
 from generated.function.control_plane.models.deployment import Deployment
 from generated.function.control_plane.models.endpoint import Endpoint
+from generated.function.control_plane.models.endpoint_usage import EndpointUsage
 from generated.function.control_plane.models.execution import Execution
 from generated.function.control_plane.models.get_stats_response import GetStatsResponse
 from generated.function.control_plane.models.list_custom_domain_routes_response import ListCustomDomainRoutesResponse

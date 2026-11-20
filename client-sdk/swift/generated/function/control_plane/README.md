@@ -164,6 +164,7 @@ Class | Method | HTTP request | Description
  - [CustomDomainRoute](docs/CustomDomainRoute.md)
  - [Deployment](docs/Deployment.md)
  - [Endpoint](docs/Endpoint.md)
+ - [EndpointUsage](docs/EndpointUsage.md)
  - [Execution](docs/Execution.md)
  - [GetStatsResponse](docs/GetStatsResponse.md)
  - [ListCustomDomainRoutesResponse](docs/ListCustomDomainRoutesResponse.md)

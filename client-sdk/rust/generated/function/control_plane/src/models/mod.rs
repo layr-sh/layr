@@ -16,6 +16,8 @@ pub mod deployment;
 pub use self::deployment::Deployment;
 pub mod endpoint;
 pub use self::endpoint::Endpoint;
+pub mod endpoint_usage;
+pub use self::endpoint_usage::EndpointUsage;
 pub mod execution;
 pub use self::execution::Execution;
 pub mod get_stats_response;

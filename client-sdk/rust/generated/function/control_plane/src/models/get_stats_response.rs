@@ -14,18 +14,75 @@ use serde::{Deserialize, Serialize};
 /// GetStatsResponse : GetStatsResponse schema
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GetStatsResponse {
+    #[serde(rename = "average_duration_ms", skip_serializing_if = "Option::is_none")]
+    pub average_duration_ms: Option<f64>,
+    #[serde(rename = "bundle_size_bytes")]
+    pub bundle_size_bytes: i64,
+    #[serde(rename = "client_errors_last_24_hours")]
+    pub client_errors_last_24_hours: i64,
+    #[serde(rename = "deployed_endpoints")]
+    pub deployed_endpoints: i32,
+    #[serde(rename = "domain_routes")]
+    pub domain_routes: i64,
+    #[serde(rename = "domains_needing_tls")]
+    pub domains_needing_tls: i64,
+    #[serde(rename = "endpoints", deserialize_with = "Option::deserialize")]
+    pub endpoints: Option<Vec<models::EndpointUsage>>,
+    #[serde(rename = "executions_last_24_hours")]
+    pub executions_last_24_hours: i64,
+    #[serde(rename = "failed_executions_last_24_hours")]
+    pub failed_executions_last_24_hours: i64,
+    #[serde(rename = "generated_at")]
+    pub generated_at: chrono::DateTime<chrono::FixedOffset>,
+    #[serde(rename = "last_executed_at", skip_serializing_if = "Option::is_none")]
+    pub last_executed_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    #[serde(rename = "p95_duration_ms", skip_serializing_if = "Option::is_none")]
+    pub p95_duration_ms: Option<f64>,
+    #[serde(rename = "private_endpoints")]
+    pub private_endpoints: i32,
+    #[serde(rename = "public_endpoints")]
+    pub public_endpoints: i32,
     #[serde(rename = "runtimes", deserialize_with = "Option::deserialize")]
     pub runtimes: Option<std::collections::HashMap<String, models::RunnerHealth>>,
+    #[serde(rename = "server_errors_last_24_hours")]
+    pub server_errors_last_24_hours: i64,
+    #[serde(rename = "total_deployments")]
+    pub total_deployments: i64,
+    #[serde(rename = "total_domains")]
+    pub total_domains: i64,
     #[serde(rename = "total_endpoints")]
     pub total_endpoints: i32,
+    #[serde(rename = "total_executions")]
+    pub total_executions: i64,
+    #[serde(rename = "window_started_at")]
+    pub window_started_at: chrono::DateTime<chrono::FixedOffset>,
 }
 
 impl GetStatsResponse {
     /// GetStatsResponse schema
-    pub fn new(runtimes: Option<std::collections::HashMap<String, models::RunnerHealth>>, total_endpoints: i32) -> GetStatsResponse {
+    pub fn new(bundle_size_bytes: i64, client_errors_last_24_hours: i64, deployed_endpoints: i32, domain_routes: i64, domains_needing_tls: i64, endpoints: Option<Vec<models::EndpointUsage>>, executions_last_24_hours: i64, failed_executions_last_24_hours: i64, generated_at: chrono::DateTime<chrono::FixedOffset>, private_endpoints: i32, public_endpoints: i32, runtimes: Option<std::collections::HashMap<String, models::RunnerHealth>>, server_errors_last_24_hours: i64, total_deployments: i64, total_domains: i64, total_endpoints: i32, total_executions: i64, window_started_at: chrono::DateTime<chrono::FixedOffset>) -> GetStatsResponse {
         GetStatsResponse {
+            average_duration_ms: None,
+            bundle_size_bytes,
+            client_errors_last_24_hours,
+            deployed_endpoints,
+            domain_routes,
+            domains_needing_tls,
+            endpoints,
+            executions_last_24_hours,
+            failed_executions_last_24_hours,
+            generated_at,
+            last_executed_at: None,
+            p95_duration_ms: None,
+            private_endpoints,
+            public_endpoints,
             runtimes,
+            server_errors_last_24_hours,
+            total_deployments,
+            total_domains,
             total_endpoints,
+            total_executions,
+            window_started_at,
         }
     }
 }

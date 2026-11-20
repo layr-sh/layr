@@ -10,25 +10,101 @@ import Foundation
 /** GetStatsResponse schema */
 public struct GetStatsResponse: Sendable, Codable, Hashable {
 
+    public var averageDurationMs: Double?
+    public var bundleSizeBytes: Int64
+    public var clientErrorsLast24Hours: Int64
+    public var deployedEndpoints: Int
+    public var domainRoutes: Int64
+    public var domainsNeedingTls: Int64
+    public var endpoints: [EndpointUsage]?
+    public var executionsLast24Hours: Int64
+    public var failedExecutionsLast24Hours: Int64
+    public var generatedAt: Date
+    public var lastExecutedAt: Date?
+    public var p95DurationMs: Double?
+    public var privateEndpoints: Int
+    public var publicEndpoints: Int
     public var runtimes: [String: RunnerHealth]?
+    public var serverErrorsLast24Hours: Int64
+    public var totalDeployments: Int64
+    public var totalDomains: Int64
     public var totalEndpoints: Int
+    public var totalExecutions: Int64
+    public var windowStartedAt: Date
 
-    public init(runtimes: [String: RunnerHealth]?, totalEndpoints: Int) {
+    public init(averageDurationMs: Double? = nil, bundleSizeBytes: Int64, clientErrorsLast24Hours: Int64, deployedEndpoints: Int, domainRoutes: Int64, domainsNeedingTls: Int64, endpoints: [EndpointUsage]?, executionsLast24Hours: Int64, failedExecutionsLast24Hours: Int64, generatedAt: Date, lastExecutedAt: Date? = nil, p95DurationMs: Double? = nil, privateEndpoints: Int, publicEndpoints: Int, runtimes: [String: RunnerHealth]?, serverErrorsLast24Hours: Int64, totalDeployments: Int64, totalDomains: Int64, totalEndpoints: Int, totalExecutions: Int64, windowStartedAt: Date) {
+        self.averageDurationMs = averageDurationMs
+        self.bundleSizeBytes = bundleSizeBytes
+        self.clientErrorsLast24Hours = clientErrorsLast24Hours
+        self.deployedEndpoints = deployedEndpoints
+        self.domainRoutes = domainRoutes
+        self.domainsNeedingTls = domainsNeedingTls
+        self.endpoints = endpoints
+        self.executionsLast24Hours = executionsLast24Hours
+        self.failedExecutionsLast24Hours = failedExecutionsLast24Hours
+        self.generatedAt = generatedAt
+        self.lastExecutedAt = lastExecutedAt
+        self.p95DurationMs = p95DurationMs
+        self.privateEndpoints = privateEndpoints
+        self.publicEndpoints = publicEndpoints
         self.runtimes = runtimes
+        self.serverErrorsLast24Hours = serverErrorsLast24Hours
+        self.totalDeployments = totalDeployments
+        self.totalDomains = totalDomains
         self.totalEndpoints = totalEndpoints
+        self.totalExecutions = totalExecutions
+        self.windowStartedAt = windowStartedAt
     }
 
     public enum CodingKeys: String, CodingKey, CaseIterable {
+        case averageDurationMs = "average_duration_ms"
+        case bundleSizeBytes = "bundle_size_bytes"
+        case clientErrorsLast24Hours = "client_errors_last_24_hours"
+        case deployedEndpoints = "deployed_endpoints"
+        case domainRoutes = "domain_routes"
+        case domainsNeedingTls = "domains_needing_tls"
+        case endpoints
+        case executionsLast24Hours = "executions_last_24_hours"
+        case failedExecutionsLast24Hours = "failed_executions_last_24_hours"
+        case generatedAt = "generated_at"
+        case lastExecutedAt = "last_executed_at"
+        case p95DurationMs = "p95_duration_ms"
+        case privateEndpoints = "private_endpoints"
+        case publicEndpoints = "public_endpoints"
         case runtimes
+        case serverErrorsLast24Hours = "server_errors_last_24_hours"
+        case totalDeployments = "total_deployments"
+        case totalDomains = "total_domains"
         case totalEndpoints = "total_endpoints"
+        case totalExecutions = "total_executions"
+        case windowStartedAt = "window_started_at"
     }
 
     // Encodable protocol methods
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(averageDurationMs, forKey: .averageDurationMs)
+        try container.encode(bundleSizeBytes, forKey: .bundleSizeBytes)
+        try container.encode(clientErrorsLast24Hours, forKey: .clientErrorsLast24Hours)
+        try container.encode(deployedEndpoints, forKey: .deployedEndpoints)
+        try container.encode(domainRoutes, forKey: .domainRoutes)
+        try container.encode(domainsNeedingTls, forKey: .domainsNeedingTls)
+        try container.encode(endpoints, forKey: .endpoints)
+        try container.encode(executionsLast24Hours, forKey: .executionsLast24Hours)
+        try container.encode(failedExecutionsLast24Hours, forKey: .failedExecutionsLast24Hours)
+        try container.encode(generatedAt, forKey: .generatedAt)
+        try container.encodeIfPresent(lastExecutedAt, forKey: .lastExecutedAt)
+        try container.encodeIfPresent(p95DurationMs, forKey: .p95DurationMs)
+        try container.encode(privateEndpoints, forKey: .privateEndpoints)
+        try container.encode(publicEndpoints, forKey: .publicEndpoints)
         try container.encode(runtimes, forKey: .runtimes)
+        try container.encode(serverErrorsLast24Hours, forKey: .serverErrorsLast24Hours)
+        try container.encode(totalDeployments, forKey: .totalDeployments)
+        try container.encode(totalDomains, forKey: .totalDomains)
         try container.encode(totalEndpoints, forKey: .totalEndpoints)
+        try container.encode(totalExecutions, forKey: .totalExecutions)
+        try container.encode(windowStartedAt, forKey: .windowStartedAt)
     }
 }
 

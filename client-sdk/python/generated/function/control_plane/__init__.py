@@ -43,6 +43,7 @@ __all__ = [
     "CustomDomainRoute",
     "Deployment",
     "Endpoint",
+    "EndpointUsage",
     "Execution",
     "GetStatsResponse",
     "ListCustomDomainRoutesResponse",
@@ -88,6 +89,7 @@ from generated.function.control_plane.models.custom_domain import CustomDomain a
 from generated.function.control_plane.models.custom_domain_route import CustomDomainRoute as CustomDomainRoute
 from generated.function.control_plane.models.deployment import Deployment as Deployment
 from generated.function.control_plane.models.endpoint import Endpoint as Endpoint
+from generated.function.control_plane.models.endpoint_usage import EndpointUsage as EndpointUsage
 from generated.function.control_plane.models.execution import Execution as Execution
 from generated.function.control_plane.models.get_stats_response import GetStatsResponse as GetStatsResponse
 from generated.function.control_plane.models.list_custom_domain_routes_response import ListCustomDomainRoutesResponse as ListCustomDomainRoutesResponse

@@ -12,7 +12,7 @@
  * Do not edit the class manually.
  */
 
-import { mapValues } from '../runtime';
+import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
 import type { RunnerHealth } from './RunnerHealth';
 import {
     RunnerHealthFromJSON,
@@ -20,6 +20,13 @@ import {
     RunnerHealthToJSON,
     RunnerHealthToJSONTyped,
 } from './RunnerHealth';
+import type { EndpointUsage } from './EndpointUsage';
+import {
+    EndpointUsageFromJSON,
+    EndpointUsageFromJSONTyped,
+    EndpointUsageToJSON,
+    EndpointUsageToJSONTyped,
+} from './EndpointUsage';
 
 /**
  * GetStatsResponse schema
@@ -30,19 +37,111 @@ export interface GetStatsResponse {
     /**
      * 
      */
+    averageDurationMs?: number;
+    /**
+     * 
+     */
+    bundleSizeBytes: number;
+    /**
+     * 
+     */
+    clientErrorsLast24Hours: number;
+    /**
+     * 
+     */
+    deployedEndpoints: number;
+    /**
+     * 
+     */
+    domainRoutes: number;
+    /**
+     * 
+     */
+    domainsNeedingTls: number;
+    /**
+     * 
+     */
+    endpoints: Array<EndpointUsage> | null;
+    /**
+     * 
+     */
+    executionsLast24Hours: number;
+    /**
+     * 
+     */
+    failedExecutionsLast24Hours: number;
+    /**
+     * 
+     */
+    generatedAt: Date;
+    /**
+     * 
+     */
+    lastExecutedAt?: Date;
+    /**
+     * 
+     */
+    p95DurationMs?: number;
+    /**
+     * 
+     */
+    privateEndpoints: number;
+    /**
+     * 
+     */
+    publicEndpoints: number;
+    /**
+     * 
+     */
     runtimes: { [key: string]: RunnerHealth; } | null;
     /**
      * 
      */
+    serverErrorsLast24Hours: number;
+    /**
+     * 
+     */
+    totalDeployments: number;
+    /**
+     * 
+     */
+    totalDomains: number;
+    /**
+     * 
+     */
     totalEndpoints: number;
+    /**
+     * 
+     */
+    totalExecutions: number;
+    /**
+     * 
+     */
+    windowStartedAt: Date;
 }
 
 /**
  * Check if a given object implements the GetStatsResponse interface.
  */
 export function instanceOfGetStatsResponse(value: object): value is GetStatsResponse {
+    if ((!('bundleSizeBytes' in (value as Record<string, any>)) && !('bundle_size_bytes' in (value as Record<string, any>))) || ((value as Record<string, any>)['bundleSizeBytes'] === undefined && (value as Record<string, any>)['bundle_size_bytes'] === undefined)) return false;
+    if ((!('clientErrorsLast24Hours' in (value as Record<string, any>)) && !('client_errors_last_24_hours' in (value as Record<string, any>))) || ((value as Record<string, any>)['clientErrorsLast24Hours'] === undefined && (value as Record<string, any>)['client_errors_last_24_hours'] === undefined)) return false;
+    if ((!('deployedEndpoints' in (value as Record<string, any>)) && !('deployed_endpoints' in (value as Record<string, any>))) || ((value as Record<string, any>)['deployedEndpoints'] === undefined && (value as Record<string, any>)['deployed_endpoints'] === undefined)) return false;
+    if ((!('domainRoutes' in (value as Record<string, any>)) && !('domain_routes' in (value as Record<string, any>))) || ((value as Record<string, any>)['domainRoutes'] === undefined && (value as Record<string, any>)['domain_routes'] === undefined)) return false;
+    if ((!('domainsNeedingTls' in (value as Record<string, any>)) && !('domains_needing_tls' in (value as Record<string, any>))) || ((value as Record<string, any>)['domainsNeedingTls'] === undefined && (value as Record<string, any>)['domains_needing_tls'] === undefined)) return false;
+    if (!('endpoints' in value) || value['endpoints'] === undefined) return false;
+    if ((!('executionsLast24Hours' in (value as Record<string, any>)) && !('executions_last_24_hours' in (value as Record<string, any>))) || ((value as Record<string, any>)['executionsLast24Hours'] === undefined && (value as Record<string, any>)['executions_last_24_hours'] === undefined)) return false;
+    if ((!('failedExecutionsLast24Hours' in (value as Record<string, any>)) && !('failed_executions_last_24_hours' in (value as Record<string, any>))) || ((value as Record<string, any>)['failedExecutionsLast24Hours'] === undefined && (value as Record<string, any>)['failed_executions_last_24_hours'] === undefined)) return false;
+    if ((!('generatedAt' in (value as Record<string, any>)) && !('generated_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['generatedAt'] === undefined && (value as Record<string, any>)['generated_at'] === undefined)) return false;
+    if ((!('privateEndpoints' in (value as Record<string, any>)) && !('private_endpoints' in (value as Record<string, any>))) || ((value as Record<string, any>)['privateEndpoints'] === undefined && (value as Record<string, any>)['private_endpoints'] === undefined)) return false;
+    if ((!('publicEndpoints' in (value as Record<string, any>)) && !('public_endpoints' in (value as Record<string, any>))) || ((value as Record<string, any>)['publicEndpoints'] === undefined && (value as Record<string, any>)['public_endpoints'] === undefined)) return false;
     if (!('runtimes' in value) || value['runtimes'] === undefined) return false;
+    if ((!('serverErrorsLast24Hours' in (value as Record<string, any>)) && !('server_errors_last_24_hours' in (value as Record<string, any>))) || ((value as Record<string, any>)['serverErrorsLast24Hours'] === undefined && (value as Record<string, any>)['server_errors_last_24_hours'] === undefined)) return false;
+    if ((!('totalDeployments' in (value as Record<string, any>)) && !('total_deployments' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalDeployments'] === undefined && (value as Record<string, any>)['total_deployments'] === undefined)) return false;
+    if ((!('totalDomains' in (value as Record<string, any>)) && !('total_domains' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalDomains'] === undefined && (value as Record<string, any>)['total_domains'] === undefined)) return false;
     if ((!('totalEndpoints' in (value as Record<string, any>)) && !('total_endpoints' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalEndpoints'] === undefined && (value as Record<string, any>)['total_endpoints'] === undefined)) return false;
+    if ((!('totalExecutions' in (value as Record<string, any>)) && !('total_executions' in (value as Record<string, any>))) || ((value as Record<string, any>)['totalExecutions'] === undefined && (value as Record<string, any>)['total_executions'] === undefined)) return false;
+    if ((!('windowStartedAt' in (value as Record<string, any>)) && !('window_started_at' in (value as Record<string, any>))) || ((value as Record<string, any>)['windowStartedAt'] === undefined && (value as Record<string, any>)['window_started_at'] === undefined)) return false;
     return true;
 }
 
@@ -56,8 +155,27 @@ export function GetStatsResponseFromJSONTyped(json: any, ignoreDiscriminator: bo
     }
     return {
         
+        'averageDurationMs': json['average_duration_ms'] == null ? undefined : json['average_duration_ms'],
+        'bundleSizeBytes': json['bundle_size_bytes'],
+        'clientErrorsLast24Hours': json['client_errors_last_24_hours'],
+        'deployedEndpoints': json['deployed_endpoints'],
+        'domainRoutes': json['domain_routes'],
+        'domainsNeedingTls': json['domains_needing_tls'],
+        'endpoints': (json['endpoints'] == null ? null : (json['endpoints'] as Array<any>).map(EndpointUsageFromJSON)),
+        'executionsLast24Hours': json['executions_last_24_hours'],
+        'failedExecutionsLast24Hours': json['failed_executions_last_24_hours'],
+        'generatedAt': (json['generated_at'] == null ? json['generated_at'] : parseDateTime(json['generated_at'])),
+        'lastExecutedAt': json['last_executed_at'] == null ? undefined : (parseDateTime(json['last_executed_at'])),
+        'p95DurationMs': json['p95_duration_ms'] == null ? undefined : json['p95_duration_ms'],
+        'privateEndpoints': json['private_endpoints'],
+        'publicEndpoints': json['public_endpoints'],
         'runtimes': (json['runtimes'] == null ? null : mapValues(json['runtimes'], RunnerHealthFromJSON)),
+        'serverErrorsLast24Hours': json['server_errors_last_24_hours'],
+        'totalDeployments': json['total_deployments'],
+        'totalDomains': json['total_domains'],
         'totalEndpoints': json['total_endpoints'],
+        'totalExecutions': json['total_executions'],
+        'windowStartedAt': (json['window_started_at'] == null ? json['window_started_at'] : parseDateTime(json['window_started_at'])),
     };
 }
 
@@ -72,8 +190,27 @@ export function GetStatsResponseToJSONTyped(value?: GetStatsResponse | null, ign
 
     return {
         
+        'average_duration_ms': value['averageDurationMs'],
+        'bundle_size_bytes': value['bundleSizeBytes'],
+        'client_errors_last_24_hours': value['clientErrorsLast24Hours'],
+        'deployed_endpoints': value['deployedEndpoints'],
+        'domain_routes': value['domainRoutes'],
+        'domains_needing_tls': value['domainsNeedingTls'],
+        'endpoints': (value['endpoints'] == null ? null : (value['endpoints'] as Array<any>).map(EndpointUsageToJSON)),
+        'executions_last_24_hours': value['executionsLast24Hours'],
+        'failed_executions_last_24_hours': value['failedExecutionsLast24Hours'],
+        'generated_at': value['generatedAt'] == null ? value['generatedAt'] : serializeDateTime(value['generatedAt']),
+        'last_executed_at': value['lastExecutedAt'] == null ? value['lastExecutedAt'] : serializeDateTime(value['lastExecutedAt']),
+        'p95_duration_ms': value['p95DurationMs'],
+        'private_endpoints': value['privateEndpoints'],
+        'public_endpoints': value['publicEndpoints'],
         'runtimes': (value['runtimes'] == null ? null : mapValues(value['runtimes'], RunnerHealthToJSON)),
+        'server_errors_last_24_hours': value['serverErrorsLast24Hours'],
+        'total_deployments': value['totalDeployments'],
+        'total_domains': value['totalDomains'],
         'total_endpoints': value['totalEndpoints'],
+        'total_executions': value['totalExecutions'],
+        'window_started_at': value['windowStartedAt'] == null ? value['windowStartedAt'] : serializeDateTime(value['windowStartedAt']),
     };
 }
 

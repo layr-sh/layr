@@ -2,6 +2,7 @@ package function
 
 import (
 	"errors"
+	"time"
 
 	"uuid"
 
@@ -69,8 +70,41 @@ type ListDeploymentsResponse struct {
 
 // GetStatsResponse represents runtime metrics and health telemetry across runners.
 type GetStatsResponse struct {
-	Runtimes       map[string]*RunnerHealth `json:"runtimes"`
-	TotalEndpoints int                      `json:"total_endpoints"`
+	Runtimes          map[string]*RunnerHealth `json:"runtimes"`
+	TotalEndpoints    int                      `json:"total_endpoints"`
+	PublicEndpoints   int                      `json:"public_endpoints"`
+	PrivateEndpoints  int                      `json:"private_endpoints"`
+	DeployedEndpoints int                      `json:"deployed_endpoints"`
+	TotalDeployments  int64                    `json:"total_deployments"`
+
+	BundleSizeBytes             int64           `json:"bundle_size_bytes"`
+	TotalDomains                int64           `json:"total_domains"`
+	DomainRoutes                int64           `json:"domain_routes"`
+	DomainsNeedingTLS           int64           `json:"domains_needing_tls"`
+	TotalExecutions             int64           `json:"total_executions"`
+	ExecutionsLast24Hours       int64           `json:"executions_last_24_hours"`
+	FailedExecutionsLast24Hours int64           `json:"failed_executions_last_24_hours"`
+	ClientErrorsLast24Hours     int64           `json:"client_errors_last_24_hours"`
+	ServerErrorsLast24Hours     int64           `json:"server_errors_last_24_hours"`
+	AverageDurationMs           *float64        `json:"average_duration_ms,omitempty"`
+	P95DurationMs               *float64        `json:"p95_duration_ms,omitempty"`
+	LastExecutedAt              *time.Time      `json:"last_executed_at,omitempty"`
+	WindowStartedAt             time.Time       `json:"window_started_at"`
+	GeneratedAt                 time.Time       `json:"generated_at"`
+	Endpoints                   []EndpointUsage `json:"endpoints"`
+}
+
+// EndpointUsage summarizes retained execution logs within the statistics window.
+type EndpointUsage struct {
+	Name              string     `json:"name"`
+	Runtime           string     `json:"runtime"`
+	IsPublic          bool       `json:"is_public"`
+	IsDeployed        bool       `json:"is_deployed"`
+	Executions        int64      `json:"executions"`
+	FailedExecutions  int64      `json:"failed_executions"`
+	AverageDurationMs *float64   `json:"average_duration_ms,omitempty"`
+	P95DurationMs     *float64   `json:"p95_duration_ms,omitempty"`
+	LastExecutedAt    *time.Time `json:"last_executed_at,omitempty"`
 }
 
 // ListExecutionsResponse represents the paginated collection of execution logs.

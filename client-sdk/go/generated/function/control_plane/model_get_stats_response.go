@@ -12,6 +12,7 @@ package control_plane
 
 import (
 	"encoding/json"
+	"time"
 	"bytes"
 	"fmt"
 )
@@ -21,8 +22,27 @@ var _ MappedNullable = &GetStatsResponse{}
 
 // GetStatsResponse GetStatsResponse schema
 type GetStatsResponse struct {
+	AverageDurationMs *float64 `json:"average_duration_ms,omitempty"`
+	BundleSizeBytes int64 `json:"bundle_size_bytes"`
+	ClientErrorsLast24Hours int64 `json:"client_errors_last_24_hours"`
+	DeployedEndpoints int32 `json:"deployed_endpoints"`
+	DomainRoutes int64 `json:"domain_routes"`
+	DomainsNeedingTls int64 `json:"domains_needing_tls"`
+	Endpoints []EndpointUsage `json:"endpoints"`
+	ExecutionsLast24Hours int64 `json:"executions_last_24_hours"`
+	FailedExecutionsLast24Hours int64 `json:"failed_executions_last_24_hours"`
+	GeneratedAt time.Time `json:"generated_at"`
+	LastExecutedAt *time.Time `json:"last_executed_at,omitempty"`
+	P95DurationMs *float64 `json:"p95_duration_ms,omitempty"`
+	PrivateEndpoints int32 `json:"private_endpoints"`
+	PublicEndpoints int32 `json:"public_endpoints"`
 	Runtimes map[string]RunnerHealth `json:"runtimes"`
+	ServerErrorsLast24Hours int64 `json:"server_errors_last_24_hours"`
+	TotalDeployments int64 `json:"total_deployments"`
+	TotalDomains int64 `json:"total_domains"`
 	TotalEndpoints int32 `json:"total_endpoints"`
+	TotalExecutions int64 `json:"total_executions"`
+	WindowStartedAt time.Time `json:"window_started_at"`
 }
 
 type _GetStatsResponse GetStatsResponse
@@ -31,10 +51,26 @@ type _GetStatsResponse GetStatsResponse
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewGetStatsResponse(runtimes map[string]RunnerHealth, totalEndpoints int32) *GetStatsResponse {
+func NewGetStatsResponse(bundleSizeBytes int64, clientErrorsLast24Hours int64, deployedEndpoints int32, domainRoutes int64, domainsNeedingTls int64, endpoints []EndpointUsage, executionsLast24Hours int64, failedExecutionsLast24Hours int64, generatedAt time.Time, privateEndpoints int32, publicEndpoints int32, runtimes map[string]RunnerHealth, serverErrorsLast24Hours int64, totalDeployments int64, totalDomains int64, totalEndpoints int32, totalExecutions int64, windowStartedAt time.Time) *GetStatsResponse {
 	this := GetStatsResponse{}
+	this.BundleSizeBytes = bundleSizeBytes
+	this.ClientErrorsLast24Hours = clientErrorsLast24Hours
+	this.DeployedEndpoints = deployedEndpoints
+	this.DomainRoutes = domainRoutes
+	this.DomainsNeedingTls = domainsNeedingTls
+	this.Endpoints = endpoints
+	this.ExecutionsLast24Hours = executionsLast24Hours
+	this.FailedExecutionsLast24Hours = failedExecutionsLast24Hours
+	this.GeneratedAt = generatedAt
+	this.PrivateEndpoints = privateEndpoints
+	this.PublicEndpoints = publicEndpoints
 	this.Runtimes = runtimes
+	this.ServerErrorsLast24Hours = serverErrorsLast24Hours
+	this.TotalDeployments = totalDeployments
+	this.TotalDomains = totalDomains
 	this.TotalEndpoints = totalEndpoints
+	this.TotalExecutions = totalExecutions
+	this.WindowStartedAt = windowStartedAt
 	return &this
 }
 
@@ -44,6 +80,368 @@ func NewGetStatsResponse(runtimes map[string]RunnerHealth, totalEndpoints int32)
 func NewGetStatsResponseWithDefaults() *GetStatsResponse {
 	this := GetStatsResponse{}
 	return &this
+}
+
+// GetAverageDurationMs returns the AverageDurationMs field value if set, zero value otherwise.
+func (o *GetStatsResponse) GetAverageDurationMs() float64 {
+	if o == nil || IsNil(o.AverageDurationMs) {
+		var ret float64
+		return ret
+	}
+	return *o.AverageDurationMs
+}
+
+// GetAverageDurationMsOk returns a tuple with the AverageDurationMs field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetAverageDurationMsOk() (*float64, bool) {
+	if o == nil || IsNil(o.AverageDurationMs) {
+		return nil, false
+	}
+	return o.AverageDurationMs, true
+}
+
+// HasAverageDurationMs returns a boolean if a field has been set.
+func (o *GetStatsResponse) HasAverageDurationMs() bool {
+	if o != nil && !IsNil(o.AverageDurationMs) {
+		return true
+	}
+
+	return false
+}
+
+// SetAverageDurationMs gets a reference to the given float64 and assigns it to the AverageDurationMs field.
+func (o *GetStatsResponse) SetAverageDurationMs(v float64) {
+	o.AverageDurationMs = &v
+}
+
+// GetBundleSizeBytes returns the BundleSizeBytes field value
+func (o *GetStatsResponse) GetBundleSizeBytes() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.BundleSizeBytes
+}
+
+// GetBundleSizeBytesOk returns a tuple with the BundleSizeBytes field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetBundleSizeBytesOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.BundleSizeBytes, true
+}
+
+// SetBundleSizeBytes sets field value
+func (o *GetStatsResponse) SetBundleSizeBytes(v int64) {
+	o.BundleSizeBytes = v
+}
+
+// GetClientErrorsLast24Hours returns the ClientErrorsLast24Hours field value
+func (o *GetStatsResponse) GetClientErrorsLast24Hours() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.ClientErrorsLast24Hours
+}
+
+// GetClientErrorsLast24HoursOk returns a tuple with the ClientErrorsLast24Hours field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetClientErrorsLast24HoursOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.ClientErrorsLast24Hours, true
+}
+
+// SetClientErrorsLast24Hours sets field value
+func (o *GetStatsResponse) SetClientErrorsLast24Hours(v int64) {
+	o.ClientErrorsLast24Hours = v
+}
+
+// GetDeployedEndpoints returns the DeployedEndpoints field value
+func (o *GetStatsResponse) GetDeployedEndpoints() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.DeployedEndpoints
+}
+
+// GetDeployedEndpointsOk returns a tuple with the DeployedEndpoints field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetDeployedEndpointsOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.DeployedEndpoints, true
+}
+
+// SetDeployedEndpoints sets field value
+func (o *GetStatsResponse) SetDeployedEndpoints(v int32) {
+	o.DeployedEndpoints = v
+}
+
+// GetDomainRoutes returns the DomainRoutes field value
+func (o *GetStatsResponse) GetDomainRoutes() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.DomainRoutes
+}
+
+// GetDomainRoutesOk returns a tuple with the DomainRoutes field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetDomainRoutesOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.DomainRoutes, true
+}
+
+// SetDomainRoutes sets field value
+func (o *GetStatsResponse) SetDomainRoutes(v int64) {
+	o.DomainRoutes = v
+}
+
+// GetDomainsNeedingTls returns the DomainsNeedingTls field value
+func (o *GetStatsResponse) GetDomainsNeedingTls() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.DomainsNeedingTls
+}
+
+// GetDomainsNeedingTlsOk returns a tuple with the DomainsNeedingTls field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetDomainsNeedingTlsOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.DomainsNeedingTls, true
+}
+
+// SetDomainsNeedingTls sets field value
+func (o *GetStatsResponse) SetDomainsNeedingTls(v int64) {
+	o.DomainsNeedingTls = v
+}
+
+// GetEndpoints returns the Endpoints field value
+// If the value is explicit nil, the zero value for []EndpointUsage will be returned
+func (o *GetStatsResponse) GetEndpoints() []EndpointUsage {
+	if o == nil {
+		var ret []EndpointUsage
+		return ret
+	}
+
+	return o.Endpoints
+}
+
+// GetEndpointsOk returns a tuple with the Endpoints field value
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *GetStatsResponse) GetEndpointsOk() ([]EndpointUsage, bool) {
+	if o == nil || IsNil(o.Endpoints) {
+		return nil, false
+	}
+	return o.Endpoints, true
+}
+
+// SetEndpoints sets field value
+func (o *GetStatsResponse) SetEndpoints(v []EndpointUsage) {
+	o.Endpoints = v
+}
+
+// GetExecutionsLast24Hours returns the ExecutionsLast24Hours field value
+func (o *GetStatsResponse) GetExecutionsLast24Hours() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.ExecutionsLast24Hours
+}
+
+// GetExecutionsLast24HoursOk returns a tuple with the ExecutionsLast24Hours field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetExecutionsLast24HoursOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.ExecutionsLast24Hours, true
+}
+
+// SetExecutionsLast24Hours sets field value
+func (o *GetStatsResponse) SetExecutionsLast24Hours(v int64) {
+	o.ExecutionsLast24Hours = v
+}
+
+// GetFailedExecutionsLast24Hours returns the FailedExecutionsLast24Hours field value
+func (o *GetStatsResponse) GetFailedExecutionsLast24Hours() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.FailedExecutionsLast24Hours
+}
+
+// GetFailedExecutionsLast24HoursOk returns a tuple with the FailedExecutionsLast24Hours field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetFailedExecutionsLast24HoursOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.FailedExecutionsLast24Hours, true
+}
+
+// SetFailedExecutionsLast24Hours sets field value
+func (o *GetStatsResponse) SetFailedExecutionsLast24Hours(v int64) {
+	o.FailedExecutionsLast24Hours = v
+}
+
+// GetGeneratedAt returns the GeneratedAt field value
+func (o *GetStatsResponse) GetGeneratedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.GeneratedAt
+}
+
+// GetGeneratedAtOk returns a tuple with the GeneratedAt field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetGeneratedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.GeneratedAt, true
+}
+
+// SetGeneratedAt sets field value
+func (o *GetStatsResponse) SetGeneratedAt(v time.Time) {
+	o.GeneratedAt = v
+}
+
+// GetLastExecutedAt returns the LastExecutedAt field value if set, zero value otherwise.
+func (o *GetStatsResponse) GetLastExecutedAt() time.Time {
+	if o == nil || IsNil(o.LastExecutedAt) {
+		var ret time.Time
+		return ret
+	}
+	return *o.LastExecutedAt
+}
+
+// GetLastExecutedAtOk returns a tuple with the LastExecutedAt field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetLastExecutedAtOk() (*time.Time, bool) {
+	if o == nil || IsNil(o.LastExecutedAt) {
+		return nil, false
+	}
+	return o.LastExecutedAt, true
+}
+
+// HasLastExecutedAt returns a boolean if a field has been set.
+func (o *GetStatsResponse) HasLastExecutedAt() bool {
+	if o != nil && !IsNil(o.LastExecutedAt) {
+		return true
+	}
+
+	return false
+}
+
+// SetLastExecutedAt gets a reference to the given time.Time and assigns it to the LastExecutedAt field.
+func (o *GetStatsResponse) SetLastExecutedAt(v time.Time) {
+	o.LastExecutedAt = &v
+}
+
+// GetP95DurationMs returns the P95DurationMs field value if set, zero value otherwise.
+func (o *GetStatsResponse) GetP95DurationMs() float64 {
+	if o == nil || IsNil(o.P95DurationMs) {
+		var ret float64
+		return ret
+	}
+	return *o.P95DurationMs
+}
+
+// GetP95DurationMsOk returns a tuple with the P95DurationMs field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetP95DurationMsOk() (*float64, bool) {
+	if o == nil || IsNil(o.P95DurationMs) {
+		return nil, false
+	}
+	return o.P95DurationMs, true
+}
+
+// HasP95DurationMs returns a boolean if a field has been set.
+func (o *GetStatsResponse) HasP95DurationMs() bool {
+	if o != nil && !IsNil(o.P95DurationMs) {
+		return true
+	}
+
+	return false
+}
+
+// SetP95DurationMs gets a reference to the given float64 and assigns it to the P95DurationMs field.
+func (o *GetStatsResponse) SetP95DurationMs(v float64) {
+	o.P95DurationMs = &v
+}
+
+// GetPrivateEndpoints returns the PrivateEndpoints field value
+func (o *GetStatsResponse) GetPrivateEndpoints() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.PrivateEndpoints
+}
+
+// GetPrivateEndpointsOk returns a tuple with the PrivateEndpoints field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetPrivateEndpointsOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.PrivateEndpoints, true
+}
+
+// SetPrivateEndpoints sets field value
+func (o *GetStatsResponse) SetPrivateEndpoints(v int32) {
+	o.PrivateEndpoints = v
+}
+
+// GetPublicEndpoints returns the PublicEndpoints field value
+func (o *GetStatsResponse) GetPublicEndpoints() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.PublicEndpoints
+}
+
+// GetPublicEndpointsOk returns a tuple with the PublicEndpoints field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetPublicEndpointsOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.PublicEndpoints, true
+}
+
+// SetPublicEndpoints sets field value
+func (o *GetStatsResponse) SetPublicEndpoints(v int32) {
+	o.PublicEndpoints = v
 }
 
 // GetRuntimes returns the Runtimes field value
@@ -72,6 +470,78 @@ func (o *GetStatsResponse) SetRuntimes(v map[string]RunnerHealth) {
 	o.Runtimes = v
 }
 
+// GetServerErrorsLast24Hours returns the ServerErrorsLast24Hours field value
+func (o *GetStatsResponse) GetServerErrorsLast24Hours() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.ServerErrorsLast24Hours
+}
+
+// GetServerErrorsLast24HoursOk returns a tuple with the ServerErrorsLast24Hours field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetServerErrorsLast24HoursOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.ServerErrorsLast24Hours, true
+}
+
+// SetServerErrorsLast24Hours sets field value
+func (o *GetStatsResponse) SetServerErrorsLast24Hours(v int64) {
+	o.ServerErrorsLast24Hours = v
+}
+
+// GetTotalDeployments returns the TotalDeployments field value
+func (o *GetStatsResponse) GetTotalDeployments() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.TotalDeployments
+}
+
+// GetTotalDeploymentsOk returns a tuple with the TotalDeployments field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetTotalDeploymentsOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TotalDeployments, true
+}
+
+// SetTotalDeployments sets field value
+func (o *GetStatsResponse) SetTotalDeployments(v int64) {
+	o.TotalDeployments = v
+}
+
+// GetTotalDomains returns the TotalDomains field value
+func (o *GetStatsResponse) GetTotalDomains() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.TotalDomains
+}
+
+// GetTotalDomainsOk returns a tuple with the TotalDomains field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetTotalDomainsOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TotalDomains, true
+}
+
+// SetTotalDomains sets field value
+func (o *GetStatsResponse) SetTotalDomains(v int64) {
+	o.TotalDomains = v
+}
+
 // GetTotalEndpoints returns the TotalEndpoints field value
 func (o *GetStatsResponse) GetTotalEndpoints() int32 {
 	if o == nil {
@@ -96,6 +566,54 @@ func (o *GetStatsResponse) SetTotalEndpoints(v int32) {
 	o.TotalEndpoints = v
 }
 
+// GetTotalExecutions returns the TotalExecutions field value
+func (o *GetStatsResponse) GetTotalExecutions() int64 {
+	if o == nil {
+		var ret int64
+		return ret
+	}
+
+	return o.TotalExecutions
+}
+
+// GetTotalExecutionsOk returns a tuple with the TotalExecutions field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetTotalExecutionsOk() (*int64, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TotalExecutions, true
+}
+
+// SetTotalExecutions sets field value
+func (o *GetStatsResponse) SetTotalExecutions(v int64) {
+	o.TotalExecutions = v
+}
+
+// GetWindowStartedAt returns the WindowStartedAt field value
+func (o *GetStatsResponse) GetWindowStartedAt() time.Time {
+	if o == nil {
+		var ret time.Time
+		return ret
+	}
+
+	return o.WindowStartedAt
+}
+
+// GetWindowStartedAtOk returns a tuple with the WindowStartedAt field value
+// and a boolean to check if the value has been set.
+func (o *GetStatsResponse) GetWindowStartedAtOk() (*time.Time, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.WindowStartedAt, true
+}
+
+// SetWindowStartedAt sets field value
+func (o *GetStatsResponse) SetWindowStartedAt(v time.Time) {
+	o.WindowStartedAt = v
+}
+
 func (o GetStatsResponse) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -106,10 +624,37 @@ func (o GetStatsResponse) MarshalJSON() ([]byte, error) {
 
 func (o GetStatsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	if !IsNil(o.AverageDurationMs) {
+		toSerialize["average_duration_ms"] = o.AverageDurationMs
+	}
+	toSerialize["bundle_size_bytes"] = o.BundleSizeBytes
+	toSerialize["client_errors_last_24_hours"] = o.ClientErrorsLast24Hours
+	toSerialize["deployed_endpoints"] = o.DeployedEndpoints
+	toSerialize["domain_routes"] = o.DomainRoutes
+	toSerialize["domains_needing_tls"] = o.DomainsNeedingTls
+	if o.Endpoints != nil {
+		toSerialize["endpoints"] = o.Endpoints
+	}
+	toSerialize["executions_last_24_hours"] = o.ExecutionsLast24Hours
+	toSerialize["failed_executions_last_24_hours"] = o.FailedExecutionsLast24Hours
+	toSerialize["generated_at"] = o.GeneratedAt
+	if !IsNil(o.LastExecutedAt) {
+		toSerialize["last_executed_at"] = o.LastExecutedAt
+	}
+	if !IsNil(o.P95DurationMs) {
+		toSerialize["p95_duration_ms"] = o.P95DurationMs
+	}
+	toSerialize["private_endpoints"] = o.PrivateEndpoints
+	toSerialize["public_endpoints"] = o.PublicEndpoints
 	if o.Runtimes != nil {
 		toSerialize["runtimes"] = o.Runtimes
 	}
+	toSerialize["server_errors_last_24_hours"] = o.ServerErrorsLast24Hours
+	toSerialize["total_deployments"] = o.TotalDeployments
+	toSerialize["total_domains"] = o.TotalDomains
 	toSerialize["total_endpoints"] = o.TotalEndpoints
+	toSerialize["total_executions"] = o.TotalExecutions
+	toSerialize["window_started_at"] = o.WindowStartedAt
 	return toSerialize, nil
 }
 
@@ -118,8 +663,24 @@ func (o *GetStatsResponse) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
+		"bundle_size_bytes",
+		"client_errors_last_24_hours",
+		"deployed_endpoints",
+		"domain_routes",
+		"domains_needing_tls",
+		"endpoints",
+		"executions_last_24_hours",
+		"failed_executions_last_24_hours",
+		"generated_at",
+		"private_endpoints",
+		"public_endpoints",
 		"runtimes",
+		"server_errors_last_24_hours",
+		"total_deployments",
+		"total_domains",
 		"total_endpoints",
+		"total_executions",
+		"window_started_at",
 	}
 
 	allProperties := make(map[string]interface{})

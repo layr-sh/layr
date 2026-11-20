@@ -98,6 +98,7 @@ Class | Method | HTTP request | Description
  - [CustomDomainRoute](generated/function/control_plane/docs/CustomDomainRoute.md)
  - [Deployment](generated/function/control_plane/docs/Deployment.md)
  - [Endpoint](generated/function/control_plane/docs/Endpoint.md)
+ - [EndpointUsage](generated/function/control_plane/docs/EndpointUsage.md)
  - [Execution](generated/function/control_plane/docs/Execution.md)
  - [GetStatsResponse](generated/function/control_plane/docs/GetStatsResponse.md)
  - [ListCustomDomainRoutesResponse](generated/function/control_plane/docs/ListCustomDomainRoutesResponse.md)

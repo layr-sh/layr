@@ -9,6 +9,7 @@ export * from './CustomDomain';
 export * from './CustomDomainRoute';
 export * from './Deployment';
 export * from './Endpoint';
+export * from './EndpointUsage';
 export * from './Execution';
 export * from './GetStatsResponse';
 export * from './ListCustomDomainRoutesResponse';
