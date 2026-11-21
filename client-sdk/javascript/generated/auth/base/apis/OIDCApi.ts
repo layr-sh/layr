@@ -54,7 +54,7 @@ export class OIDCApi extends runtime.BaseAPI {
         headerParameters['Content-Type'] = 'application/json';
 
 
-        let urlPath = `/v1/auth/oauth/token`;
+        let urlPath = `/v1/oauth/token`;
 
         return {
             path: urlPath,
@@ -94,7 +94,7 @@ export class OIDCApi extends runtime.BaseAPI {
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/v1/auth/oauth/userinfo`;
+        let urlPath = `/v1/oauth/userinfo`;
 
         return {
             path: urlPath,

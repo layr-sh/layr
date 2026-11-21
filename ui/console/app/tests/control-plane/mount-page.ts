@@ -42,6 +42,8 @@ export async function mountPage(component: Component) {
   await flushPromises();
   if (controlPlane)
     await vi.waitFor(() => expect(controlPlane.busy.value).toBe(false), { timeout: 10000 });
+  if (wrapper.setupState.authControlPlane)
+    await vi.waitFor(() => expect(wrapper.setupState.authControlPlane.busy.value).toBe(false));
   if (wrapper.setupState.imageControlPlane)
     await vi.waitFor(() => expect(wrapper.setupState.imageControlPlane.busy.value).toBe(false));
   if (wrapper.setupState.tasksControlPlane)

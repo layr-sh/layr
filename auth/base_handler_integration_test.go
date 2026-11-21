@@ -19,6 +19,11 @@ import (
 )
 
 func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -32,6 +37,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 
 	driverWebhook := "webhook"
 	authConfig := configManager.Get()
+	authConfig.MFA.Enabled = true
 	authConfig.EmailOTP.Enabled = true
 	authConfig.SMSOTP.Enabled = true
 	authConfig.EmailDispatcher = EmailDispatcherConfig{
@@ -39,13 +45,13 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	if err := configManager.Set(ctx, authConfig); err != nil {
@@ -257,6 +263,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 
 	// 6. Passkey Sign Up & Verify
+	privateKey, passkeyPublicKey := passkeyTestKey(t)
 	passkeyOptionsPayload := map[string]any{
 		"user_id":   signupAuthTokenResponse.User.ID,
 		"user_name": "Alice",
@@ -277,11 +284,11 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	passkeyVerifyPayload := map[string]any{
 		"challenge":     passkeyOptions.Challenge,
 		"credential_id": "cred-id-12345",
-		"public_key":    "public-key-es256",
+		"public_key":    passkeyPublicKey,
 		"friendly_name": "Alice MacBook",
 	}
 	encodedPasskeyVerify, _ := json.Marshal(passkeyVerifyPayload)
-	passkeyVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-up/verify", bytes.NewReader(encodedPasskeyVerify))
+	passkeyVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: signupAuthTokenResponse.User.ID}), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", bytes.NewReader(encodedPasskeyVerify))
 	passkeyVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(passkeyVerifyResponseRecorder, passkeyVerifyRequest)
 	if passkeyVerifyResponseRecorder.Code != http.StatusOK && passkeyVerifyResponseRecorder.Code != http.StatusCreated {
@@ -301,11 +308,8 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 	_ = json.NewDecoder(passkeySignInOptionsResponseRecorder.Body).Decode(&passkeySignInOptions)
 
-	passkeySignInVerifyPayload := map[string]any{
-		"challenge":     passkeySignInOptions.Challenge,
-		"credential_id": "cred-id-12345",
-	}
-	encodedSignInVerify, _ := json.Marshal(passkeySignInVerifyPayload)
+	verifyPasskeySignInInput := passkeyTestAssertion(t, privateKey, passkeySignInOptions.Challenge, "cred-id-12345")
+	encodedSignInVerify, _ := json.Marshal(verifyPasskeySignInInput)
 	passkeySignInVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/passkeys/sign-in/verify", bytes.NewReader(encodedSignInVerify))
 	passkeySignInVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignIn(passkeySignInVerifyResponseRecorder, passkeySignInVerifyRequest)
@@ -369,7 +373,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 	}
 	configManager.SetMemoryConfig(activeConfig)
 
-	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/authorize?redirect_uri=http://localhost:5297/callback&state=valid-state", nil)
+	oauthAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/google/authorize?redirect_uri=http://localhost:5297/callback&state=valid-state", nil)
 	oauthAuthRequest.SetPathValue("provider", "google")
 	oauthAuthResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleAuthorizeOAuth(oauthAuthResponseRecorder, oauthAuthRequest)
@@ -377,7 +381,7 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected 302 redirect on /oauth/google/authorize, got: %d", oauthAuthResponseRecorder.Code)
 	}
 
-	oauthCallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback?code=valid-code&state=valid-state", nil)
+	oauthCallbackRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/google/callback?code=valid-code&state=valid-state", nil)
 	oauthCallbackRequest.SetPathValue("provider", "google")
 	oauthCallbackResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleProcessOAuthCallback(oauthCallbackResponseRecorder, oauthCallbackRequest)
@@ -442,6 +446,11 @@ func TestAuthBaseHandlerFullLifecycleIntegration(t *testing.T) {
 }
 
 func TestAuthBaseHandlerAnonymousSignInAndInPlaceConversionIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -463,13 +472,13 @@ func TestAuthBaseHandlerAnonymousSignInAndInPlaceConversionIntegration(t *testin
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	if err := configManager.Set(ctx, authConfig); err != nil {
@@ -1034,7 +1043,7 @@ func TestAuthBaseHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 	}
 	defer func() {
 		_, _ = db.Exec(context.Background(), `
-			ALTER TABLE auth.sessions 
+			ALTER TABLE auth.sessions
 			ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 		`)
 	}()
@@ -1060,7 +1069,7 @@ func TestAuthBaseHandlerCredentialsAndSessionFlowsIntegration(t *testing.T) {
 
 	_, _ = db.Exec(ctx, "DELETE FROM auth.sessions WHERE refresh_token_hash = $1", deletedUserHash)
 	_, _ = db.Exec(ctx, `
-		ALTER TABLE auth.sessions 
+		ALTER TABLE auth.sessions
 		ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 	`)
 

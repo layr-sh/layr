@@ -521,12 +521,15 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 
 					var activeSession bool
 					err := server.kernel.DB().QueryRow(ctx, `
-						SELECT EXISTS (
-							SELECT 1 FROM auth.sessions s JOIN auth.users u ON u.id = s.user_id
-							WHERE s.id::text = $1 AND s.user_id::text = $2
-							  AND s.expires_at > clock_timestamp()
-							  AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
-						)
+						WITH active AS (
+							UPDATE auth.sessions s SET last_used_at = clock_timestamp() FROM auth.users u
+							WHERE u.id = s.user_id AND s.id::text = $1 AND s.user_id::text = $2
+							AND s.expires_at > clock_timestamp()
+							AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
+							AND (COALESCE((SELECT (value->'sessions'->>'idle_timeout_seconds')::int FROM auth.config WHERE key = 'runtime'), 604800) <= 0
+							 OR s.last_used_at > clock_timestamp() - make_interval(secs => COALESCE((SELECT (value->'sessions'->>'idle_timeout_seconds')::int FROM auth.config WHERE key = 'runtime'), 604800)))
+							RETURNING s.id
+						) SELECT EXISTS (SELECT 1 FROM active)
 					`, jwtClaims.SessionID, jwtClaims.Subject).Scan(&activeSession)
 					if err == nil && activeSession {
 						ctx = WithAuthContext(ctx, AuthContext{
@@ -639,11 +642,13 @@ func (server *Server) middleware(handler http.Handler) http.Handler {
 				var sessionID, sessionUserID, email, phone, role string
 				var isAnonymous bool
 				queryErr := server.kernel.DB().QueryRow(ctx, `
-					SELECT s.id, s.user_id, COALESCE(u.email, ''), COALESCE(u.phone, ''), COALESCE(u.role, 'authenticated'), COALESCE(u.is_anonymous, false)
-					FROM auth.sessions s
-					JOIN auth.users u ON u.id = s.user_id
-					WHERE s.refresh_token_hash = $1 AND s.expires_at > clock_timestamp()
-					  AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
+					UPDATE auth.sessions s SET last_used_at = clock_timestamp()
+					FROM auth.users u
+					WHERE u.id = s.user_id AND s.refresh_token_hash = $1 AND s.expires_at > clock_timestamp()
+					AND (u.locked_until IS NULL OR u.locked_until <= clock_timestamp())
+					AND (COALESCE((SELECT (value->'sessions'->>'idle_timeout_seconds')::int FROM auth.config WHERE key = 'runtime'), 604800) <= 0
+					 OR s.last_used_at > clock_timestamp() - make_interval(secs => COALESCE((SELECT (value->'sessions'->>'idle_timeout_seconds')::int FROM auth.config WHERE key = 'runtime'), 604800)))
+					RETURNING s.id, s.user_id, COALESCE(u.email, ''), COALESCE(u.phone, ''), COALESCE(u.role, 'authenticated'), COALESCE(u.is_anonymous, false)
 				`, refreshTokenHash).Scan(&sessionID, &sessionUserID, &email, &phone, &role, &isAnonymous)
 				if queryErr == nil && sessionUserID != "" {
 					jwtClaims := JWTClaims{
@@ -699,6 +704,23 @@ func (server *Server) PublishableKeyMiddleware(handler http.Handler) http.Handle
 			strings.HasPrefix(path, "/.well-known/") ||
 			strings.HasPrefix(path, "/v1/function/") ||
 			path == "/v1/function" {
+			handler.ServeHTTP(responseWriter, request)
+			return
+		}
+
+		// Browser redirects and standard OAuth clients cannot supply a project
+		// header. These endpoints authenticate their own state or grant.
+		if (path == "/v1/oauth/authorize" && (request.Method == http.MethodGet || request.Method == http.MethodPost)) ||
+			(path == "/v1/oauth/token" && request.Method == http.MethodPost) ||
+			(path == "/v1/oauth/sign-out" && (request.Method == http.MethodGet || request.Method == http.MethodPost)) ||
+			((path == "/v1/auth/passkeys/sign-in" || path == "/v1/auth/passkeys/sign-in/verify") && request.Method == http.MethodPost) {
+			handler.ServeHTTP(responseWriter, request)
+			return
+		}
+		segments := strings.Split(strings.TrimPrefix(path, "/v1/oauth/"), "/")
+		if strings.HasPrefix(path, "/v1/oauth/") && len(segments) == 2 && segments[0] != "" &&
+			((segments[1] == "authorize" && request.Method == http.MethodGet) ||
+				(segments[1] == "callback" && (request.Method == http.MethodGet || request.Method == http.MethodPost))) {
 			handler.ServeHTTP(responseWriter, request)
 			return
 		}

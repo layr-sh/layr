@@ -1375,8 +1375,8 @@ func TestAuthBaseHandlerUserSelfServiceIntegration(t *testing.T) {
 		canceledSessionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", nil).WithContext(canceledCtx)
 		canceledSessionResponseRecorder := httptest.NewRecorder()
 		baseHandler.issueSessionResponse(canceledSessionResponseRecorder, canceledSessionRequest, dummyUser)
-		if canceledSessionResponseRecorder.Code != http.StatusOK {
-			t.Fatalf("expected 200 even if session db insert fails, got: %d", canceledSessionResponseRecorder.Code)
+		if canceledSessionResponseRecorder.Code != http.StatusInternalServerError {
+			t.Fatalf("session persistence failure must fail closed, got: %d", canceledSessionResponseRecorder.Code)
 		}
 	}
 

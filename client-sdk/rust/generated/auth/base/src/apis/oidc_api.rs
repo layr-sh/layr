@@ -35,7 +35,7 @@ pub async fn auth_oidc_token(configuration: &configuration::Configuration, body:
     // add a prefix to parameters to efficiently prevent name collisions
     let p_body_body = body;
 
-    let uri_str = format!("{}/v1/auth/oauth/token", configuration.base_path);
+    let uri_str = format!("{}/v1/oauth/token", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::POST, &uri_str);
 
     if let Some(ref user_agent) = configuration.user_agent {
@@ -71,7 +71,7 @@ pub async fn auth_oidc_token(configuration: &configuration::Configuration, body:
 /// Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.
 pub async fn auth_oidc_userinfo(configuration: &configuration::Configuration, ) -> Result<models::GetOidcUserInfoResponse, Error<AuthOidcUserinfoError>> {
 
-    let uri_str = format!("{}/v1/auth/oauth/userinfo", configuration.base_path);
+    let uri_str = format!("{}/v1/oauth/userinfo", configuration.base_path);
     let mut req_builder = configuration.client.request(reqwest::Method::GET, &uri_str);
 
     if let Some(ref user_agent) = configuration.user_agent {

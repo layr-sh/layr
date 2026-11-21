@@ -65,13 +65,13 @@ describe("Auth Service Unit Tests", () => {
 
     // oidc
     await auth.oidc.token();
-    expect(getLastUrl()).toContain("/v1/auth/oauth/token");
+    expect(getLastUrl()).toContain("/v1/oauth/token");
 
     await auth.oidc.token({ grant_type: "authorization_code", code: "code1" });
-    expect(getLastUrl()).toContain("/v1/auth/oauth/token");
+    expect(getLastUrl()).toContain("/v1/oauth/token");
 
     await auth.oidc.userinfo();
-    expect(getLastUrl()).toContain("/v1/auth/oauth/userinfo");
+    expect(getLastUrl()).toContain("/v1/oauth/userinfo");
 
     // otp
     await auth.otp.send({ purpose: "login", recipient: "u@example.com" });
@@ -178,8 +178,47 @@ describe("Auth Service Unit Tests", () => {
 
   it("exercises auth control plane (.cp) endpoints", async () => {
     const { client, elevate, getLastUrl, getLastInit, serviceAccountKey } =
-      createMockServiceContext();
+      createMockServiceContext((url) =>
+        url.endsWith("/v1/_/auth/stats")
+          ? {
+              providers: [
+                {
+                  provider: "google",
+                  identity_count: 2,
+                  user_count: 1,
+                  last_signed_in_at: "2026-01-01T12:00:00Z",
+                },
+              ],
+              roles: [{ role: "authenticated", total_users: 1 }],
+              registrations: [
+                {
+                  day: "2026-01-01T00:00:00Z",
+                  total_users: 1,
+                  registered_users: 1,
+                  anonymous_users: 0,
+                },
+              ],
+            }
+          : undefined,
+      );
     const auth = elevate(useAuth(client));
+
+    const stats = await auth.cp.stats.get();
+    expect(stats.providers[0]).toMatchObject({
+      provider: "google",
+      identityCount: 2,
+      userCount: 1,
+      lastSignedInAt: new Date("2026-01-01T12:00:00Z"),
+    });
+    expect(stats.roles[0]).toEqual({ role: "authenticated", totalUsers: 1 });
+    expect(stats.registrations[0]).toEqual({
+      day: new Date("2026-01-01T00:00:00Z"),
+      totalUsers: 1,
+      registeredUsers: 1,
+      anonymousUsers: 0,
+    });
+    expect(getLastUrl()).toContain("/v1/_/auth/stats");
+    expect(getLastInit()?.headers).toMatchObject({ "Service-Account-Key": serviceAccountKey });
 
     // config
     await auth.cp.config.get();

@@ -3,11 +3,16 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
@@ -474,4 +479,175 @@ func TestAuthBaseHandlerSessionSelfServiceIntegration(t *testing.T) {
 			t.Fatalf("expected 500 on canceled revoke others with session id, got: %d", canceledRevokeOthersWithSessionResponseRecorder.Code)
 		}
 	}
+}
+
+func TestAuthSessionPoliciesIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.Sessions.SingleSessionPerUser = true
+	config.Sessions.IdleTimeoutSeconds = 60
+	require.NoError(t, service.configManager.Set(ctx, config))
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users (email) VALUES ('session-policies@example.com') RETURNING id").Scan(&userID))
+	var waitGroup sync.WaitGroup
+	errors := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		waitGroup.Go(func() {
+			errors <- service.baseHandler.persistSession(ctx, &Session{UserID: userID, RefreshTokenHash: fmt.Sprintf("hash-%d", i), ExpiresAt: time.Now().Add(time.Hour)}, "")
+		})
+	}
+	waitGroup.Wait()
+	close(errors)
+	for err := range errors {
+		t.Run("concurrent issuance", func(t *testing.T) { require.NoError(t, err) })
+	}
+	var count int
+	require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT count(*) FROM auth.sessions WHERE user_id = $1", userID).Scan(&count))
+	require.Equal(t, 1, count)
+	server := core.NewServer(kernel)
+	service.RegisterRoutes(server.BaseRouter(), server.ControlPlaneRouter(), server.Mux())
+	for _, cache := range []bool{false, true} {
+		t.Run(fmt.Sprintf("cache=%t", cache), func(t *testing.T) {
+			config.Cache.FastPathSessionsEnabled = cache
+			require.NoError(t, service.configManager.Set(ctx, config))
+			responseRecorder := httptest.NewRecorder()
+			service.baseHandler.issueSessionResponse(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil), User{ID: userID, Role: "authenticated"})
+			require.Equal(t, http.StatusOK, responseRecorder.Code)
+			var authTokenResponse AuthTokenResponse
+			require.NoError(t, json.Unmarshal(responseRecorder.Body.Bytes(), &authTokenResponse))
+			require.NoError(t, func() error {
+				_, err := kernel.DB().Exec(ctx, "UPDATE auth.sessions SET last_used_at = clock_timestamp() - interval '2 minutes' WHERE user_id = $1", userID)
+				return err
+			}())
+			profileRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user", nil)
+			profileRequest.Header.Set("Authorization", "Bearer "+authTokenResponse.AccessToken)
+			profileResponseRecorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(profileResponseRecorder, profileRequest)
+			require.Equal(t, http.StatusUnauthorized, profileResponseRecorder.Code)
+			refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refreshRequest", nil)
+			refreshRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: authTokenResponse.RefreshToken})
+			refreshResponseRecorder := httptest.NewRecorder()
+			service.baseHandler.handleRefreshToken(refreshResponseRecorder, refreshRequest)
+			require.Equal(t, http.StatusUnauthorized, refreshResponseRecorder.Code)
+		})
+	}
+}
+
+func TestAuthSessionPersistenceFailurePathsIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.Sessions.SingleSessionPerUser = true
+	service.configManager.SetMemoryConfig(config)
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users (email) VALUES ('session-storage@example.com') RETURNING id").Scan(&userID))
+	t.Run("user must exist", func(t *testing.T) {
+		require.Error(t, service.baseHandler.persistSession(ctx, &Session{UserID: "00000000-0000-0000-0000-000000000000", RefreshTokenHash: "missing", ExpiresAt: time.Now().Add(time.Hour)}, ""))
+	})
+	t.Run("revoke previous client session", func(t *testing.T) {
+		_, err := kernel.DB().Exec(ctx, "INSERT INTO auth.sessions (user_id,client_id,refresh_token_hash,expires_at) VALUES ($1,'client','old-client-hash',clock_timestamp()+interval '1 hour')", userID)
+		require.NoError(t, err)
+		require.NoError(t, kernel.KVStore().Set(ctx, "auth:session:old-client-hash", "cached", time.Minute))
+		require.NoError(t, service.baseHandler.persistSession(ctx, &Session{UserID: userID, RefreshTokenHash: "new-client-hash", ExpiresAt: time.Now().Add(time.Hour)}, ""))
+		_, err = kernel.KVStore().Get(ctx, "auth:session:old-client-hash")
+		require.Error(t, err)
+	})
+	t.Run("delete query failure", func(t *testing.T) {
+		_, err := kernel.DB().Exec(ctx, "ALTER TABLE auth.sessions RENAME TO unavailable_sessions")
+		require.NoError(t, err)
+		require.Error(t, service.baseHandler.persistSession(ctx, &Session{UserID: userID}, ""))
+		_, err = kernel.DB().Exec(ctx, "ALTER TABLE auth.unavailable_sessions RENAME TO sessions")
+		require.NoError(t, err)
+	})
+	t.Run("revoked session scan failure", func(t *testing.T) {
+		_, err := kernel.DB().Exec(ctx, `DELETE FROM auth.sessions; ALTER TABLE auth.sessions ALTER COLUMN client_id TYPE jsonb USING to_jsonb(client_id)`)
+		require.NoError(t, err)
+		_, err = kernel.DB().Exec(ctx, `INSERT INTO auth.sessions (user_id,client_id,refresh_token_hash,expires_at) VALUES ($1,'{"invalid":"client"}'::jsonb,'bad-client',clock_timestamp()+interval '1 hour')`, userID)
+		require.NoError(t, err)
+		require.Error(t, service.baseHandler.persistSession(ctx, &Session{UserID: userID, ExpiresAt: time.Now().Add(time.Hour)}, ""))
+		_, err = kernel.DB().Exec(ctx, "DELETE FROM auth.sessions; ALTER TABLE auth.sessions ALTER COLUMN client_id TYPE text USING client_id::text")
+		require.NoError(t, err)
+	})
+	for _, deferred := range []bool{false, true} {
+		t.Run(fmt.Sprintf("insert failure deferred=%t", deferred), func(t *testing.T) {
+			_, err := kernel.DB().Exec(ctx, `CREATE FUNCTION auth.fail_session_storage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'session storage failed'; END $$`)
+			require.NoError(t, err)
+			triggerSQL := "CREATE TRIGGER fail_session_storage BEFORE INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION auth.fail_session_storage()"
+			if deferred {
+				triggerSQL = "CREATE CONSTRAINT TRIGGER fail_session_storage AFTER INSERT ON auth.sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION auth.fail_session_storage()"
+			}
+			_, err = kernel.DB().Exec(ctx, triggerSQL)
+			require.NoError(t, err)
+			require.Error(t, service.baseHandler.persistSession(ctx, &Session{UserID: userID, RefreshTokenHash: "failed", ExpiresAt: time.Now().Add(time.Hour)}, ""))
+			_, err = kernel.DB().Exec(ctx, "DROP TRIGGER fail_session_storage ON auth.sessions; DROP FUNCTION auth.fail_session_storage()")
+			require.NoError(t, err)
+		})
+	}
+	config.Cache.FastPathSessionsEnabled = false
+	config.Sessions.SingleSessionPerUser = false
+	service.configManager.SetMemoryConfig(config)
+	for _, deletedUser := range []bool{false, true} {
+		t.Run(fmt.Sprintf("user changes during refresh deleted=%t", deletedUser), func(t *testing.T) {
+			var refreshUserID string
+			require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users DEFAULT VALUES RETURNING id").Scan(&refreshUserID))
+			responseRecorder := httptest.NewRecorder()
+			service.baseHandler.issueSessionResponse(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil), User{ID: refreshUserID, Role: "authenticated"})
+			require.Equal(t, http.StatusOK, responseRecorder.Code)
+			var authTokenResponse AuthTokenResponse
+			require.NoError(t, json.Unmarshal(responseRecorder.Body.Bytes(), &authTokenResponse))
+			mutationSQL := "UPDATE auth.users SET locked_until=clock_timestamp()+interval '1 hour' WHERE id=OLD.user_id;"
+			if deletedUser {
+				mutationSQL = "DELETE FROM auth.users WHERE id=OLD.user_id;"
+			}
+			_, err := kernel.DB().Exec(ctx, "CREATE FUNCTION auth.mutate_refresh_user() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "+mutationSQL+" RETURN OLD; END $$; CREATE TRIGGER mutate_refresh_user AFTER DELETE ON auth.sessions FOR EACH ROW EXECUTE FUNCTION auth.mutate_refresh_user()")
+			require.NoError(t, err)
+			responseRecorder = httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil)
+			request.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: authTokenResponse.RefreshToken})
+			service.baseHandler.handleRefreshToken(responseRecorder, request)
+			expected := http.StatusLocked
+			if deletedUser {
+				expected = http.StatusUnauthorized
+			}
+			require.Equal(t, expected, responseRecorder.Code, responseRecorder.Body.String())
+			_, err = kernel.DB().Exec(ctx, "DROP TRIGGER mutate_refresh_user ON auth.sessions; DROP FUNCTION auth.mutate_refresh_user()")
+			require.NoError(t, err)
+		})
+	}
+}
+
+type sessionDeleteFailureTracer struct{}
+
+func (tracer *sessionDeleteFailureTracer) TraceQueryStart(ctx context.Context, connection *pgx.Conn, traceQueryStartData pgx.TraceQueryStartData) context.Context {
+	if strings.HasPrefix(traceQueryStartData.SQL, "DELETE FROM auth.sessions") {
+		canceledCtx, cancel := context.WithCancel(ctx)
+		cancel()
+		return canceledCtx
+	}
+	return ctx
+}
+func (tracer *sessionDeleteFailureTracer) TraceQueryEnd(context.Context, *pgx.Conn, pgx.TraceQueryEndData) {
+}
+
+func TestAuthSessionDeleteQueryFailureIntegration(t *testing.T) {
+	ctx := context.Background()
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	databaseConfig := kernel.DB().Config()
+	databaseConfig.ConnConfig.Tracer = &sessionDeleteFailureTracer{}
+	pool, err := pgxpool.NewWithConfig(ctx, databaseConfig)
+	require.NoError(t, err)
+	defer pool.Close()
+	service := NewService(core.NewTestKernel(&core.DatabasePool{Pool: pool}))
+	config := DefaultConfig()
+	config.Sessions.SingleSessionPerUser = true
+	service.configManager.SetMemoryConfig(config)
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users DEFAULT VALUES RETURNING id").Scan(&userID))
+	require.Error(t, service.baseHandler.persistSession(ctx, &Session{UserID: userID, RefreshTokenHash: "failed", ExpiresAt: time.Now().Add(time.Hour)}, ""))
 }

@@ -35,6 +35,7 @@ const scopeOptions = computed(() =>
       "data:cache.write",
       "data:config.read",
       "data:config.write",
+      "auth:stats.read",
       "auth:user.read",
       "auth:user.write",
       "auth:config.read",

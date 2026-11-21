@@ -14,6 +14,7 @@ import (
 )
 
 func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
+	_, publicKey := passkeyTestKey(t)
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -110,7 +111,7 @@ func TestAuthBaseHandlerPasskeyUnit(t *testing.T) {
 	// 5. Passkey SignUp Verify Empty Friendly Name on Nil Pool -> 500
 	challenge2, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge2, testUserUUID, 0)
-	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"pub_key_123"}`))
+	emptyFriendlyPasskeyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge2+`","credential_id":"cred_123","public_key":"`+publicKey+`"}`))
 	emptyFriendlyPasskeyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(emptyFriendlyPasskeyResponseRecorder, emptyFriendlyPasskeyRequest)
 	if emptyFriendlyPasskeyResponseRecorder.Code != http.StatusInternalServerError {
@@ -178,6 +179,7 @@ func (errEntropyReader) Read(_ []byte) (int, error) {
 }
 
 func TestAuthBaseHandlerPasskeyManagementUnit(t *testing.T) {
+	_, publicKey := passkeyTestKey(t)
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
@@ -248,7 +250,7 @@ func TestAuthBaseHandlerPasskeyManagementUnit(t *testing.T) {
 	// 7. Passkey SignUpVerify with Bearer Token and empty user_id on nil DB -> 500
 	challenge, _ := baseHandler.passkeyManager.GenerateChallenge(testUserUUID)
 	_ = testKVStore.Set(context.Background(), "auth:challenge:"+challenge, testUserUUID, 0)
-	authVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"pub_123"}`))
+	authVerifyRequest := httptest.NewRequestWithContext(core.WithAuthContext(context.Background(), authContext), http.MethodPost, "/v1/auth/passkeys/sign-up/verify", strings.NewReader(`{"challenge":"`+challenge+`","credential_id":"cred_123","public_key":"`+publicKey+`"}`))
 	authVerifyRequest.Header.Set("Authorization", bearerHeader)
 	authVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleVerifyPasskeySignUp(authVerifyResponseRecorder, authVerifyRequest)

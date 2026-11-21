@@ -192,7 +192,8 @@ func TestAuthBaseHandlerIssueSessionResponseUnit(t *testing.T) {
 	failingDriver := &failingTestKVDriver{TestInMemoryKVDriver: *core.NewTestInMemoryKVDriver()}
 	kvStore := core.NewKVStoreFromDriver(failingDriver)
 
-	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations, core.WithKVStore(kvStore))
+	kernel, cleanup := core.SetupTestKernel(t, Migrations, core.WithKVStore(kvStore))
+	defer cleanup()
 	service := NewService(kernel)
 	baseHandler := service.baseHandler
 
@@ -209,6 +210,10 @@ func TestAuthBaseHandlerIssueSessionResponseUnit(t *testing.T) {
 		Role:  "authenticated",
 		Email: &testEmail,
 		Phone: &testPhone,
+	}
+
+	if _, err := kernel.DB().Exec(context.Background(), "INSERT INTO auth.users (id, email, phone) VALUES ($1,$2,$3)", user.ID, testEmail, testPhone); err != nil {
+		t.Fatal(err)
 	}
 
 	responseRecorder := httptest.NewRecorder()

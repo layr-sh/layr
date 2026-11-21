@@ -2,9 +2,14 @@ package oauth
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/tls"
+	"time"
+
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +19,8 @@ import (
 )
 
 type mockOAuthServer struct {
+	issuer           string
+	privateKey       ed25519.PrivateKey
 	mutex            sync.Mutex
 	validCode        string
 	expectedClientID string
@@ -89,13 +96,13 @@ func (server *mockOAuthServer) handleToken(responseWriter http.ResponseWriter, r
 	server.issuedTokens[accessToken] = "user_oauth_7777"
 	server.mutex.Unlock()
 
-	// Construct mock ID Token JWT
-	headerJSON := `{"alg":"none","typ":"JWT"}`
-	claimsJSON := `{"sub":"user_oauth_7777","email":"user777@example.com"}`
-	idToken := fmt.Sprintf("%s.%s.",
-		base64.RawURLEncoding.EncodeToString([]byte(headerJSON)),
-		base64.RawURLEncoding.EncodeToString([]byte(claimsJSON)),
-	)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{"iss": server.issuer, "aud": server.expectedClientID, "exp": time.Now().Add(time.Hour).Unix(), "sub": "user_oauth_7777", "email": "user777@example.com"})
+	token.Header["kid"] = "test-privateKey"
+	idToken, err := token.SignedString(server.privateKey)
+	if err != nil {
+		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	responseWriter.WriteHeader(http.StatusOK)
@@ -140,7 +147,21 @@ func TestOauthAuthenticationFlowE2E(t *testing.T) {
 	serveMux.HandleFunc("/oauth/token", oauthServer.handleToken)
 	serveMux.HandleFunc("/oauth/userinfo", oauthServer.handleUserInfo)
 
-	testServer := httptest.NewServer(serveMux)
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oauthServer.privateKey = privateKey
+	serveMux.HandleFunc("/.well-known/openid-configuration", func(responseWriter http.ResponseWriter, request *http.Request) {
+		_ = json.NewEncoder(responseWriter).Encode(map[string]string{"issuer": oauthServer.issuer, "authorization_endpoint": oauthServer.issuer + "/oauth/authorize", "token_endpoint": oauthServer.issuer + "/oauth/token", "jwks_uri": oauthServer.issuer + "/jwks"})
+	})
+	serveMux.HandleFunc("/jwks", func(responseWriter http.ResponseWriter, request *http.Request) {
+		_ = json.NewEncoder(responseWriter).Encode(map[string]any{"keys": []map[string]string{{"kid": "test-privateKey", "kty": "OKP", "crv": tls.Ed25519.String(), "alg": "EdDSA", "x": base64.RawURLEncoding.EncodeToString(privateKey.Public().(ed25519.PublicKey))}}})
+	})
+	testServer := httptest.NewTLSServer(serveMux)
+	oauthServer.issuer = testServer.URL
+	SetHTTPClient(testServer.Client())
+	defer SetHTTPClient(nil)
 	defer testServer.Close()
 
 	providerConfig := ProviderConfig{
@@ -155,7 +176,7 @@ func TestOauthAuthenticationFlowE2E(t *testing.T) {
 	}
 
 	// 1. Initiate authorization request
-	clientCallbackURL := "http://localhost:5297/v1/auth/oauth/callback"
+	clientCallbackURL := "http://localhost:5297/v1/oauth/callback"
 	sessionState := "random_security_state_98765"
 	authorizeURL, err := BuildAuthorizeURLWithConfig(providerConfig, clientCallbackURL, sessionState)
 	if err != nil {
@@ -164,6 +185,7 @@ func TestOauthAuthenticationFlowE2E(t *testing.T) {
 
 	// 2. Simulate browser visiting authorization URL and receiving redirect with code
 	httpClient := &http.Client{
+		Transport: testServer.Client().Transport,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			// Do not follow redirect; inspect redirect target directly
 			return http.ErrUseLastResponse

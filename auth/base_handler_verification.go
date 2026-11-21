@@ -73,11 +73,19 @@ func (handler *BaseHandler) handleRequestEmailVerification(responseWriter http.R
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 
 	log.Tracef("dispatching email verification code to %s", recipientEmail)
-	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
+	if sendErr := handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID); sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'email_verification' AND code_hash = $2", recipientEmail, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:email_verification:"+recipientEmail)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send verification code", sendErr.Error())
+		return
+	}
 
 	var targetUser *User
 	if authUserID != "" {
@@ -314,11 +322,19 @@ func (handler *BaseHandler) handleRequestPhoneVerification(responseWriter http.R
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 
 	log.Tracef("dispatching phone verification code to %s", recipientPhone)
-	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID)
+	if sendErr := handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, targetUserID); sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'phone_verification' AND code_hash = $2", recipientPhone, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:phone_verification:"+recipientPhone)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send verification code", sendErr.Error())
+		return
+	}
 
 	var targetUser *User
 	if authUserID != "" {
@@ -556,11 +572,19 @@ func (handler *BaseHandler) handleUpdateUserEmail(responseWriter http.ResponseWr
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'email_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipientEmail, codeHash, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:email_verification:%s", recipientEmail), code, otp.CodeTTL)
 
 	log.Tracef("dispatching update email verification code to %s", recipientEmail)
-	_ = handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID)
+	if sendErr := handler.emailDispatcher.SendEmailVerification(ctx, recipientEmail, code, authUserID); sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'email_verification' AND code_hash = $2", recipientEmail, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:email_verification:"+recipientEmail)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send verification code", sendErr.Error())
+		return
+	}
 
 	var targetUser *User
 	if anonymousUser != nil {
@@ -650,11 +674,19 @@ func (handler *BaseHandler) handleUpdateUserPhone(responseWriter http.ResponseWr
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'phone_verification', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipientPhone, codeHash, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:phone_verification:%s", recipientPhone), code, otp.CodeTTL)
 
 	log.Tracef("dispatching update phone verification code to %s", recipientPhone)
-	_ = handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID)
+	if sendErr := handler.smsDispatcher.SendPhoneVerification(ctx, recipientPhone, code, authUserID); sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'phone_verification' AND code_hash = $2", recipientPhone, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:phone_verification:"+recipientPhone)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send verification code", sendErr.Error())
+		return
+	}
 
 	var targetUser *User
 	if anonymousUser != nil {

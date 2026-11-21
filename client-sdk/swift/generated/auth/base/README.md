@@ -134,8 +134,8 @@ Class | Method | HTTP request | Description
 *MFAAPI* | [**authMfaDisable**](docs/MFAAPI.md#authmfadisable) | **DELETE** /v1/auth/mfa | Disable multi-factor authentication on user account
 *MFAAPI* | [**authMfaSetup**](docs/MFAAPI.md#authmfasetup) | **POST** /v1/auth/mfa | Generate TOTP secret and setup URI for authenticator enrollment
 *MFAAPI* | [**authMfaVerify**](docs/MFAAPI.md#authmfaverify) | **POST** /v1/auth/mfa/verify | Verify initial TOTP code to complete MFA enrollment
-*OIDCAPI* | [**authOidcToken**](docs/OIDCAPI.md#authoidctoken) | **POST** /v1/auth/oauth/token | Exchange authorization code or refresh token for OpenID Connect tokens
-*OIDCAPI* | [**authOidcUserinfo**](docs/OIDCAPI.md#authoidcuserinfo) | **GET** /v1/auth/oauth/userinfo | Retrieve OpenID Connect Core 1.0 user claims
+*OIDCAPI* | [**authOidcToken**](docs/OIDCAPI.md#authoidctoken) | **POST** /v1/oauth/token | Exchange authorization code or refresh token for OpenID Connect tokens
+*OIDCAPI* | [**authOidcUserinfo**](docs/OIDCAPI.md#authoidcuserinfo) | **GET** /v1/oauth/userinfo | Retrieve OpenID Connect Core 1.0 user claims
 *OTPAPI* | [**authOtpSend**](docs/OTPAPI.md#authotpsend) | **POST** /v1/auth/otp | Request a one-time password verification code via email or SMS
 *OTPAPI* | [**authOtpVerify**](docs/OTPAPI.md#authotpverify) | **POST** /v1/auth/otp/verify | Verify one-time password code and issue authenticated session
 *PasskeysSignInAPI* | [**authPasskeysSignInBegin**](docs/PasskeysSignInAPI.md#authpasskeyssigninbegin) | **POST** /v1/auth/passkeys/sign-in | Begin WebAuthn passkey authentication ceremony

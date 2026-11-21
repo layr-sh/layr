@@ -12,10 +12,17 @@ import (
 	"testing"
 	"uuid"
 
+	"github.com/stretchr/testify/require"
+	"layr.sh/auth/otp"
 	"layr.sh/core"
 )
 
 func TestAuthBaseHandlerOTPOutboundRateLimitingAndCooldownIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	_ = kernel.DB()
@@ -37,13 +44,13 @@ func TestAuthBaseHandlerOTPOutboundRateLimitingAndCooldownIntegration(t *testing
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	if err := configManager.Set(ctx, authConfig); err != nil {
@@ -142,6 +149,11 @@ func TestAuthBaseHandlerOTPOutboundRateLimitingAndCooldownIntegration(t *testing
 }
 
 func TestAuthBaseHandlerOTPFlowAndConversionIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -164,13 +176,13 @@ func TestAuthBaseHandlerOTPFlowAndConversionIntegration(t *testing.T) {
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	if err := configManager.Set(ctx, authConfig); err != nil {
@@ -509,6 +521,11 @@ func TestAuthBaseHandlerOTPFlowAndConversionIntegration(t *testing.T) {
 }
 
 func TestAuthBaseHandlerOTPVerifyMFAEnforcedIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -524,6 +541,7 @@ func TestAuthBaseHandlerOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 
 	driverWebhook := "webhook"
 	authConfig := configManager.Get()
+	authConfig.MFA.Enabled = true
 	authConfig.EmailOTP.Enabled = true
 	authConfig.SMSOTP.Enabled = true
 	authConfig.EmailDispatcher = EmailDispatcherConfig{
@@ -531,13 +549,13 @@ func TestAuthBaseHandlerOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	if err := configManager.Set(ctx, authConfig); err != nil {
@@ -631,4 +649,62 @@ func TestAuthBaseHandlerOTPVerifyMFAEnforcedIntegration(t *testing.T) {
 	if !phoneSignInResponse.MFARequired || phoneSignInResponse.MFATicket == "" || phoneSignInResponse.Factor != "totp" {
 		t.Fatalf("expected mfa_required for phone user, got: %+v", phoneSignInResponse)
 	}
+}
+
+func TestAuthOTPAttemptLimitAndDeliveryFailureIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.EmailOTP.Enabled = true
+	config.Threat.BotProtection.Enabled = false
+	service.configManager.SetMemoryConfig(config)
+	for _, hosted := range []bool{false, true} {
+		t.Run(fmt.Sprintf("hosted=%t", hosted), func(t *testing.T) {
+			recipient := fmt.Sprintf("attempts-%t@example.com", hosted)
+			_, err := kernel.DB().Exec(ctx, "INSERT INTO auth.otps (recipient,code_hash,purpose,expires_at) VALUES ($1,$2,'sign_in',clock_timestamp()+interval '1 hour')", recipient, otp.HashCode("123456"))
+			require.NoError(t, err)
+			for i := 0; i <= otp.MaxAttempts; i++ {
+				code := "999999"
+				if i == otp.MaxAttempts {
+					code = "123456"
+				}
+				responseRecorder := httptest.NewRecorder()
+				if !hosted {
+					request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(fmt.Sprintf(`{"recipient":%q,"code":%q}`, recipient, code)))
+					service.baseHandler.handleVerifyOTP(responseRecorder, request)
+					require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+				} else {
+					config.OIDC.Enabled = true
+					service.configManager.SetMemoryConfig(config)
+					payload, err := json.Marshal(OIDCAuthorizationStatePayload{ClientID: "test", RedirectURI: "https://example.com/callback"})
+					require.NoError(t, err)
+					require.NoError(t, kernel.KVStore().Set(ctx, "auth:oidc:state:otp-attempts", string(payload), 0))
+					request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(fmt.Sprintf("state=otp-attempts&action=verify_otp&recipient=%s&otp_code=%s", recipient, code)))
+					request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					service.baseHandler.handleSubmitOIDCAuthorize(responseRecorder, request)
+					require.Contains(t, responseRecorder.Body.String(), "Invalid or expired verification code")
+				}
+			}
+			var attempts int
+			require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT attempts FROM auth.otps WHERE recipient = $1", recipient).Scan(&attempts))
+			require.Equal(t, otp.MaxAttempts, attempts)
+		})
+	}
+	failingDeliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusBadGateway)
+	}))
+	defer failingDeliveryServer.Close()
+	driver := "webhook"
+	config.EmailDispatcher = EmailDispatcherConfig{Driver: &driver, Webhook: EmailDispatcherWebhookConfig{URL: failingDeliveryServer.URL}}
+	service.configManager.SetMemoryConfig(config)
+	responseRecorder := httptest.NewRecorder()
+	service.baseHandler.handleSendOTP(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/otp", strings.NewReader(`{"recipient":"failed-delivery@example.com"}`)))
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	var count int
+	require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT count(*) FROM auth.otps WHERE recipient = 'failed-delivery@example.com'").Scan(&count))
+	require.Zero(t, count)
+	_, err := kernel.KVStore().Get(ctx, "auth:cooldown:sign_in:failed-delivery@example.com")
+	require.Error(t, err)
 }

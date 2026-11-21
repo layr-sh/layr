@@ -251,6 +251,6 @@ func VerifySignature(publicKey, clientDataJSON, authenticatorData, signature []b
 		}
 	}
 
-	log.Debug("passkey public key is in unparseable or simulated format, accepting non-empty signature payload")
-	return true
+	log.Debug("passkey signature verification rejected: unsupported or invalid public key")
+	return false
 }

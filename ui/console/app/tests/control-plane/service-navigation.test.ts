@@ -12,7 +12,7 @@ beforeEach(async () => {
   enabledServices = manifest.state.value.enabledServices;
   manifest.state.value = {
     ...manifest.state.value,
-    enabledServices: ["function", "image", "file_storage"],
+    enabledServices: ["function", "image", "file_storage", "auth"],
   };
 });
 afterEach(async () => {
@@ -34,6 +34,7 @@ describe("Canonical service names and routes", () => {
         { label: "Function", href: router.resolve("/function").href },
         { label: "Image", href: router.resolve("/image").href },
         { label: "File Storage", href: router.resolve("/file-storage").href },
+        { label: "Auth", href: router.resolve("/auth").href },
       ]),
     );
     expect(links.some((link) => link.label === "Functions" || link.label === "Images")).toBe(false);
@@ -51,6 +52,9 @@ describe("Canonical service names and routes", () => {
     expect(
       services.find((service: { serviceKey: string }) => service.serviceKey === "file_storage"),
     ).toMatchObject({ title: "File Storage", to: "/file-storage", quickAction: "Browse Buckets" });
+    expect(
+      services.find((service: { serviceKey: string }) => service.serviceKey === "auth"),
+    ).toMatchObject({ title: "Auth", to: "/auth/users", quickAction: "Manage Users" });
   });
 
   it.each([
@@ -69,6 +73,18 @@ describe("Canonical service names and routes", () => {
     "/file-storage/objects",
     "/file-storage/signing",
     "/file-storage/configurations",
+    "/auth",
+    "/auth/users",
+    "/auth/sessions",
+    "/auth/providers",
+    "/auth/applications",
+    "/auth/resource-servers",
+    "/auth/sign-in-methods",
+    "/auth/security",
+    "/auth/hosted-sign-in",
+    "/auth/email",
+    "/auth/sms",
+    "/auth/configurations",
   ])("resolves %s through generated Nuxt routes", (path) => {
     expect(useNuxtApp().$router.resolve(path).matched.length).toBeGreaterThan(0);
   });
@@ -77,13 +93,16 @@ describe("Canonical service names and routes", () => {
     ["function", "/function/endpoints"],
     ["image", "/image/presets"],
     ["file_storage", "/file-storage/buckets"],
+    ["auth", "/auth/users"],
   ])("guards disabled %s services using the singular route prefix", async (service, path) => {
     const nuxtApp = useNuxtApp();
     await nuxtApp.$router.push(path);
     expect(nuxtApp.$router.currentRoute.value.path).toBe(path);
     nuxtApp.$manifest.state.value = {
       ...nuxtApp.$manifest.state.value,
-      enabledServices: ["function", "image", "file_storage"].filter((name) => name !== service),
+      enabledServices: ["function", "image", "file_storage", "auth"].filter(
+        (name) => name !== service,
+      ),
     };
     await nuxtApp.$router.push("/");
     await nuxtApp.$router.push(path);

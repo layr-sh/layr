@@ -68,7 +68,7 @@ func (a *OIDCAPIService) AuthOidcTokenExecute(r ApiAuthOidcTokenRequest) (*Issue
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/auth/oauth/token"
+	localVarPath := localBasePath + "/v1/oauth/token"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -172,7 +172,7 @@ func (a *OIDCAPIService) AuthOidcUserinfoExecute(r ApiAuthOidcUserinfoRequest) (
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/auth/oauth/userinfo"
+	localVarPath := localBasePath + "/v1/oauth/userinfo"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

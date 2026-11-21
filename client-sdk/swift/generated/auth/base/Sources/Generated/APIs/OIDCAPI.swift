@@ -22,14 +22,14 @@ open class OIDCAPI {
 
     /**
      Exchange authorization code or refresh token for OpenID Connect tokens
-     - POST /v1/auth/oauth/token
+     - POST /v1/oauth/token
      - Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications.
      - parameter body: (body) Request body for core.Empty 
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<IssueOIDCTokenResponse> 
      */
     open class func authOidcTokenWithRequestBuilder(body: JSONValue, apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<IssueOIDCTokenResponse> {
-        let localVariablePath = "/v1/auth/oauth/token"
+        let localVariablePath = "/v1/oauth/token"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters = JSONEncodingHelper.encodingParameters(forEncodableObject: body, codableHelper: apiConfiguration.codableHelper)
 
@@ -58,13 +58,13 @@ open class OIDCAPI {
 
     /**
      Retrieve OpenID Connect Core 1.0 user claims
-     - GET /v1/auth/oauth/userinfo
+     - GET /v1/oauth/userinfo
      - Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.
      - parameter apiConfiguration: The configuration for the http request.
      - returns: RequestBuilder<GetOIDCUserInfoResponse> 
      */
     open class func authOidcUserinfoWithRequestBuilder(apiConfiguration: GeneratedAPIConfiguration = GeneratedAPIConfiguration.shared) -> RequestBuilder<GetOIDCUserInfoResponse> {
-        let localVariablePath = "/v1/auth/oauth/userinfo"
+        let localVariablePath = "/v1/oauth/userinfo"
         let localVariableURLString = apiConfiguration.basePath + localVariablePath
         let localVariableParameters: [String: any Sendable]? = nil
 

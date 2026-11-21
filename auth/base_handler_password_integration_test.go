@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/auth/otp"
 	"layr.sh/core"
 )
@@ -273,4 +274,34 @@ func TestAuthBaseHandlerPasswordResetFlowIntegration(t *testing.T) {
 	if orphanConfirmResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on orphan reset confirm, got: %d (%s)", orphanConfirmResponseRecorder.Code, orphanConfirmResponseRecorder.Body.String())
 	}
+}
+
+func TestAuthPasswordDeliveryAndPersistenceFailuresIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+	driver := "webhook"
+	config := DefaultConfig()
+	config.EmailDispatcher = EmailDispatcherConfig{Driver: &driver, Webhook: EmailDispatcherWebhookConfig{URL: server.URL}}
+	service.configManager.SetMemoryConfig(config)
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users (email) VALUES ('reset-failure@example.com') RETURNING id").Scan(&userID))
+	responseRecorder := httptest.NewRecorder()
+	service.baseHandler.handleRequestPasswordReset(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"email":"reset-failure@example.com"}`)))
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	_, err := kernel.DB().Exec(ctx, "ALTER TABLE auth.otps RENAME TO unavailable_otps")
+	require.NoError(t, err)
+	responseRecorder = httptest.NewRecorder()
+	service.baseHandler.handleRequestPasswordReset(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"email":"reset-failure@example.com"}`)))
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	_, err = kernel.DB().Exec(ctx, `CREATE FUNCTION auth.fail_password_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'update failed'; END $$; CREATE TRIGGER fail_password_update BEFORE UPDATE ON auth.users FOR EACH ROW EXECUTE FUNCTION auth.fail_password_update()`)
+	require.NoError(t, err)
+	responseRecorder = httptest.NewRecorder()
+	service.baseHandler.handleUpdateUserPassword(responseRecorder, httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/", strings.NewReader(`{"new_password":"NewPassword123!"}`)))
+	require.Equal(t, http.StatusInternalServerError, responseRecorder.Code, responseRecorder.Body.String())
 }

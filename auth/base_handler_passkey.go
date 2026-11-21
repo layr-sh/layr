@@ -1,9 +1,20 @@
 package auth
 
 import (
+	"bytes"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"uuid"
@@ -91,6 +102,38 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 
 	credentialIDBytes := []byte(verifyPasskeySignUpInput.CredentialID)
 	publicKeyBytes := []byte(verifyPasskeySignUpInput.PublicKey)
+	keyDER := publicKeyBytes
+	if block, _ := pem.Decode(keyDER); block != nil {
+		keyDER = block.Bytes
+	} else if decoded, decodeErr := base64.StdEncoding.DecodeString(verifyPasskeySignUpInput.PublicKey); decodeErr == nil {
+		keyDER = decoded
+	}
+	parsedKey, parseErr := x509.ParsePKIXPublicKey(keyDER)
+	validKey := false
+	if parseErr == nil {
+		switch publicKey := parsedKey.(type) {
+		case *ecdsa.PublicKey:
+			validKey = publicKey.Curve == elliptic.P256()
+		case ed25519.PublicKey:
+			validKey = len(publicKey) == ed25519.PublicKeySize
+		case *rsa.PublicKey:
+			validKey = publicKey.Size() >= 256
+		}
+	}
+	if !validKey || len(credentialIDBytes) == 0 {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid passkey credential or public key")
+		return
+	}
+	publicKeyBytes = keyDER
+	var existingUser bool
+	if lookupErr := handler.kernel.DB().QueryRow(request.Context(), "SELECT EXISTS (SELECT 1 FROM auth.users WHERE id = $1)", expectedUserID).Scan(&existingUser); lookupErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable")
+		return
+	}
+	if existingUser && core.GetAuthContext(request.Context()).UserID != expectedUserID {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Authentication required to add a passkey")
+		return
+	}
 	if verifyPasskeySignUpInput.FriendlyName == "" {
 		verifyPasskeySignUpInput.FriendlyName = "Passkey"
 	}
@@ -124,8 +167,9 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 			INSERT INTO auth.users (id, role, created_at, last_updated_at)
 			VALUES ($1, 'authenticated', clock_timestamp(), clock_timestamp())
 			ON CONFLICT (id) DO UPDATE SET last_updated_at = clock_timestamp()
+						WHERE auth.users.id::text = $2
 			RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
-		`, targetUserID).Scan(
+		`, targetUserID, core.GetAuthContext(ctx).UserID).Scan(
 			&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
 			&user.EmailVerifiedAt, &user.PhoneVerifiedAt, &user.LockedUntil,
 			&user.EncryptedMFASecret, &user.MFAEnabled,
@@ -147,7 +191,6 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	_, execErr := handler.kernel.DB().Exec(ctx, `
 		INSERT INTO auth.passkeys (id, user_id, credential_id, public_key, counter, transports, friendly_name, created_at, last_used_at)
 		VALUES ($1, $2, $3, $4, 0, $5, $6, clock_timestamp(), clock_timestamp())
-		ON CONFLICT (credential_id) DO UPDATE SET last_used_at = clock_timestamp()
 	`, passkeyID, targetUserID, credentialIDBytes, publicKeyBytes, verifyPasskeySignUpInput.Transports, verifyPasskeySignUpInput.FriendlyName)
 	if execErr != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", fmt.Sprintf("failed to insert passkey credential for user %s: %v", targetUserID, execErr))
@@ -167,7 +210,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignUp(responseWriter http.Respon
 	}
 
 	log.Debugf("passkey sign up verified and session issued for user %s", targetUserID)
-	handler.issueSessionResponse(responseWriter, request, user, "passkey")
+	handler.completeSignInFlow(responseWriter, request, user, "passkey")
 }
 
 func (handler *BaseHandler) handleBeginPasskeySignIn(responseWriter http.ResponseWriter, request *http.Request) {
@@ -206,8 +249,8 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 		return
 	}
 
-	if _, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignInInput.Challenge); err != nil {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge", err.Error())
+	if challengeUserID, err := handler.passkeyManager.ConsumeChallenge(verifyPasskeySignInInput.Challenge); err != nil || challengeUserID != "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired challenge")
 		return
 	}
 	_ = handler.kernel.KVStore().Delete(request.Context(), "auth:challenge:"+verifyPasskeySignInInput.Challenge)
@@ -216,7 +259,8 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 	ctx := request.Context()
 	var userID string
 	var publicKey []byte
-	err := handler.kernel.DB().QueryRow(ctx, "SELECT user_id, public_key FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey)
+	var counter uint32
+	err := handler.kernel.DB().QueryRow(ctx, "SELECT user_id, public_key, counter FROM auth.passkeys WHERE credential_id = $1", credentialIDBytes).Scan(&userID, &publicKey, &counter)
 	if err != nil {
 		clientIP := core.ExtractRequestClientIP(request)
 		handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(string(credentialIDBytes), UserSignInFailedEventData{
@@ -230,22 +274,39 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 		return
 	}
 
-	if verifyPasskeySignInInput.Signature != "" {
-		clientDataBytes := []byte(verifyPasskeySignInInput.ClientDataJSON)
-		authenticatorDataBytes := []byte(verifyPasskeySignInInput.AuthenticatorData)
-		signatureBytes := []byte(verifyPasskeySignInInput.Signature)
-		if !passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
-			clientIP := core.ExtractRequestClientIP(request)
-			handler.kernel.EventBus().Publish(ctx, NewUserSignInFailedEvent(userID, UserSignInFailedEventData{
-				Identifier: userID,
-				AuthMethod: "passkey",
-				Reason:     "invalid_signature",
-				IPAddress:  clientIP,
-				UserAgent:  request.UserAgent(),
-			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
-			return
-		}
+	clientDataBytes, clientDataErr := base64.StdEncoding.DecodeString(verifyPasskeySignInInput.ClientDataJSON)
+	authenticatorDataBytes, authenticatorErr := base64.StdEncoding.DecodeString(verifyPasskeySignInInput.AuthenticatorData)
+	signatureBytes, signatureErr := base64.StdEncoding.DecodeString(verifyPasskeySignInInput.Signature)
+	var clientData struct {
+		Type        string `json:"type"`
+		Challenge   string `json:"challenge"`
+		Origin      string `json:"origin"`
+		CrossOrigin bool   `json:"crossOrigin"`
+	}
+	rpID := config.Passkeys.RelyingPartyID
+	if rpID == "" {
+		rpID = "localhost"
+	}
+	rpHash := sha256.Sum256([]byte(rpID))
+	clientJSONErr := json.Unmarshal(clientDataBytes, &clientData)
+	originURL, originErr := url.Parse(clientData.Origin)
+	validOrigin := originErr == nil && originURL.User == nil && originURL.RawQuery == "" && originURL.Fragment == "" && originURL.Path == "" && originURL.Hostname() == rpID && (originURL.Scheme == "https" || (rpID == "localhost" && originURL.Scheme == "http"))
+	if clientDataErr != nil || authenticatorErr != nil || signatureErr != nil || clientJSONErr != nil ||
+		clientData.Type != "webauthn.get" || clientData.Challenge != verifyPasskeySignInInput.Challenge || clientData.CrossOrigin || !validOrigin ||
+		len(authenticatorDataBytes) < 37 || !bytes.Equal(authenticatorDataBytes[:32], rpHash[:]) || authenticatorDataBytes[32]&1 == 0 ||
+		!passkey.VerifySignature(publicKey, clientDataBytes, authenticatorDataBytes, signatureBytes) {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+	newCounter := binary.BigEndian.Uint32(authenticatorDataBytes[33:37])
+	if (counter != 0 || newCounter != 0) && newCounter <= counter {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
+		return
+	}
+	updatedResult, updateErr := handler.kernel.DB().Exec(ctx, "UPDATE auth.passkeys SET counter = $1, last_used_at = clock_timestamp() WHERE credential_id = $2 AND counter = $3", newCounter, credentialIDBytes, counter)
+	if updateErr != nil || updatedResult.RowsAffected() != 1 {
+		core.WriteErrorResponse(responseWriter, request, http.StatusUnauthorized, "Invalid credentials")
+		return
 	}
 
 	var user User
@@ -285,7 +346,7 @@ func (handler *BaseHandler) handleVerifyPasskeySignIn(responseWriter http.Respon
 
 	_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.passkeys SET last_used_at = clock_timestamp() WHERE credential_id = $1", credentialIDBytes)
 	log.Debugf("passkey sign-in verified and session issued for user %s", userID)
-	handler.issueSessionResponse(responseWriter, request, user, "passkey")
+	handler.completeSignInFlow(responseWriter, request, user, "passkey")
 }
 
 func (handler *BaseHandler) handleListPasskeys(responseWriter http.ResponseWriter, request *http.Request) {

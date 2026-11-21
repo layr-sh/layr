@@ -19,6 +19,7 @@ __version__ = "1.0.0"
 # Define package exports
 __all__ = [
     "ConfigApi",
+    "StatsApi",
     "UsersApi",
     "UsersSessionsApi",
     "ApiResponse",
@@ -52,8 +53,11 @@ __all__ = [
     "PasskeysConfig",
     "PasswordBreachConfig",
     "PasswordConfig",
+    "ProviderStats",
     "RateLimitingConfig",
+    "RegistrationStats",
     "ResourceServerConfig",
+    "RoleStats",
     "SMSDispatcherConfig",
     "SMSDispatcherTemplateConfig",
     "SMSDispatcherTemplatesConfig",
@@ -62,12 +66,14 @@ __all__ = [
     "SMSOTPConfig",
     "Session",
     "SessionsConfig",
+    "StatsResponse",
     "ThreatConfig",
     "User",
 ]
 
 # import apis into sdk package
 from generated.auth.control_plane.api.config_api import ConfigApi as ConfigApi
+from generated.auth.control_plane.api.stats_api import StatsApi as StatsApi
 from generated.auth.control_plane.api.users_api import UsersApi as UsersApi
 from generated.auth.control_plane.api.users_sessions_api import UsersSessionsApi as UsersSessionsApi
 
@@ -105,8 +111,11 @@ from generated.auth.control_plane.models.oidcui_config import OIDCUIConfig as OI
 from generated.auth.control_plane.models.passkeys_config import PasskeysConfig as PasskeysConfig
 from generated.auth.control_plane.models.password_breach_config import PasswordBreachConfig as PasswordBreachConfig
 from generated.auth.control_plane.models.password_config import PasswordConfig as PasswordConfig
+from generated.auth.control_plane.models.provider_stats import ProviderStats as ProviderStats
 from generated.auth.control_plane.models.rate_limiting_config import RateLimitingConfig as RateLimitingConfig
+from generated.auth.control_plane.models.registration_stats import RegistrationStats as RegistrationStats
 from generated.auth.control_plane.models.resource_server_config import ResourceServerConfig as ResourceServerConfig
+from generated.auth.control_plane.models.role_stats import RoleStats as RoleStats
 from generated.auth.control_plane.models.sms_dispatcher_config import SMSDispatcherConfig as SMSDispatcherConfig
 from generated.auth.control_plane.models.sms_dispatcher_template_config import SMSDispatcherTemplateConfig as SMSDispatcherTemplateConfig
 from generated.auth.control_plane.models.sms_dispatcher_templates_config import SMSDispatcherTemplatesConfig as SMSDispatcherTemplatesConfig
@@ -115,6 +124,7 @@ from generated.auth.control_plane.models.sms_dispatcher_webhook_config import SM
 from generated.auth.control_plane.models.smsotp_config import SMSOTPConfig as SMSOTPConfig
 from generated.auth.control_plane.models.session import Session as Session
 from generated.auth.control_plane.models.sessions_config import SessionsConfig as SessionsConfig
+from generated.auth.control_plane.models.stats_response import StatsResponse as StatsResponse
 from generated.auth.control_plane.models.threat_config import ThreatConfig as ThreatConfig
 from generated.auth.control_plane.models.user import User as User
 

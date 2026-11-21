@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -10,16 +11,20 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"uuid"
 
 	"layr.sh/auth/otp"
+	"layr.sh/auth/threat"
 	"layr.sh/core"
 )
 
 const defaultM2MTokenExpirySeconds = 3600
 const defaultOIDCMFATTL = 5 * time.Minute
+
+type oidcMFAVerifiedKey struct{}
 
 // OIDCConfiguration represents OpenID Connect Core 1.0 discovery metadata (RFC 8414).
 type OIDCConfiguration struct {
@@ -48,11 +53,11 @@ func BuildOIDCDiscovery(baseURL string) OIDCConfiguration {
 	normalizedBaseURL := strings.TrimRight(baseURL, "/")
 	return OIDCConfiguration{
 		Issuer:                              normalizedBaseURL,
-		AuthorizationEndpoint:               normalizedBaseURL + "/v1/auth/oauth/authorize",
-		TokenEndpoint:                       normalizedBaseURL + "/v1/auth/oauth/token",
-		UserinfoEndpoint:                    normalizedBaseURL + "/v1/auth/oauth/userinfo",
+		AuthorizationEndpoint:               normalizedBaseURL + "/v1/oauth/authorize",
+		TokenEndpoint:                       normalizedBaseURL + "/v1/oauth/token",
+		UserinfoEndpoint:                    normalizedBaseURL + "/v1/oauth/userinfo",
 		JwksURI:                             normalizedBaseURL + "/.well-known/jwks.json",
-		EndSessionEndpoint:                  normalizedBaseURL + "/v1/auth/oauth/sign-out",
+		EndSessionEndpoint:                  normalizedBaseURL + "/v1/oauth/sign-out",
 		BackChannelSignOutSupported:         true,
 		BackChannelSignOutSessionSupported:  true,
 		FrontChannelSignOutSupported:        true,
@@ -129,7 +134,7 @@ func (handler *BaseHandler) handleGetJWKS(responseWriter http.ResponseWriter, re
 	_ = json.NewEncoder(responseWriter).Encode(jwks)
 }
 
-// 2. Authorization Endpoint (GET /v1/auth/oauth/authorize)
+// 2. Authorization Endpoint (GET /v1/oauth/authorize)
 
 func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling OIDC authorize request")
@@ -147,6 +152,22 @@ func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWrit
 			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 			if json.Unmarshal([]byte(stateJSON), &oidcAuthorizationStatePayload) == nil {
 				oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
+				if modeParam == "mfa" {
+					ticket := request.URL.Query().Get("mfa_ticket")
+					userID, ticketErr := handler.kernel.KVStore().Get(request.Context(), "auth:mfa_ticket:"+ticket)
+					if ticketErr != nil || userID == "" {
+						handler.renderOIDCSignInPage(responseWriter, stateIDParam, oidcClientConfig, "MFA session expired. Please sign in again.")
+						return
+					}
+					mfaToken := "mfa_oidc_" + uuid.NewV7().String()
+					if err := handler.kernel.KVStore().Set(request.Context(), "auth:oidc:mfa:"+stateIDParam+":"+mfaToken, userID, defaultOIDCMFATTL); err != nil {
+						core.WriteOAuthErrorResponse(responseWriter, http.StatusServiceUnavailable, "server_error", "Service temporarily unavailable")
+						return
+					}
+					_ = handler.kernel.KVStore().Delete(request.Context(), "auth:mfa_ticket:"+ticket)
+					handler.renderOIDCMFAPage(responseWriter, stateIDParam, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
+					return
+				}
 				handler.renderOIDCPage(responseWriter, stateIDParam, oidcClientConfig, "", "", modeParam, "", "")
 				return
 			}
@@ -200,6 +221,17 @@ func (handler *BaseHandler) handleAuthorizeOIDC(responseWriter http.ResponseWrit
 		return
 	}
 
+	allowedScopes := oidcClientConfig.Scopes
+	if len(allowedScopes) == 0 {
+		allowedScopes = BuildOIDCDiscovery("").ScopesSupported
+	}
+	for _, requestedScope := range strings.Fields(scope) {
+		if !slices.Contains(allowedScopes, requestedScope) {
+			redirectError(responseWriter, request, redirectURI, "invalid_scope", "The requested scope is not allowed for this client", clientState)
+			return
+		}
+	}
+
 	// Active session bypass (Single Sign-On)
 	if authContext := core.GetAuthContext(request.Context()); authContext.UserID != "" {
 		activeUserID := authContext.UserID
@@ -247,6 +279,38 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	ctx := request.Context()
 	config := handler.configManager.Get()
 
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now().UTC()) {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account temporarily locked")
+		return
+	}
+	if request.Context().Value(oidcMFAVerifiedKey{}) != user.ID && handler.requiresSignInMFA(request, user) {
+		oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
+		if code := strings.TrimSpace(request.FormValue("mfa_code")); code != "" {
+			if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
+				return
+			}
+			secret, err := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
+			if err != nil {
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
+				return
+			}
+			if !handler.totpManager.ValidateCode(string(secret), code, time.Now().UTC(), 1) {
+				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
+				return
+			}
+		} else {
+			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
+			if err := handler.kernel.KVStore().Set(ctx, "auth:oidc:mfa:"+stateID+":"+mfaToken, user.ID, defaultOIDCMFATTL); err != nil {
+				core.WriteOAuthErrorResponse(responseWriter, http.StatusServiceUnavailable, "server_error", "Service temporarily unavailable")
+				return
+			}
+			oidcClientConfig, _ := handler.configManager.GetOIDCClient(oidcAuthorizationStatePayload.ClientID)
+			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
+			return
+		}
+	}
+
 	// Delete state payload to prevent replay / CSRF fixation
 	_ = handler.kernel.KVStore().Delete(ctx, "auth:oidc:state:"+stateID)
 
@@ -266,11 +330,12 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	refreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
 	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 	expiresAt := time.Now().UTC().Add(time.Duration(config.Sessions.RefreshTokenExpirySeconds) * time.Second)
-	sessionID := uuid.NewV7().String()
-	_, _ = handler.kernel.DB().Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, clock_timestamp())
-	`, sessionID, user.ID, refreshTokenHash, expiresAt)
+	session := Session{UserID: user.ID, RefreshTokenHash: refreshTokenHash, IPAddress: nilIfEmpty(core.ExtractRequestClientIP(request)), UserAgent: nilIfEmpty(request.UserAgent()), ExpiresAt: expiresAt}
+	if err := handler.persistSession(ctx, &session, ""); err != nil {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusServiceUnavailable, "server_error", "Service temporarily unavailable", err.Error())
+		return
+	}
+	sessionID := session.ID
 
 	core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
 
@@ -296,7 +361,7 @@ func (handler *BaseHandler) completeOIDCAuthorization(
 	http.Redirect(responseWriter, request, targetURL.String(), http.StatusFound)
 }
 
-// 3. Authorization Form Submission (POST /v1/auth/oauth/authorize)
+// 3. Authorization Form Submission (POST /v1/oauth/authorize)
 
 func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling submit OIDC authorize request")
@@ -339,6 +404,22 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		action = "sign_up"
 	}
 
+	if action != "verify_mfa" {
+		captchaToken := request.FormValue("captcha_token")
+		if captchaToken == "" {
+			captchaToken = request.FormValue("cf-turnstile-response")
+		}
+		if captchaToken == "" {
+			captchaToken = request.FormValue("g-recaptcha-response")
+		}
+		if captchaToken == "" {
+			captchaToken = request.FormValue("h-captcha-response")
+		}
+		if !handler.checkCaptcha(responseWriter, request, core.ExtractRequestClientIP(request), captchaToken, request.URL.Path) {
+			return
+		}
+	}
+
 	// 1. MFA Verification Challenge Form
 	if action == "verify_mfa" {
 		mfaToken := request.FormValue("mfa_token")
@@ -347,7 +428,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
 		}
-		mfaUserID, _ := handler.kernel.KVStore().Get(ctx, "auth:oidc:mfa:"+mfaToken)
+		mfaUserID, _ := handler.kernel.KVStore().Get(ctx, "auth:oidc:mfa:"+stateID+":"+mfaToken)
 		if mfaUserID == "" {
 			handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "MFA session expired. Please sign in again.")
 			return
@@ -391,7 +472,8 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			return
 		}
 
-		_ = handler.kernel.KVStore().Delete(ctx, "auth:oidc:mfa:"+mfaToken)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:oidc:mfa:"+stateID+":"+mfaToken)
+		request = request.WithContext(context.WithValue(ctx, oidcMFAVerifiedKey{}, user.ID))
 		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
@@ -449,16 +531,29 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			VALUES ($1, $2, 'sign_in', 0, $3, clock_timestamp())
 		`
 		expiresAt := time.Now().UTC().Add(codeTTL)
-		_, _ = handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt)
+		if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt); persistErr != nil {
+			handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Failed to send verification code. Please try again.", "")
+			return
+		}
 		_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient), code, codeTTL)
 		_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:cooldown:sign_in:%s", recipient), "1", defaultOTPCooldown)
 
 		channel := "sms"
+		var sendErr error
 		if isEmail {
 			channel = "email"
-			_ = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
+			sendErr = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
 		} else {
-			_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+			sendErr = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+		}
+
+		if sendErr != nil {
+			log.Errorf("failed to send hosted sign-in code: %v", sendErr)
+			_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'sign_in' AND code_hash = $2", recipient, codeHash)
+			_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:sign_in:"+recipient)
+			_ = handler.kernel.KVStore().Delete(ctx, cooldownKey)
+			handler.renderOIDCOTPRequestPage(responseWriter, stateID, oidcClientConfig, "Failed to send verification code. Please try again.", "")
+			return
 		}
 
 		var targetUser *User
@@ -498,24 +593,28 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		var attempts int
 		var expiresAt time.Time
 		err := handler.kernel.DB().QueryRow(ctx, `
-			SELECT id, code_hash, attempts, expires_at 
-			FROM auth.otps 
-			WHERE recipient = $1 AND purpose = 'sign_in' AND expires_at > clock_timestamp()
-			ORDER BY created_at DESC 
-			LIMIT 1
-		`, recipient).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+			UPDATE auth.otps SET attempts = attempts + 1
+			WHERE id = (SELECT id FROM auth.otps
+				WHERE recipient = $1 AND purpose = 'sign_in' AND expires_at > clock_timestamp()
+				ORDER BY created_at DESC LIMIT 1)
+			AND attempts < $2
+			RETURNING id, code_hash, attempts, expires_at
+		`, recipient, otp.MaxAttempts).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 		if err != nil {
 			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
 			return
 		}
 
 		if !otp.VerifyCode(otpCode, storedHash) {
-			_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
 			return
 		}
 
-		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		consumedResult, consumeErr := handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+		if consumeErr != nil || consumedResult.RowsAffected() != 1 {
+			handler.renderOIDCOTPVerifyPage(responseWriter, stateID, oidcClientConfig, "Invalid or expired verification code", "", recipient)
+			return
+		}
 		_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:sign_in:%s", recipient))
 
 		var user User
@@ -566,13 +665,6 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			User:      &user,
 		}))
 
-		if user.MFAEnabled {
-			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
-			_ = handler.kernel.KVStore().Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
-			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
-			return
-		}
-
 		handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
 		return
 	}
@@ -596,8 +688,12 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, "Passwords do not match")
 			return
 		}
-		if len(password) < config.Password.MinLength {
-			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
+		if err := config.Password.validatePassword(password); err != nil {
+			handler.renderOIDCSignUpPage(responseWriter, stateID, oidcClientConfig, err.Error())
+			return
+		}
+
+		if !handler.checkPasswordBreach(responseWriter, request, password, email) {
 			return
 		}
 
@@ -648,6 +744,10 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 		return
 	}
 
+	if !handler.checkSignInRateLimit(responseWriter, request, email) {
+		return
+	}
+
 	// Verify user credentials
 	var user User
 	var rawProperties []byte
@@ -664,6 +764,7 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 	)
 	if scanErr != nil || user.PasswordHash == nil {
 		handler.verifyDummyPassword(userPassword)
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), core.ExtractRequestClientIP(request), 0)
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
 		return
 	}
@@ -675,34 +776,10 @@ func (handler *BaseHandler) handleSubmitOIDCAuthorize(responseWriter http.Respon
 
 	match, verifyErr := handler.hasher.Verify(userPassword, *user.PasswordHash)
 	if verifyErr != nil || !match {
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), core.ExtractRequestClientIP(request), 0)
+		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), user.ID, 0)
 		handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid email or password")
 		return
-	}
-
-	if user.MFAEnabled {
-		mfaCode := strings.TrimSpace(request.FormValue("mfa_code"))
-		if mfaCode != "" {
-			if user.EncryptedMFASecret == nil || *user.EncryptedMFASecret == "" {
-				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Multi-factor authentication configuration error")
-				return
-			}
-			secretBytes, err := handler.kernel.CryptoKeyManager().DecryptField(*user.EncryptedMFASecret)
-			if err != nil {
-				log.Errorf("failed to decrypt MFA secret for user %s: %v", user.ID, err)
-				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Failed to verify multi-factor authentication")
-				return
-			}
-			if !handler.totpManager.ValidateCode(string(secretBytes), mfaCode, time.Now().UTC(), 1) {
-				log.Debugf("invalid MFA code supplied during OIDC authorize submit for user %s", user.ID)
-				handler.renderOIDCSignInPage(responseWriter, stateID, oidcClientConfig, "Invalid two-factor authentication code")
-				return
-			}
-		} else {
-			mfaToken := "mfa_oidc_" + uuid.NewV7().String()
-			_ = handler.kernel.KVStore().Set(ctx, "auth:oidc:mfa:"+mfaToken, user.ID, defaultOIDCMFATTL)
-			handler.renderOIDCMFAPage(responseWriter, stateID, oidcClientConfig, "", "Two-factor authentication required", mfaToken)
-			return
-		}
 	}
 
 	handler.completeOIDCAuthorization(responseWriter, request, stateID, oidcAuthorizationStatePayload, user)
@@ -768,7 +845,7 @@ func parseOAuthTokenRequest(request *http.Request) OAuthTokenInput {
 	return oauthTokenInput
 }
 
-// 4. Token Endpoint (POST /v1/auth/oauth/token)
+// 4. Token Endpoint (POST /v1/oauth/token)
 
 func (handler *BaseHandler) handleIssueOIDCToken(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling issue OIDC token request")
@@ -996,6 +1073,17 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 		return
 	}
 
+	allowedScopes := oidcClientConfig.Scopes
+	if len(allowedScopes) == 0 {
+		allowedScopes = BuildOIDCDiscovery("").ScopesSupported
+	}
+	for _, requestedScope := range strings.Fields(oidcAuthorizationCodePayload.Scope) {
+		if !slices.Contains(allowedScopes, requestedScope) {
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_scope", "Scope is not allowed for this client")
+			return
+		}
+	}
+
 	// Retrieve user record
 	ctx := request.Context()
 	var user User
@@ -1003,7 +1091,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 	query := `
 		SELECT id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, properties, created_at, last_updated_at
 		FROM auth.users
-		WHERE id = $1
+		WHERE id = $1 AND (locked_until IS NULL OR locked_until <= clock_timestamp())
 	`
 	scanErr := handler.kernel.DB().QueryRow(ctx, query, oidcAuthorizationCodePayload.UserID).Scan(
 		&user.ID, &user.Email, &user.Phone, &user.Role, &user.IsAnonymous,
@@ -1048,10 +1136,11 @@ func (handler *BaseHandler) handleIssueOIDCTokenAuthorizationCode(responseWriter
 	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	expiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
-	_, _ = handler.kernel.DB().Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, client_id, refresh_token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
-	`, sessionID, user.ID, clientID, refreshTokenHash, expiresAt)
+	session := Session{ID: sessionID, UserID: user.ID, ClientID: &clientID, RefreshTokenHash: refreshTokenHash, IPAddress: nilIfEmpty(core.ExtractRequestClientIP(request)), UserAgent: nilIfEmpty(request.UserAgent()), ExpiresAt: expiresAt}
+	if err := handler.persistSession(ctx, &session, oidcAuthorizationCodePayload.Scope); err != nil {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusServiceUnavailable, "server_error", "Service temporarily unavailable", err.Error())
+		return
+	}
 
 	handler.kernel.EventBus().Publish(ctx, NewSessionCreatedEvent(sessionID, SessionCreatedEventData{
 		ID:        sessionID,
@@ -1098,14 +1187,16 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 		clientSecret = request.FormValue("client_secret")
 	}
 
-	if clientID != "" {
-		oidcClientConfig, ok := handler.configManager.GetOIDCClient(clientID)
-		if ok && !oidcClientConfig.Public {
-			decryptedSecret, _ := handler.configManager.DecryptSecret(oidcClientConfig.ClientSecret)
-			if clientSecret == "" || clientSecret != decryptedSecret {
-				core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client secret")
-				return
-			}
+	oidcClientConfig, ok := handler.configManager.GetOIDCClient(clientID)
+	if clientID == "" || !ok {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client credentials")
+		return
+	}
+	if !oidcClientConfig.Public {
+		secret, err := handler.configManager.DecryptSecret(oidcClientConfig.ClientSecret)
+		if err != nil || clientSecret == "" || clientSecret != secret {
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusUnauthorized, "invalid_client", "Invalid client secret")
+			return
 		}
 	}
 
@@ -1118,11 +1209,12 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	ctx := request.Context()
 	refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
 
-	var sessionID, userID string
+	var sessionID, userID, grantedScope string
 	err := handler.kernel.DB().QueryRow(ctx, `
-		SELECT id, user_id FROM auth.sessions
-		WHERE refresh_token_hash = $1 AND expires_at > clock_timestamp()
-	`, refreshTokenHash).Scan(&sessionID, &userID)
+		SELECT id, user_id, scope FROM auth.sessions
+		WHERE refresh_token_hash = $1 AND client_id = $2 AND expires_at > clock_timestamp()
+		AND ($3 <= 0 OR last_used_at > clock_timestamp() - make_interval(secs => $3))
+	`, refreshTokenHash, clientID, handler.configManager.Get().Sessions.IdleTimeoutSeconds).Scan(&sessionID, &userID, &grantedScope)
 	if err != nil {
 		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid or expired refresh token")
 		return
@@ -1151,11 +1243,31 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	sessionExpiry := config.Sessions.RefreshTokenExpirySeconds
 	newExpiresAt := time.Now().UTC().Add(time.Duration(sessionExpiry) * time.Second)
 
-	_, _ = handler.kernel.DB().Exec(ctx, `
-		UPDATE auth.sessions
-		SET refresh_token_hash = $1, expires_at = $2
-		WHERE id = $3
-	`, newRefreshTokenHash, newExpiresAt, sessionID)
+	requestedScope := request.FormValue("scope")
+	if requestedScope != "" {
+		for _, value := range strings.Fields(requestedScope) {
+			if !slices.Contains(strings.Fields(grantedScope), value) {
+				core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_scope", "Requested scope exceeds the original grant")
+				return
+			}
+		}
+		grantedScope = requestedScope
+	}
+	for _, value := range strings.Fields(grantedScope) {
+		if len(oidcClientConfig.Scopes) > 0 && !slices.Contains(oidcClientConfig.Scopes, value) {
+			core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_scope", "Scope is no longer allowed for this client")
+			return
+		}
+	}
+	updatedResult, updateErr := handler.kernel.DB().Exec(ctx, `
+		UPDATE auth.sessions SET refresh_token_hash = $1, expires_at = $2, last_used_at = clock_timestamp(), scope = $5
+		WHERE id = $3 AND refresh_token_hash = $4 AND expires_at > clock_timestamp()
+	`, newRefreshTokenHash, newExpiresAt, sessionID, refreshTokenHash, grantedScope)
+	if updateErr != nil || updatedResult.RowsAffected() != 1 {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusBadRequest, "invalid_grant", "Invalid or expired refresh token")
+		return
+	}
+	_ = handler.kernel.KVStore().Delete(ctx, "auth:session:"+refreshTokenHash)
 
 	accessExpiry := config.Sessions.AccessTokenExpirySeconds
 
@@ -1200,6 +1312,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 		ExpiresIn:    accessExpiry,
 		RefreshToken: newRefreshToken,
 		IDToken:      idToken,
+		Scope:        grantedScope,
 	}
 
 	responseWriter.Header().Set("Content-Type", "application/json")
@@ -1207,7 +1320,7 @@ func (handler *BaseHandler) handleIssueOIDCTokenRefreshToken(responseWriter http
 	_ = json.NewEncoder(responseWriter).Encode(issueOIDCTokenResponse)
 }
 
-// 5. Userinfo Endpoint (GET /v1/auth/oauth/userinfo)
+// 5. Userinfo Endpoint (GET /v1/oauth/userinfo)
 
 func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling get OIDC userinfo request")
@@ -1268,7 +1381,7 @@ func (handler *BaseHandler) handleGetOIDCUserInfo(responseWriter http.ResponseWr
 	_ = json.NewEncoder(responseWriter).Encode(getOIDCUserInfoResponse)
 }
 
-// 6. Sign-Out Endpoint (GET/POST /v1/auth/oauth/sign-out)
+// 6. Sign-Out Endpoint (GET/POST /v1/oauth/sign-out)
 
 func (handler *BaseHandler) handleSignOutOIDC(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling OIDC sign-out request")
@@ -1503,6 +1616,7 @@ func redirectError(responseWriter http.ResponseWriter, request *http.Request, re
 }
 
 type signInPageData struct {
+	BotProtection     BotProtectionConfig
 	ProjectName       string
 	ClientName        string
 	LogoURL           string
@@ -1584,6 +1698,7 @@ func (handler *BaseHandler) renderOIDCPage(
 	}
 
 	data := signInPageData{
+		BotProtection:     config.Threat.BotProtection,
 		ProjectName:       projectName,
 		ClientName:        clientName,
 		LogoURL:           logoURL,
@@ -1634,7 +1749,11 @@ func (handler *BaseHandler) renderOIDCOTPVerifyPage(responseWriter http.Response
 	handler.renderOIDCPage(responseWriter, stateID, oidcClientConfig, errorMessage, noticeMessage, "otp_verify", "", recipient)
 }
 
-const signInPageTemplateHTML = `<!DOCTYPE html>
+const signInPageTemplateHTML = `{{define "captcha"}}{{if .BotProtection.Enabled}}
+{{if eq .BotProtection.Provider "turnstile"}}<div class="cf-turnstile" data-sitekey="{{.BotProtection.SiteKey}}"></div>
+{{else if eq .BotProtection.Provider "recaptcha"}}<div class="g-recaptcha" data-sitekey="{{.BotProtection.SiteKey}}"></div>
+{{else if eq .BotProtection.Provider "hcaptcha"}}<div class="h-captcha" data-sitekey="{{.BotProtection.SiteKey}}"></div>{{end}}
+{{end}}{{end}}<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="utf-8">
@@ -1948,6 +2067,11 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
 {{.CustomCSS}}
   </style>
   {{end}}
+{{if .BotProtection.Enabled}}
+  {{if eq .BotProtection.Provider "turnstile"}}<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {{else if eq .BotProtection.Provider "recaptcha"}}<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+  {{else if eq .BotProtection.Provider "hcaptcha"}}<script src="https://js.hcaptcha.com/1/api.js" async defer></script>{{end}}
+  {{end}}
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -1991,7 +2115,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
 
       {{if eq .AuthMode "mfa"}}
         <!-- MFA Challenge Form -->
-        <form action="/v1/auth/oauth/authorize" method="POST">
+        <form action="/v1/oauth/authorize" method="POST">
           <input type="hidden" name="state" value="{{.StateID}}">
           <input type="hidden" name="action" value="verify_mfa">
           <input type="hidden" name="mfa_token" value="{{.MFAToken}}">
@@ -2002,13 +2126,14 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
           </div>
 
           <button type="submit" class="btn submit-btn w-full">Verify Code</button>
-          <a href="/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+          <a href="/v1/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
         </form>
       {{else if eq .AuthMode "otp_verify"}}
         <!-- OTP Code Verification Form -->
-        <form action="/v1/auth/oauth/authorize" method="POST">
+        <form action="/v1/oauth/authorize" method="POST">
           <input type="hidden" name="state" value="{{.StateID}}">
           <input type="hidden" name="action" value="verify_otp">
+              {{template "captcha" .}}
           <input type="hidden" name="recipient" value="{{.OTPRecipient}}">
 
           <div role="group" class="field">
@@ -2017,7 +2142,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
           </div>
 
           <button type="submit" class="btn submit-btn w-full">Verify & Sign in</button>
-          <a href="/v1/auth/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
+          <a href="/v1/oauth/authorize?state={{.StateID}}" class="btn back-link" data-variant="link">Back to sign in</a>
         </form>
       {{else}}
         <!-- Standard Sign-in / Sign-up / OTP-request container -->
@@ -2033,9 +2158,10 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- Sign-in form -->
         <div id="sign-in-container" class="sign-in-container" style="{{if or (eq .AuthMode "sign_up") (eq .AuthMode "otp_request")}}display:none;{{end}}">
           {{if .ShowPassword}}
-            <form action="/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="sign_in">
+              {{template "captcha" .}}
 
               <div role="group" class="field">
                 <label for="sign-in-email">Email</label>
@@ -2067,7 +2193,7 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
             <div class="divider"><span>Or</span></div>
             <div class="providers-grid">
               {{range .Providers}}
-                <a href="/v1/auth/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="btn provider-btn w-full" data-variant="outline">
+                <a href="/v1/oauth/{{.ID}}/authorize?oidc_state={{$.StateID}}" class="btn provider-btn w-full" data-variant="outline">
                   Sign in with {{.Name}}
                 </a>
               {{end}}
@@ -2078,9 +2204,10 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- Sign-up form -->
         {{if and .ShowSignUp .ShowPassword}}
           <div id="sign-up-container" class="sign-up-container" style="{{if ne .AuthMode "sign_up"}}display:none;{{end}}">
-            <form action="/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="sign_up">
+              {{template "captcha" .}}
 
               <div role="group" class="field">
                 <label for="sign-up-email">Email</label>
@@ -2105,9 +2232,10 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         <!-- OTP Request form -->
         {{if or .ShowEmailOTP .ShowSMSOTP}}
           <div id="otp-container" style="{{if ne .AuthMode "otp_request"}}display:none;{{end}}">
-            <form action="/v1/auth/oauth/authorize" method="POST">
+            <form action="/v1/oauth/authorize" method="POST">
               <input type="hidden" name="state" value="{{.StateID}}">
               <input type="hidden" name="action" value="send_otp">
+              {{template "captcha" .}}
 
               <div role="group" class="field">
                 <label for="otp-recipient">{{if and .ShowEmailOTP .ShowSMSOTP}}Email or Phone Number{{else if .ShowEmailOTP}}Email{{else}}Phone Number{{end}}</label>
@@ -2243,6 +2371,11 @@ const signInPageTemplateHTML = `<!DOCTYPE html>
         if (!verifyRes.ok) {
           var verifyErrData = await verifyRes.json().catch(function() { return {}; });
           throw new Error(verifyErrData.message || 'Passkey verification failed');
+        }
+        var result = await verifyRes.json();
+        if (result.mfa_required) {
+          window.location.assign('/v1/oauth/authorize?state=' + encodeURIComponent({{.StateID}}) + '&mode=mfa&mfa_ticket=' + encodeURIComponent(result.mfa_ticket));
+          return;
         }
         window.location.reload();
       } catch (err) {

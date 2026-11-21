@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 	"uuid"
@@ -53,7 +52,7 @@ func (handler *BaseHandler) handleAuthorizeOAuth(responseWriter http.ResponseWri
 
 	redirectURI := request.URL.Query().Get("redirect_uri")
 	if redirectURI == "" {
-		redirectURI = fmt.Sprintf("%s/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
+		redirectURI = fmt.Sprintf("%s/v1/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
 	}
 
 	state := request.URL.Query().Get("state")
@@ -219,7 +218,7 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 
 	clientSecret, _ := handler.configManager.DecryptSecret(oAuthProviderConfig.ClientSecret)
 	if redirectURI == "" {
-		redirectURI = fmt.Sprintf("%s/v1/auth/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
+		redirectURI = fmt.Sprintf("%s/v1/oauth/%s/callback", core.GetConfig().ServerBaseURL(), provider)
 	}
 
 	resolvedProviderConfig, err := oauth.ResolveProviderConfig(provider, oauth.ProviderConfig{
@@ -385,43 +384,18 @@ func (handler *BaseHandler) handleProcessOAuthCallback(responseWriter http.Respo
 
 // CompleteOAuthFlow completes the OAuth session flow, redirecting to OIDC client if linked, or issuing session tokens.
 func (handler *BaseHandler) CompleteOAuthFlow(responseWriter http.ResponseWriter, request *http.Request, user User, parsedOAuthStatePayload OAuthStatePayload, isPayload bool) {
+	if user.ID == "" || (user.LockedUntil != nil && user.LockedUntil.After(time.Now().UTC())) {
+		core.WriteOAuthErrorResponse(responseWriter, http.StatusLocked, "access_denied", "Account temporarily locked")
+		return
+	}
 	log.Debugf("completing OAuth flow for user %s (isPayload: %t, OIDCStateID: %s)", user.ID, isPayload, parsedOAuthStatePayload.OIDCStateID)
 	if isPayload && parsedOAuthStatePayload.OIDCStateID != "" {
 		oidcStateJSON, err := handler.kernel.KVStore().Get(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
 		if err == nil && oidcStateJSON != "" {
 			var oidcAuthorizationStatePayload OIDCAuthorizationStatePayload
 			if err := json.Unmarshal([]byte(oidcStateJSON), &oidcAuthorizationStatePayload); err == nil {
-				log.Tracef("resolving linked OIDC state %s for client %s", parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload.ClientID)
-				_ = handler.kernel.KVStore().Delete(request.Context(), "auth:oidc:state:"+parsedOAuthStatePayload.OIDCStateID)
-				code := handler.issueOIDCAuthorizationCode(request.Context(), oidcAuthorizationStatePayload.ClientID, oidcAuthorizationStatePayload.RedirectURI, user.ID, oidcAuthorizationStatePayload.Scope, oidcAuthorizationStatePayload.CodeChallenge, oidcAuthorizationStatePayload.CodeChallengeMethod, oidcAuthorizationStatePayload.Nonce)
-				refreshToken := handler.kernel.JWTSigner().GenerateRefreshToken()
-				refreshTokenHash := handler.kernel.JWTSigner().HashRefreshToken(refreshToken)
-				config := handler.configManager.Get()
-				refreshTokenExpirySeconds := config.Sessions.RefreshTokenExpirySeconds
-				if refreshTokenExpirySeconds <= 0 {
-					refreshTokenExpirySeconds = defaultRefreshTokenExpirySeconds
-				}
-				expiresAt := time.Now().Add(time.Duration(refreshTokenExpirySeconds) * time.Second)
-				sessionID := uuid.New().String()
-				log.Tracef("saving session for OIDC flow for user %s", user.ID)
-				_, _ = handler.kernel.DB().Exec(request.Context(), `
-					INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-					VALUES ($1, $2, $3, $4, clock_timestamp())
-				`, sessionID, user.ID, refreshTokenHash, expiresAt)
-				core.SetSessionCookie(responseWriter, request, refreshToken, expiresAt)
-
-				targetURL, parseErr := url.Parse(oidcAuthorizationStatePayload.RedirectURI)
-				if parseErr == nil {
-					queryValues := targetURL.Query()
-					queryValues.Set("code", code)
-					if oidcAuthorizationStatePayload.ClientState != "" {
-						queryValues.Set("state", oidcAuthorizationStatePayload.ClientState)
-					}
-					targetURL.RawQuery = queryValues.Encode()
-					log.Debugf("redirecting to OIDC client callback: %s", targetURL.String())
-					http.Redirect(responseWriter, request, targetURL.String(), http.StatusFound)
-					return
-				}
+				handler.completeOIDCAuthorization(responseWriter, request, parsedOAuthStatePayload.OIDCStateID, oidcAuthorizationStatePayload, user)
+				return
 			}
 		}
 	}

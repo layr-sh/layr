@@ -3,10 +3,19 @@ package oauth
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rsa"
+	"crypto/tls"
+	"math/big"
+	"slices"
+
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +25,7 @@ import (
 
 // Base64 decoding padding quantum
 const base64PaddingModulo = 4
+const maxProviderMetadataBytes = 1 << 20
 
 // Supported OAuth Preset Providers
 const (
@@ -312,13 +322,13 @@ func ExchangeCodeWithConfig(ctx context.Context, providerConfig ProviderConfig, 
 
 	rawProperties := make(map[string]any)
 
-	// If ID token is present (e.g. Apple / OIDC), parse claims as baseline
 	if tokenPayload.IDToken != "" {
-		log.Tracef("parsing ID token claims for provider %q", providerConfig.Name)
-		if claims := parseIDToken(tokenPayload.IDToken); claims != nil {
-			for key, claimValue := range claims {
-				rawProperties[key] = claimValue
-			}
+		mapClaims, verifyErr := verifyIDToken(ctx, providerConfig, tokenPayload.IDToken)
+		if verifyErr != nil {
+			return nil, fmt.Errorf("invalid provider ID token: %w", verifyErr)
+		}
+		for key, value := range mapClaims {
+			rawProperties[key] = value
 		}
 	}
 
@@ -348,6 +358,9 @@ func ExchangeCodeWithConfig(ctx context.Context, providerConfig ProviderConfig, 
 			log.Debugf("failed to parse user info JSON from %s: %v", providerConfig.UserInfoURL, err)
 			return nil, fmt.Errorf("failed to parse user info json: %w", err)
 		}
+		if subject, exists := rawProperties["sub"]; exists && userInfoMap["sub"] != subject {
+			return nil, errors.New("userinfo subject does not match provider ID token")
+		}
 		for key, attributeValue := range userInfoMap {
 			rawProperties[key] = attributeValue
 		}
@@ -368,6 +381,126 @@ func ExchangeCodeWithConfig(ctx context.Context, providerConfig ProviderConfig, 
 
 	log.Debugf("successfully normalized OAuth user info for provider %q (user_id: %s, email: %s)", userInfo.Provider, userInfo.ProviderUserID, userInfo.Email)
 	return userInfo, nil
+}
+
+func verifyIDToken(ctx context.Context, providerConfig ProviderConfig, rawToken string) (jwt.MapClaims, error) {
+	issuer, jwksURL := "", ""
+	switch providerConfig.Preset {
+	case PresetGoogle:
+		issuer, jwksURL = "https://accounts.google.com", "https://www.googleapis.com/oauth2/v3/certs"
+	case PresetApple:
+		issuer, jwksURL = "https://appleid.apple.com", "https://appleid.apple.com/auth/keys"
+	default:
+		// An unverified issuer is only a discovery candidate. Both configured
+		// endpoints must belong to it, and discovery must confirm them exactly.
+		mapClaims := parseIDToken(rawToken)
+		issuer, _ = mapClaims["iss"].(string)
+		issuerURL, err := url.Parse(issuer)
+		authURL, authErr := url.Parse(providerConfig.AuthURL)
+		tokenURL, tokenErr := url.Parse(providerConfig.TokenURL)
+		if err != nil || authErr != nil || tokenErr != nil || issuerURL.Host == "" || issuerURL.User != nil || issuerURL.RawQuery != "" || issuerURL.Fragment != "" ||
+			issuerURL.Scheme != "https" || issuerURL.Host != authURL.Host || issuerURL.Host != tokenURL.Host || issuerURL.Scheme != authURL.Scheme || issuerURL.Scheme != tokenURL.Scheme ||
+			!strings.HasPrefix(authURL.Path, strings.TrimRight(issuerURL.Path, "/")+"/") || !strings.HasPrefix(tokenURL.Path, strings.TrimRight(issuerURL.Path, "/")+"/") {
+			return nil, errors.New("provider issuer does not match configured endpoints")
+		}
+		// The issuer URL was validated above; appending this fixed path cannot invalidate it.
+		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(issuer, "/")+"/.well-known/openid-configuration", nil)
+		response, err := defaultHTTPClient.Do(request)
+		if err != nil {
+			return nil, fmt.Errorf("provider ID token verification failed: %w", err)
+		}
+		defer func() { _ = response.Body.Close() }()
+		var discovery struct {
+			Issuer   string `json:"issuer"`
+			AuthURL  string `json:"authorization_endpoint"`
+			TokenURL string `json:"token_endpoint"`
+			JWKSURL  string `json:"jwks_uri"`
+		}
+		if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, maxProviderMetadataBytes)).Decode(&discovery) != nil || discovery.Issuer != issuer || discovery.AuthURL != providerConfig.AuthURL || discovery.TokenURL != providerConfig.TokenURL {
+			return nil, errors.New("provider discovery does not match configured endpoints")
+		}
+		keysURL, err := url.Parse(discovery.JWKSURL)
+		if err != nil || keysURL.Scheme != "https" || keysURL.Host != issuerURL.Host || keysURL.User != nil {
+			return nil, errors.New("invalid provider JWKS endpoint")
+		}
+		jwksURL = discovery.JWKSURL
+	}
+	// JWKS URLs are either fixed presets or validated discovery metadata.
+	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
+	response, err := defaultHTTPClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("provider ID token verification failed: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	var keySet struct {
+		Keys []struct {
+			KeyType   string `json:"kty"`
+			KeyID     string `json:"kid"`
+			Use       string `json:"use"`
+			Algorithm string `json:"alg"`
+			Curve     string `json:"crv"`
+			N         string `json:"n"`
+			E         string `json:"e"`
+			X         string `json:"x"`
+			Y         string `json:"y"`
+		} `json:"keys"`
+	}
+	if response.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(response.Body, maxProviderMetadataBytes)).Decode(&keySet) != nil {
+		return nil, errors.New("failed to load provider signing keys")
+	}
+	mapClaims := jwt.MapClaims{}
+	_, err = jwt.ParseWithClaims(rawToken, mapClaims, func(token *jwt.Token) (any, error) {
+		kid, _ := token.Header["kid"].(string)
+		for _, key := range keySet.Keys {
+			if key.KeyID != kid || (key.Use != "" && key.Use != "sig") || (key.Algorithm != "" && key.Algorithm != token.Method.Alg()) {
+				continue
+			}
+			switch key.KeyType {
+			case "RSA":
+				if !slices.Contains([]string{"RS256", "RS384", "RS512"}, token.Method.Alg()) {
+					continue
+				}
+				n, nErr := base64.RawURLEncoding.DecodeString(key.N)
+				e, eErr := base64.RawURLEncoding.DecodeString(key.E)
+				if nErr == nil && eErr == nil && len(n) >= 256 && len(e) > 0 && len(e) <= 4 {
+					return &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: int(new(big.Int).SetBytes(e).Int64())}, nil
+				}
+			case "EC":
+				if key.Curve != "P-256" || token.Method.Alg() != "ES256" {
+					continue
+				}
+				x, xErr := base64.RawURLEncoding.DecodeString(key.X)
+				y, yErr := base64.RawURLEncoding.DecodeString(key.Y)
+				if xErr == nil && yErr == nil && len(x) == 32 && len(y) == 32 {
+					point := append(append([]byte{4}, x...), y...)
+					if publicKey, parseErr := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), point); parseErr == nil {
+						return publicKey, nil
+					}
+				}
+			case "OKP":
+				x, decodeErr := base64.RawURLEncoding.DecodeString(key.X)
+				if key.Curve == tls.Ed25519.String() && token.Method.Alg() == "EdDSA" && decodeErr == nil && len(x) == ed25519.PublicKeySize {
+					return ed25519.PublicKey(x), nil
+				}
+			}
+		}
+		return nil, errors.New("no matching provider signing key")
+	}, jwt.WithValidMethods([]string{"RS256", "RS384", "RS512", "ES256", "EdDSA"}), jwt.WithIssuer(issuer), jwt.WithAudience(providerConfig.ClientID), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
+	if err != nil {
+		return nil, fmt.Errorf("provider ID token verification failed: %w", err)
+	}
+	subject, _ := mapClaims["sub"].(string)
+	if subject == "" {
+		return nil, errors.New("missing provider subject")
+	}
+	if azp, exists := mapClaims["azp"]; exists && azp != providerConfig.ClientID {
+		return nil, errors.New("invalid authorized party")
+	}
+	audienceClaimStrings, audienceErr := mapClaims.GetAudience()
+	if audienceErr != nil || (len(audienceClaimStrings) > 1 && mapClaims["azp"] != providerConfig.ClientID) {
+		return nil, errors.New("invalid authorized party for multiple audiences")
+	}
+	return mapClaims, nil
 }
 
 func parseIDToken(idToken string) map[string]any {

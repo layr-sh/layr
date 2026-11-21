@@ -35,8 +35,11 @@ from generated.auth.control_plane.models.oidcui_config import OIDCUIConfig
 from generated.auth.control_plane.models.passkeys_config import PasskeysConfig
 from generated.auth.control_plane.models.password_breach_config import PasswordBreachConfig
 from generated.auth.control_plane.models.password_config import PasswordConfig
+from generated.auth.control_plane.models.provider_stats import ProviderStats
 from generated.auth.control_plane.models.rate_limiting_config import RateLimitingConfig
+from generated.auth.control_plane.models.registration_stats import RegistrationStats
 from generated.auth.control_plane.models.resource_server_config import ResourceServerConfig
+from generated.auth.control_plane.models.role_stats import RoleStats
 from generated.auth.control_plane.models.sms_dispatcher_config import SMSDispatcherConfig
 from generated.auth.control_plane.models.sms_dispatcher_template_config import SMSDispatcherTemplateConfig
 from generated.auth.control_plane.models.sms_dispatcher_templates_config import SMSDispatcherTemplatesConfig
@@ -45,6 +48,7 @@ from generated.auth.control_plane.models.sms_dispatcher_webhook_config import SM
 from generated.auth.control_plane.models.smsotp_config import SMSOTPConfig
 from generated.auth.control_plane.models.session import Session
 from generated.auth.control_plane.models.sessions_config import SessionsConfig
+from generated.auth.control_plane.models.stats_response import StatsResponse
 from generated.auth.control_plane.models.threat_config import ThreatConfig
 from generated.auth.control_plane.models.user import User
 

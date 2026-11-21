@@ -112,4 +112,14 @@ DROP SCHEMA IF EXISTS auth CASCADE;
 // Migrations contains the database migrations for auth.
 var Migrations = []core.DatabaseMigration{
 	AuthDatabaseMigration,
+	{
+		Service:     "auth",
+		Version:     2,
+		Description: "Track session activity and granted OIDC scopes",
+		UpSQL: `ALTER TABLE auth.sessions ADD COLUMN last_used_at TIMESTAMPTZ;
+UPDATE auth.sessions SET last_used_at = created_at;
+ALTER TABLE auth.sessions ALTER COLUMN last_used_at SET DEFAULT clock_timestamp(), ALTER COLUMN last_used_at SET NOT NULL;
+ALTER TABLE auth.sessions ADD COLUMN scope TEXT NOT NULL DEFAULT '';`,
+		DownSQL: `ALTER TABLE auth.sessions DROP COLUMN scope, DROP COLUMN last_used_at;`,
+	},
 }

@@ -31,6 +31,12 @@ func TestAuthBaseHandlerPasswordUnit(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden when password disabled, got: %d", signupDisabledResponseRecorder.Code)
 	}
 
+	signInDisabledResponseRecorder := httptest.NewRecorder()
+	baseHandler.handleSignIn(signInDisabledResponseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/sign-in", strings.NewReader(`{"email":"test@example.com","password":"Password123!"}`)))
+	if signInDisabledResponseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("disabled password sign-in returned %d", signInDisabledResponseRecorder.Code)
+	}
+
 	resetDisabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/password-reset/request", strings.NewReader(`{"email":"test@example.com"}`))
 	resetDisabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRequestPasswordReset(resetDisabledResponseRecorder, resetDisabledRequest)
@@ -263,6 +269,8 @@ func TestAuthBaseHandlerPasswordThreatValidationUnit(t *testing.T) {
 
 	// 2. Password breach detection enabled -> breached password returns 400
 	passwordBreachConfig := DefaultConfig()
+	passwordBreachConfig.Password.RequireNumbers = false
+	passwordBreachConfig.Password.RequireSymbols = false
 	passwordBreachConfig.Password.BreachCheck.Enabled = true
 	passwordBreachConfig.Password.BreachCheck.FailOpen = false
 	configManager.SetMemoryConfig(passwordBreachConfig)
@@ -288,5 +296,27 @@ func TestAuthBaseHandlerPasswordThreatValidationUnit(t *testing.T) {
 	baseHandler.handleConfirmPasswordReset(confirmBreachedResponseRecorder, confirmBreachedRequest)
 	if confirmBreachedResponseRecorder.Code != http.StatusBadRequest || !strings.Contains(confirmBreachedResponseRecorder.Body.String(), "breach") {
 		t.Fatalf("expected 400 on breached password reset confirm, got: %d (%s)", confirmBreachedResponseRecorder.Code, confirmBreachedResponseRecorder.Body.String())
+	}
+}
+
+func TestAuthPasswordPolicyUnit(t *testing.T) {
+	passwordConfig := PasswordConfig{MinLength: 8, RequireNumbers: true, RequireSymbols: true}
+	for _, value := range []string{"short1!", "nonumbers!", "nosymbols123"} {
+		t.Run(value, func(t *testing.T) {
+			if err := passwordConfig.validatePassword(value); err == nil {
+				t.Errorf("accepted invalid password %q", value)
+			}
+		})
+	}
+	for _, value := range []string{"Password1!", "Password٢€"} {
+		t.Run(value, func(t *testing.T) {
+			if err := passwordConfig.validatePassword(value); err != nil {
+				t.Errorf("rejected valid password: %v", err)
+			}
+		})
+	}
+	passwordConfig.RequireNumbers, passwordConfig.RequireSymbols = false, false
+	if err := passwordConfig.validatePassword("longpassword"); err != nil {
+		t.Fatal(err)
 	}
 }

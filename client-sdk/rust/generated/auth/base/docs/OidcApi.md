@@ -4,8 +4,8 @@ All URIs are relative to *http://localhost*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**auth_oidc_token**](OidcApi.md#auth_oidc_token) | **POST** /v1/auth/oauth/token | Exchange authorization code or refresh token for OpenID Connect tokens
-[**auth_oidc_userinfo**](OidcApi.md#auth_oidc_userinfo) | **GET** /v1/auth/oauth/userinfo | Retrieve OpenID Connect Core 1.0 user claims
+[**auth_oidc_token**](OidcApi.md#auth_oidc_token) | **POST** /v1/oauth/token | Exchange authorization code or refresh token for OpenID Connect tokens
+[**auth_oidc_userinfo**](OidcApi.md#auth_oidc_userinfo) | **GET** /v1/oauth/userinfo | Retrieve OpenID Connect Core 1.0 user claims
 
 
 

@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"layr.sh/core"
 )
 
@@ -192,4 +194,53 @@ func TestAuthBaseHandlerVerificationUnit(t *testing.T) {
 	if claimsPhoneResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 on claims phone confirm with non-existent code, got: %d", claimsPhoneResponseRecorder.Code)
 	}
+}
+
+func TestAuthVerificationDeliveryAndPersistenceFailuresUnit(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+	driver := "webhook"
+	config := DefaultConfig()
+	config.EmailDispatcher = EmailDispatcherConfig{Driver: &driver, Webhook: EmailDispatcherWebhookConfig{URL: server.URL}}
+	config.SMSDispatcher = SMSDispatcherConfig{Driver: &driver, Webhook: SMSDispatcherWebhookConfig{URL: server.URL}}
+	service.configManager.SetMemoryConfig(config)
+	var userID string
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users (email,phone) VALUES ('delivery-errors@example.com','+15551234567') RETURNING id").Scan(&userID))
+	for _, storageFailure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("storage failure=%t", storageFailure), func(t *testing.T) {
+			if storageFailure {
+				_, err := kernel.DB().Exec(ctx, "ALTER TABLE auth.otps RENAME TO unavailable_otps")
+				require.NoError(t, err)
+				defer func() {
+					_, err := kernel.DB().Exec(ctx, "ALTER TABLE auth.unavailable_otps RENAME TO otps")
+					require.NoError(t, err)
+				}()
+			}
+			for _, testCase := range []struct {
+				name, body string
+				handler    http.HandlerFunc
+			}{
+				{"request email", `{"email":"delivery-errors@example.com"}`, service.baseHandler.handleRequestEmailVerification},
+				{"request phone", `{"phone":"+15551234567"}`, service.baseHandler.handleRequestPhoneVerification},
+				{"update email", `{"email":"delivery-errors@example.com"}`, service.baseHandler.handleUpdateUserEmail},
+				{"update phone", `{"phone":"+15551234567"}`, service.baseHandler.handleUpdateUserPhone},
+			} {
+				t.Run(testCase.name, func(t *testing.T) {
+					request := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{UserID: userID}), http.MethodPost, "/", strings.NewReader(testCase.body))
+					responseRecorder := httptest.NewRecorder()
+					testCase.handler(responseRecorder, request)
+					require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code, responseRecorder.Body.String())
+				})
+			}
+		})
+	}
+	var count int
+	require.NoError(t, kernel.DB().QueryRow(ctx, "SELECT count(*) FROM auth.otps").Scan(&count))
+	require.Zero(t, count)
 }

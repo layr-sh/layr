@@ -30,8 +30,8 @@ const { data: tablesData } = await useAsyncData("overview:tables", () =>
 const { data: bucketsData } = await useAsyncData("overview:buckets", () =>
   client.value.file_storage.cp.buckets.list().catch(() => null),
 );
-const { data: authUsersData } = await useAsyncData("overview:auth-users", () =>
-  client.value.auth.cp.users.list({ limit: 1 }).catch(() => null),
+const { data: authStatsData } = await useAsyncData("overview:auth-stats", () =>
+  client.value.auth.cp.stats.get().catch(() => null),
 );
 const { data: endpointsData } = await useAsyncData("overview:endpoints", () =>
   client.value.function.cp.endpoints.list().catch(() => null),
@@ -49,9 +49,7 @@ const { data: eventsData } = await useAsyncData("overview:events", () =>
 // Metrics calculations
 const tablesCount = computed(() => tablesData.value?.count ?? 0);
 const bucketsCount = computed(() => bucketsData.value?.count ?? 0);
-const authUsersCount = computed(
-  () => authUsersData.value?.total ?? authUsersData.value?.count ?? 0,
-);
+
 const endpointsCount = computed(() => endpointsData.value?.count ?? 0);
 const jobsCount = computed(() => jobsData.value?.count ?? 0);
 const presetsCount = computed(() => presetsData.value?.count ?? 0);
@@ -68,11 +66,11 @@ const overviewServices = computed(() => [
   },
   {
     title: "Auth",
-    to: "/auth",
+    to: "/auth/users",
     icon: "i-lucide-users",
     serviceKey: "auth",
-    metric: `${authUsersCount.value} ${authUsersCount.value === 1 ? "User" : "Users"}`,
-    description: "End-user identity directory, active sessions, and auth methods.",
+    metric: authStatsData.value ? `${authStatsData.value.totalUsers} Users` : "Unavailable",
+    description: "Application users, session records, and authentication methods.",
     quickAction: "Manage Users",
   },
   {

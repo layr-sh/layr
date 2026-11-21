@@ -303,7 +303,8 @@ func TestCoreServerMiddlewareAuthContextPopulationUnit(t *testing.T) {
 	_, schemaErr := db.Exec(t.Context(), `
 		CREATE SCHEMA auth;
 		CREATE TABLE auth.users (id UUID PRIMARY KEY, email TEXT, phone TEXT, role TEXT DEFAULT 'authenticated', is_anonymous BOOLEAN DEFAULT false, locked_until TIMESTAMPTZ);
-		CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), refresh_token_hash TEXT, expires_at TIMESTAMPTZ);
+		CREATE TABLE auth.config (key TEXT PRIMARY KEY, value JSONB NOT NULL);
+				CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), refresh_token_hash TEXT, expires_at TIMESTAMPTZ, last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp());
 	`)
 	require.NoError(t, schemaErr)
 	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
@@ -997,7 +998,8 @@ func TestCoreServerHTTPListenerAppliesMiddlewareUnit(t *testing.T) {
 	_, err := db.Exec(t.Context(), `
 		CREATE SCHEMA auth;
 		CREATE TABLE auth.users (id UUID PRIMARY KEY, locked_until TIMESTAMPTZ);
-		CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), expires_at TIMESTAMPTZ);
+		CREATE TABLE auth.config (key TEXT PRIMARY KEY, value JSONB NOT NULL);
+				CREATE TABLE auth.sessions (id UUID PRIMARY KEY, user_id UUID REFERENCES auth.users(id), expires_at TIMESTAMPTZ, last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp());
 	`)
 	require.NoError(t, err)
 	kernel := NewTestKernel(db)
@@ -1082,4 +1084,42 @@ func TestCoreServerStartTLSUnit(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	require.NoError(t, validServer.Shutdown(context.Background()))
 	require.NoError(t, <-serverErrorChannel)
+}
+
+func TestCoreBrowserOAuthPublishableKeyExemptionsUnit(t *testing.T) {
+	cryptoKeyManager, err := NewCryptoKeyManager("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	require.NoError(t, err)
+	server := NewServer(&Kernel{cryptoKeyManager: cryptoKeyManager, jwtSigner: NewJWTSigner(cryptoKeyManager)})
+	handler := server.PublishableKeyMiddleware(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	for _, testCase := range []struct {
+		method, path string
+		allowed      bool
+	}{
+		{http.MethodGet, "/v1/oauth/authorize", true},
+		{http.MethodPost, "/v1/oauth/authorize", true},
+		{http.MethodPost, "/v1/oauth/token", true},
+		{http.MethodGet, "/v1/oauth/google/authorize", true},
+		{http.MethodGet, "/v1/oauth/google/callback", true},
+		{http.MethodPost, "/v1/oauth/apple/callback", true},
+		{http.MethodGet, "/v1/oauth/sign-out", true},
+		{http.MethodPost, "/v1/auth/passkeys/sign-in", true},
+		{http.MethodPost, "/v1/auth/passkeys/sign-in/verify", true},
+		{http.MethodPost, "/v1/auth/sign-in", false},
+		{http.MethodPost, "/v1/auth/otp", false},
+		{http.MethodGet, "/v1/auth/user", false},
+		{http.MethodDelete, "/v1/oauth/google/callback", false},
+		{http.MethodGet, "/v1/oauth/google/callback/extra", false},
+	} {
+		t.Run(testCase.method+testCase.path, func(t *testing.T) {
+			responseRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(responseRecorder, httptest.NewRequestWithContext(context.Background(), testCase.method, testCase.path, nil))
+			expected := http.StatusUnauthorized
+			if testCase.allowed {
+				expected = http.StatusNoContent
+			}
+			require.Equal(t, expected, responseRecorder.Code)
+		})
+	}
 }

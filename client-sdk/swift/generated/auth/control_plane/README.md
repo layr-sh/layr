@@ -131,6 +131,7 @@ Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *ConfigAPI* | [**authConfigGet**](docs/ConfigAPI.md#authconfigget) | **GET** /v1/_/auth/config | Retrieve dynamic runtime authentication configuration
 *ConfigAPI* | [**authConfigUpdate**](docs/ConfigAPI.md#authconfigupdate) | **PUT** /v1/_/auth/config | Update dynamic runtime authentication configuration
+*StatsAPI* | [**authStatsGet**](docs/StatsAPI.md#authstatsget) | **GET** /v1/_/auth/stats | Get application authentication statistics
 *UsersAPI* | [**authUsersCreate**](docs/UsersAPI.md#authuserscreate) | **POST** /v1/_/auth/users | Create an application user account via control plane
 *UsersAPI* | [**authUsersDelete**](docs/UsersAPI.md#authusersdelete) | **DELETE** /v1/_/auth/users/{user_id} | Permanently delete an application user and cascade sessions
 *UsersAPI* | [**authUsersGet**](docs/UsersAPI.md#authusersget) | **GET** /v1/_/auth/users/{user_id} | Get detailed application user record by UUID
@@ -165,8 +166,11 @@ Class | Method | HTTP request | Description
  - [PasskeysConfig](docs/PasskeysConfig.md)
  - [PasswordBreachConfig](docs/PasswordBreachConfig.md)
  - [PasswordConfig](docs/PasswordConfig.md)
+ - [ProviderStats](docs/ProviderStats.md)
  - [RateLimitingConfig](docs/RateLimitingConfig.md)
+ - [RegistrationStats](docs/RegistrationStats.md)
  - [ResourceServerConfig](docs/ResourceServerConfig.md)
+ - [RoleStats](docs/RoleStats.md)
  - [SMSDispatcherConfig](docs/SMSDispatcherConfig.md)
  - [SMSDispatcherTemplateConfig](docs/SMSDispatcherTemplateConfig.md)
  - [SMSDispatcherTemplatesConfig](docs/SMSDispatcherTemplatesConfig.md)
@@ -175,6 +179,7 @@ Class | Method | HTTP request | Description
  - [SMSOTPConfig](docs/SMSOTPConfig.md)
  - [Session](docs/Session.md)
  - [SessionsConfig](docs/SessionsConfig.md)
+ - [StatsResponse](docs/StatsResponse.md)
  - [ThreatConfig](docs/ThreatConfig.md)
  - [User](docs/User.md)
 

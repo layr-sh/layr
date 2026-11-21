@@ -273,7 +273,7 @@ func DefaultConfig() Config {
 			TokenExpiryMinutes: defaultTokenExpiryMinutes,
 		},
 		MFA: MFAConfig{
-			Enabled:      true,
+			Enabled:      false,
 			Policy:       "always",
 			RiskTriggers: []string{"new_device", "new_ip", "excessive_failed_attempts"},
 			Issuer:       mfaIssuer,

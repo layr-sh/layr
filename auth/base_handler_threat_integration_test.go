@@ -138,9 +138,9 @@ func TestAuthBaseHandlerSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	if !strings.Contains(dispatchedSuspiciousIP, "203.0.113.50") {
 		t.Fatalf("expected suspicious email body to mention IP 203.0.113.50, got: %s", dispatchedSuspiciousIP)
 	}
-	// Failed attempts should now be reset to 0
-	if attempts := threat.GetFailedAttempts(ctx, testKVStore, "203.0.113.50"); attempts != 0 {
-		t.Fatalf("expected 0 failed attempts after successful sign in, got: %d", attempts)
+	// A pending MFA challenge must preserve failed-attempt risk signals
+	if attempts := threat.GetFailedAttempts(ctx, testKVStore, "203.0.113.50"); attempts != 1 {
+		t.Fatalf("expected failed attempts to remain until MFA completes, got: %d", attempts)
 	}
 
 	// 3. Second sign-in from known device/IP (10.0.0.1, KnownBrowser/1.0): low risk -> Adaptive MFA is bypassed!
@@ -251,6 +251,8 @@ func TestAuthBaseHandlerSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 
 	// 7. Update user password with breach checking
 	breachCheckConfig := activeConfig
+	breachCheckConfig.Password.RequireNumbers = false
+	breachCheckConfig.Password.RequireSymbols = false
 	breachCheckConfig.Password.BreachCheck.Enabled = true
 	breachCheckConfig.Password.BreachCheck.FailOpen = false
 	configManager.SetMemoryConfig(breachCheckConfig)
@@ -385,7 +387,7 @@ func TestAuthBaseHandlerSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	}
 
 	// 9a. Direct OAuth callback from known device: Adaptive MFA is bypassed
-	oauthKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback", nil)
+	oauthKnownRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/google/callback", nil)
 	oauthKnownRequest.Header.Set("X-Forwarded-For", "10.0.0.1")
 	oauthKnownRequest.Header.Set("User-Agent", "KnownBrowser/1.0")
 	oauthKnownRequest.SetPathValue("provider", "google")
@@ -405,7 +407,7 @@ func TestAuthBaseHandlerSignInThreatAndAdaptiveMFAIntegration(t *testing.T) {
 	// 9b. Direct OAuth callback from new device: triggers Adaptive MFA challenge ticket & alert
 	suspiciousAlertDispatched = false
 	dispatchedSuspiciousEmail = ""
-	oauthNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback", nil)
+	oauthNewDeviceRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/google/callback", nil)
 	oauthNewDeviceRequest.Header.Set("X-Forwarded-For", "203.0.113.77")
 	oauthNewDeviceRequest.Header.Set("User-Agent", "BrandNewOAuthBrowser/1.0")
 	oauthNewDeviceRequest.SetPathValue("provider", "google")

@@ -101,16 +101,28 @@ func (handler *BaseHandler) handleSendOTP(responseWriter http.ResponseWriter, re
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, $3, 0, $4, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipient, codeHash, purpose, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipient, codeHash, purpose, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient), code, codeTTL)
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:cooldown:%s:%s", purpose, recipient), "1", defaultOTPCooldown)
 
 	channel := "sms"
+	var sendErr error
 	if isEmail {
 		channel = "email"
-		_ = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
+		sendErr = handler.emailDispatcher.SendSignInOTP(ctx, recipient, code, "")
 	} else {
-		_ = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+		sendErr = handler.smsDispatcher.SendSignInOTP(ctx, recipient, code, "")
+	}
+
+	if sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = $2 AND code_hash = $3", recipient, purpose, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient))
+		_ = handler.kernel.KVStore().Delete(ctx, cooldownKey)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send verification code", sendErr.Error())
+		return
 	}
 
 	var targetUser *User
@@ -181,12 +193,13 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 	var expiresAt time.Time
 
 	err := handler.kernel.DB().QueryRow(ctx, `
-		SELECT id, code_hash, attempts, expires_at 
-		FROM auth.otps 
-		WHERE recipient = $1 AND purpose = $2 AND expires_at > clock_timestamp()
-		ORDER BY created_at DESC 
-		LIMIT 1
-	`, recipient, purpose).Scan(&otpID, &storedHash, &attempts, &expiresAt)
+		UPDATE auth.otps SET attempts = attempts + 1
+		WHERE id = (SELECT id FROM auth.otps
+			WHERE recipient = $1 AND purpose = $2 AND expires_at > clock_timestamp()
+			ORDER BY created_at DESC LIMIT 1)
+		AND attempts < $3
+		RETURNING id, code_hash, attempts, expires_at
+	`, recipient, purpose, otp.MaxAttempts).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
 		handler.kernel.EventBus().Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
 			Recipient: recipient,
@@ -201,7 +214,6 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 	}
 
 	if !otp.VerifyCode(verifyOTPInput.Code, storedHash) {
-		_, _ = handler.kernel.DB().Exec(ctx, "UPDATE auth.otps SET attempts = attempts + 1 WHERE id = $1", otpID)
 		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), clientIP, 0)
 		_, _ = threat.RecordFailedAttempt(ctx, handler.kernel.KVStore(), recipient, 0)
 		handler.kernel.EventBus().Publish(ctx, NewOTPVerificationFailedEvent(recipient, OTPVerificationFailedEventData{
@@ -217,7 +229,11 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 	}
 
 	// Delete used OTP
-	_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+	consumedResult, consumeErr := handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE id = $1", otpID)
+	if consumeErr != nil || consumedResult.RowsAffected() != 1 {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or expired OTP code")
+		return
+	}
 	_ = handler.kernel.KVStore().Delete(ctx, fmt.Sprintf("auth:otp:%s:%s", purpose, recipient))
 
 	anonymousUser, _ := handler.resolveAnonymousCaller(request)
@@ -243,8 +259,8 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 		var rawProperties []byte
 		if isEmail {
 			_ = handler.kernel.DB().QueryRow(ctx, `
-				UPDATE auth.users 
-				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
+				UPDATE auth.users
+				SET email = $1, email_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp()
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 			`, recipient, anonymousUser.ID).Scan(
@@ -255,8 +271,8 @@ func (handler *BaseHandler) handleVerifyOTP(responseWriter http.ResponseWriter, 
 			)
 		} else {
 			_ = handler.kernel.DB().QueryRow(ctx, `
-				UPDATE auth.users 
-				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp() 
+				UPDATE auth.users
+				SET phone = $1, phone_verified_at = clock_timestamp(), is_anonymous = false, last_updated_at = clock_timestamp()
 				WHERE id = $2
 				RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 			`, recipient, anonymousUser.ID).Scan(

@@ -28,6 +28,7 @@ const (
 	ScopeDataConfigWrite = "data:config.write"
 
 	// Auth scopes
+	ScopeAuthStatsRead   = "auth:stats.read"
 	ScopeAuthUserRead    = "auth:user.read"
 	ScopeAuthUserWrite   = "auth:user.write"
 	ScopeAuthConfigRead  = "auth:config.read"

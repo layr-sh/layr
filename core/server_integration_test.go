@@ -309,6 +309,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 	// 5. Database Session Lookup via session cookie and X-Refresh-Token
 	_, _ = db.Exec(ctx, `
 		CREATE SCHEMA IF NOT EXISTS auth;
+		CREATE TABLE IF NOT EXISTS auth.config (key TEXT PRIMARY KEY, value JSONB NOT NULL);
 		CREATE TABLE IF NOT EXISTS auth.users (
 			id UUID PRIMARY KEY,
 			email VARCHAR(255),
@@ -322,6 +323,7 @@ func TestCoreServerLiveDBAndKeyManagerPipelineIntegration(t *testing.T) {
 			user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
 			refresh_token_hash VARCHAR(128) NOT NULL,
 			expires_at TIMESTAMPTZ NOT NULL,
+			last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
 			created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 		);
 	`)

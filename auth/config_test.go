@@ -88,6 +88,9 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 	if !authConfig.Password.Enabled {
 		t.Fatal("expected password method to be enabled by default")
 	}
+	if authConfig.MFA.Enabled {
+		t.Fatal("expected MFA to be disabled by default")
+	}
 	if authConfig.Password.MinLength != 8 {
 		t.Fatalf("expected min length 8, got %d", authConfig.Password.MinLength)
 	}
@@ -127,6 +130,19 @@ func TestAuthDefaultConfigUnit(t *testing.T) {
 	// Test template fallback in ConfigManager
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	configManager := NewConfigManager(kernel)
+	if configManager.Get().MFA.Enabled {
+		t.Fatal("expected a new config manager to keep MFA disabled")
+	}
+	for name, enabled := range map[string]bool{"enabled": true, "disabled": false} {
+		t.Run(name, func(t *testing.T) {
+			mfaConfig := authConfig
+			mfaConfig.MFA.Enabled = enabled
+			configManager.SetMemoryConfig(mfaConfig)
+			if configManager.Get().MFA.Enabled != enabled {
+				t.Fatalf("expected explicit MFA enabled=%t to be preserved", enabled)
+			}
+		})
+	}
 
 	emptyTemplateConfig := authConfig
 	emptyTemplateConfig.EmailDispatcher.Templates = EmailDispatcherTemplatesConfig{}

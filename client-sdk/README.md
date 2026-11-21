@@ -171,8 +171,8 @@ Standard base APIs are callable on their service client instance (from hooks suc
   - [ ] `auth.mfa.verify()`: Verify initial TOTP code to complete MFA enrollment (`POST /v1/auth/mfa/verify` | `auth__mfa__verify`)
 
 - Subgroup `auth.oidc.*`:
-  - [ ] `auth.oidc.token()`: Exchange authorization code or refresh token for OpenID Connect tokens (`POST /v1/auth/oauth/token` | `auth__oidc__token`)
-  - [ ] `auth.oidc.userinfo()`: Retrieve OpenID Connect Core 1.0 user claims (`GET /v1/auth/oauth/userinfo` | `auth__oidc__userinfo`)
+  - [ ] `auth.oidc.token()`: Exchange authorization code or refresh token for OpenID Connect tokens (`POST /v1/oauth/token` | `auth__oidc__token`)
+  - [ ] `auth.oidc.userinfo()`: Retrieve OpenID Connect Core 1.0 user claims (`GET /v1/oauth/userinfo` | `auth__oidc__userinfo`)
 
 - Subgroup `auth.otp.*`:
   - [ ] `auth.otp.send()`: Request a one-time password verification code via email or SMS (`POST /v1/auth/otp` | `auth__otp__send`)
@@ -361,6 +361,9 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - [ ] `auth.cp.config.get()`: Retrieve dynamic runtime authentication configuration (`GET /v1/_/auth/config` | `auth__config__get`)
   - [ ] `auth.cp.config.update()`: Update dynamic runtime authentication configuration (`PUT /v1/_/auth/config` | `auth__config__update`)
 
+- Subgroup `auth.cp.stats.*`:
+  - [ ] `auth.cp.stats.get()`: Get application authentication statistics (`GET /v1/_/auth/stats` | `auth__stats__get`)
+
 - Subgroup `auth.cp.users.*`:
   - [ ] `auth.cp.users.create()`: Create an application user account via control plane (`POST /v1/_/auth/users` | `auth__users__create`)
   - [ ] `auth.cp.users.delete()`: Permanently delete an application user and cascade sessions (`DELETE /v1/_/auth/users/{user_id}` | `auth__users__delete`)
@@ -393,6 +396,10 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
   - [ ] `console.cp.users.sessions.revoke()`: Revoke all active sessions for a console user (`POST /v1/_/console/users/{user_id}/sessions/revoke` | `console__users__sessions__revoke`)
 
 #### `core.cp` (Core Control Plane — via `withServiceAccount(useCore(client), ...)`)
+
+- Subgroup `core.cp.config.*`:
+  - [ ] `core.cp.config.get()`: Get Core runtime configuration (`GET /v1/_/core/config` | `core__config__get`)
+  - [ ] `core.cp.config.update()`: Update Core runtime configuration (`PUT /v1/_/core/config` | `core__config__update`)
 
 - Subgroup `core.cp.event_hooks.*`:
   - [ ] `core.cp.event_hooks.create()`: Create an event hook subscription (`POST /v1/_/core/event-hooks` | `core__event_hooks__create`)
@@ -463,6 +470,9 @@ Fluent builder APIs are provided for Data, File Storage, and Image. Other servic
 - Subgroup `fileStorage.cp.config.*`:
   - [ ] `fileStorage.cp.config.get()`: Get runtime file storage configuration (`GET /v1/_/file-storage/config` | `file_storage__config__get`)
   - [ ] `fileStorage.cp.config.update()`: Update runtime file storage configuration (`PUT /v1/_/file-storage/config` | `file_storage__config__update`)
+
+- Subgroup `fileStorage.cp.stats.*`:
+  - [ ] `fileStorage.cp.stats.get()`: Get file storage usage statistics (`GET /v1/_/file-storage/stats` | `file_storage__stats__get`)
 
 #### `function.cp` (Function Control Plane — via `withServiceAccount(useFunction(client), ...)`)
 

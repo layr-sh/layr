@@ -121,14 +121,14 @@ func TestPasskeyManagerUnit(t *testing.T) {
 		t.Fatal("expected error on expired challenge")
 	}
 
-	// 8. Signature verification helper - simulation fallback and basic checks
+	// 8. Reject simulated keys and empty signatures
 	validPublicKey := []byte("public-key-bytes")
 	validClientData := []byte(`{"type":"webauthn.get","challenge":"abc"}`)
 	validAuthenticatorData := []byte("authenticator-data-bytes")
 	validSignature := []byte("signature-bytes")
 
-	if !VerifySignature(validPublicKey, validClientData, validAuthenticatorData, validSignature) {
-		t.Fatal("expected verify signature to pass")
+	if VerifySignature(validPublicKey, validClientData, validAuthenticatorData, validSignature) {
+		t.Fatal("unparseable public keys must be rejected")
 	}
 	if VerifySignature(nil, validClientData, validAuthenticatorData, validSignature) {
 		t.Fatal("expected verify signature to fail on nil public key")

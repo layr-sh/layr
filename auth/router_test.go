@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-fuego/fuego"
@@ -49,6 +50,22 @@ func TestAuthRouterUnit(t *testing.T) {
 				assert.Nil(t, router.OutputOpenAPISpec().Paths.Find(prefix+"spec."+extension))
 			})
 		}
+	}
+
+	require.NotNil(t, controlPlaneRouter.OutputOpenAPISpec().Paths.Find("/v1/_/auth/stats"))
+	config := DefaultConfig()
+	config.OAuthProviders = map[string]OAuthProviderConfig{"google": {Enabled: false}}
+	service.configManager.SetMemoryConfig(config)
+	for _, path := range []string{"/v1/oauth/authorize", "/v1/oauth/token", "/v1/oauth/userinfo", "/v1/oauth/sign-out", "/v1/oauth/{provider}/authorize", "/v1/oauth/{provider}/callback"} {
+		t.Run(path, func(t *testing.T) {
+			requestPath := strings.ReplaceAll(path, "{provider}", "google")
+			responseRecorder := httptest.NewRecorder()
+			baseRouter.Mux().ServeHTTP(responseRecorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, requestPath, nil))
+			require.NotEqual(t, http.StatusNotFound, responseRecorder.Code)
+			oldResponseRecorder := httptest.NewRecorder()
+			baseRouter.Mux().ServeHTTP(oldResponseRecorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, strings.Replace(requestPath, "/v1/oauth", "/v1/auth/oauth", 1), nil))
+			require.Equal(t, http.StatusNotFound, oldResponseRecorder.Code)
+		})
 	}
 
 	// 2. Verify SDK routes naming compliance (snake_case, operation ID namespacing)

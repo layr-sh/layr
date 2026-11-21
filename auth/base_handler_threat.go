@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 	"uuid"
 
 	"layr.sh/auth/threat"
@@ -98,20 +99,46 @@ func (handler *BaseHandler) checkPasswordBreach(responseWriter http.ResponseWrit
 	return true
 }
 
-// completeSignInFlow processes post-authentication threat mitigation, risk evaluation, suspicious activity alerts,
-// adaptive MFA enforcement, and session token issuance across all authentication mechanisms.
-func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWriter, request *http.Request, user User, sessionMeta ...string) {
+func (handler *BaseHandler) checkSignInRateLimit(responseWriter http.ResponseWriter, request *http.Request, identifier string) bool {
+	rateLimitingConfig := handler.configManager.Get().RateLimiting
+	if !rateLimitingConfig.Enabled {
+		return true
+	}
+	ctx := request.Context()
+	key := "auth:ratelimit:sign_in:" + identifier
+	if locked, _ := handler.kernel.KVStore().Get(ctx, key+":locked"); locked != "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
+		return false
+	}
+	count, err := handler.kernel.KVStore().Increment(ctx, key, time.Duration(rateLimitingConfig.WindowDurationSeconds)*time.Second)
+	if err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", err.Error())
+		return false
+	}
+	if count > int64(rateLimitingConfig.MaxSignInAttempts) {
+		if err := handler.kernel.KVStore().Set(ctx, key+":locked", "1", time.Duration(rateLimitingConfig.LockoutDurationSeconds)*time.Second); err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", err.Error())
+			return false
+		}
+		_ = handler.kernel.KVStore().Delete(ctx, key)
+		handler.kernel.EventBus().Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{Identifier: identifier, Endpoint: request.URL.Path, AttemptCount: count, IPAddress: core.ExtractRequestClientIP(request), UserAgent: request.UserAgent()}))
+		core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
+		return false
+	}
+	return true
+}
+
+func (handler *BaseHandler) requiresSignInMFA(request *http.Request, user User) bool {
 	ctx := request.Context()
 	clientIP := core.ExtractRequestClientIP(request)
 	userAgent := request.UserAgent()
 
-	_ = threat.ResetFailedAttempts(ctx, handler.kernel.KVStore(), clientIP)
-	_ = threat.ResetFailedAttempts(ctx, handler.kernel.KVStore(), user.ID)
-
 	riskAssessment := threat.EvaluateSignInRisk(ctx, handler.kernel.DB(), handler.kernel.KVStore(), user.ID, clientIP, userAgent, handler.configManager.Get().Threat.KnownDevicesMaxDays)
 	if riskAssessment != nil && riskAssessment.IsNewDevice && handler.configManager.Get().Threat.NotifyOnNewDevice {
 		if user.Email != nil && *user.Email != "" {
-			_ = handler.emailDispatcher.SendSuspiciousActivity(ctx, *user.Email, user.ID, clientIP, userAgent)
+			if err := handler.emailDispatcher.SendSuspiciousActivity(ctx, *user.Email, user.ID, clientIP, userAgent); err != nil {
+				log.Errorf("failed to send suspicious sign-in notification for user %s: %v", user.ID, err)
+			}
 		}
 		handler.kernel.EventBus().Publish(ctx, NewSuspiciousSignInEvent(user.ID, SuspiciousSignInEventData{
 			User:      user,
@@ -123,9 +150,9 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 		}))
 	}
 
+	shouldTriggerMFA := false
 	mfaConfig := handler.configManager.Get().MFA
 	if user.MFAEnabled && mfaConfig.Enabled {
-		shouldTriggerMFA := false
 		if mfaConfig.Policy == "always" || mfaConfig.Policy == "" {
 			shouldTriggerMFA = true
 		} else if mfaConfig.Policy == "adaptive" && riskAssessment != nil {
@@ -145,17 +172,26 @@ func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWrite
 				}
 			}
 		}
+	}
+	return shouldTriggerMFA
+}
 
-		if shouldTriggerMFA {
-			mfaTicket := "mfa_tk_" + uuid.NewV7().String()
-			_ = handler.kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+mfaTicket, user.ID, mfaTicketTTL)
-			core.WriteJSONResponse(responseWriter, http.StatusOK, SignInResponse{
-				MFARequired: true,
-				MFATicket:   mfaTicket,
-				Factor:      "totp",
-			})
+// completeSignInFlow processes post-authentication threat mitigation, risk evaluation, suspicious activity alerts,
+// adaptive MFA enforcement, and session token issuance across all authentication mechanisms.
+func (handler *BaseHandler) completeSignInFlow(responseWriter http.ResponseWriter, request *http.Request, user User, sessionMeta ...string) {
+	ctx := request.Context()
+	if handler.requiresSignInMFA(request, user) {
+		mfaTicket := "mfa_tk_" + uuid.NewV7().String()
+		if err := handler.kernel.KVStore().Set(ctx, "auth:mfa_ticket:"+mfaTicket, user.ID, mfaTicketTTL); err != nil {
+			core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", err.Error())
 			return
 		}
+		core.WriteJSONResponse(responseWriter, http.StatusOK, SignInResponse{
+			MFARequired: true,
+			MFATicket:   mfaTicket,
+			Factor:      "totp",
+		})
+		return
 	}
 
 	handler.issueSessionResponse(responseWriter, request, user, sessionMeta...)

@@ -3,11 +3,13 @@ package auth
 import (
 	"context"
 	"errors"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"layr.sh/auth/threat"
 	"layr.sh/core"
@@ -249,4 +251,70 @@ func TestAuthBaseHandlerThreatCheckPasswordBreachUnit(t *testing.T) {
 	if !baseHandler.checkPasswordBreach(safePasswordResponseRecorder, safePasswordRequest, "unbreachedPassword123!", "user@example.com") {
 		t.Fatal("expected checkPasswordBreach to return true for safe password")
 	}
+}
+
+func TestAuthSignInLockoutDurationUnit(t *testing.T) {
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.RateLimiting.Enabled = true
+	config.RateLimiting.MaxSignInAttempts = 1
+	config.RateLimiting.WindowDurationSeconds = 1
+	config.RateLimiting.LockoutDurationSeconds = 60
+	service.configManager.SetMemoryConfig(config)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/sign-in", nil)
+	if !service.baseHandler.checkSignInRateLimit(httptest.NewRecorder(), request, "user@example.com") {
+		t.Fatal("first attempt rejected")
+	}
+	responseRecorder := httptest.NewRecorder()
+	if service.baseHandler.checkSignInRateLimit(responseRecorder, request, "user@example.com") || responseRecorder.Code != http.StatusTooManyRequests {
+		t.Fatal("exceeded attempts did not lock sign-in")
+	}
+	// Expiration of the counting window must not clear the separate lockout.
+	_ = kernel.KVStore().Delete(context.Background(), "auth:ratelimit:sign_in:user@example.com")
+	if service.baseHandler.checkSignInRateLimit(httptest.NewRecorder(), request, "user@example.com") {
+		t.Fatal("counting window reset bypassed lockout")
+	}
+	_ = kernel.KVStore().Delete(context.Background(), "auth:ratelimit:sign_in:user@example.com:locked")
+	if !service.baseHandler.checkSignInRateLimit(httptest.NewRecorder(), request, "user@example.com") {
+		t.Fatal("expired lockout still blocked sign-in")
+	}
+}
+
+type incrementFailureKVDriver struct{ *core.TestInMemoryKVDriver }
+
+func (driver *incrementFailureKVDriver) Increment(context.Context, string, time.Duration) (int64, error) {
+	return 0, errors.New("increment failed")
+}
+
+func TestAuthThreatStorageFailuresUnit(t *testing.T) {
+	ctx := context.Background()
+	driver := &failingTestKVDriver{TestInMemoryKVDriver: *core.NewTestInMemoryKVDriver()}
+	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations, core.WithKVStore(core.NewKVStoreFromDriver(driver)))
+	service := NewService(kernel)
+	request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sign-in", nil)
+	config := DefaultConfig()
+	config.RateLimiting.Enabled = false
+	service.configManager.SetMemoryConfig(config)
+	require.True(t, service.baseHandler.checkSignInRateLimit(httptest.NewRecorder(), request, "user"))
+	config.RateLimiting.Enabled = true
+	config.RateLimiting.MaxSignInAttempts = 1
+	service.configManager.SetMemoryConfig(config)
+	require.NoError(t, kernel.KVStore().Set(ctx, "auth:ratelimit:sign_in:user", "2", time.Minute))
+	driver.setErr = errors.New("set failed")
+	responseRecorder := httptest.NewRecorder()
+	require.False(t, service.baseHandler.checkSignInRateLimit(responseRecorder, request, "user"))
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	config.MFA.Enabled = true
+	config.MFA.Policy = "always"
+	service.configManager.SetMemoryConfig(config)
+	responseRecorder = httptest.NewRecorder()
+	service.baseHandler.completeSignInFlow(responseRecorder, request, User{ID: "mfa-user", MFAEnabled: true})
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+	failedKernel := core.SetupTestKernelWithBrokenDB(t, Migrations, core.WithKVStore(core.NewKVStoreFromDriver(&incrementFailureKVDriver{core.NewTestInMemoryKVDriver()})))
+	failedService := NewService(failedKernel)
+	failedService.configManager.SetMemoryConfig(config)
+	responseRecorder = httptest.NewRecorder()
+	require.False(t, failedService.baseHandler.checkSignInRateLimit(responseRecorder, request, "user"))
+	require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
 }

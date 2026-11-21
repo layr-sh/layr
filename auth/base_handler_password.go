@@ -2,10 +2,12 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"layr.sh/auth/otp"
 	"layr.sh/auth/threat"
@@ -18,6 +20,19 @@ const (
 	passwordResetCooldownTTL = 60 * time.Second
 	mfaTicketTTL             = 5 * time.Minute
 )
+
+func (config PasswordConfig) validatePassword(value string) error {
+	if len(value) < config.MinLength {
+		return fmt.Errorf("password must be at least %d characters", config.MinLength)
+	}
+	if config.RequireNumbers && !strings.ContainsFunc(value, unicode.IsDigit) {
+		return errors.New("password must contain a number")
+	}
+	if config.RequireSymbols && !strings.ContainsFunc(value, func(character rune) bool { return unicode.IsPunct(character) || unicode.IsSymbol(character) }) {
+		return errors.New("password must contain a symbol")
+	}
+	return nil
+}
 
 func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling sign-up request")
@@ -47,8 +62,8 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Email or phone number is required")
 		return
 	}
-	if len(signUpInput.Password) < config.Password.MinLength {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
+	if err := config.Password.validatePassword(signUpInput.Password); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -81,8 +96,8 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 	if anonymousUser != nil {
 		var existingUserID string
 		err := handler.kernel.DB().QueryRow(ctx, `
-			SELECT id FROM auth.users 
-			WHERE (email IS NOT NULL AND email = $1) 
+			SELECT id FROM auth.users
+			WHERE (email IS NOT NULL AND email = $1)
 			   OR (phone IS NOT NULL AND phone = $2)
 			LIMIT 1
 		`, emailPtr, phonePtr).Scan(&existingUserID)
@@ -158,6 +173,10 @@ func (handler *BaseHandler) handleSignUp(responseWriter http.ResponseWriter, req
 
 func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, request *http.Request) {
 	log.Trace("handling sign-in request")
+	if !handler.configManager.Get().Password.Enabled {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Password sign-in is disabled")
+		return
+	}
 	var signInInput SignInInput
 	if err := json.NewDecoder(request.Body).Decode(&signInInput); err != nil {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid JSON body", err.Error())
@@ -179,27 +198,14 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	}
 
 	ctx := request.Context()
-	config := handler.configManager.Get()
 	clientIP := core.ExtractRequestClientIP(request)
 
 	if !handler.checkCaptcha(responseWriter, request, clientIP, signInInput.CaptchaToken, "/v1/auth/sign-in") {
 		return
 	}
 
-	if config.RateLimiting.Enabled && identifier != "" {
-		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
-		windowDuration := time.Duration(config.RateLimiting.WindowDurationSeconds) * time.Second
-		if count, err := handler.kernel.KVStore().Increment(ctx, rateKey, windowDuration); err == nil && count > int64(config.RateLimiting.MaxSignInAttempts) {
-			handler.kernel.EventBus().Publish(ctx, NewRateLimitExceededEvent(identifier, RateLimitExceededEventData{
-				Identifier:   identifier,
-				Endpoint:     "/v1/auth/sign-in",
-				AttemptCount: count,
-				IPAddress:    clientIP,
-				UserAgent:    request.UserAgent(),
-			}))
-			core.WriteErrorResponse(responseWriter, request, http.StatusTooManyRequests, "Too many login attempts. Please try again later.")
-			return
-		}
+	if !handler.checkSignInRateLimit(responseWriter, request, identifier) {
+		return
 	}
 
 	var user User
@@ -265,12 +271,6 @@ func (handler *BaseHandler) handleSignIn(responseWriter http.ResponseWriter, req
 	user.Properties = make(map[string]any)
 	if len(rawProperties) > 0 {
 		_ = json.Unmarshal(rawProperties, &user.Properties)
-	}
-
-	// Reset rate limit on successful authentication
-	if identifier != "" {
-		rateKey := fmt.Sprintf("auth:ratelimit:sign_in:%s", identifier)
-		_ = handler.kernel.KVStore().Delete(ctx, rateKey)
 	}
 
 	log.Debugf("user %s successfully authenticated", user.ID)
@@ -352,14 +352,26 @@ func (handler *BaseHandler) handleRequestPasswordReset(responseWriter http.Respo
 		INSERT INTO auth.otps (recipient, code_hash, purpose, attempts, expires_at, created_at)
 		VALUES ($1, $2, 'password_reset', 0, $3, clock_timestamp())
 	`
-	_, _ = handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt)
+	if _, persistErr := handler.kernel.DB().Exec(ctx, query, recipient, codeHash, expiresAt); persistErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Service temporarily unavailable", persistErr.Error())
+		return
+	}
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:otp:password_reset:%s", recipient), code, otp.CodeTTL)
 	_ = handler.kernel.KVStore().Set(ctx, fmt.Sprintf("auth:cooldown:password_reset:%s", recipient), "1", passwordResetCooldownTTL)
 
+	var sendErr error
 	if isEmail {
-		_ = handler.emailDispatcher.SendPasswordReset(ctx, recipient, code, userID)
+		sendErr = handler.emailDispatcher.SendPasswordReset(ctx, recipient, code, userID)
 	} else {
-		_ = handler.smsDispatcher.SendPasswordReset(ctx, recipient, code, userID)
+		sendErr = handler.smsDispatcher.SendPasswordReset(ctx, recipient, code, userID)
+	}
+
+	if sendErr != nil {
+		_, _ = handler.kernel.DB().Exec(ctx, "DELETE FROM auth.otps WHERE recipient = $1 AND purpose = 'password_reset' AND code_hash = $2", recipient, codeHash)
+		_ = handler.kernel.KVStore().Delete(ctx, "auth:otp:password_reset:"+recipient)
+		_ = handler.kernel.KVStore().Delete(ctx, cooldownKey)
+		core.WriteErrorResponse(responseWriter, request, http.StatusServiceUnavailable, "Failed to send reset code", sendErr.Error())
+		return
 	}
 
 	handler.kernel.EventBus().Publish(ctx, NewPasswordResetRequestedEvent(user.ID, PasswordResetRequestedEventData{
@@ -403,8 +415,8 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 		recipient = normalizedPhone
 	}
 
-	if len(confirmPasswordResetInput.Password) < config.Password.MinLength {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
+	if err := config.Password.validatePassword(confirmPasswordResetInput.Password); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -418,10 +430,10 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 	var expiresAt time.Time
 
 	err := handler.kernel.DB().QueryRow(ctx, `
-		SELECT id, code_hash, attempts, expires_at 
-		FROM auth.otps 
+		SELECT id, code_hash, attempts, expires_at
+		FROM auth.otps
 		WHERE recipient = $1 AND purpose = 'password_reset' AND expires_at > clock_timestamp()
-		ORDER BY created_at DESC 
+		ORDER BY created_at DESC
 		LIMIT 1
 	`, recipient).Scan(&otpID, &storedHash, &attempts, &expiresAt)
 	if err != nil {
@@ -463,8 +475,8 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 	var user User
 	var rawProps []byte
 	err = handler.kernel.DB().QueryRow(ctx, `
-		UPDATE auth.users 
-		SET password_hash = $1, last_updated_at = clock_timestamp() 
+		UPDATE auth.users
+		SET password_hash = $1, last_updated_at = clock_timestamp()
 		WHERE email = $2 OR phone = $2
 		RETURNING id, email, phone, role, is_anonymous, email_verified_at, phone_verified_at, locked_until, encrypted_mfa_secret, mfa_enabled, properties, created_at, last_updated_at
 	`, passHash, recipient).Scan(
@@ -494,7 +506,7 @@ func (handler *BaseHandler) handleConfirmPasswordReset(responseWriter http.Respo
 	}))
 
 	log.Debugf("password reset successful for user %s", user.ID)
-	handler.issueSessionResponse(responseWriter, request, user, "password_reset")
+	handler.completeSignInFlow(responseWriter, request, user, "password_reset")
 }
 
 func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.ResponseWriter, request *http.Request) {
@@ -552,8 +564,8 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 	}
 
 	config := handler.configManager.Get()
-	if len(updateUserPasswordInput.NewPassword) < config.Password.MinLength {
-		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, fmt.Sprintf("Password must be at least %d characters", config.Password.MinLength))
+	if err := config.Password.validatePassword(updateUserPasswordInput.NewPassword); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -580,13 +592,15 @@ func (handler *BaseHandler) handleUpdateUserPassword(responseWriter http.Respons
 		&user.EncryptedMFASecret, &user.MFAEnabled,
 		&rawProperties, &user.CreatedAt, &user.LastUpdatedAt,
 	)
-	if queryErr == nil {
-		user.Properties = make(map[string]any)
-		if len(rawProperties) > 0 {
-			_ = json.Unmarshal(rawProperties, &user.Properties)
-		}
-		handler.kernel.EventBus().Publish(ctx, NewPasswordChangedEvent(user.ID, PasswordChangedEventData(user)))
+	if queryErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Failed to update password", queryErr.Error())
+		return
 	}
+	user.Properties = make(map[string]any)
+	if len(rawProperties) > 0 {
+		_ = json.Unmarshal(rawProperties, &user.Properties)
+	}
+	handler.kernel.EventBus().Publish(ctx, NewPasswordChangedEvent(user.ID, PasswordChangedEventData(user)))
 
 	log.Debugf("user password successfully updated for %s", userID)
 	responseWriter.WriteHeader(http.StatusNoContent)

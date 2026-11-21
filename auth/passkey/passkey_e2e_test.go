@@ -2,6 +2,10 @@ package passkey
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -208,7 +212,15 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 
 	// 2. Client Authenticator Sign Up (Simulate WebAuthn create)
 	clientCredentialID := base64.RawURLEncoding.EncodeToString([]byte("cred-unique-raw-bytes-1001"))
-	clientPublicKey := base64.RawURLEncoding.EncodeToString([]byte("pubkey-es256-authenticator-bytes"))
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientPublicKey := base64.RawURLEncoding.EncodeToString(keyDER)
 
 	registerVerifyPayload := map[string]any{
 		"challenge":     signUpOptions.Challenge,
@@ -241,7 +253,10 @@ func TestPasskeySignUpAndAuthenticationFlowE2E(t *testing.T) {
 	// 4. Client Assertion & Sign-In Verification (Simulate WebAuthn get)
 	clientDataJSON := base64.RawURLEncoding.EncodeToString([]byte(`{"type":"webauthn.get","challenge":"` + signInOptions.Challenge + `"}`))
 	authenticatorData := base64.RawURLEncoding.EncodeToString([]byte("authdata-flags-counter"))
-	assertionSignature := base64.RawURLEncoding.EncodeToString([]byte("valid-assertion-signature"))
+	clientBytes, _ := base64.RawURLEncoding.DecodeString(clientDataJSON)
+	authBytes, _ := base64.RawURLEncoding.DecodeString(authenticatorData)
+	clientHash := sha256.Sum256(clientBytes)
+	assertionSignature := base64.RawURLEncoding.EncodeToString(ed25519.Sign(privateKey, append(authBytes, clientHash[:]...)))
 
 	signInVerifyPayload := map[string]any{
 		"challenge":          signInOptions.Challenge,

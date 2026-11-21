@@ -1071,81 +1071,6 @@
         "x-sdk-method-name": "verify"
       }
     },
-    "/v1/auth/oauth/token": {
-      "post": {
-        "description": "Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications.",
-        "operationId": "auth__oidc__token",
-        "requestBody": {
-          "content": {
-            "*/*": {
-              "schema": {
-                "$ref": "#/components/schemas/Empty"
-              }
-            }
-          },
-          "description": "Request body for core.Empty",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueOIDCTokenResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/IssueOIDCTokenResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Exchange authorization code or refresh token for OpenID Connect tokens",
-        "tags": [
-          "OIDC"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "oidc"
-        ],
-        "x-sdk-method-name": "token"
-      }
-    },
-    "/v1/auth/oauth/userinfo": {
-      "get": {
-        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.",
-        "operationId": "auth__oidc__userinfo",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetOIDCUserInfoResponse"
-                }
-              },
-              "application/xml": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetOIDCUserInfoResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Retrieve OpenID Connect Core 1.0 user claims",
-        "tags": [
-          "OIDC"
-        ],
-        "x-sdk-group-name": [
-          "auth",
-          "oidc"
-        ],
-        "x-sdk-method-name": "userinfo"
-      }
-    },
     "/v1/auth/otp": {
       "post": {
         "description": "Generates a single-use 6-digit numeric OTP with configurable TTL and rate limiting, hashes it with Argon2id, stores it in auth.otps, and dispatches it via configured email or SMS provider (Twilio, Vonage, SendGrid, Resend, or SMTP).",
@@ -2366,6 +2291,81 @@
           "sessions"
         ],
         "x-sdk-method-name": "revoke"
+      }
+    },
+    "/v1/oauth/token": {
+      "post": {
+        "description": "Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications.",
+        "operationId": "auth__oidc__token",
+        "requestBody": {
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/Empty"
+              }
+            }
+          },
+          "description": "Request body for core.Empty",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueOIDCTokenResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueOIDCTokenResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Exchange authorization code or refresh token for OpenID Connect tokens",
+        "tags": [
+          "OIDC"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "oidc"
+        ],
+        "x-sdk-method-name": "token"
+      }
+    },
+    "/v1/oauth/userinfo": {
+      "get": {
+        "description": "Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token.",
+        "operationId": "auth__oidc__userinfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetOIDCUserInfoResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetOIDCUserInfoResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Retrieve OpenID Connect Core 1.0 user claims",
+        "tags": [
+          "OIDC"
+        ],
+        "x-sdk-group-name": [
+          "auth",
+          "oidc"
+        ],
+        "x-sdk-method-name": "userinfo"
       }
     }
   }

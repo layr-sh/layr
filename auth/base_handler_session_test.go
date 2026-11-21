@@ -159,8 +159,8 @@ func TestAuthBaseHandlerSessionUnit(t *testing.T) {
 	lockedCacheRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/token/refresh", strings.NewReader(`{"refresh_token":"cached-locked-token"}`))
 	lockedCacheRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleRefreshToken(lockedCacheRefreshResponseRecorder, lockedCacheRefreshRequest)
-	if lockedCacheRefreshResponseRecorder.Code != http.StatusLocked {
-		t.Fatalf("expected 423 on locked cached session refresh, got: %d", lockedCacheRefreshResponseRecorder.Code)
+	if lockedCacheRefreshResponseRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("a cache entry without a live database session must not authenticate, got: %d", lockedCacheRefreshResponseRecorder.Code)
 	}
 
 	// 9. SignOut

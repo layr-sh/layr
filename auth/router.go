@@ -225,7 +225,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// 7. OAuth & OpenID Connect
-	core.GetRoute[core.Empty](router, "/v1/auth/oauth/authorize", service.baseHandler.handleAuthorizeOIDC,
+	core.GetRoute[core.Empty](router, "/v1/oauth/authorize", service.baseHandler.handleAuthorizeOIDC,
 		core.RouteHide(),
 		core.RouteTag("OIDC"),
 		core.RouteSummary("OpenID Connect authorization endpoint"),
@@ -244,7 +244,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oidc"),
 		core.RouteSDKMethodName("authorize"),
 	)
-	core.GetRoute[core.Empty](router, "/v1/auth/oauth/{provider}/authorize", service.baseHandler.handleAuthorizeOAuth,
+	core.GetRoute[core.Empty](router, "/v1/oauth/{provider}/authorize", service.baseHandler.handleAuthorizeOAuth,
 		core.RouteHide(),
 		core.RouteTag("OAuth"),
 		core.RouteSummary("Redirect to third-party OAuth provider authorization URL"),
@@ -258,7 +258,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oauth"),
 		core.RouteSDKMethodName("authorize"),
 	)
-	core.PostRoute[IssueOIDCTokenResponse, core.Empty](router, "/v1/auth/oauth/token", service.baseHandler.handleIssueOIDCToken,
+	core.PostRoute[IssueOIDCTokenResponse, core.Empty](router, "/v1/oauth/token", service.baseHandler.handleIssueOIDCToken,
 		core.RouteTag("OIDC"),
 		core.RouteSummary("Exchange authorization code or refresh token for OpenID Connect tokens"),
 		core.RouteDescription("Exchanges an OAuth2 / OIDC authorization code (with PKCE code_verifier challenge verification) or refresh token for an Ed25519 JWT ID token, access token, and refresh token according to OpenID Connect Core 1.0 specifications."),
@@ -266,7 +266,7 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKGroupName("auth", "oidc"),
 		core.RouteSDKMethodName("token"),
 	)
-	core.GetRoute[GetOIDCUserInfoResponse](router, "/v1/auth/oauth/userinfo", service.baseHandler.handleGetOIDCUserInfo,
+	core.GetRoute[GetOIDCUserInfoResponse](router, "/v1/oauth/userinfo", service.baseHandler.handleGetOIDCUserInfo,
 		core.RouteTag("OIDC"),
 		core.RouteSummary("Retrieve OpenID Connect Core 1.0 user claims"),
 		core.RouteDescription("Retrieves standard OpenID Connect profile claims (sub, email, email_verified, phone, phone_verified, name) for the authenticated caller bearing a valid Bearer access token."),
@@ -276,11 +276,11 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 	)
 
 	// Runtime non-OpenAPI browser callback and form submission routes
-	router.Mux().HandleFunc("POST /v1/auth/oauth/authorize", service.baseHandler.handleSubmitOIDCAuthorize)
-	router.Mux().HandleFunc("GET /v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
-	router.Mux().HandleFunc("POST /v1/auth/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
-	router.Mux().HandleFunc("GET /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
-	router.Mux().HandleFunc("POST /v1/auth/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
+	router.Mux().HandleFunc("POST /v1/oauth/authorize", service.baseHandler.handleSubmitOIDCAuthorize)
+	router.Mux().HandleFunc("GET /v1/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
+	router.Mux().HandleFunc("POST /v1/oauth/sign-out", service.baseHandler.handleSignOutOIDC)
+	router.Mux().HandleFunc("GET /v1/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
+	router.Mux().HandleFunc("POST /v1/oauth/{provider}/callback", service.baseHandler.handleProcessOAuthCallback)
 
 	// 8. Device & Session Management
 	core.GetRoute[ListSessionsResponse](router, "/v1/auth/user/sessions", service.baseHandler.handleListSessions,
@@ -416,6 +416,15 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 }
 
 func (service *Service) registerControlPlaneRoutes(router *core.Router) {
+	core.GetRoute[StatsResponse](router, "/v1/_/auth/stats", service.controlPlaneHandler.handleGetStats,
+		core.RouteTag("Stats"),
+		core.RouteSummary("Get application authentication statistics"),
+		core.RouteDescription("Returns directory-wide application user, credential, and session counts from a consistent database snapshot. Active sessions exclude expired, idle, and locked-user sessions. Requires auth:stats.read scope."),
+		core.RouteOperationID("auth__stats__get"),
+		core.RouteSDKGroupName("auth", "stats"),
+		core.RouteSDKMethodName("get"),
+	)
+
 	// 1. Dynamic Runtime Configuration
 	core.GetRoute[Config](router, "/v1/_/auth/config", service.controlPlaneHandler.handleGetConfig,
 		core.RouteTag("Config"),

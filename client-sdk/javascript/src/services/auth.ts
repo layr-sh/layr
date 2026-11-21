@@ -24,6 +24,7 @@ import {
 } from "../../generated/auth/base/apis";
 import {
   ConfigApi,
+  StatsApi,
   UsersApi,
   UsersSessionsApi,
   type AuthUsersListRequest,
@@ -70,6 +71,7 @@ import type {
   ListUserSessionsResponse,
   ListUsersResponse,
   LockUserInput,
+  StatsResponse,
 } from "../../generated/auth/control_plane/models";
 import {
   ATTACH_CONTROL_PLANE,
@@ -80,6 +82,7 @@ import {
 import { handleApiCall } from "../core/transport";
 
 export interface AuthControlPlane {
+  stats: { get: () => Promise<StatsResponse> };
   config: {
     get: () => Promise<Config>;
     update: (input: Config) => Promise<Config>;
@@ -353,6 +356,9 @@ export function useAuth(client: LayrClient): AuthService {
     [ATTACH_CONTROL_PLANE]: (configuration: ConfigurationParameters): AuthControlPlane => {
       const elevatedConfig = new Configuration(configuration);
       return {
+        stats: {
+          get: () => handleApiCall(() => new StatsApi(elevatedConfig).authStatsGet()),
+        },
         config: {
           get: () => handleApiCall(() => new ConfigApi(elevatedConfig).authConfigGet()),
           update: (input: Config) =>

@@ -176,8 +176,8 @@ func TestAuthBaseHandlerOTPUnit(t *testing.T) {
 	otpSignUpSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"+1234567890","purpose":"sign_up"}`))
 	otpSignUpSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(otpSignUpSendResponseRecorder, otpSignUpSendRequest)
-	if otpSignUpSendResponseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 on OTP sign up send, got: %d", otpSignUpSendResponseRecorder.Code)
+	if otpSignUpSendResponseRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 on failed OTP send, got: %d", otpSignUpSendResponseRecorder.Code)
 	}
 
 	otpSignUpVerifyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/verify", strings.NewReader(`{"recipient":"+1234567890","code":"123456","purpose":"sign_up"}`))
@@ -191,8 +191,8 @@ func TestAuthBaseHandlerOTPUnit(t *testing.T) {
 	eventOTPSendRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/auth/otp/send", strings.NewReader(`{"recipient":"event_user@example.com"}`))
 	eventOTPSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSendOTP(eventOTPSendResponseRecorder, eventOTPSendRequest)
-	if eventOTPSendResponseRecorder.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 on event OTP send, got: %d", eventOTPSendResponseRecorder.Code)
+	if eventOTPSendResponseRecorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 on failed event OTP send, got: %d", eventOTPSendResponseRecorder.Code)
 	}
 }
 

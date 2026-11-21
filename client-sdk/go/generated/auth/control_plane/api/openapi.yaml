@@ -93,6 +93,29 @@ paths:
       - auth
       - config
       x-sdk-method-name: update
+  /v1/_/auth/stats:
+    get:
+      description: "Returns directory-wide application user, credential, and session\
+        \ counts from a consistent database snapshot. Active sessions exclude expired,\
+        \ idle, and locked-user sessions. Requires auth:stats.read scope."
+      operationId: auth__stats__get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+          description: OK
+      summary: Get application authentication statistics
+      tags:
+      - Stats
+      x-sdk-group-name:
+      - auth
+      - stats
+      x-sdk-method-name: get
   /v1/_/auth/users:
     get:
       description: "Queries auth.users with pagination, text search over email/phone,\
@@ -1279,6 +1302,30 @@ components:
       - min_length
       - require_numbers
       - require_symbols
+    ProviderStats:
+      example:
+        identity_count: 4
+        last_signed_in_at: 2000-01-23T04:56:07.000+00:00
+        provider: provider
+        user_count: 5
+      properties:
+        identity_count:
+          format: int64
+          type: integer
+        last_signed_in_at:
+          format: date-time
+          type: string
+          nullable: true
+        provider:
+          type: string
+        user_count:
+          format: int64
+          type: integer
+      required:
+      - identity_count
+      - last_signed_in_at
+      - provider
+      - user_count
     RateLimitingConfig:
       example:
         enabled: true
@@ -1299,6 +1346,30 @@ components:
       - lockout_duration_seconds
       - max_sign_in_attempts
       - window_duration_seconds
+    RegistrationStats:
+      example:
+        anonymous_users: 9
+        day: 2000-01-23T04:56:07.000+00:00
+        registered_users: 6
+        total_users: 8
+      properties:
+        anonymous_users:
+          format: int64
+          type: integer
+        day:
+          format: date-time
+          type: string
+        registered_users:
+          format: int64
+          type: integer
+        total_users:
+          format: int64
+          type: integer
+      required:
+      - anonymous_users
+      - day
+      - registered_users
+      - total_users
     ResourceServerConfig:
       example:
         description: description
@@ -1323,6 +1394,19 @@ components:
       required:
       - identifier
       - name
+    RoleStats:
+      example:
+        role: role
+        total_users: 9
+      properties:
+        role:
+          type: string
+        total_users:
+          format: int64
+          type: integer
+      required:
+      - role
+      - total_users
     SMSDispatcherConfig:
       example:
         driver: driver
@@ -1490,6 +1574,180 @@ components:
       - idle_timeout_seconds
       - refresh_token_expiry_seconds
       - single_session_per_user
+    StatsResponse:
+      description: StatsResponse schema
+      example:
+        active_session_users: 0
+        active_sessions: 6
+        anonymous_users: 1
+        email_unverified_users: 5
+        email_verified_users: 5
+        expired_sessions: 2
+        federated_users: 7
+        generated_at: 2000-01-23T04:56:07.000+00:00
+        idle_sessions: 9
+        locked_sessions: 3
+        locked_users: 2
+        mfa_users: 4
+        new_users_last_24_hours: 7
+        new_users_last_7_days: 1
+        new_users_previous_24_hours: 1
+        passkey_users: 1
+        password_users: 6
+        phone_unverified_users: 7
+        phone_verified_users: 1
+        providers:
+        - identity_count: 4
+          last_signed_in_at: 2000-01-23T04:56:07.000+00:00
+          provider: provider
+          user_count: 5
+        - identity_count: 4
+          last_signed_in_at: 2000-01-23T04:56:07.000+00:00
+          provider: provider
+          user_count: 5
+        registered_users: 9
+        registrations:
+        - anonymous_users: 9
+          day: 2000-01-23T04:56:07.000+00:00
+          registered_users: 6
+          total_users: 8
+        - anonymous_users: 9
+          day: 2000-01-23T04:56:07.000+00:00
+          registered_users: 6
+          total_users: 8
+        roles:
+        - role: role
+          total_users: 9
+        - role: role
+          total_users: 9
+        total_identities: 6
+        total_passkeys: 3
+        total_sessions: 6
+        total_users: 1
+        users_without_credentials: 2
+      properties:
+        active_session_users:
+          format: int64
+          type: integer
+        active_sessions:
+          format: int64
+          type: integer
+        anonymous_users:
+          format: int64
+          type: integer
+        email_unverified_users:
+          format: int64
+          type: integer
+        email_verified_users:
+          format: int64
+          type: integer
+        expired_sessions:
+          format: int64
+          type: integer
+        federated_users:
+          format: int64
+          type: integer
+        generated_at:
+          format: date-time
+          type: string
+        idle_sessions:
+          format: int64
+          type: integer
+        locked_sessions:
+          format: int64
+          type: integer
+        locked_users:
+          format: int64
+          type: integer
+        mfa_users:
+          format: int64
+          type: integer
+        new_users_last_24_hours:
+          format: int64
+          type: integer
+        new_users_last_7_days:
+          format: int64
+          type: integer
+        new_users_previous_24_hours:
+          format: int64
+          type: integer
+        passkey_users:
+          format: int64
+          type: integer
+        password_users:
+          format: int64
+          type: integer
+        phone_unverified_users:
+          format: int64
+          type: integer
+        phone_verified_users:
+          format: int64
+          type: integer
+        providers:
+          items:
+            $ref: "#/components/schemas/ProviderStats"
+          nullable: true
+          type: array
+          default: null
+        registered_users:
+          format: int64
+          type: integer
+        registrations:
+          items:
+            $ref: "#/components/schemas/RegistrationStats"
+          nullable: true
+          type: array
+          default: null
+        roles:
+          items:
+            $ref: "#/components/schemas/RoleStats"
+          nullable: true
+          type: array
+          default: null
+        total_identities:
+          format: int64
+          type: integer
+        total_passkeys:
+          format: int64
+          type: integer
+        total_sessions:
+          format: int64
+          type: integer
+        total_users:
+          format: int64
+          type: integer
+        users_without_credentials:
+          format: int64
+          type: integer
+      required:
+      - active_session_users
+      - active_sessions
+      - anonymous_users
+      - email_unverified_users
+      - email_verified_users
+      - expired_sessions
+      - federated_users
+      - generated_at
+      - idle_sessions
+      - locked_sessions
+      - locked_users
+      - mfa_users
+      - new_users_last_24_hours
+      - new_users_last_7_days
+      - new_users_previous_24_hours
+      - passkey_users
+      - password_users
+      - phone_unverified_users
+      - phone_verified_users
+      - providers
+      - registered_users
+      - registrations
+      - roles
+      - total_identities
+      - total_passkeys
+      - total_sessions
+      - total_users
+      - users_without_credentials
     ThreatConfig:
       example:
         bot_protection:

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+	"layr.sh/auth/otp"
 	"layr.sh/core"
 	"uuid"
 )
@@ -62,6 +65,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	}
 
 	authConfig := configManager.Get()
+	authConfig.MFA.Enabled = true
 	authConfig.OIDC.Enabled = true
 	authConfig.OIDC.UI = OIDCUIConfig{
 		CustomCSS:    ".sign-in-card { border: 2px solid cyan; }",
@@ -105,17 +109,17 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	if discoveryResponse["issuer"] != baseURL {
 		t.Fatalf("expected issuer %s, got: %v", baseURL, discoveryResponse["issuer"])
 	}
-	if discoveryResponse["authorization_endpoint"] != baseURL+"/v1/auth/oauth/authorize" {
+	if discoveryResponse["authorization_endpoint"] != baseURL+"/v1/oauth/authorize" {
 		t.Fatalf("unexpected authorization endpoint: %v", discoveryResponse["authorization_endpoint"])
 	}
 
-	// 4. Authorization Flow with PKCE (GET /v1/auth/oauth/authorize)
+	// 4. Authorization Flow with PKCE (GET /v1/oauth/authorize)
 	codeVerifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk-long-verifier-for-testing"
 	sha256Digest := sha256.Sum256([]byte(codeVerifier))
 	codeChallenge := base64.RawURLEncoding.EncodeToString(sha256Digest[:])
 
 	authorizeURL := fmt.Sprintf(
-		"/v1/auth/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code&state=%s&code_challenge=%s&code_challenge_method=S256&scope=openid+email",
+		"/v1/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code&state=%s&code_challenge=%s&code_challenge_method=S256&scope=openid+email",
 		url.QueryEscape("client-dashboard"),
 		url.QueryEscape("https://dashboard.example.com/callback"),
 		url.QueryEscape("client-csrf-state-123"),
@@ -157,13 +161,13 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		t.Fatal("extracted empty state ID from sign-in page")
 	}
 
-	// 5. State Verification & Submission (POST /v1/auth/oauth/authorize)
+	// 5. State Verification & Submission (POST /v1/oauth/authorize)
 	tamperedStateValues := url.Values{
 		"state":    {"tampered-state-id"},
 		"email":    {testUserEmail},
 		"password": {testUserPassword},
 	}
-	tamperedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(tamperedStateValues.Encode()))
+	tamperedRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(tamperedStateValues.Encode()))
 	tamperedRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	tamperedResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(tamperedResponseRecorder, tamperedRequest)
@@ -181,7 +185,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// Unknown email
 	unknownUserValues := url.Values{"state": {serverStateID}, "email": {"nonexistent@example.com"}, "password": {"SomePass123!"}}
-	unknownUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(unknownUserValues.Encode()))
+	unknownUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(unknownUserValues.Encode()))
 	unknownUserRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unknownUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(unknownUserResponseRecorder, unknownUserRequest)
@@ -191,7 +195,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// Locked user
 	lockedUserValues := url.Values{"state": {serverStateID}, "email": {"locked.user@example.com"}, "password": {"LockedPass123!"}}
-	lockedUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(lockedUserValues.Encode()))
+	lockedUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(lockedUserValues.Encode()))
 	lockedUserRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	lockedUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(lockedUserResponseRecorder, lockedUserRequest)
@@ -201,7 +205,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// Wrong password
 	wrongPassValues := url.Values{"state": {serverStateID}, "email": {testUserEmail}, "password": {"WrongPassword!"}}
-	wrongPassRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(wrongPassValues.Encode()))
+	wrongPassRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(wrongPassValues.Encode()))
 	wrongPassRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	wrongPassResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(wrongPassResponseRecorder, wrongPassRequest)
@@ -227,7 +231,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// 1. Password submit with MFA enrolled -> Renders challenge page ("Two-factor authentication required")
 	challengePageValues := url.Values{"state": {mfaUserStateID}, "email": {mfaUserEmail}, "password": {"MfaPass123!"}}
-	challengePageRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(challengePageValues.Encode()))
+	challengePageRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(challengePageValues.Encode()))
 	challengePageRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	challengePageResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(challengePageResponseRecorder, challengePageRequest)
@@ -253,7 +257,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"mfa_token": {extractedMFAToken},
 		"mfa_code":  {""},
 	}
-	emptyMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(emptyMFACodeValues.Encode()))
+	emptyMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(emptyMFACodeValues.Encode()))
 	emptyMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyMFACodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(emptyMFACodeResponseRecorder, emptyMFACodeRequest)
@@ -264,7 +268,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	// 3. Missing encrypted secret in DB -> "Multi-factor authentication configuration error"
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", mfaUserID)
 	noSecretMFAValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"123456"}}
-	noSecretMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(noSecretMFAValues.Encode()))
+	noSecretMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(noSecretMFAValues.Encode()))
 	noSecretMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noSecretMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(noSecretMFAResponseRecorder, noSecretMFARequest)
@@ -275,7 +279,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	// 4. Corrupted encrypted secret -> "Failed to verify multi-factor authentication"
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupted-secret' WHERE id = $1", mfaUserID)
 	corruptedMFAValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"123456"}}
-	corruptedMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(corruptedMFAValues.Encode()))
+	corruptedMFARequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(corruptedMFAValues.Encode()))
 	corruptedMFARequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptedMFAResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(corruptedMFAResponseRecorder, corruptedMFARequest)
@@ -288,7 +292,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// 5. Invalid MFA code -> "Invalid two-factor authentication code"
 	invalidMFACodeValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {"000000"}}
-	invalidMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(invalidMFACodeValues.Encode()))
+	invalidMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(invalidMFACodeValues.Encode()))
 	invalidMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidMFACodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(invalidMFACodeResponseRecorder, invalidMFACodeRequest)
@@ -299,7 +303,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	// 6. Valid MFA code -> 302 Found redirect
 	validTOTPCode, _ := baseHandler.totpManager.GenerateCode(mfaSecret, time.Now())
 	validMFACodeValues := url.Values{"state": {mfaUserStateID}, "action": {"verify_mfa"}, "mfa_token": {extractedMFAToken}, "mfa_code": {validTOTPCode}}
-	validMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(validMFACodeValues.Encode()))
+	validMFACodeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(validMFACodeValues.Encode()))
 	validMFACodeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	validMFACodeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(validMFACodeResponseRecorder, validMFACodeRequest)
@@ -312,7 +316,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	badRedirectPayload, _ := json.Marshal(OIDCAuthorizationStatePayload{ClientID: "client-dashboard", RedirectURI: "://invalid-url", Scope: "openid"})
 	_ = databaseKVStore.Set(ctx, "auth:oidc:state:"+badRedirectStateID, string(badRedirectPayload), 5*time.Minute)
 	badRedirectValues := url.Values{"state": {badRedirectStateID}, "email": {testUserEmail}, "password": {testUserPassword}}
-	badRedirectRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(badRedirectValues.Encode()))
+	badRedirectRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(badRedirectValues.Encode()))
 	badRedirectRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badRedirectResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(badRedirectResponseRecorder, badRedirectRequest)
@@ -332,7 +336,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"email":    {testUserEmail},
 		"password": {testUserPassword},
 	}
-	submitRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(validSubmitValues.Encode()))
+	submitRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(validSubmitValues.Encode()))
 	submitRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	submitResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(submitResponseRecorder, submitRequest)
@@ -372,7 +376,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		t.Fatalf("expected 400 on replaying deleted authorization state, got: %d", replayedSubmitResponseRecorder.Code)
 	}
 
-	// 6. Token Exchange (POST /v1/auth/oauth/token)
+	// 6. Token Exchange (POST /v1/oauth/token)
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = $1", testUserEmail).Scan(&testUserID)
 
 	// Test redirect_uri mismatch -> 400
@@ -385,7 +389,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"redirect_uri":  {"https://dashboard.example.com/other"},
 		"code_verifier": {codeVerifier},
 	}
-	mismatchRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(mismatchValues.Encode()))
+	mismatchRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(mismatchValues.Encode()))
 	mismatchRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(mismatchResponseRecorder, mismatchRequest)
@@ -403,7 +407,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"redirect_uri":  {"https://dashboard.example.com/callback"},
 		"code_verifier": {"wrong-code-verifier-12345"},
 	}
-	badPKCERequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(badPKCEValues.Encode()))
+	badPKCERequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(badPKCEValues.Encode()))
 	badPKCERequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	badPKCEResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(badPKCEResponseRecorder, badPKCERequest)
@@ -419,7 +423,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"redirect_uri":  {"https://dashboard.example.com/callback"},
 		"code_verifier": {codeVerifier},
 	}
-	tokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(tokenValues.Encode()))
+	tokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(tokenValues.Encode()))
 	tokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	tokenResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(tokenResponseRecorder, tokenRequest)
@@ -447,16 +451,16 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 
 	// 7. Authorization Code Single-Use Replay Prevention
 	replayTokenResponseRecorder := httptest.NewRecorder()
-	replayTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(tokenValues.Encode()))
+	replayTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(tokenValues.Encode()))
 	replayTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	baseHandler.handleIssueOIDCToken(replayTokenResponseRecorder, replayTokenRequest)
 	if replayTokenResponseRecorder.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request on authorization code replay, got: %d", replayTokenResponseRecorder.Code)
 	}
 
-	// 8. UserInfo Endpoint (GET /v1/auth/oauth/userinfo)
+	// 8. UserInfo Endpoint (GET /v1/oauth/userinfo)
 	tokenJWTClaims, _ := kernel.JWTSigner().VerifyAccessToken(tokenResponse.AccessToken)
-	userinfoRequest := core.WithTestAuthClaims(httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/userinfo", nil), *tokenJWTClaims)
+	userinfoRequest := core.WithTestAuthClaims(httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/userinfo", nil), *tokenJWTClaims)
 	userinfoRequest.Header.Set("Authorization", "Bearer "+tokenResponse.AccessToken)
 	userinfoResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetOIDCUserInfo(userinfoResponseRecorder, userinfoRequest)
@@ -487,7 +491,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	mobileChallenge := base64.RawURLEncoding.EncodeToString(mobileDigest[:])
 
 	ssoAuthorizeURL := fmt.Sprintf(
-		"/v1/auth/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code&state=%s&code_challenge=%s&code_challenge_method=S256",
+		"/v1/oauth/authorize?client_id=%s&redirect_uri=%s&response_type=code&state=%s&code_challenge=%s&code_challenge_method=S256",
 		url.QueryEscape("client-mobile"),
 		url.QueryEscape("https://mobile.example.com/callback"),
 		url.QueryEscape("mobile-client-state-789"),
@@ -523,7 +527,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"redirect_uri":  {"https://mobile.example.com/callback"},
 		"code_verifier": {mobileVerifier},
 	}
-	mobileTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(mobileTokenValues.Encode()))
+	mobileTokenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(mobileTokenValues.Encode()))
 	mobileTokenRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mobileTokenResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(mobileTokenResponseRecorder, mobileTokenRequest)
@@ -539,7 +543,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"client_secret": {confidentialSecret},
 		"refresh_token": {tokenResponse.RefreshToken},
 	}
-	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(refreshValues.Encode()))
+	refreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(refreshValues.Encode()))
 	refreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	refreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(refreshResponseRecorder, refreshRequest)
@@ -548,8 +552,8 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		t.Fatalf("expected 200 OK from refresh token grant, got: %d (%s)", refreshResponseRecorder.Code, refreshResponseRecorder.Body.String())
 	}
 
-	// 12. Sign-Out Endpoint (GET /v1/auth/oauth/sign-out)
-	signOutRequestURL := "/v1/auth/oauth/sign-out?post_sign_out_redirect_uri=" + url.QueryEscape("https://dashboard.example.com/signed-out")
+	// 12. Sign-Out Endpoint (GET /v1/oauth/sign-out)
+	signOutRequestURL := "/v1/oauth/sign-out?post_sign_out_redirect_uri=" + url.QueryEscape("https://dashboard.example.com/signed-out")
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, signOutRequestURL, nil)
 	signOutRequest.AddCookie(sessionCookie)
 	signOutResponseRecorder := httptest.NewRecorder()
@@ -582,7 +586,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"client_secret": {confidentialSecret},
 		"refresh_token": {"nonexistent-refresh-token-hash"},
 	}
-	invalidRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(invalidRefreshValues.Encode()))
+	invalidRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(invalidRefreshValues.Encode()))
 	invalidRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(invalidRefreshResponseRecorder, invalidRefreshRequest)
@@ -596,8 +600,8 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	var lockedUserID string
 	_ = db.QueryRow(ctx, "SELECT id FROM auth.users WHERE email = 'locked.user@example.com'").Scan(&lockedUserID)
 	_, _ = db.Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at, client_id)
+		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp(), 'client-dashboard')
 	`, uuid.NewV7().String(), lockedUserID, lockedUserRefreshHash)
 
 	lockedRefreshValues := url.Values{
@@ -606,7 +610,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"client_secret": {confidentialSecret},
 		"refresh_token": {lockedUserRefreshToken},
 	}
-	lockedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(lockedRefreshValues.Encode()))
+	lockedRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(lockedRefreshValues.Encode()))
 	lockedRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	lockedRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(lockedRefreshResponseRecorder, lockedRefreshRequest)
@@ -624,8 +628,8 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 	ghostRefreshHash := kernel.JWTSigner().HashRefreshToken(ghostRefreshToken)
 	ghostUserID := uuid.NewV7().String()
 	_, err = db.Exec(ctx, `
-		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at)
-		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp())
+		INSERT INTO auth.sessions (id, user_id, refresh_token_hash, expires_at, created_at, client_id)
+		VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour', clock_timestamp(), 'client-dashboard')
 	`, uuid.NewV7().String(), ghostUserID, ghostRefreshHash)
 	if err != nil {
 		t.Fatalf("failed to insert ghost session: %v", err)
@@ -637,7 +641,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"client_secret": {confidentialSecret},
 		"refresh_token": {ghostRefreshToken},
 	}
-	ghostRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(ghostRefreshValues.Encode()))
+	ghostRefreshRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(ghostRefreshValues.Encode()))
 	ghostRefreshRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	ghostRefreshResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(ghostRefreshResponseRecorder, ghostRefreshRequest)
@@ -660,7 +664,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		"redirect_uri":  {"https://dashboard.example.com/callback"},
 		"code_verifier": {codeVerifier},
 	}
-	orphanRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(orphanValues.Encode()))
+	orphanRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(orphanValues.Encode()))
 	orphanRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	orphanResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(orphanResponseRecorder, orphanRequest)
@@ -682,7 +686,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 			Role:    "authenticated",
 		},
 	})
-	ghostRequest := httptest.NewRequestWithContext(ghostCtx, http.MethodGet, "/v1/auth/oauth/userinfo", nil)
+	ghostRequest := httptest.NewRequestWithContext(ghostCtx, http.MethodGet, "/v1/oauth/userinfo", nil)
 	ghostRequest.Header.Set("Authorization", "Bearer "+ghostToken)
 	ghostResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetOIDCUserInfo(ghostResponseRecorder, ghostRequest)
@@ -712,7 +716,7 @@ func TestAuthBaseHandlerOIDCStandaloneIdentityProviderIntegration(t *testing.T) 
 		Role: "authenticated",
 	}
 	completeOIDCResponseRecorder := httptest.NewRecorder()
-	completeOIDCRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/oauth/google/callback", nil)
+	completeOIDCRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/google/callback", nil)
 	completeOIDCRequest.Header.Set("X-Forwarded-Proto", "https")
 	baseHandler.CompleteOAuthFlow(completeOIDCResponseRecorder, completeOIDCRequest, user, oauthStatePayload, true)
 	if completeOIDCResponseRecorder.Code != http.StatusFound {
@@ -755,7 +759,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"grant_type": {"client_credentials"},
 		"audience":   {layrAudience},
 	}
-	basicAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(basicAuthValues.Encode()))
+	basicAuthRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(basicAuthValues.Encode()))
 	basicAuthRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	basicAuthRequest.SetBasicAuth(activeServiceAccount.ID, activeServiceAccount.SecretKey)
 	basicAuthResponseRecorder := httptest.NewRecorder()
@@ -801,7 +805,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"scope":         {"data:schema.read"},
 		"audience":      {layrAudience},
 	}
-	formRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(formValues.Encode()))
+	formRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(formValues.Encode()))
 	formRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	formResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(formResponseRecorder, formRequest)
@@ -824,7 +828,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"audience":      layrAudience,
 	}
 	jsonBytes, _ := json.Marshal(jsonBodyMap)
-	jsonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", bytes.NewReader(jsonBytes))
+	jsonRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", bytes.NewReader(jsonBytes))
 	jsonRequest.Header.Set("Content-Type", "application/json")
 	jsonResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(jsonResponseRecorder, jsonRequest)
@@ -841,7 +845,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"scope":         {"admin:super"},
 		"audience":      {layrAudience},
 	}
-	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(invalidScopeValues.Encode()))
+	invalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(invalidScopeValues.Encode()))
 	invalidScopeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invalidScopeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(invalidScopeResponseRecorder, invalidScopeRequest)
@@ -856,7 +860,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_id":     {activeServiceAccount.ID},
 		"client_secret": {activeServiceAccount.SecretKey},
 	}
-	missingAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(missingAudienceValues.Encode()))
+	missingAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(missingAudienceValues.Encode()))
 	missingAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	missingAudienceResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(missingAudienceResponseRecorder, missingAudienceRequest)
@@ -871,7 +875,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_secret": {activeServiceAccount.SecretKey},
 		"audience":      {"https://unregistered.api.com"},
 	}
-	unregisteredAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(unregisteredAudienceValues.Encode()))
+	unregisteredAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(unregisteredAudienceValues.Encode()))
 	unregisteredAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	unregisteredAudienceResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(unregisteredAudienceResponseRecorder, unregisteredAudienceRequest)
@@ -896,7 +900,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"audience":      {"https://billing.example.com"},
 		"scope":         {"invoices:read"},
 	}
-	rsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(rsValues.Encode()))
+	rsRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(rsValues.Encode()))
 	rsRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rsResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(rsResponseRecorder, rsRequest)
@@ -920,7 +924,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_secret": {activeServiceAccount.SecretKey},
 		"audience":      {"https://billing.example.com"},
 	}
-	rsAllRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(rsAllValues.Encode()))
+	rsAllRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(rsAllValues.Encode()))
 	rsAllRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rsAllResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(rsAllResponseRecorder, rsAllRequest)
@@ -942,7 +946,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"audience":      {"https://billing.example.com"},
 		"scope":         {"invoices:delete"},
 	}
-	rsInvalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(rsInvalidScopeValues.Encode()))
+	rsInvalidScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(rsInvalidScopeValues.Encode()))
 	rsInvalidScopeRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rsInvalidScopeResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(rsInvalidScopeResponseRecorder, rsInvalidScopeRequest)
@@ -960,7 +964,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_secret": {activeServiceAccount.SecretKey},
 		"audience":      {"layr:service_account"},
 	}
-	emptyProjectAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(emptyProjectAudienceValues.Encode()))
+	emptyProjectAudienceRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(emptyProjectAudienceValues.Encode()))
 	emptyProjectAudienceRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emptyProjectAudienceResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(emptyProjectAudienceResponseRecorder, emptyProjectAudienceRequest)
@@ -975,7 +979,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_id":     {"sa_wrong_id_123"},
 		"client_secret": {activeServiceAccount.SecretKey},
 	}
-	mismatchRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(mismatchValues.Encode()))
+	mismatchRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(mismatchValues.Encode()))
 	mismatchRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mismatchResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(mismatchResponseRecorder, mismatchRequest)
@@ -1003,7 +1007,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"grant_type":    {"client_credentials"},
 		"client_secret": {disabledServiceAccount.SecretKey},
 	}
-	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(disabledValues.Encode()))
+	disabledRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(disabledValues.Encode()))
 	disabledRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	disabledResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(disabledResponseRecorder, disabledRequest)
@@ -1022,7 +1026,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"grant_type":    {"client_credentials"},
 		"client_secret": {expiredServiceAccount.SecretKey},
 	}
-	expiredRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(expiredValues.Encode()))
+	expiredRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(expiredValues.Encode()))
 	expiredRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	expiredResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleIssueOIDCToken(expiredResponseRecorder, expiredRequest)
@@ -1040,7 +1044,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"grant_type":    {"client_credentials"},
 		"client_secret": {ipRestrictedServiceAccount.SecretKey},
 	}
-	ipRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(ipValues.Encode()))
+	ipRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(ipValues.Encode()))
 	ipRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	ipRequest.RemoteAddr = "192.168.1.5:1234"
 	ipResponseRecorder := httptest.NewRecorder()
@@ -1059,7 +1063,7 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 		"client_secret": {activeServiceAccount.SecretKey},
 		"audience":      {layrAudience},
 	}
-	uninitSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/token", strings.NewReader(uninitSignerValues.Encode()))
+	uninitSignerRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/token", strings.NewReader(uninitSignerValues.Encode()))
 	uninitSignerRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	uninitSignerResponseRecorder := httptest.NewRecorder()
 	uninitSignerBaseHandler.handleIssueOIDCToken(uninitSignerResponseRecorder, uninitSignerRequest)
@@ -1070,6 +1074,11 @@ func TestAuthBaseHandlerOIDCClientCredentialsIntegration(t *testing.T) {
 }
 
 func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
+	deliveryServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.WriteHeader(http.StatusNoContent)
+	}))
+	defer deliveryServer.Close()
+
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 	db := kernel.DB()
@@ -1085,6 +1094,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 
 	driverWebhook := "webhook"
 	authConfig := configManager.Get()
+	authConfig.MFA.Enabled = true
 	authConfig.OIDC.Enabled = true
 	authConfig.EmailOTP.Enabled = true
 	authConfig.SMSOTP.Enabled = true
@@ -1097,13 +1107,13 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 		SenderEmail: "auth@layr.sh",
 		SenderName:  "Layr",
 		Webhook: EmailDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.SMSDispatcher = SMSDispatcherConfig{
 		Driver: &driverWebhook,
 		Webhook: SMSDispatcherWebhookConfig{
-			URL: "http://localhost:9999/webhook",
+			URL: deliveryServer.URL,
 		},
 	}
 	authConfig.OIDC.Clients = []OIDCClientConfig{
@@ -1159,7 +1169,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 		"password":         {"Pass12345!"},
 		"confirm_password": {"Pass12345!"},
 	}
-	dupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(dupValues.Encode()))
+	dupRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(dupValues.Encode()))
 	dupRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	dupResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(dupResponseRecorder, dupRequest)
@@ -1178,7 +1188,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 		"password":         {"Pass12345!"},
 		"confirm_password": {"Pass12345!"},
 	}
-	okRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(okValues.Encode()))
+	okRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(okValues.Encode()))
 	okRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	okResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(okResponseRecorder, okRequest)
@@ -1205,7 +1215,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	createState(st3a)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = NULL WHERE id = $1", mfaUID)
 	noSecValues := url.Values{"state": {st3a}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"123456"}}
-	noSecRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(noSecValues.Encode()))
+	noSecRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(noSecValues.Encode()))
 	noSecRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noSecResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(noSecResponseRecorder, noSecRequest)
@@ -1218,7 +1228,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	createState(st3b)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = 'corrupted' WHERE id = $1", mfaUID)
 	corruptValues := url.Values{"state": {st3b}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"123456"}}
-	corruptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(corruptValues.Encode()))
+	corruptRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(corruptValues.Encode()))
 	corruptRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	corruptResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(corruptResponseRecorder, corruptRequest)
@@ -1231,7 +1241,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	createState(st3c)
 	_, _ = db.Exec(ctx, "UPDATE auth.users SET encrypted_mfa_secret = $1 WHERE id = $2", encSecret, mfaUID)
 	invValues := url.Values{"state": {st3c}, "action": {"sign_in"}, "email": {mfaUserEmail}, "password": {"Pass12345!"}, "mfa_code": {"000000"}}
-	invRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(invValues.Encode()))
+	invRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(invValues.Encode()))
 	invRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(invResponseRecorder, invRequest)
@@ -1243,9 +1253,9 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	st4 := "st-mfa-nouser"
 	createState(st4)
 	mfaTkNoUser := "mfa_oidc_nouser"
-	_ = databaseKVStore.Set(ctx, "auth:oidc:mfa:"+mfaTkNoUser, "01918a24-9999-7000-8000-000000000000", 5*time.Minute)
+	_ = databaseKVStore.Set(ctx, "auth:oidc:mfa:"+st4+":"+mfaTkNoUser, "01918a24-9999-7000-8000-000000000000", 5*time.Minute)
 	noUserValues := url.Values{"state": {st4}, "action": {"verify_mfa"}, "mfa_token": {mfaTkNoUser}, "mfa_code": {"123456"}}
-	noUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(noUserValues.Encode()))
+	noUserRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(noUserValues.Encode()))
 	noUserRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noUserResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(noUserResponseRecorder, noUserRequest)
@@ -1258,7 +1268,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	st5a := "st-otp-phone-inv"
 	createState(st5a)
 	invPhoneValues := url.Values{"state": {st5a}, "action": {"send_otp"}, "recipient": {"not-a-phone"}}
-	invPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(invPhoneValues.Encode()))
+	invPhoneRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(invPhoneValues.Encode()))
 	invPhoneRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invPhoneResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(invPhoneResponseRecorder, invPhoneRequest)
@@ -1271,7 +1281,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	createState(st5b)
 	otpEmail := "otp.oidc.user@example.com"
 	emailSendValues := url.Values{"state": {st5b}, "action": {"send_otp"}, "recipient": {otpEmail}}
-	emailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	emailSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
 	emailSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	emailSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(emailSendResponseRecorder, emailSendRequest)
@@ -1280,7 +1290,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	}
 
 	// c. IP rate limit on send_otp
-	invIPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	invIPRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
 	invIPRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invIPRequest.RemoteAddr = "10.0.0.99:1234"
 	_ = databaseKVStore.Set(ctx, "auth:ratelimit:otp:ip:10.0.0.99", "11", time.Hour)
@@ -1293,7 +1303,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	// d. cooldown on send_otp
 	_ = databaseKVStore.Delete(ctx, "auth:ratelimit:otp:ip:10.0.0.99")
 	_ = databaseKVStore.Set(ctx, "auth:cooldown:sign_in:"+otpEmail, "1", time.Minute)
-	coolRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
+	coolRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(emailSendValues.Encode()))
 	coolRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	coolResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(coolResponseRecorder, coolRequest)
@@ -1304,7 +1314,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 
 	// e. verify_otp with invalid code
 	invVerifyValues := url.Values{"state": {st5b}, "action": {"verify_otp"}, "recipient": {otpEmail}, "otp_code": {"999999"}}
-	invVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(invVerifyValues.Encode()))
+	invVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(invVerifyValues.Encode()))
 	invVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	invVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(invVerifyResponseRecorder, invVerifyRequest)
@@ -1315,7 +1325,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	// f. verify_otp with valid code -> 302 Found redirect
 	otpCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+otpEmail)
 	okVerifyValues := url.Values{"state": {st5b}, "action": {"verify_otp"}, "recipient": {otpEmail}, "otp_code": {otpCode}}
-	okVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(okVerifyValues.Encode()))
+	okVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(okVerifyValues.Encode()))
 	okVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	okResponseRecorder = httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(okResponseRecorder, okVerifyRequest)
@@ -1328,7 +1338,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	createState(st5g)
 	otpPhone := "+14155553333"
 	phoneSendValues := url.Values{"state": {st5g}, "action": {"send_otp"}, "recipient": {otpPhone}}
-	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(phoneSendValues.Encode()))
+	phoneSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(phoneSendValues.Encode()))
 	phoneSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	phoneSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(phoneSendResponseRecorder, phoneSendRequest)
@@ -1338,7 +1348,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 
 	phoneCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+otpPhone)
 	phoneVerifyValues := url.Values{"state": {st5g}, "action": {"verify_otp"}, "recipient": {otpPhone}, "otp_code": {phoneCode}}
-	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(phoneVerifyValues.Encode()))
+	phoneVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(phoneVerifyValues.Encode()))
 	phoneVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	phoneVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(phoneVerifyResponseRecorder, phoneVerifyRequest)
@@ -1355,14 +1365,14 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	st5h := "st-otp-mfa"
 	createState(st5h)
 	mfaOTPSendValues := url.Values{"state": {st5h}, "action": {"send_otp"}, "recipient": {mfaOTPUser}}
-	mfaOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(mfaOTPSendValues.Encode()))
+	mfaOTPSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(mfaOTPSendValues.Encode()))
 	mfaOTPSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mfaOTPSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(mfaOTPSendResponseRecorder, mfaOTPSendRequest)
 
 	mfaOTPCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+mfaOTPUser)
 	mfaOTPVerifyValues := url.Values{"state": {st5h}, "action": {"verify_otp"}, "recipient": {mfaOTPUser}, "otp_code": {mfaOTPCode}}
-	mfaOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(mfaOTPVerifyValues.Encode()))
+	mfaOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(mfaOTPVerifyValues.Encode()))
 	mfaOTPVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	mfaOTPVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(mfaOTPVerifyResponseRecorder, mfaOTPVerifyRequest)
@@ -1374,7 +1384,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	st5i := "st-otp-no-record"
 	createState(st5i)
 	noOTPVerifyValues := url.Values{"state": {st5i}, "action": {"verify_otp"}, "recipient": {"no-otp@example.com"}, "otp_code": {"123456"}}
-	noOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(noOTPVerifyValues.Encode()))
+	noOTPVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(noOTPVerifyValues.Encode()))
 	noOTPVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	noOTPVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(noOTPVerifyResponseRecorder, noOTPVerifyRequest)
@@ -1391,14 +1401,14 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 	stLocked := "st-otp-locked"
 	createState(stLocked)
 	lockedSendValues := url.Values{"state": {stLocked}, "action": {"send_otp"}, "recipient": {lockedUser}}
-	lockedSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(lockedSendValues.Encode()))
+	lockedSendRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(lockedSendValues.Encode()))
 	lockedSendRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	lockedSendResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(lockedSendResponseRecorder, lockedSendRequest)
 
 	lockedCode, _ := databaseKVStore.Get(ctx, "auth:otp:sign_in:"+lockedUser)
 	lockedVerifyValues := url.Values{"state": {stLocked}, "action": {"verify_otp"}, "recipient": {lockedUser}, "otp_code": {lockedCode}}
-	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(lockedVerifyValues.Encode()))
+	lockedVerifyRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(lockedVerifyValues.Encode()))
 	lockedVerifyRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	lockedVerifyResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(lockedVerifyResponseRecorder, lockedVerifyRequest)
@@ -1422,7 +1432,7 @@ func TestAuthBaseHandlerOIDCSignUpAndOTPIntegration(t *testing.T) {
 		"password":         {"SecurePass123!"},
 		"confirm_password": {"SecurePass123!"},
 	}
-	failSignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/oauth/authorize", strings.NewReader(failSignUpValues.Encode()))
+	failSignUpRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(failSignUpValues.Encode()))
 	failSignUpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	failSignUpResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleSubmitOIDCAuthorize(failSignUpResponseRecorder, failSignUpRequest)
@@ -1505,7 +1515,7 @@ func TestAuthBaseHandlerOIDCFederatedSignOutBackChannelIntegration(t *testing.T)
 		t.Fatalf("failed to insert session: %v", err)
 	}
 
-	signOutRequestURL := "/v1/auth/oauth/sign-out?client_id=client-federated-rp&post_sign_out_redirect_uri=" + url.QueryEscape("https://rp.example.com/signed-out")
+	signOutRequestURL := "/v1/oauth/sign-out?client_id=client-federated-rp&post_sign_out_redirect_uri=" + url.QueryEscape("https://rp.example.com/signed-out")
 	signOutRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, signOutRequestURL, nil)
 	signOutRequest.AddCookie(&http.Cookie{
 		Name:  core.SessionCookieNameInsecure,
@@ -1550,5 +1560,217 @@ func TestAuthBaseHandlerOIDCFederatedSignOutBackChannelIntegration(t *testing.T)
 	}
 	if verifiedSignOutJWTClaims.Events[core.SignOutTokenEventURI] == nil {
 		t.Fatalf("missing backchannel logout event claim in verified token")
+	}
+}
+
+func TestAuthOIDCPolicyAndFailurePathsIntegration(t *testing.T) {
+	ctx := context.Background()
+	driver := &failingTestKVDriver{TestInMemoryKVDriver: *core.NewTestInMemoryKVDriver()}
+	kernel, cleanup := core.SetupTestKernel(t, Migrations, core.WithKVStore(core.NewKVStoreFromDriver(driver)))
+	defer cleanup()
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.OIDC.Enabled = true
+	config.EmailOTP.Enabled = true
+	config.OIDC.UI.ShowEmailOTP = true
+	config.OIDC.UI.ShowSignUp = true
+	config.OIDC.UI.ShowPassword = true
+	config.RateLimiting.Enabled = false
+	config.OIDC.Clients = []OIDCClientConfig{{ClientID: "policy-client", Public: true, RedirectURIs: []string{"https://app.example/callback"}, Scopes: []string{"openid", "email"}}}
+	service.configManager.SetMemoryConfig(config)
+	var userID string
+	passwordHash, err := service.hasher.Hash("Password123!")
+	require.NoError(t, err)
+	require.NoError(t, kernel.DB().QueryRow(ctx, "INSERT INTO auth.users (email,password_hash) VALUES ('oidc-policy@example.com',$1) RETURNING id", passwordHash).Scan(&userID))
+	oidcAuthorizationStatePayload := OIDCAuthorizationStatePayload{ClientID: "policy-client", RedirectURI: "https://app.example/callback", Scope: "openid"}
+	stateJSON, err := json.Marshal(oidcAuthorizationStatePayload)
+	require.NoError(t, err)
+	setState := func() {
+		require.NoError(t, kernel.KVStore().Set(ctx, "auth:oidc:state:policy-state", string(stateJSON), time.Minute))
+	}
+	submit := func(values url.Values) *httptest.ResponseRecorder {
+		values.Set("state", "policy-state")
+		request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/oauth/authorize", strings.NewReader(values.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.handleSubmitOIDCAuthorize(responseRecorder, request)
+		return responseRecorder
+	}
+	t.Run("passkey MFA bridge", func(t *testing.T) {
+		setState()
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/authorize?state=policy-state&mode=mfa&mfa_ticket=bridge", nil)
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.handleAuthorizeOIDC(responseRecorder, request)
+		require.Contains(t, responseRecorder.Body.String(), "MFA session expired")
+		require.NoError(t, kernel.KVStore().Set(ctx, "auth:mfa_ticket:bridge", userID, time.Minute))
+		driver.setErr = errors.New("storage failed")
+		responseRecorder = httptest.NewRecorder()
+		service.baseHandler.handleAuthorizeOIDC(responseRecorder, request)
+		require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+		driver.setErr = nil
+		responseRecorder = httptest.NewRecorder()
+		service.baseHandler.handleAuthorizeOIDC(responseRecorder, request)
+		require.Contains(t, responseRecorder.Body.String(), "Two-factor authentication required")
+		_, err := kernel.KVStore().Get(ctx, "auth:mfa_ticket:bridge")
+		require.Error(t, err)
+	})
+	t.Run("application scope allowlist", func(t *testing.T) {
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/oauth/authorize?client_id=policy-client&redirect_uri=https%3A%2F%2Fapp.example%2Fcallback&response_type=code&code_challenge=challenge&code_challenge_method=S256&scope=profile", nil)
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.handleAuthorizeOIDC(responseRecorder, request)
+		require.Contains(t, responseRecorder.Header().Get("Location"), "invalid_scope")
+	})
+	t.Run("locked linked OAuth and hosted completion", func(t *testing.T) {
+		lockedUntil := time.Now().Add(time.Hour)
+		user := User{ID: userID, LockedUntil: &lockedUntil}
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.CompleteOAuthFlow(responseRecorder, request, user, OAuthStatePayload{}, false)
+		require.Equal(t, http.StatusLocked, responseRecorder.Code)
+		responseRecorder = httptest.NewRecorder()
+		service.baseHandler.completeOIDCAuthorization(responseRecorder, request, "policy-state", oidcAuthorizationStatePayload, user)
+		require.Equal(t, http.StatusLocked, responseRecorder.Code)
+	})
+	t.Run("hosted MFA ticket persistence failure", func(t *testing.T) {
+		mfaConfig := config
+		mfaConfig.MFA.Enabled = true
+		service.configManager.SetMemoryConfig(mfaConfig)
+		driver.setErr = errors.New("storage failed")
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.completeOIDCAuthorization(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", nil), "policy-state", oidcAuthorizationStatePayload, User{ID: userID, MFAEnabled: true})
+		require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+		driver.setErr = nil
+		service.configManager.SetMemoryConfig(config)
+	})
+	t.Run("hosted attack protection", func(t *testing.T) {
+		setState()
+		protectedConfig := config
+		protectedConfig.Threat.BotProtection.Enabled = true
+		protectedConfig.Threat.BotProtection.Mode = "always"
+		service.configManager.SetMemoryConfig(protectedConfig)
+		require.Equal(t, http.StatusBadRequest, submit(url.Values{"action": {"sign_in"}}).Code)
+		protectedConfig = config
+		protectedConfig.Password.BreachCheck.Enabled = true
+		protectedConfig.Password.BreachCheck.FailOpen = false
+		service.configManager.SetMemoryConfig(protectedConfig)
+		service.httpClient = &threatMockHTTPClient{doFunc: func(request *http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(strings.NewReader("failed"))}, nil
+		}}
+		require.Equal(t, http.StatusServiceUnavailable, submit(url.Values{"action": {"sign_up"}, "email": {"new@example.com"}, "password": {"Password123!"}, "confirm_password": {"Password123!"}}).Code)
+		protectedConfig = config
+		protectedConfig.RateLimiting.Enabled = true
+		service.configManager.SetMemoryConfig(protectedConfig)
+		require.NoError(t, kernel.KVStore().Set(ctx, "auth:ratelimit:sign_in:oidc-policy@example.com", "5", time.Minute))
+		require.Equal(t, http.StatusTooManyRequests, submit(url.Values{"action": {"sign_in"}, "email": {"oidc-policy@example.com"}, "password": {"Password123!"}}).Code)
+		service.configManager.SetMemoryConfig(config)
+	})
+	t.Run("hosted OTP delivery and database failures", func(t *testing.T) {
+		setState()
+		server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			responseWriter.WriteHeader(http.StatusBadGateway)
+		}))
+		defer server.Close()
+		deliveryConfig := config
+		webhookDriver := "webhook"
+		deliveryConfig.EmailDispatcher = EmailDispatcherConfig{Driver: &webhookDriver, Webhook: EmailDispatcherWebhookConfig{URL: server.URL}}
+		service.configManager.SetMemoryConfig(deliveryConfig)
+		values := url.Values{"action": {"send_otp"}, "recipient": {"hosted-failure@example.com"}}
+		require.Contains(t, submit(values).Body.String(), "Failed to send verification code")
+		_, err := kernel.DB().Exec(ctx, "ALTER TABLE auth.otps RENAME TO unavailable_otps")
+		require.NoError(t, err)
+		require.Contains(t, submit(values).Body.String(), "Failed to send verification code")
+		_, err = kernel.DB().Exec(ctx, "ALTER TABLE auth.unavailable_otps RENAME TO otps")
+		require.NoError(t, err)
+		service.configManager.SetMemoryConfig(config)
+	})
+	t.Run("OTP consumption failure in API and hosted flows", func(t *testing.T) {
+		_, err := kernel.DB().Exec(ctx, `CREATE FUNCTION auth.skip_otp_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; CREATE TRIGGER skip_otp_delete BEFORE DELETE ON auth.otps FOR EACH ROW EXECUTE FUNCTION auth.skip_otp_delete()`)
+		require.NoError(t, err)
+		_, err = kernel.DB().Exec(ctx, "INSERT INTO auth.otps (recipient,code_hash,purpose,expires_at) VALUES ('consume@example.com',$1,'sign_in',clock_timestamp()+interval '1 hour')", otp.HashCode("123456"))
+		require.NoError(t, err)
+		responseRecorder := httptest.NewRecorder()
+		service.baseHandler.handleVerifyOTP(responseRecorder, httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(`{"recipient":"consume@example.com","code":"123456"}`)))
+		require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+		setState()
+		require.Contains(t, submit(url.Values{"action": {"verify_otp"}, "recipient": {"consume@example.com"}, "otp_code": {"123456"}}).Body.String(), "Invalid or expired verification code")
+		_, err = kernel.DB().Exec(ctx, "DROP TRIGGER skip_otp_delete ON auth.otps; DROP FUNCTION auth.skip_otp_delete()")
+		require.NoError(t, err)
+	})
+	verifier := "test-pkce-verifier"
+	digest := sha256.Sum256([]byte(verifier))
+	for _, name := range []string{"changed scope", "default scopes", "session storage failure"} {
+		t.Run(name, func(t *testing.T) {
+			tokenConfig := config
+			scope := "profile"
+			if name == "default scopes" {
+				tokenConfig.OIDC.Clients = append([]OIDCClientConfig{}, config.OIDC.Clients...)
+				tokenConfig.OIDC.Clients[0].Scopes = nil
+			}
+			if name == "session storage failure" {
+				scope = "openid"
+				_, err := kernel.DB().Exec(ctx, `CREATE FUNCTION auth.fail_session_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'insert failed'; END $$; CREATE TRIGGER fail_session_insert BEFORE INSERT ON auth.sessions FOR EACH ROW EXECUTE FUNCTION auth.fail_session_insert()`)
+				require.NoError(t, err)
+			}
+			service.configManager.SetMemoryConfig(tokenConfig)
+			code := service.baseHandler.issueOIDCAuthorizationCode(ctx, "policy-client", oidcAuthorizationStatePayload.RedirectURI, userID, scope, base64.RawURLEncoding.EncodeToString(digest[:]), "S256", "")
+			values := url.Values{"client_id": {"policy-client"}, "code": {code}, "redirect_uri": {oidcAuthorizationStatePayload.RedirectURI}, "code_verifier": {verifier}}
+			request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(values.Encode()))
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			responseRecorder := httptest.NewRecorder()
+			service.baseHandler.handleIssueOIDCTokenAuthorizationCode(responseRecorder, request)
+			switch name {
+			case "changed scope":
+				require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+			case "default scopes":
+				require.Equal(t, http.StatusOK, responseRecorder.Code)
+			case "session storage failure":
+				require.Equal(t, http.StatusServiceUnavailable, responseRecorder.Code)
+				_, err := kernel.DB().Exec(ctx, "DROP TRIGGER fail_session_insert ON auth.sessions; DROP FUNCTION auth.fail_session_insert()")
+				require.NoError(t, err)
+			}
+			service.configManager.SetMemoryConfig(config)
+		})
+	}
+	for _, name := range []string{"unknown client", "scope escalation", "scope narrowing", "scope no longer allowed", "rotation failure"} {
+		t.Run(name, func(t *testing.T) {
+			refreshConfig := config
+			if name == "scope no longer allowed" {
+				refreshConfig.OIDC.Clients = append([]OIDCClientConfig{}, config.OIDC.Clients...)
+				refreshConfig.OIDC.Clients[0].Scopes = []string{"email"}
+			}
+			service.configManager.SetMemoryConfig(refreshConfig)
+			refreshToken := kernel.JWTSigner().GenerateRefreshToken()
+			_, err := kernel.DB().Exec(ctx, "INSERT INTO auth.sessions (user_id,client_id,refresh_token_hash,expires_at,scope) VALUES ($1,'policy-client',$2,clock_timestamp()+interval '1 hour','openid email')", userID, kernel.JWTSigner().HashRefreshToken(refreshToken))
+			require.NoError(t, err)
+			values := url.Values{"client_id": {"policy-client"}, "refresh_token": {refreshToken}}
+			if name == "unknown client" {
+				values.Set("client_id", "unknown")
+			}
+			if name == "scope escalation" {
+				values.Set("scope", "profile")
+			}
+			if name == "scope narrowing" {
+				values.Set("scope", "openid")
+			}
+			if name == "rotation failure" {
+				_, err := kernel.DB().Exec(ctx, `CREATE FUNCTION auth.skip_rotation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$; CREATE TRIGGER skip_rotation BEFORE UPDATE ON auth.sessions FOR EACH ROW EXECUTE FUNCTION auth.skip_rotation()`)
+				require.NoError(t, err)
+			}
+			request := httptest.NewRequestWithContext(ctx, http.MethodPost, "/", strings.NewReader(values.Encode()))
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			responseRecorder := httptest.NewRecorder()
+			service.baseHandler.handleIssueOIDCTokenRefreshToken(responseRecorder, request)
+			if name == "scope narrowing" {
+				require.Equal(t, http.StatusOK, responseRecorder.Code)
+				require.Contains(t, responseRecorder.Body.String(), `"scope":"openid"`)
+			} else {
+				require.GreaterOrEqual(t, responseRecorder.Code, 400)
+			}
+			if name == "rotation failure" {
+				_, err := kernel.DB().Exec(ctx, "DROP TRIGGER skip_rotation ON auth.sessions; DROP FUNCTION auth.skip_rotation()")
+				require.NoError(t, err)
+			}
+			service.configManager.SetMemoryConfig(config)
+		})
 	}
 }

@@ -91,19 +91,12 @@ func (handler *BaseHandler) issueSessionResponse(responseWriter http.ResponseWri
 	clientIP := core.ExtractRequestClientIP(request)
 	userAgent := nilIfEmpty(request.UserAgent())
 
-	var sessionID string
-	var sessionCreatedAt time.Time
-	log.Tracef("persisting session record in database for user %s", user.ID)
-	queryErr := handler.kernel.DB().QueryRow(request.Context(), `
-		INSERT INTO auth.sessions (user_id, refresh_token_hash, ip_address, user_agent, expires_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, clock_timestamp())
-		RETURNING id, created_at
-	`, user.ID, refreshHash, clientIP, userAgent, refreshTokenExpiredAt).Scan(&sessionID, &sessionCreatedAt)
-	if queryErr != nil {
-		log.Debugf("failed to persist database session for user %s: %v", user.ID, queryErr)
-		sessionID = uuid.NewV7().String()
-		sessionCreatedAt = time.Now().UTC()
+	session := Session{UserID: user.ID, RefreshTokenHash: refreshHash, IPAddress: nilIfEmpty(clientIP), UserAgent: userAgent, ExpiresAt: refreshTokenExpiredAt}
+	if err := handler.persistSession(request.Context(), &session, ""); err != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusInternalServerError, "Service temporarily unavailable", err.Error())
+		return
 	}
+	sessionID, sessionCreatedAt := session.ID, session.CreatedAt
 
 	customClaims := handler.resolveCustomClaims(request.Context(), user.ID)
 	userJWTClaims := core.JWTClaims{

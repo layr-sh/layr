@@ -3,9 +3,16 @@ package oauth
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/json"
+	"time"
+
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt/v5"
 	"io"
 	"net/http"
 	"strings"
@@ -100,9 +107,23 @@ func TestOauthExchangeCodeIntegration(t *testing.T) {
 	}
 
 	// 4. Success Apple Exchange with ID Token
-	appleJWT := makeDummyJWT(`{"sub":"apple-sub-789","email":"apple@icloud.com","name":"Apple User"}`)
+	applePublicKey, applePrivateKey, keyErr := ed25519.GenerateKey(rand.Reader)
+	if keyErr != nil {
+		t.Fatal(keyErr)
+	}
+	appleToken := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{"iss": "https://appleid.apple.com", "aud": "id", "exp": time.Now().Add(time.Hour).Unix(), "sub": "apple-sub-789", "email": "apple@icloud.com", "name": "Apple User"})
+	appleToken.Header["kid"] = "apple-key"
+	appleJWT, signErr := appleToken.SignedString(applePrivateKey)
+	if signErr != nil {
+		t.Fatal(signErr)
+	}
 	SetHTTPClient(&mockHTTPClient{
 		doFunc: func(request *http.Request) (*http.Response, error) {
+			if request.URL.Path == "/auth/keys" {
+				body, _ := json.Marshal(map[string]any{"keys": []map[string]string{{"kid": "apple-key", "kty": "OKP", "crv": tls.Ed25519.String(), "alg": "EdDSA", "x": base64.RawURLEncoding.EncodeToString(applePublicKey)}}})
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body))}, nil
+			}
+
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(strings.NewReader(fmt.Sprintf(`{"id_token":"%s","token_type":"Bearer"}`, appleJWT))),

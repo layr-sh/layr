@@ -185,8 +185,8 @@ func TestPasskeyCredentialStorageAndCounterIntegration(t *testing.T) {
 	authenticatorData := []byte("authenticator-data-counter-advanced")
 	signature := []byte("mock-signature-payload")
 
-	if !VerifySignature(foundCredential.PublicKey, clientDataJSON, authenticatorData, signature) {
-		t.Fatal("expected signature verification to succeed")
+	if VerifySignature(foundCredential.PublicKey, clientDataJSON, authenticatorData, signature) {
+		t.Fatal("simulated public key and signature must not verify")
 	}
 }
 

@@ -65,6 +65,7 @@ Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *ConfigApi* | [**auth_config_get**](generated/auth/control_plane/docs/ConfigApi.md#auth_config_get) | **GET** /v1/_/auth/config | Retrieve dynamic runtime authentication configuration
 *ConfigApi* | [**auth_config_update**](generated/auth/control_plane/docs/ConfigApi.md#auth_config_update) | **PUT** /v1/_/auth/config | Update dynamic runtime authentication configuration
+*StatsApi* | [**auth_stats_get**](generated/auth/control_plane/docs/StatsApi.md#auth_stats_get) | **GET** /v1/_/auth/stats | Get application authentication statistics
 *UsersApi* | [**auth_users_create**](generated/auth/control_plane/docs/UsersApi.md#auth_users_create) | **POST** /v1/_/auth/users | Create an application user account via control plane
 *UsersApi* | [**auth_users_delete**](generated/auth/control_plane/docs/UsersApi.md#auth_users_delete) | **DELETE** /v1/_/auth/users/{user_id} | Permanently delete an application user and cascade sessions
 *UsersApi* | [**auth_users_get**](generated/auth/control_plane/docs/UsersApi.md#auth_users_get) | **GET** /v1/_/auth/users/{user_id} | Get detailed application user record by UUID
@@ -99,8 +100,11 @@ Class | Method | HTTP request | Description
  - [PasskeysConfig](generated/auth/control_plane/docs/PasskeysConfig.md)
  - [PasswordBreachConfig](generated/auth/control_plane/docs/PasswordBreachConfig.md)
  - [PasswordConfig](generated/auth/control_plane/docs/PasswordConfig.md)
+ - [ProviderStats](generated/auth/control_plane/docs/ProviderStats.md)
  - [RateLimitingConfig](generated/auth/control_plane/docs/RateLimitingConfig.md)
+ - [RegistrationStats](generated/auth/control_plane/docs/RegistrationStats.md)
  - [ResourceServerConfig](generated/auth/control_plane/docs/ResourceServerConfig.md)
+ - [RoleStats](generated/auth/control_plane/docs/RoleStats.md)
  - [SMSDispatcherConfig](generated/auth/control_plane/docs/SMSDispatcherConfig.md)
  - [SMSDispatcherTemplateConfig](generated/auth/control_plane/docs/SMSDispatcherTemplateConfig.md)
  - [SMSDispatcherTemplatesConfig](generated/auth/control_plane/docs/SMSDispatcherTemplatesConfig.md)
@@ -109,6 +113,7 @@ Class | Method | HTTP request | Description
  - [SMSOTPConfig](generated/auth/control_plane/docs/SMSOTPConfig.md)
  - [Session](generated/auth/control_plane/docs/Session.md)
  - [SessionsConfig](generated/auth/control_plane/docs/SessionsConfig.md)
+ - [StatsResponse](generated/auth/control_plane/docs/StatsResponse.md)
  - [ThreatConfig](generated/auth/control_plane/docs/ThreatConfig.md)
  - [User](generated/auth/control_plane/docs/User.md)
 
