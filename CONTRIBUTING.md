@@ -6,9 +6,16 @@ Layr (`layr.sh`) is an open-source developer infrastructure platform and modular
 
 ---
 
-## 📜 Developer Certificate of Origin (DCO)
+## 📜 Contribution Licensing and Sign-off
 
-All contributors must sign off on the [Developer Certificate of Origin](https://developercertificate.org/) (DCO 1.1). This certifies that you wrote or have the right to submit the code you are contributing.
+Contributions are submitted under the license that applies to the files they change:
+
+- The server, `layr` CLI, bundled console, and other Layr-owned code outside `client-sdk/` use [GNU AGPL v3 only (`AGPL-3.0-only`)](LICENSE), unless otherwise noted.
+- Layr-owned client SDK code under `client-sdk/`, including generated clients, uses the [MIT License](client-sdk/LICENSE).
+
+If you include third-party material, verify that its license permits inclusion and preserve any required notices.
+
+All contributors must sign off under the [Developer Certificate of Origin](https://developercertificate.org/) (DCO 1.1). The sign-off certifies that you have the right to submit your contribution under the applicable license. It does not transfer copyright.
 
 ### How to Sign Off
 
