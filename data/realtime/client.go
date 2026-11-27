@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"uuid"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -54,6 +55,7 @@ type Client struct {
 	closeOnce            sync.Once
 	closedChannel        chan struct{}
 	validator            func(schema, table string) error
+	eventAuthorizer      func(CDCEvent) (CDCEvent, bool)
 }
 
 // NewClient initializes a client session.
@@ -82,6 +84,11 @@ func (client *Client) SetValidator(validator func(schema, table string) error) {
 	client.validator = validator
 }
 
+// SetEventAuthorizer installs per-event row authorization before delivery.
+func (client *Client) SetEventAuthorizer(authorizer func(CDCEvent) (CDCEvent, bool)) {
+	client.eventAuthorizer = authorizer
+}
+
 // Close terminates the client session cleanly.
 func (client *Client) Close(ctx context.Context) {
 	client.closeOnce.Do(func() {
@@ -102,9 +109,13 @@ func (client *Client) Close(ctx context.Context) {
 // Dispatch tests matching subscriptions and queues the event to sendChannel.
 func (client *Client) Dispatch(cdcEvent CDCEvent) {
 	client.subscriptionsRWMutex.RLock()
-	defer client.subscriptionsRWMutex.RUnlock()
-
+	subscriptions := make([]Subscription, 0, len(client.subscriptions))
 	for _, subscription := range client.subscriptions {
+		subscriptions = append(subscriptions, subscription)
+	}
+	client.subscriptionsRWMutex.RUnlock()
+	authorized := false
+	for _, subscription := range subscriptions {
 		if subscription.Schema != "" && subscription.Schema != cdcEvent.Schema {
 			continue
 		}
@@ -118,6 +129,14 @@ func (client *Client) Dispatch(cdcEvent CDCEvent) {
 			continue
 		}
 
+		if !authorized && client.eventAuthorizer != nil {
+			var allowed bool
+			cdcEvent, allowed = client.eventAuthorizer(cdcEvent)
+			if !allowed {
+				return
+			}
+			authorized = true
+		}
 		broadcastMessage := BroadcastMessage{
 			Channel:         subscription.Channel,
 			Topic:           subscription.Channel,
@@ -182,19 +201,25 @@ func (client *Client) WritePump(ctx context.Context, heartbeatInterval time.Dura
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-client.closedChannel:
 			return
 
 		case message := <-client.sendChannel:
 			if client.connection != nil {
 				_ = client.connection.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				_ = client.connection.WriteMessage(websocket.TextMessage, message)
+				if err := client.connection.WriteMessage(websocket.TextMessage, message); err != nil {
+					return
+				}
 			}
 
 		case <-ticker.C:
 			if client.connection != nil {
 				_ = client.connection.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				_ = client.connection.WriteMessage(websocket.PingMessage, nil)
+				if err := client.connection.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -249,8 +274,18 @@ func (client *Client) handleMessage(ctx context.Context, clientMessage ClientMes
 			}
 		}
 
+		clientMessage.Event = strings.ToUpper(strings.TrimSpace(clientMessage.Event))
+		switch clientMessage.Event {
+		case "", "*":
+			clientMessage.Event = "*"
+		case "INSERT", "UPDATE", "DELETE":
+		default:
+			client.sendError("invalid change event")
+			return
+		}
 		client.subscriptionsRWMutex.Lock()
-		if len(client.subscriptions) >= client.maxChannels {
+		_, replacing := client.subscriptions[clientMessage.Channel]
+		if !replacing && len(client.subscriptions) >= client.maxChannels {
 			client.subscriptionsRWMutex.Unlock()
 			client.sendError(fmt.Sprintf("maximum subscription limit reached (%d)", client.maxChannels))
 			return

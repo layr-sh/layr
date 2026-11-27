@@ -26,7 +26,7 @@ func TestDataControlPlaneHandlerSQLScopeForbiddenUnit(t *testing.T) {
 }
 
 func TestDataControlPlaneHandlerSQLValidationUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	service := NewService(core.NewTestKernel(nil))
 	controlPlaneHandler := service.controlPlaneHandler
 

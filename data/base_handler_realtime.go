@@ -31,7 +31,6 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 	}
 
 	jwtClaims := core.GetAuthContext(request.Context()).JWT
-	_ = jwtClaims
 
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -42,9 +41,7 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 				return true
 			}
 			allowedOrigins := config.CORS.AllowedOrigins
-			if len(allowedOrigins) == 0 {
-				return true
-			}
+
 			for _, allowed := range allowedOrigins {
 				if allowed == "*" || allowed == origin {
 					return true
@@ -71,10 +68,13 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 	}
 
 	client := realtime.NewClient(handler.realtimeHub, connection, maxChannels)
+	client.SetEventAuthorizer(func(cdcEvent realtime.CDCEvent) (realtime.CDCEvent, bool) {
+		return handler.authorizeRealtimeEvent(request, cdcEvent)
+	})
 	client.SetValidator(func(schema, table string) error {
 		currentConfig := handler.configManager.Get()
 
-		if schema == "core" || schema == "pg_catalog" || schema == "information_schema" {
+		if IsProtectedSchema(schema) {
 			return fmt.Errorf("schema %q is protected and cannot be subscribed to", schema)
 		}
 
@@ -97,15 +97,20 @@ func (handler *BaseHandler) handleConnectRealtime(responseWriter http.ResponseWr
 			}
 		}
 
+		handler.realtimeHub.ForgetTableTrigger(schema, table)
 		return nil
 	})
 
 	handler.realtimeHub.RegisterClient(client)
 
-	clientCtx := context.WithoutCancel(request.Context())
+	clientCtx, cancel := context.WithCancel(context.WithoutCancel(request.Context()))
+	if jwtClaims.ExpiresAt > 0 {
+		cancel()
+		clientCtx, cancel = context.WithDeadline(context.WithoutCancel(request.Context()), time.Unix(jwtClaims.ExpiresAt, 0))
+	}
 
 	go client.WritePump(clientCtx, heartbeatInterval)
-	go client.ReadPump(clientCtx, heartbeatInterval)
+	go func() { defer cancel(); client.ReadPump(clientCtx, heartbeatInterval) }()
 
 	log.Debug("realtime websocket client connected successfully")
 }

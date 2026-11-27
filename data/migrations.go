@@ -31,6 +31,8 @@ DECLARE
     payload JSONB;
     rec_record JSONB;
     old_rec_record JSONB;
+    record_keys JSONB;
+    old_record_keys JSONB;
 BEGIN
     IF (TG_OP = 'DELETE') THEN
         rec_record := to_jsonb(OLD);
@@ -42,7 +44,7 @@ BEGIN
         rec_record := to_jsonb(NEW);
         old_rec_record := NULL;
     END IF;
-    
+
     payload := json_build_object(
         'schema', TG_TABLE_SCHEMA,
         'table', TG_TABLE_NAME,
@@ -51,19 +53,28 @@ BEGIN
         'record', rec_record,
         'old_record', old_rec_record
     );
-    
+
     IF octet_length(payload::text) > 7800 THEN
+        SELECT COALESCE(jsonb_object_agg(a.attname, rec_record -> a.attname), '{}'::jsonb),
+               CASE WHEN old_rec_record IS NULL THEN NULL ELSE COALESCE(jsonb_object_agg(a.attname, old_rec_record -> a.attname), '{}'::jsonb) END
+          INTO record_keys, old_record_keys
+          FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey)
+         WHERE i.indrelid=TG_RELID AND i.indisprimary;
+        IF octet_length(record_keys::text) + COALESCE(octet_length(old_record_keys::text),0) > 7000 THEN
+            record_keys := '{}'::jsonb;
+            old_record_keys := CASE WHEN old_rec_record IS NULL THEN NULL ELSE '{}'::jsonb END;
+        END IF;
         payload := json_build_object(
             'schema', TG_TABLE_SCHEMA,
             'table', TG_TABLE_NAME,
             'event', TG_OP,
             'commit_timestamp', clock_timestamp(),
-            'record', jsonb_build_object('id', COALESCE(rec_record->>'id', rec_record->>'uuid')),
-            'old_record', CASE WHEN old_rec_record IS NOT NULL THEN jsonb_build_object('id', COALESCE(old_rec_record->>'id', old_rec_record->>'uuid')) ELSE NULL END,
+            'record', record_keys,
+            'old_record', old_record_keys,
             'truncated', true
         );
     END IF;
-    
+
     PERFORM pg_notify('cdc', payload::text);
     IF (TG_OP = 'DELETE') THEN
         RETURN OLD;
@@ -298,6 +309,19 @@ CREATE POLICY select_public ON reference_data.country_tlds FOR SELECT USING (tru
 
 ALTER TABLE reference_data.country_alt_spellings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY select_public ON reference_data.country_alt_spellings FOR SELECT USING (true);
+
+DO $$ BEGIN
+ IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'layr_data_client') THEN
+  CREATE ROLE layr_data_client NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
+ END IF;
+END $$;
+ALTER ROLE layr_data_client NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
+GRANT layr_data_client TO CURRENT_USER;
+GRANT USAGE ON SCHEMA public, reference_data TO layr_data_client;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public, reference_data TO layr_data_client;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, reference_data TO layr_data_client;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_data GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO layr_data_client;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_data GRANT USAGE, SELECT ON SEQUENCES TO layr_data_client;
 `,
 	DownSQL: `
 DROP SCHEMA IF EXISTS reference_data CASCADE;

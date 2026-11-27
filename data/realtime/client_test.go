@@ -14,6 +14,48 @@ import (
 	"layr.sh/core"
 )
 
+func TestRealtimeClientRejectedEventsAndWriteFailuresUnit(t *testing.T) {
+	hub := NewHub(core.NewTestKernel(nil))
+	client := NewClient(hub, nil, 1)
+	client.handleMessage(context.Background(), ClientMessage{Action: "subscribe", Schema: "public", Table: "items", Channel: "invalid", Event: "invalid-event"})
+	if len(client.sendChannel) != 1 || len(client.subscriptions) != 0 {
+		t.Fatal("invalid event type was accepted")
+	}
+	for _, stage := range []string{"message", "heartbeat"} {
+		t.Run(stage, func(t *testing.T) {
+			connections := make(chan *websocket.Conn, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+				upgrader := websocket.Upgrader{}
+				connection, err := upgrader.Upgrade(responseWriter, request, nil)
+				if err == nil {
+					connections <- connection
+				}
+			}))
+			defer server.Close()
+			connection, httpResponse, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+			if httpResponse != nil {
+				_ = httpResponse.Body.Close()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = connection.Close() }()
+			serverConn := <-connections
+			_ = serverConn.Close()
+			client := NewClient(hub, serverConn, 1)
+			if stage == "message" {
+				client.sendChannel <- []byte("test")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			client.WritePump(ctx, time.Millisecond)
+			if ctx.Err() != nil {
+				t.Fatal("writer did not exit after socket failure")
+			}
+		})
+	}
+}
+
 func TestRealtimeClientDispatchAndMessageUnit(t *testing.T) {
 	hub := NewHub(core.NewTestKernel(nil))
 	hub.installedTables["public.orders"] = true
@@ -238,4 +280,41 @@ func TestRealtimeClientDispatchAndMessageUnit(t *testing.T) {
 	go nilConnectionClient.WritePump(context.Background(), 0)
 	time.Sleep(10 * time.Millisecond)
 	nilConnectionClient.Close(context.Background())
+}
+
+func TestRealtimeEventAuthorizationUnit(t *testing.T) {
+	hub := NewHub(core.NewTestKernel(nil))
+	client := NewClient(hub, nil, 2)
+	client.subscriptions["first"] = Subscription{Channel: "first", Schema: "public", Table: "items", Event: "*"}
+	client.subscriptions["second"] = Subscription{Channel: "second", Schema: "public", Table: "items", Event: "*"}
+	calls := 0
+	client.SetEventAuthorizer(func(cdcEvent CDCEvent) (CDCEvent, bool) { calls++; return cdcEvent, false })
+	cdcEvent := CDCEvent{Schema: "public", Table: "items", Event: "UPDATE", Record: map[string]any{"id": 1}, OldRecord: map[string]any{"secret": "private"}}
+	client.Dispatch(cdcEvent)
+	if calls != 1 || len(client.sendChannel) != 0 {
+		t.Fatal("denied event delivered")
+	}
+	calls = 0
+	client.SetEventAuthorizer(func(cdcEvent CDCEvent) (CDCEvent, bool) { calls++; cdcEvent.OldRecord = nil; return cdcEvent, true })
+	client.Dispatch(cdcEvent)
+	if calls != 1 || len(client.sendChannel) != 2 {
+		t.Fatal("event was not authorized exactly once")
+	}
+	for index := 0; index < 2; index++ {
+		var broadcastMessage BroadcastMessage
+		if err := json.Unmarshal(<-client.sendChannel, &broadcastMessage); err != nil {
+			t.Fatal(err)
+		}
+		if broadcastMessage.OldRecord != nil {
+			t.Fatal("unredacted event delivered")
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	client.WritePump(ctx, time.Second)
+	select {
+	case <-client.closedChannel:
+	default:
+		t.Fatal("canceled writer remained open")
+	}
 }

@@ -185,6 +185,7 @@ watch(
               <UDropdownMenu
                 :items="[{ label: 'Details', onSelect: () => (selected = row.original) }]"
                 ><UButton
+                  square
                   icon="i-lucide-ellipsis"
                   aria-label="Session Actions"
                   color="neutral"

@@ -1,6 +1,7 @@
 package data
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,7 +20,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 	"layr.sh/data/common"
-	datakv "layr.sh/data/kv"
 	"layr.sh/data/rest"
 )
 
@@ -28,6 +28,8 @@ const (
 	pgTypeOIDJSON       uint32 = 114
 	pgTypeOIDJSONB      uint32 = 3802
 	pgTypeOIDVoid       uint32 = 2278
+	pgTypeOIDChar       uint32 = 18
+	pgTypeOIDCharArray  uint32 = 1002
 )
 
 // handleListRecords handles GET /v1/data/{schema_name}/{table_name}.
@@ -79,15 +81,19 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	var userVisibleCacheKey string
 	var internalCacheKey string
 
-	embeddedRelations := collectEmbeddedRelations(queryParams.Embedded)
+	// Exact counts include pagination headers that are not part of cached row bodies.
+	if !config.Cache.Enabled || queryParams.CountExact {
+		cacheTTL = 0
+	}
+	embeddedRelations := handler.embeddedTableReferences(schema, table, queryParams.Embedded)
 	tableVersion := handler.getCompositeTableCacheVersion(ctx, schema, table, embeddedRelations)
 	if cacheTTL > 0 {
-		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 		userVisibleCacheKey = rest.GenerateUserVisibleRESTKeyWithVersion(schema, table, queryParams, keySuffix, tableVersion)
-		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleCacheKey)
+		canonicalKey := rest.GenerateUserVisibleRESTKeyWithVersion(schema, table, queryParams, "", tableVersion)
+		internalCacheKey = handler.queryCacheKey(request, userVisibleCacheKey, canonicalKey)
 		responseWriter.Header().Set("Cache-Key", userVisibleCacheKey)
 
-		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); internalCacheKey != "" && cacheGetErr == nil && cached != "" {
 			log.Debugf("cache hit for %s.%s", schema, table)
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("Cache-Status", "HIT")
@@ -105,38 +111,58 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, core.ScopeDataQueryRead) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
-	sqlStatement, _ := queryBuilder.BuildSelect(queryParams, tableMetadata)
+	queryBuilder.SetMetadataResolver(func(schema, name string) (rest.TableMetadata, bool) {
+		if !handler.tableExposed(schema, name) {
+			return rest.TableMetadata{}, false
+		}
+		handler.tablesRWMutex.RLock()
+		relationTableMetadata, exists := handler.tables[schema+"."+name]
+		handler.tablesRWMutex.RUnlock()
+		return relationTableMetadata, exists
+	})
+	sqlStatement, buildErr := queryBuilder.BuildSelect(queryParams, tableMetadata)
+	if buildErr != nil {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid relation query", buildErr.Error())
+		return
+	}
 
-	rows, err := tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
+	rows, err := tx.Query(ctx, sqlStatement.SQL, bindDataArguments(sqlStatement.Args)...)
 	if err != nil {
 		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
 
-	results := handler.scanRowsToJSONMaps(rows)
+	results, err := handler.scanRowsToJSONMaps(rows)
+	if err != nil {
+		handler.writeDBErrorResponse(responseWriter, request, err)
+		return
+	}
 
 	if queryParams.CountExact {
-		countSQLStatement, countErr := queryBuilder.BuildCount(queryParams)
-		if countErr == nil {
-			var totalCount int64
-			if scanErr := tx.QueryRow(ctx, countSQLStatement.SQL, countSQLStatement.Args...).Scan(&totalCount); scanErr == nil {
-				responseWriter.Header().Set("Total-Count", fmt.Sprintf("%d", totalCount))
-				end := queryParams.Offset + len(results) - 1
-				if end < queryParams.Offset {
-					end = queryParams.Offset
-				}
-				responseWriter.Header().Set("Content-Range", fmt.Sprintf("items %d-%d/%d", queryParams.Offset, end, totalCount))
-				responseWriter.Header().Set("Range-Unit", "items")
-			}
+		if err = writeExactCountHeaders(ctx, responseWriter, tx, queryBuilder, queryParams, len(results)); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
 		}
 	}
 
-	responseJSON, _ := json.Marshal(results)
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
+		return
+	}
+	tx = nil
+	responseJSON, marshalErr := json.Marshal(results)
+	if marshalErr != nil {
+		handler.writeDBErrorResponse(responseWriter, request, marshalErr)
+		return
+	}
 
 	if cacheTTL > 0 && internalCacheKey != "" {
 		maxQueries := handler.configManager.Get().Cache.MaxCachedQueries
@@ -165,6 +191,25 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 	_, _ = responseWriter.Write(responseJSON)
 }
 
+func writeExactCountHeaders(ctx context.Context, responseWriter http.ResponseWriter, tx pgx.Tx, queryBuilder *rest.QueryBuilder, queryParams *rest.QueryParams, resultCount int) error {
+	countSQLStatement, err := queryBuilder.BuildCount(queryParams)
+	if err != nil {
+		return fmt.Errorf("build exact count query: %w", err)
+	}
+	var totalCount int64
+	if err := tx.QueryRow(ctx, countSQLStatement.SQL, countSQLStatement.Args...).Scan(&totalCount); err != nil {
+		return err
+	}
+	responseWriter.Header().Set("Total-Count", fmt.Sprintf("%d", totalCount))
+	end := queryParams.Offset + resultCount - 1
+	if end < queryParams.Offset {
+		end = queryParams.Offset
+	}
+	responseWriter.Header().Set("Content-Range", fmt.Sprintf("items %d-%d/%d", queryParams.Offset, end, totalCount))
+	responseWriter.Header().Set("Range-Unit", "items")
+	return nil
+}
+
 // handleGetRecord handles GET /v1/data/{schema_name}/{table_name}/{record_id}.
 func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, request *http.Request) {
 	schema, table, recordID, tableMetadata, jwtClaims, ok := handler.prepareTableContext(responseWriter, request)
@@ -186,13 +231,13 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, core.ScopeDataQueryRead) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
-	if primaryKey == "" {
-		primaryKey = "id"
-	}
 
 	selectColumns := handler.buildSelectColumns(request, tableMetadata)
 	query := fmt.Sprintf(`SELECT %s FROM "%s"."%s" WHERE "%s" = $1 LIMIT 1`, selectColumns, schema, table, primaryKey)
@@ -204,11 +249,21 @@ func (handler *BaseHandler) handleGetRecord(responseWriter http.ResponseWriter, 
 	}
 	defer rows.Close()
 
-	results := handler.scanRowsToJSONMaps(rows)
+	results, err := handler.scanRowsToJSONMaps(rows)
+	if err != nil {
+		handler.writeDBErrorResponse(responseWriter, request, err)
+		return
+	}
 	if len(results) == 0 {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Record not found")
 		return
 	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		handler.writeDBErrorResponse(responseWriter, request, commitErr)
+		return
+	}
+	tx = nil
 
 	log.Debugf("retrieved record %s.%s id=%s", schema, table, recordID)
 	if isReturnMinimal(request) {
@@ -231,6 +286,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
+	bodyBytes = bytes.TrimSpace(bodyBytes)
 	if err != nil || len(bodyBytes) == 0 {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
@@ -238,13 +294,13 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 
 	var rawRows []map[string]any
 	if bodyBytes[0] == '[' {
-		if decodeErr := json.Unmarshal(bodyBytes, &rawRows); decodeErr != nil {
+		if decodeErr := decodeDataJSON(bytes.NewReader(bodyBytes), &rawRows); decodeErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 			return
 		}
 	} else {
 		var createRecordInput CreateRecordInput
-		if payloadErr := json.Unmarshal(bodyBytes, &createRecordInput); payloadErr == nil && len(createRecordInput.Data) > 0 {
+		if payloadErr := decodeDataJSON(bytes.NewReader(bodyBytes), &createRecordInput); payloadErr == nil && len(createRecordInput.Data) > 0 {
 			for _, rec := range createRecordInput.Data {
 				rowMap := make(map[string]any)
 				if rec.ID != "" {
@@ -257,7 +313,7 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 			}
 		} else {
 			var singleRow map[string]any
-			if decodeErr := json.Unmarshal(bodyBytes, &singleRow); decodeErr != nil {
+			if decodeErr := decodeDataJSON(bytes.NewReader(bodyBytes), &singleRow); decodeErr != nil {
 				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 				return
 			}
@@ -285,14 +341,14 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
 	primaryKey := tableMetadata.PrimaryKey
-	if primaryKey == "" {
-		primaryKey = "id"
-	}
 
 	sqlStatement, buildErr := queryBuilder.BuildInsert(rawRows, onConflict)
 	if buildErr != nil {
@@ -301,14 +357,18 @@ func (handler *BaseHandler) handleCreateRecord(responseWriter http.ResponseWrite
 	}
 
 	var rows pgx.Rows
-	rows, err = tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
+	rows, err = tx.Query(ctx, sqlStatement.SQL, bindDataArguments(sqlStatement.Args)...)
 	if err != nil {
 		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
 
-	insertedRows := handler.scanRowsToJSONMaps(rows)
+	insertedRows, err := handler.scanRowsToJSONMaps(rows)
+	if err != nil {
+		handler.writeDBErrorResponse(responseWriter, request, err)
+		return
+	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
 		handler.writeDBErrorResponse(responseWriter, request, commitErr)
@@ -374,6 +434,7 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 
 	request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 	bodyBytes, err := io.ReadAll(request.Body)
+	bodyBytes = bytes.TrimSpace(bodyBytes)
 	if err != nil || len(bodyBytes) == 0 {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid or empty request body")
 		return
@@ -381,13 +442,13 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 
 	var updateRecordInput UpdateRecordInput
 	rowMap := make(map[string]any)
-	if payloadErr := json.Unmarshal(bodyBytes, &updateRecordInput); payloadErr == nil && len(updateRecordInput.Data.Properties) > 0 {
+	if payloadErr := decodeDataJSON(bytes.NewReader(bodyBytes), &updateRecordInput); payloadErr == nil && len(updateRecordInput.Data.Properties) > 0 {
 		for k, v := range updateRecordInput.Data.Properties {
 			rowMap[k] = v
 		}
 	} else {
 		var rowData map[string]any
-		if decodeErr := json.Unmarshal(bodyBytes, &rowData); decodeErr != nil {
+		if decodeErr := decodeDataJSON(bytes.NewReader(bodyBytes), &rowData); decodeErr != nil {
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 			return
 		}
@@ -403,13 +464,13 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
-	if primaryKey == "" {
-		primaryKey = "id"
-	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
 	filters := []rest.FilterOp{{Column: primaryKey, Op: "eq", Value: recordID}}
@@ -419,14 +480,18 @@ func (handler *BaseHandler) handleUpdateRecord(responseWriter http.ResponseWrite
 		return
 	}
 
-	rows, err := tx.Query(ctx, sqlStatement.SQL, sqlStatement.Args...)
+	rows, err := tx.Query(ctx, sqlStatement.SQL, bindDataArguments(sqlStatement.Args)...)
 	if err != nil {
 		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
 	}
 	defer rows.Close()
 
-	updatedRows := handler.scanRowsToJSONMaps(rows)
+	updatedRows, err := handler.scanRowsToJSONMaps(rows)
+	if err != nil {
+		handler.writeDBErrorResponse(responseWriter, request, err)
+		return
+	}
 	if len(updatedRows) == 0 {
 		core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Record not found")
 		return
@@ -488,13 +553,13 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
 	if !handler.isRLSBypassed(request, core.ScopeDataQueryWrite) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	primaryKey := tableMetadata.PrimaryKey
-	if primaryKey == "" {
-		primaryKey = "id"
-	}
 
 	queryBuilder := rest.NewQueryBuilder(schema, table)
 	filters := []rest.FilterOp{{Column: primaryKey, Op: "eq", Value: recordID}}
@@ -504,7 +569,7 @@ func (handler *BaseHandler) handleDeleteRecord(responseWriter http.ResponseWrite
 		return
 	}
 
-	result, err := tx.Exec(ctx, sqlStatement.SQL, sqlStatement.Args...)
+	result, err := tx.Exec(ctx, sqlStatement.SQL, bindDataArguments(sqlStatement.Args)...)
 	if err != nil {
 		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
@@ -607,7 +672,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 		if request.Body != nil {
 			request.Body = http.MaxBytesReader(responseWriter, request.Body, maxRequestBodyBytes)
 			var rawPayload map[string]any
-			decodeErr := json.NewDecoder(request.Body).Decode(&rawPayload)
+			decodeErr := decodeDataJSON(request.Body, &rawPayload)
 			if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
 				core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request payload")
 				return
@@ -633,9 +698,18 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 	}
 	defer func() { _ = handler.resolveTransaction(ctx, tx, err) }()
 
+	if request.Method == http.MethodGet {
+		if _, err = tx.Exec(ctx, "SET TRANSACTION READ ONLY"); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
+	}
 	jwtClaims := core.GetAuthContext(request.Context()).JWT
 	if !handler.isRLSBypassed(request, rlsBypassScope) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return
+		}
 	}
 
 	var query string
@@ -657,7 +731,7 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 		query = fmt.Sprintf(`SELECT * FROM "%s"."%s"()`, schema, functionName)
 	}
 
-	rows, err := tx.Query(ctx, query, queryArgs...)
+	rows, err := tx.Query(ctx, query, bindDataArguments(queryArgs)...)
 	if err != nil {
 		handler.writeDBErrorResponse(responseWriter, request, err)
 		return
@@ -667,7 +741,11 @@ func (handler *BaseHandler) handleExecuteFunction(responseWriter http.ResponseWr
 	fieldDescriptions := rows.FieldDescriptions()
 	isVoid := len(fieldDescriptions) == 1 && fieldDescriptions[0].DataTypeOID == pgTypeOIDVoid
 
-	results := handler.scanRowsToJSONMaps(rows)
+	results, err := handler.scanRowsToJSONMaps(rows)
+	if err != nil {
+		handler.writeDBErrorResponse(responseWriter, request, err)
+		return
+	}
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
 		handler.writeDBErrorResponse(responseWriter, request, commitErr)
@@ -738,15 +816,15 @@ func parseQueryArgValue(rawText string) any {
 	if integerResult, err := strconv.ParseInt(rawText, 10, 64); err == nil {
 		return integerResult
 	}
-	if floatResult, err := strconv.ParseFloat(rawText, 64); err == nil {
-		return floatResult
+	if _, err := strconv.ParseFloat(rawText, 64); err == nil {
+		return json.Number(rawText)
 	}
 	if booleanResult, err := strconv.ParseBool(rawText); err == nil {
 		return booleanResult
 	}
 	if strings.HasPrefix(rawText, "{") || strings.HasPrefix(rawText, "[") {
 		var decodedJSON any
-		if err := json.Unmarshal([]byte(rawText), &decodedJSON); err == nil {
+		if err := decodeDataJSON(strings.NewReader(rawText), &decodedJSON); err == nil {
 			return decodedJSON
 		}
 	}
@@ -766,6 +844,10 @@ func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWrit
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
+	if IsProtectedSchema(schema) {
+		core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Access denied")
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
+	}
 	if !common.IsValidIdentifier(schema) || !common.IsValidIdentifier(table) {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid request path")
 		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
@@ -795,13 +877,24 @@ func (handler *BaseHandler) prepareTableContext(responseWriter http.ResponseWrit
 	tableMetadata, exists := handler.tables[tableKey]
 	handler.tablesRWMutex.RUnlock()
 	if !exists {
-		tableMetadata = rest.TableMetadata{
-			Schema:      schema,
-			Table:       table,
-			PrimaryKey:  "id",
-			Columns:     nil,
-			ForeignKeys: make(map[string]rest.RelationForeignKey),
+		// Refresh the same verified relationship graph used at startup, including
+		// ambiguity checks, query-role grants, and CDC trigger installation.
+		handler.InvalidateCache(request.Context(), InvalidateCacheInput{Catalog: true})
+		if err := handler.IntrospectSchemas(request.Context()); err != nil {
+			handler.writeDBErrorResponse(responseWriter, request, err)
+			return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 		}
+		handler.tablesRWMutex.RLock()
+		tableMetadata, exists = handler.tables[tableKey]
+		handler.tablesRWMutex.RUnlock()
+		if !exists {
+			core.WriteErrorResponse(responseWriter, request, http.StatusNotFound, "Resource not found")
+			return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
+		}
+	}
+	if recordID != "" && tableMetadata.PrimaryKey == "" {
+		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Single-record routes require a single-column primary key")
+		return "", "", "", rest.TableMetadata{}, core.JWTClaims{}, false
 	}
 
 	jwtClaims := core.GetAuthContext(request.Context()).JWT
@@ -843,33 +936,87 @@ func (handler *BaseHandler) buildSelectColumns(request *http.Request, tableMetad
 	return "*"
 }
 
-func (handler *BaseHandler) scanRowsToJSONMaps(rows pgx.Rows) []map[string]any {
+func (handler *BaseHandler) scanRowsToJSONMaps(rows pgx.Rows) ([]map[string]any, error) {
 	fieldDescriptions := rows.FieldDescriptions()
 	results := make([]map[string]any, 0)
-
 	for rows.Next() {
-		values, _ := rows.Values()
-		rowMap := make(map[string]any, len(fieldDescriptions))
+		values, err := rows.Values()
+		if err != nil {
+			return nil, err
+		}
+		row := make(map[string]any, len(fieldDescriptions))
+		rawValues := rows.RawValues()
 		for index, field := range fieldDescriptions {
-			rawValue := values[index]
-			switch typedValue := rawValue.(type) {
-			case [16]byte:
-				rowMap[field.Name] = uuid.UUID(typedValue).String()
-			case []byte:
-				switch field.DataTypeOID {
-				case pgTypeOIDJSON, pgTypeOIDJSONB:
-					rowMap[field.Name] = json.RawMessage(typedValue)
-				default:
-					rowMap[field.Name] = rawValue
-				}
-			default:
-				rowMap[field.Name] = rawValue
+			var raw []byte
+			if index < len(rawValues) {
+				raw = rawValues[index]
+			}
+			row[field.Name] = queryJSONColumn(values[index], field, raw)
+		}
+		results = append(results, row)
+	}
+	return results, rows.Err()
+}
+
+func queryJSONValue(value any, typeOID uint32) any {
+	switch typed := value.(type) {
+	case uint8:
+		if typeOID == pgTypeOIDChar {
+			return string([]byte{typed})
+		}
+	case float64:
+		if math.IsNaN(typed) {
+			return "NaN"
+		}
+		if math.IsInf(typed, 1) {
+			return "Infinity"
+		}
+		if math.IsInf(typed, -1) {
+			return "-Infinity"
+		}
+	case []any:
+		result := make([]any, len(typed))
+		elementOID := uint32(0)
+		if typeOID == pgTypeOIDCharArray {
+			elementOID = 18
+		}
+		for index, item := range typed {
+			result[index] = queryJSONValue(item, elementOID)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for name, item := range typed {
+			result[name] = queryJSONValue(item, 0)
+		}
+		return result
+	case [16]byte:
+		return uuid.UUID(typed).String()
+	case []byte:
+		if typeOID == pgTypeOIDJSON || typeOID == pgTypeOIDJSONB {
+			return json.RawMessage(typed)
+		}
+	}
+	return value
+}
+
+func (handler *BaseHandler) embeddedTableReferences(schema, table string, fields []rest.EmbeddedField) []string {
+	handler.tablesRWMutex.RLock()
+	tableMetadata := handler.tables[schema+"."+table]
+	handler.tablesRWMutex.RUnlock()
+	var references []string
+	for _, field := range fields {
+		targetSchema, targetTable := schema, field.Relation
+		if relationForeignKey, exists := tableMetadata.ForeignKeys[field.Relation]; exists {
+			targetTable = relationForeignKey.ToTable
+			if relationForeignKey.ToSchema != "" {
+				targetSchema = relationForeignKey.ToSchema
 			}
 		}
-		results = append(results, rowMap)
+		references = append(references, targetSchema+"."+targetTable)
+		references = append(references, handler.embeddedTableReferences(targetSchema, targetTable, field.Children)...)
 	}
-
-	return results
+	return references
 }
 
 func collectEmbeddedRelations(embedded []rest.EmbeddedField) []string {
@@ -890,8 +1037,22 @@ func (handler *BaseHandler) getCompositeTableCacheVersion(ctx context.Context, s
 	}
 	fnvHash64 := fnv.New64a()
 	_, _ = fmt.Fprintf(fnvHash64, "%s:%s:%d", schema, rootTable, rootVersion)
+	handler.tablesRWMutex.RLock()
+	tableMetadata := handler.tables[schema+"."+rootTable]
+	handler.tablesRWMutex.RUnlock()
 	for _, rel := range embeddedRelations {
-		relVersion := handler.getTableCacheVersion(ctx, schema, rel)
+		targetSchema, targetTable := schema, rel
+		if strings.Contains(rel, ".") {
+			parts := strings.SplitN(rel, ".", 2)
+			targetSchema, targetTable = parts[0], parts[1]
+		}
+		if relationForeignKey, exists := tableMetadata.ForeignKeys[rel]; exists {
+			targetTable = relationForeignKey.ToTable
+			if relationForeignKey.ToSchema != "" {
+				targetSchema = relationForeignKey.ToSchema
+			}
+		}
+		relVersion := handler.getTableCacheVersion(ctx, targetSchema, targetTable)
 		_, _ = fmt.Fprintf(fnvHash64, ";%s:%d", rel, relVersion)
 	}
 	return int64(fnvHash64.Sum64() & uint64(math.MaxInt64))

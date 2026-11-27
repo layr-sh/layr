@@ -4,31 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"layr.sh/core"
 	"layr.sh/data/common"
 )
 
-var protectedSchemas = map[string]bool{
-	"system":             true,
-	"core":               true,
-	"auth":               true,
-	"data":               true,
-	"file_storage":       true,
-	"tasks":              true,
-	"image":              true,
-	"function":           true,
-	"console":            true,
-	"information_schema": true,
-	"pg_catalog":         true,
-	"pg_toast":           true,
-}
-
 // IsProtectedSchema returns true if the schema is reserved for platform internals or PostgreSQL catalog.
 func IsProtectedSchema(schema string) bool {
-	return protectedSchemas[strings.ToLower(strings.TrimSpace(schema))]
+	return common.IsProtectedSchema(schema)
 }
 
 // DDLEngine executes schema introspection and DDL commands.
@@ -54,7 +42,7 @@ func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Ta
 		}
 
 		const listSQLStatement = `
-			SELECT 
+			SELECT
 				t.table_name,
 				COALESCE(c.reltuples::bigint, 0) AS estimated_rows,
 				COALESCE(pg_total_relation_size(quote_ident(t.table_schema) || '.' || quote_ident(t.table_name)), 0) AS total_bytes
@@ -76,14 +64,22 @@ func (engine *DDLEngine) ListTables(ctx context.Context, schemas []string) ([]Ta
 		var tableList []tableStatsRecord
 		for rows.Next() {
 			var statsRecord tableStatsRecord
-			if scanErr := rows.Scan(&statsRecord.name, &statsRecord.estRows, &statsRecord.sizeBytes); scanErr == nil {
-				tableList = append(tableList, statsRecord)
+			if scanErr := rows.Scan(&statsRecord.name, &statsRecord.estRows, &statsRecord.sizeBytes); scanErr != nil {
+				rows.Close()
+				return nil, scanErr
 			}
+			tableList = append(tableList, statsRecord)
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 
 		for _, statsRecord := range tableList {
-			table, _ := engine.GetTable(ctx, schema, statsRecord.name)
+			table, err := engine.GetTable(ctx, schema, statsRecord.name)
+			if err != nil {
+				return nil, err
+			}
 			if table != nil {
 				table.EstimatedRowCount = statsRecord.estRows
 				table.SizeBytes = statsRecord.sizeBytes
@@ -104,13 +100,16 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 	var exists bool
 	const existsSQLStatement = `
 		SELECT EXISTS (
-			SELECT 1 FROM information_schema.tables 
+			SELECT 1 FROM information_schema.tables
 			WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'
 		)
 	`
 	scanErr := engine.kernel.DB().QueryRow(ctx, existsSQLStatement, schema, tableName).Scan(&exists)
-	if scanErr != nil || !exists {
-		return nil, fmt.Errorf("table '%s.%s' not found", schema, tableName)
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	if !exists {
+		return nil, &pgconn.PgError{Code: "42P01", Message: fmt.Sprintf("table %s.%s not found", schema, tableName)}
 	}
 
 	table := &Table{
@@ -123,86 +122,109 @@ func (engine *DDLEngine) GetTable(ctx context.Context, schema, tableName string)
 
 	// 1. Fetch Primary Key
 	const pkSQLStatement = `
-		SELECT kcu.column_name
+		SELECT min(kcu.column_name::text)
 		FROM information_schema.table_constraints tc
 		JOIN information_schema.key_column_usage kcu
 		  ON tc.constraint_name = kcu.constraint_name
-		  AND tc.table_schema = kcu.table_schema
+		  AND tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name
 		WHERE tc.constraint_type = 'PRIMARY KEY'
 		  AND tc.table_schema = $1
 		  AND tc.table_name = $2
-		LIMIT 1
+		HAVING count(*) = 1
 	`
-	_ = engine.kernel.DB().QueryRow(ctx, pkSQLStatement, schema, tableName).Scan(&table.PrimaryKey)
+	if err := engine.kernel.DB().QueryRow(ctx, pkSQLStatement, schema, tableName).Scan(&table.PrimaryKey); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
 
 	// 2. Fetch Columns
 	const columnSQLStatement = `
-		SELECT column_name, data_type, is_nullable, column_default
-		FROM information_schema.columns
-		WHERE table_schema = $1 AND table_name = $2
-		ORDER BY ordinal_position ASC
+		SELECT a.attname, format_type(a.atttypid, a.atttypmod), CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, pg_get_expr(d.adbin, d.adrelid),
+ EXISTS(SELECT 1 FROM pg_index i WHERE i.indrelid=c.oid AND i.indisprimary AND a.attnum=ANY(i.indkey)),
+ EXISTS(SELECT 1 FROM pg_index i WHERE i.indrelid=c.oid AND i.indisunique AND i.indnkeyatts=1 AND i.indkey[0]=a.attnum AND i.indpred IS NULL)
+ FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+ LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+ WHERE n.nspname=$1 AND c.relname=$2 AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum
 	`
 	columnRows, queryColumnErr := engine.kernel.DB().Query(ctx, columnSQLStatement, schema, tableName)
-	if queryColumnErr == nil {
+	if queryColumnErr != nil {
+		return nil, queryColumnErr
+	}
+	{
 		defer columnRows.Close()
 		for columnRows.Next() {
 			var columnName, dataType, isNullable string
 			var columnDefault *string
-			if columnScanErr := columnRows.Scan(&columnName, &dataType, &isNullable, &columnDefault); columnScanErr == nil {
+			var primary, unique bool
+			if columnScanErr := columnRows.Scan(&columnName, &dataType, &isNullable, &columnDefault, &primary, &unique); columnScanErr != nil {
+				return nil, columnScanErr
+			}
+			{
 				table.Columns = append(table.Columns, Column{
 					Name:         columnName,
 					Type:         dataType,
 					IsNullable:   isNullable == "YES",
 					DefaultValue: columnDefault,
-					IsPrimaryKey: columnName == table.PrimaryKey,
+					IsPrimaryKey: primary,
+					IsUnique:     unique,
 				})
 			}
 		}
 	}
 
+	columnRows.Close()
+	if err := columnRows.Err(); err != nil {
+		return nil, err
+	}
+
 	// 3. Fetch Foreign Keys
-	const fkSQLStatement = `
-		SELECT
-			tc.constraint_name,
-			kcu.column_name,
-			ccu.table_schema AS foreign_schema,
-			ccu.table_name AS foreign_table,
-			ccu.column_name AS foreign_column,
-			rc.delete_rule,
-			rc.update_rule
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu
-		  ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu
-		  ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
-		JOIN information_schema.referential_constraints rc
-		  ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY'
-		  AND tc.table_schema = $1 AND tc.table_name = $2
-	`
+	const fkSQLStatement = `SELECT con.conname, source.attname, target_schema.nspname, target_table.relname, target.attname,
+ CASE con.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END,
+ CASE con.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' END
+ FROM pg_constraint con
+ JOIN pg_class source_table ON source_table.oid=con.conrelid JOIN pg_namespace source_schema ON source_schema.oid=source_table.relnamespace
+ JOIN pg_class target_table ON target_table.oid=con.confrelid JOIN pg_namespace target_schema ON target_schema.oid=target_table.relnamespace
+ CROSS JOIN LATERAL unnest(con.conkey, con.confkey) AS keys(source_num, target_num)
+ JOIN pg_attribute source ON source.attrelid=source_table.oid AND source.attnum=keys.source_num
+ JOIN pg_attribute target ON target.attrelid=target_table.oid AND target.attnum=keys.target_num
+ WHERE con.contype='f' AND source_schema.nspname=$1 AND source_table.relname=$2 ORDER BY con.conname, source.attnum`
 	fkRows, fkErr := engine.kernel.DB().Query(ctx, fkSQLStatement, schema, tableName)
-	if fkErr == nil {
+	if fkErr != nil {
+		return nil, fkErr
+	}
+	{
 		defer fkRows.Close()
 		for fkRows.Next() {
 			var foreignKeyScanResult foreignKeyScanResult
-			if fkScanErr := fkRows.Scan(&foreignKeyScanResult.ConstraintName, &foreignKeyScanResult.Column, &foreignKeyScanResult.ForeignSchema, &foreignKeyScanResult.ForeignTable, &foreignKeyScanResult.ForeignColumn, &foreignKeyScanResult.OnDelete, &foreignKeyScanResult.OnUpdate); fkScanErr == nil {
+			if fkScanErr := fkRows.Scan(&foreignKeyScanResult.ConstraintName, &foreignKeyScanResult.Column, &foreignKeyScanResult.ForeignSchema, &foreignKeyScanResult.ForeignTable, &foreignKeyScanResult.ForeignColumn, &foreignKeyScanResult.OnDelete, &foreignKeyScanResult.OnUpdate); fkScanErr != nil {
+				return nil, fkScanErr
+			}
+			{
 				table.ForeignKeys = append(table.ForeignKeys, ForeignKey(foreignKeyScanResult))
 			}
 		}
 	}
 
 	// 4. Fetch Indexes
-	indexes, _ := engine.ListIndexes(ctx, schema, tableName)
+	fkRows.Close()
+	if err := fkRows.Err(); err != nil {
+		return nil, err
+	}
+	indexes, err := engine.ListIndexes(ctx, schema, tableName)
+	if err != nil {
+		return nil, err
+	}
 	table.Indexes = indexes
 
 	// 5. Fetch RLS Status
 	const rlsSQLStatement = `
-		SELECT c.relrowsecurity, c.relforcerowsecurity
+		SELECT c.relrowsecurity, c.relforcerowsecurity, c.reltuples::bigint, pg_total_relation_size(c.oid)
 		FROM pg_class c
 		JOIN pg_namespace n ON n.oid = c.relnamespace
 		WHERE n.nspname = $1 AND c.relname = $2
 	`
-	_ = engine.kernel.DB().QueryRow(ctx, rlsSQLStatement, schema, tableName).Scan(&table.RLSEnabled, &table.RLSForced)
+	if err := engine.kernel.DB().QueryRow(ctx, rlsSQLStatement, schema, tableName).Scan(&table.RLSEnabled, &table.RLSForced, &table.EstimatedRowCount, &table.SizeBytes); err != nil {
+		return nil, err
+	}
 
 	return table, nil
 }
@@ -243,6 +265,9 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableInput Creat
 			continue
 		}
 
+		if err := validateColumnDefinition(column); err != nil {
+			return err
+		}
 		clause := buildColumnClause(column)
 		columnClauses = append(columnClauses, clause)
 	}
@@ -273,7 +298,7 @@ func (engine *DDLEngine) CreateTable(ctx context.Context, createTableInput Creat
 		))
 	}
 
-	createSQLStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (\n    %s\n);", quoteIdent(schema), quoteIdent(createTableInput.Name), strings.Join(columnClauses, ",\n    "))
+	createSQLStatement := fmt.Sprintf("CREATE TABLE %s.%s (\n    %s\n);", quoteIdent(schema), quoteIdent(createTableInput.Name), strings.Join(columnClauses, ",\n    "))
 	if _, execErr := engine.kernel.DB().Exec(ctx, createSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to create table %s.%s: %w", schema, createTableInput.Name, execErr)
 	}
@@ -341,6 +366,9 @@ func (engine *DDLEngine) AddColumn(ctx context.Context, schema, table string, co
 		return fmt.Errorf("invalid table or column name")
 	}
 
+	if err := validateColumnDefinition(column); err != nil {
+		return err
+	}
 	clause := buildColumnClause(column)
 	addColumnSQLStatement := fmt.Sprintf("ALTER TABLE %s.%s ADD COLUMN %s;", quoteIdent(schema), quoteIdent(table), clause)
 	if _, execErr := engine.kernel.DB().Exec(ctx, addColumnSQLStatement); execErr != nil {
@@ -376,6 +404,9 @@ func (engine *DDLEngine) AlterColumn(ctx context.Context, schema, table, columnN
 	// Change Type
 	if updateColumnInput.NewType != nil && *updateColumnInput.NewType != "" {
 		safeType := sanitizeType(*updateColumnInput.NewType)
+		if safeType == "" {
+			return fmt.Errorf("unsupported column type %q", *updateColumnInput.NewType)
+		}
 		alterStatements = append(alterStatements, fmt.Sprintf("ALTER TABLE %s.%s ALTER COLUMN %s TYPE %s USING %s::%s;",
 			quoteIdent(schema), quoteIdent(table), quoteIdent(columnName), safeType, quoteIdent(columnName), safeType))
 	}
@@ -466,15 +497,16 @@ func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) 
 			i.relname AS index_name,
 			am.amname AS index_type,
 			ix.indisunique AS is_unique,
-			ARRAY_AGG(a.attname ORDER BY array_position(ix.indkey, a.attnum)) AS columns
+			ARRAY(SELECT pg_get_indexdef(ix.indexrelid, position, true)
+							FROM generate_series(1, ix.indnatts) AS position ORDER BY position) AS columns
 		FROM pg_index ix
 		JOIN pg_class t ON t.oid = ix.indrelid
 		JOIN pg_class i ON i.oid = ix.indexrelid
 		JOIN pg_namespace n ON n.oid = t.relnamespace
 		JOIN pg_am am ON am.oid = i.relam
-		JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+
 		WHERE n.nspname = $1 AND t.relname = $2
-		GROUP BY i.relname, am.amname, ix.indisunique
+
 		ORDER BY i.relname ASC
 	`
 	rows, queryErr := engine.kernel.DB().Query(ctx, indexesSQLStatement, schema, table)
@@ -486,9 +518,13 @@ func (engine *DDLEngine) ListIndexes(ctx context.Context, schema, table string) 
 	var indexes []Index
 	for rows.Next() {
 		var index Index
-		if scanErr := rows.Scan(&index.IndexName, &index.Type, &index.IsUnique, &index.Columns); scanErr == nil {
-			indexes = append(indexes, index)
+		if scanErr := rows.Scan(&index.IndexName, &index.Type, &index.IsUnique, &index.Columns); scanErr != nil {
+			return nil, scanErr
 		}
+		indexes = append(indexes, index)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return indexes, nil
 }
@@ -536,7 +572,7 @@ func (engine *DDLEngine) CreateIndex(ctx context.Context, schema, table string, 
 		uniqueClause = "UNIQUE "
 	}
 
-	createIndexSQLStatement := fmt.Sprintf("CREATE %sINDEX IF NOT EXISTS %s ON %s.%s USING %s (%s);",
+	createIndexSQLStatement := fmt.Sprintf("CREATE %sINDEX %s ON %s.%s USING %s (%s);",
 		uniqueClause, quoteIdent(indexName), quoteIdent(schema), quoteIdent(table), indexType, strings.Join(quotedColumns, ", "))
 	if _, execErr := engine.kernel.DB().Exec(ctx, createIndexSQLStatement); execErr != nil {
 		return fmt.Errorf("failed to create index %s: %w", indexName, execErr)
@@ -570,8 +606,31 @@ func (engine *DDLEngine) ExecuteSQL(ctx context.Context, sqlQuery string) (*Exec
 		return nil, errors.New("empty SQL query")
 	}
 
+	if err := validateSQLTransaction(trimmed); err != nil {
+		return nil, err
+	}
 	start := time.Now()
-	rows, queryErr := engine.kernel.DB().Query(ctx, trimmed)
+	connection, acquireErr := engine.kernel.DB().Acquire(ctx)
+	if acquireErr != nil {
+		return nil, fmt.Errorf("SQL execution error: %w", acquireErr)
+	}
+	// Scratchpad statements may change session settings, temporary objects, or
+	// advisory locks. Never return that session to the application query pool.
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = connection.Conn().Close(closeCtx)
+		connection.Release()
+	}()
+	tx, beginErr := connection.Begin(ctx)
+	if beginErr != nil {
+		return nil, fmt.Errorf("SQL execution error: %w", beginErr)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SET LOCAL standard_conforming_strings = on"); err != nil {
+		return nil, err
+	}
+	rows, queryErr := tx.Query(ctx, trimmed, pgx.QueryExecModeSimpleProtocol)
 	if queryErr != nil {
 		return nil, fmt.Errorf("SQL execution error: %w", queryErr)
 	}
@@ -586,13 +645,21 @@ func (engine *DDLEngine) ExecuteSQL(ctx context.Context, sqlQuery string) (*Exec
 	var rowData []map[string]any
 	for rows.Next() {
 		values, valueErr := rows.Values()
-		if valueErr == nil {
-			rowMap := make(map[string]any)
-			for i, columnName := range columnNames {
-				rowMap[columnName] = values[i]
-			}
-			rowData = append(rowData, rowMap)
+		if valueErr != nil {
+			return nil, fmt.Errorf("SQL result error: %w", valueErr)
 		}
+		rowMap := make(map[string]any)
+		rawValues := rows.RawValues()
+		for index, columnName := range columnNames {
+			rowMap[columnName] = queryJSONColumn(values[index], fieldDescriptions[index], rawValues[index])
+		}
+		rowData = append(rowData, rowMap)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("SQL execution error: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("SQL commit error: %w", err)
 	}
 
 	rowsAffected := int64(len(rowData))
@@ -683,7 +750,7 @@ func (engine *DDLEngine) ListPolicies(ctx context.Context, schema, table string)
 	}
 
 	const policiesSQLStatement = `
-		SELECT 
+		SELECT
 			policyname,
 			permissive,
 			cmd,
@@ -801,6 +868,18 @@ func (engine *DDLEngine) DropPolicy(ctx context.Context, schema, table, policyNa
 	return nil
 }
 
+func validateColumnDefinition(column Column) error {
+	if sanitizeType(column.Type) == "" {
+		return fmt.Errorf("unsupported column type %q", column.Type)
+	}
+	if column.DefaultValue != nil && *column.DefaultValue != "" {
+		if _, err := sanitizeDefaultValue(*column.DefaultValue); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func buildColumnClause(column Column) string {
 	safeType := sanitizeType(column.Type)
 	var parts []string
@@ -832,23 +911,26 @@ func sanitizeDefaultValue(raw string) (string, error) {
 	return trimmed, nil
 }
 
+var parameterizedTypePattern = regexp.MustCompile(`^(varchar|character varying)\([1-9][0-9]*\)$|^numeric\([1-9][0-9]*(,\s*-?[0-9]+)?\)$`)
+
 func sanitizeType(raw string) string {
-	raw = strings.TrimSpace(raw)
-	lower := strings.ToLower(raw)
-	switch lower {
-	case "uuid", "text", "varchar", "integer", "int", "bigint", "smallint", "boolean", "bool",
-		"timestamptz", "timestamp", "timestamp with time zone", "timestamp without time zone",
-		"date", "time", "jsonb", "json", "numeric", "float8", "real", "bytea":
-		return lower
-	default:
-		if strings.HasPrefix(lower, "varchar(") && strings.HasSuffix(lower, ")") {
-			return lower
-		}
-		if strings.HasPrefix(lower, "numeric(") && strings.HasSuffix(lower, ")") {
-			return lower
-		}
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
 		return "text"
 	}
+	suffix := ""
+	for strings.HasSuffix(value, "[]") {
+		value = strings.TrimSpace(strings.TrimSuffix(value, "[]"))
+		suffix += "[]"
+	}
+	switch value {
+	case "uuid", "text", "varchar", "character varying", "integer", "int", "bigint", "smallint", "boolean", "bool", "timestamptz", "timestamp", "timestamp with time zone", "timestamp without time zone", "date", "time", "jsonb", "json", "numeric", "float8", "double precision", "real", "bytea":
+		return value + suffix
+	}
+	if parameterizedTypePattern.MatchString(value) {
+		return value + suffix
+	}
+	return ""
 }
 
 func sanitizeAction(action string) string {

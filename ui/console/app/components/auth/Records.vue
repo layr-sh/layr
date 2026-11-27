@@ -219,15 +219,19 @@ async function remove() {
                   : []),
               ]"
               ><UButton
+                square
                 aria-label="Auth Record Actions"
                 icon="i-lucide-ellipsis"
                 color="neutral"
                 variant="ghost"
             /></UDropdownMenu></div
         ></template>
+        <template #loading>
+          <UEmpty title="Loading Auth Configuration…" icon="i-lucide-key-round" loading />
+        </template>
         <template #empty
           ><UEmpty
-            :title="control.busy.value ? 'Loading Auth Configuration…' : `No ${title}`"
+            :title="`No ${title}`"
             :description="
               control.config.value
                 ? search

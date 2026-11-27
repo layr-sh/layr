@@ -121,7 +121,7 @@ func (compiler *Compiler) compileRootQuery(fieldNode FieldNode, startIndex int) 
 		}
 	}
 
-	if !compiler.isSchemaAllowed(schema) {
+	if !compiler.isSchemaAllowed(schema) || common.IsProtectedSchema(schema) {
 		return "", nil, startIndex, fmt.Errorf("schema %q is not exposed for GraphQL operations", schema)
 	}
 	if compiler.isTableExcluded(schema, table) {
@@ -243,35 +243,6 @@ func (compiler *Compiler) compileNestedRelation(schema, parentTable, parentAlias
 	var args []any
 	argIndex := startIndex
 
-	var selectPairs []string
-	for _, subField := range fieldNode.SelectionSet {
-		subAlias := subField.Name
-		if subField.Alias != "" {
-			subAlias = subField.Alias
-		}
-
-		if !common.IsValidIdentifier(subAlias) {
-			return "", nil, argIndex, fmt.Errorf("invalid selection alias %q", subAlias)
-		}
-
-		if len(subField.SelectionSet) > 0 {
-			nestedQuery, nestedArgs, nextArgIndex, err := compiler.compileNestedRelation(schema, relTable, relationAlias, subField, argIndex, depth+1)
-			if err != nil {
-				return "", nil, argIndex, err
-			}
-			args = append(args, nestedArgs...)
-			argIndex = nextArgIndex
-			selectPairs = append(selectPairs, fmt.Sprintf("'%s', (%s)", subAlias, nestedQuery))
-		} else {
-			if !common.IsValidIdentifier(subField.Name) {
-				return "", nil, argIndex, fmt.Errorf("invalid column identifier %q", subField.Name)
-			}
-			selectPairs = append(selectPairs, fmt.Sprintf("'%s', %s.\"%s\"", subAlias, relationAlias, subField.Name))
-		}
-	}
-
-	jsonRow := fmt.Sprintf("json_build_object(%s)", strings.Join(selectPairs, ", "))
-
 	// Foreign key join predicate (supports bidirectional relations)
 	parentPrimaryKey := "id"
 	foreignKeyColumn := fmt.Sprintf("%s_id", strings.TrimSuffix(parentTable, "s"))
@@ -298,8 +269,10 @@ func (compiler *Compiler) compileNestedRelation(schema, parentTable, parentAlias
 		}
 	}
 
+	knownRelationship := false
 	if hasRelInfo {
 		if relationInfo, ok := relationTableInfo.ForeignKeys[parentTable]; ok {
+			knownRelationship = true
 			foreignKeyColumn = relationInfo.LocalColumn
 			parentPrimaryKey = relationInfo.TargetColumn
 			if relationInfo.ForeignTable != "" && !relationInfo.IsArray {
@@ -309,6 +282,7 @@ func (compiler *Compiler) compileNestedRelation(schema, parentTable, parentAlias
 	}
 	if hasParentInfo {
 		if parentRelationInfo, ok := parentTableInfo.ForeignKeys[relTable]; ok {
+			knownRelationship = true
 			foreignKeyColumn = parentRelationInfo.TargetColumn
 			parentPrimaryKey = parentRelationInfo.LocalColumn
 			if parentRelationInfo.ForeignTable != "" {
@@ -319,6 +293,44 @@ func (compiler *Compiler) compileNestedRelation(schema, parentTable, parentAlias
 			}
 		}
 	}
+	if !knownRelationship && len(compiler.allowedSchemas) > 0 {
+		return "", nil, argIndex, fmt.Errorf("no unambiguous relationship named %q", relTable)
+	}
+	if !compiler.isSchemaAllowed(actualRelSchema) || common.IsProtectedSchema(actualRelSchema) {
+		return "", nil, argIndex, fmt.Errorf("relation schema %q is not exposed", actualRelSchema)
+	}
+	if compiler.isTableExcluded(actualRelSchema, actualRelTable) {
+		return "", nil, argIndex, fmt.Errorf("relation table %q is excluded", actualRelTable)
+	}
+	var selectPairs []string
+	for _, subField := range fieldNode.SelectionSet {
+		subAlias := subField.Name
+		if subField.Alias != "" {
+			subAlias = subField.Alias
+		}
+
+		if !common.IsValidIdentifier(subAlias) {
+			return "", nil, argIndex, fmt.Errorf("invalid selection alias %q", subAlias)
+		}
+
+		if len(subField.SelectionSet) > 0 {
+			nestedQuery, nestedArgs, nextArgIndex, err := compiler.compileNestedRelation(actualRelSchema, actualRelTable, relationAlias, subField, argIndex, depth+1)
+			if err != nil {
+				return "", nil, argIndex, err
+			}
+			args = append(args, nestedArgs...)
+			argIndex = nextArgIndex
+			selectPairs = append(selectPairs, fmt.Sprintf("'%s', (%s)", subAlias, nestedQuery))
+		} else {
+			if !common.IsValidIdentifier(subField.Name) {
+				return "", nil, argIndex, fmt.Errorf("invalid column identifier %q", subField.Name)
+			}
+			selectPairs = append(selectPairs, fmt.Sprintf("'%s', %s.\"%s\"", subAlias, relationAlias, subField.Name))
+		}
+	}
+
+	jsonRow := fmt.Sprintf("json_build_object(%s)", strings.Join(selectPairs, ", "))
+
 	joinCondition := fmt.Sprintf("%s.\"%s\" = %s.\"%s\"", relationAlias, foreignKeyColumn, parentAlias, parentPrimaryKey)
 
 	whereClause, whereArgs, nextArgIndex, err := compiler.compileWhere(relationAlias, fieldNode.Arguments["where"], argIndex)

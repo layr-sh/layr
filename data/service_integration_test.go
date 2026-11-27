@@ -6,20 +6,64 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
 	"github.com/go-fuego/fuego"
 	"layr.sh/core"
 	"layr.sh/data/referencedata"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
 )
+
+func TestDataReviewCatalogAndGlobalCacheIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Stop()
+	if _, err := kernel.DB().Exec(ctx, `CREATE TABLE public.review_cache (key integer PRIMARY KEY, title text); INSERT INTO public.review_cache VALUES (1, 'before')`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateCatalog(ctx)
+	if service.tables["public.review_cache"].PrimaryKey != "key" {
+		t.Fatal("catalog refresh did not update REST primary key metadata")
+	}
+	read := func() string {
+		responseRecorder := httptest.NewRecorder()
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/review_cache", nil)
+		service.BaseHandler().handleListRecords(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("read failed: %s", responseRecorder.Body.String())
+		}
+		return responseRecorder.Body.String()
+	}
+	if !bytes.Contains([]byte(read()), []byte("before")) {
+		t.Fatal("missing initial row")
+	}
+	if _, err := kernel.DB().Exec(ctx, `UPDATE public.review_cache SET title = 'after'`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateCache(ctx, InvalidateCacheInput{All: true})
+	if !bytes.Contains([]byte(read()), []byte("after")) {
+		t.Fatal("global cache flush served stale results")
+	}
+	if _, err := kernel.DB().Exec(ctx, `DROP TABLE public.review_cache`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateCatalog(ctx)
+	if _, exists := service.tables["public.review_cache"]; exists {
+		t.Fatal("dropped table remains in REST catalog")
+	}
+}
 
 func TestDataServiceLifecycleIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	db := kernel.DB()
 	serviceAccountManager := kernel.ServiceAccountManager()
 
@@ -162,6 +206,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 
 	// Flush Cache with valid key
 	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
+	flushRequest = flushRequest.WithContext(context.Background())
 	flushRequest.Header.Set("Authorization", "Bearer "+controlPlaneCacheServiceAccount.SecretKey)
 	flushResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(flushResponseRecorder, flushRequest)
@@ -179,6 +224,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	flushForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
+	flushForbiddenRequest = flushForbiddenRequest.WithContext(context.Background())
 	flushForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	flushForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(flushForbiddenResponseRecorder, flushForbiddenRequest)
@@ -187,6 +233,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	invalidForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", nil)
+	invalidForbiddenRequest = invalidForbiddenRequest.WithContext(context.Background())
 	invalidForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	invalidForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(invalidForbiddenResponseRecorder, invalidForbiddenRequest)
@@ -196,6 +243,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 
 	// Config endpoints with service account auth
 	configForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
+	configForbiddenRequest = configForbiddenRequest.WithContext(context.Background())
 	configForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	configForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(configForbiddenResponseRecorder, configForbiddenRequest)
@@ -204,6 +252,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 	}
 
 	configPutForbiddenRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader(rawPut))
+	configPutForbiddenRequest = configPutForbiddenRequest.WithContext(context.Background())
 	configPutForbiddenRequest.Header.Set("Authorization", "Bearer "+readOnlyServiceAccount.SecretKey)
 	configPutForbiddenResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(configPutForbiddenResponseRecorder, configPutForbiddenRequest)
@@ -213,6 +262,7 @@ func TestDataServiceLifecycleIntegration(t *testing.T) {
 
 	// Bad service account key
 	badKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
+	badKeyRequest = badKeyRequest.WithContext(context.Background())
 	badKeyRequest.Header.Set("Authorization", "Bearer invalid_service_account_key_123")
 	badKeyResponseRecorder := httptest.NewRecorder()
 	serveMux.ServeHTTP(badKeyResponseRecorder, badKeyRequest)
@@ -273,6 +323,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 
 	// 1. GET /v1/_/data/config via control router
 	configRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
+	configRequest = configRequest.WithContext(context.Background())
 	configRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	configResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(configResponseRecorder, configRequest)
@@ -282,6 +333,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 
 	// 2. PUT /v1/_/data/config via control router
 	putRequest := httptest.NewRequestWithContext(ctx, http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":200}}`)))
+	putRequest = putRequest.WithContext(context.Background())
 	putRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	putRequest.Header.Set("Content-Type", "application/json")
 	putResponseRecorder := httptest.NewRecorder()
@@ -292,6 +344,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 
 	// 3. POST /v1/_/data/cache/flush via control router
 	flushRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/flush", nil)
+	flushRequest = flushRequest.WithContext(context.Background())
 	flushRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	flushResponseRecorder := httptest.NewRecorder()
 	controlPlaneRouter.Mux().ServeHTTP(flushResponseRecorder, flushRequest)
@@ -301,6 +354,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 
 	// 4. POST /v1/_/data/cache/invalidate via control router
 	invalidateRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/_/data/cache/invalidate", bytes.NewReader([]byte(`{"catalog":true}`)))
+	invalidateRequest = invalidateRequest.WithContext(context.Background())
 	invalidateRequest.Header.Set("Authorization", "Bearer "+controlPlaneServiceAccount.SecretKey)
 	invalidateRequest.Header.Set("Content-Type", "application/json")
 	invalidateResponseRecorder := httptest.NewRecorder()
@@ -329,6 +383,7 @@ func TestDataServiceOpenAPIRoutesIntegration(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%s_%s", endpoint.method, endpoint.path), func(t *testing.T) {
 			endpointRequest := httptest.NewRequestWithContext(ctx, endpoint.method, endpoint.path, nil)
+			endpointRequest = endpointRequest.WithContext(core.WithAuthContext(ctx, core.AuthContext{}))
 			endpointRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
 			endpointResponseRecorder := httptest.NewRecorder()
 			controlPlaneRouter.Mux().ServeHTTP(endpointResponseRecorder, endpointRequest)
@@ -362,4 +417,90 @@ func TestDataServiceSeedErrorIntegration(t *testing.T) {
 		t.Fatalf("expected service.Start not to fail on seed error: %v", err)
 	}
 	defer func() { dataService.Stop() }()
+}
+
+func TestDataCacheIsolationAndCDCIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	service := NewService(kernel)
+	ctx := context.Background()
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Stop()
+	if _, err := kernel.DB().Exec(ctx, `CREATE TABLE public.review_cache_rows(id integer PRIMARY KEY, tenant text); INSERT INTO public.review_cache_rows VALUES(1,'tenant-a'),(2,'tenant-b'); ALTER TABLE public.review_cache_rows ENABLE ROW LEVEL SECURITY; CREATE POLICY tenants ON public.review_cache_rows USING(tenant=current_setting('request.jwt.tenant',true));`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateCatalog(ctx)
+	serviceAccount, err := kernel.ServiceAccountManager().Create(ctx, core.CreateServiceAccountInput{Name: "cache-reader", Scopes: []string{core.ScopeDataQueryRead}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	privilegedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/review_cache_rows?cache_key=privilege-isolation", nil)
+	privilegedRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
+	privilegedResponseRecorder := httptest.NewRecorder()
+	service.BaseHandler().handleListRecords(privilegedResponseRecorder, privilegedRequest)
+	if privilegedResponseRecorder.Code != http.StatusOK || !bytes.Contains(privilegedResponseRecorder.Body.Bytes(), []byte("tenant-a")) {
+		t.Fatal("scoped Service Account failed to read rows")
+	}
+	anonymousRequest := privilegedRequest.Clone(ctx)
+	anonymousRequest.Header.Del("Authorization")
+	anonymousResponseRecorder := httptest.NewRecorder()
+	service.BaseHandler().handleListRecords(anonymousResponseRecorder, anonymousRequest)
+	if anonymousResponseRecorder.Code != http.StatusOK || anonymousResponseRecorder.Body.String() != "[]" {
+		t.Fatal("anonymous caller received a privileged cached response")
+	}
+	read := func(tenant, query string) *httptest.ResponseRecorder {
+		callerCtx := core.WithAuthContext(ctx, core.AuthContext{UserID: "same-user", JWT: core.JWTClaims{Subject: "same-user", Role: "authenticated", Claims: map[string]any{"tenant": tenant}}})
+		responseRecorder := httptest.NewRecorder()
+		service.BaseHandler().handleListRecords(responseRecorder, httptest.NewRequestWithContext(callerCtx, http.MethodGet, "/v1/data/public/review_cache_rows"+query, nil))
+		if responseRecorder.Code != http.StatusOK {
+			t.Fatalf("read failed: %d %s", responseRecorder.Code, responseRecorder.Body.String())
+		}
+		return responseRecorder
+	}
+	firstResponseRecorder := read("tenant-a", "?cache_key=shared")
+	if !bytes.Contains(firstResponseRecorder.Body.Bytes(), []byte("tenant-a")) {
+		t.Fatal("missing first tenant")
+	}
+	secondResponseRecorder := read("tenant-b", "?cache_key=shared")
+	if bytes.Contains(secondResponseRecorder.Body.Bytes(), []byte("tenant-a")) || !bytes.Contains(secondResponseRecorder.Body.Bytes(), []byte("tenant-b")) {
+		t.Fatal("cache reused another tenant's policy context")
+	}
+	if read("tenant-a", "?cache_key=shared&id=eq.999").Body.String() != "[]" {
+		t.Fatal("cache alias ignored query predicates")
+	}
+	cachedResponseRecorder := read("tenant-a", "?cache_key=shared")
+	if cachedResponseRecorder.Header().Get("Cache-Status") != "HIT" {
+		t.Fatal("identical request was not cached")
+	}
+	service.InvalidateCache(ctx, InvalidateCacheInput{Pattern: "public.*"})
+	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "HIT" {
+		t.Fatal("pattern invalidation did not evict hashed queries")
+	}
+	service.InvalidateCache(ctx, InvalidateCacheInput{Schema: "public"})
+	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "HIT" {
+		t.Fatal("schema invalidation did not evict hashed queries")
+	}
+	config := service.configManager.Get()
+	config.Cache.Enabled = false
+	service.configManager.SetMemoryConfig(config)
+	if read("tenant-a", "?cache_ttl=60").Header().Get("Cache-Status") != "" {
+		t.Fatal("per-query TTL bypassed disabled caching")
+	}
+	config.Cache.Enabled = true
+	config.Cache.InvalidateOnMutation = false
+	config.Cache.InvalidateOnCDC = true
+	service.configManager.SetMemoryConfig(config)
+	before := service.getTableCacheVersion(ctx, "public", "review_cache_rows")
+	if _, err := kernel.DB().Exec(ctx, `UPDATE public.review_cache_rows SET tenant='tenant-b' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	deadlineTime := time.Now().Add(3 * time.Second)
+	for service.getTableCacheVersion(ctx, "public", "review_cache_rows") == before && time.Now().Before(deadlineTime) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if service.getTableCacheVersion(ctx, "public", "review_cache_rows") == before {
+		t.Fatal("CDC invalidation incorrectly depended on invalidate_on_mutation")
+	}
 }

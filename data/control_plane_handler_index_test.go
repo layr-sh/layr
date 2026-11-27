@@ -45,7 +45,7 @@ func TestDataControlPlaneHandlerIndexScopeForbiddenUnit(t *testing.T) {
 }
 
 func TestDataControlPlaneHandlerIndexValidationAndMissingParamsUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	service := NewService(core.NewTestKernel(nil))
 	controlPlaneHandler := service.controlPlaneHandler
 

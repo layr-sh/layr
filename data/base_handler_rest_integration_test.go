@@ -5,20 +5,48 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"layr.sh/core"
 	"layr.sh/data/rest"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
 )
+
+func TestDataReviewRLSIsolationIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Stop()
+	if _, err := kernel.DB().Exec(ctx, `CREATE TABLE public.review_rls(id integer PRIMARY KEY, owner text); INSERT INTO public.review_rls VALUES(1, 'alice'), (2, 'bob'); ALTER TABLE public.review_rls ENABLE ROW LEVEL SECURITY; CREATE POLICY owner_rows ON public.review_rls USING(owner = current_setting('request.jwt.sub', true));`); err != nil {
+		t.Fatal(err)
+	}
+	userCtx := core.WithAuthContext(ctx, core.AuthContext{UserID: "alice", JWT: core.JWTClaims{Subject: "alice", Role: "authenticated"}})
+	responseRecorder := httptest.NewRecorder()
+	service.BaseHandler().handleListRecords(responseRecorder, httptest.NewRequestWithContext(userCtx, http.MethodGet, "/v1/data/public/review_rls", nil))
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("read failed: %s", responseRecorder.Body.String())
+	}
+	if bytes.Contains(responseRecorder.Body.Bytes(), []byte("bob")) || !bytes.Contains(responseRecorder.Body.Bytes(), []byte("alice")) {
+		t.Fatalf("RLS did not isolate caller: %s", responseRecorder.Body.String())
+	}
+	responseRecorder = httptest.NewRecorder()
+	service.BaseHandler().handleCreateRecord(responseRecorder, httptest.NewRequestWithContext(userCtx, http.MethodPost, "/v1/data/public/review_rls", bytes.NewBufferString(`{"id":3,"owner":"bob"}`)))
+	if responseRecorder.Code != http.StatusForbidden {
+		t.Fatalf("RLS write check bypassed: %d %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+}
 
 func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	db := kernel.DB()
 	serviceAccountManager := kernel.ServiceAccountManager()
 
@@ -75,7 +103,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleCreateRecord(bulkPostResponseRecorder, bulkPostRequest)
 	assert.Equal(t, http.StatusNoContent, bulkPostResponseRecorder.Code)
 
-	// 4. List records with exact count and caching
+	// 4. Exact-count requests preserve pagination headers and bypass row-only caching
 	listRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?count=exact&order=name.asc&cache_ttl=60", nil)
 	listRequest.SetPathValue("schema_name", "public")
 	listRequest.SetPathValue("table_name", "items")
@@ -83,13 +111,15 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleListRecords(listResponseRecorder, listRequest)
 	assert.Equal(t, http.StatusOK, listResponseRecorder.Code)
 	assert.Equal(t, "3", listResponseRecorder.Header().Get("Total-Count"))
-	assert.Equal(t, "MISS", listResponseRecorder.Header().Get("Cache-Status"))
+	assert.Empty(t, listResponseRecorder.Header().Get("Cache-Status"))
 
-	// List again -> HIT
+	// Repeated exact-count requests must still include pagination metadata
 	secondListResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleListRecords(secondListResponseRecorder, listRequest)
 	assert.Equal(t, http.StatusOK, secondListResponseRecorder.Code)
-	assert.Equal(t, "HIT", secondListResponseRecorder.Header().Get("Cache-Status"))
+	assert.Empty(t, secondListResponseRecorder.Header().Get("Cache-Status"))
+	assert.Equal(t, "3", secondListResponseRecorder.Header().Get("Total-Count"))
+	assert.Equal(t, listResponseRecorder.Header().Get("Content-Range"), secondListResponseRecorder.Header().Get("Content-Range"))
 
 	// List when MaxCachedQueries exceeded skips caching
 	tableConfig := service.GetConfigManager().Get()
@@ -255,6 +285,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	serviceAccountRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
 	serviceAccountRequest.SetPathValue("schema_name", "public")
 	serviceAccountRequest.SetPathValue("table_name", "items")
+	serviceAccountRequest = serviceAccountRequest.WithContext(context.Background())
 	serviceAccountRequest.Header.Set("Authorization", "Bearer "+serviceAccount.SecretKey)
 	assert.True(t, baseHandler.isRLSBypassed(serviceAccountRequest, core.ScopeDataQueryRead))
 
@@ -264,11 +295,13 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 		Scopes: []string{core.ScopeAuthUserRead},
 	})
 	serviceAccountNoScopeRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
+	serviceAccountNoScopeRequest = serviceAccountNoScopeRequest.WithContext(context.Background())
 	serviceAccountNoScopeRequest.Header.Set("Authorization", "Bearer "+noScopeServiceAccount.SecretKey)
 	assert.False(t, baseHandler.isRLSBypassed(serviceAccountNoScopeRequest, core.ScopeDataQueryRead))
 
 	// SA invalid key
 	serviceAccountBadRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items", nil)
+	serviceAccountBadRequest = serviceAccountBadRequest.WithContext(context.Background())
 	serviceAccountBadRequest.Header.Set("Authorization", "Bearer invalid_secret_key_12345678901234567890")
 	assert.False(t, baseHandler.isRLSBypassed(serviceAccountBadRequest, core.ScopeDataQueryRead))
 
@@ -319,7 +352,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	baseHandler.handleDeleteRecord(canceledDeleteResponseRecorder, canceledDeleteRequest)
 	assert.Equal(t, http.StatusInternalServerError, canceledDeleteResponseRecorder.Code)
 
-	// 17. Empty primary key fallback ("" -> "id") in table metadata
+	// 17. Single-record routes reject tables without a verified single-column key
 	_, _ = db.Exec(ctx, `CREATE TABLE public.no_pk_items (id uuid primary key default uuidv7(), name text);`)
 	baseHandler.SetTableMetadata(rest.TableMetadata{
 		Schema:     "public",
@@ -345,7 +378,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	noPKGetRequest.SetPathValue("record_id", noPKID)
 	noPKGetResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleGetRecord(noPKGetResponseRecorder, noPKGetRequest)
-	assert.Equal(t, http.StatusOK, noPKGetResponseRecorder.Code)
+	assert.Equal(t, http.StatusBadRequest, noPKGetResponseRecorder.Code)
 
 	noPKUpdateRequest := httptest.NewRequestWithContext(ctx, http.MethodPatch, "/v1/data/public/no_pk_items/"+noPKID, bytes.NewReader([]byte(`{"name":"Updated No PK"}`)))
 	noPKUpdateRequest.SetPathValue("schema_name", "public")
@@ -353,7 +386,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	noPKUpdateRequest.SetPathValue("record_id", noPKID)
 	noPKUpdateResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleUpdateRecord(noPKUpdateResponseRecorder, noPKUpdateRequest)
-	assert.Equal(t, http.StatusOK, noPKUpdateResponseRecorder.Code)
+	assert.Equal(t, http.StatusBadRequest, noPKUpdateResponseRecorder.Code)
 
 	noPKDeleteRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/data/public/no_pk_items/"+noPKID, nil)
 	noPKDeleteRequest.SetPathValue("schema_name", "public")
@@ -361,7 +394,7 @@ func TestDataBaseHandlerRESTLifecycleIntegration(t *testing.T) {
 	noPKDeleteRequest.SetPathValue("record_id", noPKID)
 	noPKDeleteResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleDeleteRecord(noPKDeleteResponseRecorder, noPKDeleteRequest)
-	assert.Equal(t, http.StatusNoContent, noPKDeleteResponseRecorder.Code)
+	assert.Equal(t, http.StatusBadRequest, noPKDeleteResponseRecorder.Code)
 
 	// 18. Database execution errors on invalid columns / functions
 	badSelectRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/data/public/items?select=non_existent_column", nil)
@@ -691,4 +724,95 @@ func TestDataBaseHandlerRESTRPCIntegration(t *testing.T) {
 	deferRPCResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteFunction(deferRPCResponseRecorder, deferRPCRequest)
 	assert.Equal(t, http.StatusConflict, deferRPCResponseRecorder.Code)
+}
+
+func TestDataVerifiedRelationshipsIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Stop()
+	if _, err := kernel.DB().Exec(ctx, `CREATE SCHEMA review_related;
+ CREATE TABLE review_related.people(id integer PRIMARY KEY, name text);
+ CREATE TABLE public.review_posts(id integer PRIMARY KEY, author_id integer REFERENCES review_related.people(id));
+ CREATE TABLE public.review_comments(id integer PRIMARY KEY, post_id integer REFERENCES public.review_posts(id), body text);
+ CREATE TABLE public.review_ambiguous(id integer PRIMARY KEY, sender_id integer REFERENCES review_related.people(id), receiver_id integer REFERENCES review_related.people(id), reviewer_id integer REFERENCES review_related.people(id));
+ CREATE TABLE public.review_composite(a integer, b integer, PRIMARY KEY(a,b));
+ INSERT INTO review_related.people VALUES(1,'Alice'); INSERT INTO public.review_posts VALUES(1,1); INSERT INTO public.review_comments VALUES(1,1,'Nested comment'); INSERT INTO public.review_composite VALUES(1,1),(1,2);`); err != nil {
+		t.Fatal(err)
+	}
+	config := service.configManager.Get()
+	config.Schemas = append(config.Schemas, "review_related")
+	service.configManager.SetMemoryConfig(config)
+	service.InvalidateCatalog(ctx)
+	call := func(path string) *httptest.ResponseRecorder {
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+		responseRecorder := httptest.NewRecorder()
+		service.BaseHandler().handleListRecords(responseRecorder, request)
+		return responseRecorder
+	}
+	responseRecorder := call("/v1/data/public/review_posts?select=id,author(name),review_comments(body)&cache_ttl=60")
+	if responseRecorder.Code != http.StatusOK || !strings.Contains(responseRecorder.Body.String(), "Alice") || !strings.Contains(responseRecorder.Body.String(), "Nested comment") {
+		t.Fatalf("verified joins failed: %d %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+	if call("/v1/data/public/review_posts?select=id,author(name),review_comments(body)&cache_ttl=60").Header().Get("Cache-Status") != "HIT" {
+		t.Fatal("relation query was not cached")
+	}
+	if _, err := kernel.DB().Exec(ctx, `UPDATE review_related.people SET name='Updated Alice' WHERE id=1`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateTableCache(ctx, "review_related", "people")
+	responseRecorder = call("/v1/data/public/review_posts?select=id,author(name),review_comments(body)&cache_ttl=60")
+	if !strings.Contains(responseRecorder.Body.String(), "Updated Alice") {
+		t.Fatal("cross-schema relation cache was stale")
+	}
+	ambiguousTableInfo, ok := service.GraphQLSchema().GetTable("public", "review_ambiguous")
+	if !ok {
+		t.Fatal("missing ambiguous table metadata")
+	}
+	if _, ok := ambiguousTableInfo.ForeignKeys["people"]; ok {
+		t.Fatal("ambiguous foreign table alias retained")
+	}
+	if len(ambiguousTableInfo.ForeignKeys) != 3 {
+		t.Fatalf("explicit relation aliases lost: %+v", ambiguousTableInfo.ForeignKeys)
+	}
+	peopleTableInfo, _ := service.GraphQLSchema().GetTable("review_related", "people")
+	if _, ok := peopleTableInfo.ForeignKeys["review_ambiguous"]; ok {
+		t.Fatal("ambiguous reverse join retained")
+	}
+	if call("/v1/data/public/review_ambiguous?select=id,people(name)").Code != http.StatusBadRequest {
+		t.Fatal("ambiguous join accepted")
+	}
+	config.REST.ExcludedTables = []string{"review_related.people"}
+	service.configManager.SetMemoryConfig(config)
+	if call("/v1/data/public/review_posts?select=id,author(name)").Code != http.StatusBadRequest {
+		t.Fatal("excluded embedded table exposed")
+	}
+	payload, _ := json.Marshal(map[string]any{"query": "{ review_posts { id author { name } } }"})
+	gqlRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader(payload))
+	gqlResponseRecorder := httptest.NewRecorder()
+	service.BaseHandler().handleExecuteGraphQL(gqlResponseRecorder, gqlRequest)
+	if gqlResponseRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("GraphQL exposed excluded relation: %d %s", gqlResponseRecorder.Code, gqlResponseRecorder.Body.String())
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPatch, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			request := httptest.NewRequestWithContext(ctx, method, "/v1/data/public/review_composite/1", bytes.NewBufferString(`{"b":3}`))
+			responseRecorder := httptest.NewRecorder()
+			switch method {
+			case http.MethodGet:
+				service.BaseHandler().handleGetRecord(responseRecorder, request)
+			case http.MethodPatch:
+				service.BaseHandler().handleUpdateRecord(responseRecorder, request)
+			default:
+				service.BaseHandler().handleDeleteRecord(responseRecorder, request)
+			}
+			if responseRecorder.Code != http.StatusBadRequest {
+				t.Fatalf("composite ID route accepted: %d", responseRecorder.Code)
+			}
+		})
+	}
 }

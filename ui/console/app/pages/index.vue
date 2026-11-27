@@ -261,6 +261,7 @@ export const client = createClient({
             npm i layr-client
           </span>
           <UButton
+            square
             :icon="isCopiedInstall ? 'i-lucide-check' : 'i-lucide-copy'"
             color="neutral"
             variant="ghost"

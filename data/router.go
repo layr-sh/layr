@@ -276,6 +276,11 @@ func (service *Service) registerControlPlaneRoutes(router *core.Router) {
 		core.RouteSDKGroupName("data", "tables"),
 		core.RouteSDKMethodName("delete"),
 	)
+	core.PostRoute[map[string]any, core.Empty](router, "/v1/_/data/tables/{schema_name}/{table_name}/truncate", service.controlPlaneHandler.handleTruncateTable,
+		core.RouteHide(),
+		core.RouteNoRequestBody(),
+		core.RouteSummary("Truncate a table"),
+	)
 	core.PostRoute[CreateColumnResponse, Column](router, "/v1/_/data/tables/{schema_name}/{table_name}/columns", service.controlPlaneHandler.handleCreateColumn,
 		core.RouteTag("Tables Columns"),
 		core.RouteSummary("Add a new column to a table schema"),

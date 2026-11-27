@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"errors"
+	"layr.sh/core"
 	"testing"
 )
 
@@ -117,5 +118,69 @@ func TestDataConfigManagerSetValidationUnit(t *testing.T) {
 	}
 	if !errors.Is(err, ErrInvalidConfig) {
 		t.Fatalf("expected error to wrap ErrInvalidConfig, got: %v", err)
+	}
+}
+
+func TestDataConfigSnapshotIsolationUnit(t *testing.T) {
+	configManager := NewConfigManager(core.NewTestKernel(nil))
+	config := DefaultConfig()
+	config.REST.ExcludedTables = []string{"private"}
+	configManager.SetMemoryConfig(config)
+	config.Schemas[0] = "changed"
+	config.REST.ExcludedTables[0] = "changed"
+	config.CORS.AllowedOrigins[0] = "changed"
+	config.CORS.AllowedHeaders[0] = "changed"
+	snapshotConfig := configManager.Get()
+	if snapshotConfig.Schemas[0] != "public" || snapshotConfig.REST.ExcludedTables[0] != "private" || snapshotConfig.CORS.AllowedOrigins[0] != "*" || snapshotConfig.CORS.AllowedHeaders[0] != "Authorization" {
+		t.Fatal("configuration retained caller-owned slices")
+	}
+	snapshotConfig.Schemas[0] = "mutated"
+	snapshotConfig.REST.ExcludedTables[0] = "mutated"
+	snapshotConfig.CORS.AllowedOrigins[0] = "mutated"
+	snapshotConfig.CORS.AllowedHeaders[0] = "mutated"
+	nextConfig := configManager.Get()
+	if nextConfig.Schemas[0] != "public" || nextConfig.REST.ExcludedTables[0] != "private" || nextConfig.CORS.AllowedOrigins[0] != "*" || nextConfig.CORS.AllowedHeaders[0] != "Authorization" {
+		t.Fatal("configuration exposed mutable internal slices")
+	}
+}
+
+func TestDataAdditionalConfigValidationUnit(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		change func(*Config)
+	}{
+		{"default limit", func(config *Config) { config.REST.DefaultLimit = config.REST.MaxLimit + 1 }},
+		{"graphql limit", func(config *Config) { config.GraphQL.DefaultLimit = 0 }},
+		{"connections", func(config *Config) { config.Realtime.MaxConnections = 0 }},
+		{"catalog ttl", func(config *Config) { config.Cache.CatalogTTLSeconds = -1 }},
+		{"query ttl", func(config *Config) { config.Cache.QueryTTLSeconds = -1 }},
+		{"cache count", func(config *Config) { config.Cache.MaxCachedQueries = -1 }},
+		{"minute quota", func(config *Config) { config.RateLimiting.Enabled = true; config.RateLimiting.RequestsPerMinute = 0 }},
+		{"burst quota", func(config *Config) { config.RateLimiting.Enabled = true; config.RateLimiting.Burst = 0 }},
+		{"protected schema", func(config *Config) { config.Schemas = []string{"auth"} }},
+		{"invalid schema", func(config *Config) { config.Schemas = []string{"bad-name"} }},
+		{"empty exclusion", func(config *Config) { config.REST.ExcludedTables = []string{""} }},
+		{"malformed origin", func(config *Config) { config.CORS.AllowedOrigins = []string{"https://%"} }},
+		{"origin scheme", func(config *Config) { config.CORS.AllowedOrigins = []string{"ftp://app.test"} }},
+		{"origin host", func(config *Config) { config.CORS.AllowedOrigins = []string{"https:"} }},
+		{"origin credentials", func(config *Config) { config.CORS.AllowedOrigins = []string{"https://user@app.test"} }},
+		{"origin path", func(config *Config) { config.CORS.AllowedOrigins = []string{"https://app.test/path"} }},
+		{"origin query", func(config *Config) { config.CORS.AllowedOrigins = []string{"https://app.test?x=1"} }},
+		{"origin fragment", func(config *Config) { config.CORS.AllowedOrigins = []string{"https://app.test#x"} }},
+		{"header injection", func(config *Config) { config.CORS.AllowedHeaders = []string{"X-Test\r\nBad: value"} }},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			config := DefaultConfig()
+			testCase.change(&config)
+			if err := config.Validate(); err == nil {
+				t.Fatal("invalid configuration accepted")
+			}
+		})
+	}
+	config := DefaultConfig()
+	config.CORS.AllowedOrigins = []string{"https://app.test", "null", "*"}
+	config.CORS.AllowedHeaders = []string{"Authorization", "*"}
+	if err := config.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }

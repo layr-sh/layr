@@ -10,7 +10,7 @@
 
 :root {
   --ui-radius: 0.25rem;
-  --ui-primary: black;
+  --ui-primary: white;
 }
 
 :root,
@@ -18,7 +18,7 @@
   --ui-bg: var(--ui-color-neutral-50);
   --ui-bg-muted: var(--ui-color-neutral-100);
   --ui-text-inverted: var(--ui-color-neutral-50);
-  --ui-primary: var(--ui-color-primary-600);
+  --ui-primary: black;
 }
 
 .dark {

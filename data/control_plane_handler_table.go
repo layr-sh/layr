@@ -137,7 +137,9 @@ func (controlPlaneHandler *ControlPlaneHandler) handleTruncateTable(responseWrit
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, truncateErr.Error())
 		return
 	}
-	controlPlaneHandler.InvalidateTableCache(request.Context(), schema, table)
+	// TRUNCATE does not fire row-level CDC triggers; CASCADE can also empty
+	// dependent tables, so query caches must be invalidated independently.
+	controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 
 	tableID := fmt.Sprintf("%s.%s", schema, table)
 	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableTruncatedEvent(tableID, TableTruncatedEventData{

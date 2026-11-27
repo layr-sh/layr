@@ -131,8 +131,8 @@ func TestDataControlPlaneHandlerBaseRequireScopeUnit(t *testing.T) {
 
 	allowedRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
 	allowedResponseRecorder := httptest.NewRecorder()
-	if !serviceAccountManager.RequireScope(allowedResponseRecorder, allowedRequest, core.ScopeDataConfigRead) {
-		t.Fatal("expected true on empty service account key")
+	if serviceAccountManager.RequireScope(allowedResponseRecorder, allowedRequest, core.ScopeDataConfigRead) {
+		t.Fatal("expected missing credentials to be rejected")
 	}
 
 	invalidKeyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/_/data/config", nil)
@@ -143,6 +143,7 @@ func TestDataControlPlaneHandlerBaseRequireScopeUnit(t *testing.T) {
 	}
 
 	allowedJWTRequest := httptest.NewRequestWithContext(core.WithAuthContext(ctx, core.AuthContext{
+		ServiceAccountID: "data-test-admin",
 		JWT: core.JWTClaims{
 			Role:  "service_role",
 			Scope: core.ScopeDataConfigRead,

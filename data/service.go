@@ -97,17 +97,23 @@ func (service *Service) Start(ctx context.Context) error {
 	}
 	service.schemaIntrospector.SetCatalogTTL(catalogTTL)
 
-	if service.configManager.Get().GraphQL.Enabled {
-		_ = service.IntrospectSchemas(ctx)
+	if err := service.IntrospectSchemas(ctx); err != nil {
+		return err
 	}
 
-	if service.configManager.Get().Realtime.Enabled {
-		service.realtimeHub.SetEventHandler(func(cdcEvent realtime.CDCEvent) {
-			if service.configManager.Get().Cache.Enabled && service.configManager.Get().Cache.InvalidateOnCDC {
-				service.InvalidateTableCache(ctx, cdcEvent.Schema, cdcEvent.Table)
-			}
-		})
-		service.realtimeHub.Start(ctx)
+	service.realtimeHub.SetEventHandler(func(cdcEvent realtime.CDCEvent) {
+		cacheConfig := service.configManager.Get().Cache
+		if cacheConfig.Enabled && cacheConfig.InvalidateOnCDC {
+			service.bumpTableCacheVersion(ctx, cdcEvent.Schema, cdcEvent.Table)
+		}
+	})
+	service.realtimeHub.Start(ctx)
+	const listenerReadyTimeout = 5 * time.Second
+	readyCtx, cancel := context.WithTimeout(ctx, listenerReadyTimeout)
+	defer cancel()
+	if err := service.realtimeHub.WaitReady(readyCtx); err != nil {
+		service.Stop() //nolint:contextcheck // Shutdown must close clients even when the startup context is canceled.
+		return fmt.Errorf("start realtime listener: %w", err)
 	}
 
 	return nil
@@ -120,7 +126,7 @@ func (service *Service) Stop() {
 
 // InvalidateCache evicts the specified cache keys from the KVStore and increments version numbers.
 func (service *Service) InvalidateCache(ctx context.Context, invalidateCacheInput InvalidateCacheInput) {
-	if invalidateCacheInput.All || invalidateCacheInput.Catalog {
+	if invalidateCacheInput.All || invalidateCacheInput.Catalog || invalidateCacheInput.Pattern != "" || invalidateCacheInput.Schema != "" && invalidateCacheInput.Table == "" {
 		_ = service.kernel.KVStore().Delete(ctx, "cache:catalog")
 		_ = service.kernel.KVStore().Delete(ctx, "cache:schema:catalog")
 		_, _ = service.kernel.KVStore().Increment(ctx, "cache:v:global", 0)
@@ -138,7 +144,9 @@ func (service *Service) InvalidateCache(ctx context.Context, invalidateCacheInpu
 // InvalidateCatalog purges the schema catalog from cache and triggers GraphQL introspection reload.
 func (service *Service) InvalidateCatalog(ctx context.Context) {
 	service.InvalidateCache(ctx, InvalidateCacheInput{Catalog: true, All: true})
-	_ = service.schemaIntrospector.Introspect(ctx, service.configManager.Get().Schemas)
+	if err := service.IntrospectSchemas(ctx); err != nil {
+		log.Warnf("failed to refresh data catalog: %v", err)
+	}
 }
 
 // InvalidateTableCache invalidates cached query results for a specific table.
@@ -147,6 +155,10 @@ func (service *Service) InvalidateTableCache(ctx context.Context, schema, table 
 	if !cacheConfig.Enabled || !cacheConfig.InvalidateOnMutation {
 		return
 	}
+	service.bumpTableCacheVersion(ctx, schema, table)
+}
+
+func (service *Service) bumpTableCacheVersion(ctx context.Context, schema, table string) {
 	versionKey := fmt.Sprintf("cache:v:%s:%s", schema, table)
 	newVersion, err := service.kernel.KVStore().Increment(ctx, versionKey, 0)
 	const maxSafeVersion int64 = 9_000_000_000_000_000
@@ -222,22 +234,32 @@ func (service *Service) IntrospectSchemas(ctx context.Context, schemas ...string
 		return fmt.Errorf("failed to introspect schemas: %w", err)
 	}
 
-	service.tablesRWMutex.Lock()
+	if err := service.grantQuerySchemas(ctx, schemas); err != nil {
+		return err
+	}
+	nextTables := make(map[string]rest.TableMetadata)
 	for _, tableInfo := range service.schemaIntrospector.Tables() {
 		columns := make([]string, 0, len(tableInfo.Columns))
 		for columnName := range tableInfo.Columns {
 			columns = append(columns, columnName)
+		}
+		if !IsProtectedSchema(tableInfo.Schema) && (service.configManager.Get().Cache.InvalidateOnCDC || service.configManager.Get().Realtime.Enabled) {
+			service.realtimeHub.ForgetTableTrigger(tableInfo.Schema, tableInfo.Name)
+			if err := service.realtimeHub.EnsureTableTrigger(ctx, tableInfo.Schema, tableInfo.Name); err != nil {
+				return fmt.Errorf("prepare CDC trigger: %w", err)
+			}
 		}
 		foreignKeys := make(map[string]rest.RelationForeignKey, len(tableInfo.ForeignKeys))
 		for relName, relInfo := range tableInfo.ForeignKeys {
 			foreignKeys[relName] = rest.RelationForeignKey{
 				FromColumn: relInfo.LocalColumn,
 				ToTable:    relInfo.ForeignTable,
+				ToSchema:   relInfo.ForeignSchema,
 				ToColumn:   relInfo.TargetColumn,
 			}
 		}
 		tableKey := fmt.Sprintf("%s.%s", tableInfo.Schema, tableInfo.Name)
-		service.tables[tableKey] = rest.TableMetadata{
+		nextTables[tableKey] = rest.TableMetadata{
 			Schema:      tableInfo.Schema,
 			Table:       tableInfo.Name,
 			PrimaryKey:  tableInfo.PrimaryKey,
@@ -245,6 +267,8 @@ func (service *Service) IntrospectSchemas(ctx context.Context, schemas ...string
 			ForeignKeys: foreignKeys,
 		}
 	}
+	service.tablesRWMutex.Lock()
+	service.tables = nextTables
 	service.tablesRWMutex.Unlock()
 	return nil
 }

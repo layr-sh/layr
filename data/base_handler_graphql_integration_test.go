@@ -12,11 +12,32 @@ import (
 	"layr.sh/core"
 )
 
+func TestDataReviewGraphQLCommitFailureIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	service := NewService(kernel)
+	if err := service.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer service.Stop()
+	if _, err := kernel.DB().Exec(ctx, `CREATE TABLE public.review_gql(id uuid PRIMARY KEY DEFAULT uuidv7(), slug text UNIQUE DEFERRABLE INITIALLY DEFERRED); INSERT INTO public.review_gql(slug) VALUES ('existing')`); err != nil {
+		t.Fatal(err)
+	}
+	service.InvalidateCatalog(ctx)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/graphql", bytes.NewBufferString(`{"query":"mutation { insert_review_gql(objects: [{slug: \"existing\"}]) { id } }"}`))
+	responseRecorder := httptest.NewRecorder()
+	service.BaseHandler().handleExecuteGraphQL(responseRecorder, request)
+	if responseRecorder.Code != http.StatusConflict {
+		t.Fatalf("deferred constraint failure reported as %d: %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+}
+
 func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	service := NewService(kernel)
 
 	_ = service.Start(ctx)

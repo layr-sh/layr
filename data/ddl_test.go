@@ -3,9 +3,11 @@ package data
 import (
 	"context"
 	"fmt"
-	"testing"
-
+	"github.com/jackc/pgx/v5/pgproto3"
 	"layr.sh/core"
+	"strings"
+	"testing"
+	"time"
 )
 
 func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
@@ -87,8 +89,8 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	if sanitizeType("NUMERIC(10,2)") != "numeric(10,2)" {
 		t.Fatalf("unexpected sanitizeType: %s", sanitizeType("NUMERIC(10,2)"))
 	}
-	if sanitizeType("INT; DROP TABLE") != "text" {
-		t.Fatalf("expected fallback to text on invalid characters in type, got %s", sanitizeType("INT; DROP TABLE"))
+	if sanitizeType("INT; DROP TABLE") != "" {
+		t.Fatalf("expected invalid types to be rejected, got %s", sanitizeType("INT; DROP TABLE"))
 	}
 
 	// 4. sanitizeAction
@@ -208,5 +210,90 @@ func TestDataDDLValidationAndSanitizationUnit(t *testing.T) {
 	err = ddlEngine.DropTable(ctx, "public", "invalid table!", false)
 	if err == nil {
 		t.Fatal("expected error on invalid table name in DropTable")
+	}
+}
+
+func TestDataCatalogWireFailuresUnit(t *testing.T) {
+	for _, testCase := range []struct{ stage, mode, operation string }{
+		{"exists", "query", "get"}, {"primary", "query", "get"}, {"ddl columns", "query", "get"}, {"ddl columns", "scan", "get"}, {"ddl columns", "stream", "get"}, {"ddl foreign", "query", "get"}, {"ddl foreign", "scan", "get"}, {"ddl foreign", "stream", "get"}, {"indexes", "query", "get"}, {"indexes", "scan", "get"}, {"indexes", "stream", "get"}, {"stats", "query", "get"}, {"ddl tables", "scan", "list"}, {"ddl tables", "stream", "list"}, {"exists", "query", "list"},
+		{"schema tables", "scan", "introspect"}, {"schema tables", "stream", "introspect"}, {"schema columns", "query", "introspect"}, {"schema columns", "scan", "introspect"}, {"schema columns", "stream", "introspect"}, {"primary", "query", "introspect"}, {"schema foreign", "query", "introspect"}, {"schema foreign", "scan", "introspect"}, {"schema foreign", "stream", "introspect"},
+		{"schemas", "scan", "grant"}, {"schemas", "stream", "grant"},
+	} {
+		t.Run(testCase.operation+"/"+testCase.stage+"/"+testCase.mode, func(t *testing.T) {
+			reached := make(chan struct{}, 1)
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				if catalogQueryStage(sql) == testCase.stage {
+					select {
+					case reached <- struct{}{}:
+					default:
+					}
+					switch testCase.mode {
+					case "scan":
+						return postgresResult([]uint32{25, 25}, []string{"wrong", "shape"})
+					case "stream":
+						return postgresStreamFailure()
+					default:
+						return postgresFailure()
+					}
+				}
+				return catalogQueryReply(sql)
+			})
+			service := NewService(kernel)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			var err error
+			switch testCase.operation {
+			case "get":
+				_, err = service.DDLEngine().GetTable(ctx, "public", "items")
+			case "list":
+				_, err = service.DDLEngine().ListTables(ctx, []string{"public"})
+			case "introspect":
+				err = service.GraphQLSchema().Introspect(ctx, []string{"public"})
+			case "grant":
+				err = service.grantQuerySchemas(ctx, []string{"public"})
+			}
+			if err == nil || len(reached) == 0 {
+				t.Fatalf("database failure not exercised/propagated: reached=%v error=%v", (len(reached) > 0), err)
+			}
+		})
+	}
+}
+
+func TestDataSQLWireFailuresUnit(t *testing.T) {
+	for _, stage := range []string{"begin", "settings", "values", "commit", "acquire"} {
+		t.Run(stage, func(t *testing.T) {
+			reached := make(chan struct{}, 1)
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				statement := strings.ToLower(strings.TrimSpace(sql))
+				if stage == "begin" && statement == "begin" || stage == "settings" && strings.HasPrefix(statement, "set local standard") || stage == "commit" && statement == "commit" {
+					select {
+					case reached <- struct{}{}:
+					default:
+					}
+					return postgresFailure()
+				}
+				if strings.HasPrefix(statement, "select ") {
+					if stage == "values" {
+						select {
+						case reached <- struct{}{}:
+						default:
+						}
+						return postgresResult([]uint32{23}, []string{"invalid-integer"})
+					}
+					return postgresResult([]uint32{23}, []string{"1"})
+				}
+				return nil
+			})
+			if stage == "acquire" {
+				kernel.DB().Close()
+				select {
+				case reached <- struct{}{}:
+				default:
+				}
+			}
+			if _, err := NewDDLEngine(kernel).ExecuteSQL(context.Background(), "SELECT 1"); err == nil || len(reached) == 0 {
+				t.Fatalf("SQL fault not exercised: reached=%v error=%v", (len(reached) > 0), err)
+			}
+		})
 	}
 }

@@ -405,6 +405,7 @@ async function handleMFA() {
             >
               <template #trailing>
                 <UButton
+                  square
                   color="neutral"
                   variant="link"
                   :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"

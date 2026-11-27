@@ -8,6 +8,103 @@ import (
 	"layr.sh/data/common"
 )
 
+func TestDataReviewSQLDeferredErrorsIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	ddlEngine := NewDDLEngine(kernel)
+	if _, err := kernel.DB().Exec(ctx, `CREATE FUNCTION public.review_raise() RETURNS integer LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''deferred failure''; END'`); err != nil {
+		t.Fatal(err)
+	}
+	if executeSQLResponse, err := ddlEngine.ExecuteSQL(ctx, `SELECT public.review_raise()`); err == nil {
+		t.Fatalf("SQL failure reported as success: %+v", executeSQLResponse)
+	}
+	if _, err := ddlEngine.ExecuteSQL(ctx, `CREATE TABLE public.review_atomic(id integer); SELECT public.review_raise();`); err == nil {
+		t.Fatal("expected script failure")
+	}
+	var exists bool
+	if err := kernel.DB().QueryRow(ctx, `SELECT to_regclass('public.review_atomic') IS NOT NULL`).Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		t.Fatal("failed SQL script left committed schema changes")
+	}
+}
+
+func TestDataReviewColumnMetadataAndTypesIntegration(t *testing.T) {
+	kernel, cleanup := core.SetupTestKernel(t, Migrations)
+	defer cleanup()
+	ctx := context.Background()
+	ddlEngine := NewDDLEngine(kernel)
+	if _, err := kernel.DB().Exec(ctx, `CREATE TABLE public.review_metadata(a integer, b integer, label varchar(25) UNIQUE, items text[], PRIMARY KEY(a,b)); CREATE TABLE public.review_metadata_child(x integer, y integer, FOREIGN KEY(x,y) REFERENCES public.review_metadata(a,b)); CREATE INDEX review_metadata_expression ON public.review_metadata ((lower(label))) INCLUDE (a);`); err != nil {
+		t.Fatal(err)
+	}
+	table, err := ddlEngine.GetTable(ctx, "public", "review_metadata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(table.Columns) != 4 {
+		t.Fatalf("missing columns: %+v", table)
+	}
+	if table.PrimaryKey != "" || !table.Columns[0].IsPrimaryKey || !table.Columns[1].IsPrimaryKey || !table.Columns[2].IsUnique || table.Columns[3].Type != "text[]" || table.SizeBytes <= 0 {
+		t.Fatalf("incorrect table metadata: %+v", table)
+	}
+	if len(table.Indexes) != 3 {
+		t.Fatalf("expression index was omitted: %+v", table.Indexes)
+	}
+	childTable, err := ddlEngine.GetTable(ctx, "public", "review_metadata_child")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(childTable.ForeignKeys) != 2 || childTable.ForeignKeys[0].Column != "x" || childTable.ForeignKeys[0].ForeignColumn != "a" || childTable.ForeignKeys[1].ForeignColumn != "b" {
+		t.Fatalf("incorrect composite foreign key mapping: %+v", childTable.ForeignKeys)
+	}
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Schema: "public", Name: "review_metadata"}); err == nil {
+		t.Fatal("existing table reported as newly created")
+	}
+	invalid := "1; SELECT 1"
+	if err := ddlEngine.AddColumn(ctx, "public", "review_metadata", Column{Name: "invalid", Type: "unsupported"}); err == nil {
+		t.Fatal("unsupported type silently became text")
+	}
+	if err := ddlEngine.AddColumn(ctx, "public", "review_metadata", Column{Name: "invalid", Type: "text", DefaultValue: &invalid}); err == nil {
+		t.Fatal("invalid default was silently discarded")
+	}
+	if err := ddlEngine.CreateTable(ctx, CreateTableInput{Name: "invalid_default", Columns: []Column{{Name: "value", Type: "text", DefaultValue: &invalid}}}); err == nil {
+		t.Fatal("invalid default accepted in create")
+	}
+	invalidType := "integer; DROP TABLE public.review_metadata"
+	if err := ddlEngine.AlterColumn(ctx, "public", "review_metadata", "a", UpdateColumnInput{NewType: &invalidType}); err == nil {
+		t.Fatal("unsafe type accepted")
+	}
+	for _, typeName := range []string{"text[]", "double precision", "numeric(10,2)", "varchar(255)", "character varying(255)[]", ""} {
+		t.Run("case", func(t *testing.T) {
+			if sanitizeType(typeName) == "" {
+				t.Fatalf("valid type rejected: %s", typeName)
+			}
+		})
+	}
+	for _, typeName := range []string{"varchar(1)); DROP TABLE x; --)", "numeric(1) /*)", "unknown_type", "[]"} {
+		t.Run("case", func(t *testing.T) {
+			if sanitizeType(typeName) != "" {
+				t.Fatalf("invalid type accepted: %s", typeName)
+			}
+		})
+	}
+	if _, err := ddlEngine.ExecuteSQL(ctx, "COMMIT; CREATE TABLE public.uncommitted(id integer)"); err == nil {
+		t.Fatal("script escaped its transaction")
+	}
+	if _, err := ddlEngine.ExecuteSQL(ctx, "SET application_name = 'scratchpad-only'"); err != nil {
+		t.Fatal(err)
+	}
+	var name string
+	if err := kernel.DB().QueryRow(ctx, "SELECT current_setting('application_name')").Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name == "scratchpad-only" {
+		t.Fatal("scratchpad session state leaked into query pool")
+	}
+}
+
 func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
@@ -60,7 +157,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 		t.Fatal("expected error on invalid primary key name")
 	}
 
-	// 4. Create child table with Foreign Key
+	// 4. Create childTable table with Foreign Key
 	orderCreateTableInput := CreateTableInput{
 		Schema: "public",
 		Name:   "orders",
@@ -297,7 +394,7 @@ func TestDataDDLEngineLifecycleIntegration(t *testing.T) {
 	if sanitizeAction("SET NULL") != "SET NULL" || sanitizeAction("SET DEFAULT") != "SET DEFAULT" || sanitizeAction("RESTRICT") != "RESTRICT" || sanitizeAction("unknown") != "NO ACTION" {
 		t.Fatal("unexpected sanitizeAction results")
 	}
-	if sanitizeType("varchar(10)") != "varchar(10)" || sanitizeType("numeric(5,2)") != "numeric(5,2)" || sanitizeType("custom_unknown_type") != "text" {
+	if sanitizeType("varchar(10)") != "varchar(10)" || sanitizeType("numeric(5,2)") != "numeric(5,2)" || sanitizeType("custom_unknown_type") != "" {
 		t.Fatal("unexpected sanitizeType results")
 	}
 	if common.IsValidIdentifier("") || common.IsValidIdentifier("1start_with_digit") || common.IsValidIdentifier("very_long_identifier_that_exceeds_sixty_three_characters_limit_in_postgresql_standard_length") {

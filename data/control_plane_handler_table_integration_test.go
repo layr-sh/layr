@@ -15,7 +15,7 @@ func TestDataControlPlaneHandlerTableLifecycleIntegration(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	service := NewService(kernel)
 	_ = service.Start(ctx)
 	defer func() { service.Stop() }()

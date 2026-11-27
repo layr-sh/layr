@@ -6,7 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"slices"
 	"sync"
+
+	"golang.org/x/net/http/httpguts"
+
+	"layr.sh/data/common"
 
 	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
@@ -118,7 +124,7 @@ func DefaultConfig() Config {
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: []string{"*"},
-			AllowedHeaders: []string{"Authorization", "Content-Type", "X-Custom-Header"},
+			AllowedHeaders: []string{"Authorization", "Content-Type", "Publishable-Key", "X-Publishable-Key", "Cache-TTL", "Cache-Key-Suffix", "Prefer", "X-Custom-Header"},
 		},
 		Cache: CacheConfig{
 			Enabled:              true,
@@ -156,7 +162,51 @@ func (config Config) Validate() error {
 	if config.Realtime.MaxChannelsPerConnection <= 0 {
 		return fmt.Errorf("realtime max_channels_per_connection must be greater than 0, got %d", config.Realtime.MaxChannelsPerConnection)
 	}
+	if config.REST.DefaultLimit > config.REST.MaxLimit {
+		return errors.New("rest default_limit must not exceed max_limit")
+	}
+	if config.GraphQL.DefaultLimit <= 0 || config.Realtime.MaxConnections <= 0 {
+		return errors.New("graphql default_limit and realtime max_connections must be positive")
+	}
+	if config.Cache.CatalogTTLSeconds < 0 || config.Cache.QueryTTLSeconds < 0 || config.Cache.MaxCachedQueries < 0 {
+		return errors.New("cache TTLs and limits must not be negative")
+	}
+	if config.RateLimiting.Enabled && (config.RateLimiting.RequestsPerMinute <= 0 || config.RateLimiting.Burst <= 0) {
+		return errors.New("enabled rate limiting requires positive requests_per_minute and burst")
+	}
+	for _, schema := range config.Schemas {
+		if !common.IsValidIdentifier(schema) || IsProtectedSchema(schema) {
+			return fmt.Errorf("schema %q is invalid or protected", schema)
+		}
+	}
+	for _, table := range config.REST.ExcludedTables {
+		if table == "" {
+			return errors.New("excluded table names must not be empty")
+		}
+	}
+	for _, origin := range config.CORS.AllowedOrigins {
+		if origin == "*" || origin == "null" {
+			continue
+		}
+		url, err := url.Parse(origin)
+		if err != nil || url.Scheme != "http" && url.Scheme != "https" || url.Host == "" || url.User != nil || url.Path != "" || url.RawQuery != "" || url.Fragment != "" {
+			return fmt.Errorf("invalid CORS origin %q", origin)
+		}
+	}
+	for _, header := range config.CORS.AllowedHeaders {
+		if !httpguts.ValidHeaderFieldName(header) {
+			return fmt.Errorf("invalid CORS header %q", header)
+		}
+	}
 	return nil
+}
+
+func cloneDataConfig(config Config) Config {
+	config.Schemas = slices.Clone(config.Schemas)
+	config.REST.ExcludedTables = slices.Clone(config.REST.ExcludedTables)
+	config.CORS.AllowedOrigins = slices.Clone(config.CORS.AllowedOrigins)
+	config.CORS.AllowedHeaders = slices.Clone(config.CORS.AllowedHeaders)
+	return config
 }
 
 // ConfigManager handles in-memory caching and PostgreSQL synchronization for data.config.
@@ -178,7 +228,7 @@ func NewConfigManager(kernel *core.Kernel) *ConfigManager {
 func (configManager *ConfigManager) Get() Config {
 	configManager.rwMutex.RLock()
 	defer configManager.rwMutex.RUnlock()
-	return configManager.config
+	return cloneDataConfig(configManager.config)
 }
 
 // Load fetches the runtime config from PostgreSQL or initializes the default if not present.
@@ -212,7 +262,7 @@ func (configManager *ConfigManager) Load(ctx context.Context) error {
 func (configManager *ConfigManager) SetMemoryConfig(config Config) {
 	configManager.rwMutex.Lock()
 	defer configManager.rwMutex.Unlock()
-	configManager.config = config
+	configManager.config = cloneDataConfig(config)
 }
 
 // Set writes new configuration to PostgreSQL, updates the in-memory cache, and publishes event.

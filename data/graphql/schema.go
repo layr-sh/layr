@@ -4,11 +4,13 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"layr.sh/core"
 )
 
@@ -58,6 +60,8 @@ func NewSchemaIntrospector(kernel *core.Kernel) *SchemaIntrospector {
 
 // SetCatalogTTL configures the TTL duration for cached schema metadata.
 func (schemaInspector *SchemaIntrospector) SetCatalogTTL(ttl time.Duration) {
+	schemaInspector.rwMutex.Lock()
+	defer schemaInspector.rwMutex.Unlock()
 	if ttl > 0 {
 		schemaInspector.catalogTTL = ttl
 	}
@@ -104,6 +108,9 @@ func (schemaInspector *SchemaIntrospector) Tables() map[string]*TableInfo {
 
 // Introspect reads tables, columns, and foreign keys from PostgreSQL information_schema.
 func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schemas []string) error {
+	schemaInspector.rwMutex.RLock()
+	catalogTTL := schemaInspector.catalogTTL
+	schemaInspector.rwMutex.RUnlock()
 	if cached, err := schemaInspector.kernel.KVStore().Get(ctx, "cache:schema:catalog"); err == nil && cached != "" {
 		var cachedTables map[string]*TableInfo
 		if err := json.Unmarshal([]byte(cached), &cachedTables); err == nil && len(cachedTables) > 0 {
@@ -115,12 +122,27 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 	}
 
 	newTables := make(map[string]*TableInfo)
+	ambiguous := make(map[*TableInfo]map[string]bool)
+	addRelation := func(tableInfo *TableInfo, alias string, relationInfo RelationInfo) {
+		if ambiguous[tableInfo] == nil {
+			ambiguous[tableInfo] = make(map[string]bool)
+		}
+		if ambiguous[tableInfo][alias] {
+			return
+		}
+		if previousRelationInfo, exists := tableInfo.ForeignKeys[alias]; exists && previousRelationInfo != relationInfo {
+			delete(tableInfo.ForeignKeys, alias)
+			ambiguous[tableInfo][alias] = true
+			return
+		}
+		tableInfo.ForeignKeys[alias] = relationInfo
+	}
 
 	for _, schema := range schemas {
 		// Fetch tables
 		rows, err := schemaInspector.kernel.DB().Query(ctx, `
-			SELECT table_name 
-			FROM information_schema.tables 
+			SELECT table_name
+			FROM information_schema.tables
 			WHERE table_schema = $1 AND table_type = 'BASE TABLE'
 		`, schema)
 		if err != nil {
@@ -130,17 +152,22 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 		var tableNames []string
 		for rows.Next() {
 			var name string
-			if err := rows.Scan(&name); err == nil {
-				tableNames = append(tableNames, name)
+			if err := rows.Scan(&name); err != nil {
+				rows.Close()
+				return err
 			}
+			tableNames = append(tableNames, name)
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
 
 		for _, name := range tableNames {
 			tableInfo := &TableInfo{
 				Schema:      schema,
 				Name:        name,
-				PrimaryKey:  "id",
+				PrimaryKey:  "",
 				Columns:     make(map[string]ColumnInfo),
 				ForeignKeys: make(map[string]RelationInfo),
 			}
@@ -151,10 +178,17 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 				FROM information_schema.columns
 				WHERE table_schema = $1 AND table_name = $2
 			`, schema, name)
-			if queryColumnsErr == nil {
+			if queryColumnsErr != nil {
+				return queryColumnsErr
+			}
+			{
 				for columnRows.Next() {
 					var columnName, dataType, isNullable string
-					if err := columnRows.Scan(&columnName, &dataType, &isNullable); err == nil {
+					if err := columnRows.Scan(&columnName, &dataType, &isNullable); err != nil {
+						columnRows.Close()
+						return err
+					}
+					{
 						tableInfo.Columns[columnName] = ColumnInfo{
 							Name:       columnName,
 							DataType:   dataType,
@@ -163,21 +197,27 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 					}
 				}
 				columnRows.Close()
+				if err := columnRows.Err(); err != nil {
+					return err
+				}
 			}
 
 			// Fetch primary key
 			var pkName string
-			_ = schemaInspector.kernel.DB().QueryRow(ctx, `
-				SELECT kcu.column_name
+			pkErr := schemaInspector.kernel.DB().QueryRow(ctx, `
+				SELECT min(kcu.column_name::text)
 				FROM information_schema.table_constraints tc
 				JOIN information_schema.key_column_usage kcu
 				  ON tc.constraint_name = kcu.constraint_name
-				  AND tc.table_schema = kcu.table_schema
+				  AND tc.table_schema = kcu.table_schema AND tc.table_name = kcu.table_name
 				WHERE tc.constraint_type = 'PRIMARY KEY'
 				  AND tc.table_schema = $1
 				  AND tc.table_name = $2
-				LIMIT 1
+				HAVING count(*) = 1
 			`, schema, name).Scan(&pkName)
+			if pkErr != nil && !errors.Is(pkErr, pgx.ErrNoRows) {
+				return pkErr
+			}
 			if pkName != "" {
 				tableInfo.PrimaryKey = pkName
 				if columnInfo, ok := tableInfo.Columns[pkName]; ok {
@@ -188,25 +228,26 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 
 			// Fetch foreign keys (including cross-schema foreign keys)
 			fkRows, queryFKErr := schemaInspector.kernel.DB().Query(ctx, `
-				SELECT
-					kcu.column_name,
-					ccu.table_schema AS foreign_table_schema,
-					ccu.table_name AS foreign_table_name,
-					ccu.column_name AS foreign_column_name
-				FROM information_schema.table_constraints AS tc
-				JOIN information_schema.key_column_usage AS kcu
-				  ON tc.constraint_name = kcu.constraint_name
-				  AND tc.table_schema = kcu.table_schema
-				JOIN information_schema.constraint_column_usage AS ccu
-				  ON ccu.constraint_name = tc.constraint_name
-				WHERE tc.constraint_type = 'FOREIGN KEY'
-				  AND tc.table_schema = $1
-				  AND tc.table_name = $2
+SELECT source.attname, target_schema.nspname, target_table.relname, target.attname
+ FROM pg_constraint con
+ JOIN pg_class source_table ON source_table.oid=con.conrelid JOIN pg_namespace source_schema ON source_schema.oid=source_table.relnamespace
+ JOIN pg_class target_table ON target_table.oid=con.confrelid JOIN pg_namespace target_schema ON target_schema.oid=target_table.relnamespace
+ CROSS JOIN LATERAL unnest(con.conkey, con.confkey) AS keys(source_num, target_num)
+ JOIN pg_attribute source ON source.attrelid=source_table.oid AND source.attnum=keys.source_num
+ JOIN pg_attribute target ON target.attrelid=target_table.oid AND target.attnum=keys.target_num
+ WHERE con.contype='f' AND cardinality(con.conkey)=1 AND source_schema.nspname=$1 AND source_table.relname=$2 ORDER BY con.conname, source.attnum
 			`, schema, name)
-			if queryFKErr == nil {
+			if queryFKErr != nil {
+				return queryFKErr
+			}
+			{
 				for fkRows.Next() {
 					var columnName, foreignSchema, foreignTable, targetColumn string
-					if err := fkRows.Scan(&columnName, &foreignSchema, &foreignTable, &targetColumn); err == nil {
+					if err := fkRows.Scan(&columnName, &foreignSchema, &foreignTable, &targetColumn); err != nil {
+						fkRows.Close()
+						return err
+					}
+					{
 						relationInfo := RelationInfo{
 							RelationName:  foreignTable,
 							ForeignSchema: foreignSchema,
@@ -215,15 +256,18 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 							TargetColumn:  targetColumn,
 							IsArray:       false,
 						}
-						tableInfo.ForeignKeys[foreignTable] = relationInfo
+						addRelation(tableInfo, foreignTable, relationInfo)
 						// Also index by singular relation alias (e.g. author_id -> author)
 						trimmedColumnName := strings.TrimSuffix(columnName, "_id")
 						if trimmedColumnName != "" && trimmedColumnName != foreignTable {
-							tableInfo.ForeignKeys[trimmedColumnName] = relationInfo
+							addRelation(tableInfo, trimmedColumnName, relationInfo)
 						}
 					}
 				}
 				fkRows.Close()
+				if err := fkRows.Err(); err != nil {
+					return err
+				}
 			}
 
 			tableKey := fmt.Sprintf("%s.%s", schema, name)
@@ -231,21 +275,28 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 		}
 	}
 
-	// Second pass: Populate reverse (one-to-many) relations
-	for _, childTable := range newTables {
-		for _, foreignKey := range childTable.ForeignKeys {
+	// Snapshot forward edges before adding reverse relations to avoid traversing
+	// newly added edges or choosing an arbitrary join for ambiguous foreign keys.
+	forward := make(map[*TableInfo][]RelationInfo)
+	for _, table := range newTables {
+		for _, relation := range table.ForeignKeys {
+			forward[table] = append(forward[table], relation)
+		}
+	}
+	for childTable, relations := range forward {
+		for _, foreignKey := range relations {
 			targetSchema := foreignKey.ForeignSchema
 			parentKey := fmt.Sprintf("%s.%s", targetSchema, foreignKey.ForeignTable)
 			if parentTableInfo, exists := newTables[parentKey]; exists {
-				if _, alreadySet := parentTableInfo.ForeignKeys[childTable.Name]; !alreadySet {
-					parentTableInfo.ForeignKeys[childTable.Name] = RelationInfo{
+				{
+					addRelation(parentTableInfo, childTable.Name, RelationInfo{
 						RelationName:  childTable.Name,
 						ForeignSchema: childTable.Schema,
 						ForeignTable:  childTable.Name,
 						LocalColumn:   foreignKey.TargetColumn,
 						TargetColumn:  foreignKey.LocalColumn,
 						IsArray:       true,
-					}
+					})
 				}
 			}
 		}
@@ -256,7 +307,7 @@ func (schemaInspector *SchemaIntrospector) Introspect(ctx context.Context, schem
 	schemaInspector.rwMutex.Unlock()
 
 	if data, err := json.Marshal(newTables); err == nil {
-		_ = schemaInspector.kernel.KVStore().Set(ctx, "cache:schema:catalog", string(data), schemaInspector.catalogTTL)
+		_ = schemaInspector.kernel.KVStore().Set(ctx, "cache:schema:catalog", string(data), catalogTTL)
 	}
 	return nil
 }

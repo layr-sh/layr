@@ -10,8 +10,18 @@ import (
 	"layr.sh/core"
 )
 
+func TestDataControlPlaneCatalogTTLFallbackUnit(t *testing.T) {
+	service := NewService(postgresFaultKernel(t, catalogQueryReply))
+	request := httptest.NewRequestWithContext(dataAdminContext(), http.MethodPut, "/v1/_/data/config", bytes.NewBufferString(`{"cache":{"catalog_ttl_seconds":0}}`))
+	responseRecorder := httptest.NewRecorder()
+	service.ControlPlaneHandler().handleUpdateConfig(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK || service.ConfigManager().Get().Cache.CatalogTTLSeconds != 0 {
+		t.Fatalf("catalog TTL fallback failed: %d %s", responseRecorder.Code, responseRecorder.Body.String())
+	}
+}
+
 func TestDataControlPlaneHandlerConfigGetAndUpdateUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	kernel := core.NewTestKernel(nil)
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
@@ -85,7 +95,7 @@ func TestDataControlPlaneHandlerConfigScopeForbiddenUnit(t *testing.T) {
 }
 
 func TestDataControlPlaneHandlerConfigCacheControlUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
@@ -136,7 +146,7 @@ func TestDataControlPlaneHandlerConfigDatabaseErrorUnit(t *testing.T) {
 	service := NewService(kernel)
 	controlPlaneHandler := service.controlPlaneHandler
 
-	validUpdateRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":500}}`)))
+	validUpdateRequest := httptest.NewRequestWithContext(dataAdminContext(), http.MethodPut, "/v1/_/data/config", bytes.NewReader([]byte(`{"rest":{"max_limit":500}}`)))
 	validResponseRecorder := httptest.NewRecorder()
 	controlPlaneHandler.handleUpdateConfig(validResponseRecorder, validUpdateRequest)
 	if validResponseRecorder.Code != http.StatusInternalServerError {

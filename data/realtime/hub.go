@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -45,6 +46,9 @@ type Hub struct {
 	stopChannel     chan struct{}
 	listenDone      chan struct{}
 	started         bool
+	stopped         bool
+	ready           chan struct{}
+	readyOnce       sync.Once
 	startMutex      sync.Mutex
 	stopOnce        sync.Once
 	presenceTTL     time.Duration
@@ -62,6 +66,7 @@ func NewHub(kernel *core.Kernel) *Hub {
 		installedTables: make(map[string]bool),
 		stopChannel:     make(chan struct{}),
 		listenDone:      make(chan struct{}),
+		ready:           make(chan struct{}),
 		presenceTTL:     60 * time.Second,
 	}
 }
@@ -75,6 +80,8 @@ func (hub *Hub) SetEventHandler(handler func(CDCEvent)) {
 
 // SetPresenceTTL configures the TTL for presence keys in KVStore.
 func (hub *Hub) SetPresenceTTL(expiry time.Duration) {
+	hub.eventRWMutex.Lock()
+	defer hub.eventRWMutex.Unlock()
 	if expiry > 0 {
 		hub.presenceTTL = expiry
 	} else {
@@ -85,7 +92,10 @@ func (hub *Hub) SetPresenceTTL(expiry time.Duration) {
 // SetPresence records subscriber presence in KVStore.
 func (hub *Hub) SetPresence(ctx context.Context, channel, clientID string) {
 	if channel != "" && clientID != "" {
-		_ = hub.kernel.KVStore().Set(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID), clientID, hub.presenceTTL)
+		hub.eventRWMutex.RLock()
+		expiry := hub.presenceTTL
+		hub.eventRWMutex.RUnlock()
+		_ = hub.kernel.KVStore().Set(ctx, fmt.Sprintf("data:presence:%s:%s", channel, clientID), clientID, expiry)
 	}
 }
 
@@ -99,11 +109,24 @@ func (hub *Hub) RemovePresence(ctx context.Context, channel, clientID string) {
 // Start launches the background LISTEN cdc loop.
 func (hub *Hub) Start(ctx context.Context) {
 	hub.startMutex.Lock()
-	if !hub.started {
+	if !hub.started && !hub.stopped {
 		hub.started = true
 		go hub.listenLoop(ctx)
 	}
 	hub.startMutex.Unlock()
+}
+
+// WaitReady waits until LISTEN is active so subscriptions cannot acknowledge
+// before the service is capable of receiving committed change events.
+func (hub *Hub) WaitReady(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("wait for realtime listener: %w", ctx.Err())
+	case <-hub.stopChannel:
+		return fmt.Errorf("realtime hub is stopped")
+	case <-hub.ready:
+		return nil
+	}
 }
 
 // Stop terminates the hub and closes all client connections.
@@ -111,10 +134,11 @@ func (hub *Hub) Stop() {
 	hub.stopOnce.Do(func() {
 		hub.startMutex.Lock()
 		wasStarted := hub.started
+		hub.stopped = true
+		close(hub.stopChannel)
 		hub.startMutex.Unlock()
 
 		if wasStarted {
-			close(hub.stopChannel)
 			<-hub.listenDone
 		}
 
@@ -153,6 +177,13 @@ func (hub *Hub) ClientCount() int {
 	return len(hub.clients)
 }
 
+// ForgetTableTrigger clears a cached installation after table DDL or before a new subscription.
+func (hub *Hub) ForgetTableTrigger(schema, table string) {
+	hub.tablesMutex.Lock()
+	delete(hub.installedTables, schema+"."+table)
+	hub.tablesMutex.Unlock()
+}
+
 // EnsureTableTrigger verifies and installs the CDC trigger on a table.
 func (hub *Hub) EnsureTableTrigger(ctx context.Context, schema, table string) error {
 	if schema == "" {
@@ -161,7 +192,7 @@ func (hub *Hub) EnsureTableTrigger(ctx context.Context, schema, table string) er
 	if !common.IsValidIdentifier(schema) || !common.IsValidIdentifier(table) {
 		return fmt.Errorf("invalid schema or table name for CDC trigger")
 	}
-	if schema == "core" || schema == "pg_catalog" || schema == "information_schema" {
+	if common.IsProtectedSchema(schema) {
 		return fmt.Errorf("cannot install CDC trigger on protected schema %q", schema)
 	}
 
@@ -174,19 +205,20 @@ func (hub *Hub) EnsureTableTrigger(ctx context.Context, schema, table string) er
 		return nil
 	}
 
-	triggerName := fmt.Sprintf("trg_cdc_%s_%s", schema, table)
+	fingerprint := sha256.Sum256([]byte(schema + "." + table))
+	triggerName := fmt.Sprintf("trg_cdc_%x", fingerprint[:16])
 	query := fmt.Sprintf(`
 		DO $$
 		BEGIN
 			IF NOT EXISTS (
-				SELECT 1 FROM pg_trigger WHERE tgname = '%s'
+				SELECT 1 FROM pg_trigger WHERE tgname = '%s' AND tgrelid = '"%s"."%s"'::regclass
 			) THEN
 				CREATE TRIGGER %s
 				AFTER INSERT OR UPDATE OR DELETE ON "%s"."%s"
 				FOR EACH ROW EXECUTE FUNCTION data.notify_cdc();
 			END IF;
 		END $$;
-	`, triggerName, triggerName, schema, table)
+	`, triggerName, schema, table, triggerName, schema, table)
 
 	if _, err := hub.kernel.DB().Exec(ctx, query); err != nil {
 		return fmt.Errorf("failed to install CDC trigger on %s.%s: %w", schema, table, err)
@@ -199,10 +231,14 @@ func (hub *Hub) EnsureTableTrigger(ctx context.Context, schema, table string) er
 // BroadcastEvent delivers a change event to matching client subscriptions and registered handlers.
 func (hub *Hub) BroadcastEvent(cdcEvent CDCEvent) {
 	hub.clientsRWMutex.RLock()
+	clients := make([]*Client, 0, len(hub.clients))
 	for client := range hub.clients {
-		client.Dispatch(cdcEvent)
+		clients = append(clients, client)
 	}
 	hub.clientsRWMutex.RUnlock()
+	for _, client := range clients {
+		client.Dispatch(cdcEvent)
+	}
 
 	hub.eventRWMutex.RLock()
 	eventHandler := hub.onEvent
@@ -257,7 +293,16 @@ func (hub *Hub) listenLoop(ctx context.Context) {
 
 		backoff = 100 * time.Millisecond
 
-		_, _ = pooledConn.Exec(loopCtx, "LISTEN cdc")
+		if _, err := pooledConn.Exec(loopCtx, "LISTEN cdc"); err != nil {
+			pooledConn.Release()
+			select {
+			case <-loopCtx.Done():
+				return
+			case <-time.After(backoff):
+				continue
+			}
+		}
+		hub.readyOnce.Do(func() { close(hub.ready) })
 
 		for {
 			notification, err := pooledConn.Conn().WaitForNotification(loopCtx)
@@ -271,7 +316,9 @@ func (hub *Hub) listenLoop(ctx context.Context) {
 
 			if notification != nil && notification.Channel == "cdc" {
 				var cdcEvent CDCEvent
-				if err := json.Unmarshal([]byte(notification.Payload), &cdcEvent); err == nil {
+				decoder := json.NewDecoder(strings.NewReader(notification.Payload))
+				decoder.UseNumber()
+				if err := decoder.Decode(&cdcEvent); err == nil {
 					hub.BroadcastEvent(cdcEvent)
 				}
 			}

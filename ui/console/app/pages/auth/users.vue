@@ -199,6 +199,7 @@ onMounted(() => {
                   : []),
               ]"
               ><UButton
+                square
                 icon="i-lucide-ellipsis"
                 aria-label="User Actions"
                 color="neutral"

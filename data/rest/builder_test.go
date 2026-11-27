@@ -219,13 +219,58 @@ func TestRestBuilderInsertUpdateDeleteUnit(t *testing.T) {
 		Filters: negatedFilters,
 		Embedded: []EmbeddedField{
 			{Relation: "comments", Fields: []string{"id", "body"}},
-			{Relation: "tags", Fields: []string{"invalid-field!"}},
+			{Relation: "tags", Fields: []string{"id"}},
 		},
 	}, TableMetadata{PrimaryKey: ""})
 	if err != nil {
 		t.Fatalf("unexpected error building negated select: %v", err)
 	}
+	if _, err := queryBuilder.BuildSelect(&QueryParams{Embedded: []EmbeddedField{{Relation: "tags", Fields: []string{"invalid-field!"}}}}, TableMetadata{}); err == nil {
+		t.Fatal("invalid embedded projection was accepted")
+	}
 	if !strings.Contains(negatedSQLStatement.SQL, "NOT IN") || !strings.Contains(negatedSQLStatement.SQL, "websearch_to_tsquery") {
 		t.Fatalf("expected negated SQL constructs: %s", negatedSQLStatement.SQL)
+	}
+}
+
+func TestRestVerifiedEmbeddedRelationsUnit(t *testing.T) {
+	parentTableMetadata := TableMetadata{PrimaryKey: "id", ForeignKeys: map[string]RelationForeignKey{"child": {FromColumn: "id", ToSchema: "related", ToTable: "children", ToColumn: "parent_id"}}}
+	childTableMetadata := TableMetadata{ForeignKeys: map[string]RelationForeignKey{"leaf": {FromColumn: "id", ToTable: "leaves", ToColumn: "child_id"}}}
+	queryBuilder := NewQueryBuilder("public", "parents")
+	queryBuilder.SetMetadataResolver(func(schema, table string) (TableMetadata, bool) {
+		switch table {
+		case "children":
+			return childTableMetadata, true
+		case "leaves":
+			return TableMetadata{}, true
+		default:
+			return TableMetadata{}, false
+		}
+	})
+	queryParams := &QueryParams{Embedded: []EmbeddedField{{Relation: "child", Fields: []string{"*"}, Children: []EmbeddedField{{Relation: "leaf"}}}}}
+	sqlStatement, err := queryBuilder.BuildSelect(queryParams, parentTableMetadata)
+	if err != nil || !strings.Contains(sqlStatement.SQL, `"related"."children"`) || !strings.Contains(sqlStatement.SQL, "relation_2.*") {
+		t.Fatalf("nested relation failed: %s %v", sqlStatement.SQL, err)
+	}
+	for _, testCase := range []struct {
+		name          string
+		embeddedField EmbeddedField
+		tableMetadata TableMetadata
+		depth         int
+	}{
+		{"invalid relation", EmbeddedField{Relation: "bad-name"}, parentTableMetadata, 1},
+		{"depth", EmbeddedField{Relation: "child"}, parentTableMetadata, 17},
+		{"unknown relation", EmbeddedField{Relation: "unknown"}, parentTableMetadata, 1},
+		{"protected schema", EmbeddedField{Relation: "child"}, TableMetadata{ForeignKeys: map[string]RelationForeignKey{"child": {FromColumn: "id", ToSchema: "auth", ToTable: "users", ToColumn: "id"}}}, 1},
+		{"invalid source", EmbeddedField{Relation: "child"}, TableMetadata{ForeignKeys: map[string]RelationForeignKey{"child": {FromColumn: "bad-name", ToTable: "children", ToColumn: "id"}}}, 1},
+		{"unexposed target", EmbeddedField{Relation: "child"}, TableMetadata{ForeignKeys: map[string]RelationForeignKey{"child": {FromColumn: "id", ToTable: "private", ToColumn: "id"}}}, 1},
+		{"invalid field", EmbeddedField{Relation: "child", Fields: []string{"bad-field"}}, parentTableMetadata, 1},
+		{"invalid nested", EmbeddedField{Relation: "child", Children: []EmbeddedField{{Relation: "unknown"}}}, parentTableMetadata, 1},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := queryBuilder.buildEmbedded(testCase.embeddedField, testCase.tableMetadata, "public", "parents", "parents", testCase.depth); err == nil {
+				t.Fatal("invalid relation accepted")
+			}
+		})
 	}
 }

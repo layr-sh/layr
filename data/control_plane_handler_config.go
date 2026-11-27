@@ -43,6 +43,12 @@ func (controlPlaneHandler *ControlPlaneHandler) handleUpdateConfig(responseWrite
 		return
 	}
 
+	ttl := time.Duration(config.Cache.CatalogTTLSeconds) * time.Second
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	controlPlaneHandler.schemaIntrospector.SetCatalogTTL(ttl)
+	controlPlaneHandler.InvalidateCatalog(request.Context())
 	log.Debug("successfully updated data configuration")
 	core.WriteJSONResponse(responseWriter, http.StatusOK, controlPlaneHandler.configManager.Get())
 }

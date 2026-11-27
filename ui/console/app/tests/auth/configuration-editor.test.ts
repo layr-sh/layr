@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { nextTick } from "vue";
+import { nextTick, type Component } from "vue";
 import { useNuxtApp } from "#app";
 import { UCard, UFormField, USelectMenu, USeparator } from "#components";
 import Configuration from "../../pages/auth/configurations.vue";
@@ -34,7 +34,7 @@ afterEach(async () => {
 describe("Auth form information hierarchy", () => {
   it("uses a fixed multi-select for backend-supported MFA risk signals", async () => {
     ({ wrapper } = await mountPage(Security));
-    const menu = wrapper.findComponent(USelectMenu);
+    const menu = wrapper.findAllComponents(USelectMenu as Component)[0]!;
     const props = menu.props() as {
       multiple: boolean;
       createItem: boolean;

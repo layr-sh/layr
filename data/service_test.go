@@ -3,9 +3,15 @@ package data
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"strings"
+	"time"
+
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgproto3"
 
 	"github.com/go-fuego/fuego"
 	"github.com/stretchr/testify/assert"
@@ -13,8 +19,55 @@ import (
 	"layr.sh/data/realtime"
 )
 
+func TestDataServiceLifecycleWireFailuresUnit(t *testing.T) {
+	for _, stage := range []string{"startup catalog", "listener", "refresh", "privileges", "trigger"} {
+		t.Run(stage, func(t *testing.T) {
+			configJSON, err := json.Marshal(DefaultConfig())
+			if err != nil {
+				t.Fatal(err)
+			}
+			reached := make(chan struct{}, 1)
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				queryStage := catalogQueryStage(sql)
+				if strings.Contains(sql, "SELECT value FROM data.config") {
+					return postgresResult([]uint32{114}, []string{string(configJSON)})
+				}
+				if strings.Contains(sql, "reference_data.countries LIMIT") {
+					return postgresResult([]uint32{16}, []string{"t"})
+				}
+				target := (stage == "startup catalog" || stage == "refresh") && queryStage == "schema tables" || stage == "privileges" && queryStage == "schemas" || stage == "trigger" && strings.Contains(sql, "CREATE TRIGGER") || stage == "listener" && sql == "LISTEN cdc"
+				if target {
+					select {
+					case reached <- struct{}{}:
+					default:
+					}
+					return postgresFailure()
+				}
+				if stage == "listener" && queryStage == "schema tables" {
+					return postgresResult([]uint32{25})
+				}
+				return catalogQueryReply(sql)
+			})
+			service := NewService(kernel)
+			ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
+			defer cancel()
+			switch stage {
+			case "refresh":
+				service.InvalidateCatalog(ctx)
+			case "privileges", "trigger":
+				err = service.IntrospectSchemas(ctx)
+			default:
+				err = service.Start(ctx)
+			}
+			if len(reached) == 0 || stage != "refresh" && err == nil {
+				t.Fatalf("lifecycle failure was not exercised: reached=%v error=%v", (len(reached) > 0), err)
+			}
+		})
+	}
+}
+
 func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	dataService := NewService(kernel)
 	if dataService == nil {
@@ -53,7 +106,7 @@ func TestDataServiceInitializationAndRoutesUnit(t *testing.T) {
 }
 
 func TestDataServiceCacheInvalidationUnit(t *testing.T) {
-	ctx := context.Background()
+	ctx := dataAdminContext()
 	kernel := core.SetupTestKernelWithBrokenDB(t, Migrations)
 	dataService := NewService(kernel)
 
@@ -121,7 +174,7 @@ func TestDataServiceScopeCheckUnit(t *testing.T) {
 	defer cleanup()
 
 	dataService := NewService(kernel)
-	ctx := context.Background()
+	ctx := dataAdminContext()
 
 	assert.NoError(t, dataService.GetConfigManager().Load(ctx))
 	_, err := kernel.DB().Exec(ctx, `UPDATE data.config SET value = jsonb_set(value, '{cache,catalog_ttl_seconds}', '0') WHERE key = 'runtime'`)

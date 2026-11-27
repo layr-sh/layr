@@ -103,9 +103,8 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 
 	t.Run("CacheHit", func(t *testing.T) {
 		query := `query @cache(ttl: 60) { users { id } }`
-		authContext := datakv.ExtractAuthContext(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/graphql", nil), "")
 		userVisibleKey := datakv.BuildGraphQLQueryKey(query, nil, "")
-		internalKey := datakv.BuildInternalKey(authContext, userVisibleKey)
+		internalKey := baseHandler.queryCacheKey(httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/graphql", nil), userVisibleKey, datakv.BuildGraphQLQueryKey(query+"\n# operation:", nil, ""))
 
 		_ = kernel.KVStore().Set(context.Background(), internalKey, `{"data":{"users":[{"id":"1"}]}}`, time.Hour)
 

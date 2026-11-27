@@ -9,6 +9,37 @@ import (
 	"time"
 )
 
+func TestCoreSessionRealtimeQueryTokenUnit(t *testing.T) {
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime?token=browser-token", nil)
+	request.Header.Set("Upgrade", "WebSocket")
+	if token := ExtractRequestSessionToken(request); token != "browser-token" {
+		t.Fatalf("missing realtime token: %q", token)
+	}
+	request.Header.Set("Authorization", "Bearer header-token")
+	if token := ExtractRequestSessionToken(request); token != "header-token" {
+		t.Fatal("query token overrode bearer header")
+	}
+	request.Header.Del("Authorization")
+	for _, path := range []string{"/v1/data/public/items?token=browser-token", "/v1/_/data/sql?token=browser-token", "/v1/realtime?token=%20"} {
+		t.Run("case", func(t *testing.T) {
+			upgradeRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
+			upgradeRequest.Header.Set("Upgrade", "websocket")
+			if ExtractRequestSessionToken(upgradeRequest) != "" {
+				t.Fatal("query token accepted outside a realtime upgrade")
+			}
+		})
+	}
+	request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime?token=browser-token", nil)
+	if ExtractRequestSessionToken(request) != "" {
+		t.Fatal("ordinary HTTP request accepted query token")
+	}
+	request.Method = http.MethodPost
+	request.Header.Set("Upgrade", "websocket")
+	if ExtractRequestSessionToken(request) != "" {
+		t.Fatal("POST accepted query token")
+	}
+}
+
 func TestCoreSessionCookieAndRequestHelpersUnit(t *testing.T) {
 	// 1. IsSecureRequest tests
 	if IsSecureRequest(nil) {

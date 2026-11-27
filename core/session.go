@@ -212,6 +212,13 @@ func ExtractRequestSessionToken(request *http.Request) string {
 			}
 		}
 	}
+	// Browser WebSockets cannot attach an Authorization header. Accept the SDK's
+	// query token only for the realtime upgrade, never for ordinary HTTP routes.
+	if request.Method == http.MethodGet && request.URL.Path == "/v1/realtime" && strings.EqualFold(request.Header.Get("Upgrade"), "websocket") {
+		if token := strings.TrimSpace(request.URL.Query().Get("token")); token != "" {
+			return token
+		}
+	}
 	if cookie, err := request.Cookie(SessionCookieNameSecure); err == nil && cookie.Value != "" {
 		return cookie.Value
 	}

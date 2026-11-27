@@ -203,6 +203,7 @@ onMounted(async () => {
               :content="{ align: 'end' }"
             >
               <UButton
+                square
                 icon="i-lucide-ellipsis"
                 color="neutral"
                 variant="ghost"

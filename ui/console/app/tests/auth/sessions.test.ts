@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
+import { nextTick, type Component } from "vue";
 import { useNuxtApp } from "#app";
 import { UModal, USelectMenu } from "#components";
 import { createClient, useAuth as useAuthService } from "layr-client";
@@ -72,9 +72,10 @@ describe("Auth per-user session inspection", () => {
     const user = await fixture();
     ({ wrapper } = await mountPage(Sessions));
     const state = wrapper.setupState;
-    wrapper
-      .findComponent(USelectMenu)
-      .vm.$emit("update:modelValue", { id: user.id, label: user.email });
+    wrapper.findAllComponents(USelectMenu as Component)[0]!.vm.$emit("update:modelValue", {
+      id: user.id,
+      label: user.email,
+    });
     await nextTick();
     await settle();
     const session = state.authControlPlane.sessions.value.data[0];
@@ -129,7 +130,7 @@ describe("Auth per-user session inspection", () => {
     }
     ({ wrapper } = await mountPage(Sessions));
     const state = wrapper.setupState;
-    const picker = wrapper.findComponent(USelectMenu);
+    const picker = wrapper.findAllComponents(USelectMenu as Component)[0]!;
     expect(pageDOM().text()).not.toContain("UUID");
     expect(state.userOptions.value.some((item: { id: string }) => item.id === user.id)).toBe(false);
     picker.vm.$emit("update:searchTerm", user.email);

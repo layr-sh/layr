@@ -2,10 +2,9 @@ package realtime
 
 import (
 	"context"
+	"layr.sh/core"
 	"testing"
 	"time"
-
-	"layr.sh/core"
 )
 
 type unitMockKV struct {
@@ -367,5 +366,32 @@ func TestRealtimeHubLifecycleAndFilteringUnit(t *testing.T) {
 	}
 	if !matchLike("a_b", "a_b", false) {
 		t.Fatal("expected matchLike with underscore wildcard to match")
+	}
+}
+
+func TestRealtimeHubReadinessAndShutdownUnit(t *testing.T) {
+	hub := NewHub(core.NewTestKernel(nil))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := hub.WaitReady(ctx); err == nil {
+		t.Fatal("canceled readiness wait succeeded")
+	}
+	hub.Stop()
+	hub.Start(context.Background())
+	if hub.started {
+		t.Fatal("stopped hub restarted")
+	}
+	if err := hub.WaitReady(context.Background()); err == nil {
+		t.Fatal("stopped hub reported readiness")
+	}
+	readyHub := NewHub(core.NewTestKernel(nil))
+	close(readyHub.ready)
+	if err := readyHub.WaitReady(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	readyHub.installedTables["public.recreated"] = true
+	readyHub.ForgetTableTrigger("public", "recreated")
+	if readyHub.installedTables["public.recreated"] {
+		t.Fatal("trigger installation cache retained a recreated table")
 	}
 }

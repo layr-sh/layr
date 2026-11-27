@@ -54,6 +54,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleCreatePolicy(responseWrite
 		return
 	}
 
+	controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 	tableID := schema + "." + table
 	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
 		Schema: schema,
@@ -87,6 +88,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleDeletePolicy(responseWrite
 		return
 	}
 
+	controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 	tableID := schema + "." + table
 	controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(tableID, TableUpdatedEventData{
 		Schema: schema,
@@ -143,6 +145,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, enableErr.Error())
 			return
 		}
+		controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
 			Schema: schema,
 			Table:  table,
@@ -159,6 +162,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, disableErr.Error())
 			return
 		}
+		controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
 			Schema: schema,
 			Table:  table,
@@ -180,6 +184,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 		if !force {
 			status = "unforced"
 		}
+		controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
 			Schema: schema,
 			Table:  table,
@@ -196,6 +201,7 @@ func (controlPlaneHandler *ControlPlaneHandler) handleToggleRLS(responseWriter h
 			core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, unforceErr.Error())
 			return
 		}
+		controlPlaneHandler.InvalidateCache(request.Context(), InvalidateCacheInput{All: true})
 		controlPlaneHandler.kernel.EventBus().Publish(request.Context(), NewTableUpdatedEvent(schema+"."+table, TableUpdatedEventData{
 			Schema: schema,
 			Table:  table,

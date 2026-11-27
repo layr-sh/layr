@@ -4,22 +4,113 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"layr.sh/core"
+	"layr.sh/data/graphql"
 	"layr.sh/data/rest"
 )
+
+func TestDataRESTMetadataEdgeCasesUnit(t *testing.T) {
+	baseHandler := NewService(core.NewTestKernel(nil)).BaseHandler()
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/auth/users", nil)
+	responseRecorder := httptest.NewRecorder()
+	baseHandler.handleListRecords(responseRecorder, request)
+	assert.Equal(t, http.StatusForbidden, responseRecorder.Code)
+	assert.Equal(t, "*", baseHandler.buildSelectColumns(request, rest.TableMetadata{}))
+	queryParams := &rest.QueryParams{Filters: []rest.FilterOp{{Column: "invalid-name", Op: "eq"}}}
+	assert.Error(t, writeExactCountHeaders(request.Context(), responseRecorder, nil, rest.NewQueryBuilder("public", "items"), queryParams, 0))
+	baseHandler.SetTableMetadata(rest.TableMetadata{Schema: "public", Table: "items", ForeignKeys: map[string]rest.RelationForeignKey{"parent": {ToSchema: "related", ToTable: "parents"}}})
+	before := baseHandler.getCompositeTableCacheVersion(request.Context(), "public", "items", []string{"parent"})
+	baseHandler.bumpTableCacheVersion(request.Context(), "related", "parents")
+	assert.NotEqual(t, before, baseHandler.getCompositeTableCacheVersion(request.Context(), "public", "items", []string{"parent"}))
+}
+
+func TestDataRESTMissingCatalogUnit(t *testing.T) {
+	for _, unavailable := range []bool{true, false} {
+		t.Run(fmt.Sprint(unavailable), func(t *testing.T) {
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				if catalogQueryStage(sql) == "schema tables" {
+					if unavailable {
+						return postgresFailure()
+					}
+					return postgresResult([]uint32{25})
+				}
+				return catalogQueryReply(sql)
+			})
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/data/public/missing", nil)
+			responseRecorder := httptest.NewRecorder()
+			NewService(kernel).BaseHandler().handleListRecords(responseRecorder, request)
+			expected := http.StatusNotFound
+			if unavailable {
+				expected = http.StatusInternalServerError
+			}
+			assert.Equal(t, expected, responseRecorder.Code, responseRecorder.Body.String())
+		})
+	}
+}
+
+func TestDataRowDecodingFailuresAndJSONValuesUnit(t *testing.T) {
+	baseHandler := NewService(core.NewTestKernel(nil)).BaseHandler()
+	for _, rows := range []*mockJSONRows{{rows: [][]any{{}}, valueErr: errors.New("decode")}, {streamErr: errors.New("stream")}} {
+		t.Run("case", func(t *testing.T) {
+			if _, err := baseHandler.scanRowsToJSONMaps(rows); err == nil {
+				t.Fatal("row failure swallowed")
+			}
+		})
+	}
+	if queryJSONValue(uint8('i'), 18) != "i" || queryJSONValue(uint8(4), 0) != uint8(4) {
+		t.Fatal("internal char decoded incorrectly")
+	}
+	for _, pair := range []struct {
+		value    float64
+		expected any
+	}{{1, float64(1)}, {math.NaN(), "NaN"}, {math.Inf(1), "Infinity"}, {math.Inf(-1), "-Infinity"}} {
+		t.Run("case", func(t *testing.T) {
+			if value := queryJSONValue(pair.value, 0); value != pair.expected {
+				t.Fatalf("unexpected JSON numeric value: %v", value)
+			}
+		})
+	}
+	if _, err := json.Marshal(queryJSONValue(map[string]any{"ids": []any{[16]byte{}, math.Inf(1)}}, 0)); err != nil {
+		t.Fatal(err)
+	}
+	chars := queryJSONValue([]any{uint8('a')}, 1002).([]any)
+	if chars[0] != "a" {
+		t.Fatal("char array decoded incorrectly")
+	}
+	for _, code := range []string{"22P02", "22003", "22007", "22008", "23502", "23514", "25006"} {
+		t.Run("case", func(t *testing.T) {
+			responseRecorder := httptest.NewRecorder()
+			baseHandler.writeDBErrorResponse(responseRecorder, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil), &pgconn.PgError{Code: code})
+			if responseRecorder.Code != http.StatusBadRequest {
+				t.Fatal("invalid input reported as server error")
+			}
+		})
+	}
+	invalidClaimsCtx := core.WithAuthContext(context.Background(), core.AuthContext{JWT: core.JWTClaims{Claims: map[string]any{"unsupported": func() {}}}})
+	if baseHandler.queryCacheKey(httptest.NewRequestWithContext(invalidClaimsCtx, http.MethodGet, "/", nil), "rest:alias", "rest:query") != "" {
+		t.Fatal("invalid claims were cacheable")
+	}
+}
 
 func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 	kernel := core.NewTestKernel(nil)
 	service := NewService(kernel)
 	configManager := service.configManager
 	baseHandler := service.baseHandler
+	baseHandler.SetTableMetadata(rest.TableMetadata{Schema: "public", Table: "users", PrimaryKey: "id", Columns: []string{"id", "name"}})
 
 	t.Run("DisabledREST", func(t *testing.T) {
 		config := configManager.Get()
@@ -314,7 +405,8 @@ func TestDataBaseHandlerRESTValidationUnit(t *testing.T) {
 				{[]byte(`{"key":"val1"}`), []byte(`{"key":"val2"}`)},
 			},
 		}
-		results := baseHandler.scanRowsToJSONMaps(rows)
+		results, scanErr := baseHandler.scanRowsToJSONMaps(rows)
+		assert.NoError(t, scanErr)
 		assert.Len(t, results, 1)
 		marshaled, err := json.Marshal(results[0])
 		assert.NoError(t, err)
@@ -425,23 +517,25 @@ func TestDataBaseHandlerRESTRPCValidationUnit(t *testing.T) {
 
 	t.Run("ParseQueryArgValueTypes", func(t *testing.T) {
 		assert.Equal(t, int64(123), parseQueryArgValue("123"))
-		assert.Equal(t, 123.45, parseQueryArgValue("123.45"))
+		assert.Equal(t, json.Number("123.45"), parseQueryArgValue("123.45"))
 		assert.Equal(t, true, parseQueryArgValue("true"))
 		assert.Equal(t, false, parseQueryArgValue("false"))
-		assert.Equal(t, map[string]any{"x": float64(1)}, parseQueryArgValue(`{"x":1}`))
-		assert.Equal(t, []any{float64(1), float64(2)}, parseQueryArgValue(`[1,2]`))
+		assert.Equal(t, map[string]any{"x": json.Number("1")}, parseQueryArgValue(`{"x":1}`))
+		assert.Equal(t, []any{json.Number("1"), json.Number("2")}, parseQueryArgValue(`[1,2]`))
 		assert.Equal(t, "hello", parseQueryArgValue("hello"))
 	})
 }
 
 type mockJSONRows struct {
-	fields []pgconn.FieldDescription
-	rows   [][]any
-	index  int
+	fields    []pgconn.FieldDescription
+	rows      [][]any
+	index     int
+	valueErr  error
+	streamErr error
 }
 
 func (m *mockJSONRows) Close()                                       {}
-func (m *mockJSONRows) Err() error                                   { return nil }
+func (m *mockJSONRows) Err() error                                   { return m.streamErr }
 func (m *mockJSONRows) CommandTag() pgconn.CommandTag                { return pgconn.CommandTag{} }
 func (m *mockJSONRows) FieldDescriptions() []pgconn.FieldDescription { return m.fields }
 func (m *mockJSONRows) Next() bool {
@@ -452,8 +546,108 @@ func (m *mockJSONRows) Next() bool {
 	return false
 }
 func (m *mockJSONRows) Scan(dest ...any) error { return nil }
-func (m *mockJSONRows) Values() ([]any, error) { return m.rows[m.index-1], nil }
+func (m *mockJSONRows) Values() ([]any, error) { return m.rows[m.index-1], m.valueErr }
 func (m *mockJSONRows) RawValues() [][]byte    { return nil }
 func (m *mockJSONRows) Conn() *pgx.Conn        { return nil }
 
 var _ pgx.Rows = (*mockJSONRows)(nil)
+
+func TestDataHandlerWireFailuresUnit(t *testing.T) {
+	for _, testCase := range []struct{ operation, stage string }{
+		{"list", "rls"}, {"get", "rls"}, {"create", "rls"}, {"update", "rls"}, {"delete", "rls"}, {"graphql", "rls"}, {"rpc", "rls"}, {"rpc", "readonly"},
+		{"list", "values"}, {"get", "values"}, {"update", "values"}, {"rpc", "values"}, {"list", "count"}, {"list", "commit"}, {"get", "commit"}, {"list", "marshal"},
+	} {
+		t.Run(testCase.operation+"/"+testCase.stage, func(t *testing.T) {
+			reached := make(chan struct{}, 1)
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				statement := strings.ToLower(strings.TrimSpace(sql))
+				target := false
+				switch testCase.stage {
+				case "rls":
+					target = strings.Contains(statement, "set local role")
+				case "readonly":
+					target = strings.Contains(statement, "set transaction read only")
+				case "commit":
+					target = statement == "commit"
+				case "count":
+					target = strings.Contains(statement, "select count(*)")
+				case "values", "marshal":
+					target = strings.HasPrefix(statement, "select ") || strings.HasPrefix(statement, "update ")
+				}
+				if target {
+					select {
+					case reached <- struct{}{}:
+					default:
+					}
+					if testCase.stage == "values" {
+						return postgresResult([]uint32{23}, []string{"invalid-integer"})
+					}
+					if testCase.stage != "marshal" {
+						return postgresFailure()
+					}
+				}
+				if strings.HasPrefix(statement, "select ") || strings.HasPrefix(statement, "update ") {
+					return postgresResult([]uint32{23}, []string{"1"})
+				}
+				return nil
+			})
+			if testCase.stage == "marshal" {
+				connection, err := kernel.DB().Acquire(context.Background())
+				if err != nil {
+					t.Fatal(err)
+				}
+				connection.Conn().TypeMap().RegisterType(&pgtype.Type{Name: "int4", OID: 23, Codec: unmarshalableIntCodec{}})
+				connection.Release()
+			}
+			service := NewService(kernel)
+			service.SetTableMetadata(rest.TableMetadata{Schema: "public", Table: "items", PrimaryKey: "id", Columns: []string{"id"}})
+			service.GraphQLSchema().SetTable(&graphql.TableInfo{Schema: "public", Name: "items", PrimaryKey: "id", Columns: map[string]graphql.ColumnInfo{"id": {Name: "id", DataType: "integer"}}})
+			method, path, body := http.MethodGet, "/v1/data/public/items", ""
+			switch testCase.operation {
+			case "get":
+				path += "/1"
+			case "create":
+				method = http.MethodPost
+				body = `{"id":1}`
+			case "update":
+				method = http.MethodPatch
+				path += "/1"
+				body = `{"id":2}`
+			case "delete":
+				method = http.MethodDelete
+				path += "/1"
+			case "graphql":
+				method = http.MethodPost
+				path = "/v1/graphql"
+				body = `{"query":"{ items(limit:1.5) { id } }"}`
+			case "rpc":
+				path = "/v1/data/public/rpc/echo"
+			}
+			if testCase.stage == "count" {
+				path += "?count=exact"
+			}
+			request := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
+			responseRecorder := httptest.NewRecorder()
+			baseHandler := service.BaseHandler()
+			switch testCase.operation {
+			case "list":
+				baseHandler.handleListRecords(responseRecorder, request)
+			case "get":
+				baseHandler.handleGetRecord(responseRecorder, request)
+			case "create":
+				baseHandler.handleCreateRecord(responseRecorder, request)
+			case "update":
+				baseHandler.handleUpdateRecord(responseRecorder, request)
+			case "delete":
+				baseHandler.handleDeleteRecord(responseRecorder, request)
+			case "graphql":
+				baseHandler.handleExecuteGraphQL(responseRecorder, request)
+			case "rpc":
+				baseHandler.handleExecuteFunction(responseRecorder, request)
+			}
+			if len(reached) == 0 || responseRecorder.Code != http.StatusInternalServerError {
+				t.Fatalf("database failure not propagated: reached=%v status=%d body=%s", (len(reached) > 0), responseRecorder.Code, responseRecorder.Body.String())
+			}
+		})
+	}
+}

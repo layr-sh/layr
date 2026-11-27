@@ -2,17 +2,44 @@ package data
 
 import (
 	"context"
+	"errors"
+	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
+	"layr.sh/data/realtime"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gorilla/websocket"
-	"github.com/stretchr/testify/assert"
-	"layr.sh/core"
-	"layr.sh/data/realtime"
 )
+
+func TestDataRealtimeTokenExpiryUnit(t *testing.T) {
+	service := NewService(core.NewTestKernel(nil))
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		ctx := core.WithAuthContext(request.Context(), core.AuthContext{JWT: core.JWTClaims{ExpiresAt: time.Now().Add(time.Second).Unix()}})
+		service.BaseHandler().handleConnectRealtime(responseWriter, request.WithContext(ctx))
+	}))
+	defer server.Close()
+	connection, httpResponse, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+	if httpResponse != nil {
+		_ = httpResponse.Body.Close()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = connection.Close() }()
+	if err := connection.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, readErr := connection.ReadMessage()
+	var networkError net.Error
+	if readErr == nil || errors.As(readErr, &networkError) && networkError.Timeout() {
+		t.Fatal("expired token left its connection open")
+	}
+}
 
 func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 	kernel := core.NewTestKernel(nil)
@@ -104,11 +131,11 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 			_ = conn.Close()
 		}
 
-		// Empty allowed origins list defaults to true
+		// An empty allowlist rejects cross-origin WebSocket requests
 		config.CORS.AllowedOrigins = []string{}
 		configManager.SetMemoryConfig(config)
 		conn, httpResponse, err = websocket.DefaultDialer.Dial(wsURL, badHeader)
-		assert.NoError(t, err)
+		assert.Error(t, err)
 		if httpResponse != nil {
 			_ = httpResponse.Body.Close()
 		}
@@ -215,4 +242,29 @@ func TestDataBaseHandlerRealtimeUnit(t *testing.T) {
 		_ = conn.ReadJSON(&errMsg4)
 		assert.Contains(t, errMsg4["error"], "excluded")
 	})
+}
+
+func TestDataRealtimeAuthorizationWireFailuresUnit(t *testing.T) {
+	for _, stage := range []string{"begin", "truncated"} {
+		t.Run(stage, func(t *testing.T) {
+			kernel := postgresFaultKernel(t, func(sql string) []pgproto3.BackendMessage {
+				if strings.EqualFold(strings.TrimSpace(sql), "begin") {
+					return postgresFailure()
+				}
+				if strings.Contains(sql, "relrowsecurity") {
+					return postgresResult([]uint32{16}, []string{"f"})
+				}
+				return nil
+			})
+			cdcEvent := realtime.CDCEvent{Schema: "public", Table: "items", Event: "INSERT", Record: map[string]any{"id": 1}}
+			if stage == "truncated" {
+				cdcEvent.Truncated = true
+				cdcEvent.Record = nil
+			}
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/realtime", nil)
+			if _, allowed := NewService(kernel).BaseHandler().authorizeRealtimeEvent(request, cdcEvent); allowed {
+				t.Fatal("database failure or missing row identity authorized")
+			}
+		})
+	}
 }

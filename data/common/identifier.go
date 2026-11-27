@@ -1,6 +1,19 @@
 package common
 
-import "unicode"
+import (
+	"strings"
+	"unicode"
+)
+
+// IsProtectedSchema identifies platform and PostgreSQL schemas that public data APIs must never expose.
+func IsProtectedSchema(schema string) bool {
+	schema = strings.ToLower(strings.TrimSpace(schema))
+	switch schema {
+	case "system", "core", "auth", "data", "file_storage", "tasks", "image", "function", "console", "information_schema":
+		return true
+	}
+	return strings.HasPrefix(schema, "pg_")
+}
 
 // IsValidIdentifier validates that an identifier follows PostgreSQL naming conventions (letter or underscore followed by letters, digits, underscores, max 63 chars).
 func IsValidIdentifier(identifier string) bool {

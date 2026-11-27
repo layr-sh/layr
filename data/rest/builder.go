@@ -22,17 +22,19 @@ type TableMetadata struct {
 	ForeignKeys map[string]RelationForeignKey // relationName -> FK details
 }
 
-// RelationForeignKey defines relation details between tables.
+// RelationForeignKey defines relationForeignKey details between tables.
 type RelationForeignKey struct {
 	FromColumn string
 	ToTable    string
+	ToSchema   string
 	ToColumn   string
 }
 
 // QueryBuilder constructs parameterized SQL queries.
 type QueryBuilder struct {
-	schema string
-	table  string
+	schema           string
+	table            string
+	metadataResolver func(string, string) (TableMetadata, bool)
 }
 
 // NewQueryBuilder initializes a query builder for a specific schema and table.
@@ -44,6 +46,68 @@ func NewQueryBuilder(schema, table string) *QueryBuilder {
 		schema: schema,
 		table:  table,
 	}
+}
+
+// SetMetadataResolver supplies exposed relation metadata for nested selects.
+func (queryBuilder *QueryBuilder) SetMetadataResolver(resolver func(string, string) (TableMetadata, bool)) {
+	queryBuilder.metadataResolver = resolver
+}
+
+func (queryBuilder *QueryBuilder) buildEmbedded(embeddedField EmbeddedField, tableMetadata TableMetadata, schema, table, parentAlias string, depth int) (string, error) {
+	if depth > 16 || !common.IsValidIdentifier(embeddedField.Relation) {
+		return "", fmt.Errorf("invalid or excessively nested relation")
+	}
+	targetSchema, targetTable := schema, embeddedField.Relation
+	sourceColumn := tableMetadata.PrimaryKey
+	if sourceColumn == "" {
+		sourceColumn = "id"
+	}
+	targetColumn := strings.TrimSuffix(table, "s") + "_id"
+	if relationForeignKey, exists := tableMetadata.ForeignKeys[embeddedField.Relation]; exists {
+		targetTable = relationForeignKey.ToTable
+		targetColumn = relationForeignKey.ToColumn
+		sourceColumn = relationForeignKey.FromColumn
+		if relationForeignKey.ToSchema != "" {
+			targetSchema = relationForeignKey.ToSchema
+		}
+	}
+	if _, exists := tableMetadata.ForeignKeys[embeddedField.Relation]; !exists && queryBuilder.metadataResolver != nil {
+		return "", fmt.Errorf("no unambiguous relationship named %q", embeddedField.Relation)
+	}
+	if common.IsProtectedSchema(targetSchema) || !common.IsValidIdentifier(targetSchema) || !common.IsValidIdentifier(targetTable) || !common.IsValidIdentifier(sourceColumn) || !common.IsValidIdentifier(targetColumn) {
+		return "", fmt.Errorf("invalid relation target")
+	}
+	targetTableMetadata := TableMetadata{Schema: targetSchema, Table: targetTable}
+	if queryBuilder.metadataResolver != nil {
+		var allowed bool
+		targetTableMetadata, allowed = queryBuilder.metadataResolver(targetSchema, targetTable)
+		if !allowed {
+			return "", fmt.Errorf("relation %s.%s is not exposed", targetSchema, targetTable)
+		}
+	}
+	alias := fmt.Sprintf("relation_%d", depth)
+	var columns []string
+	if len(embeddedField.Fields) == 0 {
+		columns = append(columns, alias+".*")
+	}
+	for _, name := range embeddedField.Fields {
+		if name == "*" {
+			columns = append(columns, alias+".*")
+			continue
+		}
+		if !common.IsValidIdentifier(name) {
+			return "", fmt.Errorf("invalid relation column")
+		}
+		columns = append(columns, fmt.Sprintf(`%s."%s"`, alias, name))
+	}
+	for _, child := range embeddedField.Children {
+		expression, err := queryBuilder.buildEmbedded(child, targetTableMetadata, targetSchema, targetTable, alias, depth+1)
+		if err != nil {
+			return "", err
+		}
+		columns = append(columns, expression+fmt.Sprintf(` AS "%s"`, child.Relation))
+	}
+	return fmt.Sprintf(`(SELECT COALESCE(json_agg(embedded_row), '[]'::json) FROM (SELECT %s FROM "%s"."%s" %s WHERE %s."%s" = "%s"."%s") embedded_row)`, strings.Join(columns, ", "), targetSchema, targetTable, alias, alias, targetColumn, parentAlias, sourceColumn), nil
 }
 
 // BuildSelect builds a parameterized SELECT query.
@@ -65,48 +129,12 @@ func (queryBuilder *QueryBuilder) BuildSelect(queryParams *QueryParams, tableMet
 		}
 	}
 
-	// Handle embedded relations
-	primaryKey := tableMetadata.PrimaryKey
-	if primaryKey == "" {
-		primaryKey = "id"
-	}
-
 	for _, embedded := range queryParams.Embedded {
-		var jsonAggExpression string
-		if len(embedded.Fields) > 0 && (len(embedded.Fields) != 1 || embedded.Fields[0] != "*") {
-			var jsonBuildObjectPairs []string
-			for _, fieldName := range embedded.Fields {
-				if common.IsValidIdentifier(fieldName) {
-					jsonBuildObjectPairs = append(jsonBuildObjectPairs, fmt.Sprintf("'%s', r.\"%s\"", fieldName, fieldName))
-				}
-			}
-			if len(jsonBuildObjectPairs) > 0 {
-				jsonAggExpression = fmt.Sprintf("json_build_object(%s)", strings.Join(jsonBuildObjectPairs, ", "))
-			} else {
-				jsonAggExpression = "to_json(r)"
-			}
-		} else {
-			jsonAggExpression = "to_json(r)"
+		expression, err := queryBuilder.buildEmbedded(embedded, tableMetadata, queryBuilder.schema, queryBuilder.table, queryBuilder.table, 1)
+		if err != nil {
+			return SQLStatement{}, err
 		}
-
-		relationForeignKey, ok := tableMetadata.ForeignKeys[embedded.Relation]
-		if !ok {
-			// Fallback convention: relation is foreign table with <table_singular>_id = table.id
-			// or relation_id on current table
-			subSQL := fmt.Sprintf(`(
-				SELECT COALESCE(json_agg(%s), '[]'::json)
-				FROM "%s"."%s" r
-				WHERE r."%s_id" = "%s"."%s"
-			) AS "%s"`, jsonAggExpression, queryBuilder.schema, embedded.Relation, strings.TrimSuffix(queryBuilder.table, "s"), queryBuilder.table, primaryKey, embedded.Relation)
-			selectColumns = append(selectColumns, subSQL)
-		} else {
-			subSQL := fmt.Sprintf(`(
-				SELECT COALESCE(json_agg(%s), '[]'::json)
-				FROM "%s"."%s" r
-				WHERE r."%s" = "%s"."%s"
-			) AS "%s"`, jsonAggExpression, queryBuilder.schema, relationForeignKey.ToTable, relationForeignKey.ToColumn, queryBuilder.table, relationForeignKey.FromColumn, embedded.Relation)
-			selectColumns = append(selectColumns, subSQL)
-		}
+		selectColumns = append(selectColumns, expression+fmt.Sprintf(` AS "%s"`, embedded.Relation))
 	}
 
 	whereClause, whereArgs, err := queryBuilder.buildWhere(queryParams.Filters, argIndex)

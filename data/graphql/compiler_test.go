@@ -7,6 +7,25 @@ import (
 	"layr.sh/core"
 )
 
+func TestGraphqlNestedRelationExposureUnit(t *testing.T) {
+	for _, schema := range []string{"unknown", "private", "auth"} {
+		t.Run(schema, func(t *testing.T) {
+			schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(nil))
+			parentTableInfo := &TableInfo{Schema: "public", Name: "parents", ForeignKeys: map[string]RelationInfo{}}
+			if schema != "unknown" {
+				parentTableInfo.ForeignKeys["child"] = RelationInfo{ForeignSchema: schema, ForeignTable: "children", LocalColumn: "id", TargetColumn: "parent_id"}
+			}
+			schemaIntrospector.SetTable(parentTableInfo)
+			compiler := NewCompiler(schemaIntrospector, "public")
+			compiler.SetAllowedSchemas([]string{"public", "auth"})
+			_, _, _, err := compiler.compileNestedRelation("public", "parents", "parent", FieldNode{Name: "child", SelectionSet: []FieldNode{{Name: "id"}}}, 1, 1)
+			if err == nil {
+				t.Fatal("unverified or unexposed relation accepted")
+			}
+		})
+	}
+}
+
 func TestGraphqlCompilerQueryAndMutationUnit(t *testing.T) {
 	schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(nil))
 	schemaIntrospector.tables["public.users"] = &TableInfo{

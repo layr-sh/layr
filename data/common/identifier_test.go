@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestCommonProtectedSchemasUnit(t *testing.T) {
+	for _, schema := range []string{"system", "core", "auth", "data", "file_storage", "tasks", "image", "function", "console", "information_schema", "pg_catalog", "pg_temp_1", " CORE "} {
+		t.Run(schema, func(t *testing.T) {
+			if !IsProtectedSchema(schema) {
+				t.Fatal("reserved schema was not protected")
+			}
+		})
+	}
+	if IsProtectedSchema("public") || IsProtectedSchema("application") {
+		t.Fatal("application schema was protected")
+	}
+}
+
 func TestCommonIdentifierValidationUnit(t *testing.T) {
 	// 1. Length constraints: empty string and exceeding 63 chars
 	if IsValidIdentifier("") {

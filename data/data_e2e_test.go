@@ -16,7 +16,7 @@ func TestDataServiceSchemaAndQueryFlowE2E(t *testing.T) {
 	kernel, cleanup := core.SetupTestKernel(t, Migrations)
 	defer cleanup()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(dataAdminContext(), 120*time.Second)
 	defer cancel()
 
 	dataService := NewService(kernel)

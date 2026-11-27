@@ -14,7 +14,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"layr.sh/core"
-	"layr.sh/data/common"
 	"layr.sh/data/graphql"
 	datakv "layr.sh/data/kv"
 )
@@ -40,7 +39,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 	}
 
 	var executeGraphQLInput ExecuteGraphQLInput
-	if err := json.NewDecoder(request.Body).Decode(&executeGraphQLInput); err != nil {
+	if err := decodeDataJSON(request.Body, &executeGraphQLInput); err != nil {
 		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "Invalid JSON request payload")
 		return
 	}
@@ -50,6 +49,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		return
 	}
 
+	normalizeDataNumbers(executeGraphQLInput.Variables)
 	operationNode, err := graphql.ParseGraphQLWithOperation(executeGraphQLInput.Query, executeGraphQLInput.OperationName, executeGraphQLInput.Variables)
 	if err != nil {
 		log.Debugf("GraphQL syntax error: %v", err)
@@ -145,12 +145,12 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 	if isCacheActive && cacheTTL > 0 && operationNode.Type == graphql.QueryOperationType {
 		referencedTables := handler.resolveGraphQLTables(operationNode)
 		tableVersion := handler.getGraphQLTableCacheVersion(ctx, referencedTables)
-		cacheAuthContext := datakv.ExtractAuthContext(request, handler.saltSecret)
 		userVisibleKey = datakv.BuildGraphQLQueryKeyWithVersion(executeGraphQLInput.Query, executeGraphQLInput.Variables, keySuffix, tableVersion)
-		internalCacheKey = datakv.BuildInternalKey(cacheAuthContext, userVisibleKey)
+		canonicalKey := datakv.BuildGraphQLQueryKeyWithVersion(executeGraphQLInput.Query+"\n# operation:"+executeGraphQLInput.OperationName, executeGraphQLInput.Variables, "", tableVersion)
+		internalCacheKey = handler.queryCacheKey(request, userVisibleKey, canonicalKey)
 		responseWriter.Header().Set("Cache-Key", userVisibleKey)
 
-		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); cacheGetErr == nil && cached != "" {
+		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); internalCacheKey != "" && cacheGetErr == nil && cached != "" {
 			log.Debug("cache hit for GraphQL query")
 			responseWriter.Header().Set("Content-Type", "application/json")
 			responseWriter.Header().Set("Cache-Status", "HIT")
@@ -161,10 +161,11 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 	}
 
 	// Update compiler configuration for schema exposures and exclusions
-	handler.graphqlCompiler.SetAllowedSchemas(config.Schemas)
-	handler.graphqlCompiler.SetExcludedTables(config.REST.ExcludedTables)
+	compiler := graphql.NewCompiler(handler.schemaIntrospector, "public")
+	compiler.SetAllowedSchemas(config.Schemas)
+	compiler.SetExcludedTables(config.REST.ExcludedTables)
 
-	sqlQuery, err := handler.graphqlCompiler.Compile(operationNode)
+	sqlQuery, err := compiler.Compile(operationNode)
 	if err != nil {
 		log.Debugf("GraphQL compilation error: %v", err)
 		handler.writeGraphQLError(responseWriter, http.StatusBadRequest, "GraphQL compilation error")
@@ -183,15 +184,24 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		requiredScope = core.ScopeDataQueryWrite
 	}
 	if !handler.isRLSBypassed(request, requiredScope) {
-		common.ApplyRLS(ctx, tx, jwtClaims)
+		if err = applyQueryRLS(ctx, tx, jwtClaims); err != nil {
+			handler.writeGraphQLDBError(responseWriter, err)
+			return
+		}
 	}
 
 	var rawJSON []byte
-	err = tx.QueryRow(ctx, sqlQuery.SQL, sqlQuery.Args...).Scan(&rawJSON)
+	err = tx.QueryRow(ctx, sqlQuery.SQL, bindDataArguments(sqlQuery.Args)...).Scan(&rawJSON)
 	if err != nil {
 		handler.writeGraphQLDBError(responseWriter, err)
 		return
 	}
+
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		handler.writeGraphQLDBError(responseWriter, commitErr)
+		return
+	}
+	tx = nil
 
 	// Invalidate cache and publish events on successful mutations
 	if operationNode.Type == graphql.MutationOperationType {
@@ -455,35 +465,44 @@ func (handler *BaseHandler) resolveGraphQLTables(operationNode *graphql.Operatio
 		}
 		tableReferences = append(tableReferences, graphQLTableRef{schema: targetSchema, table: targetTable})
 		if len(fieldNode.SelectionSet) > 0 {
-			tableReferences = append(tableReferences, handler.resolveNestedGraphQLTables(targetSchema, fieldNode.SelectionSet)...)
+			tableReferences = append(tableReferences, handler.resolveNestedGraphQLTables(targetSchema, fieldNode.SelectionSet, targetTable)...)
 		}
 	}
 	return tableReferences
 }
 
-func (handler *BaseHandler) resolveNestedGraphQLTables(schema string, subFields []graphql.FieldNode) []graphQLTableRef {
-	var tableReferences []graphQLTableRef
-	for _, subField := range subFields {
-		if len(subField.SelectionSet) == 0 {
+func (handler *BaseHandler) resolveNestedGraphQLTables(schema string, fields []graphql.FieldNode, parent ...string) []graphQLTableRef {
+	var references []graphQLTableRef
+	for _, field := range fields {
+		if len(field.SelectionSet) == 0 {
 			continue
 		}
-		relationTable := subField.Name
-		if _, exists := handler.schemaIntrospector.GetTable(schema, relationTable); exists {
-			tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: relationTable})
-		} else if strings.HasSuffix(relationTable, "s") {
-			singular := strings.TrimSuffix(relationTable, "s")
-			if _, exists := handler.schemaIntrospector.GetTable(schema, singular); exists {
-				tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: singular})
-			}
-		} else {
-			plural := relationTable + "s"
-			if _, exists := handler.schemaIntrospector.GetTable(schema, plural); exists {
-				tableReferences = append(tableReferences, graphQLTableRef{schema: schema, table: plural})
+		targetSchema, targetTable := schema, field.Name
+		resolved := false
+		if len(parent) > 0 {
+			if tableInfo, exists := handler.schemaIntrospector.GetTable(schema, parent[0]); exists {
+				if relationInfo, exists := tableInfo.ForeignKeys[field.Name]; exists {
+					targetTable = relationInfo.ForeignTable
+					if relationInfo.ForeignSchema != "" {
+						targetSchema = relationInfo.ForeignSchema
+					}
+					resolved = true
+				}
 			}
 		}
-		tableReferences = append(tableReferences, handler.resolveNestedGraphQLTables(schema, subField.SelectionSet)...)
+		if _, exists := handler.schemaIntrospector.GetTable(targetSchema, targetTable); !resolved && !exists {
+			if strings.HasSuffix(targetTable, "s") {
+				targetTable = strings.TrimSuffix(targetTable, "s")
+			} else {
+				targetTable += "s"
+			}
+		}
+		if _, exists := handler.schemaIntrospector.GetTable(targetSchema, targetTable); exists {
+			references = append(references, graphQLTableRef{schema: targetSchema, table: targetTable})
+		}
+		references = append(references, handler.resolveNestedGraphQLTables(targetSchema, field.SelectionSet, targetTable)...)
 	}
-	return tableReferences
+	return references
 }
 
 func (handler *BaseHandler) getGraphQLTableCacheVersion(ctx context.Context, tableReferences []graphQLTableRef) int64 {
