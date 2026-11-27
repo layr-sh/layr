@@ -35,9 +35,20 @@ if ! ./scripts/sdk/generate --target all \
 fi
 
 DRIFTED_SDKS=()
+for language in javascript python go; do
+  SDK_LICENSE="client-sdk/${language}/LICENSE"
+  if ! cmp -s "${SDK_LICENSE}" "${TEMP_DIR}/client-sdk/${language}/LICENSE"; then
+    DRIFTED_SDKS+=("${SDK_LICENSE}")
+  fi
+done
+
 for language in javascript python go rust swift; do
   SDK_DIR="client-sdk/${language}/generated"
-  if ! diff -ru "${SDK_DIR}" "${TEMP_DIR}/client-sdk/${language}/generated"; then
+  DIFF_ARGS=(-ru)
+  if [[ "${language}" == rust ]]; then
+    DIFF_ARGS+=(-x target -x Cargo.lock)
+  fi
+  if ! diff "${DIFF_ARGS[@]}" "${SDK_DIR}" "${TEMP_DIR}/client-sdk/${language}/generated"; then
     DRIFTED_SDKS+=("${SDK_DIR}")
   fi
 done

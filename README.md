@@ -69,4 +69,6 @@ For architectural details and usage across all languages, see the **[SDK Ecosyst
 
 ## 📄 License
 
-Layr core is open-source software licensed.
+- **Server, `layr` CLI, and bundled console:** [GNU AGPL v3 only (`AGPL-3.0-only`)](LICENSE). This is the default license for Layr-owned code in this repository unless otherwise noted.
+- **Client SDKs (`client-sdk/`):** [MIT](client-sdk/LICENSE), including Layr-owned generated clients. Third-party components retain their own licenses.
+- **Name and logo:** see the [Layr trademark policy](TRADEMARKS.md). Independent hosting is permitted under the software licenses; do not present it as the official service.

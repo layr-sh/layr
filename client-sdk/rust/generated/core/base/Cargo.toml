@@ -3,6 +3,7 @@ name = "generated"
 version = "1.0.0"
 authors = ["OpenAPI Generator team and contributors"]
 description = "Public Application & Client APIs for Layr Platform"
+license = "MIT"
 edition = "2021"
 
 [dependencies]

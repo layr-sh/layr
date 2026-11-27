@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   s.version = '0.0.1'
   s.source = { :git => 'git@github.com:OpenAPITools/openapi-generator.git', :tag => 'v0.0.1' }
   s.authors = 'OpenAPI Generator'
-  s.license = 'Proprietary'
+  s.license = { :type => 'MIT', :file => 'LICENSE' }
   s.homepage = 'https://github.com/OpenAPITools/openapi-generator'
   s.summary = 'Generated Swift SDK'
   s.source_files = 'Sources/Generated/**/*.swift'

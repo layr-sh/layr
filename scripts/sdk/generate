@@ -81,6 +81,15 @@ clean_cruft() {
   rm -f "${target_dir}/git_push.sh"
 }
 
+install_sdk_license() {
+  cp "${ROOT_DIR}/client-sdk/LICENSE" "$1/LICENSE"
+}
+
+if [[ "${TARGET}" == all || "${TARGET}" == js ]]; then
+  mkdir -p "${SDK_DIR}/javascript"
+  install_sdk_license "${SDK_DIR}/javascript"
+fi
+
 for SPEC_DIR in "${SPEC_ROOT}"/*/; do
   SERVICE="$(basename "${SPEC_DIR}")"
   for PLANE in base control_plane; do
@@ -113,6 +122,7 @@ for SPEC_DIR in "${SPEC_ROOT}"/*/; do
       clean_cruft "${OUT_DIR}"
       clean_cruft "${SDK_DIR}/python"
       rm -rf "${SDK_DIR}/python/generated_README.md" "${OUT_DIR}/docs" "${OUT_DIR}/test"
+      install_sdk_license "${SDK_DIR}/python"
       echo "Python SDK generated successfully."
     fi
 
@@ -129,6 +139,7 @@ for SPEC_DIR in "${SPEC_ROOT}"/*/; do
       clean_cruft "${OUT_DIR}"
       rm -f "${OUT_DIR}/go.mod" "${OUT_DIR}/go.sum" "${OUT_DIR}/README.md"
       rm -rf "${OUT_DIR}/docs" "${OUT_DIR}/test"
+      install_sdk_license "${SDK_DIR}/go"
       echo "Go SDK generated successfully."
     fi
 
@@ -150,6 +161,10 @@ for SPEC_DIR in "${SPEC_ROOT}"/*/; do
         sed -i -E 's/\{([a-zA-Z0-9_]+)\.\.\.\}/{\1}/g' "${OUT_DIR}/src/apis/"*.rs
         sed -i -E 's/([a-zA-Z0-9_]+)\.\.\.=/ \1=/g' "${OUT_DIR}/src/apis/"*.rs
       fi
+      sed -E '/^# Override this license by providing a License Object in the OpenAPI\.$/d; s/^license = .*/license = "MIT"/' \
+        "${OUT_DIR}/Cargo.toml" > "${OUT_DIR}/Cargo.toml.tmp"
+      mv "${OUT_DIR}/Cargo.toml.tmp" "${OUT_DIR}/Cargo.toml"
+      install_sdk_license "${OUT_DIR}"
       echo "Rust SDK generated successfully."
     fi
 
@@ -164,6 +179,10 @@ for SPEC_DIR in "${SPEC_ROOT}"/*/; do
         -o "${OUT_DIR}" \
         --additional-properties=projectName=Generated,responseAs=AsyncAwait
       clean_cruft "${OUT_DIR}"
+      sed -E "s/^  s\.license = .*/  s.license = { :type => 'MIT', :file => 'LICENSE' }/" \
+        "${OUT_DIR}/Generated.podspec" > "${OUT_DIR}/Generated.podspec.tmp"
+      mv "${OUT_DIR}/Generated.podspec.tmp" "${OUT_DIR}/Generated.podspec"
+      install_sdk_license "${OUT_DIR}"
       echo "Swift SDK generated successfully."
     fi
   done

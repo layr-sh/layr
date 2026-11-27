@@ -2,6 +2,8 @@
 
 Official client SDKs for Layr, an open-source single-binary Backend-as-a-Service (BaaS) and application platform built on PostgreSQL 18+.
 
+Layr-owned SDK code in this directory is licensed under the [MIT License](LICENSE). Third-party components retain their own licenses.
+
 Target SDKs:
 
 - JavaScript/TypeScript (`client-sdk/javascript`)
