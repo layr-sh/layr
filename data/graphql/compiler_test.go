@@ -8,7 +8,7 @@ import (
 )
 
 func TestGraphqlNestedRelationExposureUnit(t *testing.T) {
-	for _, schema := range []string{"unknown", "private", "auth"} {
+	for _, schema := range []string{"unknown", "private", "auth", "public"} {
 		t.Run(schema, func(t *testing.T) {
 			schemaIntrospector := NewSchemaIntrospector(core.NewTestKernel(nil))
 			parentTableInfo := &TableInfo{Schema: "public", Name: "parents", ForeignKeys: map[string]RelationInfo{}}
@@ -18,9 +18,13 @@ func TestGraphqlNestedRelationExposureUnit(t *testing.T) {
 			schemaIntrospector.SetTable(parentTableInfo)
 			compiler := NewCompiler(schemaIntrospector, "public")
 			compiler.SetAllowedSchemas([]string{"public", "auth"})
+			compiler.SetExcludedTables([]string{"public.children"})
 			_, _, _, err := compiler.compileNestedRelation("public", "parents", "parent", FieldNode{Name: "child", SelectionSet: []FieldNode{{Name: "id"}}}, 1, 1)
 			if err == nil {
 				t.Fatal("unverified or unexposed relation accepted")
+			}
+			if schema == "public" && !strings.Contains(err.Error(), "is excluded") {
+				t.Fatalf("expected excluded relation error, got %v", err)
 			}
 		})
 	}

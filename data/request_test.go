@@ -42,6 +42,13 @@ func TestDataRequestCORSAndLimitsUnit(t *testing.T) {
 	if responseRecorder.Code != http.StatusNoContent || responseRecorder.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Fatalf("invalid public preflight: %d %v", responseRecorder.Code, responseRecorder.Header())
 	}
+	responseRecorder = call(ctx, http.MethodOptions, "/v1/data/public/items", "https://app.test", "X-Publishable-Key, x-Cache-TTL, X-Custom-Header")
+	if responseRecorder.Code != http.StatusNoContent || responseRecorder.Header().Get("Access-Control-Allow-Headers") != "X-Publishable-Key, x-Cache-TTL, X-Custom-Header" {
+		t.Fatalf("prefixed request headers were not accepted: %d %v", responseRecorder.Code, responseRecorder.Header())
+	}
+	if call(ctx, http.MethodOptions, "/v1/graphql", "https://app.test", "X-Authorization").Code != http.StatusForbidden {
+		t.Fatal("a standard header was incorrectly treated as a custom alias")
+	}
 	config := service.configManager.Get()
 	config.CORS.AllowedOrigins = []string{"https://app.test"}
 	config.CORS.AllowedHeaders = []string{"Authorization"}
@@ -61,8 +68,8 @@ func TestDataRequestCORSAndLimitsUnit(t *testing.T) {
 	}
 	config.CORS.AllowedHeaders = []string{"*"}
 	service.configManager.SetMemoryConfig(config)
-	responseRecorder = call(ctx, http.MethodOptions, "/v1/graphql", "https://app.test", "X-Custom")
-	if responseRecorder.Code != http.StatusNoContent || responseRecorder.Header().Get("Access-Control-Allow-Headers") != "X-Custom" {
+	responseRecorder = call(ctx, http.MethodOptions, "/v1/graphql", "https://app.test", "Custom-Header")
+	if responseRecorder.Code != http.StatusNoContent || responseRecorder.Header().Get("Access-Control-Allow-Headers") != "Custom-Header" {
 		t.Fatal("credentialed wildcard preflight did not echo requested headers")
 	}
 	invalidMethodRequest := httptest.NewRequestWithContext(ctx, http.MethodOptions, "/v1/graphql", nil)

@@ -2,9 +2,14 @@ package realtime
 
 import (
 	"context"
-	"layr.sh/core"
+	"net"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"layr.sh/core"
 )
 
 type unitMockKV struct {
@@ -393,5 +398,86 @@ func TestRealtimeHubReadinessAndShutdownUnit(t *testing.T) {
 	readyHub.ForgetTableTrigger("public", "recreated")
 	if readyHub.installedTables["public.recreated"] {
 		t.Fatal("trigger installation cache retained a recreated table")
+	}
+}
+
+func TestRealtimeHubListenFailureUnit(t *testing.T) {
+	for _, cancelOnFailure := range []bool{true, false} {
+		name := "retry"
+		if cancelOnFailure {
+			name = "cancel"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			config, configErr := pgxpool.ParseConfig("postgres://test@localhost/test?sslmode=disable&default_query_exec_mode=simple_protocol")
+			if configErr != nil {
+				t.Fatal(configErr)
+			}
+			config.MaxConns = 1
+			var attemptsInt32 atomic.Int32
+			config.ConnConfig.DialFunc = func(_ context.Context, _, _ string) (net.Conn, error) {
+				clientConnection, serverConnection := net.Pipe()
+				go func() {
+					defer func() { _ = serverConnection.Close() }()
+					backend := pgproto3.NewBackend(serverConnection, serverConnection)
+					if _, err := backend.ReceiveStartupMessage(); err != nil {
+						return
+					}
+					backend.Send(&pgproto3.AuthenticationOk{})
+					backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+					if err := backend.Flush(); err != nil {
+						return
+					}
+					for {
+						frontendMessage, err := backend.Receive()
+						query, ok := frontendMessage.(*pgproto3.Query)
+						if err != nil || !ok {
+							return
+						}
+						if query.String == "LISTEN cdc" && attemptsInt32.Add(1) == 1 {
+							backend.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "55000", Message: "LISTEN unavailable"})
+							if cancelOnFailure {
+								cancel()
+							}
+						} else {
+							backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("LISTEN")})
+						}
+						backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+						if err := backend.Flush(); err != nil {
+							return
+						}
+					}
+				}()
+				return clientConnection, nil
+			}
+			pool, err := pgxpool.NewWithConfig(ctx, config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer pool.Close()
+			hub := NewHub(core.NewTestKernel(&core.DatabasePool{Pool: pool}))
+			hub.Start(ctx)
+			defer hub.Stop()
+			if cancelOnFailure {
+				select {
+				case <-hub.listenDone:
+				case <-time.After(5 * time.Second):
+					t.Fatal("listener did not exit after LISTEN failed")
+				}
+				if got := attemptsInt32.Load(); got != 1 {
+					t.Fatalf("LISTEN attempts = %d, want 1", got)
+				}
+				return
+			}
+			select {
+			case <-hub.ready:
+				if got := attemptsInt32.Load(); got != 2 {
+					t.Fatalf("LISTEN attempts = %d, want 2", got)
+				}
+			case <-ctx.Done():
+				t.Fatal("listener did not recover after LISTEN failed")
+			}
+		})
 	}
 }

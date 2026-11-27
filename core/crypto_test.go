@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"strings"
@@ -265,8 +266,9 @@ func TestCoreCryptoKeyManagerPublishableKeyDerivationAndVerificationUnit(t *test
 	cryptoKeyManager, _ := NewCryptoKeyManager(validEncryptionKeyHex)
 
 	publishableKey := cryptoKeyManager.DerivePublishableKey()
-	if len(publishableKey) != 64 {
-		t.Fatalf("expected 64-char hex publishable key, got %d chars", len(publishableKey))
+	decodedKey, err := hex.DecodeString(publishableKey)
+	if err != nil || len(decodedKey) != 32 {
+		t.Fatal("expected an unprefixed 32-byte hex publishable key")
 	}
 
 	// Infallible & deterministic check

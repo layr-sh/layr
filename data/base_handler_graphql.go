@@ -153,7 +153,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); internalCacheKey != "" && cacheGetErr == nil && cached != "" {
 			log.Debug("cache hit for GraphQL query")
 			responseWriter.Header().Set("Content-Type", "application/json")
-			responseWriter.Header().Set("Cache-Status", "HIT")
+			responseWriter.Header().Set("Cache-Status", cacheStatusHit)
 			responseWriter.WriteHeader(http.StatusOK)
 			_, _ = responseWriter.Write([]byte(cached))
 			return
@@ -210,7 +210,7 @@ func (handler *BaseHandler) handleExecuteGraphQL(responseWriter http.ResponseWri
 
 	responseWriter.Header().Set("Content-Type", "application/json")
 	if isCacheActive && cacheTTL > 0 && operationNode.Type == graphql.QueryOperationType {
-		responseWriter.Header().Set("Cache-Status", "MISS")
+		responseWriter.Header().Set("Cache-Status", cacheStatusMiss)
 		if userVisibleKey != "" {
 			responseWriter.Header().Set("Cache-Key", userVisibleKey)
 		}

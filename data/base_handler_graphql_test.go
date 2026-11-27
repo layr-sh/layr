@@ -113,7 +113,7 @@ func TestDataBaseHandlerGraphQLUnit(t *testing.T) {
 		baseHandler.handleExecuteGraphQL(responseRecorder, request)
 
 		assert.Equal(t, http.StatusOK, responseRecorder.Code)
-		assert.Equal(t, "HIT", responseRecorder.Header().Get("Cache-Status"))
+		assert.Equal(t, "Layr; hit", responseRecorder.Header().Get("Cache-Status"))
 		assert.Contains(t, responseRecorder.Body.String(), `"id":"1"`)
 	})
 

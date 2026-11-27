@@ -33,9 +33,9 @@ func (capturingWriter *capturingResponseWriter) WriteHeader(code int) {
 		if unescaped, unescapeErr := url.QueryUnescape(rawStdout); unescapeErr == nil {
 			capturingWriter.stdout = unescaped
 		}
-		capturingWriter.Header().Del("Stdout")
-		capturingWriter.Header().Del("X-Stdout")
 	}
+	capturingWriter.Header().Del("Stdout")
+	capturingWriter.Header().Del("X-Stdout")
 	rawStderr := capturingWriter.Header().Get("Stderr")
 	if rawStderr == "" {
 		rawStderr = capturingWriter.Header().Get("X-Stderr")
@@ -44,9 +44,9 @@ func (capturingWriter *capturingResponseWriter) WriteHeader(code int) {
 		if unescaped, unescapeErr := url.QueryUnescape(rawStderr); unescapeErr == nil {
 			capturingWriter.stderr = unescaped
 		}
-		capturingWriter.Header().Del("Stderr")
-		capturingWriter.Header().Del("X-Stderr")
 	}
+	capturingWriter.Header().Del("Stderr")
+	capturingWriter.Header().Del("X-Stderr")
 	capturingWriter.ResponseWriter.WriteHeader(code)
 }
 
@@ -264,6 +264,7 @@ func injectAuthHeaders(request *http.Request) {
 
 	authContextJSON, marshalErr := json.Marshal(authContext)
 	if marshalErr == nil {
+		request.Header.Del("X-Auth-Context")
 		request.Header.Set("Auth-Context", string(authContextJSON))
 	}
 }

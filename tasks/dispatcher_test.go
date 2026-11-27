@@ -189,6 +189,10 @@ func TestTasksDispatcherUnit(t *testing.T) {
 		receivedHeader := ""
 		testServer := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 			receivedHeader = request.Header.Get("Webhook-Signature")
+			if request.Header.Get("Custom-Header") != "test-header" {
+				http.Error(responseWriter, "missing custom header", http.StatusBadRequest)
+				return
+			}
 			bodyBytes, readErr := io.ReadAll(request.Body)
 			if readErr != nil {
 				http.Error(responseWriter, readErr.Error(), http.StatusInternalServerError)
@@ -200,7 +204,7 @@ func TestTasksDispatcherUnit(t *testing.T) {
 		defer testServer.Close()
 
 		ctx := context.Background()
-		customHeaders := map[string]string{"X-Custom": "test-header"}
+		customHeaders := map[string]string{"Custom-Header": "test-header"}
 		bodyBytes := []byte(`{"action":"sync"}`)
 
 		statusCode, responseBody, isClientError, err := dispatcher.ExecuteHTTPAttempt(

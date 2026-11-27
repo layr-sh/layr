@@ -97,7 +97,7 @@ describe("Client Context & Elevation Unit Tests", () => {
     const client = createClient({ endpoint: "http://localhost:5297" });
     const auth = useAuth(client);
     withServiceAccount(auth, {
-      serviceAccountKey: "secret_key",
+      serviceAccountKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     });
 
     expect(client.headers["Service-Account-Key"]).toBeUndefined();
@@ -128,9 +128,11 @@ describe("Client Context & Elevation Unit Tests", () => {
     expect(() => withServiceAccount({} as any)).toThrow(
       "Provided service is not a valid Layr service client",
     );
-    expect(() => withServiceAccount({} as any, { serviceAccountKey: "valid_key" })).toThrow(
-      "Provided service is not a valid Layr service client",
-    );
+    expect(() =>
+      withServiceAccount({} as any, {
+        serviceAccountKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      }),
+    ).toThrow("Provided service is not a valid Layr service client");
   });
 
   it("CL-08: Elevation on service without ATTACH_CONTROL_PLANE yields undefined cp", () => {

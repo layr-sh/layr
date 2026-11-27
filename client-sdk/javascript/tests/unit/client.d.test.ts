@@ -34,12 +34,12 @@ describe('LayrClient & Service Wrappers Type Safety', () => {
     it('creates typed client instance with endpoint', () => {
       const client = createClient({
         endpoint: 'https://api.layr.sh',
-        publishableKey: 'pk_live_123',
+        publishableKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         sessionToken: 'tok_abc',
         maxRetries: 3,
         retryDelayMs: 200,
         timeoutMs: 5000,
-        headers: { 'X-Custom': 'header' },
+        headers: { 'Custom-Header': 'header' },
       });
 
       expectTypeOf(client).toEqualTypeOf<LayrClient>();

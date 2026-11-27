@@ -24,11 +24,7 @@ func isRequestHTTPS(request *http.Request) bool {
 	if request.TLS != nil || request.URL.Scheme == "https" {
 		return true
 	}
-	config := core.GetConfig()
-	if config.Server.TrustProxyHeaders && strings.EqualFold(request.Header.Get("X-Forwarded-Proto"), "https") {
-		return true
-	}
-	return false
+	return core.GetConfig().Server.TrustProxyHeaders && core.IsSecureRequest(request)
 }
 
 func (baseHandler *BaseHandler) resolveEndpointByCustomDomain(ctx context.Context, host string, rawPath string) (*Endpoint, *Deployment, bool, string, error) {

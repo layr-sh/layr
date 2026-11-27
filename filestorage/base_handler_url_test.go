@@ -3,12 +3,15 @@ package filestorage
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgproto3"
 	"layr.sh/core"
 )
 
@@ -108,4 +111,32 @@ func TestFilestorageBaseHandlerURLUnit(t *testing.T) {
 			t.Fatalf("expected mismatched operation to fail")
 		}
 	})
+}
+
+func TestFilestoragePresignUsesBuiltInExpiryUnit(t *testing.T) {
+	kernel := postgresFaultKernel(t.Context(), t, func(sql string) []pgproto3.BackendMessage {
+		if strings.Contains(sql, "FROM file_storage.buckets") {
+			return fixtureBucketResult("database", "{}", "4")
+		}
+		return nil
+	})
+	service := NewService(kernel)
+	config := DefaultConfig()
+	config.PresignTokenExpirySeconds = 0
+	service.ConfigManager().SetMemoryConfig(config)
+	request := storageTestRequest(http.MethodPost, "/v1/file-storage/url/presign", `{"bucket":"test-bucket","key":"test.txt","operation":"read"}`, core.ScopeFileStorageObjectRead)
+	responseRecorder := httptest.NewRecorder()
+	startTime := time.Now()
+	service.BaseHandler().handlePresignURL(responseRecorder, request)
+	if responseRecorder.Code != http.StatusOK {
+		t.Fatalf("expected presigned URL, got %d: %s", responseRecorder.Code, responseRecorder.Body)
+	}
+	var presignURLResponse PresignURLResponse
+	if err := json.NewDecoder(responseRecorder.Body).Decode(&presignURLResponse); err != nil {
+		t.Fatal(err)
+	}
+	want := defaultPresignedExpirationSeconds * time.Second
+	if expiresAt := presignURLResponse.ExpiresAt; expiresAt.Before(startTime.Add(want)) || expiresAt.After(time.Now().Add(want)) {
+		t.Fatalf("expected expiry %s from now, got %s", want, expiresAt)
+	}
 }

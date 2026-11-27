@@ -93,7 +93,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	baseHandler.handleExecuteGraphQL(cachedQueryResponseRecorder, cachedQueryRequest)
 
 	assert.Equal(t, http.StatusOK, cachedQueryResponseRecorder.Code)
-	assert.Equal(t, "MISS", cachedQueryResponseRecorder.Header().Get("Cache-Status"))
+	assert.Equal(t, "Layr; fwd=miss", cachedQueryResponseRecorder.Header().Get("Cache-Status"))
 
 	// Query again -> HIT
 	hitQueryRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/graphql", bytes.NewReader([]byte(`{"query":"`+graphQLQuery+`"}`)))
@@ -103,7 +103,7 @@ func TestDataBaseHandlerGraphQLIntegration(t *testing.T) {
 	hitQueryResponseRecorder := httptest.NewRecorder()
 	baseHandler.handleExecuteGraphQL(hitQueryResponseRecorder, hitQueryRequest)
 	assert.Equal(t, http.StatusOK, hitQueryResponseRecorder.Code)
-	assert.Equal(t, "HIT", hitQueryResponseRecorder.Header().Get("Cache-Status"))
+	assert.Equal(t, "Layr; hit", hitQueryResponseRecorder.Header().Get("Cache-Status"))
 
 	// Caching skipped when MaxCachedQueries exceeded (test fallback X-Cache-TTL and X-Cache-Key-Suffix)
 	appConfig := service.GetConfigManager().Get()

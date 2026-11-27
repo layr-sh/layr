@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -72,11 +73,23 @@ func TestCoreServiceAccountIsIPAllowedUnit(t *testing.T) {
 func TestCoreServiceAccountGenerateSecretKeyUnit(t *testing.T) {
 	prefix, secretKey, keyHash := GenerateServiceAccountSecretKey()
 
-	if len(secretKey) == 0 || len(prefix) == 0 || len(keyHash) == 0 {
-		t.Fatal("expected non-empty key components")
+	decodedKey, err := hex.DecodeString(secretKey)
+	if err != nil || len(decodedKey) != 32 {
+		t.Fatal("expected an unprefixed 32-byte hex key")
 	}
-	if len(prefix) != 8 {
-		t.Fatalf("expected 8-char prefix, got %d", len(prefix))
+	if prefix != secretKey[:8] || keyHash != HashSecretKey(secretKey) {
+		t.Fatal("invalid key metadata")
+	}
+	serviceAccountManager := NewServiceAccountManager(nil)
+	for _, testCase := range []struct{ name, key string }{
+		{"prefixed key", "prefix-" + secretKey},
+		{"non-hex key at the expected length", "not-hex-" + secretKey[8:]},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if _, err := serviceAccountManager.Authenticate(context.Background(), testCase.key, "127.0.0.1"); err != ErrServiceAccountNotFound {
+				t.Fatalf("expected malformed key to be rejected, got %v", err)
+			}
+		})
 	}
 }
 

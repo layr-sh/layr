@@ -7,9 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"uuid"
+
 	"github.com/stretchr/testify/require"
 	"layr.sh/core"
-	"uuid"
 )
 
 func TestFunctionBaseHandlerCustomDomainUnit(t *testing.T) {
@@ -236,6 +237,11 @@ func TestFunctionIsRequestHTTPSUnit(t *testing.T) {
 	proxyRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
 	proxyRequest.Header.Set("X-Forwarded-Proto", "https")
 	require.True(t, isRequestHTTPS(proxyRequest))
+	proxyRequest.Header.Set("Forwarded-Proto", "http")
+	require.False(t, isRequestHTTPS(proxyRequest))
+	proxyRequest.Header.Set("Forwarded-Proto", "https")
+	proxyRequest.Header.Del("X-Forwarded-Proto")
+	require.True(t, isRequestHTTPS(proxyRequest))
 
 	// 4. TrustProxyHeaders == true and X-Forwarded-Proto == "http"
 	httpRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
@@ -249,7 +255,7 @@ func TestFunctionIsRequestHTTPSUnit(t *testing.T) {
 	defer core.UnloadConfig()
 
 	untrustedRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", nil)
-	untrustedRequest.Header.Set("X-Forwarded-Proto", "https")
+	untrustedRequest.Header.Set("Forwarded-Proto", "https")
 	require.False(t, isRequestHTTPS(untrustedRequest))
 }
 

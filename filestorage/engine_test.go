@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"layr.sh/core"
@@ -126,4 +127,15 @@ func TestFilestorageEngineUnit(t *testing.T) {
 			t.Fatal("expected non-nil s3 file storage engine")
 		}
 	})
+}
+
+func TestFilestorageEngineUploadDefaultsAndSizeLimitUnit(t *testing.T) {
+	engine := NewEngine(mockEchoDriver{})
+	bucket := Bucket{AllowedMIMETypes: []string{"application/octet-stream"}, MaxFileSizeBytes: 4}
+	if _, err := engine.Upload(context.Background(), bucket, "echo.txt", strings.NewReader("echo"), 4, ""); err != nil {
+		t.Fatalf("upload with default content type at the limit: %v", err)
+	}
+	if _, err := engine.Upload(context.Background(), bucket, "echo.txt", strings.NewReader("echo!"), 5, ""); !errors.Is(err, ErrPayloadTooLarge) {
+		t.Fatalf("expected ErrPayloadTooLarge, got %v", err)
+	}
 }

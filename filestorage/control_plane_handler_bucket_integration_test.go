@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"uuid"
 
@@ -348,4 +349,26 @@ func TestFilestorageControlPlaneHandlerBucketIntegration(t *testing.T) {
 	if deleteS3ResponseRecorder.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 No Content on delete s3 bucket, got %d", deleteS3ResponseRecorder.Code)
 	}
+
+	t.Run("nil bucket defaults and config", func(t *testing.T) {
+		config := DefaultConfig()
+		config.DefaultAllowedMIMETypes = nil
+		service.ConfigManager().SetMemoryConfig(config)
+
+		request := storageTestRequest(http.MethodPost, "/v1/_/file-storage/buckets", `{"name":"test-bucket"}`, core.ScopeFileStorageBucketWrite)
+		responseRecorder := httptest.NewRecorder()
+		controlPlaneHandler.handleCreateBucket(responseRecorder, request)
+		if responseRecorder.Code != http.StatusCreated || !strings.Contains(responseRecorder.Body.String(), `"allowed_mime_types":[]`) {
+			t.Fatalf("expected empty MIME type defaults, got %d: %s", responseRecorder.Code, responseRecorder.Body)
+		}
+		if _, err := kernel.DB().Exec(request.Context(), `UPDATE file_storage.buckets SET backend_config = 'null'::jsonb WHERE name = 'test-bucket'`); err != nil {
+			t.Fatal(err)
+		}
+		request = storageTestRequest(http.MethodPatch, "/v1/_/file-storage/buckets/test-bucket", `{"backend_config":{"region":"us-east-1"}}`, core.ScopeFileStorageBucketWrite)
+		responseRecorder = httptest.NewRecorder()
+		controlPlaneHandler.handleUpdateBucket(responseRecorder, request)
+		if responseRecorder.Code != http.StatusOK || !strings.Contains(responseRecorder.Body.String(), `"region":"us-east-1"`) {
+			t.Fatalf("expected merged config, got %d: %s", responseRecorder.Code, responseRecorder.Body)
+		}
+	})
 }

@@ -115,6 +115,8 @@ func (handler *BaseHandler) resolveTransaction(ctx context.Context, tx pgx.Tx, e
 const (
 	minPathSegments         = 2
 	minRecordIDPathSegments = 3
+	cacheStatusHit          = "Layr; hit"
+	cacheStatusMiss         = "Layr; fwd=miss"
 )
 
 // parsePath extracts schema, table, and optional record_id from the request URL.

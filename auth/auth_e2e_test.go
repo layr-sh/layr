@@ -185,7 +185,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	_ = json.NewDecoder(signInResponseRecorder.Body).Decode(&secondAuthTokenResponse)
 
 	// 3. List active sessions via E2E server mux
-	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/sessions", nil)
+	listSessionsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/auth/user/sessions", nil)
 	listSessionsRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	listSessionsRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	listSessionsResponseRecorder := httptest.NewRecorder()
@@ -210,7 +210,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	}
 
 	// 4. Revoke secondary session via E2E server mux
-	deleteSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/sessions/"+secondarySessionID, nil)
+	deleteSessionRequest := httptest.NewRequestWithContext(ctx, http.MethodDelete, "/v1/auth/user/sessions/"+secondarySessionID, nil)
 	deleteSessionRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	deleteSessionResponseRecorder := httptest.NewRecorder()
 	coreServer.Handler().ServeHTTP(deleteSessionResponseRecorder, deleteSessionRequest)
@@ -219,7 +219,7 @@ func TestAuthSelfServiceSessionsE2E(t *testing.T) {
 	}
 
 	// 5. Revoke other sessions via E2E server mux (now only 1 session left)
-	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/sessions/revoke-others", nil)
+	revokeOthersRequest := httptest.NewRequestWithContext(ctx, http.MethodPost, "/v1/auth/user/sessions/revoke-others", nil)
 	revokeOthersRequest.Header.Set("Authorization", "Bearer "+firstAuthTokenResponse.AccessToken)
 	revokeOthersRequest.AddCookie(&http.Cookie{Name: core.SessionCookieNameInsecure, Value: firstAuthTokenResponse.RefreshToken})
 	revokeOthersResponseRecorder := httptest.NewRecorder()

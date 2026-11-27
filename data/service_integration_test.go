@@ -471,15 +471,15 @@ func TestDataCacheIsolationAndCDCIntegration(t *testing.T) {
 		t.Fatal("cache alias ignored query predicates")
 	}
 	cachedResponseRecorder := read("tenant-a", "?cache_key=shared")
-	if cachedResponseRecorder.Header().Get("Cache-Status") != "HIT" {
+	if cachedResponseRecorder.Header().Get("Cache-Status") != "Layr; hit" {
 		t.Fatal("identical request was not cached")
 	}
 	service.InvalidateCache(ctx, InvalidateCacheInput{Pattern: "public.*"})
-	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "HIT" {
+	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "Layr; hit" {
 		t.Fatal("pattern invalidation did not evict hashed queries")
 	}
 	service.InvalidateCache(ctx, InvalidateCacheInput{Schema: "public"})
-	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "HIT" {
+	if read("tenant-a", "?cache_key=shared").Header().Get("Cache-Status") == "Layr; hit" {
 		t.Fatal("schema invalidation did not evict hashed queries")
 	}
 	config := service.configManager.Get()

@@ -32,9 +32,8 @@ type contextKey string
 const serviceAccountContextKey contextKey = "core_service_account"
 
 const (
-	secretKeyEntropyBytes  = 32
-	secretKeyPrefixLength  = 8
-	minimumSecretKeyLength = 16
+	secretKeyEntropyBytes = 32
+	secretKeyPrefixLength = 8
 )
 
 // WithServiceAccount stores the authenticated service account in context.
@@ -130,8 +129,11 @@ func (serviceAccountManager *ServiceAccountManager) Create(ctx context.Context, 
 // Authenticate validates a presented secret key against core.service_accounts.
 func (serviceAccountManager *ServiceAccountManager) Authenticate(ctx context.Context, secretKey, clientIP string) (*ServiceAccount, error) {
 	secretKey = strings.TrimSpace(secretKey)
-	if len(secretKey) < minimumSecretKeyLength {
-		log.Tracef("service account key length %d is below minimum %d", len(secretKey), minimumSecretKeyLength)
+	if len(secretKey) != hex.EncodedLen(secretKeyEntropyBytes) {
+		return nil, ErrServiceAccountNotFound
+	}
+	var decodedKey [secretKeyEntropyBytes]byte
+	if _, err := hex.Decode(decodedKey[:], []byte(secretKey)); err != nil {
 		return nil, ErrServiceAccountNotFound
 	}
 

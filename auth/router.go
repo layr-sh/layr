@@ -310,11 +310,6 @@ func (service *Service) registerBaseRoutes(router *core.Router) {
 		core.RouteSDKMethodName("revoke_others"),
 	)
 
-	// Backward-compatibility aliases for legacy /v1/auth/sessions paths
-	router.Mux().HandleFunc("GET /v1/auth/sessions", service.baseHandler.handleListSessions)
-	router.Mux().HandleFunc("DELETE /v1/auth/sessions/{session_id}", service.baseHandler.handleRevokeSession)
-	router.Mux().HandleFunc("POST /v1/auth/sessions/revoke-others", service.baseHandler.handleRevokeOtherSessions)
-
 	// 9. User Self-Service Account Management
 	core.GetRoute[GetUserResponse](router, "/v1/auth/user", service.baseHandler.handleGetUser,
 		core.RouteTag("User"),

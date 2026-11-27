@@ -96,7 +96,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 		if cached, cacheGetErr := handler.kernel.KVStore().Get(ctx, internalCacheKey); internalCacheKey != "" && cacheGetErr == nil && cached != "" {
 			log.Debugf("cache hit for %s.%s", schema, table)
 			responseWriter.Header().Set("Content-Type", "application/json")
-			responseWriter.Header().Set("Cache-Status", "HIT")
+			responseWriter.Header().Set("Cache-Status", cacheStatusHit)
 			responseWriter.WriteHeader(http.StatusOK)
 			_, _ = responseWriter.Write([]byte(cached))
 			return
@@ -181,7 +181,7 @@ func (handler *BaseHandler) handleListRecords(responseWriter http.ResponseWriter
 				counterExpiry = 5 * time.Minute
 			}
 			_, _ = handler.kernel.KVStore().Increment(ctx, "cache:query_count", counterExpiry)
-			responseWriter.Header().Set("Cache-Status", "MISS")
+			responseWriter.Header().Set("Cache-Status", cacheStatusMiss)
 		}
 	}
 

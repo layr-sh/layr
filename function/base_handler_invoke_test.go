@@ -70,6 +70,8 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		capturingResponseRecorder := httptest.NewRecorder()
 		capturingResponseRecorder.Header().Set("Stdout", "test%20stdout")
 		capturingResponseRecorder.Header().Set("Stderr", "test%20stderr")
+		capturingResponseRecorder.Header().Set("X-Stdout", "ignored%20stdout")
+		capturingResponseRecorder.Header().Set("X-Stderr", "ignored%20stderr")
 		recordedResponseWriter := &capturingResponseWriter{ResponseWriter: capturingResponseRecorder}
 		_, writeErr := recordedResponseWriter.Write([]byte("raw worker body"))
 		require.NoError(t, writeErr)
@@ -78,6 +80,8 @@ func TestFunctionBaseHandlerInvokeUnit(t *testing.T) {
 		require.Equal(t, "test stderr", recordedResponseWriter.stderr)
 		require.Empty(t, capturingResponseRecorder.Header().Get("Stdout"))
 		require.Empty(t, capturingResponseRecorder.Header().Get("Stderr"))
+		require.NotContains(t, capturingResponseRecorder.Header(), "X-Stdout")
+		require.NotContains(t, capturingResponseRecorder.Header(), "X-Stderr")
 
 		// Test capturingResponseWriter with fallback X-Stdout and X-Stderr
 		fallbackResponseRecorder := httptest.NewRecorder()
@@ -231,6 +235,8 @@ func TestFunctionInjectAuthHeadersUnit(t *testing.T) {
 		},
 	})
 	serviceAccountRequest := httptest.NewRequestWithContext(serviceAccountCtx, http.MethodGet, "/test", nil)
+	serviceAccountRequest.Header.Set("X-Auth-Context", "untrusted")
 	injectAuthHeaders(serviceAccountRequest)
 	require.Contains(t, serviceAccountRequest.Header.Get("Auth-Context"), "sa_200")
+	require.NotContains(t, serviceAccountRequest.Header, "X-Auth-Context")
 }

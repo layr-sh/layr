@@ -7,10 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgproto3"
 	"layr.sh/core"
 )
 
@@ -199,6 +203,23 @@ func TestFilestorageS3OperationsUnit(t *testing.T) {
 		},
 	}
 
+	t.Run("upstream succeeds but metadata fails", func(t *testing.T) {
+		kernel := postgresFaultKernel(ctx, t, func(sql string) []pgproto3.BackendMessage {
+			if strings.Contains(sql, "file_storage.objects") {
+				return postgresFailure()
+			}
+			return nil
+		})
+		metadataS3Engine := NewS3Engine(kernel)
+		const key = "metadata-failure.txt"
+		if _, err := metadataS3Engine.Upload(ctx, testBucket, key, strings.NewReader("test"), 4, "text/plain"); err == nil || !strings.Contains(err.Error(), "failed to register upstream object metadata: ERROR: injected PostgreSQL failure") {
+			t.Fatalf("expected metadata registration error, got %v", err)
+		}
+		if err := metadataS3Engine.Delete(ctx, testBucket, key); err == nil || !strings.Contains(err.Error(), "failed to delete upstream object metadata: ERROR: injected PostgreSQL failure") {
+			t.Fatalf("expected metadata deletion error, got %v", err)
+		}
+	})
+
 	// 1. Upload success with custom and empty content type
 	uploadedObject, err := s3Engine.Upload(ctx, testBucket, "file.txt", strings.NewReader("hello world"), 11, "text/plain")
 	if err != nil || uploadedObject.ChecksumSHA256 != "mock-etag-123" {
@@ -320,4 +341,61 @@ func TestFilestorageS3OperationsUnit(t *testing.T) {
 		t.Fatalf("download no len failed: %v", noLenErr)
 	}
 	_ = noLenReadCloser.Close()
+}
+
+// A WriterTo source sees the staging file via io.Copy. Close it after a
+// successful copy to simulate a file that became unusable before the rewind.
+type closeAfterCopyReader struct{ *strings.Reader }
+
+func (reader closeAfterCopyReader) WriteTo(writer io.Writer) (int64, error) {
+	written, err := reader.Reader.WriteTo(writer)
+	if err != nil {
+		return written, fmt.Errorf("copy to staging writer: %w", err)
+	}
+	closer, ok := writer.(io.Closer)
+	if !ok {
+		return written, errors.New("staging writer is not closable")
+	}
+	if err := closer.Close(); err != nil {
+		return written, fmt.Errorf("close staging writer: %w", err)
+	}
+	return written, nil
+}
+
+func TestFilestorageS3UploadStagingErrorsUnit(t *testing.T) {
+	s3Engine := NewS3Engine(core.NewTestKernel(nil))
+	bucket := Bucket{Name: "test-bucket", MaxFileSizeBytes: 4, BackendConfig: map[string]any{
+		"bucket": "test-bucket", "region": "us-east-1", "access_key_id": "test-key", "secret_access_key": "test-secret",
+	}}
+	readErr := errors.New("source read failed")
+	for _, test := range []struct {
+		name     string
+		reader   io.Reader
+		causeErr error
+		want     string
+	}{
+		{"temp directory missing", strings.NewReader("test"), os.ErrNotExist, "failed to stage upload"},
+		{"copy fails", iotest.ErrReader(readErr), readErr, "failed to stage upload"},
+		{"size probe fails", io.MultiReader(strings.NewReader("test"), iotest.ErrReader(readErr)), readErr, "failed reading upload"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if errors.Is(test.causeErr, os.ErrNotExist) {
+				missing := filepath.Join(t.TempDir(), "missing")
+				t.Setenv("TMPDIR", missing)
+				t.Setenv("TMP", missing)
+				t.Setenv("TEMP", missing)
+			}
+			object, err := s3Engine.Upload(context.Background(), bucket, "test.txt", test.reader, -1, "text/plain")
+			if object != nil || !errors.Is(err, test.causeErr) || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q wrapping %v, got object=%+v, err=%v", test.want, test.causeErr, object, err)
+			}
+		})
+	}
+	t.Run("rewind fails", func(t *testing.T) {
+		bucket.MaxFileSizeBytes = 0
+		object, err := s3Engine.Upload(t.Context(), bucket, "test.txt", closeAfterCopyReader{strings.NewReader("test")}, -1, "text/plain")
+		if object != nil || !errors.Is(err, os.ErrClosed) || !strings.Contains(err.Error(), "failed to rewind upload") {
+			t.Fatalf("expected closed staging file error, got object=%+v, err=%v", object, err)
+		}
+	})
 }

@@ -58,6 +58,8 @@ func TestGraphqlSchemaIntrospectionIntegration(t *testing.T) {
 		CREATE TABLE public.posts (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
 			author_id UUID NOT NULL REFERENCES public.authors(id) ON DELETE CASCADE,
+			editor_id UUID REFERENCES public.authors(id),
+			reviewer_id UUID REFERENCES public.authors(id),
 			title TEXT NOT NULL,
 			content TEXT,
 			created_at TIMESTAMPTZ DEFAULT now()
@@ -102,6 +104,20 @@ func TestGraphqlSchemaIntrospectionIntegration(t *testing.T) {
 	}
 	if !foundAuthorRelation {
 		t.Fatal("expected postTableInfo to have relationship referencing authors")
+	}
+
+	for _, alias := range []string{"author", "editor", "reviewer"} {
+		t.Run(alias+" alias", func(t *testing.T) {
+			if relationInfo := postTableInfo.ForeignKeys[alias]; relationInfo.LocalColumn != alias+"_id" {
+				t.Fatalf("expected unambiguous relation for %q, got %+v", alias, relationInfo)
+			}
+		})
+	}
+	if _, ambiguous := postTableInfo.ForeignKeys["authors"]; ambiguous {
+		t.Fatal("ambiguous authors alias must not resolve")
+	}
+	if _, ambiguous := authorTableInfo.ForeignKeys["posts"]; ambiguous {
+		t.Fatal("ambiguous reverse posts alias must not resolve")
 	}
 
 	// 4. Introspect with KVStore caching

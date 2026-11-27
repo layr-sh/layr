@@ -26,7 +26,7 @@ describe("Core Service Unit Tests", () => {
       project: { name: "test-project" },
       enabled_services: ["data", "auth"],
       server: { base_url: "https://api.layr.sh" },
-      publishable_key: "pk_123",
+      publishable_key: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     });
 
     const core = useCore(client);

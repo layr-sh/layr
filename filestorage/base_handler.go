@@ -128,7 +128,7 @@ func (baseHandler *BaseHandler) authorizeRESTRequest(request *http.Request, buck
 		}
 	}
 
-	// 2. Check Service Account Key (X-Service-Account-Key or Bearer lak_...)
+	// 2. Check Service-Account-Key, X-Service-Account-Key, or a raw hex Bearer key.
 	serviceAccountKey := core.ExtractRequestServiceAccountKey(request)
 	if serviceAccountKey != "" {
 		clientIP := core.ExtractRequestClientIP(request)

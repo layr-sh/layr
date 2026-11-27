@@ -5,9 +5,12 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
 	"layr.sh/core"
 )
 
@@ -140,4 +143,23 @@ func TestFilestorageBaseHandlerRESTUnit(t *testing.T) {
 			t.Fatalf("expected authenticated user to be authorized for write")
 		}
 	})
+}
+
+func TestFilestorageRESTRejectsOversizedStreamUnit(t *testing.T) {
+	kernel := postgresFaultKernel(t.Context(), t, func(sql string) []pgproto3.BackendMessage {
+		if strings.Contains(sql, "FROM file_storage.buckets") {
+			return fixtureBucketResult("database", "{}", "3")
+		}
+		if strings.Contains(sql, "INSERT INTO file_storage.objects") {
+			return postgresResult([]uint32{pgtype.UUIDOID}, []string{fixtureObjectID})
+		}
+		return nil
+	})
+	request := storageTestRequest(http.MethodPut, "/v1/file-storage/objects/test-bucket/test.txt", "test", core.ScopeFileStorageObjectWrite)
+	request.ContentLength = -1
+	responseRecorder := httptest.NewRecorder()
+	NewService(kernel).BaseHandler().handleUploadObject(responseRecorder, request)
+	if responseRecorder.Code != http.StatusRequestEntityTooLarge || !strings.Contains(responseRecorder.Body.String(), "File size exceeds allowed maximum for this bucket") {
+		t.Fatalf("expected oversized stream rejection, got %d: %s", responseRecorder.Code, responseRecorder.Body)
+	}
 }

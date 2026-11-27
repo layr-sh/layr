@@ -54,17 +54,19 @@ func (service *Service) AuthorizeRequest(responseWriter http.ResponseWriter, req
 					continue
 				}
 				found := false
+				canonical := canonicalDataRequestHeader(header)
 				for _, candidate := range config.CORS.AllowedHeaders {
-					if candidate == "*" || strings.EqualFold(candidate, header) {
+					if candidate == "*" || strings.EqualFold(candidate, header) || strings.EqualFold(candidate, canonical) {
 						found = true
 						break
 					}
 				}
-				allowedHeaders = append(allowedHeaders, header)
 				if !found {
 					core.WriteErrorResponse(responseWriter, request, http.StatusForbidden, "Request header is not allowed")
 					return false
 				}
+				// Preflight must echo the name the browser will actually send.
+				allowedHeaders = append(allowedHeaders, header)
 			}
 			responseWriter.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			responseWriter.Header().Set("Access-Control-Allow-Headers", strings.Join(allowedHeaders, ", "))
@@ -108,4 +110,15 @@ func (service *Service) AuthorizeRequest(responseWriter http.ResponseWriter, req
 		}
 	}
 	return true
+}
+
+func canonicalDataRequestHeader(name string) string {
+	name = strings.ToLower(name)
+	switch name {
+	case "x-publishable-key", "x-service-account-key", "x-refresh-token", "x-request-id",
+		"x-cache-ttl", "x-cache-key-suffix", "x-cache-invalidate-tables", "x-custom-header":
+		return name[2:]
+	default:
+		return name
+	}
 }

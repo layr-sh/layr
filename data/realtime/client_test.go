@@ -318,3 +318,17 @@ func TestRealtimeEventAuthorizationUnit(t *testing.T) {
 		t.Fatal("canceled writer remained open")
 	}
 }
+
+func TestRealtimeClientAcceptsExplicitChangeEventsUnit(t *testing.T) {
+	for _, event := range []string{"INSERT", "UPDATE", "DELETE"} {
+		t.Run(event, func(t *testing.T) {
+			hub := NewHub(core.NewTestKernel(nil))
+			hub.installedTables["public.items"] = true
+			client := NewClient(hub, nil, 1)
+			client.handleMessage(context.Background(), ClientMessage{Action: "subscribe", Table: "items", Channel: "items", Event: strings.ToLower(event)})
+			if got := client.subscriptions["items"].Event; got != event {
+				t.Fatalf("subscription event = %q, want %q", got, event)
+			}
+		})
+	}
+}

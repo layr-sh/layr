@@ -156,11 +156,7 @@ func (handler *BaseHandler) handleRevokeSession(responseWriter http.ResponseWrit
 
 	targetSessionID := request.PathValue("session_id")
 	if targetSessionID == "" {
-		path := strings.TrimSuffix(request.URL.Path, "/")
-		targetSessionID = strings.TrimPrefix(path, "/v1/auth/user/sessions/")
-		if targetSessionID == path {
-			targetSessionID = strings.TrimPrefix(path, "/v1/auth/sessions/")
-		}
+		targetSessionID = strings.TrimPrefix(strings.TrimSuffix(request.URL.Path, "/"), "/v1/auth/user/sessions/")
 	}
 	if targetSessionID == "" || strings.Contains(targetSessionID, "/") {
 		core.WriteErrorResponse(responseWriter, request, http.StatusBadRequest, "Invalid session ID")

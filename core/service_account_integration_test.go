@@ -116,8 +116,9 @@ func TestCoreServiceAccountFullLifecycleIntegration(t *testing.T) {
 		t.Fatalf("expected ErrServiceAccountIPBlocked, got: %v", err)
 	}
 
-	// 8. Authenticate Invalid Key -> ErrServiceAccountNotFound
-	_, err = serviceAccountManager.Authenticate(ctx, "invalid_secret_key_123456789", "127.0.0.1")
+	// 8. Authenticate an unissued key -> ErrServiceAccountNotFound
+	_, unissuedKey, _ := GenerateServiceAccountSecretKey()
+	_, err = serviceAccountManager.Authenticate(ctx, unissuedKey, "127.0.0.1")
 	if !errors.Is(err, ErrServiceAccountNotFound) {
 		t.Fatalf("expected ErrServiceAccountNotFound, got: %v", err)
 	}

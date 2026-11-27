@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/stretchr/testify/assert"
-	"layr.sh/core"
-	"layr.sh/data/rest"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"layr.sh/core"
+	"layr.sh/data/rest"
 )
 
 func TestDataReviewRLSIsolationIntegration(t *testing.T) {
@@ -758,7 +759,10 @@ func TestDataVerifiedRelationshipsIntegration(t *testing.T) {
 	if responseRecorder.Code != http.StatusOK || !strings.Contains(responseRecorder.Body.String(), "Alice") || !strings.Contains(responseRecorder.Body.String(), "Nested comment") {
 		t.Fatalf("verified joins failed: %d %s", responseRecorder.Code, responseRecorder.Body.String())
 	}
-	if call("/v1/data/public/review_posts?select=id,author(name),review_comments(body)&cache_ttl=60").Header().Get("Cache-Status") != "HIT" {
+	if status := responseRecorder.Header().Get("Cache-Status"); status != "Layr; fwd=miss" {
+		t.Fatalf("expected an uncached response, got Cache-Status %q", status)
+	}
+	if call("/v1/data/public/review_posts?select=id,author(name),review_comments(body)&cache_ttl=60").Header().Get("Cache-Status") != "Layr; hit" {
 		t.Fatal("relation query was not cached")
 	}
 	if _, err := kernel.DB().Exec(ctx, `UPDATE review_related.people SET name='Updated Alice' WHERE id=1`); err != nil {

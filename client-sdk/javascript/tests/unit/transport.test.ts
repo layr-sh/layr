@@ -50,13 +50,13 @@ describe("Transport & Normalization Unit Tests", () => {
     const headers = buildHeaders({
       publishableKey,
       headers: {
-        "X-Custom": "val",
+        "Custom-Header": "val",
         "X-Null": null as any,
         "X-Undef": undefined as any,
         "Publishable-Key": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       },
     });
-    expect(headers["X-Custom"]).toBe("val");
+    expect(headers["Custom-Header"]).toBe("val");
     expect(headers["X-Null"]).toBeUndefined();
     expect(headers["X-Undef"]).toBeUndefined();
     expect(headers["Publishable-Key"]).toBe(publishableKey);

@@ -98,7 +98,7 @@ Outgoing HTTP requests include credentials based on client mode and elevation:
 | `Authorization: Bearer <token>` | User Session JWT or M2M JWT | Authenticated user session or M2M client (issued via `auth.oidc.token` `client_credentials`); enforces PostgreSQL RLS |
 | `Service-Account-Key` (fallback `X-Service-Account-Key`) | Service Account Key | Elevated backend service account; bypasses RLS, enables `.cp` operations |
 
-Keys (both publishable keys and service account keys) do not use prefixes like `pk_` or `sa_`; they are raw 32-byte hex strings.
+Publishable keys and service account keys are 32 bytes encoded as 64 hexadecimal characters, with no prefix.
 
 ### 5. Identifier & Naming Conventions
 

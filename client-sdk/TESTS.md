@@ -391,7 +391,7 @@ Unit tests run in isolation with zero network calls. All HTTP/WebSocket transpor
 | `TR-05` | Headers: Bearer Token Cleanup | `sessionToken: "Bearer my-jwt"` | Sets `Authorization: Bearer my-jwt` (redundant prefix stripped) | With and without leading `Bearer` |
 | `TR-06` | Headers: Empty Session Token | `sessionToken: ""` or `"   "` | `Authorization` header is not set | Empty / whitespace strings |
 | `TR-07` | Headers: Service Account Key | `serviceAccountKey: "sec-key"` | Sets `Service-Account-Key: sec-key` | Present vs omitted |
-| `TR-08` | Headers: Custom Headers Merge | `{ headers: { "X-Custom": "val" } }` | Merges custom headers without overwriting security headers | Custom header preservation |
+| `TR-08` | Headers: Custom Headers Merge | `{ headers: { "Custom-Header": "val" } }` | Merges custom headers without overwriting security headers | Custom header preservation |
 
 ---
 

@@ -84,14 +84,18 @@ describe("Service schema isolation", () => {
       sessionMaxLifetimeSeconds: 3600,
     };
     const { client, getLastInit } = createMockServiceContext();
-    const service = withServiceAccount(useConsole(client), { serviceAccountKey: "console-key" });
+    const service = withServiceAccount(useConsole(client), {
+      serviceAccountKey: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    });
     await service.cp.config.update(input);
     expect(JSON.parse(getLastInit()?.body as string)).toEqual({
       mfa_enforced: true,
       session_idle_timeout_seconds: 600,
       session_max_lifetime_seconds: 3600,
     });
-    expect(getLastInit()?.headers).toMatchObject({ "Service-Account-Key": "console-key" });
+    expect(getLastInit()?.headers).toMatchObject({
+      "Service-Account-Key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    });
   });
 
   it("keeps Auth and Console user/session models separate", async () => {

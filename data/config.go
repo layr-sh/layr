@@ -124,7 +124,7 @@ func DefaultConfig() Config {
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: []string{"*"},
-			AllowedHeaders: []string{"Authorization", "Content-Type", "Publishable-Key", "X-Publishable-Key", "Cache-TTL", "Cache-Key-Suffix", "Prefer", "X-Custom-Header"},
+			AllowedHeaders: []string{"Authorization", "Content-Type", "Publishable-Key", "Cache-TTL", "Cache-Key-Suffix", "Prefer", "Custom-Header"},
 		},
 		Cache: CacheConfig{
 			Enabled:              true,

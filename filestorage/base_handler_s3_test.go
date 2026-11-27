@@ -6,9 +6,12 @@ import (
 	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgproto3"
+	"github.com/jackc/pgx/v5/pgtype"
 	"layr.sh/core"
 )
 
@@ -265,4 +268,48 @@ func TestFilestorageBaseHandlerS3Unit(t *testing.T) {
 			t.Fatalf("expected 401 on unauth abort multipart, got %d", abortMultipartResponseRecorder.Code)
 		}
 	})
+}
+
+func TestFilestorageS3UploadAndMultipartErrorsUnit(t *testing.T) {
+	for _, test := range []struct {
+		name, method, query, failure, backend, mimeTypes, limit string
+		status                                                  int
+		code                                                    string
+	}{
+		{"put exceeds limit", http.MethodPut, "", "", "database", "{}", "3", http.StatusBadRequest, "EntityTooLarge"},
+		{"initiate insert fails", http.MethodPost, "?uploads", "INSERT INTO file_storage.multipart_uploads", "database", "{}", "9", http.StatusInternalServerError, "InternalError"},
+		{"complete unsupported backend", http.MethodPost, "?uploadId=" + fixtureObjectID, "", "unsupported", "{}", "9", http.StatusInternalServerError, "InternalError"},
+		{"complete size query fails", http.MethodPost, "?uploadId=" + fixtureObjectID, "SUM(size_bytes)", "database", "{}", "9", http.StatusInternalServerError, "InternalError"},
+		{"complete upload missing", http.MethodPost, "?uploadId=" + fixtureObjectID, "SELECT content_type", "database", "{}", "9", http.StatusNotFound, "NoSuchUpload"},
+		{"complete exceeds limit", http.MethodPost, "?uploadId=" + fixtureObjectID, "", "database", "{}", "3", http.StatusBadRequest, "EntityTooLarge"},
+		{"complete disallowed type", http.MethodPost, "?uploadId=" + fixtureObjectID, "", "database", "{image/png}", "9", http.StatusBadRequest, "InvalidRequest"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			kernel := postgresFaultKernel(t.Context(), t, func(sql string) []pgproto3.BackendMessage {
+				switch {
+				case test.failure != "" && strings.Contains(sql, test.failure):
+					return postgresFailure()
+				case strings.Contains(sql, "FROM file_storage.buckets"):
+					return fixtureBucketResult(test.backend, test.mimeTypes, test.limit)
+				case strings.Contains(sql, "SUM(size_bytes)"):
+					return postgresResult([]uint32{pgtype.Int8OID}, []string{"4"})
+				case strings.Contains(sql, "SELECT content_type"):
+					return postgresResult([]uint32{pgtype.TextOID}, []string{"text/plain"})
+				}
+				return nil
+			})
+			request := storageTestRequest(test.method, "/v1/file-storage/s3/test-bucket/test.txt"+test.query, "test", core.ScopeFileStorageObjectWrite)
+			responseRecorder := httptest.NewRecorder()
+			baseHandler := NewService(kernel).BaseHandler()
+			if test.method == http.MethodPut {
+				baseHandler.handlePutS3Object(responseRecorder, request)
+			} else {
+				baseHandler.handlePostS3Object(responseRecorder, request)
+			}
+			var s3ErrorResponse S3ErrorResponse
+			if err := xml.Unmarshal(responseRecorder.Body.Bytes(), &s3ErrorResponse); err != nil || responseRecorder.Code != test.status || s3ErrorResponse.Code != test.code {
+				t.Fatalf("expected %d/%s, got %d: %s (decode error: %v)", test.status, test.code, responseRecorder.Code, responseRecorder.Body, err)
+			}
+		})
+	}
 }
