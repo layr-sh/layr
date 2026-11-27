@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// ImageDatabaseMigration defines the database schema for the image subsystem.
-var ImageDatabaseMigration = core.DatabaseMigration{
-	Service:     "image",
-	Version:     1,
-	Description: "Initialize image schema, dynamic config, presets, and cache entries",
-	UpSQL: `
+// Migrations contains the database migrations for image.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "image",
+		Version:     1,
+		Description: "Initialize image schema, dynamic config, presets, and cache entries",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS image;
 
 -- 1. Dynamic Runtime Configuration
@@ -50,12 +51,8 @@ CREATE TABLE IF NOT EXISTS image.cache_entries (
 CREATE INDEX IF NOT EXISTS idx_image_cache_lookup ON image.cache_entries (cache_key);
 CREATE INDEX IF NOT EXISTS idx_image_cache_lru ON image.cache_entries (last_accessed_at);
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS image CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for image.
-var Migrations = []core.DatabaseMigration{
-	ImageDatabaseMigration,
+	},
 }

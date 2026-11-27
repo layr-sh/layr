@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// TasksDatabaseMigration defines the database schema for the tasks subsystem.
-var TasksDatabaseMigration = core.DatabaseMigration{
-	Service:     "tasks",
-	Version:     1,
-	Description: "Initialize tasks schema, dynamic config, jobs, executions, and execution logs",
-	UpSQL: `
+// Migrations contains the database migrations for tasks.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "tasks",
+		Version:     1,
+		Description: "Initialize tasks schema, dynamic config, jobs, executions, and execution logs",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS tasks;
 
 -- 1. Dynamic Runtime Configuration
@@ -73,12 +74,8 @@ CREATE TABLE IF NOT EXISTS tasks.execution_logs (
 
 CREATE INDEX IF NOT EXISTS idx_execution_logs_time ON tasks.execution_logs(job_id, executed_at DESC);
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS tasks CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for tasks.
-var Migrations = []core.DatabaseMigration{
-	TasksDatabaseMigration,
+	},
 }

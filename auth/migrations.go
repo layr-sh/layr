@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// AuthDatabaseMigration defines the database schema for auth.
-var AuthDatabaseMigration = core.DatabaseMigration{
-	Service:     "auth",
-	Version:     1,
-	Description: "Initialize auth schema, users, identities, sessions, passkeys, and otps",
-	UpSQL: `
+// Migrations contains the database migrations for auth.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "auth",
+		Version:     1,
+		Description: "Initialize auth schema, users, identities, sessions, passkeys, and otps",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS auth;
 
 -- 1. Dynamic Runtime Configuration (Managed via Console)
@@ -69,7 +70,9 @@ CREATE TABLE IF NOT EXISTS auth.sessions (
     ip_address INET,
     user_agent TEXT,
     expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    scope TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth.sessions(user_id);
@@ -104,22 +107,8 @@ CREATE TABLE IF NOT EXISTS auth.otps (
 
 CREATE INDEX IF NOT EXISTS idx_otps_recipient ON auth.otps(recipient, purpose);
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS auth CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for auth.
-var Migrations = []core.DatabaseMigration{
-	AuthDatabaseMigration,
-	{
-		Service:     "auth",
-		Version:     2,
-		Description: "Track session activity and granted OIDC scopes",
-		UpSQL: `ALTER TABLE auth.sessions ADD COLUMN last_used_at TIMESTAMPTZ;
-UPDATE auth.sessions SET last_used_at = created_at;
-ALTER TABLE auth.sessions ALTER COLUMN last_used_at SET DEFAULT clock_timestamp(), ALTER COLUMN last_used_at SET NOT NULL;
-ALTER TABLE auth.sessions ADD COLUMN scope TEXT NOT NULL DEFAULT '';`,
-		DownSQL: `ALTER TABLE auth.sessions DROP COLUMN scope, DROP COLUMN last_used_at;`,
 	},
 }

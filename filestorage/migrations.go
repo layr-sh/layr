@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// FileStorageDatabaseMigration defines the database schema for the file_storage subsystem.
-var FileStorageDatabaseMigration = core.DatabaseMigration{
-	Service:     "filestorage",
-	Version:     1,
-	Description: "Initialize file_storage schema, buckets, objects, chunks, s3 credentials, and multipart uploads",
-	UpSQL: `
+// Migrations contains the database migrations for filestorage.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "filestorage",
+		Version:     1,
+		Description: "Initialize file_storage schema, buckets, objects, chunks, s3 credentials, and multipart uploads",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS file_storage;
 
 -- 1. Dynamic Runtime Configuration
@@ -130,12 +131,8 @@ BEGIN
     END IF;
 END $$;
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS file_storage CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for filestorage.
-var Migrations = []core.DatabaseMigration{
-	FileStorageDatabaseMigration,
+	},
 }

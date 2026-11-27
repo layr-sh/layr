@@ -12,12 +12,13 @@ func init() {
 // CDCNotificationChannel is the PostgreSQL LISTEN/NOTIFY channel for CDC events.
 const CDCNotificationChannel = "cdc"
 
-// DataDatabaseMigration defines the database schema for data and reference_data.
-var DataDatabaseMigration = core.DatabaseMigration{
-	Service:     "data",
-	Version:     1,
-	Description: "Initialize data and reference_data schemas, config table, CDC triggers, and relational tables",
-	UpSQL: `
+// Migrations contains the database migrations for data.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "data",
+		Version:     1,
+		Description: "Initialize data and reference_data schemas, config table, CDC triggers, and relational tables",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS data;
 
 CREATE TABLE IF NOT EXISTS data.config (
@@ -323,13 +324,9 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, reference_data TO layr_da
 ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_data GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO layr_data_client;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference_data GRANT USAGE, SELECT ON SEQUENCES TO layr_data_client;
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS reference_data CASCADE;
 DROP SCHEMA IF EXISTS data CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for data.
-var Migrations = []core.DatabaseMigration{
-	DataDatabaseMigration,
+	},
 }

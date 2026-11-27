@@ -24,7 +24,7 @@ func TestAuthMigrationsExecutionIntegration(t *testing.T) {
 			var tableExists bool
 			queryErr := db.QueryRow(ctx, `
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
+					SELECT FROM information_schema.tables
 					WHERE table_schema = 'auth' AND table_name = $1
 				);
 			`, tableName).Scan(&tableExists)
@@ -45,7 +45,7 @@ func TestAuthMigrationsExecutionIntegration(t *testing.T) {
 		var schemaExists bool
 		err := db.QueryRow(ctx, `
 			SELECT EXISTS (
-				SELECT FROM information_schema.schemata 
+				SELECT FROM information_schema.schemata
 				WHERE schema_name = 'auth'
 			);
 		`).Scan(&schemaExists)
@@ -64,12 +64,30 @@ func TestAuthMigrationsExecutionIntegration(t *testing.T) {
 			var tableExists bool
 			queryErr := db.QueryRow(ctx, `
 				SELECT EXISTS (
-					SELECT FROM information_schema.tables 
+					SELECT FROM information_schema.tables
 					WHERE table_schema = 'auth' AND table_name = $1
 				);
 			`, tableName).Scan(&tableExists)
 			require.NoError(t, queryErr)
 			require.True(t, tableExists, "expected auth.%s to exist after reapply", tableName)
 		}
+	})
+
+	t.Run("VerifySessionDefaults", func(t *testing.T) {
+		var hasLastUsedAt bool
+		var scope string
+		queryErr := db.QueryRow(ctx, `
+			WITH new_user AS (INSERT INTO auth.users DEFAULT VALUES RETURNING id),
+			new_session AS (
+				INSERT INTO auth.sessions (user_id, refresh_token_hash, expires_at)
+				SELECT id, 'test-refresh-token-hash', clock_timestamp() + interval '1 hour'
+				FROM new_user
+				RETURNING last_used_at, scope
+			)
+			SELECT last_used_at IS NOT NULL, scope FROM new_session;
+		`).Scan(&hasLastUsedAt, &scope)
+		require.NoError(t, queryErr)
+		require.True(t, hasLastUsedAt)
+		require.Empty(t, scope)
 	})
 }

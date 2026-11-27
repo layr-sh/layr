@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// FunctionDatabaseMigration defines the database schema for the function subsystem.
-var FunctionDatabaseMigration = core.DatabaseMigration{
-	Service:     "function",
-	Version:     1,
-	Description: "Initialize function schema, dynamic config, endpoints, and deployments",
-	UpSQL: `
+// Migrations contains the database migrations for function.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "function",
+		Version:     1,
+		Description: "Initialize function schema, dynamic config, endpoints, and deployments",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS function;
 
 -- 1. Dynamic Runtime Configuration
@@ -122,12 +123,8 @@ CREATE TABLE IF NOT EXISTS function.custom_domain_routes (
 CREATE INDEX IF NOT EXISTS idx_function_custom_domain_routes_domain ON function.custom_domain_routes(custom_domain_id);
 CREATE INDEX IF NOT EXISTS idx_function_custom_domain_routes_endpoint ON function.custom_domain_routes(endpoint_id);
 `,
-	DownSQL: `
+		DownSQL: `
 DROP SCHEMA IF EXISTS function CASCADE;
 `,
-}
-
-// Migrations contains the database migrations for function.
-var Migrations = []core.DatabaseMigration{
-	FunctionDatabaseMigration,
+	},
 }

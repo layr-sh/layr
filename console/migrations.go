@@ -9,12 +9,13 @@ func init() {
 	}
 }
 
-// ConsoleDatabaseMigration defines the database schema for the console subsystem.
-var ConsoleDatabaseMigration = core.DatabaseMigration{
-	Service:     "console",
-	Version:     1,
-	Description: "Initialize console schema, dynamic config, users, sessions, and passkeys",
-	UpSQL: `
+// Migrations contains the database migrations for console.
+var Migrations = []core.DatabaseMigration{
+	{
+		Service:     "console",
+		Version:     1,
+		Description: "Initialize console schema, dynamic config, users, sessions, and passkeys",
+		UpSQL: `
 CREATE SCHEMA IF NOT EXISTS console;
 
 -- 1. Dynamic Runtime Configuration
@@ -124,13 +125,9 @@ CREATE TRIGGER protect_root_user BEFORE UPDATE OF is_enabled OR DELETE ON consol
 FOR EACH ROW EXECUTE FUNCTION console.protect_root_user();
 CREATE TRIGGER protect_root_user BEFORE UPDATE OF scopes, is_enabled, expires_at, console_user_id OR DELETE ON core.service_accounts
 FOR EACH ROW EXECUTE FUNCTION console.protect_root_user();
-	`,
-	DownSQL: `
+		`,
+		DownSQL: `
 DROP SCHEMA IF EXISTS console CASCADE;
-	`,
-}
-
-// Migrations contains the database migrations for console.
-var Migrations = []core.DatabaseMigration{
-	ConsoleDatabaseMigration,
+		`,
+	},
 }
